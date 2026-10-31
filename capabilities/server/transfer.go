@@ -17,7 +17,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
-	"platformserver/studio/build"
 )
 
 func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]platform.ImportRow, *kernel.Error) {
@@ -255,15 +254,4 @@ func toCSV(v any) string {
 		return strings.Join(parts, ";")
 	}
 	return fmt.Sprint(v)
-}
-
-func (t *Tenant) restricted(typ string) bool {
-	c := t.automation(build.ID, false)
-	switch typ {
-	case build.DatasetType, build.DatasetVersionType:
-		sets, _, _ := platform.Find[build.Dataset](c, platform.Query{Limit: 500})
-		return slices.ContainsFunc(sets, func(d build.Dataset) bool { return d.Marking == "restricted" })
-	}
-	pipelines, _, _ := platform.Find[build.Pipeline](c, platform.Query{Limit: 500})
-	return slices.ContainsFunc(pipelines, func(p build.Pipeline) bool { return p.OutputObject == typ && p.Marking == "restricted" })
 }

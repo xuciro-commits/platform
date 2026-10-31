@@ -14,6 +14,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/platform/authz"
+	"platformserver/studio/build"
 )
 
 func (d *stagedDecision) savedAuthorizations() ([]acceptedformat.AuthorizationEvidence, error) {
@@ -390,8 +391,13 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 		}()
 		context.Derived = authz.Gate{Allowed: readable, Reason: "The original source is outside the caller's permissions"}
 	}
-	if q.Kind == "export" && t.restricted(q.Type) {
-		context.Markings = authz.Gate{Reason: "Restricted data does not leave as CSV"}
+	if et != nil {
+		index := t.markingsIn(store, held)
+		if !(c.Automation && c.App == et.Info().App) && !platform.MarkingCleared(c.Member, index.row(et.Info().Type, current)) {
+			context.Markings = authz.Gate{Reason: "The data carries a marking the caller is not cleared for"}
+		} else if q.Kind == "export" && index.highest(et.Info().Type) == "restricted" {
+			context.Markings = authz.Gate{Reason: "Restricted data does not leave as CSV"}
+		}
 	}
 	slices.Sort(context.Withheld)
 	context.Withheld = slices.Compact(context.Withheld)
@@ -498,6 +504,10 @@ func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et 
 	policy, err := t.scopePolicy(store, c, et.Info(), at, 0, newAuthorizationWalk())
 	if err != nil {
 		return func(reflect.Value) bool { return false }, nil
+	}
+	if et.Info().Type == build.DatasetVersionType {
+		index := t.markingsIn(store, true)
+		return func(value reflect.Value) bool { return index.visible(c.Member, value) && policy.Match(value) }, nil
 	}
 	return policy.Match, nil
 }

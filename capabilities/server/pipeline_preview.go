@@ -86,7 +86,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The input dataset version is unavailable")
 		}
 		sources = append(sources, build.DatasetType+"/"+id, build.DatasetVersionType+"/"+versionID+"#data")
-		out.Marking = build.HigherMarking(out.Marking, dataset.Marking)
+		out.Marking = platform.HigherMarking(out.Marking, dataset.Marking)
 		if id == p.Input {
 			out.InputRows, out.InputVersion = len(rows), dataset.Version
 		}

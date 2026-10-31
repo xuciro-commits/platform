@@ -825,7 +825,7 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 			if payload.Producer != "" {
 				ds.Producer = payload.Producer
 			}
-			ds.Marking = HigherMarking(ds.Marking, payload.Marking)
+			ds.Marking = platform.HigherMarking(ds.Marking, payload.Marking)
 			c.Put(r, ds)
 			version := DatasetVersion{Record: platform.Record{ID: VersionID(ds.ID, ds.Version)}, Dataset: ds.ID, Version: ds.Version, At: now, Rows: len(payload.Rows), Data: data}
 			if !c.Replaying {
@@ -2191,7 +2191,7 @@ func (b *Build) submitPipelineRan(c platform.Caller, s *pb.Submission, now time.
 		return func(r *pb.ChangeRecord) {
 			run := payload.Run
 			p.Last, p.Requested = &run, run.Execution != nil && run.Execution.Pending
-			p.Marking = HigherMarking(p.Marking, run.Marking)
+			p.Marking = platform.HigherMarking(p.Marking, run.Marking)
 			c.Put(r, p)
 		}, nil
 	})
@@ -2205,7 +2205,7 @@ func (b *Build) inputMarking(c platform.Caller, p Pipeline) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			marking = HigherMarking(marking, fixed.Marking)
+			marking = platform.HigherMarking(marking, fixed.Marking)
 		}
 	}
 	return marking, nil

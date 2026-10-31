@@ -63,6 +63,8 @@ type Tenant struct {
 	views                 transport.ViewCache
 	defGen                atomic.Uint64
 	streamMu              sync.Mutex
+	markingMu             sync.Mutex
+	markings              markingIndex
 	fault                 atomic.Pointer[tenantFault]
 	apps                  []platform.App
 	appIndex              map[string]int

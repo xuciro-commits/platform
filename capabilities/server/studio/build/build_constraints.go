@@ -365,18 +365,9 @@ const (
 	Integrator = "integrator"
 )
 
-var Markings = []string{"", "internal", "confidential", "restricted"}
-
-func MarkingRank(m string) int { return max(slices.Index(Markings, m), 0) }
-
-func HigherMarking(a, b string) string {
-	if MarkingRank(b) > MarkingRank(a) {
-		return b
-	}
-	return a
+func Guarded(marking string) bool {
+	return platform.MarkingRank(marking) >= platform.MarkingRank("confidential")
 }
-
-func Guarded(marking string) bool { return MarkingRank(marking) >= MarkingRank("confidential") }
 
 func UnguardedFields(info platform.EntityInfo, columns []string) []string {
 	var open []string

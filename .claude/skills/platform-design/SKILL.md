@@ -54,6 +54,7 @@ Multi-field edits open in a right `Sheet`; confirmations stay in `Dialog`.
 - No raw JSON in normal flows; structured editors first, JSON under "Advanced".
 - Empty, loading, error and refusal states use `EmptyState`, skeleton rows, `Notice`, `Rejection`; refusals show the server's reason.
 - Disabled actions explain why. Status is a `Tag`/`StatusTag` with a tone.
+- Marking clearances are not roles: Control Panel shows them in a member's Markings panel, and Data Lineage details say whether you are cleared.
 - Conditions, criteria, policies and filters use the one Expr builder; record sets use the one set builder.
 - Editors autosave into the working state (a draft on main, the branch spec on a branch); a refused save stops autosave and leaves a manual Save. No editor publishes on its own: the branch panel's "Review and save (N)" opens the joint release review on main or the proposal review on a branch.
 

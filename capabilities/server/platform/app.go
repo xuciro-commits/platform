@@ -993,6 +993,30 @@ const (
 	SchemaDelegate   = "platform.member.delegate"
 )
 const Auditor = "auditor"
+
+var Markings = []string{"", "internal", "confidential", "restricted"}
+
+func MarkingRank(m string) int { return max(slices.Index(Markings, m), 0) }
+
+func HigherMarking(a, b string) string {
+	if MarkingRank(b) > MarkingRank(a) {
+		return b
+	}
+	return a
+}
+
+func MarkingCleared(m Member, marking string) bool {
+	if MarkingRank(marking) <= MarkingRank("internal") {
+		return true
+	}
+	for _, clearance := range Markings[MarkingRank(marking):] {
+		if m.Holds("platform", clearance) {
+			return true
+		}
+	}
+	return false
+}
+
 const (
 	ProjectType       = "platform.project"
 	SchemaProjectSave = ProjectType + ".save"

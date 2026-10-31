@@ -720,7 +720,7 @@ func (b *Build) ConnectionConfiguration(live Connection) (Connection, error) {
 		return Connection{}, fmt.Errorf("connection binding kind differs from its accepted definition")
 	}
 	r.Record, r.Address, r.Secret, r.AllowPrivate, r.State, r.Requested, r.Last = live.Record, live.Address, live.Secret, live.AllowPrivate, live.State, live.Requested, live.Last
-	r.Marking = HigherMarking(r.Marking, live.Marking)
+	r.Marking = platform.HigherMarking(r.Marking, live.Marking)
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }
@@ -756,7 +756,7 @@ func (b *Build) ExecutionDataset(live Dataset) (Dataset, error) {
 	}
 	r := fixed.(Dataset)
 	r.Record, r.Producer, r.Schema, r.Version, r.Last = live.Record, live.Producer, live.Schema, live.Version, live.Last
-	r.Marking = HigherMarking(r.Marking, live.Marking)
+	r.Marking = platform.HigherMarking(r.Marking, live.Marking)
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }

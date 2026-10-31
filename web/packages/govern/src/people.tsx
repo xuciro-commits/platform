@@ -5,6 +5,10 @@ import { z } from "zod";
 import { active, kind, today, type Chart, type Member } from "./shared";
 import type { Api } from "@platform/kernel";
 type Grant = Api.Grant;
+const markings = ["confidential", "restricted"];
+const markingLabels: Record<string, string> = { confidential: "Confidential", restricted: "Restricted" };
+const markingHelp: Record<string, string> = { confidential: "Opens data marked confidential.", restricted: "Opens data marked confidential or restricted." };
+const clearance = (g: Grant) => g.app === "platform" && markings.includes(g.role);
 import { ProfileForm, type Account, type TenantRecord } from "./account";
 
 export function Members() {
@@ -68,7 +72,8 @@ export function MemberDetail({ id }: { id: string }) {
   const account: Account = { ...member.profile, subjects: member.subjects, effective: { language: member.profile.language || settings.language || "", timezone: member.profile.timezone || settings.timezone || "UTC",
     dateFormat: member.profile.dateFormat || settings.dateFormat || "ymd", numberFormat: member.profile.numberFormat || settings.numberFormat || "1,234.56", weekStart: member.profile.weekStart || settings.weekStart || "monday",
     email: member.profile.email || member.subjects.find((s) => s.startsWith("user:"))?.slice(5) || "", digest: member.profile.digest || settings.digest || "instant" } };
-  const grants = member.grants ?? [];
+  const grants = (member.grants ?? []).filter((g) => !clearance(g));
+  const clearances = (member.grants ?? []).filter(clearance);
   const self = member.id === me.principalId;
   const standing = member.status || "active";
   return (
@@ -114,8 +119,23 @@ export function MemberDetail({ id }: { id: string }) {
           ))}
         </div>
       </Panel>
+      <Panel title={t("Markings")} help={t("Marked data opens only to members cleared for every marking it carries. Markings follow data lineage, and no role lifts them.")}>
+        <div className="grid divide-y divide-border text-sm">
+          {markings.map((m) => {
+            const held = clearances.find((g) => g.role === m);
+            const viaTeam = !!held?.by?.startsWith("team:");
+            return <div key={m} className="flex items-center gap-2 py-1.5">
+              <span className="w-24 font-medium">{t(markingLabels[m]!)}</span>
+              <span className="min-w-0 flex-1 truncate text-xs text-muted">{t(markingHelp[m]!)}</span>
+              {held ? <Tag label={viaTeam ? t("Cleared through a team") : t("Cleared")} tone="success" /> : <Tag label={t("Not cleared")} />}
+              {held && !viaTeam && can("platform.member.revoke") && <Button size="sm" variant="ghost" onClick={() => void decide("platform.member.revoke", { type: "platform.member", id: member.id }, { app: "platform", role: m, unit: "" })}>{t("Remove")}</Button>}
+              {!held && can("platform.member.grant") && <Button size="sm" onClick={() => void decide("platform.member.grant", { type: "platform.member", id: member.id }, { app: "platform", role: m })}>{t("Grant")}</Button>}
+            </div>;
+          })}
+        </div>
+      </Panel>
       {can("platform.member.grant") && <Sheet isolated open={granting} onOpenChange={setGranting} title={t("Add role")}>
-        <GrantForm apps={apps.filter((a) => a.roles.length)} onCancel={() => setGranting(false)}
+        <GrantForm apps={apps.filter((a) => a.roles.length).map((a) => a.id === "platform" ? { ...a, roles: a.roles.filter((r) => !markings.includes(r)) } : a)} onCancel={() => setGranting(false)}
           onSubmit={async (g) => { if (await decide("platform.member.grant", { type: "platform.member", id: member.id }, g)) setGranting(false); }} />
       </Sheet>}
       {(role("enterprise") || holds("platform", "admin")) && <MemberUnits member={member.id} />}

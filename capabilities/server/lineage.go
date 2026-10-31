@@ -39,8 +39,6 @@ type Lineage struct {
 	Edges []LineageEdge `json:"edges"`
 }
 
-var markingRank = map[string]int{"internal": 1, "confidential": 2, "restricted": 3}
-
 func lineageRecords[T any](c platform.Caller) []T {
 	rows, _, refusal := platform.Find[T](c, platform.Query{Sort: []string{"id"}, Limit: 1000})
 	if refusal != nil {
@@ -64,6 +62,26 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 		return Lineage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	c := t.caller(m, t.app(build.ID), false)
+	return lineageGraph(lineageInputs{
+		connections: lineageRecords[build.Connection](c),
+		datasets:    lineageRecords[build.Dataset](c),
+		objects:     lineageRecords[build.Object](c),
+		sources:     lineageRecords[build.Source](c),
+		pipelines:   lineageRecords[build.Pipeline](c),
+		writebacks:  lineageRecords[build.Writeback](c),
+	}), nil
+}
+
+type lineageInputs struct {
+	connections []build.Connection
+	datasets    []build.Dataset
+	objects     []build.Object
+	sources     []build.Source
+	pipelines   []build.Pipeline
+	writebacks  []build.Writeback
+}
+
+func lineageGraph(in lineageInputs) Lineage {
 	out := Lineage{Nodes: []LineageNode{}, Edges: []LineageEdge{}}
 	at := map[string]int{}
 	add := func(node LineageNode) {
@@ -98,8 +116,7 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 		return &v
 	}
 
-	connections := lineageRecords[build.Connection](c)
-	for _, conn := range connections {
+	for _, conn := range in.connections {
 		node := LineageNode{ID: "connection:" + conn.ID, Kind: "connection", Record: conn.ID, Name: conn.Name, Title: conn.Title, State: conn.State, Marking: conn.Marking}
 		if conn.Last != nil {
 			node.At = when(conn.Last.At)
@@ -107,9 +124,8 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 		}
 		add(node)
 	}
-	datasets := lineageRecords[build.Dataset](c)
 	versions := map[string]int{}
-	for _, ds := range datasets {
+	for _, ds := range in.datasets {
 		versions[ds.ID] = ds.Version
 		node := LineageNode{ID: "dataset:" + ds.ID, Kind: "dataset", Record: ds.ID, Name: ds.Name, Title: ds.Title, Marking: ds.Marking, Version: ds.Version}
 		if ds.Last != nil {
@@ -118,13 +134,11 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 		}
 		add(node)
 	}
-	objects := lineageRecords[build.Object](c)
-	for _, o := range objects {
+	for _, o := range in.objects {
 		add(LineageNode{ID: "object:" + lineageObjectType(o.Name), Kind: "object", Record: o.ID, Name: lineageObjectType(o.Name), Title: o.Title, State: o.State})
 	}
-	sources := lineageRecords[build.Source](c)
 	sourceByName := map[string]string{}
-	for _, s := range sources {
+	for _, s := range in.sources {
 		sourceByName[s.Name] = "source:" + s.ID
 		node := LineageNode{ID: "source:" + s.ID, Kind: "source", Record: s.ID, Name: s.Name, Title: s.Title, State: s.State}
 		if s.Last != nil {
@@ -134,9 +148,8 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 		}
 		add(node)
 	}
-	pipelines := lineageRecords[build.Pipeline](c)
 	pipelineByName := map[string]string{}
-	for _, p := range pipelines {
+	for _, p := range in.pipelines {
 		pipelineByName[p.Name] = "pipeline:" + p.ID
 		node := LineageNode{ID: "pipeline:" + p.ID, Kind: "pipeline", Record: p.ID, Name: p.Name, Title: p.Title, State: p.State, Marking: p.Marking}
 		if p.Last != nil {
@@ -146,18 +159,17 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 		}
 		add(node)
 	}
-	writebacks := lineageRecords[build.Writeback](c)
-	for _, w := range writebacks {
+	for _, w := range in.writebacks {
 		add(LineageNode{ID: "writeback:" + w.ID, Kind: "writeback", Record: w.ID, Name: w.Name, Title: w.Title, State: w.State, Rows: w.Sent})
 	}
 
-	for _, s := range sources {
+	for _, s := range in.sources {
 		id := "source:" + s.ID
 		link(LineageEdge{From: "connection:" + s.Connection, To: id})
 		link(LineageEdge{From: id, To: "dataset:" + s.Dataset})
 		link(LineageEdge{From: id, To: "object:" + lineageObjectType(s.Object)})
 	}
-	for _, p := range pipelines {
+	for _, p := range in.pipelines {
 		id := "pipeline:" + p.ID
 		stale := false
 		for _, input := range append([]string{p.Input}, p.StepDatasets()...) {
@@ -175,7 +187,7 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 		link(LineageEdge{From: id, To: "dataset:" + p.OutputDataset})
 		link(LineageEdge{From: id, To: "object:" + lineageObjectType(p.OutputObject)})
 	}
-	for _, o := range objects {
+	for _, o := range in.objects {
 		id := "object:" + lineageObjectType(o.Name)
 		for _, binding := range o.DataSources {
 			switch binding.Kind {
@@ -186,7 +198,7 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 			}
 		}
 	}
-	for _, w := range writebacks {
+	for _, w := range in.writebacks {
 		id := "writeback:" + w.ID
 		link(LineageEdge{From: "object:" + lineageObjectType(w.Object), To: id})
 		link(LineageEdge{From: id, To: "connection:" + w.Connection})
@@ -212,7 +224,7 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 		changed = false
 		for _, edge := range out.Edges {
 			from, to := &out.Nodes[at[edge.From]], &out.Nodes[at[edge.To]]
-			if to.Kind == "connection" || markingRank[from.Effective] <= markingRank[to.Effective] {
+			if to.Kind == "connection" || platform.MarkingRank(from.Effective) <= platform.MarkingRank(to.Effective) {
 				continue
 			}
 			to.Effective = from.Effective
@@ -220,5 +232,5 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 		}
 	}
 	slices.SortStableFunc(out.Edges, func(a, b LineageEdge) int { return strings.Compare(a.From+">"+a.To, b.From+">"+b.To) })
-	return out, nil
+	return out
 }

@@ -106,7 +106,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 					inputErr = err
 					break
 				}
-				run.Marking = build.HigherMarking(run.Marking, fixed.Marking)
+				run.Marking = platform.HigherMarking(run.Marking, fixed.Marking)
 			}
 		}
 		t.mu.Unlock()

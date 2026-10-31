@@ -1,4 +1,4 @@
-import { assetKey, definitionPresentation, DependencyGraph, useDependencies, useDefinitions, useProvidedCapabilities, useReadQuery, type AssetRef, type ProvidedCapability } from "@platform/app";
+import { assetKey, definitionPresentation, DependencyGraph, useDependencies, useDefinitions, useHost, useProvidedCapabilities, useReadQuery, type AssetRef, type ProvidedCapability } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, DataTable, Disclosure, PageHeader, Panel, PropertyList, RelationCanvas, relationNodeClasses, SegmentedChoice, Select, useWorkspace, t, type RelationEdge, type RelationNode } from "@platform/ui";
 import { RefreshCw } from "lucide-react";
@@ -7,6 +7,7 @@ import { useMemo, useState, type ReactNode } from "react";
 const kindLabel = (kind: string) => t(relationNodeClasses[kind]?.title ?? kind);
 const capabilityKey = (item: ProvidedCapability) => `${assetKey(item.ref)}@${item.version}:${item.capability.kind}:${item.capability.name}`;
 const sideLabels: Record<string, string> = { pure: "Read only", effect: "Declare an effect", authoritative: "Change authoritative state" };
+const guarded = (marking?: string) => marking === "confidential" || marking === "restricted";
 const markingTones: Record<string, string> = { internal: "info", confidential: "warning", restricted: "danger" };
 const resourceViews: Record<string, string> = { connection: "connection", source: "data-source", dataset: "dataset", pipeline: "pipeline", writeback: "writeback", object: "object-type" };
 type ColorBy = "kind" | "marking" | "status";
@@ -30,6 +31,8 @@ export function Lineage({ ref: requested, node: requestedNode }: { ref?: string;
   const { open } = useWorkspace();
   const query = useReadQuery<Api.Lineage>("/v1/lineage", 15000);
   const graph = query.data ?? { nodes: [], edges: [] };
+  const { holds } = useHost();
+  const cleared = (marking: string) => holds("platform", marking) || (marking === "confidential" && holds("platform", "restricted"));
   const [colorBy, setColorBy] = useState<ColorBy>("kind");
   const [selected, setSelected] = useState<string | undefined>(requestedNode);
   const chosen = graph.nodes.find(node => node.id === selected);
@@ -67,6 +70,7 @@ export function Lineage({ ref: requested, node: requestedNode }: { ref?: string;
             ...(chosen.state ? [[t("State"), t(chosen.state)] as [string, ReactNode]] : []),
             [t("Marking"), chosen.marking ? t(chosen.marking) : t("None")],
             ...(chosen.effective && chosen.effective !== chosen.marking ? [[t("Effective marking"), `${t(chosen.effective)} · ${t("inherited from upstream")}`] as [string, ReactNode]] : []),
+            ...(["dataset", "object"].includes(chosen.kind) && guarded(chosen.effective) ? [[t("Your access"), cleared(chosen.effective!) ? t("Cleared") : t("Needs {marking} clearance", { marking: t(chosen.effective!) })] as [string, ReactNode]] : []),
             ...(chosen.version ? [[t("Latest version"), String(chosen.version)] as [string, ReactNode]] : []),
             ...(chosen.rows ? [[t("Rows"), String(chosen.rows)] as [string, ReactNode]] : []),
             ...(chosen.at ? [[t("Last activity"), new Date(chosen.at).toLocaleString()] as [string, ReactNode]] : []),
