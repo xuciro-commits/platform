@@ -9,7 +9,7 @@ import { ReviewDialog, useOpenProposal } from "./ReviewDialog";
 
 const branchStates = defineStatuses({ open: { label: t("Open"), tone: "info" }, proposed: { label: t("Proposed"), tone: "purple" }, merged: { label: t("Merged"), tone: "success" }, closed: { label: t("Archived"), tone: "neutral" } });
 
-export function BranchControls() {
+export function BranchControls({ panel = false }: { panel?: boolean }) {
   const { holds } = useHost(), { confirmLeave } = useWorkspace();
   const { confirmDiscard } = useUnsavedChanges(false, () => {});
   const builder = holds("build", "builder");
@@ -31,21 +31,35 @@ export function BranchControls() {
     { id: "all", label: t("All branches and proposals"), run: () => open({ view: "changes" }) },
     ...(current ? [{ id: "archive", label: t("Archive branch…"), danger: true, separatorBefore: true, run: () => setArchiving(true) }] : []),
   ];
-  return <div role="group" aria-label={t("Branch")} className="flex min-w-0 flex-wrap items-center gap-2">
-    <GitBranch aria-hidden className="size-4 shrink-0 text-muted" />
-    <Tooltip content={current ? undefined : t("Edits on main are saved as drafts immediately.")}><Select aria-label={t("Branch")} value={current?.id ?? ""} className="h-7 w-auto max-w-56 text-xs" onChange={event => switchTo(event.target.value || undefined)}>
+  const select_ = <Tooltip content={current ? undefined : t("Edits on main are saved as drafts immediately.")}><Select aria-label={t("Branch")} value={current?.id ?? ""} className={panel ? "h-7 min-w-0 flex-1 text-xs" : "h-7 w-auto max-w-56 text-xs"} onChange={event => switchTo(event.target.value || undefined)}>
       <option value="">main</option>
       {live.map(branch => <option key={branch.id} value={branch.id}>{branch.title}</option>)}
-    </Select></Tooltip>
-    <ActionMenu label={t("Branch actions")} icon={<MoreHorizontal />} commands={commands} />
-    {current && <StatusTag status={current.state} registry={branchStates} />}
-    {current && count > 0 && <Tag label={t("Unsaved changes ({n})", { n: count })} tone="warning" />}
-    {current?.state === "open" && <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("This branch has no changes.")} onClick={() => setReviewing(true)}>{t("Save")}</Button>}
-    {current?.state === "proposed" && <Button size="sm" variant="primary" onClick={() => openProposal(current.id)}>{t("Open proposal")}</Button>}
+    </Select></Tooltip>;
+  const save = current?.state === "open" ? <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("This branch has no changes.")} onClick={() => setReviewing(true)}>{t("Save")}</Button>
+    : current?.state === "proposed" ? <Button size="sm" variant="primary" onClick={() => openProposal(current.id)}>{t("Open proposal")}</Button> : null;
+  const dialogs = <>
     {list.isError && <span role="alert" className="text-xs text-danger">{t("Branches could not be loaded.")}</span>}
     <NewBranchDialog open={creating} onOpenChange={setCreating} onCreated={branch => select(branch.id)} />
     {current && <CloseBranchDialog branch={current} open={archiving} onOpenChange={setArchiving} onClosed={() => select(undefined)} />}
     {reviewing && detail.data && <ReviewDialog branch={detail.data} open onOpenChange={setReviewing} onProposed={openProposal} />}
+  </>;
+  if (panel) return <div role="group" aria-label={t("Branch")} className="grid gap-1.5 rounded-md border border-border bg-surface p-2">
+    <div className="flex min-w-0 items-center gap-1"><GitBranch aria-hidden className="size-3.5 shrink-0 text-muted" />{select_}<ActionMenu label={t("Branch actions")} icon={<MoreHorizontal />} commands={commands} /></div>
+    {current ? <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <StatusTag status={current.state} registry={branchStates} />
+      {count > 0 ? <Tag label={t("Unsaved changes ({n})", { n: count })} tone="warning" /> : <span className="text-2xs text-muted">{t("Up to date")}</span>}
+      <span className="ml-auto">{save}</span>
+    </div> : <p className="text-2xs text-muted">{t("Edits on main are saved as drafts immediately.")}</p>}
+    {dialogs}
+  </div>;
+  return <div role="group" aria-label={t("Branch")} className="flex min-w-0 flex-wrap items-center gap-2">
+    <GitBranch aria-hidden className="size-4 shrink-0 text-muted" />
+    {select_}
+    <ActionMenu label={t("Branch actions")} icon={<MoreHorizontal />} commands={commands} />
+    {current && <StatusTag status={current.state} registry={branchStates} />}
+    {current && count > 0 && <Tag label={t("Unsaved changes ({n})", { n: count })} tone="warning" />}
+    {save}
+    {dialogs}
   </div>;
 }
 

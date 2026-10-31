@@ -16,7 +16,7 @@ const types = ["text","longtext","integer","decimal","date","datetime","boolean"
 export function PropertyTypes() {
  const {source, holds}=useHost(),{open}=useApplicationWorkspace();
  if(!holds("build", "builder"))return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
- return <div className="grid gap-3"><PageHeader title={t("Shared properties")} help={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button>}/><ResourceList source={source} type="build.propertytype" fields={["title","name","type","version"]} onOpen={record=>open({view:"property-type",params:{id:record.id}})}/></div>;
+ return <div className="grid gap-3"><PageHeader title={t("Shared properties")} help={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<Button variant="primary" onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button>}/><ResourceList source={source} type="build.propertytype" fields={["title","name","type","version"]} onOpen={record=>open({view:"property-type",params:{id:record.id}})}/></div>;
 }
 
 export function PropertyTypeEditor({id}:{id:string}) {

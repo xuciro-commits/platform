@@ -1609,4 +1609,8 @@ export default {
   "Edited by {member}": "{member} 编辑",
   "Source time {time}": "来源时间 {time}",
   "Recorded at {time}": "记录于 {time}",
+  "Go to home": "返回首页",
+  "Open as page": "作为页面打开",
+  "Unpin from the rail": "从侧栏取消固定",
+  "Pin to the rail": "固定到侧栏",
 } as Record<string, string>;

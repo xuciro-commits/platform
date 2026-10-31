@@ -12,7 +12,7 @@ export function ActionMenu({ label, commands, icon, size = 'sm', variant = 'ghos
 }) {
   if (commands.length === 0) return null;
   return <DropdownMenu.Root>
-    <DropdownMenu.Trigger asChild><Button size={size} variant={variant} aria-label={children ? undefined : label} title={children ? undefined : label}>{icon}{children ?? label}</Button></DropdownMenu.Trigger>
+    <DropdownMenu.Trigger asChild><Button size={icon && !children ? "icon" : size} variant={variant} aria-label={children ? undefined : label} title={children ? undefined : label}>{icon}{children ?? (icon ? null : label)}</Button></DropdownMenu.Trigger>
     <DropdownMenu.Portal><DropdownMenu.Content aria-label={label} sideOffset={4} align="end" className={panel} onKeyDown={(event) => event.stopPropagation()}>
       {commands.map((command) => <Tooltip key={command.id} content={command.reason} side="left"><DropdownMenu.Item disabled={command.disabled} onSelect={command.run}
         className={`${item} ${command.reason ? '' : 'data-[disabled]:pointer-events-none'} ${command.danger ? 'text-[var(--tone-danger)]' : ''} ${command.separatorBefore ? 'mt-1 border-t border-border pt-2' : ''}`}>

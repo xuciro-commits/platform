@@ -3,16 +3,16 @@ import { t, type PlatformApplication } from "@platform/ui";
 
 export const categories: { id: PlatformAppCategory; label: () => string }[] = [
   { id: "business", label: () => t("Business applications") },
-  { id: "ontology", label: () => t("Knowledge and data") },
-  { id: "build", label: () => t("Build and intelligence") },
-  { id: "operate", label: () => t("Run and manage") },
+  { id: "build", label: () => t("Build") },
+  { id: "ontology", label: () => t("Data and knowledge") },
+  { id: "operate", label: () => t("Administration") },
 ];
 
 export type Projection = "operations" | "build" | "admin";
-export const projections: { id: Projection; title: () => string; categories: PlatformAppCategory[] }[] = [
-  { id: "operations", title: () => t("Operate"), categories: ["business", "ontology"] },
-  { id: "build", title: () => t("Build"), categories: ["ontology", "build"] },
-  { id: "admin", title: () => t("System"), categories: ["operate"] },
+export const projections: { id: Projection; categories: PlatformAppCategory[] }[] = [
+  { id: "operations", categories: ["business", "ontology"] },
+  { id: "build", categories: ["build", "ontology"] },
+  { id: "admin", categories: ["operate"] },
 ];
 
 export const portalEntry = (app: AppUI, host: Host): PlatformApplication =>

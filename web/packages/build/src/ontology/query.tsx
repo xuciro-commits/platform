@@ -19,7 +19,7 @@ const supported = ["text","choice","reference","boolean","integer","decimal","da
 export function Queries() {
  const {source, holds}=useHost(),{open}=useApplicationWorkspace();
  if(!holds("build", "builder"))return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
- return <div className="grid gap-3"><PageHeader title={t("Queries")} help={t("Publish reusable record reads and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"query",params:{id:"new"}})}>{t("New query")}</Button>}/><ResourceList source={source} type="build.query" fields={["title","name","object","interface","version"]} onOpen={(record)=>open({view:"query",params:{id:record.id}})}/></div>;
+ return <div className="grid gap-3"><PageHeader title={t("Queries")} help={t("Publish reusable record reads and bind pages to an exact version.")} actions={<Button variant="primary" onClick={()=>open({view:"query",params:{id:"new"}})}>{t("New query")}</Button>}/><ResourceList source={source} type="build.query" fields={["title","name","object","interface","version"]} onOpen={(record)=>open({view:"query",params:{id:record.id}})}/></div>;
 }
 export function QueryEditor({id}:{id:string}) {
  const {definitions, holds}=useHost(),{open}=useApplicationWorkspace();

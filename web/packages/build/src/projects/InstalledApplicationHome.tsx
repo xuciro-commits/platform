@@ -60,7 +60,7 @@ export function InstalledApplicationHome({ id, area, selected }: { id: string; a
     { id: "kind", header: t("Type"), accessorFn: item => t(item.kind.label) },
     { id: "identity", header: t("Identity"), accessorFn: item => refKey(item.ref) },
   ];
-  return <Workbench storageKey="project" title={title} crumbs={[{ label: t("Applications"), onClick: () => open({ view: "projects" }) }]}
+  return <Workbench storageKey="project" title={title} crumbs={[{ label: t("Projects"), onClick: () => open({ view: "projects" }) }]}
     status={<span className="text-xs text-muted">{t(definition?.source === "code" ? "Native code" : "Published application")} · {definition?.version ?? installedApps.data?.find(app => app.id === ref.app)?.version}</span>}
     actions={<>
       <ContextHelp title={title}>{t("Inspect the declared assets and extend them without changing their owner or permissions.")}</ContextHelp>

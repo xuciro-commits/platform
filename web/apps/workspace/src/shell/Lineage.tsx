@@ -72,7 +72,7 @@ function CapabilityDiscovery({ app, focus, onOpen }: { app: string; focus?: Asse
     ]} />
     {chosen && <div className="grid gap-2 text-xs">
       <Button size="sm" variant="ghost" onClick={() => onOpen(chosen.ref)}>{t("Open asset")}: {chosen.ref.name}</Button>
-      <Disclosure summary={t("Typed inputs and outputs")}><pre className="max-h-56 overflow-auto rounded bg-subtle p-2">{JSON.stringify({ inputs: chosen.capability.inputs, outputs: chosen.capability.outputs, parameters: chosen.capability.parameters }, null, 2)}</pre></Disclosure>
+      <Disclosure summary={t("Typed inputs and outputs")}><pre className="max-h-56 overflow-auto rounded bg-canvas p-2">{JSON.stringify({ inputs: chosen.capability.inputs, outputs: chosen.capability.outputs, parameters: chosen.capability.parameters }, null, 2)}</pre></Disclosure>
     </div>}
   </Panel>;
 }

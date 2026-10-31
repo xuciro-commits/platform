@@ -22,7 +22,7 @@ export function Datasets() {
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Datasets")} help={t("Rows as they came, in versions. A source loads a dataset instead of mapping straight to an object; a pipeline reads one and writes another or an object.")}
-      actions={<Button onClick={() => open({ view: "dataset", params: { id: "new" } })}>{t("New dataset")}</Button>} />
+      actions={<Button variant="primary" onClick={() => open({ view: "dataset", params: { id: "new" } })}>{t("New dataset")}</Button>} />
     <ResourceList source={source} type="build.dataset" fields={["title", "name", "producer", "version", "marking"]} onOpen={(record) => open({ view: "dataset", params: { id: record.id } })} />
   </div>;
 }

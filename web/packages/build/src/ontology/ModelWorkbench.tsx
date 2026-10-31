@@ -3,47 +3,28 @@ import { useCurrentBranch } from "../branches/current";
 import { useDraftInventory } from "../branches/records";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { useStudioApplication } from "../projects/use-studio-application";
-import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
-import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
-import { ContextHelp, Button, Checkbox, DataTable, Form, GroupedList, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, RelationCanvas, Tag,
-  t, type ColumnDef, type RelationEdge, type RelationNode, ContentTabs, SegmentedChoice , Workbench } from "@platform/ui";
+import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, useHost, type Definition, type SemanticRelation } from "@platform/app";
+import { ContextHelp, Button, Checkbox, DataTable, EmptyState, Form, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, Tag,
+  t, type ColumnDef, ContentTabs } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { Layers, Link2 } from "lucide-react";
 import { useInterfaces } from "./shape";
 import { projectGroup, useProjectIndex } from "../projects/membership";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type DraftProperty = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 type ObjectDraft = { id: string; revision: number; archived?: boolean; name: string; title: string; icon?: string; color?: string; state: string; fields: DraftProperty[]; actions?: { name: string; title: string }[]; access?: { role: string; read: string }[]; implements?: string[]; extends?: string };
 type Resource = { ref: Api.AssetRef; title: string; source: string; installed?: Definition; draft?: ObjectDraft; fields: (Api.FieldInfo | DraftProperty)[] };
-type Selection = { kind: "property"; ref: PropertyRef } | { kind: "relation"; relation: SemanticRelation; inbound: boolean } | { kind: "action"; definition: Definition };
 type PageSeed = { object: Api.AssetRef; field?: string; relation?: SemanticRelation };
 
-export function ModelWorkbench({ initialObject, initialTab }: { initialObject?: string; initialTab?: string }) {
-  const { holds} = useHost();
-  return holds("build", "builder") ? <ModelInventory initialObject={initialObject} initialTab={initialTab} />
-    : <PageHeader title={t("Objects")} description={t("Only a builder can edit application assets.")} />;
-}
-
-function ModelInventory({ initialObject, initialTab }: { initialObject?: string; initialTab?: string }) {
+function useObjectResources() {
   const host = useHost();
-  const application = useApplicationScope(), { id: branch } = useCurrentBranch();
+  const application = useApplicationScope();
   const { application: project, installed: installedApplication } = useStudioApplication(application);
   const held = project?.resources?.filter(ref => ref.kind === "object").map(ref => ref.name);
-  const { open } = useApplicationWorkspace();
   const inventory = useDraftInventory<ObjectDraft>("build.object", 1000, !installedApplication);
-  const linkInventory=useDraftInventory<{id:string;name:string}>("build.linktype");
-  const propertyInventory=useDraftInventory<{id:string;name:string}>("build.propertytype");
   const model = useMemo(() => semanticModelView(host.definitions), [host.definitions]);
-  const [search, setSearch] = useState("");
-  const [showSystem, setShowSystem] = useSystemDefinitionsVisibility();
-  const includeSystem = showSystem || !!application;
-  const [current, setCurrent] = useState(initialObject ?? ""), [view, setView] = useState<"catalog" | "graph" | "detail" | "shared" | "interfaces">(initialObject ? "detail" : "catalog");
-  const interfaces = useInterfaces().filter(shape => includeSystem || host.definitions.find(definition => definition.ref.app === shape.app && definition.ref.kind === "interface" && definition.ref.name === shape.name)?.source !== "code");
-  const [shared,setShared]=useState("");
-  const [tab, setTab] = useState(initialTab ?? "overview"), [selection, select] = useState<Selection>();
-  const [seed, setSeed] = useState<PageSeed>();
   const resources = useMemo(() => {
     const all = new Map<string, Resource>(model.objects.map((installed) => [installed.ref.name, { ref: installed.ref, title: installed.entity!.title, source: installed.source, installed, fields: installed.entity!.fields }]));
     for (const draft of installedApplication ? [] : inventory.data?.records ?? []) {
@@ -53,132 +34,135 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
     }
     return [...all.values()].filter(item => !application || held?.includes(item.ref.name)).sort((a, b) => a.title.localeCompare(b.title));
   }, [model, inventory.data, installedApplication, application, project]);
-  const listedResources = useMemo(() => resources.filter(item => includeSystem || item.source !== "code"), [resources, includeSystem]);
-  const resource = resources.find((item) => item.ref.name === current);
-  const visible = useMemo(() => listedResources.filter((item) => `${item.title} ${item.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [listedResources, search]);
+  return { resources, model, inventory, application };
+}
+
+const iconOf = (item: Resource) => ({ icon: item.installed?.entity?.icon ?? item.draft?.icon, color: item.installed?.entity?.color ?? item.draft?.color });
+
+export function ModelWorkbench({ initialObject, initialTab }: { initialObject?: string; initialTab?: string }) {
+  const { holds } = useHost();
+  if (!holds("build", "builder")) return <PageHeader title={t("Object types")} description={t("Only a builder can edit application assets.")} />;
+  return initialObject ? <ObjectTypeDetail key={initialObject} name={initialObject} initialTab={initialTab} /> : <ObjectTypes />;
+}
+
+function ObjectTypes() {
+  const host = useHost();
+  const { id: branch } = useCurrentBranch();
+  const { open } = useApplicationWorkspace();
+  const { resources, model, inventory, application } = useObjectResources();
+  const [search, setSearch] = useState("");
+  const [showSystem, setShowSystem] = useSystemDefinitionsVisibility();
+  const includeSystem = showSystem || !!application;
   const projects = useProjectIndex();
   const appTitle = (id: string) => host.me.apps.find((a) => a.id === id)?.title ?? id;
-  const choose = (item: Resource) => { setCurrent(item.ref.name); setView("detail"); select(undefined); setTab("overview"); };
-  useEffect(() => { setSeed(undefined); }, [current]);
-  const edit = (item: Resource, parameters: Record<string, string> = {}) => {
-    if (item.draft && host.can("build.object.edit")) open({ view: "object-type", params: { id: item.draft.id, ...parameters } });
-  };
+  const visible = useMemo(() => resources.filter(item => (includeSystem || item.source !== "code") && `${item.title} ${item.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [resources, includeSystem, search]);
+  const linkCount = (item: Resource) => model.relations.filter(relation => relation.ref.object.name === item.ref.name || relation.target.name === item.ref.name).length;
+  const actionCount = (item: Resource) => Math.max(host.definitions.filter(definition => definition.ref.kind === "action" && definition.action?.target === item.ref.name).length, item.draft?.actions?.length ?? 0);
+  const openResource = (item: Resource) => item.draft && host.can("build.object.edit")
+    ? open({ view: "object-type", params: { id: item.draft.id } })
+    : open({ view: "object-type", params: { object: item.ref.name } });
+  const count = (value: number) => <span className="tabular-nums text-muted">{value}</span>;
   const columns: ColumnDef<Resource>[] = [
-    { accessorKey: "title", header: t("Object"), meta: { width: 210, pin: "left" } },
-    { id: "identity", accessorFn: (item) => item.ref.name, header: t("Identity"), meta: { width: 230 } },
-    { id: "source", header: t("Source"), accessorFn: (item) => item.source, cell: ({ row }) => <Tag label={t(row.original.source === "code" ? "Native code" : "Tenant definition")} /> },
-    { id: "state", header: t("Status"), accessorFn: (item) => item.installed ? "published" : "draft", cell: ({ row }) => t(row.original.installed ? "Published" : "Draft") },
+    { id: "title", accessorKey: "title", header: t("Object type"), meta: { width: 300, pin: "left" }, cell: ({ row }) => <span className="flex min-w-0 items-center gap-2">
+      <ObjectIcon {...iconOf(row.original)} className="size-6 rounded-sm" />
+      <span className="grid min-w-0"><span className="truncate font-medium">{row.original.title}</span><span className="truncate font-mono text-2xs text-muted">{row.original.ref.name}</span></span>
+    </span> },
+    { id: "state", header: t("Status"), meta: { width: 110 }, accessorFn: (item) => item.installed ? "published" : "draft", cell: ({ row }) => <Tag label={t(row.original.installed ? (row.original.draft && row.original.draft.state !== "published" ? "Changed" : "Published") : "Draft")} tone={row.original.installed ? (row.original.draft && row.original.draft.state !== "published" ? "warning" : "success") : "neutral"} /> },
+    { id: "properties", header: t("Properties"), meta: { width: 100 }, accessorFn: (item) => item.fields.length, cell: ({ row }) => count(row.original.fields.length) },
+    { id: "links", header: t("Links"), meta: { width: 80 }, accessorFn: linkCount, cell: ({ row }) => count(linkCount(row.original)) },
+    { id: "actions", header: t("Actions"), meta: { width: 90 }, accessorFn: actionCount, cell: ({ row }) => count(actionCount(row.original)) },
+    { id: "project", header: t("Project"), meta: { width: 200 }, accessorFn: (item) => item.source === "code" ? appTitle(item.installed?.ref.app ?? item.ref.app) : projectGroup(projects, item.ref).label },
+    { id: "source", header: t("Defined by"), meta: { width: 140 }, accessorFn: (item) => item.source, cell: ({ row }) => <span className="text-muted">{t(row.original.source === "code" ? "Native code" : "Tenant definition")}</span> },
   ];
-  const graph = useMemo(() => {
-    const shown = visible.slice(0, 80), ids = new Set(shown.map((item) => item.ref.name));
-    const edges: RelationEdge[] = model.relations.filter((relation) => ids.has(relation.ref.object.name) && ids.has(relation.target.name)).map((relation) => ({
-      id: relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`,
-      source: relation.ref.object.name, target: relation.target.name, label: relation.title,
-    }));
-    const nodes: RelationNode[] = shown.map((item) => ({ id: item.ref.name, label: item.title, detail: item.ref.name, class: "object" }));
-    return { nodes, edges };
-  }, [visible, model]);
-  const related = resource ? model.relations.filter((relation) => relation.ref.object.name === current || relation.target.name === current) : [];
-  const actions = host.definitions.filter((definition) => definition.ref.kind === "action" && definition.action?.target === current);
-  const dependencies = useDependencies(resource?.ref, undefined, !!resource?.installed);
-  const used = (dependencies.data?.usedBy ?? []).flatMap(ref => { const owner = host.definitions.find(definition => assetKey(definition.ref) === assetKey(ref)); return owner ? [{ owner }] : []; });
-  const property = selection?.kind === "property" ? resource?.fields.find((field) => field.name === selection.ref.field) : undefined;
-  const sharedProperties=model.propertyTypes.filter(p=>(includeSystem||p.definition.source!=="code")&&`${p.property.title} ${p.binding.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
-  const sharedProperty=model.propertyTypes.find(p=>assetBindingKey(p.binding)===shared);
-  const propertySource=property?.property?model.propertyTypes.find(p=>assetBindingKey(p.binding)===assetBindingKey(property.property!)):undefined;
-  const editShared=(name:string)=>{const draft=propertyInventory.data?.records.find(p=>p.name===name);if(draft)open({view:"property-type",params:{id:draft.id}});};
-  return <div className="flex flex-col gap-2 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
-    <PageHeader title={t("Objects")} help={t("Explore the business model, inspect relationships, and bind real resources to pages.")}
-      actions={<div className="flex flex-wrap gap-2">{application ? <Button onClick={() => open({ view: "project", params: { id: application, area: "model" } })}>{t("Add model resources")}</Button> : <><AssetControls type="build.object" /><NewActions type="build.object" onCreated={branch ? target => open({ view: "object-type", params: { id: target.id } }) : undefined}/><Button onClick={()=>open({view:"link-type",params:{id:"new",parent:current}})}>{t("New relationship")}</Button><Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button></>}</div>} />
-    <div role="toolbar" aria-label={t("Model navigation")} className="flex flex-wrap items-center gap-2">
-      <SegmentedChoice label={t("Model navigation")} value={view} onChange={next => setView(next as typeof view)} options={[
-        { value: "catalog", label: t("Model catalog") }, { value: "graph", label: t("Relationship graph") },
-        { value: "shared", label: t("Shared property catalog") }, { value: "interfaces", label: t("Interfaces") }]} />
-      <Input aria-label={t("Search model resources")} placeholder={t("Search model resources")} value={search} onChange={(event) => setSearch(event.target.value)} className="ml-auto h-8 w-56 text-xs" />
-      {!application && <SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />}
-    </div>
+  return <div className="flex min-h-full flex-col gap-3">
+    <PageHeader title={t("Object types")} meta={t("{count} object types", { count: visible.length })} help={t("Every object type in the tenant ontology. Open one to edit its properties, links, actions and access.")}
+      actions={<>
+        <Input type="search" aria-label={t("Search object types")} placeholder={t("Search object types")} value={search} onChange={(event) => setSearch(event.target.value)} className="w-56" />
+        {!application && <SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />}
+        {application ? <Button variant="primary" onClick={() => open({ view: "project", params: { id: application } })}>{t("Add object types")}</Button>
+          : <NewActions type="build.object" onCreated={branch ? target => open({ view: "object-type", params: { id: target.id } }) : undefined} />}
+      </>} />
     {inventory.isError && <Panel role="alert">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
-    <Workbench storageKey="object-model" mainLabel={t("Model workspace")}
-      left={{ label: t("Model resources"), content: <div className="grid content-start gap-3 p-3">
-        <GroupedList<Resource> items={listedResources} id={(item) => item.ref.name} selected={current} onSelect={choose}
-          text={(item) => `${item.title} ${item.ref.name}`} dense
-          groupings={[
-            { id: "project", label: t("Project"), of: (item) => item.source === "code" ? { id: `app:${item.installed?.ref.app ?? item.ref.app}`, label: appTitle(item.installed?.ref.app ?? item.ref.app), hint: t("shipped"), order: 5 } : projectGroup(projects, item.ref) },
-            { id: "owner", label: t("Owner"), of: (item) => ({ id: item.installed?.ref.app ?? item.ref.app, label: appTitle(item.installed?.ref.app ?? item.ref.app) }) },
-            { id: "status", label: t("Status"), of: (item) => item.installed ? { id: "published", label: t("Published") } : { id: "draft", label: t("Draft"), order: 1 } },
-          ]}
-          row={(item) => <><ObjectIcon icon={item.installed?.entity?.icon ?? item.draft?.icon} color={item.installed?.entity?.color ?? item.draft?.color} className="size-5 rounded-sm" /><span className="min-w-0 flex-1 truncate">{item.title}</span>
-            {!item.installed && <span className="shrink-0 text-2xs text-muted">{t("Draft")}</span>}</>}
-          empty={t("No matching objects.")} />
-      </div> }}
-      right={{ label: t("Semantic inspector"), heading: t("Semantic inspector"), content: <div className="grid content-start gap-3 p-3">
-        {view==="shared" ? sharedProperty ? <><h2 className="text-sm font-semibold">{sharedProperty.property.title}</h2><PropertyList items={[[t("Identity"),sharedProperty.binding.ref.name],[t("Type"),t(sharedProperty.property.type)],[t("Version"),sharedProperty.binding.sourceVersion],[t("Source"),t(sharedProperty.definition.source==="code"?"Native code":"Tenant definition")]]}/><p className="text-xs">{sharedProperty.property.description}</p>{sharedProperty.definition.source==="tenant"&&<Button onClick={()=>editShared(sharedProperty.binding.ref.name)}>{t("Edit shared property")}</Button>}<ContextHelp title={t("Shared property")}><p className="text-xs text-muted">{t("Local field names, required values and access belong to each object.")}</p></ContextHelp>{resources.flatMap(item=>item.fields.filter(f=>f.property&&assetBindingKey(f.property)===shared).map(f=><Button key={`${item.ref.name}/${f.name}`} variant="row" onClick={()=>{choose(item);setTab("properties");select({kind:"property",ref:{object:item.ref,field:f.name}});}}>{item.title} · {f.name}</Button>))}</>:<p className="text-xs text-muted">{t("Choose a shared property version to inspect its consumers.")}</p> : resource ? <><h2 className="text-sm font-semibold">{property?.title ?? resource.title}</h2><p className="break-all font-mono text-xs text-muted">{current}{property ? `.${property.name}` : ""}</p>
-          <Tag label={t(resource.source === "code" ? "Native code" : "Tenant definition")} />
-          {view === "graph" && <Button onClick={() => choose(resource)}>{t("Open object details")}</Button>}
-          {selection?.kind === "property" && property && <>
-            <PropertyList items={[[t("Type"), t(property.type)], [t("Required"), property.required ? t("Yes") : t("No")]]} />
-            {property.property&&<><PropertyList items={[[t("Shared property"),property.property.ref.name],[t("Version"),property.property.sourceVersion]]}/>{propertySource?<><p className="text-xs">{propertySource.property.description}</p>{propertySource.definition.source==="tenant"&&<Button onClick={()=>editShared(propertySource.binding.ref.name)}>{t("Edit shared property")}</Button>}</>:<p role="alert" className="text-xs text-danger">{t("The bound shared property version is unavailable.")}</p>}</>}
-            <Button disabled={!resource.installed} onClick={() => setSeed({ object: resource.ref, field: property.name })}>{t("Use property in page")}</Button>
-            {resource.draft && <Button disabled={!host.can("build.object.edit")} onClick={() => edit(resource, { field: property.name })}>{t("Edit property")}</Button>}
-          </>}
-          {selection?.kind === "relation" && <>
-            <p className="text-xs">{selection.relation.title} · {selection.relation.ref.field}</p>
-            {selection.relation.linkType?<><PropertyList items={[[t("Relationship version"),selection.relation.definition?.version??""],[t("Cardinality"),t(selection.relation.linkType.cardinality==="one-to-one"?"One-to-one (at most one child)":"One-to-many")],[t("Archive policy"),t(selection.relation.linkType.deletePolicy==="restrict-active"?"Protect active references":"Object owner")]]}/>{selection.relation.definition?.source==="tenant"&&<Button onClick={()=>{const row=linkInventory.data?.records.find(r=>r.name===selection.relation.definition?.ref.name);if(row)open({view:"link-type",params:{id:row.id}});}}>{t("Edit relationship")}</Button>}</>:<><p className="text-xs text-muted">{t("This relationship is backed by a reference field. Cardinality and delete rules are not inferred.")}</p>{selection.relation.owner.source==="tenant"&&selection.relation.targetDefinition.source==="tenant"&&<Button onClick={()=>open({view:"link-type",params:{id:"new",parent:selection.relation.target.name,child:selection.relation.ref.object.name,via:selection.relation.ref.field}})}>{t("Define relationship asset")}</Button>}</>}
-            <Button onClick={() => choose(resources.find((item) => item.ref.name === (selection.inbound ? selection.relation.ref.object.name : selection.relation.target.name))!)}>{t("Open related object")}</Button>
-            <Button disabled={!selection.inbound || (!selection.relation.inverse&&!selection.relation.linkType) || selection.relation.field.type !== "reference"} onClick={() => setSeed({ object: resource.ref, relation: selection.relation })}>{t("Use related records in page")}</Button>
-            {(!selection.inbound || (!selection.relation.inverse&&!selection.relation.linkType) || selection.relation.field.type !== "reference") && <p className="text-xs text-muted">{t("Related-page binding needs an incoming scalar reference with a declared inverse name.")}</p>}
-          </>}
-          {selection?.kind === "action" && selection.definition.action && <>
-            <h3 className="text-sm font-medium">{selection.definition.action.title}</h3><p className="text-xs text-muted">{selection.definition.action.description}</p>
-            <PropertyList items={selection.definition.action.payload.map((field) => [field.name, `${t(field.type)}${field.required ? " *" : ""}`])} />
-            {resource.draft && <Button onClick={() => edit(resource, { action: selection.definition.ref.name.replace(`${current}.`, "") })}>{t("Edit action")}</Button>}
-          </>}
-          {resource.draft && <Button onClick={() => edit(resource)}>{t("Edit object")}</Button>}
-          {resource.source === "code" && <p className="text-xs text-muted">{t("Native definitions are maintained by their code owner. This workbench provides read-only inspection.")}</p>}
-          {!resource.installed && <p className="text-xs text-muted">{t("Publish this object before binding it to a page.")}</p>}
-          {resource.draft && <Button onClick={() => open({ view: "release-review", params: { kind: "object", id: resource.draft!.id } })}>{t("Review release")}</Button>}
-        </> : <p className="text-xs text-muted">{t("Choose an object or relationship to inspect it.")}</p>}
-      </div> }}>
-      <div className="min-h-[26rem] flex-1 overflow-auto p-3">
-        {view==="shared"&&<DataTable data={sharedProperties} getRowId={p=>assetBindingKey(p.binding)} searchable={false} height="100%" onRowClick={p=>setShared(assetBindingKey(p.binding))} empty={t("No published shared property yet.")} columns={[{id:"title",header:t("Shared property"),accessorFn:p=>p.property.title},{id:"name",header:t("Identity"),accessorFn:p=>p.binding.ref.name},{id:"type",header:t("Type"),accessorFn:p=>t(p.property.type)},{id:"version",header:t("Version"),accessorFn:p=>p.binding.sourceVersion}]}/>}
-        {view === "interfaces" && <div className="grid gap-3"><ContextHelp title={t("Interfaces")}><p className="text-xs text-muted">{t("An interface is a shape several objects share; a page or query written against it works for all of them. Apps declare interfaces; objects implement them.")}</p></ContextHelp>
-          {interfaces.map((shape) => { const implementers = resources.filter((item) => item.installed?.entity?.implements?.includes(shape.name)); return <div key={shape.name} className="grid gap-1 rounded-md border border-border p-3">
-            <div className="flex items-center gap-2"><Layers className="size-4 text-primary" /><span className="text-sm font-semibold">{shape.title}</span><span className="font-mono text-xs text-muted">{shape.name}</span><Tag label={shape.app} /></div>
-            {shape.description && <p className="text-xs text-muted">{shape.description}</p>}
-            <p className="text-xs">{shape.fields.map((f) => `${f.name}: ${t(f.type)}`).join(" · ")}</p>
-            <div className="flex flex-wrap gap-1">{implementers.map((item) => <Button key={item.ref.name} size="sm" onClick={() => choose(item)}>{item.title}</Button>)}{!implementers.length && <span className="text-xs text-muted">{t("No installed object implements it yet.")}</span>}</div>
-          </div>; })}{!interfaces.length && <p className="text-xs text-muted">{t("No app declares an interface yet.")}</p>}</div>}
-        {view === "catalog" && <DataTable data={visible} columns={columns} getRowId={(item) => item.ref.name} height="100%" loading={inventory.isLoading} searchable={false}
-          onRowClick={(item) => item.draft && !item.installed ? edit(item) : choose(item)} empty={t("No matching objects.")} />}
-        {view === "graph" && <div className="flex h-full min-h-[25rem] flex-col"><p className="mb-2 text-xs text-muted" role="status">{t("Showing {shown} of {total} objects", { shown: graph.nodes.length, total: visible.length })}</p>
-          <RelationCanvas layout="right" nodes={graph.nodes} edges={graph.edges} selected={current} height="100%" label={t("Relationship graph")} storeKey="model-graph"
-            onSelect={(name) => { if (name) { setCurrent(name); select(undefined); } }} onOpen={(name) => { const item = resources.find((item) => item.ref.name === name); if (item) choose(item); }} /></div>}
-        {view === "detail" && resource && <div className="grid gap-3">
-          <div className="flex items-center gap-3"><ObjectIcon icon={resource.installed?.entity?.icon ?? resource.draft?.icon} color={resource.installed?.entity?.color ?? resource.draft?.color} /><div className="min-w-0 flex-1"><h2 className="text-base font-semibold">{resource.title}</h2><p className="font-mono text-xs text-muted">{resource.ref.name}{resource.installed?.entity?.implements?.length ? <> · {t("implements")} {resource.installed.entity.implements.join(", ")}</> : null}{resource.draft?.extends ? <> · {t("extends")} {resource.draft.extends}</> : null}</p></div><Tag label={t(resource.installed ? "Published" : "Draft")} /></div>
-          <ContentTabs label={t("Object resource views")} value={tab}
-            onChange={(id) => { setTab(id as typeof tab); select(undefined); }} items={[
-          { id: "overview", title: t("Overview"), content: <><PropertyList items={[[t("Identity"), resource.ref.name], [t("Owner"), resource.ref.app], [t("Source"), t(resource.source === "code" ? "Native code" : "Tenant definition")], [t("Version"), resource.installed?.version ?? t("Draft")], [t("Title property"), resource.installed?.entity?.display ?? "—"]]} />
-            <p className="text-sm text-muted">{resource.installed?.entity?.description ?? t("Define fields, relationships, actions and access.")}</p></> },
-          { id: "properties", title: t("Properties"), content: <DataTable data={resource.fields} getRowId={(field) => field.name} searchable={false} height={380} onRowClick={(field) => select({ kind: "property", ref: { object: resource.ref, field: field.name } })}
-            columns={[{ accessorKey: "title", header: t("Property") }, { accessorKey: "name", header: t("Name") }, { accessorKey: "type", header: t("Type"), cell: ({ row }) => t(row.original.type) }, { id: "shared", header: t("Shared property version"), accessorFn:f=>f.property?`${f.property.ref.name}@${f.property.sourceVersion}`:"—" }, { id: "reference", header: t("Reference object"), accessorFn: (field) => field.ref ?? "—" }]} /> },
-          { id: "links", title: t("Relationships"), content: <div className="grid gap-2">{related.map((relation) => {
-            const inbound = relation.target.name === current;
-            return <Button key={relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`} variant="row" onClick={() => select({ kind: "relation", relation, inbound })}>
-              <Link2 /><span className="min-w-0 flex-1 text-left"><span className="block text-xs font-medium">{inbound ? relation.inverse ?? relation.title : relation.title}</span><span className="block truncate font-mono text-2xs text-muted">{relation.ref.object.name}.{relation.ref.field} → {relation.target.name}</span></span><Tag label={t(inbound ? "Incoming reference" : "Outgoing reference")} />
-            </Button>;
-          })}{!related.length && <p className="text-xs text-muted">{t("No visible reference relationships.")}</p>}</div> },
-          { id: "actions", title: t("Actions"), content: <div className="grid gap-2">{actions.map((definition) => <Button key={definition.ref.name} variant="row" onClick={() => select({ kind: "action", definition })}>{definition.action!.title}<span className="ml-auto font-mono text-2xs text-muted">{definition.ref.name}</span></Button>)}
-            {!actions.length && <p className="text-xs text-muted">{t("No action of this object is offered to you.")}</p>}{resource.draft && <div className="flex flex-wrap gap-2">{(resource.draft.actions ?? []).map((a) => <Button key={a.name} size="sm" onClick={() => host.can("build.object.edit") && open({ view: "action-type", params: { id: resource.draft!.id, action: a.name } })}>{a.title || a.name}</Button>)}<Button size="sm" variant="primary" onClick={() => edit(resource, { tab: "lifecycle" })}>{t("Edit the lifecycle")}</Button></div>}</div> },
-          { id: "data", title: t("Data"), content: (resource.installed ? <RecordList source={host.source} type={resource.ref.name} fields={resource.fields.filter((field) => field.type !== "lines" && !("aside" in field && field.aside)).slice(0, 5).map((field) => field.name)} height={420} /> : <Panel>{t("Publish this object before reading its business records.")}</Panel>) },
-          { id: "usage", title: t("Usage"), content: <div className="grid gap-2"><ContextHelp title={t("Usage")}><p className="text-xs text-muted">{t("Usage follows declared dependencies visible to the current member.")}</p></ContextHelp>{dependencies.isError && <p role="alert" className="text-xs text-danger">{t("Asset dependencies could not be loaded.")}</p>}{used.map(({ owner }) => <Button key={`${owner.ref.app}/${owner.ref.kind}/${owner.ref.name}`} variant="row" onClick={() => owner.page ? open({ view: "page", params: owner.ref }) : open({ view: "definition", params: owner.ref })}>
-            {owner.page?.title ?? owner.action?.title ?? owner.query?.title ?? owner.ref.name}<Tag label={owner.ref.kind} /></Button>)}{!used.length && <p className="text-xs text-muted">{t("No visible declared usage.")}</p>}</div> },
-          { id: "access", title: t("Access"), content: <><ContextHelp title={t("Access")}><p className="text-xs text-muted">{t("Object, field and action access is enforced by the original owner.")}</p></ContextHelp><PropertyList items={resource.fields.filter((field) => field.read?.length || field.write?.length).map((field) => [field.title, `${t("Read")}: ${field.read?.join(", ") ?? "—"} · ${t("Write")}: ${field.write?.join(", ") ?? "—"}`])} />
-            {resource.draft && <><PropertyList items={(resource.draft.access ?? []).map((access) => [access.role, access.read])} /><Button onClick={() => edit(resource, { access: "true" })}>{t("Edit access")}</Button></>}</> }
-          ]} />
-        </div>}
-        {seed && <PageFromModel key={`${seed.object.name}/${seed.field ?? seed.relation?.ref.field ?? ""}`} seed={seed} onClose={() => setSeed(undefined)} />}
-      </div>
-    </Workbench>
+    <div className="min-h-[24rem] flex-1">
+      <DataTable data={visible} columns={columns} getRowId={(item) => item.ref.name} height="100%" loading={inventory.isLoading} searchable={false}
+        onRowClick={openResource} empty={search ? t("No matching objects.") : t("No object types yet.")} />
+    </div>
+  </div>;
+}
+
+function ObjectTypeDetail({ name, initialTab }: { name: string; initialTab?: string }) {
+  const host = useHost();
+  const { open } = useApplicationWorkspace();
+  const { resources, model, inventory } = useObjectResources();
+  const resource = resources.find(item => item.ref.name === name);
+  const [tab, setTab] = useState(initialTab ?? "properties");
+  const [seed, setSeed] = useState<PageSeed>();
+  const dependencies = useDependencies(resource?.ref, undefined, !!resource?.installed);
+  if (!resource) return <PageHeader title={t("Object type")} crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }]} description={inventory.isLoading ? t("Loading…") : t("This object type is not visible to you.")} />;
+  const related = model.relations.filter((relation) => relation.ref.object.name === name || relation.target.name === name);
+  const actions = host.definitions.filter((definition) => definition.ref.kind === "action" && definition.action?.target === name);
+  const used = (dependencies.data?.usedBy ?? []).flatMap(ref => { const owner = host.definitions.find(definition => assetKey(definition.ref) === assetKey(ref)); return owner ? [owner] : []; });
+  const edit = (parameters: Record<string, string> = {}) => { if (resource.draft && host.can("build.object.edit")) open({ view: "object-type", params: { id: resource.draft.id, ...parameters } }); };
+  const entity = resource.installed?.entity;
+  return <div className="grid min-w-0 gap-3">
+    <PageHeader crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }]} icon={<ObjectIcon {...iconOf(resource)} />} title={resource.title}
+      meta={<span className="font-mono">{resource.ref.name}</span>}
+      status={<Tag label={t(resource.source === "code" ? "Native code" : "Tenant definition")} />}
+      actions={<>
+        {resource.installed && <Button onClick={() => setSeed({ object: resource.ref })}>{t("Create page from model")}</Button>}
+        {resource.draft && <Button variant="primary" disabled={!host.can("build.object.edit")} onClick={() => edit()}>{t("Edit object type")}</Button>}
+      </>} />
+    {resource.source === "code" && <p className="text-xs text-muted">{t("Native definitions are maintained by their code owner. This workbench provides read-only inspection.")}</p>}
+    {entity?.description && <p className="max-w-3xl text-sm text-muted">{entity.description}</p>}
+    <PropertyList items={[[t("Owner"), resource.ref.app], [t("Version"), resource.installed?.version ?? t("Draft")], [t("Title property"), entity?.display ?? "—"], [t("Implements"), entity?.implements?.join(", ") || "—"]]} />
+    <ContentTabs label={t("Object type sections")} value={tab} onChange={setTab} items={[
+      { id: "properties", title: t("Properties"), badge: resource.fields.length, content: <DataTable data={resource.fields} getRowId={(field) => field.name} searchable={false} height={420}
+        columns={[{ accessorKey: "title", header: t("Property") }, { accessorKey: "name", header: t("API name"), cell: ({ row }) => <span className="font-mono text-xs">{row.original.name}</span> }, { accessorKey: "type", header: t("Type"), cell: ({ row }) => t(row.original.type) }, { id: "shared", header: t("Shared property"), accessorFn: f => f.property ? `${f.property.ref.name}@${f.property.sourceVersion}` : "—" }, { id: "reference", header: t("Reference object"), accessorFn: (field) => field.ref ?? "—" }, { id: "actions", header: "", meta: { width: 140 }, cell: ({ row }) => resource.installed ? <Button size="sm" variant="ghost" onClick={() => setSeed({ object: resource.ref, field: row.original.name })}>{t("Use in page")}</Button> : null }]} /> },
+      { id: "links", title: t("Links"), badge: related.length, content: <div className="grid gap-1">{related.map((relation) => {
+        const inbound = relation.target.name === name;
+        const usable = inbound && (!!relation.inverse || !!relation.linkType) && relation.field.type === "reference";
+        return <div key={relation.ref.kind === "link-type" ? `${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}` : `${relation.ref.object.name}/${relation.ref.field}`} className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2">
+          <Link2 className="size-3.5 text-muted" /><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{inbound ? relation.inverse ?? relation.title : relation.title}</span><span className="block truncate font-mono text-2xs text-muted">{relation.ref.object.name}.{relation.ref.field} → {relation.target.name}</span></span>
+          <Tag label={t(inbound ? "Incoming reference" : "Outgoing reference")} />
+          {usable && <Button size="sm" variant="ghost" onClick={() => setSeed({ object: resource.ref, relation })}>{t("Use in page")}</Button>}
+          <Button size="sm" variant="ghost" onClick={() => open({ view: "object-type", params: { object: inbound ? relation.ref.object.name : relation.target.name } })}>{t("Open related object")}</Button>
+        </div>;
+      })}{!related.length && <EmptyState title={t("No visible reference relationships.")} />}</div> },
+      { id: "actions", title: t("Actions"), badge: actions.length, content: <div className="grid gap-1">{actions.map((definition) => <div key={definition.ref.name} className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2">
+          <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{definition.action!.title}</span><span className="block truncate text-xs text-muted">{definition.action!.payload.map(field => `${field.name}${field.required ? "*" : ""}`).join(" · ")}</span></span>
+          <span className="font-mono text-2xs text-muted">{definition.ref.name}</span>
+          {resource.draft && <Button size="sm" variant="ghost" onClick={() => edit({ action: definition.ref.name.replace(`${name}.`, "") })}>{t("Edit action")}</Button>}
+        </div>)}{!actions.length && <EmptyState title={t("No action of this object is offered to you.")} />}</div> },
+      { id: "data", title: t("Data"), content: resource.installed ? <RecordList source={host.source} type={resource.ref.name} fields={resource.fields.filter((field) => field.type !== "lines" && !("aside" in field && field.aside)).slice(0, 6).map((field) => field.name)} height={420} /> : <EmptyState title={t("Publish this object before reading its business records.")} /> },
+      { id: "usage", title: t("Usage"), badge: used.length, content: <div className="grid gap-1">{dependencies.isError && <p role="alert" className="text-xs text-danger">{t("Asset dependencies could not be loaded.")}</p>}
+        {used.map(owner => <Button key={assetKey(owner.ref)} variant="row" onClick={() => owner.page ? open({ view: "page", params: { app: owner.ref.app, kind: "page", name: owner.ref.name } }) : open({ view: "definition", params: { ...owner.ref, surface: "studio" } })}>
+          <span className="min-w-0 flex-1 truncate">{owner.page?.title ?? owner.action?.title ?? owner.query?.title ?? owner.ref.name}</span><Tag label={owner.ref.kind} /></Button>)}
+        {!used.length && <EmptyState title={t("No visible declared usage.")} />}</div> },
+      { id: "access", title: t("Access"), content: <div className="grid gap-2"><PropertyList items={resource.fields.filter((field) => field.read?.length || field.write?.length).map((field) => [field.title, `${t("Read")}: ${field.read?.join(", ") ?? "—"} · ${t("Write")}: ${field.write?.join(", ") ?? "—"}`])} />
+        {resource.draft && <><PropertyList items={(resource.draft.access ?? []).map((access) => [access.role, access.read])} /><div><Button onClick={() => edit({ access: "true" })}>{t("Edit access")}</Button></div></>}</div> },
+    ]} />
+    {seed && <PageFromModel key={`${seed.object.name}/${seed.field ?? seed.relation?.ref.field ?? ""}`} seed={seed} onClose={() => setSeed(undefined)} />}
+  </div>;
+}
+
+export function Interfaces() {
+  const host = useHost();
+  const { open } = useApplicationWorkspace();
+  const { resources } = useObjectResources();
+  const [showSystem, setShowSystem] = useSystemDefinitionsVisibility();
+  const interfaces = useInterfaces().filter(shape => showSystem || host.definitions.find(definition => definition.ref.app === shape.app && definition.ref.kind === "interface" && definition.ref.name === shape.name)?.source !== "code");
+  return <div className="grid min-w-0 gap-3">
+    <PageHeader title={t("Interfaces")} meta={t("{count} interfaces", { count: interfaces.length })} help={t("An interface is a shape several objects share; a page or query written against it works for all of them. Apps declare interfaces; objects implement them.")}
+      actions={<SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />} />
+    <div className="grid gap-2">
+      {interfaces.map((shape) => { const implementers = resources.filter((item) => item.installed?.entity?.implements?.includes(shape.name)); return <div key={shape.name} className="grid gap-1.5 rounded-md border border-border bg-surface p-3">
+        <div className="flex items-center gap-2"><Layers className="size-4 text-primary" /><span className="text-sm font-semibold">{shape.title}</span><span className="font-mono text-xs text-muted">{shape.name}</span><Tag label={shape.app} /></div>
+        {shape.description && <p className="text-xs text-muted">{shape.description}</p>}
+        <p className="text-xs">{shape.fields.map((f) => `${f.name}: ${t(f.type)}`).join(" · ")}</p>
+        <div className="flex flex-wrap items-center gap-1"><span className="text-xs text-muted">{t("Implemented by")}</span>{implementers.map((item) => <Button key={item.ref.name} size="sm" variant="ghost" onClick={() => open({ view: "object-type", params: { object: item.ref.name } })}>{item.title}</Button>)}{!implementers.length && <span className="text-xs text-muted">{t("No installed object implements it yet.")}</span>}</div>
+      </div>; })}
+      {!interfaces.length && <EmptyState title={t("No app declares an interface yet.")} />}
+    </div>
   </div>;
 }
 
@@ -215,7 +199,7 @@ function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void 
     } catch { setError(t("The page draft could not be created. Your choices are still here.")); }
     finally { setBusy(false); }
   };
-  return <Panel role="region" aria-label={t("Create page from model")} title={t("Create page from model")} className="mt-4">
+  return <Panel role="region" aria-label={t("Create page from model")} title={t("Create page from model")}>
     <Form className="grid gap-3" onSubmit={() => create()}>
       <ContextHelp title={t("Create page draft")}><p className="text-xs text-muted">{t("This creates a controlled page draft. Review its bindings before releasing it.")}</p></ContextHelp>
       <fieldset disabled={busy} className="grid gap-3">

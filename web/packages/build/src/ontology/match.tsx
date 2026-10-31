@@ -20,7 +20,7 @@ export function Matches() {
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Matching rules")} description={t("Only a builder or integrator can edit matching rules.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Matching rules")} help={t("Say when rows from different systems are the same party, material or site, and whose value wins per field. One published rule per object; it applies to every source and pipeline writing it.")}
-      actions={<Button onClick={() => open({ view: "match", params: { id: "new" } })}>{t("New matching rule")}</Button>} />
+      actions={<Button variant="primary" onClick={() => open({ view: "match", params: { id: "new" } })}>{t("New matching rule")}</Button>} />
     <ResourceList source={source} type="build.match" fields={["title", "object", "state"]} onOpen={(record) => open({ view: "match", params: { id: record.id } })} />
   </div>;
 }

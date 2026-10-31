@@ -21,7 +21,7 @@ export function Agents() {
   if (!holds("build", "builder")) return <PageHeader title={t("Agents")} description={t("Only a builder can edit agents.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Agents")} help={t("An agent works on the ontology with the actions and queries you give it, within a budget. What it cannot take back waits for a person; every step is kept.")}
-      actions={<Button onClick={() => open({ view: "agent", params: { id: "new" } })}>{t("New agent")}</Button>} />
+      actions={<Button variant="primary" onClick={() => open({ view: "agent", params: { id: "new" } })}>{t("New agent")}</Button>} />
     <ResourceList source={source} type="build.agent" fields={["title", "name", "state", "version"]} onOpen={(record) => open({ view: "agent", params: { id: record.id } })} />
   </div>;
 }

@@ -21,7 +21,7 @@ export function Writebacks() {
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Writebacks")} help={t("Declare the connection and request mapping for external writes. Accepted actions, business confirmations and dispatches keep their own sending and retry rules.")}
-      actions={<Button onClick={() => open({ view: "writeback", params: { id: "new" } })}>{t("New writeback")}</Button>} />
+      actions={<Button variant="primary" onClick={() => open({ view: "writeback", params: { id: "new" } })}>{t("New writeback")}</Button>} />
     <ResourceList source={source} type="build.writeback" fields={["title", "object", "on", "connection", "sent", "failed", "state"]} onOpen={(record) => open({ view: "writeback", params: { id: record.id } })} />
   </div>;
 }

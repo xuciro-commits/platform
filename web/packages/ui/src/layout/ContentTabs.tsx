@@ -4,7 +4,7 @@ import { cn } from "../lib/cn";
 import { ViewVisibilityContext, useViewVisible } from "../shell/ViewVisibility";
 
 export function ContentTabs({ label, items, value, onChange, compact = false, wrap = !compact, open = true, actions, className, disabled = false, strict = false }: {
-  label: string; items: { id: string; title: ReactNode; content?: ReactNode }[];
+  label: string; items: { id: string; title: ReactNode; content?: ReactNode; badge?: ReactNode }[];
   value?: string; onChange: (id: string) => void;
   compact?: boolean; wrap?: boolean; open?: boolean; actions?: ReactNode; className?: string; disabled?: boolean; strict?: boolean;
 }) {
@@ -24,7 +24,7 @@ export function ContentTabs({ label, items, value, onChange, compact = false, wr
             if (target === undefined) return;
             event.preventDefault(); onChange(items[target]!.id);
             document.getElementById(`${prefix}-tab-${items[target]!.id}`)?.focus();
-          }}>{item.title}</Button>)}
+          }}>{item.title}{item.badge !== undefined && item.badge !== null && <span className="rounded-full bg-row-hover px-1.5 text-2xs font-medium tabular-nums text-muted">{item.badge}</span>}</Button>)}
       </div>
       {actions}
     </div>

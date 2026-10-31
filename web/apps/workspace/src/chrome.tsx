@@ -40,7 +40,7 @@ function MyInbox() {
   const approval = (task: InboxTask) => task.ref?.startsWith("work.approval/") ? task.ref.slice("work.approval/".length) : undefined;
   return (
     <>
-      <PageHeader title={t("Inbox")} help={t("Approvals waiting for you and tasks offered to you, from every app.")} />
+      <PageHeader title={t("Tasks and approvals")} help={t("Approvals waiting for you and tasks offered to you, from every app.")} />
       <Inbox tasks={tasks} onOpen={(task) => task.ref && openRecord(task.ref, { window: "tab" })}
         actions={(task) => approval(task) ? <>
           <Button size="sm" variant="primary" onClick={() => void decide("work.approval.approve", { type: "work.approval", id: approval(task)! }, {})}>{t("Approve")}</Button>
@@ -245,7 +245,7 @@ function Saved({ id }: { id: string }) {
 }
 
 export const personalWork = defineApp({
-  id: "my-work", serves: [], category: "operate", title: t("My work"), icon: <InboxIcon />,
+  id: "my-work", serves: [], category: "operate", title: t("Inbox"), icon: <InboxIcon />,
   description: t("Your tasks, requests, notifications and pending decisions across applications."),
   home: { view: "inbox" },
   views: [
@@ -255,7 +255,7 @@ export const personalWork = defineApp({
     { id: "outbox", title: () => t("Outbox"), render: () => <Outbox /> },
   ],
   nav: host => [{ label: t("My work"), items: [
-    { label: t("Inbox"), icon: <InboxIcon />, route: { view: "inbox" } },
+    { label: t("Tasks and approvals"), icon: <InboxIcon />, route: { view: "inbox" } },
     { label: t("My requests"), icon: <ClipboardList />, route: { view: "requests" } },
     { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" } },
     { label: t("Outbox"), icon: <Send />, route: { view: "outbox" }, badge: host.outbox.filter(entry => entry.state !== "SUBMISSION_STATE_CONFIRMED" && entry.state !== "SUBMISSION_STATE_REJECTED").length || undefined },

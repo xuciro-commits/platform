@@ -1,12 +1,11 @@
 import { ContextHelp, StructuredEditor , SegmentedChoice } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
 import { useHost, ModelPicker, ModelOptionsEditor, useRecordInventory, useReadQuery } from "@platform/app";
 import { type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, FlowCanvas, PageHeader, Panel, Select, Textarea, Workbench, t,
+import { Button, Card, Checkbox, Input, FlowCanvas, Panel, Select, Textarea, Workbench, t,
   type FlowNode, type FlowCatalog } from "@platform/ui";
 import { useState } from "react";
 import { type WorkflowObject } from "../automate/workflow-model";
@@ -22,16 +21,6 @@ const loaded = (record: FunctionDraft): FunctionDraft => ({ ...record, fields: r
 const scalarTypes = ["text", "longtext", "integer", "decimal", "boolean", "choice"];
 const toggle = (values: string[], name: string, enabled: boolean) => enabled ? [...new Set([...values, name])] : values.filter((value) => value !== name);
 
-export function Functions() {
-  const { source , holds} = useHost();
-  const { open } = useApplicationWorkspace();
-  if (!holds("build", "builder")) return <PageHeader title={t("AI functions")} description={t("Only a builder can edit AI functions.")} />;
-  return <div className="grid gap-3">
-    <PageHeader title={t("AI functions")} help={t("Turn readable record fields into typed suggestions for human review.")}
-      actions={<Button onClick={() => open({ view: "function", params: { id: "new" } })}>{t("New AI function")}</Button>} />
-    <ResourceList source={source} type="build.function" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "function", params: { id: record.id } })} />
-  </div>;
-}
 
 export function FunctionEditor({ id }: { id: string }) {
   const { holds} = useHost();

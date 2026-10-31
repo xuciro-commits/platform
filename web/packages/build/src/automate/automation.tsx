@@ -39,7 +39,7 @@ export function Automations() {
   const stateOf = (type: string, name: string) => entities.find((entity) => entity.type === type)?.lifecycle?.states.find((state) => state.name === name)?.title ?? name;
   return <div className="grid content-start gap-3 p-4">
     <PageHeader title={t("Automations")} help={t("When a record reaches a state, run effects. Each automation is one sentence; open it to shape the effects on the map.")}
-      actions={holds("build", "builder") && <Button onClick={() => open({ view: "automation", params: { id: "new" } })}><Plus />{t("New automation")}</Button>} />
+      actions={holds("build", "builder") && <Button variant="primary" onClick={() => open({ view: "automation", params: { id: "new" } })}><Plus />{t("New automation")}</Button>} />
     <div className="flex flex-wrap items-center gap-2">
       <Input type="search" aria-label={t("Filter automations")} placeholder={t("Filter automations")} value={search} onChange={(event) => setSearch(event.target.value)} className="max-w-xs" />
       <Button variant="ghost" size="sm" onClick={() => open({ view: "runs" })}><Clock />{t("Runs")}</Button>

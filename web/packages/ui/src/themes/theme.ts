@@ -6,32 +6,36 @@ const storageKey = "platform.appearance";
 const listeners = new Set<() => void>();
 const media = () => typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : undefined;
 const root = () => typeof document === "undefined" ? undefined : document.documentElement;
+const resolved = (scheme: Scheme): "light" | "dark" => scheme === "system" ? (media()?.matches ? "dark" : "light") : scheme;
 
-const read = (): { scheme: Scheme } => {
-  const element = root();
-  const scheme = element?.dataset.theme === "dark" ? "dark" : element?.dataset.theme === "light" ? "light" : "system";
-  return { scheme };
+const stored = (): Scheme => {
+  try {
+    const value = typeof localStorage === "undefined" ? null : localStorage.getItem(storageKey);
+    const scheme = value ? (JSON.parse(value) as { scheme?: Scheme }).scheme : undefined;
+    return scheme === "dark" || scheme === "system" ? scheme : "light";
+  } catch { return "light"; }
 };
-const apply = (scheme: Scheme) => {
+
+let state: { scheme: Scheme; theme: "light" | "dark" } = { scheme: stored(), theme: "light" };
+const paint = () => {
+  const theme = resolved(state.scheme);
+  if (theme !== state.theme) state = { ...state, theme };
   const element = root();
-  if (!element) return;
-  if (scheme === "system") delete element.dataset.theme; else element.dataset.theme = scheme;
+  if (element) element.dataset.theme = theme;
+};
+paint();
+media()?.addEventListener("change", () => { if (state.scheme === "system") { paint(); listeners.forEach(fn => fn()); } });
+
+const apply = (scheme: Scheme) => {
+  state = { scheme, theme: resolved(scheme) };
+  paint();
   try { localStorage.setItem(storageKey, JSON.stringify({ scheme })); } catch {   }
   listeners.forEach((fn) => fn());
 };
-try {
-  const stored = typeof localStorage === "undefined" ? null : localStorage.getItem(storageKey);
-  if (stored) { const { scheme } = JSON.parse(stored) as { scheme?: Scheme }; const element = root(); if (element && scheme && scheme !== "system") element.dataset.theme = scheme; }
-} catch {   }
-
-let cached = read();
-const snapshot = () => { const next = read(); if (next.scheme !== cached.scheme) cached = next; return cached; };
-const subscribe = (fn: () => void) => { listeners.add(fn); const query = media(); query?.addEventListener("change", fn); return () => { listeners.delete(fn); query?.removeEventListener("change", fn); }; };
-const resolved = (scheme: Scheme): "light" | "dark" => scheme === "system" ? (media()?.matches ? "dark" : "light") : scheme;
+const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
 
 export function useTheme() {
-  const { scheme } = useSyncExternalStore(subscribe, snapshot, () => cached);
-  const theme = useSyncExternalStore(subscribe, () => resolved(scheme), () => "light" as const);
+  const { scheme, theme } = useSyncExternalStore(subscribe, () => state, () => state);
   return {
     theme, scheme,
     setScheme: (next: Scheme) => apply(next),

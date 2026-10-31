@@ -4,7 +4,7 @@ import {cn} from '../lib/cn';
 
 export function SegmentedChoice({label,value,options,compact=false,disabled,onChange}:{label:string;value:string;options:readonly {value:string;label:string;icon?:ReactNode;disabled?:boolean}[];compact?:boolean;disabled?:boolean;onChange?:(value:string)=>void}){
  const active=options.find(option=>option.value===value&&!option.disabled)??options.find(option=>!option.disabled);
- return <div role="group" aria-label={label} className={cn('flex min-w-0',compact?'overflow-hidden rounded-md border border-border bg-canvas p-0.5':'flex-wrap gap-1')} onKeyDown={event=>{
+ return <div role="group" aria-label={label} className={cn('flex min-w-0',compact?'overflow-hidden rounded-md border border-border bg-background p-0.5':'flex-wrap gap-1')} onKeyDown={event=>{
   if(event.altKey||event.ctrlKey||event.metaKey||disabled||!onChange)return;
   const buttons=Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
   const at=buttons.indexOf(event.target as HTMLButtonElement);

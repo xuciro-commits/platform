@@ -226,7 +226,7 @@ export function ApplicationSampleAsset({ id = "new" }: { id?: string }) {
     </Select></label>
     {projects.isError && <p role="alert" className="text-sm text-danger">{t("The applications could not be loaded.")} <Button size="sm" onClick={() => void projects.refetch()}>{t("Retry")}</Button></p>}
     {projects.isSuccess && !projects.data.records.some(project => !project.archived) && <p className="text-sm text-muted">{t("Create an application before preparing sample records.")}</p>}
-    <Button className="w-fit" variant="ghost" onClick={() => open({ view: "projects" })}>{t("All applications")}</Button>
+    <Button className="w-fit" variant="ghost" onClick={() => open({ view: "projects" })}>{t("All projects")}</Button>
   </div>;
   const failed = projects.isError || inventory.isError || projects.isSuccess && !project || inventory.isSuccess && id !== "new" && !record;
   if (!project || id !== "new" && !record) return <p role={failed ? "alert" : "status"} className="p-3 text-sm">{failed ? t("The application sample could not be loaded.") : t("Loading…")}</p>;

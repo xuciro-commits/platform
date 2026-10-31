@@ -4,7 +4,6 @@ import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import {useInputBuffers} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import {DraftInputs} from "../session/DraftSession";
 import { removeWorkflowSteps, renameWorkflowStep, replaceReferences, workflowBindings, withWorkflowBinding } from "./workflow-edit";
@@ -12,7 +11,7 @@ import {workflowRunMatches} from "./workflow-session";
 import { useProcessDraft } from "./process-draft";
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
-import { ActionMenu, Button, FLOW_NODE_DROP, FlowCanvas, Input, PageHeader, Panel, ProblemList, StructureRow, Workbench,
+import { ActionMenu, Button, FLOW_NODE_DROP, FlowCanvas, Input, Panel, ProblemList, StructureRow, Workbench,
   flowBlockHeight, flowNodeIcon, flowNodeWidth, flowPlacement, flowPortFits, useFlowArrangement, loops, notationOf, t,
   type FlowAddContext, type FlowBoundary, type FlowCatalog, type FlowEdge, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort, type WorkbenchProblem } from "@platform/ui";
 import { MoreHorizontal, Play, Plus, Search, Settings2 } from "lucide-react";
@@ -114,12 +113,6 @@ function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capabi
   return { ...root, id: `node:${step.name}`, addable: false, inputs, outputs };
 }
 
-export function Flows() {
-  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
-  return <div className="grid gap-3 p-4"><PageHeader title={t("Flows")} help={t("Branching logic: native capabilities, typed code, human tasks and AI on one map. For a plain trigger → effects rule, create an automation instead.")}
-    actions={holds("build", "builder") && <Button onClick={() => open({ view: "flow", params: { id: "new" } })}>{t("New flow")}</Button>} />
-    <ResourceList source={source} type="build.process" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "flow", params: { id: record.id } })} /></div>;
-}
 
 export function FlowEditor({ id }: { id: string }) {
   const { decide, client , holds} = useHost(), { open } = useApplicationWorkspace();

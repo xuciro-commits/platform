@@ -42,10 +42,6 @@ export function studioArea(value?: string, kind?: string): StudioArea {
   if (value === "assemble") return kind ? areaForKind(kind) : "integration";
   return studioAreas.find(area => area.id === value)?.id ?? "model";
 }
-export const studioAreaKinds = (area: StudioArea): readonly string[] => {
-  const kinds = studioAreas.find(item => item.id === area)?.kinds ?? [];
-  return [...kinds, ...(studioAreas.find(item => item.id === area)?.contextKinds ?? [])];
-};
 export function studioAreaForRoute(route?: Route): StudioArea {
   const params = route?.params;
   if (route?.view === "project") return studioArea(params?.area, params?.asset?.split("/")[1]);
@@ -60,37 +56,9 @@ export function studioAreaForRoute(route?: Route): StudioArea {
   if (["definition", "observations"].includes(route?.view ?? "")) return areaForKind(route?.view === "observations" ? "observation" : params?.kind);
   return "model";
 }
-export function studioNavigation(area: StudioArea) {
-  const domain = studioAreas.find(item => item.id === area)!;
-  return domain.groups.flatMap(group => [
-    ...resourceKinds.filter(kind => group.kinds.includes(kind.ref ?? kind.kind)).map(kind => ({ title: kind.plural, view: kind.view, kind: kind.kind })),
-    ...(group.links ?? []).map(link => ({ ...link, kind: undefined })),
-  ]);
-}
 export const studioApplicationID = (route?: Route) => route?.view === "project" || route?.view === "module" && route.params?.id ? route.params?.id : route?.params?.application;
 export const studioRoute = (id: string, area: StudioArea, asset?: string): Route => ({ view: "project", params: { id, area, ...(asset ? { asset } : {}) } });
 
-export function studioContext(route: Route | undefined, resources: readonly OwnedResource[], definitions: readonly WorkspaceDefinition[]) {
-  const params = route?.params;
-  const definitionKind = route?.view === "observations" ? "observation" : params?.kind;
-  const definition = ["definition", "page-preview", "observations"].includes(route?.view ?? "")
-    ? definitions.find(item => item.ref.app === params?.app && item.ref.kind === definitionKind && item.ref.name === params?.name) : undefined;
-  const recordID = route?.view === "project" ? params?.plan : route?.view === "module" ? params?.page : params?.id;
-  const selected = resources.find(item => {
-    if (params?.asset && refKey(item.ref) === params.asset || params?.object && item.ref.name === params.object) return true;
-    if (definition && (refKey(item.ref) === refKey(definition.ref) || item.ref.kind === "object" && item.ref.name === definition.action?.target)) return true;
-    if (!recordID || item.record?.id !== recordID) return false;
-    return route?.view === item.kind.view
-      || route?.view === "project" && item.kind.kind === "test-plan"
-      || item.kind.type === "build.process" && ["flow", "automation"].includes(route?.view ?? "")
-      || route?.view === "action-type" && item.ref.kind === "object"
-      || route?.view === "release-review" && (params?.kind === item.kind.kind || params?.kind === item.ref.kind);
-  });
-  const ref = definition?.ref ?? (route?.view === "action-type" && selected && params?.action
-    ? { app: selected.ref.app, kind: "action", name: `${selected.ref.name}.${params.action}` } : selected?.ref);
-  const area = route?.view === "project" ? studioArea(params?.area, selected?.ref.kind ?? params?.asset?.split("/")[1]) : studioAreaForRoute(route);
-  return { selected, ref, area };
-}
 
 function resourceArea(item: OwnedResource): StudioArea {
   return areaForKind(item.ref.kind);
@@ -134,18 +102,6 @@ export function studioResourceGroups(application: Pick<Api.Application, "title" 
   return [...custom, ...groups].filter(group => group.items.length).map(group => ({ id: group.id, title: group.title, items: [...group.items].sort((a, b) => a.title.localeCompare(b.title) || refKey(a.ref).localeCompare(refKey(b.ref))) }));
 }
 
-export function studioActionGroups(resources: readonly OwnedResource[], definitions: readonly WorkspaceDefinition[]) {
-  const objects = resources.filter(item => item.ref.kind === "object");
-  const actions = resources.filter(item => item.ref.kind === "action");
-  const definitionsByRef = new Map(definitions.map(item => [refKey(item.ref), item]));
-  const assigned = new Set<string>();
-  const groups = objects.map(object => ({ object, actions: actions.filter(action => {
-    if (action.ref.app !== object.ref.app || definitionsByRef.get(refKey(action.ref))?.action?.target !== object.ref.name) return false;
-    assigned.add(refKey(action.ref));
-    return true;
-  }) }));
-  return { groups, other: resources.filter(item => item.ref.kind !== "object" && !assigned.has(refKey(item.ref))) };
-}
 
 export function moveConceptAsset(concepts: readonly Api.AppConcept[], ref: Api.AssetRef, id: string) {
   return concepts.map(group => ({ ...group, assets: [

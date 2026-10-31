@@ -23,7 +23,7 @@ export function DataSources() {
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Data sources")} help={t("Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Retrying a pull keeps its previous row results. A new pull can update records even when the source content is unchanged.")}
-      actions={<Button onClick={() => open({ view: "data-source", params: { id: "new" } })}>{t("New data source")}</Button>} />
+      actions={<Button variant="primary" onClick={() => open({ view: "data-source", params: { id: "new" } })}>{t("New data source")}</Button>} />
     <ResourceList source={source} type="build.source" fields={["title", "name", "object", "dataset", "every", "state"]} onOpen={(record) => open({ view: "data-source", params: { id: record.id } })} />
   </div>;
 }

@@ -1,55 +1,57 @@
 ---
 name: platform-design
-description: Frontend design rules for the platform web workspace (web/packages/ui, build, app). Use before creating or changing any screen, panel, editor, form, table, dialog or component in web/, and when reviewing frontend work.
+description: Frontend design rules for the platform web workspace (web/packages/ui, build, app, govern, apps/workspace). Use before creating or changing any screen, panel, editor, form, table, dialog, navigation item or component in web/, and when reviewing frontend work.
 ---
 
 # Platform frontend design
 
-The product is a dense, professional builder for business software. Benchmarks: Retool/Appsmith for editing feel, Palantir Workshop/Ontology Manager for binding and resource management. Calm, information-dense, keyboard-friendly. Never marketing-style.
+A builder-first platform for business software, benchmarked on Palantir Foundry: the shell finds things, an app completes a task, a project organizes work. Light, dense, calm, keyboard-friendly (Blueprint feel). Never marketing-style.
 
-## Foundations
+## Information architecture
 
-- Use only `@platform/ui` exports and the tokens in `web/packages/ui/src/themes/tokens.css`. No raw hex/oklch, no ad-hoc px font sizes, no new shadow or radius values. If a primitive is missing, add it to `@platform/ui` once; do not inline a one-off.
-- Type scale: `--type-xs` 11 for meta, `--type-sm` 12 for body in dense panels, `--type-base` 13 default, `--type-lg` 15 for page titles only. No bold body text; use `font-medium` for labels, `font-semibold` only for titles.
-- Control heights: 28 (`sm`) inside panels and tables, 32 (`md`) in page headers. Table rows 28.
-- Radius `--r-sm` on controls, `--r-md` on panels. One border weight (`--border`); `--border-strong` only for the focused or selected container.
-- Color carries meaning, not decoration. Tones: neutral, info, success, warning, danger (+ purple/pink/teal/orange for categorical identity like object-type colors). Primary blue appears at most once per region (the one primary action).
-- Both languages: every visible string goes through `t()`; check widths with Chinese and English. Business data is never translated.
+- **Rail** (48px, dark, `Workspace` in `ui/src/shell`): Home, Search ⌘K, Projects (builders), Applications, Inbox; Recent; pinned apps; at the bottom Assistant, Control Panel, account (appearance, language, tenant). Nothing else is global. No top menubar, no document tabs.
+- **Applications** are `AppUI` contributions. Each has its own sidebar: app header (icon, title, pin), optional `navigation` node, then at most 8 nav links in labelled sections. Platform pages (home, portal, search) have no sidebar.
+- **Builder tools** (`packages/build/src/index.tsx`): Projects (`build`), Ontology Manager (`ontology`), Data Integration (`data`), Logic (`logic`), Automate (`automate`), Workshop (`workshop`), Releases (`releases`), and Agent definitions merged into `agents`. Every tool sidebar starts with `ToolContext`: a back link to the project when the route carries `application`, and the branch panel (branch selector, state, "Unsaved changes (N)", Save).
+- **Ontology is global** to the tenant, governed by branches and proposals. A project groups the work of one application; lists show everything with a Project column, not per-project copies.
+- **Behaviour** is Action (writes) + Function (computes). Functions are one list with an Engine column (Code, Decision table, AI, Flow logic); "New function" picks the engine. Automations and Agents are their own apps.
+- Business applications run inside the shell with their own sidebar and `data-density="comfortable"`.
 
-## Layout archetypes (pick one, do not invent)
+## Navigation mechanics
 
-1. **Resource workbench** — editing any definition (object type, link type, action, query, function, pipeline, page, app). Use `Workbench`: crumbs, title + status tag, saving/history, actions on the right; left = resource tree grouped by kind with counts and search; center = the kind's editor; right = inspector for the current selection; dock = problems/diff. `EditorWorkbench` is legacy; migrate to `Workbench` when touching a screen.
-2. **Object view** — one record: sticky header (icon in type color, title property, status pill, action buttons with one primary), then tabs (Overview properties grid, Links, History, related sets). Generated from type metadata, not hand-built per type.
-3. **Collection** — `DataTable` with `FilterBar`, saved views, bulk actions in a selection bar that appears only when rows are selected.
-4. **Canvas** — graphs and flows (`RelationCanvas`, `FlowCanvas`) with a floating toolbar and a right inspector; dimming non-neighbors on hover.
+- One main view per URL hash; browser back/forward work. `open(route)` replaces the main view after the unsaved-changes guard.
+- `window: "inspect" | "beside"` opens the right side pane (480px, non-modal, "Open as page", Esc closes). `window: "popout"` opens a browser tab.
+- `transfer` (pick-and-return calls) stacks the callee over the caller; the caller keeps its state and gets the value back.
+- Never add another navigation layer inside a view: no pill rows that duplicate sidebar items, no segmented choices that switch between list pages.
 
-Forms and multi-field edits open in a right `Sheet` (width ~420) from the workbench or object view; full-page forms only for creation wizards, which use `StepSelector` with at most 4 steps.
+## Page archetypes (pick one)
 
-## Hierarchy rules (where current screens fail)
+1. **List** — `PageHeader` (title, `meta` count, help; actions: search, filters toggle, exactly one primary "New …") over a full-width `DataTable`. First column: icon + title with the API name in mono `text-2xs` muted underneath. Row click opens the resource.
+2. **Resource page / editor** — `PageHeader` with `crumbs` back to the list, `icon`, `status`, `meta` (identity in mono); sections in `ContentTabs` with `badge` counts. Long editors use `Workbench` (tree, editor, inspector).
+3. **Object view** — sticky `ObjectHeader`, generated from type metadata.
+4. **Canvas** — `RelationCanvas` / `FlowCanvas` with floating toolbar and right inspector.
+5. **Dashboard** (Home, project overview) — stat tiles, then two columns of `Panel`s with compact rows.
 
-- One page header per view. No Card wrapping a toolbar wrapping buttons. A view's mode switch is a `SegmentedChoice` or `ContentTabs`, never a row of primary/ghost buttons.
-- At most one primary button visible per region; secondary actions go into a menu once there are more than three.
-- Do not nest cards. Panels separate by a border or `PanelSection` heading, not by shadow stacks.
-- No raw JSON editing in normal flows. A field typed as json in a model needs a structured editor (expression builder, set builder, mapping table). `StructuredEditor` is an escape hatch behind "Advanced".
-- Empty, loading, error and refusal states use `EmptyState`, skeleton rows, `Notice`, `Rejection`. A refusal shows the server's reason verbatim.
-- Disabled actions explain why: tooltip with the criterion message returned by the server.
-- Status is a `StatusTag` with a tone, never colored text alone.
-- Identity strings (api names, RIDs) are mono `--type-xs` muted, shown in inspectors, not in titles.
+Multi-field edits open in a right `Sheet`; confirmations stay in `Dialog`.
 
-## Unsaved changes and review
+## Visual system
 
-Definitions are edited as a changeset: the workbench header shows an amber count "Unsaved changes (N)" and a primary "Save"; saving opens a review dialog listing each resource with Added/Modified/Deleted tags and a field-level diff. Use `useUnsavedChanges` for navigation guards.
+- Tokens only (`ui/src/themes/tokens.css`, mapped in `styles.css` `@theme`). Light is the default; dark is chosen explicitly. Palette is Blueprint: gray scale `--gray-*`, one blue accent (`--primary` #2D72D2), tones neutral/info/success/warning/danger plus purple/pink/teal/orange for categorical identity.
+- Colors as classes: `bg-background` (app canvas), `bg-surface` (cards, sidebars), `bg-sidebar`, `bg-canvas` (editing canvases), `bg-rail`, `text-muted`, `text-primary`, `text-danger|warning|success|info`, `border-border`, `border-border-strong`, `bg-row-hover`, `bg-row-selected`.
+- Type: 10/11/12/13/15/18 (`text-2xs` … `text-xl`). Body 13. Page title `text-lg` semibold; section labels `text-2xs` semibold uppercase tracking-wider muted.
+- Radii 2/3/4px (`rounded-sm|md|lg`). Controls 22/26/30/36 (`--ctrl-h-*`); table rows 28. Shadows only for overlays (menus, sheets, palette).
+- At most one primary button per region. Icon-only buttons have a tooltip (`title`). Identity strings (API names, RIDs) are mono `text-2xs`/`text-xs` muted, never titles.
+- Every visible string goes through `t()` with an `en` key and a `zh-CN` entry in the owning package's dictionary; business data is never translated. Use industry-standard names (Object type 对象类型, Link type 关系类型, Action type 操作类型, Function 函数, Branch 分支, Proposal 提案).
 
-## Shared builders
+## Behaviour rules
 
-Conditions, criteria, formatting rules, policies and filters all use one Expr builder (`ExpressionEditor`). Sets of records use one set builder. Never build another condition UI.
-
-## Motion
-
-`--dur-fast` for hover/press, `--dur-base` for panels and sheets, `--ease-standard`. No bounce, no decorative animation. Live updates change values in place with a brief background fade, without reflowing the layout.
+- No raw JSON in normal flows; structured editors first, JSON under "Advanced".
+- Empty, loading, error and refusal states use `EmptyState`, skeleton rows, `Notice`, `Rejection`; refusals show the server's reason.
+- Disabled actions explain why. Status is a `Tag`/`StatusTag` with a tone.
+- Conditions, criteria, policies and filters use the one Expr builder; record sets use the one set builder.
+- Definitions change on branches; the branch panel shows the staged state; saving opens the review with a field-level diff.
 
 ## Done means
 
-- `cd web && pnpm typecheck` and `pnpm build` pass; `git diff --check` is clean.
-- No new strings without both `en` and `zh-CN` entries.
-- The owner walks the UI and judges look and feel; report which screens changed so they can.
+- Per-package `tsc -p .` (or `pnpm typecheck`) and `pnpm build` pass; `git diff --check` is clean.
+- New strings have `zh-CN` entries.
+- The owner walks the UI and judges look and feel; report which screens changed.

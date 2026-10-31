@@ -3,12 +3,11 @@ import { ContentTabs, ContextHelp, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { useDraftRecord } from "../branches/draft-record";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, DraftInputs, useInputBuffers, InputDraftProvider, useInputDrafts, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, Input, Panel, Select, Textarea, Workbench, DraftInputs, useInputBuffers, InputDraftProvider, useInputDrafts, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { JSONEditor, SchemaEditor, schemaDefault } from "../automate/workflow-binding";
 import type { ValueSchema } from "../automate/workflow-model";
@@ -26,15 +25,6 @@ const empty = (): CodeDraft => ({ id: "", revision: 0, name: "", title: "", desc
   output: { type: "object", properties: { result: { type: "integer" } }, required: ["result"] },
   limits: { timeoutMillis: 1000, memoryPages: 1024, maxInputBytes: 65536, maxOutputBytes: 49152 } });
 
-export function CodeFunctions() {
-  const { source , holds} = useHost();
-  const { open } = useApplicationWorkspace();
-  if (!holds("build", "builder")) return <PageHeader title={t("Code functions")} description={t("Only a builder can edit code functions.")} />;
-  return <div className="grid gap-3"><PageHeader title={t("Code functions")} help={t("Package a typed Go or TinyGo algorithm for pages and workflows.")}
-    actions={<Button onClick={() => open({ view: "code", params: { id: "new" } })}>{t("New code function")}</Button>} />
-    <ResourceList source={source} type="build.code" fields={["title", "name", "language", "state", "version"]} onOpen={(record) => open({ view: "code", params: { id: record.id } })} />
-  </div>;
-}
 
 export function CodeEditor({ id }: { id: string }) {
   const { decide, client , holds} = useHost(), { open } = useApplicationWorkspace(), invoke = useInvokeCapability();

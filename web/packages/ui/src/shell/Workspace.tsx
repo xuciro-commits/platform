@@ -1,21 +1,18 @@
-import {useInputDrafts} from "../fields/draft";
-import {useTheme} from "../themes/theme";
+import { useInputDrafts } from "../fields/draft";
+import { useTheme } from "../themes/theme";
 import { Command } from "cmdk";
-import { DockviewDefaultTab, DockviewReact, themeLight,themeDark, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type SerializedDockview } from "dockview-react";
-import { Bell, ChevronDown, Clock, Ellipsis, Grid2x2, Home as HomeIcon, LayoutGrid, PanelLeft, Search, Sparkles, Star } from "lucide-react";
-import { ContextMenu, DropdownMenu, Menubar } from "radix-ui";
+import { Bell, ChevronsLeft, Clock, FolderKanban, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Settings, Sparkles, Star, X } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
 import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
 import { routeFromHash, routeKey, routeToHash, type Route } from "./route";
 import { language, languages, setLanguage, t } from "../i18n";
 import { Dialog } from "../primitives/dialog";
-import { Sheet } from "../primitives/sheet";
 import { Button } from "../primitives/button";
 import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
-import { resolveLayout, rewriteLayout } from "./WorkspaceLayout";
-import { NavigationItems, navigationLinks, type NavSection } from "./Navigation";
+import { NavigationItems, navigationLinks, routeCovers, type NavSection } from "./Navigation";
 import { Tooltip } from "../primitives/tooltip";
 export type { NavSection } from "./Navigation";
 
@@ -26,8 +23,6 @@ export type View = {
   render: (params: Record<string, string>) => ReactNode;
   documentKey?: (params: Record<string, string>) => string;
 };
-export type MenuItem = { label: string; shortcut?: string; onSelect: () => void; disabled?: boolean };
-export type Menu = { label: string; items: MenuItem[] };
 export type ShellCommand = { id: string; label: string; group?: string; shortcut?: string; run: () => void };
 type SearchHit = { id: string; label: string; detail?: string; open: () => void };
 type RecordSearch = (text: string) => Promise<SearchHit[]>;
@@ -40,7 +35,7 @@ export type Session = {
 
 export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };
 export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };
-export type Rail = { home: Route; applications: Route; notifications?: { route: Route; unread?: number }; assist?: Route };
+export type Rail = { home: Route; applications: Route; projects?: Route; notifications?: { route: Route; unread?: number }; assist?: Route; settings?: Route };
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
 type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect"; ifCurrent?: Route; from?: string; replace?: boolean };
@@ -56,15 +51,18 @@ type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close
   recent: RecentEntry[];
   favorites: string[]; toggleFavorite: (app: string) => void;
   applications?: Applications; rail?: Rail; };
+type Entry = { id: string; route: Route };
+type Memory = { recent: RecentEntry[]; favorites: string[]; last: Record<string, Route> };
+type Pending = { panels: string[]; run: () => void; owner?: symbol; cancel?: () => void };
+
 const PanelContext = createContext<string | undefined>(undefined);
-const DockScope = createContext<string | undefined>(undefined);
-const taskKey = (scope: string | undefined, panel: string) => JSON.stringify([scope ?? null, panel]);
-const FrontDock = createContext(true);
 const ViewCallContext = createContext<{ input?: unknown; expired?: boolean; returnValue?: (value: unknown) => void } | undefined>(undefined);
 export const useViewCall = () => useContext(ViewCallContext);
 
 export const WorkspaceContext = createContext<WorkspaceApi | null>(null);
-const ViewRegistryContext = createContext<ReadonlyMap<string, View>>(new Map());
+
+let serial = 0;
+const entryId = (kind: "view" | "side") => `${kind}:${++serial}`;
 
 export function useWorkspace(): WorkspaceApi {
   const api = useContext(WorkspaceContext);
@@ -104,56 +102,76 @@ export function useUnsavedChanges(dirty: boolean, discard: () => void, busy = fa
 
 export const notify = toast;
 
-class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void }, { error?: Error }> {
+class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void; closeLabel: string }, { error?: Error }> {
   state: { error?: Error } = {};
   static getDerivedStateFromError(error: Error) { return { error }; }
   componentDidCatch(error: Error) { console.error(error); }
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div role="alert" className="grid max-w-xl gap-2 rounded-md border border-[var(--tone-danger)] p-3 text-sm">
+      <div role="alert" className="grid max-w-xl gap-2 rounded-md border border-[var(--tone-danger)] bg-surface p-3 text-sm">
         <p className="font-medium">{t("This view failed to show.")}</p>
         <p className="font-mono text-xs text-muted">{this.state.error.message}</p>
         <div className="flex gap-2">
-          <button type="button" className="rounded-md border border-border px-2 py-1 hover:bg-row-hover" onClick={() => this.setState({ error: undefined })}>{t("Try again")}</button>
-          <button type="button" className="rounded-md border border-border px-2 py-1 hover:bg-row-hover" onClick={this.props.onClose}>{t("Close tab")}</button>
+          <Button size="sm" onClick={() => this.setState({ error: undefined })}>{t("Try again")}</Button>
+          <Button size="sm" variant="ghost" onClick={this.props.onClose}>{this.props.closeLabel}</Button>
         </div>
       </div>
     );
   }
 }
 
-export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, menus = [], commands = [], session, status, applications: appEntries, rail, onActiveRoute, onEmpty, onLanguage, search }: {
+export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, commands = [], session, status, applications: appEntries, rail, onActiveRoute, onLanguage, search }: {
   product: string; productIcon?: ReactNode; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
   navigation?: ReactNode;
   layoutScope?: string;
   scopeOf?: (route: Route) => string | undefined;
   resolveRoute?: (route: Route, layout?: string) => Route | Promise<Route>;
-  menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
+  commands?: ShellCommand[]; session?: Session; status?: ReactNode;
   applications?: Applications; rail?: Rail; onActiveRoute?: (route: Route) => void;
-  onEmpty?: () => void;
   search?: (text: string) => Promise<{ id: string; label: string; detail?: string; open: () => void }[]>;
   onLanguage?: (id: string) => unknown;
 }) {
-  const appearance=useTheme();
-  const dock = useRef<DockviewApi>(null);
-  const docks = useRef(new Map<string | undefined, DockviewApi>());
-  const syncs = useRef(new Map<string | undefined, () => void>());
-  const [created, setCreated] = useState<(string | undefined)[]>(() => [layoutScope]);
-  const booted = useRef(false);
-  const unloaded = useRef(false);
+  const appearance = useTheme();
+  const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
+  const registry = useRef(byId); registry.current = byId;
+  const keyOf = useCallback((route: Route) => {
+    const key = registry.current.get(route.view)?.documentKey;
+    return key ? JSON.stringify([route.view, key(route.params ?? {}), route.params?.call]) : routeKey(route);
+  }, []);
+  const routeScope = useRef(scopeOf); routeScope.current = scopeOf;
+  const routeReader = useRef(resolveRoute); routeReader.current = resolveRoute;
+  const currentScope = useRef(layoutScope); currentScope.current = layoutScope;
+
+  const [stack, setStackState] = useState<Entry[]>([]);
+  const stackRef = useRef<Entry[]>([]);
+  const [side, setSideState] = useState<Entry & { focus: HTMLElement | null }>();
+  const sideRef = useRef<Entry & { focus: HTMLElement | null }>(undefined);
+  const setSide = useCallback((entry?: Entry & { focus: HTMLElement | null }) => { sideRef.current = entry; setSideState(entry); }, []);
+  const [titles, setTitles] = useState<Record<string, string>>({});
   const drafts = useRef(new Map<string, Map<symbol, { discard: () => void; busy: boolean }>>());
   const transfers = useRef(new ViewTransfers());
-  const [pending, setPending] = useState<{ panels: string[]; run: () => void; owner?: symbol }>();
-  const taskOwner = useCallback((address: string) => {
-    const [storedScope, id] = JSON.parse(address) as [string | null, string];
-    const scope = storedScope ?? undefined, api = docks.current.get(scope);
-    return { scope, id, api, panel: api?.getPanel(id) };
+  const [pending, setPending] = useState<Pending>();
+  const lastHash = useRef<string | undefined>(undefined);
+  const revision = useRef(0);
+
+  const routeOf = useCallback((id: string) => stackRef.current.find(entry => entry.id === id)?.route ?? (sideRef.current?.id === id ? sideRef.current.route : undefined), []);
+  const forget = useCallback((ids: string[]) => {
+    for (const id of ids) { transfers.current.remove(id); drafts.current.delete(id); }
+    setTitles(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !ids.includes(id))));
   }, []);
-  const panelIn = useCallback((address: string) => !!taskOwner(address).panel, [taskOwner]);
+  const guard = useCallback((panels: string[], run: () => void, cancel?: () => void, selected?: symbol) => {
+    const owners = (id: string) => selected === undefined ? [...(drafts.current.get(id)?.values() ?? [])] : [drafts.current.get(id)?.get(selected)].filter(Boolean);
+    if (panels.some((id) => owners(id).some((owner) => owner?.busy))) {
+      toast.error(t("An operation is in progress. Wait for its result before leaving.")); cancel?.(); return;
+    }
+    const dirty = panels.filter((id) => !!routeOf(id) && owners(id).length > 0);
+    if (dirty.length) setPending({ panels: dirty, run, owner: selected, cancel });
+    else run();
+  }, [routeOf]);
   const unsaved = useMemo<Unsaved>(() => ({
     register: (panel, owner, discard, busy = false) => {
-      if ((discard || busy) && panelIn(panel)) {
+      if ((discard || busy) && routeOf(panel)) {
         const entries = drafts.current.get(panel) ?? new Map<symbol, { discard: () => void; busy: boolean }>();
         entries.set(owner, { discard: discard ?? (() => {}), busy }); drafts.current.set(panel, entries);
       } else {
@@ -162,88 +180,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         if (!entries?.size) drafts.current.delete(panel);
       }
     },
-    ask: (panels, run, selected) => {
-      const owners = (id: string) => selected === undefined ? [...(drafts.current.get(id)?.values() ?? [])] : [drafts.current.get(id)?.get(selected)].filter(Boolean);
-      if (panels.some((id) => owners(id).some((owner) => owner?.busy))) {
-        toast.error(t("An operation is in progress. Wait for its result before leaving.")); return;
-      }
-      const dirty = panels.filter((id) => panelIn(id) && owners(id).length > 0);
-      if (dirty.length) setPending({ panels: dirty, run, owner: selected });
-      else run();
-    },
-  }), []);
-  const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
-  const closePanels = useCallback((ids: string[]) => unsaved.ask(ids, () => { for (const id of ids) taskOwner(id).panel?.api.close(); }), [unsaved, taskOwner]);
-  const closePanel = useCallback((id: string) => closePanels([id]), [closePanels]);
-  const scope = useRef(layoutScope);
-  const routeScope = useRef(scopeOf); routeScope.current = scopeOf;
-  const routeReader = useRef(resolveRoute); routeReader.current = resolveRoute;
-  const viewRegistry = useRef(byId); viewRegistry.current = byId;
-  const keyOf = useCallback((route: Route) => {
-    const key = viewRegistry.current.get(route.view)?.documentKey;
-    return key ? JSON.stringify([route.view, key(route.params ?? {}), route.params?.call]) : routeKey(route);
-  }, []);
-  const applicationEntries = useRef(appEntries); applicationEntries.current = appEntries;
-  const switching = useRef(false);
-  const incomingRevision = useRef(0);
-  const queuedOpen = useRef<{ route: Route; options: OpenOptions; scope?: string | undefined } | undefined>(undefined);
-  const allTasks = useCallback(() => [...docks.current].flatMap(([scope, api]) => api.panels.map(panel => taskKey(scope, panel.id))), []);
-  const leaveViews = useCallback((run: () => void) => unsaved.ask(allTasks(), () => {
-    ++incomingRevision.current; queuedOpen.current = undefined; run();
-  }), [unsaved, allTasks]);
-  const applications = useMemo<Applications | undefined>(() => appEntries && ({ ...appEntries, onSelect: (id) => {
-    if (id === appEntries.current || !appEntries.apps.some((app) => app.id === id)) return;
-    appEntries.onSelect(id);
-  } }), [appEntries]);
-  const layoutKey = (id: string | undefined) => `${storageKey}:${id ?? "shell"}`;
-  const saveLayout = useCallback((api: DockviewApi, id: string | undefined) => {
-    try {
-      const layout = routeScope.current ? rewriteLayout(api.toJSON(), (route) => routeScope.current!(route) === id ? route : undefined, keyOf) : api.toJSON();
-      localStorage.setItem(layoutKey(id), JSON.stringify(layout));
-    } catch {   }
-  }, [storageKey, keyOf]);
-  const loadLayout = useCallback(async (api: DockviewApi, id: string | undefined) => {
-    try {
-      const saved = localStorage.getItem(layoutKey(id));
-      const restored = saved && await resolveLayout(JSON.parse(saved) as SerializedDockview,
-        (route) => routeReader.current?.(route, id) ?? route, (view) => viewRegistry.current.has(view), keyOf);
-      const layout = restored && routeScope.current
-        ? rewriteLayout(restored, route => routeScope.current!(route) === id ? route : undefined, keyOf)
-        : restored;
-      if (layout) api.fromJSON(layout); else api.clear();
-    } catch {
-      api.clear();
-    }
-    for (const panel of [...api.panels]) {
-      const route = (panel.params as { route?: Route } | undefined)?.route;
-      const view = viewRegistry.current.get(route?.view ?? "");
-      if (!view) panel.api.close(); else panel.setTitle(view.title(route?.params ?? {}));
-    }
-    return true;
-  }, [storageKey]);
-  const popping = useRef(new Set<string>());
-  const popout = useCallback((id: string, dockScope: string | undefined) => {
-    const api = docks.current.get(dockScope), panel = api?.getPanel(id), address = taskKey(dockScope, id);
-    if (!api || !panel || panel.api.location.type === "popout" || popping.current.has(address)) return;
-    popping.current.add(address);
-    void api.addPopoutGroup(panel, { onDidOpen: ({ window: child }) => {
-      child.addEventListener("load", () => {
-        const root = document.documentElement, target = child.document.documentElement;
-        const mirror = () => {
-          target.lang = root.lang; target.dir = root.dir; target.className = root.className;
-          for (const key of ["theme"]) {
-            if (root.dataset[key]) target.dataset[key] = root.dataset[key]; else delete target.dataset[key];
-          }
-        };
-        mirror();
-        const observer = new MutationObserver(mirror);
-        observer.observe(root, { attributes: true, attributeFilter: ["lang", "dir", "class", "data-theme"] });
-        child.addEventListener("unload", () => observer.disconnect(), { once: true });
-      }, { once: true });
-    } }).then((opened) => { if (!opened) toast.error(t("Could not open a new window. Allow pop-ups and try again.")); })
-      .catch(() => toast.error(t("Could not open a new window. Allow pop-ups and try again.")))
-      .finally(() => popping.current.delete(address));
-  }, []);
+    ask: (panels, run, selected) => guard(panels, run, undefined, selected),
+  }), [guard, routeOf]);
+  const allPanels = useCallback(() => [...stackRef.current.map(entry => entry.id), ...(sideRef.current ? [sideRef.current.id] : [])], []);
+
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (drafts.current.size) { event.preventDefault(); event.returnValue = ""; }
@@ -251,10 +191,208 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     addEventListener("beforeunload", beforeUnload);
     return () => removeEventListener("beforeunload", beforeUnload);
   }, []);
-  const [active, setActive] = useState<string>();
-  const [activeRoute, setActiveRoute] = useState<string>();
-  const [openTabs, setOpenTabs] = useState<{ key: string; title: string }[]>([]);
+
+  const writeHash = useCallback((route: Route, replace = false) => {
+    const hash = routeToHash(route);
+    lastHash.current = hash;
+    if (location.hash === hash) return;
+    if (replace) history.replaceState(null, "", hash); else history.pushState(null, "", hash);
+  }, []);
+  const setStack = useCallback((entries: Entry[], replace = false) => {
+    const removed = stackRef.current.filter(entry => !entries.some(kept => kept.id === entry.id)).map(entry => entry.id);
+    stackRef.current = entries; setStackState(entries);
+    if (removed.length) forget(removed);
+    const top = entries.at(-1);
+    if (top) writeHash(top.route, replace);
+  }, [forget, writeHash]);
+  const restoreHash = useCallback(() => { if (lastHash.current && location.hash !== lastHash.current) history.replaceState(null, "", lastHash.current); }, []);
+
+  const showMain = useCallback((route: Route, options: OpenOptions & { link?: boolean } = {}) => {
+    const entries = stackRef.current, top = entries.at(-1);
+    const replace = options.replace || options.link;
+    if (top && keyOf(top.route) === keyOf(route)) {
+      if (routeKey(top.route) !== routeKey(route)) setStack([...entries.slice(0, -1), { ...top, route }], replace);
+      else if (options.link) writeHash(route, true);
+      return;
+    }
+    const below = entries.findIndex(entry => keyOf(entry.route) === keyOf(route));
+    if (below >= 0) {
+      const above = entries.slice(below + 1).map(entry => entry.id);
+      guard(above, () => setStack([...entries.slice(0, below), { ...entries[below]!, route }], replace), options.link ? restoreHash : undefined);
+      return;
+    }
+    if (route.params?.call) { setStack([...entries, { id: entryId("view"), route }], replace); return; }
+    guard(entries.map(entry => entry.id), () => setStack([{ id: entryId("view"), route }], replace), options.link ? restoreHash : undefined);
+  }, [keyOf, guard, setStack, writeHash, restoreHash]);
+  const showSide = useCallback((route: Route) => {
+    const current = sideRef.current;
+    if (current && keyOf(current.route) === keyOf(route)) { setSide({ ...current, route }); return; }
+    const focus = current?.focus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const run = () => { if (current) forget([current.id]); setSide({ id: entryId("side"), route, focus }); };
+    if (current) guard([current.id], run); else run();
+  }, [keyOf, guard, forget, setSide]);
+  const closeSide = useCallback(() => {
+    const current = sideRef.current;
+    if (!current) return;
+    guard([current.id], () => { forget([current.id]); setSide(undefined); if (current.focus?.isConnected) current.focus.focus(); });
+  }, [guard, forget, setSide]);
+
+  const openResolved = useCallback((route: Route, options: OpenOptions & { link?: boolean } = {}) => {
+    if (!registry.current.has(route.view)) {
+      toast.error(t("This address points to a task your current access does not include."));
+      if (options.link) { if (stackRef.current.length) restoreHash(); else showMain(home, { replace: true }); }
+      return;
+    }
+    const source = options.from ? routeOf(options.from) : undefined;
+    if (options.from && !source) return;
+    if (options.ifCurrent && (!source || keyOf(source) !== keyOf(options.ifCurrent))) return;
+    if (options.window === "popout") { window.open(`${location.pathname}${location.search}${routeToHash(route)}`, "_blank", "noopener"); return; }
+    if (options.window === "inspect" || options.window === "beside") { showSide(route); return; }
+    if (options.from && options.from === sideRef.current?.id && !route.params?.call) { forget([options.from]); setSide(undefined); }
+    showMain(route, options);
+  }, [keyOf, routeOf, showMain, showSide, restoreHash, home, forget, setSide]);
+  const open = useCallback((route: Route, options: OpenOptions & { link?: boolean } = {}) => {
+    const resolve = routeReader.current;
+    const ticket = ++revision.current;
+    const take = (resolved: Route) => { if (ticket === revision.current || options.window === "inspect" || options.window === "beside") openResolved(resolved, options); };
+    const failed = () => { if (ticket === revision.current) { toast.error(t("Could not open this view.")); if (options.link) restoreHash(); } };
+    try {
+      const resolved = resolve ? resolve(route, currentScope.current) : route;
+      if (resolved instanceof Promise) void resolved.then(take).catch(failed);
+      else take(resolved);
+    } catch { failed(); }
+  }, [openResolved, restoreHash]);
+
+  const navKey = `${storageKey}:nav`;
+  const [memory, setMemory] = useState<Memory>(() => {
+    try { const saved = localStorage.getItem(navKey); if (saved) return { recent: [], favorites: [], last: {}, ...JSON.parse(saved) }; } catch {   }
+    return { recent: [], favorites: [], last: {} };
+  });
+  const remember = useCallback((change: (m: Memory) => Memory) => setMemory((m) => {
+    const next = change(m);
+    try { localStorage.setItem(navKey, JSON.stringify(next)); } catch {   }
+    return next;
+  }), [navKey]);
+  const toggleFavorite = useCallback((app: string) => remember((m) => ({ ...m, favorites: m.favorites.includes(app) ? m.favorites.filter((id) => id !== app) : [...m.favorites, app] })), [remember]);
+  const memoryRef = useRef(memory); memoryRef.current = memory;
+
+  const applicationEntries = useRef(appEntries); applicationEntries.current = appEntries;
+  const applications = useMemo<Applications | undefined>(() => appEntries && ({ ...appEntries, onSelect: (id) => {
+    const app = appEntries.apps.find(entry => entry.id === id);
+    if (!app) return;
+    const target = id === appEntries.current ? app.home : memoryRef.current.last[id] ?? app.home;
+    guard(allPanels(), () => { appEntries.onSelect(id); open(target); });
+  } }), [appEntries, guard, allPanels, open]);
+
+  const top = stack.at(-1);
+  const topKey = top ? `${top.id}:${routeKey(top.route)}` : undefined;
+  const followed = useRef(onActiveRoute); followed.current = onActiveRoute;
+  useEffect(() => {
+    if (!top) return;
+    const origin = top.route.params?.call ? stack[0]!.route : top.route;
+    followed.current?.(origin);
+    if (top.route.params?.call) return;
+    const scope = routeScope.current ? routeScope.current(top.route) : currentScope.current;
+    const title = titles[top.id] ?? registry.current.get(top.route.view)?.title(top.route.params ?? {}) ?? top.route.view;
+    const homes = rail ? [rail.home, rail.applications, ...(rail.projects ? [rail.projects] : [])].map(routeKey) : [];
+    remember((m) => ({
+      ...m,
+      last: scope ? { ...m.last, [scope]: top.route } : m.last,
+      recent: homes.includes(routeKey(top.route)) ? m.recent : [{ route: top.route, title, app: scope, at: Date.now() }, ...m.recent.filter((r) => keyOf(r.route) !== keyOf(top.route))].slice(0, 20),
+    }));
+  }, [topKey]);
+  useEffect(() => {
+    const title = top ? titles[top.id] ?? registry.current.get(top.route.view)?.title(top.route.params ?? {}) : undefined;
+    document.title = title ? `${title} · ${product}` : product;
+  }, [topKey, titles, product]);
+
+  const opener = useRef(open); opener.current = open;
+  const homeRoute = useRef(home); homeRoute.current = home;
+  useEffect(() => {
+    const linked = routeFromHash(location.hash);
+    if (linked) opener.current(linked, { link: true }); else opener.current(homeRoute.current, { replace: true });
+    const onHash = () => {
+      if (location.hash === lastHash.current) return;
+      const route = routeFromHash(location.hash);
+      if (route) opener.current(route, { link: true }); else opener.current(homeRoute.current, { replace: true });
+    };
+    addEventListener("hashchange", onHash);
+    return () => removeEventListener("hashchange", onHash);
+  }, []);
+
+  const goHome = useCallback(() => {
+    const scope = currentScope.current;
+    open(applicationEntries.current?.apps.find((app) => app.id === scope)?.home ?? home);
+  }, [open, home]);
+  const close = useCallback((route: Route, from?: string) => {
+    if (sideRef.current && (from === sideRef.current.id || keyOf(sideRef.current.route) === keyOf(route))) { closeSide(); return; }
+    const entries = stackRef.current, index = entries.findIndex(entry => keyOf(entry.route) === keyOf(route));
+    if (index < 0) return;
+    if (index > 0) guard(entries.slice(index).map(entry => entry.id), () => setStack(entries.slice(0, index), true));
+    else guard(entries.map(entry => entry.id), goHome);
+  }, [keyOf, closeSide, guard, setStack, goHome]);
+
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const workspace = useMemo<WorkspaceApi>(() => ({
+    open, notify: toast, close,
+    closeAll: () => guard(allPanels(), () => { if (sideRef.current) { forget([sideRef.current.id]); setSide(undefined); } goHome(); }),
+    unsaved,
+    confirmLeave: (run, exceptPanel) => guard(allPanels().filter(id => id !== exceptPanel), run),
+    transfer: (from, route, input, result) => {
+      if (!routeOf(from)) return;
+      const resolve = routeReader.current;
+      const start = (resolved: Route) => {
+        if (!registry.current.has(resolved.view) || !routeOf(from)) return;
+        const id = entryId("view"), ticket = transfers.current.start(from, input, result);
+        transfers.current.bind(ticket, id);
+        setStack([...stackRef.current, { id, route: { ...resolved, params: { ...resolved.params, call: ticket } } }]);
+      };
+      try {
+        const resolved = resolve ? resolve(route, currentScope.current) : route;
+        if (resolved instanceof Promise) void resolved.then(start).catch(() => toast.error(t("Could not open this view.")));
+        else start(resolved);
+      } catch { toast.error(t("Could not open this view.")); }
+    },
+    palette: () => setPaletteOpen(true),
+    retitle: (id, name) => {
+      setTitles(previous => previous[id] === name ? previous : { ...previous, [id]: name });
+      const route = routeOf(id);
+      if (route && stackRef.current.at(-1)?.id === id) remember(m => ({ ...m, recent: m.recent.map(entry => keyOf(entry.route) === keyOf(route) ? { ...entry, title: name } : entry) }));
+    },
+    recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail,
+  }), [open, close, guard, allPanels, forget, setSide, goHome, unsaved, routeOf, setStack, remember, keyOf, memory, toggleFavorite, applications, rail]);
+
+  const returnFrom = useCallback((entry: Entry, ticket: string) => (value: unknown) => guard([entry.id], () => {
+    transfers.current.finish(ticket, entry.id, value);
+    const entries = stackRef.current, index = entries.findIndex(item => item.id === entry.id);
+    if (index > 0) setStack(entries.slice(0, index), true);
+  }), [guard, setStack]);
+
+  const [compact, setCompact] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(max-width: 767px)").matches);
+  useEffect(() => {
+    const media = matchMedia("(max-width: 767px)");
+    const changed = () => { setCompact(media.matches); setMobileNavOpen(false); };
+    media.addEventListener("change", changed);
+    return () => media.removeEventListener("change", changed);
+  }, []);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => setMobileNavOpen(false), [topKey]);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem(`${storageKey}:sidebar`) ?? "{}") as Record<string, boolean>; } catch { return {}; }
+  });
+  const pageScope = top ? (scopeOf ? scopeOf(top.route) : layoutScope ?? "") : undefined;
+  const sidebarScope = pageScope ?? "";
+  const sidebarCollapsed = !!collapsed[sidebarScope];
+  const toggleSidebar = useCallback(() => {
+    if (compact) { setMobileNavOpen(open => !open); return; }
+    setCollapsed(previous => {
+      const next = { ...previous, [sidebarScope]: !previous[sidebarScope] };
+      try { localStorage.setItem(`${storageKey}:sidebar`, JSON.stringify(next)); } catch {   }
+      return next;
+    });
+  }, [compact, sidebarScope, storageKey]);
+  const hasNavigation = pageScope !== undefined && (nav.length > 0 || !!navigation);
+
   const [typed, setTyped] = useState("");
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [recordSearch, setRecordSearch] = useState<{ source: RecordSearch; text: string; attempt: number; hits?: SearchHit[]; error?: string }>();
@@ -272,509 +410,131 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     }, 200);
     return () => { live = false; clearTimeout(wait); };
   }, [search, typed, searching, searchAttempt]);
-  const navKey = `${storageKey}:nav`;
-  const [memory, setMemory] = useState<{ recent: RecentEntry[]; favorites: string[] }>(() => {
-    try { const saved = localStorage.getItem(navKey); if (saved) return { recent: [], favorites: [], ...JSON.parse(saved) }; } catch {   }
-    return { recent: [], favorites: [] };
-  });
-  const remember = useCallback((change: (m: { recent: RecentEntry[]; favorites: string[] }) => { recent: RecentEntry[]; favorites: string[] }) => setMemory((m) => {
-    const next = change(m);
-    try { localStorage.setItem(navKey, JSON.stringify(next)); } catch {   }
-    return next;
-  }), [navKey]);
-  const toggleFavorite = useCallback((app: string) => remember((m) => ({ ...m, favorites: m.favorites.includes(app) ? m.favorites.filter((id) => id !== app) : [...m.favorites, app] })), [remember]);
-  const currentApp = useRef(applications?.current); currentApp.current = applications?.current;
-  const visited = useCallback((route: Route, title: string) => {
-    if (rail && [routeKey(rail.home), routeKey(rail.applications)].includes(routeKey(route))) return;
-    const key = keyOf(route);
-    remember((m) => ({ ...m, recent: [{ route, title, app: currentApp.current, at: Date.now() }, ...m.recent.filter((r) => keyOf(r.route) !== key)].slice(0, 20) }));
-  }, [rail, remember, keyOf]);
-  const [navOpen, setNavOpen] = useState(nav.length > 0);
-  const navPreferences = useRef(new Map<string, boolean>());
-  const navScope = applications?.current ?? layoutScope ?? "";
-  const hasNavigation = nav.length > 0 || !!navigation;
-  useEffect(() => {
-    if (hasNavigation) setNavOpen(navPreferences.current.get(navScope) ?? true);
-  }, [navScope, hasNavigation]);
-  const [inspection, setInspection] = useState<{ route: Route; focus: HTMLElement | null }>();
-  useEffect(() => setInspection(undefined), [active, layoutScope]);
-  const [compact, setCompact] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(max-width: 639px)").matches);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const navigationTrigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => setMobileNavOpen(false), [activeRoute, layoutScope]);
-  const compactGroup = useRef(false);
-  useEffect(() => {
-    const media = matchMedia("(max-width: 639px)");
-    const changed = () => { setCompact(media.matches); setMobileNavOpen(false); };
-    media.addEventListener("change", changed);
-    return () => media.removeEventListener("change", changed);
-  }, []);
-  useEffect(() => {
-    const api = dock.current, panel = api?.activePanel;
-    if (compact && panel?.group.api.location.type === "grid") {
-      if (!panel.api.isMaximized()) {
-        panel.api.maximize();
-        compactGroup.current = true;
-      }
-    } else if (!compact && compactGroup.current) {
-      api?.exitMaximizedGroup();
-      compactGroup.current = false;
-    }
-  }, [compact, active]);
-  const navigationVisible = compact ? mobileNavOpen : navOpen;
-  const toggleNavigation = () => compact ? setMobileNavOpen((open) => !open) : setNavOpen((open) => {
-    navPreferences.current.set(navScope, !open);
-    return !open;
-  });
-
-  const followed = useRef(onActiveRoute);
-  followed.current = onActiveRoute;
-  const emptied = useRef(onEmpty); emptied.current = onEmpty;
-  const visit = useRef(visited); visit.current = visited;
-
-  const canBeside = (id: string | undefined, dockScope: string | undefined) => {
-    const api = docks.current.get(dockScope), panel = id && api?.getPanel(id);
-    return !!api && !!panel && !compact && (panel.group.panels.length > 1 || api.groups.some((group) => group !== panel.group && group.api.location.type === "grid"));
-  };
-  const placeBeside = useCallback((id: string, reference: string, dockScope: string | undefined) => {
-    const api = docks.current.get(dockScope), panel = api?.getPanel(id), source = api?.getPanel(reference)?.group;
-    if (!api || !panel || !source || compact) return;
-    if (panel.group !== source && panel.group.api.location.type === "grid") return;
-    const other = api.groups.find((group) => group !== source && group.api.location.type === "grid");
-    if (!other && (source.api.location.type !== "grid" || source.panels.length < 2)) return;
-    panel.api.moveTo({ group: other ?? api.addGroup({ referenceGroup: source, direction: "right" }) });
-  }, [compact]);
-  const show = useCallback((route: Route, options: OpenOptions, dockScope: string | undefined) => {
-    const api = dockScope === scope.current ? dock.current : docks.current.get(dockScope), view = byId.get(route.view);
-    if (!view) return;
-    if (!api) {
-      setCreated((prev) => prev.includes(dockScope) ? prev : [...prev, dockScope]);
-      queuedOpen.current = { route, options, scope: dockScope };
-      return;
-    }
-    const reference = api.activePanel?.id;
-    const key = keyOf(route), title = view.title(route.params ?? {});
-    let panel = api.getPanel(key);
-    if (panel) {
-      if (view.documentKey) panel.api.updateParameters({ route });
-      if (options.window === "beside" && reference) placeBeside(panel.id, reference, dockScope);
-    } else if (options.window === "beside" && !compact && api.activePanel?.group.api.location.type === "grid") {
-      const current = api.activePanel.group;
-      const other = api.groups.find((group) => group !== current && group.api.location.type === "grid")
-        ?? api.addGroup({ referenceGroup: current, direction: "right" });
-      panel = api.addPanel({ id: key, component: "view", title, params: { route }, position: { referenceGroup: other } });
-    }
-    panel ??= api.addPanel({ id: key, component: "view", title, params: { route } });
-    panel.api.setActive();
-    syncs.current.get(dockScope)?.();
-    if (options.window === "popout") popout(panel.id, dockScope);
-    if (options.replace && options.from && options.from !== taskKey(dockScope, panel.id)) closePanel(options.from);
-  }, [byId, compact, popout, placeBeside, keyOf, closePanel]);
-  const openResolved = useCallback((route: Route, options: OpenOptions = {}, hint?: string | undefined) => {
-    if (!viewRegistry.current.has(route.view)) return;
-    const source = options.from ? taskOwner(options.from) : undefined;
-    if (source && !source.panel) return;
-    const target = hint ?? (route.params?.call && source ? source.scope : routeScope.current?.(route) ?? source?.scope ?? scope.current);
-    const call = route.params?.call ? transfers.current.read(route.params.call, taskKey(target, keyOf(route))) : undefined;
-    const origin = call ? taskOwner(call.from).panel : undefined;
-    const originRoute = (origin?.params as { route?: Route } | undefined)?.route;
-    const scopeApi = target === scope.current ? dock.current : docks.current.get(target);
-    if (options.ifCurrent && (source?.api ?? scopeApi)?.activePanel?.id !== keyOf(options.ifCurrent)) return;
-    if (source && source.scope !== scope.current) {
-      if (target === source.scope && options.window !== "inspect") show(route, { ...options, window: "tab" }, target);
-      return;
-    }
-    if (options.window === "inspect") {
-      setInspection(previous => ({ route, focus: previous?.focus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null) }));
-      return;
-    }
-    setInspection(undefined);
-    if (switching.current) { queuedOpen.current = { route, options, scope: target }; return; }
-    if (target !== scope.current) {
-      show(route, options, target);
-      followed.current?.(originRoute ?? route);
-      return;
-    }
-    show(route, options, target);
-  }, [show, keyOf, taskOwner]);
-  const open = useCallback((route: Route, options: OpenOptions = {}, hint?: string | undefined) => {
-    const resolve = routeReader.current;
-    if (!resolve) { openResolved(route, options, hint); return; }
-    const source = options.from ? taskOwner(options.from) : undefined;
-    if (source && !source.panel) return;
-    if (options.ifCurrent && (source?.api ?? dock.current)?.activePanel?.id !== keyOf(options.ifCurrent)) return;
-    const foreground = !source || source.scope === scope.current;
-    const revision = foreground ? ++incomingRevision.current : incomingRevision.current;
-    const take = (resolved: Route) => { if (!foreground || revision === incomingRevision.current) openResolved(resolved, options, hint); };
-    try {
-      const resolved = resolve(route);
-      if (resolved instanceof Promise) void resolved.then(take).catch(() => {
-        if (revision === incomingRevision.current) toast.error(t("Could not open this view."));
-      });
-      else take(resolved);
-    } catch {
-      if (revision === incomingRevision.current) toast.error(t("Could not open this view."));
-    }
-  }, [openResolved, keyOf, taskOwner]);
-  const readLink = useCallback((route: Route) => {
-    const revision = ++incomingRevision.current;
-    void Promise.resolve().then(() => routeReader.current?.(route) ?? route).then((resolved) => {
-      if (revision !== incomingRevision.current) return;
-      if (viewRegistry.current.has(resolved.view)) openResolved(resolved);
-      else {
-        toast.error(t("This address points to a task your current access does not include."));
-        if (!dock.current?.panels.length) open(applicationEntries.current?.apps.find((app) => app.id === scope.current)?.home ?? home);
-      }
-    }).catch(() => {
-      if (revision !== incomingRevision.current) return;
-      const previous = (dock.current?.activePanel?.params as { route?: Route } | undefined)?.route;
-      if (previous) history.replaceState(null, "", routeToHash(previous));
-      toast.error(t("Could not open this view."));
-    });
-  }, [open, openResolved, home]);
-  useEffect(() => {
-    const linked = routeFromHash(location.hash);
-    if (!resolveRoute || !linked || !dock.current) return;
-    const revision = incomingRevision.current;
-    void Promise.resolve(resolveRoute(linked)).then(resolved => {
-      if (revision === incomingRevision.current && routeToHash(linked) === location.hash && routeKey(resolved) !== routeKey(linked)) openResolved(resolved);
-    }).catch(() => {   });
-  }, [resolveRoute, openResolved]);
-  const beside = useCallback((id: string, dockScope: string | undefined) => {
-    placeBeside(id, id, dockScope);
-    docks.current.get(dockScope)?.getPanel(id)?.api.setActive();
-  }, [placeBeside]);
-  const closeAll = useCallback(() => closePanels((dock.current?.panels ?? []).map((p) => taskKey(scope.current, p.id))), [closePanels]);
-  const closeOthers = useCallback((id: string, dockScope: string | undefined) => closePanels((docks.current.get(dockScope)?.panels ?? []).filter((p) => p.id !== id).map((p) => taskKey(dockScope, p.id))), [closePanels]);
-  const closeRight = useCallback((id: string, dockScope: string | undefined) => {
-    const group = docks.current.get(dockScope)?.getPanel(id)?.group; if (!group) return;
-    const index = group.panels.findIndex((p) => p.id === id);
-    closePanels(group.panels.slice(index + 1).map((p) => taskKey(dockScope, p.id)));
-  }, [closePanels]);
-  useEffect(() => {
-    if (scope.current === layoutScope && dock.current && docks.current.has(layoutScope)) return;
-    scope.current = layoutScope;
-    setCreated((prev) => prev.includes(layoutScope) ? prev : [...prev, layoutScope]);
-    const api = docks.current.get(layoutScope);
-    if (api) {
-      dock.current = api;
-      switching.current = false;
-      syncs.current.get(layoutScope)?.();
-    }
-  }, [layoutScope]);
-  useEffect(() => {
-    unloaded.current = false;
-    booted.current = false;
-    return () => { unloaded.current = true; };
-  }, []);
-
-  const workspace = useMemo<WorkspaceApi>(() => ({
-    open, notify: toast, close: (route, from) => closePanel(taskKey(from ? taskOwner(from).scope : scope.current, keyOf(route))),
-    closeAll: from => {
-      if (!from) { closeAll(); return; }
-      const owner = taskOwner(from);
-      closePanels((owner.api?.panels ?? []).map(panel => taskKey(owner.scope, panel.id)));
-    }, unsaved,
-    confirmLeave: (run, exceptPanel) => unsaved.ask(allTasks().filter(id => id !== exceptPanel), run),
-    transfer: (from, route, input, result) => {
-      const source = taskOwner(from);
-      if (!source.panel) return;
-      const id = transfers.current.start(from, input, result), called = { ...route, params: { ...route.params, call: id } };
-      transfers.current.bind(id, taskKey(source.scope, keyOf(called))); open(called, { from });
-    },
-    palette: () => setPaletteOpen(true),
-    retitle: (id, name) => {
-      const panel = taskOwner(id).panel;
-      const route = (panel?.params as { route?: Route } | undefined)?.route;
-      const category = route ? byId.get(route.view)?.title(route.params ?? {}) : undefined;
-      const title = category && category !== name ? `${category} · ${name}` : name;
-      if (panel && panel.api.title !== title) panel.setTitle(title);
-    },
-    recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail,
-  }), [open, closePanel, closePanels, closeAll, unsaved, memory, toggleFavorite, applications, rail, byId, allTasks, taskOwner]);
-
-  const tab = useCallback((props: IDockviewPanelHeaderProps) => {
-    const id = props.api.id, dockScope = useContext(DockScope), address = taskKey(dockScope, id);
-    const items: { label: string; run: () => void; separator?: boolean; disabled?: boolean }[] = [
-      { label: t("Close"), run: () => closePanel(address) },
-      { label: t("Close others"), run: () => closeOthers(id, dockScope) },
-      { label: t("Close to the right"), run: () => closeRight(id, dockScope) },
-      { label: t("Close all"), run: () => closePanels((docks.current.get(dockScope)?.panels ?? []).map(panel => taskKey(dockScope, panel.id))) },
-      { label: t("Open beside"), run: () => beside(id, dockScope), separator: true, disabled: !canBeside(id, dockScope) },
-      { label: t("Move to new window"), run: () => popout(id, dockScope) },
-    ];
-    return <ContextMenu.Root>
-      <ContextMenu.Trigger asChild><div className="flex h-full"><DockviewDefaultTab {...props} closeActionOverride={() => closePanel(address)} /></div></ContextMenu.Trigger>
-      <ContextMenu.Portal><ContextMenu.Content className={menuPanel}>
-        {items.map((item) => <div key={item.label}>{item.separator && <ContextMenu.Separator className="my-1 h-px bg-border" />}
-          <ContextMenu.Item onSelect={item.run} disabled={item.disabled} className={menuItem}>{item.label}</ContextMenu.Item></div>)}
-      </ContextMenu.Content></ContextMenu.Portal>
-    </ContextMenu.Root>;
-  }, [closePanel, closePanels, closeOthers, closeRight, beside, popout, compact]);
-
-  const components = useMemo(() => ({
-    view: ({ params, api }: IDockviewPanelProps<{ route: Route }>) => {
-      const view = useContext(ViewRegistryContext).get(params.route.view);
-      const dockScope = useContext(DockScope), address = taskKey(dockScope, api.id);
-      const ticket = params.route.params?.call;
-      const call = ticket ? transfers.current.read(ticket, address) : undefined;
-      const returned = (value: unknown) => {
-        if (!ticket) return;
-        unsaved.ask([address], () => {
-          const origin = transfers.current.finish(ticket, address, value);
-          if (origin && taskOwner(origin).panel) {
-            taskOwner(origin).panel!.api.setActive();
-            taskOwner(address).panel?.api.close();
-          }
-        });
-      };
-      const [panelVisible, setVisible] = useState(api.isVisible);
-      const front = useContext(FrontDock);
-      useEffect(() => {
-        const changed = api.onDidVisibilityChange((event) => setVisible(event.isVisible));
-        return () => changed.dispose();
-      }, [api]);
-      const visible = panelVisible && front;
-      return <div style={{ display: panelVisible ? undefined : "none" }} role="region" aria-label={view?.title(params.route.params ?? {}) ?? t("Workspace view")} className="h-full overflow-auto bg-background p-4">
-        <ViewVisibilityContext.Provider value={visible}><PanelContext.Provider value={address}><ViewCallContext.Provider value={ticket ? { input: call?.input, expired: !call, returnValue: call ? returned : undefined } : undefined}><ViewBoundary onClose={() => closePanel(address)}>
-          {view ? view.render(params.route.params ?? {}) : <p className="text-sm text-muted">{t("This view no longer exists.")}</p>}
-        </ViewBoundary></ViewCallContext.Provider></PanelContext.Provider></ViewVisibilityContext.Provider>
-      </div>;
-    },
-  }), [closePanel, taskOwner, unsaved]);
-
-  const onDockReady = useCallback(({ api }: { api: DockviewApi }, dockScope: string | undefined) => {
-    docks.current.set(dockScope, api);
-    if (dockScope === scope.current) dock.current = api;
-    api.onDidRemovePanel((panel) => {
-      const address = taskKey(dockScope, panel.id);
-      transfers.current.remove(address);
-      drafts.current.delete(address);
-      setPending((request) => {
-        if (!request) return request;
-        const panels = request.panels.filter((id) => id !== address);
-        return panels.length ? { ...request, panels } : undefined;
-      });
-    });
-    const sync = () => {
-      const front = dockScope === scope.current && dock.current === api;
-      if (front) {
-        setOpenTabs(api.panels.map((panel) => ({ key: panel.id, title: panel.title ?? panel.id })));
-        setActive(api.activePanel?.id);
-        const route = (api.activePanel?.params as { route?: Route } | undefined)?.route;
-        setActiveRoute(route && routeKey(route));
-        if (!switching.current) {
-          history.replaceState(null, "", route ? routeToHash(route) : "#/");
-          const call = route?.params?.call ? transfers.current.read(route.params.call, taskKey(dockScope, api.activePanel!.id)) : undefined;
-          const origin = call ? taskOwner(call.from).panel : undefined;
-          const originRoute = (origin?.params as { route?: Route } | undefined)?.route;
-          if (route) followed.current?.(originRoute ?? route); else emptied.current?.();
-          if (route && !call) visit.current(route, api.activePanel?.title ?? route.view);
-        }
-      }
-      if (!unloaded.current) saveLayout(api, dockScope);
-    };
-    syncs.current.set(dockScope, sync);
-    api.onDidLayoutChange(sync);
-    api.onDidActivePanelChange(sync);
-    const linked = !booted.current ? routeFromHash(location.hash) : undefined;
-    const linkRevision = incomingRevision.current;
-    switching.current = true;
-    void loadLayout(api, dockScope).then((loaded) => {
-      if (!loaded || unloaded.current || docks.current.get(dockScope) !== api) return;
-      const queued = queuedOpen.current?.scope === dockScope ? queuedOpen.current : undefined;
-      if (queued) queuedOpen.current = undefined;
-      const front = dockScope === scope.current;
-      if (front) { dock.current = api; switching.current = false; }
-      if (!api.panels.length && !linked && !queued) show(applicationEntries.current?.apps.find((app) => app.id === dockScope)?.home ?? home, {}, dockScope);
-      if (queued) show(queued.route, queued.options, dockScope);
-      if (front) {
-        booted.current = true;
-        if (!queued && linked && linkRevision === incomingRevision.current) readLink(linked);
-      }
-      sync();
-    });
-  }, [home, open, show, readLink, loadLayout, saveLayout, taskOwner]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented && mobileNavOpen) { setMobileNavOpen(false); navigationTrigger.current?.focus(); }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((v) => !v); }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w" && dock.current?.activePanel) { e.preventDefault(); closePanel(taskKey(scope.current, dock.current.activePanel.id)); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") { e.preventDefault(); toggleSidebar(); }
+      if (e.key === "Escape" && !e.defaultPrevented && compact && mobileNavOpen) setMobileNavOpen(false);
     };
-    const onHash = () => { const route = routeFromHash(location.hash); if (route) readLink(route); };
     addEventListener("keydown", onKey);
-    addEventListener("hashchange", onHash);
-    return () => { removeEventListener("keydown", onKey); removeEventListener("hashchange", onHash); };
-  }, [readLink, closePanel, mobileNavOpen]);
+    return () => removeEventListener("keydown", onKey);
+  }, [toggleSidebar, compact, mobileNavOpen]);
 
-  const activePanel = () => dock.current?.activePanel;
-  const builtInMenus: Menu[] = [
-    { label: t("View"), items: [
-      { label: t("Command palette"), shortcut: "⌘K", onSelect: () => setPaletteOpen(true) },
-      { label: navigationVisible ? t("Hide navigation") : t("Show navigation"), onSelect: toggleNavigation },
-      { label: t("Reset layout"), onSelect: () => leaveViews(() => { dock.current?.clear(); open(applicationEntries.current?.apps.find((app) => app.id === scope.current)?.home ?? home); }) },
-    ] },
-    { label: t("Appearance"), items: [
-      ...([["system", t("Follow system")], ["light", t("Light")], ["dark", t("Dark")]] as const).map(([scheme, label]) => ({ label, shortcut: appearance.scheme === scheme ? "✓" : undefined, onSelect: () => appearance.setScheme(scheme) })),
-    ] },
-    { label: t("Window"), items: [
-      { label: t("Open beside"), disabled: !canBeside(active, scope.current), onSelect: () => { const p = activePanel(); if (p) beside(p.id, scope.current); } },
-      { label: t("Move to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) popout(p.id, scope.current); } },
-      { label: t("Close"), shortcut: "⌘W", disabled: !active, onSelect: () => { const p = activePanel(); if (p) closePanel(taskKey(scope.current, p.id)); } },
-      { label: t("Close others"), disabled: openTabs.length < 2, onSelect: () => { const p = activePanel(); if (p) closeOthers(p.id, scope.current); } },
-      { label: t("Close all"), disabled: !openTabs.length, onSelect: closeAll },
-      ...openTabs.map((t) => ({ label: t.title, onSelect: () => dock.current?.getPanel(t.key)?.api.setActive() })),
-    ] },
-  ];
-
-  const watermark = useCallback(() => <div className="grid h-full place-content-center gap-3 p-6 text-center text-sm text-muted">
-    <p>{t("No open tabs.")}</p>
-    <div className="flex justify-center gap-2">
-      <Button onClick={() => open(applicationEntries.current?.apps.find((app) => app.id === scope.current)?.home ?? home)}>{t("Open home")}</Button>
-      <Button variant="ghost" onClick={() => setPaletteOpen(true)}>{t("Search and commands")}</Button>
-    </div>
-  </div>, [open, home]);
-
-  const favoriteApps = (applications?.apps ?? []).filter((a) => memory.favorites.includes(a.id));
-  const starred = !!applications?.current && memory.favorites.includes(applications.current);
+  const leave = useCallback((run: () => void) => guard(allPanels(), run), [guard, allPanels]);
+  const activeKey = top ? routeKey(top.route) : undefined;
+  const currentApp = applications?.apps.find(app => app.id === pageScope);
+  const pinnedApps = (applications?.apps ?? []).filter((a) => memory.favorites.includes(a.id));
+  const onRailRoute = (route?: Route) => !!route && !!top && routeKey(route) === routeKey(top.route);
   type RailItem = { id: string; label: string; icon: ReactNode; badge?: number; active?: boolean; run: () => void };
   const railItems: RailItem[] = rail ? [
-    { id: "home", label: t("Home"), icon: <HomeIcon />, active: active === routeKey(rail.home), run: () => open(rail.home) },
+    { id: "home", label: t("Home"), icon: <HomeIcon />, active: onRailRoute(rail.home), run: () => open(rail.home) },
     { id: "search", label: t("Search"), icon: <Search />, run: () => setPaletteOpen(true) },
-    ...(rail.notifications ? [{ id: "notifications", label: t("Notifications"), icon: <Bell />, badge: rail.notifications.unread, active: active === routeKey(rail.notifications.route), run: () => open(rail.notifications!.route) }] : []),
-    { id: "applications", label: t("Applications"), icon: <Grid2x2 />, active: active === routeKey(rail.applications), run: () => open(rail.applications) },
+    ...(rail.projects ? [{ id: "projects", label: t("Projects"), icon: <FolderKanban />, active: onRailRoute(rail.projects), run: () => open(rail.projects!) }] : []),
+    { id: "applications", label: t("Applications"), icon: <Grid2x2 />, active: onRailRoute(rail.applications), run: () => open(rail.applications) },
+    ...(rail.notifications ? [{ id: "inbox", label: t("Inbox"), icon: <Bell />, badge: rail.notifications.unread, active: onRailRoute(rail.notifications.route), run: () => open(rail.notifications!.route) }] : []),
   ] : [];
-  const railButton = (item: RailItem) => (
-    <Tooltip key={item.id} content={item.label} side="right"><button type="button" aria-label={item.label} aria-current={item.active ? "page" : undefined} onClick={item.run}
-      className={cn("relative grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground [&_svg]:size-4", item.active && "bg-row-selected text-foreground")}>
-      {item.icon}{item.badge ? <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-2xs font-semibold leading-4 text-primary-foreground">{item.badge > 99 ? "99+" : item.badge}</span> : null}
-    </button></Tooltip>
-  );
-  const sessionMenu = session && <SessionMenu compact={!!rail && !compact} session={{ ...session, onAccount: session.onAccount ? () => leaveViews(() => session.onAccount?.()) : undefined, onSwitch: (id) => leaveViews(() => session.onSwitch(id)) }}
-    onLanguageSelect={(id) => leaveViews(() => {
+  const sessionMenu = session && <SessionMenu rail={!compact} scheme={appearance.scheme} onScheme={appearance.setScheme} session={{ ...session, onAccount: session.onAccount ? () => leave(() => session.onAccount?.()) : undefined, onSwitch: (id) => leave(() => session.onSwitch(id)) }}
+    onLanguageSelect={(id) => leave(() => {
       void Promise.resolve(onLanguage?.(id)).catch(() => undefined).finally(() => setLanguage(id));
     })} />;
+  const density = currentApp?.category === "business" ? "comfortable" : "compact";
+  const sideView = side ? byId.get(side.route.view) : undefined;
+  const sideTitle = side ? titles[side.id] ?? sideView?.title(side.route.params ?? {}) ?? t("Details") : "";
+  const fullRoute = (route: Route): Route => { const { inspect: _inspect, ...params } = route.params ?? {}; return Object.keys(params).length ? { ...route, params } : { view: route.view }; };
+  const builtInCommands: ShellCommand[] = [
+    ...(hasNavigation ? [{ id: "shell:navigation", label: sidebarCollapsed ? t("Show navigation") : t("Hide navigation"), group: t("View"), shortcut: "⌘\\", run: toggleSidebar }] : []),
+    ...([["light", t("Light")], ["dark", t("Dark")], ["system", t("Follow system")]] as const).map(([scheme, label]) => ({ id: `shell:appearance:${scheme}`, label: `${t("Appearance")}: ${label}`, group: t("View"), run: () => appearance.setScheme(scheme) })),
+  ];
+
+  const sidebar = hasNavigation && (
+    <Sidebar app={currentApp} product={product} productIcon={productIcon} nav={nav} navigation={navigation} active={activeKey}
+      collapsed={!compact && sidebarCollapsed} onToggle={toggleSidebar} status={status}
+      pinned={!!currentApp && memory.favorites.includes(currentApp.id)} onPin={currentApp ? () => toggleFavorite(currentApp.id) : undefined}
+      onHome={currentApp ? () => open(currentApp.home) : undefined}
+      onOpen={route => { open(route); setMobileNavOpen(false); }} />
+  );
 
   return (
     <WorkspaceContext.Provider value={workspace}>
-      <ViewRegistryContext.Provider value={byId}>
       <div className={cn("grid h-dvh w-full min-w-0 max-w-full overflow-hidden bg-background text-foreground",
-        rail && !compact ? "grid-cols-[44px_minmax(0,1fr)]" : "grid-cols-1", rail && compact ? "grid-rows-[36px_1fr_44px]" : "grid-rows-[36px_1fr]")}>
-        {rail && !compact && (
-          <aside aria-label={t("Platform")} data-ui="chrome" className="row-span-2 flex flex-col items-center gap-1 border-r border-border bg-surface py-1.5">
-            {railItems.map(railButton)}
-            <div className="my-1 h-px w-6 bg-border" />
+        compact ? rail ? "grid-rows-[40px_minmax(0,1fr)_48px]" : "grid-rows-[40px_minmax(0,1fr)]" : rail ? "grid-cols-[var(--rail-width)_auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)]")}>
+        {!compact && rail && (
+          <aside aria-label={t("Platform")} data-ui="rail" className="flex min-h-0 flex-col items-center gap-1 overflow-y-auto border-r border-rail-border bg-rail py-2">
+            {railItems.map(item => <RailButton key={item.id} {...item} />)}
             <RailList label={t("Recent")} icon={<Clock />} empty={t("Nothing opened yet.")}
               items={memory.recent.slice(0, 12).map((r) => ({ id: routeKey(r.route), label: r.title, detail: r.app ? applications?.apps.find((a) => a.id === r.app)?.title : undefined, run: () => open(r.route) }))} />
-            <RailList label={t("Favorites")} icon={<Star />} empty={t("Star an application to keep it here.")}
-              items={favoriteApps.map((a) => ({ id: a.id, label: a.title, icon: a.icon, run: () => applications!.onSelect(a.id) }))} />
-            <div className="mt-auto flex flex-col items-center gap-1">
-              {rail.assist && railButton({ id: "assist", label: t("Assistant"), icon: <Sparkles />, active: active === routeKey(rail.assist), run: () => open(rail.assist!) })}
+            {pinnedApps.length > 0 && <div className="my-1 h-px w-6 shrink-0 bg-rail-hover" />}
+            {pinnedApps.map(app => <RailButton key={app.id} id={app.id} label={app.title} icon={app.icon} active={pageScope === app.id} run={() => applications!.onSelect(app.id)} />)}
+            <div className="mt-auto flex flex-col items-center gap-1 pt-2">
+              {rail.assist && <RailButton id="assist" label={t("Assistant")} icon={<Sparkles />} active={onRailRoute(rail.assist)} run={() => open(rail.assist!)} />}
+              {rail.settings && <RailButton id="settings" label={t("Control Panel")} icon={<Settings />} active={pageScope !== undefined && pageScope === (scopeOf?.(rail.settings))} run={() => open(rail.settings!)} />}
               {sessionMenu}
             </div>
           </aside>
         )}
-        <header data-ui="chrome" className="flex min-w-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-2">
-          <button ref={navigationTrigger} type="button" aria-label={t("Toggle navigation")} aria-expanded={navigationVisible} onClick={toggleNavigation}
-            className="rounded-sm p-1 text-muted hover:bg-row-hover hover:text-foreground"><PanelLeft className="size-4" /></button>
-          {applications && applications.apps.length > 0
-            ? <AppMenu applications={applications} product={product} icon={productIcon} />
-            : <span className="flex items-center gap-2 pr-2 text-sm font-semibold tracking-tight [&_svg]:size-4 [&_svg]:text-muted">{productIcon}{product}</span>}
-          {applications?.current && (
-            <button type="button" aria-label={starred ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={starred} onClick={() => toggleFavorite(applications.current!)}
-              className={cn("rounded-sm p-1 hover:bg-row-hover", starred ? "text-[var(--tone-warning)]" : "text-muted hover:text-foreground")}>
-              <Star className="size-3.5" fill={starred ? "currentColor" : "none"} />
-            </button>
-          )}
-          <Menubar.Root className="hidden items-center sm:flex">
-            {[...menus, ...builtInMenus].map((menu) => (
-              <Menubar.Menu key={menu.label}>
-                <Menubar.Trigger className="h-6 rounded-sm px-2 text-sm outline-none hover:bg-row-hover data-[state=open]:bg-row-hover">
-                  {menu.label}
-                </Menubar.Trigger>
-                <Menubar.Portal>
-                  <Menubar.Content align="start" sideOffset={4} className={menuPanel}>
-                    {menu.items.map((item) => (
-                      <Menubar.Item key={item.label} disabled={item.disabled} onSelect={item.onSelect} className={menuItem}>
-                        {item.label}{item.shortcut && <span className="ml-auto pl-6 text-xs text-muted">{item.shortcut}</span>}
-                      </Menubar.Item>
-                    ))}
-                  </Menubar.Content>
-                </Menubar.Portal>
-              </Menubar.Menu>
-            ))}
-          </Menubar.Root>
-          {compact && <DropdownMenu.Root>
-            <DropdownMenu.Trigger aria-label={t("Workspace menu")} className="grid size-7 shrink-0 place-items-center rounded-sm text-muted hover:bg-row-hover hover:text-foreground data-[state=open]:bg-row-hover">
-              <Ellipsis className="size-4" />
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content align="start" sideOffset={4} className={cn(menuPanel, "max-h-[70dvh] max-w-[calc(100vw-16px)] overflow-auto")}>
-                {[...menus, ...builtInMenus].map((menu, index) => <DropdownMenu.Group key={menu.label}>
-                  {index > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border" />}
-                  <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-muted">{menu.label}</DropdownMenu.Label>
-                  {menu.items.map((item) => <DropdownMenu.Item key={item.label} disabled={item.disabled} onSelect={item.onSelect} className={cn(menuItem, "h-auto min-h-8 gap-3 py-1 pl-2")}>
-                    <span className="min-w-0 break-words">{item.label}</span>{item.shortcut && <span className="ml-auto shrink-0 text-xs text-muted">{item.shortcut}</span>}
-                  </DropdownMenu.Item>)}
-                </DropdownMenu.Group>)}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>}
-          <button type="button" aria-label={t("Search and commands")} onClick={() => setPaletteOpen(true)}
-            className="mx-auto flex h-6 w-6 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-background text-sm text-muted hover:text-foreground lg:w-72 lg:justify-start lg:px-2">
-            <Search className="size-3.5" /><span className="max-lg:hidden">{t("Search and commands")}</span><kbd className="ml-auto text-xs max-lg:hidden">⌘K</kbd>
-          </button>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="max-sm:hidden">{status}</span>
-            {(!rail || compact) && sessionMenu}
-          </div>
-        </header>
-        <div className={cn("relative grid min-h-0 min-w-0", !compact && navOpen && (nav.length > 0 || navigation) ? "grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1")}>
-          {compact && mobileNavOpen && <button type="button" aria-label={t("Close navigation")} className="fixed inset-x-0 bottom-0 top-9 z-20 bg-overlay" onClick={() => setMobileNavOpen(false)} />}
-          {(nav.length > 0 || navigation) && (!compact && navOpen || compact && mobileNavOpen) && (
-            <nav aria-label={t("Main")} className={cn("overflow-auto border-r border-border bg-surface p-2",
-              compact && "fixed inset-y-9 left-0 z-30 w-[min(19rem,85vw)] shadow-lg")}>
-              {navigation}
-              {nav.map((section) => (
-                <div key={section.label} className="mb-3">
-                  <div className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted">{section.label}</div>
-                  <NavigationItems items={section.items} active={active} onOpen={route => { open(route); setMobileNavOpen(false); }} />
-                </div>
-              ))}
-            </nav>
-          )}
-          <div className="platform-dock relative min-h-0 min-w-0 overflow-hidden">
-            {created.map((dockScope) => (
-              <div key={dockScope ?? "shell"} data-density={appEntries?.apps.find(app => app.id === dockScope)?.category === "business" ? "comfortable" : "compact"} className="absolute inset-0" style={{ visibility: dockScope === layoutScope ? "visible" : "hidden", zIndex: dockScope === layoutScope ? 1 : 0 }}>
-                <DockScope.Provider value={dockScope}><FrontDock.Provider value={dockScope === layoutScope}>
-                  <DockviewReact defaultRenderer="always" defaultTabComponent={tab} watermarkComponent={watermark} components={components} onReady={(event) => onDockReady(event, dockScope)} theme={appearance.theme==="dark"?themeDark:themeLight} />
-                </FrontDock.Provider></DockScope.Provider>
-              </div>
-            ))}
-          </div>
+        {compact && (
+          <header data-ui="chrome" className="flex min-w-0 items-center gap-2 border-b border-border bg-surface px-2">
+            {hasNavigation && <Button size="icon" variant="ghost" aria-label={t("Toggle navigation")} aria-expanded={mobileNavOpen} onClick={toggleSidebar}><MenuIcon /></Button>}
+            <span className="flex min-w-0 flex-1 items-center gap-2 truncate text-sm font-semibold [&_svg]:size-4 [&_svg]:shrink-0">{currentApp?.icon ?? productIcon}{currentApp?.title ?? product}</span>
+            <Button size="icon" variant="ghost" aria-label={t("Search and commands")} onClick={() => setPaletteOpen(true)}><Search /></Button>
+            {sessionMenu}
+          </header>
+        )}
+        {!compact && (sidebar || <div />)}
+        <div className={cn("relative grid min-h-0 min-w-0", side && !compact ? "grid-cols-[minmax(0,1fr)_var(--side-pane-width)]" : "grid-cols-1")}>
+          {compact && mobileNavOpen && sidebar && <>
+            <button type="button" aria-label={t("Close navigation")} className="fixed inset-x-0 bottom-12 top-10 z-20 bg-overlay" onClick={() => setMobileNavOpen(false)} />
+            <div className="fixed bottom-12 left-0 top-10 z-30 flex w-[min(19rem,85vw)] shadow-lg">{sidebar}</div>
+          </>}
+          <main data-density={density} className="relative min-h-0 min-w-0">
+            {stack.map((entry, index) => {
+              const view = byId.get(entry.route.view);
+              const visible = index === stack.length - 1;
+              const ticket = entry.route.params?.call;
+              const call = ticket ? transfers.current.read(ticket, entry.id) : undefined;
+              return <div key={entry.id} hidden={!visible} role="region" aria-label={titles[entry.id] ?? view?.title(entry.route.params ?? {}) ?? t("Workspace view")} className="absolute inset-0 overflow-auto px-5 py-4 max-md:px-3 max-md:py-3">
+                <ViewVisibilityContext.Provider value={visible}><PanelContext.Provider value={entry.id}><ViewCallContext.Provider value={ticket ? { input: call?.input, expired: !call, returnValue: call ? returnFrom(entry, ticket) : undefined } : undefined}>
+                  <ViewBoundary closeLabel={t("Go to home")} onClose={goHome}>
+                    <div key={keyOf(entry.route)} className="contents">{view ? view.render(entry.route.params ?? {}) : <p className="text-sm text-muted">{t("This view no longer exists.")}</p>}</div>
+                  </ViewBoundary>
+                </ViewCallContext.Provider></PanelContext.Provider></ViewVisibilityContext.Provider>
+              </div>;
+            })}
+          </main>
+          {side && <aside aria-label={sideTitle} data-density={density} className={cn("flex min-h-0 min-w-0 flex-col border-l border-border bg-surface", compact && "fixed inset-x-0 bottom-12 top-10 z-30")}
+            onKeyDown={event => { if (event.key === "Escape" && !event.defaultPrevented) { event.stopPropagation(); closeSide(); } }}>
+            <header className="flex h-10 shrink-0 items-center gap-1 border-b border-border pl-3 pr-1">
+              <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{sideTitle}</h2>
+              <Button size="icon" variant="ghost" aria-label={t("Open as page")} title={t("Open as page")} onClick={() => { const route = fullRoute(side.route); guard([side.id], () => { forget([side.id]); setSide(undefined); open(route); }); }}><Maximize2 /></Button>
+              <Button size="icon" variant="ghost" aria-label={t("Close")} title={t("Close")} onClick={closeSide}><X /></Button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-auto p-3">
+              <PanelContext.Provider value={side.id}>
+                <ViewBoundary key={side.id} closeLabel={t("Close")} onClose={() => { forget([side.id]); setSide(undefined); }}>
+                  <div key={keyOf(side.route)} className="contents">{sideView?.render(side.route.params ?? {})}</div>
+                </ViewBoundary>
+              </PanelContext.Provider>
+            </div>
+          </aside>}
         </div>
-        {inspection && <Sheet open onOpenChange={open => { if (!open) setInspection(undefined); }} title={byId.get(inspection.route.view)?.title(inspection.route.params ?? {}) ?? t("Record")} width={560} returnFocus={inspection.focus}>
-          <ViewBoundary onClose={() => setInspection(undefined)}>
-            {byId.get(inspection.route.view)?.render(inspection.route.params ?? {})}
-          </ViewBoundary>
-        </Sheet>}
-        {rail && compact && (
-          <nav aria-label={t("Platform")} data-ui="chrome" className="flex items-center justify-around border-t border-border bg-surface px-2">
-            {railItems.map(railButton)}
+        {compact && rail && (
+          <nav aria-label={t("Platform")} data-ui="rail" className="flex items-center justify-around border-t border-rail-border bg-rail px-2">
+            {railItems.map(item => <RailButton key={item.id} {...item} />)}
           </nav>
         )}
       </div>
       <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")}
         overlayClassName="fixed inset-0 z-40 bg-overlay"
-        contentClassName="fixed left-1/2 top-[15%] z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-md border border-border bg-surface text-foreground shadow-2xl">
-        <Command.Input value={typed} onValueChange={setTyped} placeholder={t("Search records, go to, open, run…")} className="h-10 w-full border-b border-border bg-transparent px-3 text-base outline-none" />
+        contentClassName="fixed left-1/2 top-[14%] z-50 w-[min(600px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-surface text-foreground shadow-lg">
+        <div className="flex items-center gap-2 border-b border-border px-3"><Search className="size-4 shrink-0 text-muted" />
+          <Command.Input value={typed} onValueChange={setTyped} placeholder={t("Search records, go to, open, run…")} className="h-11 w-full bg-transparent text-base outline-none" /></div>
         {searchPending && <p role="status" className="px-3 py-2 text-sm text-muted">{t("Searching records…")}</p>}
         {answer?.error !== undefined && <div role="alert" className="grid gap-1 border-b border-border px-3 py-2 text-sm">
           <p className="text-danger">{t("Record search failed.")} {answer.error}</p>
           <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => setSearchAttempt(attempt => attempt + 1)}>{t("Retry")}</Button>
         </div>}
-        <Command.List className="max-h-80 overflow-auto p-1">
+        <Command.List className="max-h-[min(420px,60dvh)] overflow-auto p-1">
           {!searchPending && answer?.error === undefined && <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>}
           {found.length > 0 && (
             <Command.Group heading={t("Records")} className={paletteGroup}>
@@ -784,6 +544,14 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               ))}
             </Command.Group>
           )}
+          {nav.length > 0 && pageScope && nav.map((section) => (
+            <Command.Group key={section.label} heading={currentApp ? `${currentApp.title} · ${section.label}` : section.label} className={paletteGroup}>
+              {navigationLinks(section.items).map((item) => (
+                <Command.Item key={routeKey(item.route)} value={`${section.label} ${item.label}`} className={paletteItem}
+                  onSelect={() => { open(item.route); setPaletteOpen(false); }}>{item.icon}{item.label}</Command.Item>
+              ))}
+            </Command.Group>
+          ))}
           {applications && applications.apps.length > 0 && (
             <Command.Group heading={t("Applications")} className={paletteGroup}>
               {applications.apps.map((a) => (
@@ -793,43 +561,33 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               ))}
             </Command.Group>
           )}
-
-          {nav.map((section) => (
-            <Command.Group key={section.label} heading={section.label} className={paletteGroup}>
-              {navigationLinks(section.items).map((item) => (
-                <Command.Item key={routeKey(item.route)} value={`${section.label} ${item.label}`} className={paletteItem}
-                  onSelect={() => { open(item.route); setPaletteOpen(false); }}>{item.icon}{item.label}</Command.Item>
-              ))}
-            </Command.Group>
-          ))}
-          {openTabs.length > 0 && (
-            <Command.Group heading={t("Open tabs")} className={paletteGroup}>
-              {openTabs.map((tab) => (
-                <Command.Item key={tab.key} value={`tab ${tab.title} ${tab.key}`} className={paletteItem}
-                  onSelect={() => { dock.current?.getPanel(tab.key)?.api.setActive(); setPaletteOpen(false); }}>{tab.title}</Command.Item>
+          {memory.recent.length > 0 && (
+            <Command.Group heading={t("Recent")} className={paletteGroup}>
+              {memory.recent.slice(0, 8).map((entry) => (
+                <Command.Item key={routeKey(entry.route)} value={`recent ${entry.title} ${routeKey(entry.route)}`} className={paletteItem}
+                  onSelect={() => { open(entry.route); setPaletteOpen(false); }}><Clock />{entry.title}
+                  {entry.app && <span className="ml-auto text-xs text-muted">{applications?.apps.find(app => app.id === entry.app)?.title}</span>}</Command.Item>
               ))}
             </Command.Group>
           )}
-          {commands.length > 0 && (
+          {[...commands, ...builtInCommands].length > 0 && (
             <Command.Group heading={t("Commands")} className={paletteGroup}>
-              {commands.map((c) => (
+              {[...commands, ...builtInCommands].map((c) => (
                 <Command.Item key={c.id} value={`${c.group ?? ""} ${c.label}`} className={paletteItem}
                   onSelect={() => { setPaletteOpen(false); c.run(); }}>
-                  {c.label}{c.shortcut && <span className="ml-auto text-xs text-muted">{c.shortcut}</span>}
+                  {c.label}{(c.shortcut || c.group) && <span className="ml-auto text-xs text-muted">{c.shortcut ?? c.group}</span>}
                 </Command.Item>
               ))}
             </Command.Group>
           )}
         </Command.List>
       </Command.Dialog>
-      <Dialog open={!!pending} title={t("Unsaved changes")} onOpenChange={(open) => {
-        if (!open) { const id = pending?.panels[0]; setPending(undefined); if (id) dock.current?.getPanel(id)?.api.setActive(); }
-      }}>
+      <Dialog open={!!pending} title={t("Unsaved changes")} onOpenChange={(open) => { if (!open) { pending?.cancel?.(); setPending(undefined); } }}>
         <div className="grid gap-3 text-sm">
           <p>{t("Save your work in the editor, or discard the changes to continue.")}</p>
-          <ul className="list-inside list-disc text-muted">{pending?.panels.map((id) => <li key={id}>{dock.current?.getPanel(id)?.title ?? id}</li>)}</ul>
+          <ul className="list-inside list-disc text-muted">{pending?.panels.map((id) => { const route = routeOf(id); return <li key={id}>{titles[id] ?? (route ? byId.get(route.view)?.title(route.params ?? {}) : id)}</li>; })}</ul>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => { const id = pending?.panels[0]; setPending(undefined); if (id) dock.current?.getPanel(id)?.api.setActive(); }}>{t("Keep editing")}</Button>
+            <Button onClick={() => { pending?.cancel?.(); setPending(undefined); }}>{t("Keep editing")}</Button>
             <Button variant="danger" onClick={() => {
               if (!pending) return;
               if (pending.panels.some((id) => [...(drafts.current.get(id)?.entries() ?? [])].some(([key, owner]) => (pending.owner === undefined || key === pending.owner) && owner.busy))) {
@@ -841,50 +599,64 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </div>
         </div>
       </Dialog>
-      <Toaster position="bottom-right" toastOptions={{ className: "!rounded-md !border-border !bg-surface !text-foreground !text-sm" }} />
-      </ViewRegistryContext.Provider>
+      <Toaster position="bottom-right" toastOptions={{ className: "!rounded-md !border-border !bg-surface !text-foreground !text-sm !shadow-md" }} />
     </WorkspaceContext.Provider>
   );
 }
 
-function AppMenu({ applications, product, icon }: { applications: Applications; product: string; icon?: ReactNode }) {
-  const current = applications.apps.find((a) => a.id === applications.current);
-  const groups = applications.categories.map(category => ({ ...category, apps: applications.apps.filter(app => app.category === category.id) })).filter(group => group.apps.length);
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label={t("Switch application")} className="flex h-7 min-w-0 max-w-64 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover max-sm:max-w-32 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted">
-        {current?.icon ?? icon ?? <LayoutGrid />}<span className="truncate">{product}</span><ChevronDown className="size-3.5 shrink-0 text-muted" />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={4} collisionPadding={8} style={{ width: `min(calc(100vw - 16px), ${Math.min(4, groups.length) * 15}rem)` }} className={cn(menuPanel, "max-h-[70dvh] overflow-auto")}>
-          <DropdownMenu.RadioGroup value={applications.current ?? ""} onValueChange={applications.onSelect} className={cn("grid grid-cols-1 gap-3 p-1", groups.length > 1 && "sm:grid-cols-2", groups.length > 2 && "lg:grid-cols-3", groups.length > 3 && "xl:grid-cols-4")}>
-            {groups.map((category) => {
-              return <div key={category.id}>
-                <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{category.label}</DropdownMenu.Label>
-                {category.apps.map((a) => (
-                  <DropdownMenu.RadioItem key={a.id} value={a.id} className={cn(menuItem, "h-auto min-h-8 gap-2 py-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0")}>
-                    <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{a.icon}<span className="min-w-0 break-words">{a.title}</span>
-                  </DropdownMenu.RadioItem>
-                ))}
-              </div>;
-            })}
-          </DropdownMenu.RadioGroup>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
+function Sidebar({ app, product, productIcon, nav, navigation, active, collapsed, onToggle, onOpen, status, pinned, onPin, onHome }: {
+  app?: PlatformApplication; product: string; productIcon?: ReactNode; nav: NavSection[]; navigation?: ReactNode; active?: string;
+  collapsed: boolean; onToggle: () => void; onOpen: (route: Route) => void; status?: ReactNode; pinned: boolean; onPin?: () => void; onHome?: () => void;
+}) {
+  const title = app?.title ?? product, icon = app?.icon ?? productIcon;
+  if (collapsed) return <nav aria-label={title} className="flex w-11 min-h-0 flex-col items-center gap-0.5 overflow-y-auto border-r border-border bg-sidebar py-2">
+    <Tooltip content={t("Show navigation")} side="right"><button type="button" aria-label={t("Show navigation")} onClick={onToggle} className="mb-2 grid size-8 place-items-center rounded-md text-primary hover:bg-row-hover [&_svg]:size-4">{icon}</button></Tooltip>
+    {nav.flatMap(section => navigationLinks(section.items)).map(link => <Tooltip key={routeKey(link.route)} content={link.label} side="right">
+      <button type="button" aria-label={link.label} aria-current={routeCovers(link.route, active) ? "page" : undefined} onClick={() => onOpen(link.route)}
+        className={cn("grid size-8 shrink-0 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground [&_svg]:size-4", routeCovers(link.route, active) && "bg-row-selected text-primary")}>
+        {link.icon ?? <span className="text-xs font-semibold">{link.label.slice(0, 1)}</span>}
+      </button></Tooltip>)}
+  </nav>;
+  return <nav aria-label={title} className="flex h-full w-[var(--sidebar-width)] min-h-0 flex-col border-r border-border bg-sidebar">
+    <div className="group/app flex h-11 shrink-0 items-center gap-1 border-b border-border pl-2 pr-1">
+      <button type="button" onClick={onHome} disabled={!onHome} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-row-hover disabled:hover:bg-transparent">
+        <span className="grid size-6 shrink-0 place-items-center rounded-md bg-row-selected text-primary [&_svg]:size-3.5">{icon}</span>
+        <span className="min-w-0 truncate text-sm font-semibold">{title}</span>
+      </button>
+      {onPin && <Button size="icon" variant="ghost" aria-label={pinned ? t("Unpin from the rail") : t("Pin to the rail")} aria-pressed={pinned} title={pinned ? t("Unpin from the rail") : t("Pin to the rail")} onClick={onPin}
+        className={cn(pinned ? "text-[var(--tone-warning)]" : "text-muted opacity-0 group-hover/app:opacity-100 focus-visible:opacity-100")}><Star fill={pinned ? "currentColor" : "none"} /></Button>}
+      <Button size="icon" variant="ghost" aria-label={t("Hide navigation")} title={`${t("Hide navigation")} ⌘\\`} onClick={onToggle} className="text-muted max-md:hidden"><ChevronsLeft /></Button>
+    </div>
+    <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-2">
+      {navigation}
+      {nav.map((section) => (
+        <div key={section.label} className="mb-2">
+          <div className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wider text-muted">{section.label}</div>
+          <NavigationItems items={section.items} active={active} onOpen={onOpen} />
+        </div>
+      ))}
+    </div>
+    {status && <div className="shrink-0 border-t border-border px-2 py-1.5">{status}</div>}
+  </nav>;
+}
+
+function RailButton({ label, icon, badge, active, run }: { id: string; label: string; icon: ReactNode; badge?: number; active?: boolean; run: () => void }) {
+  return <Tooltip content={label} side="right"><button type="button" aria-label={label} aria-current={active ? "page" : undefined} onClick={run}
+    className={cn("relative grid size-9 shrink-0 place-items-center rounded-md text-rail-foreground transition-colors hover:bg-rail-hover hover:text-rail-active [&_svg]:size-[18px]", active && "bg-rail-selected text-rail-active before:absolute before:-left-1.5 before:top-2 before:h-5 before:w-0.5 before:rounded-full before:bg-primary")}>
+    {icon}{badge ? <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-2xs font-semibold leading-4 text-primary-foreground ring-2 ring-rail">{badge > 99 ? "99+" : badge}</span> : null}
+  </button></Tooltip>;
 }
 
 function RailList({ label, icon, items, empty }: { label: string; icon: ReactNode; empty: string; items: { id: string; label: string; detail?: string; icon?: ReactNode; run: () => void }[] }) {
   return (
     <DropdownMenu.Root>
       <Tooltip content={label} side="right"><DropdownMenu.Trigger aria-label={label}
-        className="grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground data-[state=open]:bg-row-hover data-[state=open]:text-foreground [&_svg]:size-4">
+        className="grid size-9 shrink-0 place-items-center rounded-md text-rail-foreground hover:bg-rail-hover hover:text-rail-active data-[state=open]:bg-rail-selected data-[state=open]:text-rail-active [&_svg]:size-[18px]">
         {icon}
       </DropdownMenu.Trigger></Tooltip>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content side="right" align="start" sideOffset={6} className={cn(menuPanel, "max-h-[70vh] min-w-56 max-w-80 overflow-auto")}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{label}</DropdownMenu.Label>
+        <DropdownMenu.Content side="right" align="start" sideOffset={8} className={cn(menuPanel, "max-h-[70vh] min-w-64 max-w-80 overflow-auto")}>
+          <DropdownMenu.Label className={menuLabel}>{label}</DropdownMenu.Label>
           {items.length === 0 && <p className="px-2 py-1.5 text-xs text-muted">{empty}</p>}
           {items.map((item) => (
             <DropdownMenu.Item key={item.id} onSelect={item.run} className={cn(menuItem, "gap-2 pl-2 [&_svg]:size-3.5")}>
@@ -897,43 +669,30 @@ function RailList({ label, icon, items, empty }: { label: string; icon: ReactNod
   );
 }
 
-function SessionMenu({ session, onLanguageSelect, compact = false }: { session: Session; onLanguageSelect: (id: string) => void; compact?: boolean }) {
+function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme }: { session: Session; onLanguageSelect: (id: string) => void; rail: boolean; scheme: string; onScheme: (scheme: "light" | "dark" | "system") => void }) {
   const shown = session.name || session.principal;
-  const avatar = <span className="grid size-5 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-    {shown.slice(0, 1).toUpperCase()}
-  </span>;
   return (
     <DropdownMenu.Root>
-      <Tooltip content={compact ? `${session.principal} · ${session.tenant}` : undefined} side="right"><DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`}
-        className={compact ? "grid size-9 place-items-center rounded-md hover:bg-row-hover data-[state=open]:bg-row-hover"
-          : "flex h-7 shrink-0 items-center gap-2 rounded-md border border-border px-2 text-sm hover:bg-row-hover"}>
-        {avatar}
-        {!compact && <>
-          <span className="text-left leading-tight max-sm:hidden">
-            <span className="block text-sm">{shown}</span>
-            <span className="block text-xs text-muted">{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
-          </span>
-          <ChevronDown className="size-3.5 text-muted" />
-        </>}
+      <Tooltip content={`${shown} · ${session.tenant}`} side={rail ? "right" : "bottom"}><DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`}
+        className={cn("grid size-9 shrink-0 place-items-center rounded-md", rail ? "hover:bg-rail-hover data-[state=open]:bg-rail-selected" : "hover:bg-row-hover")}>
+        <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{shown.slice(0, 1).toUpperCase()}</span>
       </DropdownMenu.Trigger></Tooltip>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content side={compact ? "right" : "bottom"} align="end" sideOffset={4} className={menuPanel}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs">
-            <span className="block text-sm text-foreground">{shown}</span>
-            <span className="block text-muted">{session.name ? `${session.principal} · ` : ""}{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
-          </DropdownMenu.Label>
-          {session.onAccount && <DropdownMenu.Item className={menuItem} onSelect={() => session.onAccount?.()}>{t("My account")}</DropdownMenu.Item>}
+        <DropdownMenu.Content side={rail ? "right" : "bottom"} align="end" sideOffset={8} className={cn(menuPanel, "min-w-64")}>
+          <div className="px-2 pb-2 pt-1">
+            <span className="block text-sm font-medium">{shown}</span>
+            <span className="block text-xs text-muted">{session.name ? `${session.principal} · ` : ""}{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
+          </div>
+          {session.onAccount && <DropdownMenu.Item className={cn(menuItem, "pl-2")} onSelect={() => session.onAccount?.()}>{t("My account")}</DropdownMenu.Item>}
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Switch tenant or identity")}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>
-            {session.options.map((o) => (
-              <DropdownMenu.RadioItem key={o.id} value={o.id} className={menuItem}>
-                <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{o.label}
-              </DropdownMenu.RadioItem>
-            ))}
+          <DropdownMenu.Label className={menuLabel}>{t("Appearance")}</DropdownMenu.Label>
+          <DropdownMenu.RadioGroup value={scheme} onValueChange={value => onScheme(value as "light" | "dark" | "system")}>
+            {([["light", t("Light")], ["dark", t("Dark")], ["system", t("Follow system")]] as const).map(([id, label]) => <DropdownMenu.RadioItem key={id} value={id} className={menuItem}>
+              <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{label}
+            </DropdownMenu.RadioItem>)}
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Language")}</DropdownMenu.Label>
+          <DropdownMenu.Label className={menuLabel}>{t("Language")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={language()} onValueChange={onLanguageSelect}>
             {languages.map((l) => (
               <DropdownMenu.RadioItem key={l.id} value={l.id} className={menuItem}>
@@ -941,13 +700,25 @@ function SessionMenu({ session, onLanguageSelect, compact = false }: { session: 
               </DropdownMenu.RadioItem>
             ))}
           </DropdownMenu.RadioGroup>
+          {session.options.length > 0 && <>
+            <DropdownMenu.Separator className="my-1 h-px bg-border" />
+            <DropdownMenu.Label className={menuLabel}>{t("Switch tenant or identity")}</DropdownMenu.Label>
+            <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>
+              {session.options.map((o) => (
+                <DropdownMenu.RadioItem key={o.id} value={o.id} className={menuItem}>
+                  <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{o.label}
+                </DropdownMenu.RadioItem>
+              ))}
+            </DropdownMenu.RadioGroup>
+          </>}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
   );
 }
 
-const menuPanel = "z-50 min-w-48 rounded-md border border-border bg-surface p-1 text-sm shadow-lg";
+const menuPanel = "z-50 min-w-48 rounded-md border border-border bg-surface p-1 text-sm text-foreground shadow-md";
+const menuLabel = "px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-muted";
 const menuItem = "relative flex h-7 cursor-default select-none items-center rounded-sm pl-6 pr-2 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-row-hover";
-const paletteGroup = "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted";
-const paletteItem = "flex h-8 cursor-default items-center gap-2 rounded-sm px-2 text-sm data-[selected=true]:bg-row-selected [&_svg]:size-3.5";
+const paletteGroup = "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted";
+const paletteItem = "flex h-8 cursor-default items-center gap-2 rounded-sm px-2 text-sm data-[selected=true]:bg-row-selected [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted";

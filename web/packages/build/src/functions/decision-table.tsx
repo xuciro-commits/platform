@@ -2,7 +2,6 @@ import { ContextHelp, StructuredEditor } from "@platform/ui";
 import { cellRuleText } from "../editor/rule-text";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDefinitionDraft } from "../session/definition-draft";
-import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { useMemo, useRef } from "react";
 import type { Api } from "@platform/kernel";
@@ -16,15 +15,6 @@ const types = ["text", "number", "boolean"];
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 const cell = "h-8 min-w-24 px-2 text-xs";
 
-export function DecisionTables() {
-  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
-  if (!holds("build", "builder")) return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;
-  return <div className="grid gap-3">
-    <PageHeader title={t("Decision tables")} help={t("Condition columns to result columns; the first matching row decides. A published table is an operation any process step, page or caller can use.")}
-      actions={<Button onClick={() => open({ view: "decision-table", params: { id: "new" } })}>{t("New decision table")}</Button>} />
-    <ResourceList source={source} type="build.table" fields={["title", "name", "version", "state"]} onOpen={(record) => open({ view: "decision-table", params: { id: record.id } })} />
-  </div>;
-}
 
 export function DecisionTableEditor({ id }: { id: string }) {
   const { holds} = useHost(), { open } = useApplicationWorkspace();

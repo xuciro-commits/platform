@@ -16,8 +16,8 @@ const hydrate=(record:Draft):Draft=>({...empty(),...record,storage:record.storag
 
 export function LinkTypes() {
  const {source, holds}=useHost(),{open}=useApplicationWorkspace();
- if(!holds("build", "builder"))return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
- return <div className="grid gap-3"><PageHeader title={t("Relationships")} help={t("Declare relationships in their object owner and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"link-type",params:{id:"new"}})}>{t("New relationship")}</Button>}/><ResourceList source={source} type="build.linktype" fields={["title","name","parent","child","version"]} onOpen={(record)=>open({view:"link-type",params:{id:record.id}})}/></div>;
+ if(!holds("build", "builder"))return <PageHeader title={t("Link types")} description={t("Only a builder can edit relationships.")}/>;
+ return <div className="grid gap-3"><PageHeader title={t("Link types")} help={t("Declare relationships in their object owner and bind pages to an exact version.")} actions={<Button variant="primary" onClick={()=>open({view:"link-type",params:{id:"new"}})}>{t("New link type")}</Button>}/><ResourceList source={source} type="build.linktype" fields={["title","name","parent","child","version"]} onOpen={(record)=>open({view:"link-type",params:{id:record.id}})}/></div>;
 }
 export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;child?:string;via?:string}) {
  const {decide,definitions,client, holds}=useHost(),{open}=useApplicationWorkspace();

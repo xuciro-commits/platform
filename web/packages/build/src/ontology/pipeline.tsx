@@ -64,7 +64,7 @@ export function Pipelines() {
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Pipelines")} help={t("Transform a dataset into another dataset or into records of an object, step by step, with expectations that quarantine bad rows instead of writing them.")}
-      actions={<Button onClick={() => open({ view: "pipeline", params: { id: "new" } })}>{t("New pipeline")}</Button>} />
+      actions={<Button variant="primary" onClick={() => open({ view: "pipeline", params: { id: "new" } })}>{t("New pipeline")}</Button>} />
     <ResourceList source={source} type="build.pipeline" fields={["title", "name", "input", "outputDataset", "outputObject", "state"]} onOpen={(record) => open({ view: "pipeline", params: { id: record.id } })} />
   </div>;
 }

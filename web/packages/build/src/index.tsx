@@ -5,7 +5,7 @@ import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
 import { ObjectTypeEditor } from "./ontology/process";
 import { ActionTypeEditor, ActionTypes } from "./ontology/action-type";
 import { ModelWorkbench } from "./ontology/ModelWorkbench";
-import { FlowEditor, Flows } from "./automate/workflow";
+import { FlowEditor } from "./automate/workflow";
 import { AutomationEditor, Automations } from "./automate/automation";
 import { WorkflowRuns } from "./automate/workflow-runs";
 import { LinkTypeEditor, LinkTypes } from "./ontology/link-type";
@@ -19,10 +19,10 @@ import { PipelineEditor, Pipelines } from "./ontology/pipeline";
 import { WritebackEditor, Writebacks } from "./ontology/writeback";
 import { MatchEditor, Matches } from "./ontology/match";
 import { IntegrationHealth } from "./ontology/integration-health";
-import { DecisionTableEditor, DecisionTables } from "./functions/decision-table";
+import { DecisionTableEditor } from "./functions/decision-table";
 import { QueryEditor, Queries } from "./ontology/query";
-import { FunctionEditor, Functions } from "./functions/function";
-import { CodeEditor, CodeFunctions } from "./functions/code";
+import { FunctionEditor } from "./functions/function";
+import { CodeEditor } from "./functions/code";
 import { AgentEditor, Agents } from "./functions/agent";
 import { AlertEditor, Alerts } from "./functions/alert";
 import { ReleaseReview, releaseDraftsSelection, releaseKinds, type ReleaseKind } from "./releases/release";
@@ -32,93 +32,215 @@ import { CandidateTest } from "./releases/simulate";
 import { ProjectHome, ProjectsList } from "./projects/project";
 import { Discover } from "./projects/discover";
 import { StudioTemplates } from "./workshop/template-ui";
-import { PageHeader, t, type NavSection, type Route, type View } from "@platform/ui";
+import { PageHeader, t, type NavItem, type NavSection, type Route, type View } from "@platform/ui";
 import type { ReactNode } from "react";
 import { ApplicationScope } from "./projects/application-scope";
-import { StudioNavigation } from "./projects/studio-navigation";
-import { studioApplicationID, studioAreaForRoute, studioAreas, studioNavigation } from "./projects/studio-model";
-import { kindIcon } from "./projects/resource-icons";
-import { FolderKanban, Hammer } from "lucide-react";
+import { ToolContext } from "./projects/tool-context";
+import { studioApplicationID, studioAreaForRoute } from "./projects/studio-model";
+import { FunctionCatalog } from "./functions/catalog";
+import { Interfaces } from "./ontology/ModelWorkbench";
+import { Activity, BellRing, Bot, Boxes, Braces, ClipboardCheck, Database, FolderKanban, GitBranch, GitMerge, History, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.holds("build", "builder");
 const integrator = (host: Host) => host.holds("build", "integrator");
-const editorViews: View[] = [
-  { id: "projects", title: () => t("Applications"), render: () => <StudioHome /> },
-  { id: "project", documentKey: p => p.id ?? "", title: () => t("Application Studio"), render: p => <ProjectHome key={p.id} id={p.id ?? ""} area={p.area} initialSelected={p.asset} initialSection={p.section} initialPlan={p.plan} initialTemplate={p.template} /> },
-  { id: "object-type", documentKey: p => p.id ?? p.object ?? "catalog", title: p => p.id ? t("Object type") : t("Model"), render: p => p.id ? <ObjectTypeEditor key={p.id} id={p.id} initialField={p.field} initialAction={p.action} initialAccess={p.access === "true"} initialTab={p.tab} /> : <ModelWorkbench key={p.object ?? "catalog"} initialObject={p.object} initialTab={p.tab} /> },
-  { id: "action-type", title: () => t("Action type"), render: p => p.id ? <ActionTypeEditor key={p.id} id={p.id} action={p.action} /> : <ActionTypes /> },
-  { id: "link-type", title: () => t("Relationships"), render: p => p.id ? <LinkTypeEditor key={p.id} id={p.id} parent={p.parent} child={p.child} via={p.via} /> : <LinkTypes /> },
-  { id: "property-type", title: () => t("Shared properties"), render: p => p.id ? <PropertyTypeEditor key={p.id} id={p.id} /> : <PropertyTypes /> },
-  { id: "value-type", title: () => t("Value types"), render: p => p.id ? <ValueTypeEditor key={p.id} id={p.id} /> : <ValueTypes /> },
-  { id: "query", title: () => t("Queries"), render: p => p.id ? <QueryEditor key={p.id} id={p.id} /> : <Queries /> },
-  { id: "module", title: p => p.page ? t("Page") : t("Application interface"), render: p => <ModuleWorkbench key={`${p.id ?? ""}:${p.page ?? ""}`} id={p.id} page={p.page} focus={p.focus} /> },
-  { id: "discover", title: () => t("Discover"), render: () => <Discover /> },
-  { id: "studio-templates", title: () => t("Templates"), render: p => <StudioTemplates key={p.template ?? "templates"} initial={p.template} /> },
-  { id: "automation", title: () => t("Automations"), render: p => p.id ? <AutomationEditor key={p.id} id={p.id} /> : <Automations /> },
-  { id: "flow", title: () => t("Flows"), render: p => p.id ? <FlowEditor key={p.id} id={p.id} /> : <Flows /> },
-  { id: "runs", title: () => t("Runs"), render: p => <WorkflowRuns name={p.name ?? ""} onStepSelect={() => {}} /> },
-  { id: "function", title: () => t("AI functions"), render: p => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <Functions /> },
-  { id: "decision-table", title: () => t("Decision tables"), render: p => p.id ? <DecisionTableEditor key={p.id} id={p.id} /> : <DecisionTables /> },
-  { id: "code", title: () => t("Code functions"), render: p => p.id ? <CodeEditor key={p.id} id={p.id} /> : <CodeFunctions /> },
-  { id: "alert", title: () => t("Alert rules"), render: p => p.id ? <AlertEditor key={p.id} id={p.id} /> : <Alerts /> },
-  {id:"sample-set",title:()=>t("Sample set"),render:p=><ApplicationSampleAsset key={p.id ?? "new"} id={p.id}/>},
-  { id: "evaluation-set", title: () => t("Evaluation set"), render: p => <CandidateTest key={p.id ?? "new"} planId={p.id === "new" ? undefined : p.id} evaluationSet /> },
-  { id: "test-plan", title: () => t("Business test plan"), render: p => <CandidateTest key={p.id ?? "new"} planId={p.id} applicationId={p.application} /> },
-  { id: "changes", title: () => t("Branches and proposals"), render: () => <Branches /> },
+const publisher = (host: Host) => host.holds("build", "publisher");
+
+const view = (id: string, title: () => string, render: View["render"], documentKey?: View["documentKey"]): View => ({ id, title: () => title(), render, ...(documentKey ? { documentKey } : {}) });
+const projectViews: View[] = [
+  { id: "projects", title: () => t("Projects"), render: () => <ProjectsList /> },
+  { id: "project", documentKey: p => p.id ?? "", title: () => t("Project"), render: p => <ProjectHome key={p.id} id={p.id ?? ""} area={p.area} initialSelected={p.asset} initialSection={p.section} initialPlan={p.plan} initialTemplate={p.template} /> },
+];
+const ontologyViews: View[] = [
+  view("discover", () => t("Overview"), () => <Discover />),
+  { id: "object-type", documentKey: p => p.id ?? p.object ?? "catalog", title: p => p.id || p.object ? t("Object type") : t("Object types"), render: p => p.id ? <ObjectTypeEditor key={p.id} id={p.id} initialField={p.field} initialAction={p.action} initialAccess={p.access === "true"} initialTab={p.tab} /> : <ModelWorkbench key={p.object ?? "catalog"} initialObject={p.object} initialTab={p.tab} /> },
+  view("link-type", () => t("Link types"), p => p.id ? <LinkTypeEditor key={p.id} id={p.id} parent={p.parent} child={p.child} via={p.via} /> : <LinkTypes />),
+  view("interfaces", () => t("Interfaces"), () => <Interfaces />),
+  view("property-type", () => t("Shared properties"), p => p.id ? <PropertyTypeEditor key={p.id} id={p.id} /> : <PropertyTypes />),
+  view("value-type", () => t("Value types"), p => p.id ? <ValueTypeEditor key={p.id} id={p.id} /> : <ValueTypes />),
+  view("action-type", () => t("Action types"), p => p.id ? <ActionTypeEditor key={p.id} id={p.id} action={p.action} /> : <ActionTypes />),
+  view("changes", () => t("Branches and proposals"), () => <Branches />),
   { id: "proposal", documentKey: p => p.id ?? "", title: () => t("Proposal"), render: p => <ProposalScreen key={p.id} id={p.id ?? ""} /> },
+];
+const dataViews: View[] = [
+  view("connection", () => t("Connections"), p => p.id ? <ConnectionEditor key={p.id} id={p.id} /> : <Connections />),
+  view("data-source", () => t("Data sources"), p => p.id ? <DataSourceEditor key={p.id} id={p.id} /> : <DataSources />),
+  view("dataset", () => t("Datasets"), p => p.id ? <DatasetEditor key={p.id} id={p.id} /> : <Datasets />),
+  view("pipeline", () => t("Pipelines"), p => p.id ? <PipelineEditor key={p.id} id={p.id} /> : <Pipelines />),
+  view("match", () => t("Matching rules"), p => p.id ? <MatchEditor key={p.id} id={p.id} /> : <Matches />),
+  view("writeback", () => t("Writebacks"), p => p.id ? <WritebackEditor key={p.id} id={p.id} /> : <Writebacks />),
+  view("observation-source", () => t("Observation sources"), p => p.id ? <ObservationSourceEditor key={p.id} id={p.id} /> : <ObservationSources />),
+  view("integration-health", () => t("Integration health"), () => <IntegrationHealth />),
+];
+const logicViews: View[] = [
+  view("functions", () => t("Functions"), () => <FunctionCatalog />),
+  view("code", () => t("Code function"), p => p.id ? <CodeEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
+  view("decision-table", () => t("Decision table"), p => p.id ? <DecisionTableEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
+  view("function", () => t("AI function"), p => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
+  view("flow", () => t("Logic flow"), p => p.id ? <FlowEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
+  view("runs", () => t("Runs"), p => <WorkflowRuns name={p.name ?? ""} onStepSelect={() => {}} />),
+  view("query", () => t("Queries"), p => p.id ? <QueryEditor key={p.id} id={p.id} /> : <Queries />),
+];
+const automateViews: View[] = [
+  view("automation", () => t("Automations"), p => p.id ? <AutomationEditor key={p.id} id={p.id} /> : <Automations />),
+  view("alert", () => t("Alert rules"), p => p.id ? <AlertEditor key={p.id} id={p.id} /> : <Alerts />),
+];
+const workshopViews: View[] = [
+  view("module", () => t("Workshop"), p => <ModuleWorkbench key={`${p.id ?? ""}:${p.page ?? ""}`} id={p.id} page={p.page} focus={p.focus} />),
+  view("studio-templates", () => t("Templates"), p => <StudioTemplates key={p.template ?? "templates"} initial={p.template} />),
+];
+const releaseViews: View[] = [
   { id: "release-review", title: () => t("Release review"), render: p => {
     const selection = releaseDraftsSelection(p.drafts, releaseKinds);
     return <ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}:${p.candidate ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={selection.drafts} selectionError={selection.error} candidateID={p.candidate} applicationName={p.applicationName} />;
   } },
-  { id: "release-history", title: () => t("Release history"), render: () => <ReleaseReview key="history" /> },
-  { id: "connection", title: () => t("Connections"), render: p => p.id ? <ConnectionEditor key={p.id} id={p.id} /> : <Connections /> },
-  { id: "observation-source", title: () => t("Observation sources"), render: p => p.id ? <ObservationSourceEditor key={p.id} id={p.id} /> : <ObservationSources /> },
-  { id: "data-source", title: () => t("Data sources"), render: p => p.id ? <DataSourceEditor key={p.id} id={p.id} /> : <DataSources /> },
-  { id: "dataset", title: () => t("Datasets"), render: p => p.id ? <DatasetEditor key={p.id} id={p.id} /> : <Datasets /> },
-  { id: "pipeline", title: () => t("Pipelines"), render: p => p.id ? <PipelineEditor key={p.id} id={p.id} /> : <Pipelines /> },
-  { id: "writeback", title: () => t("Writebacks"), render: p => p.id ? <WritebackEditor key={p.id} id={p.id} /> : <Writebacks /> },
-  { id: "match", title: () => t("Matching rules"), render: p => p.id ? <MatchEditor key={p.id} id={p.id} /> : <Matches /> },
-  { id: "integration-health", title: () => t("Integration health"), render: () => <IntegrationHealth /> },
-
-  { id: "agent", title: () => t("Agents"), render: p => p.id ? <AgentEditor key={p.id} id={p.id} /> : <Agents /> },
+  view("release-history", () => t("Release history"), () => <ReleaseReview key="history" />),
+  view("test-plan", () => t("Business test plans"), p => <CandidateTest key={p.id ?? "new"} planId={p.id} applicationId={p.application} />),
+  view("evaluation-set", () => t("Evaluation set"), p => <CandidateTest key={p.id ?? "new"} planId={p.id === "new" ? undefined : p.id} evaluationSet />),
+  view("sample-set", () => t("Sample set"), p => <ApplicationSampleAsset key={p.id ?? "new"} id={p.id} />),
 ];
+const agentViews: View[] = [
+  view("agent", () => t("Agent definitions"), p => p.id ? <AgentEditor key={p.id} id={p.id} /> : <Agents />),
+];
+
 function referenceContext(route: Route, children: ReactNode) {
   const params = route.params ?? {};
   const application = studioApplicationID(route) ?? (route.view === "module" ? params.id : undefined);
   return <ApplicationScope application={application} route={route}>{children}</ApplicationScope>;
 }
-function StudioHome() {
-  const host = useHost();
-  return builder(host) ? <ProjectsList /> : integrator(host) ? <Connections /> : <ReleaseReview key="history" />;
-}
-
-const releaseViews = new Set(["changes", "proposal", "release-review", "release-history"]);
+const publishing = new Set(["release-review", "release-history"]);
 function AuthoringView({ route, children }: { route: Route; children: ReactNode }) {
   const host = useHost();
-  const allowed = route.view === "projects" || builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || host.holds("build", "publisher") && route.view !== "changes" && route.view !== "proposal" && releaseViews.has(route.view);
-  return allowed ? <>{children}</> : <PageHeader title={t("Application Studio")} description={t("This authoring view is not available with your current access.")} />;
+  const allowed = builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || publisher(host) && publishing.has(route.view);
+  return allowed ? <>{children}</> : <PageHeader title={t("Projects")} description={t("This authoring view is not available with your current access.")} />;
 }
 const contextualViews = (views: View[]) => views.map(view => ({ ...view, render: (params: Record<string, string>) => {
   const route = { view: view.id, params };
   return <AuthoringView route={route}>{referenceContext(route, view.render(params))}</AuthoringView>;
 } }));
 
+type Link = { label: string; icon: ReactNode; view: string; params?: Record<string, string> };
+const links = (route: Route | undefined, items: Link[]): NavItem[] => items.map(item => ({ label: item.label, icon: item.icon, route: { view: item.view, params: { ...item.params, ...(route?.params?.application ? { application: route.params.application } : {}) } } }));
+const section = (label: string, route: Route | undefined, items: Link[]): NavSection => ({ label, items: links(route, items) });
+const navigation = (route?: Route) => <ToolContext route={route} />;
+
 export default defineApp({
-  id: "build", surface: "studio", category: "build", title: t("Builder"), referenceContext,
-  description: t("Design applications: their object types, modules, automations and functions, and release them together."), icon: <Hammer />,
-  for: host => builder(host) || integrator(host) || host.holds("build", "publisher"),
+  id: "build", category: "build", title: t("Projects"), icon: <FolderKanban />,
+  description: t("Projects group the pages, logic, data and releases of one application."),
+  for: builder,
   home: { view: "projects" },
-  views: contextualViews(editorViews),
+  views: contextualViews(projectViews),
   opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.valuetype": "value-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.alertrule": "alert", "build.agent": "agent", "build.connection": "connection", "build.observation": "observation-source", "build.source": "data-source", "build.dataset": "dataset", "build.pipeline": "pipeline", "build.writeback": "writeback", "build.match": "match" },
-  navigation: route => <StudioNavigation route={route} />,
-  nav: (host, route): NavSection[] => {
-    if (studioApplicationID(route) && builder(host)) return [{ label: t("Applications"), items: [{ label: t("All applications"), icon: <FolderKanban />, route: { view: "projects" } }] }];
-    const allowed = studioAreas.filter(area => builder(host) || integrator(host) && area.id === "integration" || host.holds("build", "publisher") && area.id === "release");
-    return [
-      ...(builder(host) ? [{ label: t("Applications"), items: [{ label: t("All applications"), icon: <FolderKanban />, route: { view: "projects" } }] }] : []),
-      ...allowed.map(area => ({ label: t(area.title), items: studioNavigation(area.id)
-        .filter(link => builder(host) || integrator(host) || link.view !== "changes" && link.view !== "proposal" && releaseViews.has(link.view))
-        .map(link => ({ label: t(link.title), icon: kindIcon[link.kind ?? "definition"], route: { view: link.view, ...("params" in link && link.params ? { params: link.params } : {}) } })) })),
-    ];
-  },
+  nav: () => [],
 });
+
+const ontology = defineApp({
+  id: "ontology", surface: "studio", category: "build", title: t("Ontology Manager"), icon: <Boxes />, referenceContext,
+  description: t("Object types, links, interfaces, shared properties, value types and action types of the tenant ontology."),
+  for: builder,
+  home: { view: "object-type" },
+  views: contextualViews(ontologyViews),
+  navigation,
+  nav: (_host, route) => [
+    section(t("Ontology"), route, [
+      { label: t("Overview"), icon: <Network />, view: "discover" },
+      { label: t("Object types"), icon: <Boxes />, view: "object-type" },
+      { label: t("Link types"), icon: <Link2 />, view: "link-type" },
+      { label: t("Interfaces"), icon: <Layers />, view: "interfaces" },
+      { label: t("Shared properties"), icon: <Tags />, view: "property-type" },
+      { label: t("Value types"), icon: <Ruler />, view: "value-type" },
+      { label: t("Action types"), icon: <Zap />, view: "action-type" },
+    ]),
+    section(t("Changes"), route, [{ label: t("Branches and proposals"), icon: <GitBranch />, view: "changes" }]),
+  ],
+});
+
+const data = defineApp({
+  id: "data", category: "build", title: t("Data Integration"), icon: <Database />,
+  description: t("Connections, sources, datasets and pipelines that feed the ontology, and writebacks out of it."),
+  for: host => builder(host) || integrator(host),
+  home: { view: "connection" },
+  views: contextualViews(dataViews),
+  navigation,
+  nav: (_host, route) => [
+    section(t("Ingest"), route, [
+      { label: t("Connections"), icon: <Plug />, view: "connection" },
+      { label: t("Data sources"), icon: <Database />, view: "data-source" },
+      { label: t("Observation sources"), icon: <Radio />, view: "observation-source" },
+    ]),
+    section(t("Transform"), route, [
+      { label: t("Datasets"), icon: <TableProperties />, view: "dataset" },
+      { label: t("Pipelines"), icon: <Workflow />, view: "pipeline" },
+      { label: t("Matching rules"), icon: <GitMerge />, view: "match" },
+    ]),
+    section(t("Deliver"), route, [
+      { label: t("Writebacks"), icon: <Link2 />, view: "writeback" },
+      { label: t("Integration health"), icon: <Activity />, view: "integration-health" },
+    ]),
+  ],
+});
+
+const logic = defineApp({
+  id: "logic", category: "build", title: t("Logic"), icon: <Braces />,
+  description: t("Functions that compute — code, decision tables, AI and flows — and the queries they read."),
+  for: builder,
+  home: { view: "functions" },
+  views: contextualViews(logicViews),
+  navigation,
+  nav: (_host, route) => [section(t("Logic"), route, [
+    { label: t("Functions"), icon: <Braces />, view: "functions" },
+    { label: t("Queries"), icon: <Search />, view: "query" },
+  ])],
+});
+
+const automate = defineApp({
+  id: "automate", category: "build", title: t("Automate"), icon: <Zap />,
+  description: t("Triggers that run actions and functions on events, schedules and conditions."),
+  for: builder,
+  home: { view: "automation" },
+  views: contextualViews(automateViews),
+  navigation,
+  nav: (_host, route) => [section(t("Automate"), route, [
+    { label: t("Automations"), icon: <Zap />, view: "automation" },
+    { label: t("Alert rules"), icon: <BellRing />, view: "alert" },
+  ])],
+});
+
+const workshop = defineApp({
+  id: "workshop", category: "build", title: t("Workshop"), icon: <PanelsTopLeft />,
+  description: t("Pages, navigation and headers of applications, built from the ontology."),
+  for: builder,
+  home: { view: "module" },
+  views: contextualViews(workshopViews),
+  navigation,
+  nav: (_host, route) => [section(t("Workshop"), route, [
+    { label: t("Modules"), icon: <PanelsTopLeft />, view: "module" },
+    { label: t("Templates"), icon: <LayoutTemplate />, view: "studio-templates" },
+  ])],
+});
+
+const releases = defineApp({
+  id: "releases", category: "build", title: t("Releases"), icon: <Rocket />,
+  description: t("Test, review and activate releases of applications."),
+  for: host => builder(host) || publisher(host),
+  home: { view: "release-review" },
+  views: contextualViews(releaseViews),
+  navigation,
+  nav: (host, route) => [
+    section(t("Releases"), route, [
+      { label: t("Release review"), icon: <Rocket />, view: "release-review" },
+      { label: t("Release history"), icon: <History />, view: "release-history" },
+    ]),
+    ...(builder(host) ? [section(t("Verification"), route, [{ label: t("Business test plans"), icon: <ClipboardCheck />, view: "test-plan" }])] : []),
+  ],
+});
+
+const agentDefinitions = defineApp({
+  id: "agents", category: "build", title: t("Agents"), icon: <Bot />,
+  description: t("AI agents, what they are allowed to do, their runs and evaluations."),
+  for: builder,
+  home: { view: "agent" },
+  views: contextualViews(agentViews),
+  nav: (_host, route) => [section(t("Agents"), route, [{ label: t("Agent definitions"), icon: <Shapes />, view: "agent" }])],
+});
+
+export const contributions = [ontology, data, logic, automate, workshop, releases, agentDefinitions];

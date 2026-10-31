@@ -17,7 +17,7 @@ export function Connections() {
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Connections")} description={t("Only a builder or integrator can edit connections.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Connections")} help={t("The systems this tenant reads from. A connection names its credential in the host's secret store; the credential itself never enters a definition or a release.")}
-      actions={<Button onClick={() => open({ view: "connection", params: { id: "new" } })}>{t("New connection")}</Button>} />
+      actions={<Button variant="primary" onClick={() => open({ view: "connection", params: { id: "new" } })}>{t("New connection")}</Button>} />
     <ResourceList source={source} type="build.connection" fields={["title", "name", "kind", "address", "state"]} onOpen={(record) => open({ view: "connection", params: { id: record.id } })} />
   </div>;
 }

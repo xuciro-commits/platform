@@ -18,7 +18,7 @@ export function Alerts() {
   if (!holds("build", "builder")) return <PageHeader title={t("Alert rules")} description={t("Only a builder can edit alert rules.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Alert rules")} help={t("Tell a role when a record comes to match a condition: a late order, a stock below its minimum, a receipt without a supplier.")}
-      actions={<Button onClick={() => open({ view: "alert", params: { id: "new" } })}>{t("New alert rule")}</Button>} />
+      actions={<Button variant="primary" onClick={() => open({ view: "alert", params: { id: "new" } })}>{t("New alert rule")}</Button>} />
     <ResourceList source={source} type="build.alertrule" fields={["title", "object", "field", "operator", "value", "role", "active", "state", "version"]} onOpen={(record) => open({ view: "alert", params: { id: record.id } })} />
   </div>;
 }

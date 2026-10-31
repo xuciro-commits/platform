@@ -188,7 +188,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const selectedEntry = useRef(current); selectedEntry.current = current;
   const resolveRoute = useCallback((route: Route, layout?: string) => {
     const resolved = resolveLegacyRoute(route, {
-      builder: owner.get("flow") === "build", application: layout ?? selectedEntry.current,
+      builder: owner.has("flow"), application: layout ?? selectedEntry.current,
       read: (type, id) => client.record(type, id),
     });
     const take = (resolved: Route) => resolveApplicationRoute(resolved, definitions, host?.applications ?? [], layout ?? selectedEntry.current);
@@ -259,15 +259,17 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   return (
     <HostContext.Provider value={host}>
-      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Platform")} productIcon={app?.icon}
+      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={t("Platform")}
         storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         layoutScope={app?.id} scopeOf={applicationOf}
         views={views} resolveRoute={resolveRoute} home={{ view: "home" }}
-        rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "notifications" }, unread },
+        rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "inbox" }, unread },
+          ...(host.holds("build", "builder") ? { projects: { view: "projects" } } : {}),
+          ...(all.some(entry => entry.id === "platform") ? { settings: { view: "control-panel" } } : {}),
           ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
-        onActiveRoute={setActiveRoute} onEmpty={() => setActiveRoute(undefined)}
+        onActiveRoute={setActiveRoute}
         navigation={app?.navigation?.(activeRoute)}
         nav={[
           ...(app?.nav(host, activeRoute) ?? []),
@@ -287,15 +289,13 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
             { id: "definitions", label: t("Browse definitions"), run: () => { location.hash = "#/definitions"; } },
           ] : []), ...(app?.commands?.(host) ?? [])]}
         search={searchRecords}
-        status={<div className="flex items-center gap-2 text-xs text-muted">
-          <Button size="sm" variant="ghost" aria-label={t("Offline applications")} className="max-w-64 truncate" onClick={()=>setOfflineOpen(true)}>{!online||client.usingPrepared?preparedAt?t("Saved {time}",{time:new Date(preparedAt).toLocaleString()}):t("Offline work"):t("Offline applications")}</Button>
-          {connectionUnavailable && <span role="status" title={String(meQuery.error)}>{t("Live updates unavailable")}</span>}
-          <span className="max-lg:hidden">{me!.tenantId}</span>
-          <Button size="sm" variant="ghost" aria-label={t("Last activated release")} onClick={() => setReleaseOpen(true)}
-            title={!releaseUnavailable ? release.data?.id : undefined}>
+        status={<div className="grid gap-0.5 text-2xs text-muted">
+          {connectionUnavailable && <span role="status" className="px-2 text-[var(--tone-warning)]">{t("Live updates unavailable")}</span>}
+          <button type="button" aria-label={t("Last activated release")} title={!releaseUnavailable ? release.data?.id : undefined} onClick={() => setReleaseOpen(true)} className="truncate rounded-sm px-2 py-0.5 text-left hover:bg-row-hover hover:text-foreground">
             {releaseUnavailable ? t("Release unavailable") : release.isPending ? t("Checking release…") :
-              release.data?.id ? <>{t("Last activated release")}: <code>{release.data.id.split(":").at(-1)?.slice(0, 10)}</code></> : t("No activated release")}
-          </Button>
+              release.data?.id ? <>{t("Release")} <code>{release.data.id.split(":").at(-1)?.slice(0, 10)}</code></> : t("No activated release")}
+          </button>
+          {(!online || client.usingPrepared) && <button type="button" onClick={() => setOfflineOpen(true)} className="truncate rounded-sm px-2 py-0.5 text-left text-[var(--tone-warning)] hover:bg-row-hover">{preparedAt ? t("Saved {time}", { time: new Date(preparedAt).toLocaleString() }) : t("Offline work")}</button>}
         </div>}
         session={{ tenant: me!.tenantId === "system" ? t("System self-hosting") : me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch,
