@@ -1,6 +1,6 @@
 import type { Api } from "@platform/kernel";
 import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, humanizeKernelError, useWorkspace } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, DataTable, Sheet, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, humanizeKernelError, useWorkspace } from "@platform/ui";
 import { type UseQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -153,7 +153,7 @@ export function Endpoints() {
           </Card>
         ))}
       </>}</ReadResult>
-      <Dialog open={adding} onOpenChange={setAdding} title={t("Add endpoint")}>
+      <Sheet isolated open={adding} onOpenChange={setAdding} title={t("Add endpoint")}>
         <div className="grid gap-2 text-sm">
           <Select aria-label={t("Kind")} value={draft.kind} onChange={(e) => setDraft({ ...blank, kind: e.target.value, id: draft.id })}>
             <option value="webhook">{t("Webhook (events and effects over HTTPS)")}</option>
@@ -202,7 +202,7 @@ export function Endpoints() {
               }}>{t("Add")}</Button>
           </span>
         </div>
-      </Dialog>
+      </Sheet>
   </>;
 }
 

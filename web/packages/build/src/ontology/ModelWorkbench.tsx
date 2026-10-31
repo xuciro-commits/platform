@@ -6,8 +6,8 @@ import { useStudioApplication } from "../projects/use-studio-application";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
 import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
-import { ContextHelp, Button, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, RelationCanvas, Tag,
-  t, type ColumnDef, type RelationEdge, type RelationNode, ContentTabs, SegmentedChoice } from "@platform/ui";
+import { ContextHelp, Button, Checkbox, DataTable, Form, GroupedList, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, RelationCanvas, Tag,
+  t, type ColumnDef, type RelationEdge, type RelationNode, ContentTabs, SegmentedChoice , Workbench } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { Layers, Link2 } from "lucide-react";
 import { useInterfaces } from "./shape";
@@ -98,8 +98,8 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
       {!application && <SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />}
     </div>
     {inventory.isError && <Panel role="alert">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
-    <EditorWorkbench leftLabel={t("Model resources")} centerLabel={t("Model workspace")} rightLabel={t("Semantic inspector")}
-      left={<div className="grid content-start gap-3 p-3">
+    <Workbench storageKey="object-model" mainLabel={t("Model workspace")}
+      left={{ label: t("Model resources"), content: <div className="grid content-start gap-3 p-3">
         <GroupedList<Resource> items={listedResources} id={(item) => item.ref.name} selected={current} onSelect={choose}
           text={(item) => `${item.title} ${item.ref.name}`} dense
           groupings={[
@@ -110,9 +110,8 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
           row={(item) => <><ObjectIcon icon={item.installed?.entity?.icon ?? item.draft?.icon} color={item.installed?.entity?.color ?? item.draft?.color} className="size-5 rounded-sm" /><span className="min-w-0 flex-1 truncate">{item.title}</span>
             {!item.installed && <span className="shrink-0 text-2xs text-muted">{t("Draft")}</span>}</>}
           empty={t("No matching objects.")} />
-      </div>}
-      right={<div className="grid content-start gap-3 p-3">
-        <h3 className="text-xs font-semibold text-muted">{t("Semantic inspector")}</h3>
+      </div> }}
+      right={{ label: t("Semantic inspector"), heading: t("Semantic inspector"), content: <div className="grid content-start gap-3 p-3">
         {view==="shared" ? sharedProperty ? <><h2 className="text-sm font-semibold">{sharedProperty.property.title}</h2><PropertyList items={[[t("Identity"),sharedProperty.binding.ref.name],[t("Type"),t(sharedProperty.property.type)],[t("Version"),sharedProperty.binding.sourceVersion],[t("Source"),t(sharedProperty.definition.source==="code"?"Native code":"Tenant definition")]]}/><p className="text-xs">{sharedProperty.property.description}</p>{sharedProperty.definition.source==="tenant"&&<Button onClick={()=>editShared(sharedProperty.binding.ref.name)}>{t("Edit shared property")}</Button>}<ContextHelp title={t("Shared property")}><p className="text-xs text-muted">{t("Local field names, required values and access belong to each object.")}</p></ContextHelp>{resources.flatMap(item=>item.fields.filter(f=>f.property&&assetBindingKey(f.property)===shared).map(f=><Button key={`${item.ref.name}/${f.name}`} variant="row" onClick={()=>{choose(item);setTab("properties");select({kind:"property",ref:{object:item.ref,field:f.name}});}}>{item.title} · {f.name}</Button>))}</>:<p className="text-xs text-muted">{t("Choose a shared property version to inspect its consumers.")}</p> : resource ? <><h2 className="text-sm font-semibold">{property?.title ?? resource.title}</h2><p className="break-all font-mono text-xs text-muted">{current}{property ? `.${property.name}` : ""}</p>
           <Tag label={t(resource.source === "code" ? "Native code" : "Tenant definition")} />
           {view === "graph" && <Button onClick={() => choose(resource)}>{t("Open object details")}</Button>}
@@ -139,7 +138,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
           {!resource.installed && <p className="text-xs text-muted">{t("Publish this object before binding it to a page.")}</p>}
           {resource.draft && <Button onClick={() => open({ view: "release-review", params: { kind: "object", id: resource.draft!.id } })}>{t("Review release")}</Button>}
         </> : <p className="text-xs text-muted">{t("Choose an object or relationship to inspect it.")}</p>}
-      </div>}>
+      </div> }}>
       <div className="min-h-[26rem] flex-1 overflow-auto p-3">
         {view==="shared"&&<DataTable data={sharedProperties} getRowId={p=>assetBindingKey(p.binding)} searchable={false} height="100%" onRowClick={p=>setShared(assetBindingKey(p.binding))} empty={t("No published shared property yet.")} columns={[{id:"title",header:t("Shared property"),accessorFn:p=>p.property.title},{id:"name",header:t("Identity"),accessorFn:p=>p.binding.ref.name},{id:"type",header:t("Type"),accessorFn:p=>t(p.property.type)},{id:"version",header:t("Version"),accessorFn:p=>p.binding.sourceVersion}]}/>}
         {view === "interfaces" && <div className="grid gap-3"><ContextHelp title={t("Interfaces")}><p className="text-xs text-muted">{t("An interface is a shape several objects share; a page or query written against it works for all of them. Apps declare interfaces; objects implement them.")}</p></ContextHelp>
@@ -179,7 +178,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
         </div>}
         {seed && <PageFromModel key={`${seed.object.name}/${seed.field ?? seed.relation?.ref.field ?? ""}`} seed={seed} onClose={() => setSeed(undefined)} />}
       </div>
-    </EditorWorkbench>
+    </Workbench>
   </div>;
 }
 

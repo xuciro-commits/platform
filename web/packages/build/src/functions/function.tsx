@@ -1,4 +1,4 @@
-import { ContextHelp, StructuredEditor } from "@platform/ui";
+import { ContextHelp, StructuredEditor , SegmentedChoice } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -94,7 +94,7 @@ export function FunctionEditor({ id }: { id: string }) {
     {inventory.isError && <Panel role="alert">{t("The function sources could not be loaded.")}</Panel>}
     <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 gap-3 xl:grid-cols-[12rem_minmax(0,1fr)_22rem]">
       <Panel role="region" aria-label={t("Function stages")} className="grid content-start gap-2 p-3">
-        {stages.map((stage) => <Button key={stage.id} aria-pressed={chosen === stage.id} variant={chosen === stage.id ? "primary" : "ghost"} onClick={() => setChosen(stage.id)}>{stage.title}</Button>)}
+        <SegmentedChoice label={t("Function stages")} value={chosen} onChange={(stage) => setChosen(stage as Stage)} options={stages.map((stage) => ({ value: stage.id, label: stage.title }))} />
         <ContextHelp title={t("Function stages")}><p className="text-xs text-muted">{t("Select a stage or use these buttons to edit its properties. Source permissions are checked on every call.")}</p></ContextHelp>
       </Panel>
       <FunctionMap draft={draft} source={source?.title} chosen={chosen} onChoose={setChosen} />

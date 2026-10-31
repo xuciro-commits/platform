@@ -1,7 +1,6 @@
 import { useHost } from "@platform/app";
 import { useDraftInventory } from "../branches/records";
-import { Button, GroupedList, RecordList, Tag, Panel, t, type EntityRecord, type RecordSource } from "@platform/ui";
-import { ListTree, Table2 } from "lucide-react";
+import { Button, GroupedList, RecordList, SegmentedChoice, Tag, Panel, t, type EntityRecord, type RecordSource } from "@platform/ui";
 import { useState } from "react";
 import { kindOfType } from "../projects/resources";
 import { projectGroupOfRecord, useProjectIndex } from "../projects/membership";
@@ -30,10 +29,7 @@ export function ResourceList({ source, type, fields = [], onOpen }: { source: Re
     { id: "status", label: t("Status"), of: (r: Row) => { const s = stateOf(r) ?? "—"; return { id: s, label: t(s === "published" ? "Published" : s === "draft" ? "Draft" : s) }; } },
     { id: "none", label: t("No grouping"), of: () => ({ id: "", label: "" }) },
   ];
-  const toggle = <span className="ml-auto flex gap-1">
-    <Button size="sm" variant={mode === "tree" ? "primary" : "ghost"} aria-pressed={mode === "tree"} onClick={() => setMode("tree")}><ListTree />{t("Tree")}</Button>
-    <Button size="sm" variant={mode === "table" ? "primary" : "ghost"} aria-pressed={mode === "table"} onClick={() => setMode("table")}><Table2 />{t("Table")}</Button>
-  </span>;
+  const toggle = <span className="ml-auto flex"><SegmentedChoice compact label={t("Resource view")} value={mode} onChange={next => setMode(next as typeof mode)} options={[{ value: "tree", label: t("Tree") }, { value: "table", label: t("Table") }]} /></span>;
   const content = mode === "table" ? <div className="grid gap-2"><div className="flex">{toggle}</div><RecordList source={source} type={type} fields={fields} onOpen={onOpen} /></div>
     : inventory.isError ? <Panel role="alert" className="grid gap-2 text-sm"><p>{t("The resource inventory is unavailable. This does not mean the application has no assets.")}</p>
       <div>{toggle}<Button size="sm" onClick={() => void inventory.refetch()}>{t("Refresh")}</Button></div></Panel>

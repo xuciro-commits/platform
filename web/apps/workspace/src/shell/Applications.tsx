@@ -1,5 +1,5 @@
 import { useHost } from "@platform/app";
-import { Button, Input, PageHeader, useWorkspace, t, type PlatformApplication } from "@platform/ui";
+import { Button, Input, PageHeader, useWorkspace, t, type PlatformApplication , SegmentedChoice } from "@platform/ui";
 import { Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { categories, projections, type Projection } from "./registry";
@@ -44,11 +44,7 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
       <PageHeader title={t("Applications")} help={t("Every application you may open in {tenant}: the ones your organisation runs, and the platform's own tools your role allows.", { tenant: me.tenantId })} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Find an application…")} aria-label={t("Find an application…")} className="w-full sm:w-72" />
-        <div className="flex flex-wrap items-center gap-1 text-xs">
-          {[{ id: "all", title: () => t("All") }, ...projections].map((p) => (
-            <Button key={p.id} size="sm" variant={only === p.id ? "primary" : "ghost"} onClick={() => setOnly(p.id)}>{p.title()}</Button>
-          ))}
-        </div>
+        <SegmentedChoice label={t("Application category")} value={only} onChange={setOnly} options={[{ id: "all", title: () => t("All") }, ...projections].map((p) => ({ value: p.id, label: p.title() }))} />
       </div>
       {ordered.map((category) => {
         const inCategory = apps.filter((a) => a.category === category.id);

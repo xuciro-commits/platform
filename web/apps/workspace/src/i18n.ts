@@ -5,6 +5,7 @@ register("zh-CN", {
   "Host maintenance is unavailable. Check your administrator access and connection.": "无法打开宿主维护，请检查管理员权限和连接。",
   "Open an application or continue your work.": "打开应用，或继续之前的工作。",
   "Workspace tasks": "工作入口",
+  "Application category": "应用类别",
   "Operate": "运营",
   "System": "系统",
   "Continue working": "继续工作",

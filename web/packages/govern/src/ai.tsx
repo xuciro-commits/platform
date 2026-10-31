@@ -1,5 +1,5 @@
 import { useHost, ModelPicker, ModelOptionsEditor, MemberSelect, useReadQuery as useRead } from "@platform/app";
-import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Panel, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, useWorkspace, t , SegmentedChoice } from "@platform/ui";
+import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Panel, Checkbox, DataTable, Dialog, Sheet, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, useWorkspace, t , SegmentedChoice } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
@@ -94,7 +94,7 @@ export function AIProviders() {
           <DataTable data={shown} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 380px)" empty={catalog.error ?? t("No models")} />
         </div>
       )}
-      <Dialog open={adding} onOpenChange={setAdding} title={t(editing ? "Edit AI provider" : "Add AI provider")}>
+      <Sheet isolated open={adding} onOpenChange={setAdding} title={t(editing ? "Edit AI provider" : "Add AI provider")}>
         <div className="grid gap-2 text-sm">
           <Select aria-label={t("Kind")} value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value })}>
             <option value="vendor">{t("Vendor")}</option>
@@ -139,7 +139,7 @@ export function AIProviders() {
               }}>{t(editing ? "Save" : "Add")}</Button>
           </span>
         </div>
-      </Dialog>
+      </Sheet>
       <Dialog open={!!removing} onOpenChange={value=>{if(!value)setRemoving(undefined)}} title={t("Remove AI service")}>
         <p className="text-sm">{t("Removing this service disables its models. References and usage history remain.")}</p>
         <ul className="my-3 grid gap-2 text-sm">{references?.models.filter(row=>row.model.provider===removing).map(row=><li key={row.model.model}>{row.model.model} · {row.references?.map(modelReferenceTitle).join(", ")||t("No purpose default")}</li>)}</ul>

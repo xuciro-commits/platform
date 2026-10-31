@@ -18,11 +18,11 @@ export function StructuredEditorExample(){
  return <InputDraftProvider scope="catalog-source"><StructuredEditor scope="catalog-source" value={value} onChange={setValue} fields={[{name:"name",title:t("Name"),type:"text",required:true,example:"example"},{name:"enabled",title:t("Enabled"),type:"boolean"},{name:"quantity",title:t("Quantity"),type:"integer",constraints:{min:0}}]}><Input aria-label={t("Name")} value={String(value.name??"")} onChange={event=>setValue({...value,name:event.target.value})}/></StructuredEditor></InputDraftProvider>;
 }
 import {
-  AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, EmptyState, DateTimeInput, DateInput, DateRangeInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet, Rejection, editLaneOf,
+  AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, EmptyState, DateTimeInput, DateInput, DateRangeInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet, Rejection, editLaneOf,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordDeliveries, RecordLookup, InterfaceRecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
-  Chart, Pivot, FlowSteps, FlowCanvas, RelationCanvas, FlowRun, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
+  Chart, Pivot, FlowSteps, FlowCanvas, RelationCanvas, FlowRun, FlowGraph, Workspace, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView, type AttachedFile,
   type InboxTask, type Lifecycle as LifecycleInfo, type FlowCatalog, type FlowNode, type FlowEdge,
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
@@ -65,13 +65,6 @@ export function ObservationTimeSeriesExample(){return <ObservationExample kind="
 
 export function RecordActionGridExample(){return <RecordActionGrid records={demoRows} info={demoInfo} parameters={[{parameter:"amount",field:"quantity"}]} payload={[{name:"amount",type:"integer",description:"Amount",required:true}]} port={{schema:"sample.item.adjust",fields:["amount"],scope:"catalog",maxRows:50,preview:true,alwaysEditing:true,confirmation:{title:t("Review row actions"),description:t("Actions do not run while you compose.")},submit:async()=>({accepted:false})}}/>;}
 
-export function EditorPanels() {
-  return <div className="flex h-[30rem] flex-col"><EditorWorkbench leftLabel={t("Library")} centerLabel={t("Canvas")} rightLabel={t("Inspector")}
-    left={<Panel title={t("Library")}><Button>{t("Table")}</Button></Panel>}
-    right={<Panel title={t("Inspector")}><Input aria-label={t("Title")} defaultValue={t("Example")} /></Panel>}>
-    <Panel title={t("Canvas")} description={t("Example")} />
-  </EditorWorkbench></div>;
-}
 export function ButtonGroups(){
  const [selected,setSelected]=useState("");
  return <div className="grid gap-2"><ButtonGroup label={t("Button group")} buttons={[{id:"open",title:t("Open"),variant:"primary",icon:"arrow"},{id:"close",title:t("Close"),variant:"default"}]} isBound={()=>true} onActivate={setSelected}/><output>{selected}</output></div>;
@@ -393,7 +386,7 @@ export function InspectorControlsExample(){
   <div className="grid grid-cols-2 gap-2"><InspectorField label={t('Width (px)')} prefix="W" unit="px" type="number" value={width} onChange={e=>setWidth(e.target.value)}/><InspectorField label={t('Height (px)')} prefix="H" unit="px" type="number" value={height} onChange={e=>setHeight(e.target.value)}/></div>
  </InspectorSection></div>;
 }
-export function IndexedChoicesExample(){const [value,setValue]=useState("1"),options=[{value:"0",label:"Configure"},{value:"1",label:"Review"},{value:"2",label:"Review"}];return <div className="grid min-w-0 gap-4"><StepSelector options={options} value={value} label="Build steps" onChange={setValue}/><TabSelector options={options} value={value} label="Review tabs" onChange={setValue}/></div>;}
+export function IndexedChoicesExample(){const [value,setValue]=useState("1"),options=[{value:"0",label:"Configure"},{value:"1",label:"Review"},{value:"2",label:"Review"}];return <div className="grid min-w-0 gap-4"><StepSelector options={options} value={value} label="Build steps" onChange={setValue}/><ContentTabs strict label="Review tabs" value={value} onChange={setValue} items={options.map(option=>({id:option.value,title:option.label}))}/></div>;}
 
 export function MultipleChoiceInputExample(){const [value,setValue]=useState(["Open"]);return <MultipleChoiceInput clearable value={value} options={["Open","In progress","Done"]} label="Status" title="Task status" onChange={setValue}/>;}
 

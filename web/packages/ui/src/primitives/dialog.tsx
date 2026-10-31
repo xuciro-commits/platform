@@ -15,23 +15,24 @@ type OverlayProps = {
   wide?: boolean;
   suspended?: boolean;
   returnFocus?: HTMLElement | null; fallbackFocus?: HTMLElement | null;
-} & OverlayPolicy & {width?:number;side?:"left"|"right"};
+} & OverlayPolicy & {width?:number;side?:"left"|"right";isolated?:boolean};
 
 export function Dialog(props: OverlayProps) {
   return <OverlayFrame {...props} />;
 }
 
-export function OverlayFrame({ open, onOpenChange, title, children, wide, returnFocus, fallbackFocus, suspended = false,backdrop=true,closeOnBackdrop=true,closeOnEsc=true,width,side="right",sheet=false }: OverlayProps & {sheet?:boolean}) {
+export function OverlayFrame({ open, onOpenChange, title, children, wide, returnFocus, fallbackFocus, suspended = false,backdrop=true,closeOnBackdrop=true,closeOnEsc=true,width,side="right",sheet=false,isolated=false }: OverlayProps & {sheet?:boolean}) {
   const visible = useViewVisible();
   suspended = suspended || !visible;
   const nested = useContext(OverlayDepth) > 0;
+  const own = !nested && (isolated || !sheet);
   sheet = sheet || nested;
   const inputs=useInputDrafts();
-  const busy=!sheet&&inputs?.busy;
+  const busy=own&&inputs?.busy;
   const change=(next:boolean)=>{if(!busy&&!suspended)onOpenChange(next);};
   const focus = useOverlayFocus(returnFocus, fallbackFocus);
   const policy=overlayPolicy({backdrop,closeOnBackdrop,closeOnEsc});
-  const body = useOverlayBody(open, <OverlayDepth.Provider value={useContext(OverlayDepth) + 1}>{sheet ? children : <InputDraftProvider isolated scope="dialog">{children}</InputDraftProvider>}</OverlayDepth.Provider>);
+  const body = useOverlayBody(open, <OverlayDepth.Provider value={useContext(OverlayDepth) + 1}>{own ? <InputDraftProvider isolated scope="dialog">{children}</InputDraftProvider> : children}</OverlayDepth.Provider>);
   return (
     <D.Root modal={backdrop} open={open && !suspended} onOpenChange={(next) => { change(next); }}>
       <D.Portal>

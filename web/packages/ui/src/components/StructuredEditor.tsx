@@ -7,6 +7,7 @@ import { formatStructuredSource, parseStructuredSource, structuredExample, struc
 import { t } from '../i18n';
 import {ContextHelp} from './ContextHelp';
 import {Disclosure} from '../primitives/controls';
+import {SegmentedChoice} from './SegmentedChoice';
 
 export function StructuredEditor({value,onChange,children,scope,fields,fieldInput,validate,onTrial,expectedRevision,readOnly=false,disabled=false,context,initialMode='visual'}: {
   value: StructuredValue; onChange?: (value: StructuredValue) => void; children?: ReactNode; scope: string; fields?: Api.FieldInfo[];
@@ -57,10 +58,7 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
   </div>)}</dl>;
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" data-structured-editor={scope}>
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-      <div className="flex gap-1" role="group" aria-label={t('Editing mode')}>
-        {children&&<Button size="sm" variant={mode==='visual'?'primary':'ghost'} disabled={disabled||running} aria-pressed={mode==='visual'} onClick={()=>switchMode('visual')}>{t('Visual')}</Button>}
-        <Button size="sm" variant={mode==='source'?'primary':'ghost'} disabled={disabled||running} aria-pressed={mode==='source'} onClick={()=>switchMode('source')}>{t('Source editor')}</Button>
-      </div>
+      <SegmentedChoice label={t('Editing mode')} disabled={disabled||running} value={mode} onChange={next=>switchMode(next as 'visual'|'source')} options={[...(children?[{value:'visual',label:t('Visual')}]:[]),{value:'source',label:t('Source editor')}]}/>
       {mode==='source'&&<div className="flex flex-wrap items-center gap-2">
         <Select aria-label={t('Source format')} value={format} disabled={disabled||running||!!input.problem&&input.problem!==t('Apply source before saving.')} onChange={event=>{const next=event.target.value as SourceFormat;try{const parsed=parseStructuredSource(input.text,format);setFormat(next);input.clear();if(JSON.stringify(parsed)!==JSON.stringify(value)&&!readOnly)input.write(formatStructuredSource(parsed,next),t('Apply source before saving.'));setMessage('');}catch(error){setMessage(String(error));}}}><option value="json">JSON</option><option value="yaml">YAML</option></Select>
         <Button size="sm" disabled={disabled||running} onClick={()=>{try{const parsed=parseStructuredSource(input.text,format);if(JSON.stringify(parsed)===JSON.stringify(value)||readOnly)input.clear();else input.write(formatStructuredSource(parsed,format),t('Apply source before saving.'));setMessage('');}catch(error){setMessage(String(error));}}}>{t('Format')}</Button>

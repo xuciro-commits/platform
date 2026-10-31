@@ -1,5 +1,5 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { ContextHelp, Button, Form, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, useWorkspace, type ColumnDef, t, formatStamp} from "@platform/ui";
+import { ContextHelp, Button, Form, DataTable, Dialog, Sheet, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, useWorkspace, type ColumnDef, t, formatStamp} from "@platform/ui";
 import { useState } from "react";
 import { z } from "zod";
 import { active, kind, today, type Chart, type Member } from "./shared";
@@ -32,20 +32,20 @@ export function Members() {
       {members.error ? <p className="text-sm text-[var(--tone-danger)]">{String(members.error)} {t("— administrators only.")}</p> :
         <DataTable data={members.data ?? []} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 190px)"
           onRowClick={(m) => open({ view: "member", params: { id: m.id } }, { window: "inspect" })} />}
-      {can("platform.member.add") && <Dialog open={adding} onOpenChange={setAdding} title={t("Add member")}>
+      {can("platform.member.add") && <Sheet isolated open={adding} onOpenChange={setAdding} title={t("Add member")}>
         <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, t(t("Lower case, digits, dashes"))), subject: z.string().regex(/^(user|client):.+/, t("user:<email> or client:<id>")), agent: z.boolean() })}
           defaultValues={{ id: "", subject: "", agent: false }} submitLabel={t("Add")} onCancel={() => setAdding(false)}
           fields={[{ name: "id", label: t("Member ID") }, { name: "subject", label: t("Signs in as (user:<email> or client:<id>)") },
             { name: "agent", label: t("AI agent (what it causes that cannot be recalled waits for a person's approval)"), kind: "checkbox" }]}
           onSubmit={async (v) => { if (await decide("platform.member.add", { type: "platform.member", id: v.id }, { subject: v.subject, agent: v.agent })) setAdding(false); }} />
-      </Dialog>}
-      {can("platform.member.invite") && <Dialog open={inviting} onOpenChange={setInviting} title={t("Invite member")}>
+      </Sheet>}
+      {can("platform.member.invite") && <Sheet isolated open={inviting} onOpenChange={setInviting} title={t("Invite member")}>
         <div className="mb-2 flex justify-end"><ContextHelp title={t("Invite member")}>{t("Add a member who has not signed in yet: they stand invited until they first do, and may be granted roles meanwhile.")}</ContextHelp></div>
         <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, t("Lower case, digits, dashes")), subject: z.string().regex(/^user:.+/, t("user:<email>")) })}
           defaultValues={{ id: "", subject: "" }} submitLabel={t("Invite")} onCancel={() => setInviting(false)}
           fields={[{ name: "id", label: t("Member ID") }, { name: "subject", label: t("Signs in as (user:<email>)") }]}
           onSubmit={async (v) => { if (await decide("platform.member.invite", { type: "platform.member", id: v.id }, { subject: v.subject })) setInviting(false); }} />
-      </Dialog>}
+      </Sheet>}
     </>
   );
 }
@@ -114,10 +114,10 @@ export function MemberDetail({ id }: { id: string }) {
           ))}
         </div>
       </Panel>
-      {can("platform.member.grant") && <Dialog open={granting} onOpenChange={setGranting} title={t("Add role")}>
+      {can("platform.member.grant") && <Sheet isolated open={granting} onOpenChange={setGranting} title={t("Add role")}>
         <GrantForm apps={apps.filter((a) => a.roles.length)} onCancel={() => setGranting(false)}
           onSubmit={async (g) => { if (await decide("platform.member.grant", { type: "platform.member", id: member.id }, g)) setGranting(false); }} />
-      </Dialog>}
+      </Sheet>}
       {(role("enterprise") || holds("platform", "admin")) && <MemberUnits member={member.id} />}
       {holds("platform", "admin") && <Panel title={t("Profile")}>
         <ProfileForm member={member.id} account={account} languages={me.languages} tenant={tenant} self={member.id === me.principalId} />

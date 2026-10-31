@@ -4734,102 +4734,6 @@
       ]
     },
     {
-      "id": "ui/editor-workbench",
-      "owner": "@platform/ui",
-      "name": "Editor workbench",
-      "summary": "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.",
-      "layer": 2,
-      "source": "web/packages/ui/src/layout/EditorWorkbench.tsx",
-      "exports": [
-        "EditorWorkbench"
-      ],
-      "example": "EditorPanels",
-      "authority": "api",
-      "maturity": "recommended",
-      "scope": "platform",
-      "uses": [
-        "code"
-      ],
-      "tags": [
-        "editor",
-        "layout",
-        "inspector",
-        "resize"
-      ],
-      "dependencies": [
-        "ui/panels",
-        "foundation/semantic-tokens"
-      ],
-      "props": [
-        {
-          "name": "left",
-          "type": "ReactNode",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "right",
-          "type": "ReactNode",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "leftLabel",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "centerLabel",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "rightLabel",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "className",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        }
-      ],
-      "slots": [
-        {
-          "name": "left",
-          "type": "ReactNode",
-          "optional": true
-        },
-        {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": false
-        },
-        {
-          "name": "right",
-          "type": "ReactNode",
-          "optional": true
-        }
-      ]
-    },
-    {
       "id": "ui/empty-state",
       "owner": "@platform/ui",
       "name": "Empty state",
@@ -6360,13 +6264,12 @@
     {
       "id": "ui/indexed-choices",
       "owner": "@platform/ui",
-      "name": "Steps and tabs",
-      "summary": "Select original string identities through ordered steps or semantic tabs with independently keyed labels.",
+      "name": "Steps",
+      "summary": "Select original string identities through ordered steps with independently keyed labels.",
       "layer": 1,
       "source": "web/packages/ui/src/components/IndexedChoices.tsx",
       "exports": [
-        "StepSelector",
-        "TabSelector"
+        "StepSelector"
       ],
       "example": "IndexedChoicesExample",
       "authority": "api",
@@ -6378,14 +6281,13 @@
       "tags": [
         "choice",
         "steps",
-        "tabs",
         "index"
       ],
       "dependencies": [
         "ui/button"
       ],
       "constraints": [
-        "The caller owns current state and optional writes. Duplicate labels retain distinct values; empty or unmatched state has no current choice. Step position makes no business workflow claim and tabs do not invent panel content."
+        "The caller owns current state and optional writes. Duplicate labels retain distinct values; empty or unmatched state has no current choice. Step position makes no business workflow claim."
       ],
       "props": [
         {
@@ -14500,9 +14402,6 @@
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx",
       "web/packages/ui/src/components/MultipleChoiceInput.tsx",
       "web/packages/ui/src/fields/types.tsx"
-    ],
-    "ui/editor-workbench": [
-      "web/packages/build/src/ontology/ModelWorkbench.tsx"
     ],
     "app/semantic-selection": [
       "web/packages/build/src/ontology/action-type.tsx",

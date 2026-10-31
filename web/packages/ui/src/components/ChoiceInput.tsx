@@ -3,12 +3,14 @@ import {SegmentedChoice} from "./SegmentedChoice";
 import {Select} from "../primitives/input";
 import {t} from "../i18n";
 import {validChoiceInput} from "./choice";
-import {StepSelector,TabSelector} from "./IndexedChoices";
+import {ContentTabs} from "../layout/ContentTabs";
+import {CurrentChoice,StepSelector} from "./IndexedChoices";
 
 export function ChoiceInput({value,options,optionLabels,variant,label,title,disabled,onChange}:{value:string;options:readonly string[];optionLabels?:readonly string[];variant:string;label?:string;title:string;disabled?:boolean;onChange?:(value:string)=>void}){
  const id=useId(),caption=label??"",name=caption.trim()?caption:title;
  if(variant==="multiple"||!validChoiceInput({options,optionLabels,variant,label}))return <p role="alert">{t("Choice configuration is unsupported.")}</p>;
- if(variant==="steps"||variant==="tabs"){const Selector=variant==="steps"?StepSelector:TabSelector;return <Selector options={options.map((value,index)=>({value,label:optionLabels![index]!}))} value={value} label={name} enabled={!disabled} onChange={onChange}/>;}
+ if(variant==="steps")return <StepSelector options={options.map((value,index)=>({value,label:optionLabels![index]!}))} value={value} label={name} enabled={!disabled} onChange={onChange}/>;
+ if(variant==="tabs")return <div className="grid min-w-0 gap-2"><ContentTabs strict wrap={false} label={name} value={value} disabled={disabled||!onChange} onChange={next=>onChange?.(next)} items={options.map((option,index)=>({id:option,title:optionLabels![index]||t("Tab {number}",{number:index+1})}))}/><CurrentChoice value={value} known={options.includes(value)}/></div>;
  disabled=disabled||!onChange;
  const unmatched=value!==""&&!options.includes(value),select=(next:string)=>{if(!disabled&&(options.includes(next)||next===""&&variant==="select"))onChange?.(next);};
  return <div className="grid min-w-0 gap-2">

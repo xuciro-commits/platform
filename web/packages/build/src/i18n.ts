@@ -2555,6 +2555,7 @@ register("zh-CN", {
   "Installed function version {version}. Accepted calls keep their saved inputs and definition.": "已安装函数版本 {version}。已接受调用保留其已保存输入和定义。",
   "The function sources could not be loaded.": "无法加载函数来源。",
   "Function stages": "函数步骤",
+  "Resource view": "资源视图",
   "Select a stage or use these buttons to edit its properties. Source permissions are checked on every call.": "选择步骤或使用这些按钮编辑属性。每次调用都会检查来源权限。",
   "Function properties": "函数属性",
   "Function name": "函数名称",

@@ -1,7 +1,7 @@
 import {useInputDrafts, PanelGroup , Notice } from "@platform/ui";
 import {apiErrorMessage,type Api} from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
-import { Button, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Form, Input, PageHeader, Panel, PropertyList, Select, Tag, Textarea, notify, useUnsavedChanges, useWorkspace, type ColumnDef, t } from "@platform/ui";
+import { Button, Checkbox, ContextHelp, DataTable, Dialog, Sheet, Disclosure, Form, Input, PageHeader, Panel, PropertyList, Select, Tag, Textarea, notify, useUnsavedChanges, useWorkspace, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { when } from "./shared";
@@ -216,7 +216,7 @@ function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     const created = await call<TenantView>("/v1/host/tenants", { id, name, template, admin: admin.includes(":") ? admin : `user:${admin}` });
     if (created) { notify.success(t("Tenant {id} created.", { id: created.id })); onOpenChange(false); setId(""); setName(""); setAdmin(""); openView({ view: "host-tenant", params: { tenant: created.id } }); }
   };
-  return <Dialog open={open} onOpenChange={onOpenChange} title={t("Create tenant")}>
+  return <Sheet isolated open={open} onOpenChange={onOpenChange} title={t("Create tenant")}>
     <Form className="grid gap-3" onSubmit={() => submit()}>
       <div className="flex justify-end"><ContextHelp title={t("Create tenant")}>{t("A tenant is a hard boundary: its own members, records, settings and audit. Subsidiaries and sites normally live inside one tenant's enterprise model.")}</ContextHelp></div>
       <label className="grid gap-1 text-sm">{t("Tenant ID")}<Input required pattern="[a-z][a-z0-9-]{1,31}" value={id} onChange={(e) => setId(e.target.value)} placeholder="acme" />
@@ -230,7 +230,7 @@ function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         <span className="text-xs text-muted">{t("Their sign-in email (or client:<id>); they administer every app and invite the rest.")}</span></label>
       <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t("Cancel")}</Button><Button type="submit" variant="primary">{t("Create")}</Button></div>
     </Form>
-  </Dialog>;
+  </Sheet>;
 }
 
 function SupportDialog({ tenant, open, onOpenChange }: { tenant: string; open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -242,7 +242,7 @@ function SupportDialog({ tenant, open, onOpenChange }: { tenant: string; open: b
     const grant = await call<Grant>(`/v1/host/tenants/${encodeURIComponent(tenant)}/support`, { member, reason, minutes: Number(minutes) || 60 });
     if (grant) { notify.success(t("Support session {id} opened until {expires}.", { id: grant.id, expires: when(grant.expires) })); onOpenChange(false); setMember(""); setReason(""); }
   };
-  return <Dialog open={open} onOpenChange={onOpenChange} title={t("Open a support session")}>
+  return <Sheet isolated open={open} onOpenChange={onOpenChange} title={t("Open a support session")}>
     <Form className="grid gap-3" onSubmit={() => submit()}>
       <p className="text-sm text-muted">{t("Reads the tenant's health and audit as one of its members, for a bounded time. Every use is recorded.")}</p>
       <label className="grid gap-1 text-sm">{t("Member")}<Input required value={member} onChange={(e) => setMember(e.target.value)} placeholder="member-id" /></label>
@@ -250,7 +250,7 @@ function SupportDialog({ tenant, open, onOpenChange }: { tenant: string; open: b
       <label className="grid gap-1 text-sm">{t("Minutes")}<Input type="number" min={1} max={1440} value={minutes} onChange={(e) => setMinutes(e.target.value)} /></label>
       <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t("Cancel")}</Button><Button type="submit" variant="primary">{t("Open session")}</Button></div>
     </Form>
-  </Dialog>;
+  </Sheet>;
 }
 
 export function HostPromotions({ tenant, from: initialFrom, candidate: initialCandidate }: { tenant?: string; from?: string; candidate?: string }) {

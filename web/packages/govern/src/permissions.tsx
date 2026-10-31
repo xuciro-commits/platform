@@ -1,5 +1,5 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { PropertyList, ContextHelp, Button, Form, Checkbox, DataTable, type ColumnDef, Dialog, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
+import { PropertyList, ContextHelp, Button, Form, Checkbox, DataTable, type ColumnDef, Sheet, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -129,18 +129,18 @@ function Access({ catalog }: { catalog: AppPermissions[] }) {
           {remove("platform.project.archive", "platform.project", p.id)}
         </p>)}</div>
       </Panel>
-      <Dialog open={adding === "project"} onOpenChange={(o) => !o && setAdding(null)} title={editing ? t("Edit project") : t("Save project")}>
+      <Sheet isolated open={adding === "project"} onOpenChange={(o) => !o && setAdding(null)} title={editing ? t("Edit project") : t("Save project")}>
         <ProjectForm key={editing?.id ?? "new"} members={members} project={editing} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.project.save", { type: "platform.project", id }, p)) setAdding(null); }} />
-      </Dialog>
-      <Dialog open={adding === "role"} onOpenChange={(o) => !o && setAdding(null)} title={t("Define role")}>
+      </Sheet>
+      <Sheet isolated open={adding === "role"} onOpenChange={(o) => !o && setAdding(null)} title={t("Define role")}>
         <RoleForm catalog={catalog} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.role.save", { type: "platform.role", id }, p)) setAdding(null); }} />
-      </Dialog>
-      <Dialog open={adding === "policy"} onOpenChange={(o) => !o && setAdding(null)} title={t("Set policy")}>
+      </Sheet>
+      <Sheet isolated open={adding === "policy"} onOpenChange={(o) => !o && setAdding(null)} title={t("Set policy")}>
         <PolicyForm members={members} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.policy.save", { type: "platform.policy", id }, p)) setAdding(null); }} />
-      </Dialog>
-      <Dialog open={adding === "team"} onOpenChange={(o) => !o && setAdding(null)} title={t("Save team")}>
+      </Sheet>
+      <Sheet isolated open={adding === "team"} onOpenChange={(o) => !o && setAdding(null)} title={t("Save team")}>
         <TeamForm members={members} catalog={catalog} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.team.save", { type: "platform.team", id }, p)) setAdding(null); }} />
-      </Dialog>
+      </Sheet>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { modelOptionLabel, ModelOptionsEditor, ModelPicker, useHost, useReadQuery as useRead, type ModelPurpose } from "@platform/app";
-import { Button, Dialog, Input, PageHeader, Panel, PropertyList, Select, Tag, useWorkspace, t , SegmentedChoice } from "@platform/ui";
+import { Button, Dialog, Sheet, Input, PageHeader, Panel, PropertyList, Select, Tag, useWorkspace, t , SegmentedChoice } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import {modelReferenceTitle} from "./shared";
 import { ReadResult } from "./operations";
@@ -98,7 +98,7 @@ function AvailableModels() {
         </div>;
       })}
     </div>}</ReadResult>
-    <Dialog open={!!editing} onOpenChange={open => { if (!open) setEditing(undefined); }} title={editing?.model ?? t("Model details")}>
+    <Sheet isolated open={!!editing} onOpenChange={open => { if (!open) setEditing(undefined); }} title={editing?.model ?? t("Model details")}>
       {editing && <div className="grid gap-4 text-sm">
         <ModelFacts capabilities={facts??editing.capabilities} />
         <Button onClick={async()=>{const result=await client.call<Api.CatalogModel[] & {error?:{detail?:string}}>("GET",`/v1/ai/providers/${encodeURIComponent(editing.provider)}/models?refresh=true`);const found=result.ok?result.body.find(model=>model.id===editing.model):undefined;if(found?.capabilities){setFacts(found.capabilities);setFactsError("")}else{setFactsError(result.body.error?.detail??t("This model was not returned by the provider. Current configuration is preserved."))}}}>{t("Read latest model facts")}</Button>
@@ -111,7 +111,7 @@ function AvailableModels() {
         <p className="text-xs text-muted">{t("Defaults affect new tasks. Existing evaluations must match the effective configuration before publication.")}</p>
         <div className="flex justify-end gap-2"><Button onClick={() => setEditing(undefined)}>{t("Cancel")}</Button><Button variant="primary" onClick={() => void save()}>{t("Save configuration")}</Button></div>
       </div>}
-    </Dialog>
+    </Sheet>
     <Dialog open={!!removing} onOpenChange={open => { if (!open) setRemoving(undefined); }} title={t("Disable model")}>
       <p className="text-sm">{t("Tasks using this model will stop making model calls. References are preserved so you can enable it again or choose a replacement.")}</p>
       <p className="my-3 break-words text-sm">{t("Purpose references")}: {removing?.references?.map(modelReferenceTitle).join(", ") || t("None")}</p>

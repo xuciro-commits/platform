@@ -1,6 +1,6 @@
 import { sourceFieldInput } from "@platform/app";
 import { useDraftInventory } from "../branches/records";
-import { ContextHelp, PageHeader, StructuredEditor } from "@platform/ui";
+import { ContextHelp, PageHeader, StructuredEditor , ContentTabs } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
@@ -320,9 +320,8 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         {createdResource && !pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.")} />
           <div className="flex gap-2"><Button disabled={saving || dirty} onClick={() => void addCreated(createdResource.kind, createdResource.target)}>{t("Retry adding created resource")}</Button>
             <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedResource(undefined))}>{t("Keep resource without project membership")}</Button></div></div>}
-        <div role="tablist" aria-label={t("Project sections")} className="flex flex-wrap gap-1 border-b border-border px-3 py-1">
-          {(["resources", ...(activeArea === "release" ? ["release"] as const : []), "concepts", "guide", "roles", "runs", "settings"] as const).map(item => <Button variant="ghost" size="sm" key={item} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{t(item === "resources" ? "Overview" : item === "release" ? "Verification and delivery" : item === "concepts" ? "Business concepts" : item === "guide" ? "Guided start" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings")}</Button>)}
-        </div>
+        <ContentTabs strict className="px-3" label={t("Project sections")} value={tab} onChange={id => setTab(id as Section)}
+          items={(["resources", ...(activeArea === "release" ? ["release"] as const : []), "concepts", "guide", "roles", "runs", "settings"] as const).map(item => ({ id: item, title: t(item === "resources" ? "Overview" : item === "release" ? "Verification and delivery" : item === "concepts" ? "Business concepts" : item === "guide" ? "Guided start" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings") }))} />
         {tab === "resources" && <div className="flex flex-wrap items-center gap-2 px-4 pt-3 text-xs">
           <strong className="mr-auto">{t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
           {!current && <Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} className="w-full sm:w-56" value={filter} onChange={event => setFilter(event.target.value)} />}
