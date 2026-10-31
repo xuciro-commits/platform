@@ -52,6 +52,7 @@
 | 宿主类型 | `cd capabilities/server && go run ./cmd/api-types`（生成 `web/packages/kernel/src/gen/host.ts`） |
 | Web 检查 | 改动的包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 空白 | `git diff --check` |
+| 全部检查 | `make verify`（静态检查、内核不变量、黄金路径验收；验收自带隔离宿主） |
 
 长命令一律加超时（如 `perl -e 'alarm 400; exec @ARGV' go build ./...`）。
 

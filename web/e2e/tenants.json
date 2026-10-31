@@ -1,0 +1,11 @@
+[
+  {
+    "id": "acceptance",
+    "settings": { "language": "en", "timezone": "UTC", "currency": "USD" },
+    "seats": [
+      { "id": "admin-1", "subjects": ["admin"], "roles": { "platform": "admin", "build": "builder" } },
+      { "id": "builder-1", "subjects": ["builder"], "roles": { "build": "builder" } },
+      { "id": "user-1", "subjects": ["user"], "roles": {} }
+    ]
+  }
+]

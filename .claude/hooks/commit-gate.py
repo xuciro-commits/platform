@@ -91,7 +91,14 @@ def main():
             stale.append(f"{name}: " + ", ".join(hits[:6]) + (" …" if len(hits) > 6 else ""))
     if not stale:
         return 0
-    digest = hashlib.sha256((run(["git", "diff", "HEAD"], root)[1] + "\n".join(sorted(untracked))).encode()).hexdigest()
+    state = hashlib.sha256()
+    for name in sorted(changed):
+        path = os.path.join(root, name)
+        state.update(name.encode() + b"\0")
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                state.update(hashlib.sha256(f.read()).digest())
+    digest = state.hexdigest()
     mark = os.path.join(root, ".git", "claude-doc-gate")
     if os.path.isfile(mark) and open(mark).read() == digest:
         return 0

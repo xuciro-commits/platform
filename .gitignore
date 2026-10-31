@@ -12,3 +12,5 @@ __pycache__/
 capabilities/server/vendor/
 
 web/public/rules/
+web/e2e/test-results/
+web/e2e/playwright-report/
