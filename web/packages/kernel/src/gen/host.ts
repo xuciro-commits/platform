@@ -1795,6 +1795,8 @@ export type DraftChangeField = {
   name: string;
   before?: unknown;
   after?: unknown;
+  removed?: string[];
+  retyped?: string[];
 };
 
 export type Edge = {

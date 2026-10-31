@@ -1,6 +1,7 @@
 package build
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
@@ -473,9 +474,34 @@ type DraftChange struct {
 }
 
 type DraftChangeField struct {
-	Name   string          `json:"name"`
-	Before json.RawMessage `json:"before,omitempty"`
-	After  json.RawMessage `json:"after,omitempty"`
+	Name    string          `json:"name"`
+	Before  json.RawMessage `json:"before,omitempty"`
+	After   json.RawMessage `json:"after,omitempty"`
+	Removed []string        `json:"removed,omitempty"`
+	Retyped []string        `json:"retyped,omitempty"`
+}
+
+func breakingMembers(before, after json.RawMessage) (removed, retyped []string) {
+	type member struct {
+		Name string          `json:"name"`
+		Type json.RawMessage `json:"type"`
+	}
+	var old, next []member
+	if json.Unmarshal(before, &old) != nil || json.Unmarshal(after, &next) != nil {
+		return nil, nil
+	}
+	for _, item := range old {
+		if item.Name == "" {
+			continue
+		}
+		index := slices.IndexFunc(next, func(other member) bool { return other.Name == item.Name })
+		if index < 0 {
+			removed = append(removed, item.Name)
+		} else if len(item.Type) > 0 && !bytes.Equal(item.Type, next[index].Type) {
+			retyped = append(retyped, item.Name)
+		}
+	}
+	return removed, retyped
 }
 
 func CompatibleObjectExpansion(previous, next Object) bool {

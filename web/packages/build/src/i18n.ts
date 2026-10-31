@@ -4329,4 +4329,9 @@ register("zh-CN", {
   "Keep theirs": "保留对方的",
   "Keep mine": "保留我的",
   "Your version is saved over theirs.": "已用你的版本覆盖对方的版本。",
+  "Breaking": "破坏性",
+  "Removes {names}.": "删除了 {names}。",
+  "Changes the type of {names}.": "改变了 {names} 的类型。",
+  "Records, pages and actions that use them may stop working after saving.": "保存后，使用它们的记录、页面与动作可能无法正常工作。",
+  "Selected change": "选中的变更",
 });

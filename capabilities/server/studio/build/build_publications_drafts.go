@@ -102,6 +102,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 						continue
 					}
 					field := DraftChangeField{Name: name}
+					field.Removed, field.Retyped = breakingMembers(before[name], after[name])
 					if typ != "" && id != "" {
 						field.Before, field.After = before[name], after[name]
 					}
