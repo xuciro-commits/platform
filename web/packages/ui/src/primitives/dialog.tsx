@@ -41,7 +41,7 @@ export function OverlayFrame({ open, onOpenChange, title, children, wide, return
         {
 }
         <D.Content data-frame={sheet ? "sheet" : "modal"} {...focus} {...policy} onEscapeKeyDown={event=>{focus.onEscapeKeyDown(event);policy.onEscapeKeyDown(event);}} onCloseAutoFocus={(event) => { if (suspended) event.preventDefault(); else focus.onCloseAutoFocus(event); }}
-          style={sheet ? {width:`min(${width??420}px, 100vw)`,[side]:0} : width===undefined?undefined:{width:`min(${width}px, calc(100vw - 32px))`}}
+          style={sheet ? {width:`min(${width??420}px, 100vw)`,[side]:0} : undefined}
           className={sheet ? `fixed inset-y-0 z-50 flex flex-col ${side==="left"?"border-r":"border-l"} border-border bg-surface shadow-2xl outline-none` : `fixed z-50 left-1/2 top-1/2 flex max-h-[calc(100dvh-32px)] flex-col ${wide ? "w-[min(880px,calc(100vw-32px))]" : "w-[min(480px,calc(100vw-32px))]"} -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-surface p-4 shadow-xl`}>
           <div className={sheet ? "flex h-10 items-center justify-between border-b border-border px-3" : "mb-3 flex items-center justify-between"}>
             <D.Title className="text-base font-semibold">{title}</D.Title>

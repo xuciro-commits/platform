@@ -190,6 +190,6 @@ read-when: 使用或新建一个界面组件，或实现表格、表单、侧窗
 
 ## 现存差距
 
-- 记录类组件（RecordKanban、RecordGantt、RecordMap 等 20 余个）未按 Workshop 组件目录统一；Dialog 存在自定义宽度用法（路线图 P3.14）。
+- 记录类组件（RecordKanban、RecordGantt、RecordMap 等 20 余个）未按 Workshop 组件目录统一（路线图 P3.14）。
 - 条件构建器 M10 与对象集构建器 M11 在各工具中的实现未统一（P3.18）。
 - 差异审阅 M18 缺字段级差异与逐项放弃（P3.1）。

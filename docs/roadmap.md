@@ -20,7 +20,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 ## 下一批
 
-P3.14 Workshop 组件目录统一记录类组件；Dialog 只留 480 与 880 两种宽度。
+P3.4 侧栏收敛：Control Panel 8 项与独立 Markings 分区；Monitoring、Data Connection 去除旧项；项目页移除 Business roles。
 
 ## P2 内核收敛
 
@@ -56,7 +56,7 @@ P3.14 Workshop 组件目录统一记录类组件；Dialog 只留 480 与 880 两
 | P3.11 | 函数编辑提议；查询并入函数或对象集 | 6-domain §6.8 |
 | P3.12 | 分支从 main 更新、合并批准规则 | 6-domain/change §6.20 |
 | P3.13 | Workshop 对象视图模块替换默认对象视图 | 4-interaction §4.3 D |
-| P3.14 | Workshop 组件目录统一记录类组件；Dialog 只留 480 与 880 两种宽度 | 4-interaction/patterns |
+| P3.14 | Workshop 组件目录统一记录类组件 | 4-interaction/patterns |
 | P3.15 | Object Explorer 分面、Search around、保存 | 4-interaction/workbenches |
 | P3.17 | 监听器、对象类型组、监控视图 | 2-product §2.2 |
 | P3.18 | 条件构建器与对象集构建器各一个实现 | 4-interaction/patterns M10、M11 |

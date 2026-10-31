@@ -389,7 +389,7 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
         };
         collect(overlay.root);
         const presentation=overlay.presentation,width=presentation?.size==="custom"?presentation.customWidth:presentation?({small:320,medium:overlay.kind==="drawer"?420:560,large:overlay.kind==="drawer"?560:880} as Record<string,number>)[presentation.size]:undefined;
-        return <Frame width={width} side={presentation?.side as "left"|"right"|undefined} backdrop={presentation?.backdrop} closeOnBackdrop={presentation?.closeOnBackdrop} closeOnEsc={presentation?.closeOnEsc} key={id} open={open} suspended={!viewVisible} title={overlay.title} onOpenChange={(open) => writeState(overlay.openVariable, open)} returnFocus={callers.current[overlay.openVariable]} fallbackFocus={pageFocus.current}>
+        return <Frame width={width} wide={overlay.kind !== "drawer" && (width ?? 0) > 480} side={presentation?.side as "left"|"right"|undefined} backdrop={presentation?.backdrop} closeOnBackdrop={presentation?.closeOnBackdrop} closeOnEsc={presentation?.closeOnEsc} key={id} open={open} suspended={!viewVisible} title={overlay.title} onOpenChange={(open) => writeState(overlay.openVariable, open)} returnFocus={callers.current[overlay.openVariable]} fallbackFocus={pageFocus.current}>
           {open && <OverlayBody session={session} sectionIDs={sections} owner={id}>{queryErrors(id)}{renderNode(overlay.root, new Set(), undefined, id)}</OverlayBody>}
         </Frame>;
       })}
