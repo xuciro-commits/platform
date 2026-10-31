@@ -20,10 +20,10 @@ import {interfaceQueryForSection,pageLayoutDiagnostics} from "@platform/app";
 import { recordPaths } from "../ontology/record-paths";
 import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, pageVariableContract, widgetContract, widgetContracts, useHost, useProvidedCapabilities, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  Button, CanvasEditor, CanvasRegion, Checkbox, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
+  Button, CanvasEditor, CanvasRegion, Checkbox, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, SegmentedChoice, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
-import { Copy, Clipboard, Columns2, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
+import { Copy, Clipboard, Columns2, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, PenLine, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
@@ -62,7 +62,7 @@ type Draft = NonNullable<PageRecord["sections"]>[number];
 const widgets = widgetContracts.map((contract) => contract.componentID);
 const widgetTitles: Record<string, () => string> = Object.fromEntries(widgetContracts.map((contract) => [contract.componentID, () => t(contract.title)]));
 
-type StudioSelection = { kind: "page" | "variables" | "interface" | "queries" } | { kind: "widget" | "container"; id: string };
+type StudioSelection = { kind: "page" | "interface" } | { kind: "widget" | "container"; id: string };
 const emptyDraft = (): PageDraft => ({ sections: [], document: pageDocumentFromSections<Draft>([]).document, selections: [], title: "", description: "" });
 const loadDraft = (record: PageRecord,lookup:(type:string)=>EntityInfo|undefined=()=>undefined, fields: HostApi.FieldInfo[] = []): PageDraft => {
   if(record.format===3){
@@ -132,7 +132,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
     if (selection.kind === "widget" && !sections.some((section) => section.id === selection.id) ||
       selection.kind === "container" && !document.nodes[selection.id]) select({ kind: "page" });
   }, [selection, sections, document]);
-  const chosen = selection.kind === "widget" ? sections.findIndex((section) => section.id === selection.id) : selection.kind === "container" ? -2 : selection.kind === "variables" ? -3 : -1;
+  const chosen = selection.kind === "widget" ? sections.findIndex((section) => section.id === selection.id) : selection.kind === "container" ? -2 : -1;
   const container = selection.kind === "container" ? selection.id : undefined;
   const choose = (index: number) => { select(index < 0 || !sections[index]?.id ? { kind: "page" } : { kind: "widget", id: sections[index]!.id! });  };
   const edit: typeof session.edit = (update, key) => { if (preview) return; setSourceApplied(false); session.edit((old) => {
@@ -155,7 +155,8 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
       if (target.kind === "compatibility") setCompatibilityOpen(true);
       else if (target.kind === "node") canvasSelect(target.id);
       else if (target.kind === "widget") { const at = sections.findIndex(section => section.id === target.id); if (at >= 0) choose(at); }
-      else select({ kind: target.kind });
+      else if (target.kind === "page") select({ kind: "page" });
+      else { select({ kind: "page" }); setLeftTab("data"); setLeftOpen(true); }
     } })),
     ...Object.entries(session.inputProblems).filter(([, problem]) => problem).map(([id, problem]) => ({ id: `form:${id}`, text: problem, subject: id })),
   ];
@@ -288,8 +289,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
       onSelections={(next, rename) => edit((old) => ({ ...old, selections: next, sections: rename ? old.sections.map((s) => ({ ...s, selection: s.selection === rename.from ? rename.to : s.selection, parentSelection: s.parentSelection === rename.from ? rename.to : s.parentSelection })) : old.sections }))}
       onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> },
-    { id: "variables", title: t("Variables"), badge: Object.keys(document.variables ?? {}).length || undefined, content: <VariablesPanel object={objectRef} entity={authoringEntity} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> },
-    { id: "queries", title: t("Queries"), badge: Object.keys(document.queries ?? {}).length || undefined, content: <QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} document={document} object={objectRef} values={variableValues} onChange={(document) => edit({ document })} /> },
     { id: "interface", title: t("Inputs and outputs"), content: <InterfacePanel document={document} object={objectRef} onChange={(document) => edit({ document })} /> },
   ];
   const containerTabs: WorkbenchTab[] = container ? [
@@ -319,10 +318,10 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   }) : [];
   const inspectorTabs = canvasSelection ? widgetTabs : container ? containerTabs : pageTabs;
   const inspectorKey = canvasSelection ? `widget:${canvasSelection.id}` : container ? `container:${container}` : "page";
-  const inspectorValue = selection.kind === "variables" ? "variables" : selection.kind === "queries" ? "queries" : selection.kind === "interface" ? "interface" : inspectorTab[inspectorKey.split(":")[0]!];
+  const inspectorValue = selection.kind === "interface" ? "interface" : inspectorTab[inspectorKey.split(":")[0]!];
   const liveValues = Object.entries(variableValues);
   const crumbs: WorkbenchCrumb[] = module ? [
-    { label: t("Projects"), onClick: () => open({ view: "projects" }) },
+    { label: t("Files"), onClick: () => open({ view: "projects" }) },
     { label: module.project.title || module.project.name, onClick: () => open({ view: "project", params: { id: module.project.id } }) },
     { label: t("Module"), onClick: () => module.openModule() },
   ] : [{ label: t("Pages"), onClick: () => open({ view: "module" }) }];
@@ -331,9 +330,9 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       status={<DraftStatus state={page.state} problems={problemList.length} />} saving={savingState(dirty, saving, refused)}
       history={{ canUndo: session.canUndo && !busy && !preview, canRedo: session.canRedo && !busy && !preview, undo: () => history("undo"), redo: () => history("redo") }}
       actions={<>
-        <ResourceControls showStatus={false} type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} operations={[
-          { id: "preview", label: preview ? t("Exit preview") : t("Preview"), icon: <Play />, run: () => { setPreview(!preview); setCompatibilityOpen(false); select({ kind: "page" }); } },
-        ]} extra={[
+        <SegmentedChoice compact label={t("Editor mode")} value={preview ? "preview" : "edit"} options={[{ value: "edit", label: t("Edit"), icon: <PenLine /> }, { value: "preview", label: t("Preview"), icon: <Play /> }]}
+          onChange={(mode) => { setPreview(mode === "preview"); setCompatibilityOpen(false); select({ kind: "page" }); }} />
+        <ResourceControls showStatus={false} type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} extra={[
           { id: "compatibility", label: t("Review page compatibility…"), disabled: busy || preview, run: () => setCompatibilityOpen(true) },
           ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
         ]} onSave={() => void save()} onCancel={discardChanges} route={canvasRoute} />
@@ -363,12 +362,16 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
             commandsForNode={canvasCommands} />
         </div> },
         { id: "widgets", title: t("Widgets"), content: <WidgetLibrary widgets={widgets} widgetTitles={widgetTitles} onAdd={(widget) => add(widget)} /> },
+        { id: "data", title: t("Variables"), badge: (Object.keys(document.variables ?? {}).length + Object.keys(document.queries ?? {}).length) || undefined, content: <div className="grid content-start">
+          <InspectorSection title={t("Variables")}><VariablesPanel object={objectRef} entity={authoringEntity} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /></InspectorSection>
+          <InspectorSection title={t("Queries")}><QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} document={document} object={objectRef} values={variableValues} onChange={(document) => edit({ document })} /></InspectorSection>
+        </div> },
       ] }}
-      right={preview ? undefined : { label: t("Inspector"), heading: <span className="flex min-w-0 items-center gap-1.5">{canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : container ? <LayoutGlyph kind={document.nodes[container]?.kind ?? "rows"} /> : <Settings2 className="size-3.5 shrink-0" />}<span className="truncate" title={canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}>{canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}</span></span>, scope:inspectorKey,locate:()=>select(selection), value: inspectorValue, onChange: (next) => { if (["variables", "queries", "interface"].includes(next) && !canvasSelection && !container) select({ kind: next as "variables" | "queries" | "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
+      right={preview ? undefined : { label: t("Inspector"), heading: <span className="flex min-w-0 items-center gap-1.5">{canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : container ? <LayoutGlyph kind={document.nodes[container]?.kind ?? "rows"} /> : <Settings2 className="size-3.5 shrink-0" />}<span className="truncate" title={canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}>{canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}</span></span>, scope:inspectorKey,locate:()=>select(selection), value: inspectorValue, onChange: (next) => { if (next === "interface" && !canvasSelection && !container) select({ kind: "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
         tabs: inspectorTabs }}
       dock={{ label: t("Page dock"), tabs: [
         { id: "problems", title: t("Problems"), badge: problemList.length, content: <ProblemList problems={problemList} empty={t("No problems. The page can be published.")} /> },
-        { id: "variables", title: t("Variables"), badge: liveValues.length || undefined, content: <DataTable data={liveValues} getRowId={([name]) => name} searchable={false} height="100%" empty={t("Variables show their live values here once the page renders.")} columns={[
+        { id: "variables", title: t("Live values"), badge: liveValues.length || undefined, content: <DataTable data={liveValues} getRowId={([name]) => name} searchable={false} height="100%" empty={t("Variables show their live values here once the page renders.")} columns={[
           { id: "name", header: t("Variable"), accessorFn: ([name]) => document.variables?.[name]?.title || name, enableSorting: false },
           { id: "type", header: t("Type"), accessorFn: ([name]) => document.variables?.[name]?.type, enableSorting: false },
           { id: "value", header: t("Current value"), accessorFn: ([, value]) => JSON.stringify(value), enableSorting: false },
@@ -401,7 +404,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
           <div data-canvas-scroll className="min-h-[24rem] flex-1 overflow-auto bg-canvas p-4">
             <div className="mx-auto" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, zoom: zoom / 100 }}>
               <ApplicationPage pageRef={{ app: "build", kind: "page", name: page.name }} applicationRef={module ? { app: "build", kind: "app", name: module.project.name } : undefined} route={canvasRoute} preview><ComposedPage modelDraft editingRoot={preview ? undefined : (() => {
-                if (selection.kind === "queries") return queryPreviewOwner ? document.overlays?.[queryPreviewOwner]?.root : undefined;
+                if (leftTab === "data" && queryPreviewOwner) return document.overlays?.[queryPreviewOwner]?.root;
                 const node = container ?? (canvasSelection?.id ? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection.id)?.[0] : undefined);
                 return Object.values(document.overlays ?? {}).find((overlay) => {
                   const includes = (id: string): boolean => id === node || [...(document.nodes[id]?.children ?? []), ...(document.unusedWidgets ?? []).filter((entry) => entry.parent === id).map((entry) => entry.node)].some(includes);

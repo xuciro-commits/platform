@@ -4257,4 +4257,12 @@ register("zh-CN", {
   "New object type": "新建对象类型",
   "Usage and lineage": "使用与血缘",
   "Rules and security": "规则与安全",
+  "State changes and related work are declared in Rules. A state field can use a fixed value or a required choice parameter.": "状态变化与相关工作在“规则”中声明。状态字段可以使用固定值或必填的选项参数。",
+  "Who may take it": "谁可以执行",
+  "Refusals": "拒绝条件",
+  "Define the rules first.": "请先定义规则。",
+  "Other actions on {object}": "{object} 的其他操作",
+  "New action": "新建操作",
+  "Editor mode": "编辑模式",
+  "Live values": "实时值",
 });

@@ -7,11 +7,11 @@ import {RefusalEditor} from "./RefusalEditor";
 import { PayloadFields, SemanticObjectSelect, assetKey, useHost, useRecordInventory, type Definition } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { projectGroup, useProjectIndex } from "../projects/membership";
-import { Button, Card, Checkbox, GroupedList, Input, PageHeader, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
+import { Button, Card, Checkbox, GroupedList, Input, PageHeader, Panel, ProblemList, ResourceNavigation, Select, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { DraftStatus } from "../editor/workbench";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
-import { Boxes, FileInput, ListChecks, Plus, Shield, Trash2, Zap, Blocks } from "lucide-react";
+import { Plus, Shield, Trash2, Zap, Blocks } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { EnterpriseReferenceTypes, Label } from "./process";
@@ -19,15 +19,15 @@ import { actionInputFields, conditionSubjects, inputTypes, nameOf, type Action, 
 import { actionResultEdges } from "./process-rules";
 import { useObjectDraft } from "./object-draft";
 
-type Section = "overview" | "parameters" | "form" | "transaction" | "approval" | "permissions";
+type Section = "overview" | "rules" | "parameters" | "form" | "criteria" | "effects";
 type Pick = { kind: "parameter"; at: number } | undefined;
-const sections: { id: Section; title: () => string; icon: ReactNode }[] = [
-  { id: "overview", title: () => t("Overview"), icon: <Zap /> },
-  { id: "parameters", title: () => t("Parameters"), icon: <FileInput /> },
-  { id: "form", title: () => t("Form"), icon: <ListChecks /> },
-  { id: "transaction", title: () => t("Transaction"), icon: <ListChecks /> },
-  { id: "approval", title: () => t("Approval"), icon: <Shield /> },
-  { id: "permissions", title: () => t("Permissions"), icon: <Shield /> },
+const sections: { id: Section; title: () => string; group?: () => string }[] = [
+  { id: "overview", title: () => t("Overview") },
+  { id: "rules", title: () => t("Rules"), group: () => t("Definition") },
+  { id: "parameters", title: () => t("Parameters"), group: () => t("Definition") },
+  { id: "form", title: () => t("Form"), group: () => t("Definition") },
+  { id: "criteria", title: () => t("Submission criteria"), group: () => t("Behavior") },
+  { id: "effects", title: () => t("Side effects"), group: () => t("Behavior") },
 ];
 
 type ObjectDraft = { id: string; name: string; title: string; state: string; archived?: boolean; actions?: Action[]; states?: { name: string; title: string }[] };
@@ -101,7 +101,6 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
   const problems: WorkbenchProblem[] = issues.map((text, index) => ({ id: `issue:${index}`, text }));
   const inputs = action?.inputs ?? [], subjects = action ? conditionSubjects(process, action, parent, entities) : [];
   const reviewerRoles = [...new Set(["builder", ...process.access.map(access => access.role)])];
-  const stateTitle = (name: string) => process.states.find(state => state.name === name)?.title ?? name;
   const main: Record<Section, ReactNode> = !action ? {} as Record<Section, ReactNode> : {
     overview: <div className="grid max-w-2xl content-start gap-3 p-4">
       <Label text={t("What people call it")}><Input value={action.title} onChange={event => patch({ title: event.target.value })} /></Label>
@@ -109,15 +108,14 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       <Label text={t("What it does")}><Textarea rows={2} value={action.description ?? ""} onChange={event => patch({ description: event.target.value })} /></Label>
       <Checkbox checked={!!action.confirmationOnly} onChange={confirmationOnly=>patch({confirmationOnly})}>{t("Require original confirmation receipt")}</Checkbox>
       {action.confirmationOnly&&<p className="text-xs text-muted">{t("Only the original confirmation can invoke this action. The initiating member still needs current business permissions.")}</p>}
-      <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("Taken from")}</legend><Toggles options={process.states.map(state => ({ value: state.name, label: state.title }))} value={action.from} onChange={from => patch({ from })} /></fieldset>
-      <p className="text-sm text-muted">{t("State changes, rules and related work are declared in Transaction. A state field can use a fixed value or a required choice parameter.")}</p>
-      <div className="grid grid-cols-2 gap-2 text-sm">{([["parameters", inputs.length], ["transaction", action.transaction?.steps.length ?? 0]] as const).map(([id, count]) => <Button key={id} variant="row" className="rounded-md border border-border p-3 text-left" onClick={() => { setSection(id); setPick(undefined); }}><span className="block text-xs text-muted">{sections.find(section => section.id === id)!.title()}</span><span className="text-lg font-semibold">{count}</span></Button>)}</div>
+      <p className="text-sm text-muted">{t("State changes and related work are declared in Rules. A state field can use a fixed value or a required choice parameter.")}</p>
+      <div className="grid grid-cols-2 gap-2 text-sm">{([["rules", action.transaction?.steps.length ?? 0], ["parameters", inputs.length]] as const).map(([id, count]) => <Button key={id} variant="row" className="rounded-md border border-border p-3 text-left" onClick={() => { setSection(id); setPick(undefined); }}><span className="block text-xs text-muted">{sections.find(section => section.id === id)!.title()}</span><span className="text-lg font-semibold">{count}</span></Button>)}</div>
     </div>,
     parameters: <div className="grid content-start gap-2 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Parameters")}</h2><Button size="sm" onClick={() => { patch({ inputs: [...inputs, { name: nameOf("input", inputs.map(input => input.name)), title: t("Input"), type: "text" }] }); setPick({ kind: "parameter", at: inputs.length }); }}><Plus />{t("Add a parameter")}</Button></div>
       {inputs.length ? <ul className="divide-y divide-border rounded-md border border-border">{inputs.map((input, index) => <li key={index}><Button variant="row" aria-pressed={pick?.at === index} className={cn("flex w-full items-center gap-3 px-3 py-2 text-left text-sm", pick?.at === index && "bg-row-selected")} onClick={() => setPick({ kind: "parameter", at: index })}><span className="min-w-0 flex-1 truncate font-medium">{input.title}</span><code className="text-xs text-muted">{input.name}</code><span className="text-xs text-muted">{t(input.type)}{input.required ? " *" : ""}</span></Button></li>)}</ul> : <p className="text-sm text-muted">{t("No parameters. People take the action with no form.")}</p>}
     </div>,
     form: <div className="grid max-w-xl content-start gap-3 p-4"><p className="text-xs text-muted">{t("The form as people will see it. Nothing here is saved or taken.")}</p><Card className="grid gap-2 p-3"><h3 className="text-sm font-semibold">{action.title}</h3>{action.description && <p className="text-sm text-muted">{action.description}</p>}<div className="flex flex-wrap gap-1">{inputs.map((input, at) => <Button key={input.name} size="sm" onClick={() => setPick({ kind: "parameter", at })}>{input.title}</Button>)}</div><FormPreview key={JSON.stringify(inputs)} inputs={inputs} />{action.transaction?.message && <p className="text-xs text-muted">{action.transaction.message}</p>}<Button variant="primary" size="sm" className="w-fit" disabled>{action.title}</Button></Card></div>,
-    transaction: <div className="grid min-w-0 max-w-4xl content-start gap-3 p-4"><h2 className="text-sm font-semibold">{t("Transaction")}</h2>
+    rules: <div className="grid min-w-0 max-w-4xl content-start gap-3 p-4"><h2 className="text-sm font-semibold">{t("Rules")}</h2>
       {action.transaction ? <TransactionEditor value={action.transaction} onChange={transaction => patch({ transaction })} process={process} inputs={inputs} roles={reviewerRoles} /> : <Button className="w-fit" onClick={() => patch({ transaction: { subject: parent, steps: [{ name: "update", kind: "update", target: { type: parent, id: "$subject" }, changes: [] }] } })}>{t("Define transaction")}</Button>}
  <Checkbox checked={!!action.adoption} disabled={!action.transaction} onChange={enabled=>patch({adoption:enabled?{function:{app:"build",name:"",version:0},input:"proposal",mapping:[]}:undefined,inputs:enabled&&!inputs.some(input=>input.name==="proposal")?[...inputs,{name:"proposal",title:t("Retained proposal"),type:"reference",ref:"build.function-call",required:true}]:inputs})}>{t("Adopt an AI proposal")}</Checkbox>
  {action.adoption&&<div className="grid gap-2 rounded border border-border p-3">
@@ -130,19 +128,26 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
  </div>}
 
 
-      {action.transaction && <>
+    </div>,
+    criteria: <div className="grid min-w-0 max-w-4xl content-start gap-4 p-4 text-sm"><h2 className="text-sm font-semibold">{t("Submission criteria")}</h2>
+      <fieldset className="grid gap-1 text-xs"><legend className="mb-1 font-semibold">{t("Taken from")}</legend><Toggles options={process.states.map(state => ({ value: state.name, label: state.title }))} value={action.from} onChange={from => patch({ from })} /></fieldset>
+      <section className="grid gap-2 border-t border-border pt-3"><h3 className="text-xs font-semibold">{t("Who may take it")}</h3>{roles.length ? <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("Taken by")}</legend><Toggles options={roles.map(role => ({ value: role, label: role }))} value={action.roles ?? []} onChange={roles => patch({ roles: roles.length ? roles : undefined })} /><p className="text-muted">{t("None chosen: every role that may read the object. The builder always may.")}</p></fieldset> : <p className="text-muted">{t("The object has no roles yet; only builders may take this action.")}</p>}<Button size="sm" className="w-fit" onClick={() => open({ view: "object-type", params: { id, tab: "permissions" } })}><Shield />{t("Edit the object's roles")}</Button></section>
+      <section className="grid gap-2 border-t border-border pt-3"><h3 className="text-xs font-semibold">{t("Approval")}</h3><Checkbox checked={!!action.approval} onChange={enabled => patch({ approval: enabled ? { pending: "", levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }] } : undefined })}>{t("Wait for approval")}</Checkbox>
+      {action.approval && <><p className="text-xs text-muted">{t("Business records stay unchanged while approval waits. After the final approval, the transaction runs with the requester's current permissions.")}</p>
+        <Rows<ApproverLevel> title={t("Approver levels, in order")} add={t("Add a level")} items={action.approval.levels} make={() => ({ title: t("Approver"), role: approverRoles[0] ?? "builder" })} onChange={levels => patch({ approval: { ...action.approval!, levels } })} row={(level, set) => <><Label text={t("What this level is called")}><Input value={level.title} onChange={event => set({ title: event.target.value })} /></Label><Label text={t("Approver role")}><Select value={level.role} onChange={event => set({ role: event.target.value })}>{approverRoles.map(role => <option key={role}>{role}</option>)}</Select></Label><Checkbox checked={!!level.all} onChange={all => set({ all })}>{t("Everyone in the role must approve")}</Checkbox></>} /></>}
+</section>
+      {action.transaction && <section className="grid gap-2 border-t border-border pt-3"><h3 className="text-xs font-semibold">{t("Refusals")}</h3>
+        <RefusalEditor value={action.transaction} onChange={transaction => patch({ transaction })} choices={subjects} actions={process.actions.filter(candidate => candidate.name !== action.name && candidate.transaction && !candidate.approval && !candidate.adoption).map(candidate => candidate.name)} entities={entities} roles={reviewerRoles} />
+      </section>}
+    </div>,
+    effects: <div className="grid min-w-0 max-w-4xl content-start gap-3 p-4"><h2 className="text-sm font-semibold">{t("Side effects")}</h2>
+      {action.transaction ? <>
         <ConfirmationEditor value={action.transaction.confirmation} onChange={confirmation => patch({ transaction: { ...action.transaction!, confirmation } })} actions={process.actions.filter(candidate => candidate.name !== action.name).map(candidate => candidate.name)} roles={reviewerRoles} inputs={inputs} />
         <DispatchEditor value={action.transaction.dispatch} onChange={dispatch => patch({ transaction: { ...action.transaction!, dispatch } })} commands={process.dispatchCommands ?? []}
           onCommandsChange={(dispatchCommands, rename) => change({ ...process, dispatchCommands: dispatchCommands.map(command => rename && command.compensate === rename.before ? { ...command, compensate: rename.after } : command), actions: rename ? process.actions.map(candidate => candidate.transaction?.dispatch?.command === rename.before ? { ...candidate, transaction: { ...candidate.transaction, dispatch: { ...candidate.transaction.dispatch, command: rename.after } } } : candidate) : process.actions })}
           object={parent} fields={process.fields} choices={[{ value: "input.$subject", label: t("Subject record ID"), type: "reference", ref: parent }, ...subjects]} roles={reviewerRoles} />
-        <RefusalEditor value={action.transaction} onChange={transaction => patch({ transaction })} choices={subjects} actions={process.actions.filter(candidate => candidate.name !== action.name && candidate.transaction && !candidate.approval && !candidate.adoption).map(candidate => candidate.name)} entities={entities} roles={reviewerRoles} />
-      </>}
+      </> : <p className="text-sm text-muted">{t("Define the rules first.")}</p>}
     </div>,
-    approval: <div className="grid max-w-xl content-start gap-3 p-4 text-sm"><Checkbox checked={!!action.approval} onChange={enabled => patch({ approval: enabled ? { pending: "", levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }] } : undefined })}>{t("Wait for approval")}</Checkbox>
-      {action.approval && <><p className="text-xs text-muted">{t("Business records stay unchanged while approval waits. After the final approval, the transaction runs with the requester's current permissions.")}</p>
-        <Rows<ApproverLevel> title={t("Approver levels, in order")} add={t("Add a level")} items={action.approval.levels} make={() => ({ title: t("Approver"), role: approverRoles[0] ?? "builder" })} onChange={levels => patch({ approval: { ...action.approval!, levels } })} row={(level, set) => <><Label text={t("What this level is called")}><Input value={level.title} onChange={event => set({ title: event.target.value })} /></Label><Label text={t("Approver role")}><Select value={level.role} onChange={event => set({ role: event.target.value })}>{approverRoles.map(role => <option key={role}>{role}</option>)}</Select></Label><Checkbox checked={!!level.all} onChange={all => set({ all })}>{t("Everyone in the role must approve")}</Checkbox></>} /></>}
-    </div>,
-    permissions: <div className="grid max-w-xl content-start gap-3 p-4 text-sm">{roles.length ? <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("Taken by")}</legend><Toggles options={roles.map(role => ({ value: role, label: role }))} value={action.roles ?? []} onChange={roles => patch({ roles: roles.length ? roles : undefined })} /><p className="text-muted">{t("None chosen: every role that may read the object. The builder always may.")}</p></fieldset> : <p className="text-muted">{t("The object has no roles yet; only builders may take this action.")}</p>}<Button size="sm" className="w-fit" onClick={() => open({ view: "object-type", params: { id, tab: "permissions" } })}><Shield />{t("Edit the object's roles")}</Button></div>,
   };
   const inspector = action && pick && inputs[pick.at] ? <div className="p-2"><RowCard title={t("Parameter")} onRemove={() => { patch({ inputs: inputs.filter((_, index) => index !== pick.at) }); setPick(undefined); }}><ParameterEditor input={inputs[pick.at]!} inputs={inputs} entities={entities} onChange={change => patch({ inputs: inputs.map((input, index) => index === pick.at ? { ...input, ...change } : input) })} /></RowCard></div> : <p className="p-3 text-xs text-muted">{t("Select a row to edit it here.")}</p>;
   return <Workbench storageKey="action-type" title={action?.title || t("Action type")}
@@ -150,9 +155,15 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
     status={<DraftStatus state={object.state} problems={issues.length} />} saving={savingState(dirty, busy, refused)}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setPick(undefined); }, redo: () => { session.redo(); setPick(undefined); } }}
     actions={<ResourceControls showStatus={false} type="build.object" record={object} dirty={dirty} busy={busy} invalid={draft.issues.length > 0} onSave={() => void draft.perform(draft.save)} onCancel={discardChanges} route={{ view: "action-type", params: { id, action: name ?? "" } }} />}
-    left={{ label: t("Action structure"), content: <div className="grid min-w-0 content-start"><PanelSection title={object.title} actions={<Button size="sm" variant="ghost" aria-label={t("Add an action")} disabled={!process.states.length} onClick={addAction}><Plus /></Button>}><StructureRow icon={<Boxes />} label={t("Object type")} onClick={() => open({ view: "object-type", params: { id } })} />{process.actions.map(action => <StructureRow key={action.name} depth={1} icon={<Zap />} label={action.title || action.name} meta={action.from.map(stateTitle).join(", ")} selected={action.name === name} onClick={() => { setName(action.name); setPick(undefined); }} />)}{!process.actions.length && <p className="px-2 text-xs text-muted">{t("No actions yet.")}</p>}</PanelSection>{action && <PanelSection title={t("Sections")}>{sections.map(item => <StructureRow key={item.id} icon={item.icon} label={item.title()} selected={item.id === section} onClick={() => { setSection(item.id); setPick(undefined); }} meta={item.id === "parameters" ? String(inputs.length) : item.id === "transaction" ? String(action.transaction?.steps.length ?? 0) : item.id === "approval" && action.approval ? "✓" : undefined} />)}</PanelSection>}</div> }}
     right={{ label: t("Action inspector"), scope: JSON.stringify([at, pick]), locate: path => { const scope = path?.split("/").find(part => part.startsWith("[")); setPick(scope ? (JSON.parse(scope) as [number, Pick])[1] : pick); }, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Action dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The action can be published with its object type.")} /> }] }}>
+    <ResourceNavigation back={{ label: t("Action types"), onClick: () => open({ view: "action-type" }) }} title={action?.title || t("Action type")} icon={<Zap />} meta={action ? `build.${object.name}.${action.name}` : object.title}
+      sections={[
+        ...(action ? sections.map(item => ({ id: item.id, label: item.title(), group: item.group?.(), badge: item.id === "parameters" ? inputs.length || undefined : item.id === "rules" ? action.transaction?.steps.length || undefined : undefined })) : []),
+        ...process.actions.filter(other => other.name !== name).map(other => ({ id: `action:${other.name}`, label: other.title || other.name, icon: <Zap />, group: t("Other actions on {object}", { object: object.title }) })),
+        ...(process.states.length ? [{ id: "new-action", label: t("New action"), icon: <Plus />, group: t("Other actions on {object}", { object: object.title }) }] : []),
+      ]}
+      value={section} onChange={next => { if (next === "new-action") addAction(); else if (next.startsWith("action:")) { setName(next.slice(7)); setSection("overview"); } else setSection(next as Section); setPick(undefined); }} />
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
     {action ? <StructuredEditor expectedRevision={draft.structured.expectedRevision} fieldInput={sourceFieldInput} value={{ ...action }} fields={draft.structured.fields.find(field => field.name === "actions")?.fields} scope={`build.object:${id}:action:${name}`} disabled={busy || blocked} onTrial={next => draft.structured.onTrial({ ...process, actions: process.actions.map((item, index) => index === at ? next as Action : item) })} onChange={next => { change({ ...process, actions: process.actions.map((item, index) => index === at ? next as Action : item) }); if (typeof next.name === "string") setName(next.name); }}><fieldset disabled={busy || blocked} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[section]}</fieldset></StructuredEditor> : <WorkbenchMessage>{process.actions.length ? t("Choose an action on the left.") : t("This object type has no actions yet.")}</WorkbenchMessage>}
   </Workbench>;

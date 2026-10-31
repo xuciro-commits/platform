@@ -109,6 +109,16 @@ export function ResourceNavigation({ back, title, icon, meta, sections, value, o
   </div>, target);
 }
 
+export function ResourceSections({ items, value, onChange, ...navigation }: Omit<Parameters<typeof ResourceNavigation>[0], "sections"> & {
+  items: (Omit<ResourceSection, "label"> & { title: string; content: ReactNode })[];
+}) {
+  const active = items.find(item => item.id === value) ?? items[0];
+  return <>
+    <ResourceNavigation {...navigation} sections={items.map(({ content: _content, title, ...item }) => ({ ...item, label: title }))} value={active?.id ?? ""} onChange={onChange} />
+    {active?.content}
+  </>;
+}
+
 export function useViewTitle(name?: string) {
   const api = useContext(WorkspaceContext);
   const panel = useContext(PanelContext);
@@ -320,6 +330,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   });
   const remember = useCallback((change: (m: Memory) => Memory) => setMemory((m) => {
     const next = change(m);
+    if (next === m) return m;
     try { localStorage.setItem(navKey, JSON.stringify(next)); } catch {   }
     return next;
   }), [navKey]);
@@ -413,7 +424,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     retitle: (id, name) => {
       setTitles(previous => previous[id] === name ? previous : { ...previous, [id]: name });
       const route = routeOf(id);
-      if (route && stackRef.current.at(-1)?.id === id) remember(m => ({ ...m, recent: m.recent.map(entry => keyOf(entry.route) === keyOf(route) ? { ...entry, title: name } : entry) }));
+      if (route && stackRef.current.at(-1)?.id === id) remember(m => m.recent.some(entry => keyOf(entry.route) === keyOf(route) && entry.title !== name) ? { ...m, recent: m.recent.map(entry => keyOf(entry.route) === keyOf(route) ? { ...entry, title: name } : entry) } : m);
     },
     recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail, sidebarSlot, claimSidebar, activePanel: stack.at(-1)?.id,
   }), [open, close, guard, allPanels, forget, setSide, goHome, unsaved, routeOf, setStack, remember, keyOf, memory, toggleFavorite, applications, rail, sidebarSlot, claimSidebar, stack]);

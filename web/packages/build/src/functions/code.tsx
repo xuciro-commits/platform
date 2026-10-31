@@ -1,5 +1,6 @@
 import { sourceFieldInput } from "@platform/app";
-import { ContentTabs, ContextHelp, StructuredEditor } from "@platform/ui";
+import { ContextHelp, ResourceSections, StructuredEditor } from "@platform/ui";
+import { Braces } from "lucide-react";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -122,7 +123,7 @@ export function CodeEditor({ id }: { id: string }) {
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <StructuredEditor expectedRevision={draft.id ? branch ? mainRevision : draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.code:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setDirty(true); setError(""); setSDK(""); }} onTrial={next => trial(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: draft.id || createID }, next, draft.id ? branch ? mainRevision : draft.revision : 0)}><fieldset disabled={busy} className="grid min-w-0 gap-3 border-0 p-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-3 p-4">
-        <ContentTabs label={t("Code function editor")} value={tab} onChange={(id) => setTab(id as typeof tab)} items={[
+        <ResourceSections back={{ label: t("Functions"), onClick: () => open({ view: "functions" }) }} title={draft.title || t("Code function")} icon={<Braces />} meta={draft.name} value={tab} onChange={(id) => setTab(id as typeof tab)} items={[
           { id: "source", title: t("Source code"), content: <>
           <ContextHelp title={t("Source code")}><p className="text-xs text-muted">{t("Implement Run(input Input) (Output, error). The SDK generates the command wrapper from your schema.")}</p></ContextHelp>
           <label className="grid gap-1 text-xs">{t("Source code")}<Textarea spellCheck={false} rows={22} className="font-mono text-xs leading-6" value={draft.source} onChange={(event) => change({ source: event.target.value })} /></label>

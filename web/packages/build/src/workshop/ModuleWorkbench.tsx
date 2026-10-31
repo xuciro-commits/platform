@@ -12,7 +12,7 @@ import { useDraftSession } from "../session/DraftSession";
 import { useDraftRecord } from "../branches/draft-record";
 import { readDraftIdentity } from "../branches/identity";
 import { useDraftInventory } from "../branches/records";
-import { DraftStatus, savingState, useAutoSave, WorkbenchMessage } from "../editor/workbench";
+import { DraftStatus, ResourceControls, savingState, useAutoSave, WorkbenchMessage } from "../editor/workbench";
 import type { Project } from "../projects/project";
 import { PageEditor } from "./editor";
 import { HeaderEditor } from "./HeaderEditor";
@@ -72,7 +72,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const declarationFields = source.entity("build.app")?.fields ?? [], trial = useActionTrial();
   const [sourceApplied, setSourceApplied] = useState(false);
   const { open } = useWorkspace();
-  const { query, scope, branch, mainRevision, publishRefusal } = useDraftRecord<Project>("build.app", id);
+  const { query, scope, branch, mainRevision } = useDraftRecord<Project>("build.app", id);
   const project = query.data?.record;
   const pageRecords = useDraftInventory<PageRecord>("build.page");
   const session = useDraftSession<ModuleDraft>({ pages: [], groups: [], title: "" }, `${id}:${scope}`);
@@ -198,15 +198,12 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const tabs: { id: ModuleFocus; title: string }[] = [{ id: "navigation", title: t("Navigation") }, { id: "header", title: t("Header") }, { id: "variables", title: t("Variables") }, { id: "queries", title: t("Queries") }, { id: "settings", title: t("Settings") }];
   const previewPage = pages[0]?.name ?? "";
   return <>
-    <Workbench storageKey="module" crumbs={[{ label: t("Projects"), onClick: () => open({ view: "projects" }) }, { label: project.title || project.name, onClick: () => open({ view: "project", params: { id: project.id } }) }]} title={t("Module")}
+    <Workbench storageKey="module" crumbs={[{ label: t("Files"), onClick: () => open({ view: "projects" }) }, { label: project.title || project.name, onClick: () => open({ view: "project", params: { id: project.id } }) }]} title={t("Module")}
       status={<DraftStatus state={project.state} problems={problems.filter((problem) => problem.severity !== "info").length} />} saving={savingState(dirty, saving, error)}
       history={{ canUndo: !saving && !createdPage && session.canUndo, canRedo: !saving && !createdPage && session.canRedo, undo: session.undo, redo: session.redo }}
-      actions={<>
-        {canEdit && <Button size="sm" disabled={!dirty || saving || !!createdPage || invalid} onClick={() => void save()}>{t("Save")}</Button>}
-        <Button size="sm" variant="ghost" disabled={saving} onClick={reload}>{t("Reload current module")}</Button>
-        {canEdit && <Button size="sm" disabled={saving || !!createdPage || invalid || !createPage.available} onClick={addPage}><Plus />{t("New page")}</Button>}
-        {canEdit && <Button size="sm" variant="primary" disabled={!pages.length || dirty || saving || !!createdPage || invalid || !!branch} title={branch ? publishRefusal : undefined} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id } })}>{t("Publish")}</Button>}
-      </>}
+      actions={<ResourceControls showStatus={false} autosave={false} type="build.app" record={canEdit ? project : undefined} dirty={dirty} busy={saving || !!createdPage} invalid={invalid}
+        operations={canEdit ? [{ id: "new-page", label: t("New page"), icon: <Plus />, disabled: !createPage.available, run: addPage }] : []}
+        onSave={canEdit ? () => void save() : undefined} onReload={reload} route={{ view: "module", params: { id: project.id } }} />}
       left={{ label: t("Module structure"), content: <ModuleTree context={context} focus={focus} onFocus={setFocus} /> }}
       right={{ label: t("Module inspector"),scope:focus, tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: <fieldset disabled={!canEdit || saving || !!createdPage} className="contents">{inspector[tab.id]}</fieldset> })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
       dock={{ label: t("Module dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
