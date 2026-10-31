@@ -403,7 +403,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             {retireIntent.refusal ? <p role="alert" className="text-xs text-danger">{humanizeKernelError(retireIntent.refusal)}</p> : !retireBusy && retireIntent.attempted && <p role="alert" className="text-xs text-warning">{t("The previous retirement request was not confirmed. Retry its original key and list before leaving or choosing a different batch.")}</p>}
             <div className="flex justify-end gap-2">
               <Button size="sm" onClick={() => rememberRetirement(undefined)} disabled={retireBusy || !!retireIntent.attempted && !retireIntent.refusal}>{t("Discard and reselect")}</Button>
-              <Button size="sm" variant="danger" disabled={retireBusy || !!retireIntent.refusal} onClick={() => void retire()}>{retireBusy ? t("Retiring…") : t("Retire them")}</Button>
+              <Button size="sm" variant="danger" loading={retireBusy} disabled={!!retireIntent.refusal} onClick={() => void retire()}>{t("Retire them")}</Button>
             </div>
           </div>
         </Dialog>}

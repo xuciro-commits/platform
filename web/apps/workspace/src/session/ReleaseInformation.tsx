@@ -10,7 +10,7 @@ export function ReleaseInformation({ query, open, onOpenChange }: { query: UseQu
           <code className="select-all break-all rounded-sm bg-background p-3 text-xs">{query.data.id}</code> : <p>{t("No activated release")}</p>}
       <p className="text-xs text-muted">{t("This identifies the last activated release. Existing workflows keep their startup release.")}</p>
       <p className="text-xs text-muted">{t("Direct installs may change workspace definitions outside this release.")}</p>
-      <Button disabled={query.isFetching} onClick={() => void query.refetch()}>{query.isFetching ? t("Checking release…") : t("Refresh release")}</Button>
+      <Button loading={query.isFetching} onClick={() => void query.refetch()}>{t("Refresh release")}</Button>
     </div>
   </Dialog>;
 }

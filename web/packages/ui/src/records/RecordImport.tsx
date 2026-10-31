@@ -44,14 +44,12 @@ export function RecordImportDialog({ source, type, open, onOpenChange, onImporte
             {refused.slice(0, 20).map((row, index) => <li key={index} className="break-words">{t("Row {row} ({id}): {reason}", { row: row.row, id: row.id, reason: row.error?.detail ?? row.error?.message ?? row.outcome })}</li>)}
           </ul>}
           <div className="flex gap-2">
-            <Button size="sm" variant="primary" disabled={busy || refused.length === preview.length} onClick={() => void run(true)}>{import_button_label(busy, preview.length - refused.length)}</Button>
+            <Button size="sm" variant="primary" loading={busy} disabled={refused.length === preview.length} onClick={() => void run(true)}>{t("Import {ok} rows", { ok: preview.length - refused.length })}</Button>
             <Button size="sm" variant="ghost" onClick={() => void run(false)}>{t("Check again")}</Button>
           </div>
         </div>;
       })()}
-      {csv !== undefined && !preview && <Button size="sm" disabled={busy} onClick={() => void run(false)}>{busy ? t("Checking…") : t("Check rows")}</Button>}
+      {csv !== undefined && !preview && <Button size="sm" loading={busy} onClick={() => void run(false)}>{t("Check rows")}</Button>}
     </div>
   </Dialog>;
 }
-
-const import_button_label = (busy: boolean, ok: number) => busy ? t("Importing…") : t("Import {ok} rows", { ok });

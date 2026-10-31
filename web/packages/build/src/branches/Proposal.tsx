@@ -93,7 +93,7 @@ export function ProposalScreen({ id }: { id: string }) {
           </div>}
           {branch.state === "proposed" && <Button size="sm" variant="ghost" className="mt-2" disabled={!!busy} onClick={() => void run("withdraw", () => actions.withdraw(id))}>{t("Withdraw proposal")}</Button>}
         </Panel>}
-        {(branch.state === "open" || branch.state === "proposed") && <Panel title={t("Checks")} actions={<Button size="sm" variant="ghost" disabled={!!busy} onClick={() => void run("check", () => actions.recheck(id, { resolutions: resolved() }))}>{busy === "check" ? t("Checking…") : t("Re-check")}</Button>}>
+        {(branch.state === "open" || branch.state === "proposed") && <Panel title={t("Checks")} actions={<Button size="sm" variant="ghost" loading={busy === "check"} disabled={!!busy} onClick={() => void run("check", () => actions.recheck(id, { resolutions: resolved() }))}>{t("Re-check")}</Button>}>
           {branch.check ? <CheckSummary check={branch.check} titles={titles} stale={branch.checkStale} /> : <p role="status" className="text-xs text-muted">{t("No check has been recorded for this branch yet.")}</p>}
         </Panel>}
         {(branch.state === "proposed" || branch.state === "merged") && <Panel title={t("Merge")}>
@@ -102,7 +102,7 @@ export function ProposalScreen({ id }: { id: string }) {
             {result?.candidateError && <Notice tone="warning" message={result.candidateError} />}
             {(result?.candidate ?? branch.merge?.candidate) && <Button size="sm" onClick={() => open({ view: "release-review", params: { candidate: result?.candidate ?? branch.merge!.candidate! } })}>{t("Open the release candidate")}</Button>}
           </div> : <div className="grid gap-2">
-            <Button variant="primary" disabled={!!busy || !!block} title={block} onClick={() => void run("merge", async () => { const done = await actions.merge(id, { resolutions: resolved() }); setResult(done); notify.success(t("Merged. Activate the release candidate to publish.")); })}>{busy === "merge" ? t("Merging…") : t("Merge")}</Button>
+            <Button variant="primary" loading={busy === "merge"} disabled={!!busy || !!block} title={block} onClick={() => void run("merge", async () => { const done = await actions.merge(id, { resolutions: resolved() }); setResult(done); notify.success(t("Merged. Activate the release candidate to publish.")); })}>{t("Merge")}</Button>
             {block && <p role="status" className="break-words text-xs text-muted">{block}</p>}
           </div>}
         </Panel>}

@@ -36,8 +36,8 @@ export function Recovery({ client, token, tenant }: { client: EdgeClient; token:
       {health.error && <p role="alert">{t("Only a tenant administrator can view recovery diagnostics and retry.")}</p>}
       {!maintenance && <p>{t("Repair the underlying journal or restore a valid backup before retrying. Recovery rebuilds this tenant from its durable history without restarting healthy tenants.")}</p>}
       {failure && <p role="alert" className="break-all text-danger">{failure}</p>}
-      {!maintenance && !health.error && <Button disabled={retrying || !health.data} onClick={() => void retry()}>
-        {retrying ? t("Recovering…") : t("Retry recovery")}
+      {!maintenance && !health.error && <Button loading={retrying} disabled={!health.data} onClick={() => void retry()}>
+        {t("Retry recovery")}
       </Button>}
     </Card>
   </main>;
@@ -50,7 +50,7 @@ export function SignInProblem({ problem, email, signingOut, error, onSignOut }: 
       {email && <>
         <p className="text-sm text-muted">{t("Sign out and sign in with an account that belongs to this host.")}</p>
         {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-        <Button disabled={signingOut} onClick={onSignOut}>{signingOut ? t("Signing out…") : t("Sign out and switch account")}</Button>
+        <Button loading={signingOut} onClick={onSignOut}>{t("Sign out and switch account")}</Button>
       </>}
     </Card>
   </main>;

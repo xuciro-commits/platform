@@ -183,7 +183,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
       </StructuredEditor>
       <div className="mt-1 flex justify-end gap-2">
         {onCancel && <Button onClick={() => confirmOwnDiscard(onCancel)} disabled={isSubmitting}>{t("Cancel")}</Button>}
-        <Button type="submit" variant="primary" disabled={isSubmitting||submitDisabled||inputs?.invalid}>{isSubmitting ? t("Saving…") : submitLabel}</Button>
+        <Button type="submit" variant="primary" loading={isSubmitting} disabled={submitDisabled||inputs?.invalid}>{submitLabel}</Button>
       </div>
     </form>
   );

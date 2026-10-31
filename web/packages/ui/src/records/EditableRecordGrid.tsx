@@ -56,7 +56,7 @@ export function EditableRecordGrid({data,columns,entity,height,rowHeight,showToo
    onRowClick={editing?undefined:selectionSet||onOpen?choose:undefined} cellAccess={(record,name)=>port?.access?.[record.id]?.[name]} onCellEdit={editing&&!busy&&!review&&port?.enabled!==false?stage:undefined} loading={loading} empty={empty}
    toolbar={port&&(showToolbar||editing)?(editing?<>
      <Button size="sm" variant={editing?"ghost":undefined} aria-pressed={editing} onClick={()=>{confirmDiscard(()=>{if(!port.alwaysEditing)setEditing(false);setRows(emptyRows());setNotice("");});}}>{t("Finish editing")}</Button>
-     <Button size="sm" variant="primary" disabled={busy||port.preview||port.enabled===false||Object.keys(rows).length===0} onClick={()=>{if(port.confirmation){reviewedRows.current=structuredClone(rows);setReview(true);}else void submit();}}>{busy?t("Submitting…"):t("Submit cell edits")}</Button>
+     <Button size="sm" variant="primary" loading={busy} disabled={port.preview||port.enabled===false||Object.keys(rows).length===0} onClick={()=>{if(port.confirmation){reviewedRows.current=structuredClone(rows);setReview(true);}else void submit();}}>{t("Submit cell edits")}</Button>
      <span className="text-xs text-muted">{t("{count} rows staged",{count:Object.keys(rows).length})}</span>
    </>:<>
      <Button size="sm" aria-pressed={false} onClick={()=>setEditing(true)}><Pencil aria-hidden className="size-3.5"/>{t("Edit cells")}</Button>

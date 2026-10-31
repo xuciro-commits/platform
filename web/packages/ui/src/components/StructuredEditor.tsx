@@ -80,7 +80,7 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
     </div>}
     {!readOnly&&<div className="flex shrink-0 flex-wrap gap-2">
       <Button size="sm" disabled={disabled||running} onClick={()=>{setMessage('');const next=mode==='source'?parse():value;if(!next)return;const found=check(next);setIssues(found);if(!found.length)setMessage(t('Input checks passed. Business rules have not been run.'));}}>{t('Check inputs')}</Button>
-      {onTrial&&<Button size="sm" disabled={disabled||running||!!input.problem} onClick={async()=>{const found=check(value);setIssues(found);if(found.length)return;const captured=signature;setRunning(true);try{const result=await onTrial(value);if(latest.current===captured)setTrial({signature:captured,result});}catch(error){if(latest.current===captured)setMessage(error instanceof Error?error.message:String(error));}finally{setRunning(false);}}}>{t(running?'Trying…':'Try operation')}</Button>}
+      {onTrial&&<Button size="sm" loading={running} disabled={disabled||!!input.problem} onClick={async()=>{const found=check(value);setIssues(found);if(found.length)return;const captured=signature;setRunning(true);try{const result=await onTrial(value);if(latest.current===captured)setTrial({signature:captured,result});}catch(error){if(latest.current===captured)setMessage(error instanceof Error?error.message:String(error));}finally{setRunning(false);}}}>{t('Try operation')}</Button>}
     </div>}
     {input.problem&&<p role="alert" className="break-words text-sm text-danger">{input.problem}</p>}
     {!!issues.length&&<ul role="alert" className="grid gap-1 text-sm text-danger">{issues.map((issue,index)=><li key={index}>{issue.path.join('.')}: {issue.message}</li>)}</ul>}

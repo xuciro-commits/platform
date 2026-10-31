@@ -44,7 +44,7 @@ export function PackageSources({ items, reviewOnly = false, inspectPath = "/v1/p
       </Select></label>
       {source === "existing" ? <p className="text-sm">{t(items.length ? "Available packages are listed below. Choose an exact version and review its requirements before installing." : "This library is empty. Download a package or import a local file to begin.")}</p> : <>
         {source === "online" ? <label className="grid gap-1 text-sm">{t("Package URL")}<Input aria-label={t("Package URL")} type="url" placeholder="https://example.com/package.json" value={address} disabled={busy || !!preview} onChange={event => setAddress(event.target.value)} /><span className="text-xs text-muted">{t("Use a direct HTTPS link to a platform package JSON file. Website pages and arbitrary plugin code are not supported.")}</span></label> : <label className="grid gap-1 text-sm">{t("Package file")}<Input aria-label={t("Package file")} type="file" accept=".json,application/json" disabled={busy || !!preview} onChange={event => setFile(event.target.files?.[0])} /><span className="text-xs text-muted">{t("A platform package descriptor JSON file, up to 96 MiB. Secrets belong in Credentials, never in a package.")}</span></label>}
-        {!preview && <div><Button disabled={busy || (source === "online" ? !address.trim() : !file)} onClick={() => void inspect()}>{t(busy ? "Inspecting package…" : "Review package")}</Button></div>}
+        {!preview && <div><Button loading={busy} disabled={(source === "online" ? !address.trim() : !file)} onClick={() => void inspect()}>{t("Review package")}</Button></div>}
       </>}
       {reviewOnly && <p className="text-sm text-muted">{t("Maintenance review cannot install or activate a package. Restore trusted implementations here; use Packages after business access resumes.")}</p>}
       {preview && <div className="grid min-w-0 gap-3 border-t pt-3">
@@ -55,7 +55,7 @@ export function PackageSources({ items, reviewOnly = false, inspectPath = "/v1/p
         {preview.precheck.problems?.map(problem => <p key={problem} className="text-sm text-[var(--tone-warning)]">{problem}</p>)}
         {!preview.precheck.ok && <p className="text-sm">{t("This version cannot be installed here. Install its dependencies or obtain a compatible package.")}</p>}
         <Disclosure summary={t("Inspect all package contents")}><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(preview.descriptor, null, 2)}</pre></Disclosure>
-        <div className="flex flex-wrap gap-2">{!reviewOnly && <Button variant="primary" disabled={busy} onClick={() => void add()}>{t(busy ? "Adding…" : "Add reviewed version to library")}</Button>}<Button disabled={busy || !!pending.current} onClick={() => setPreview(undefined)}>{t("Choose another source")}</Button></div>
+        <div className="flex flex-wrap gap-2">{!reviewOnly && <Button variant="primary" loading={busy} onClick={() => void add()}>{t("Add reviewed version to library")}</Button>}<Button disabled={busy || !!pending.current} onClick={() => setPreview(undefined)}>{t("Choose another source")}</Button></div>
       </div>}
       {error && <p role="alert" className="break-words text-sm text-[var(--tone-danger)]">{error}</p>}
     </Panel>}

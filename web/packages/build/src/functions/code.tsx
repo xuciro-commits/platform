@@ -151,7 +151,7 @@ export function CodeEditor({ id }: { id: string }) {
           <DraftInputs.Provider value={{...testInputs,scope:"test"}}>
             <JSONEditor label={t("Test input")} value={input} onChange={setInput} schema={published?.input ?? draft.input} rows={6} />
           </DraftInputs.Provider>
-          <Button disabled={busy || testInputs.invalid || !draft.version} onClick={() => void perform(run)}>{busy ? t("Running function…") : t("Run function")}</Button>
+          <Button loading={busy} disabled={testInputs.invalid || !draft.version} onClick={() => void perform(run)}>{t("Run function")}</Button>
           <Panel title={t("Function output")} role="status" className="grid gap-2 text-sm">
             {!call ? <p className="text-muted">{t(busy ? "Running function…" : "Run the function to see its output here.")}</p> : <>
               <p>{t("State")}: {t(({ pending: "Pending", running: "Running", completed: "Completed", failed: "Failed", cancelled: "Cancelled" } as Record<string, string>)[result.data?.state ?? "pending"] ?? result.data?.state ?? "Pending")}</p>

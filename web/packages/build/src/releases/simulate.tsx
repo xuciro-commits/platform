@@ -549,7 +549,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           {kind==="function"&&evaluationEnabled&&<Button disabled={!planID||dirty||blocked||!setName.trim()} onClick={()=>void open({view:"release-review",params:{kind:"evaluation-set",id:planID}})}>{t("Publish evaluation set")}</Button>}
           <Button disabled={!planID} onClick={reload}>{t("Reload saved plan")}</Button>
           <Button onClick={newPlan}>{t("New test plan")}</Button>
-          <Button variant="primary" disabled={sampleInvalid || !!inputDrafts?.invalid || (kind!=="app" && !object && !process?.manual) || !steps.length} onClick={run}>{busy ? t("Running test…") : t("Run isolated test")}</Button>
+          <Button variant="primary" loading={busy} disabled={sampleInvalid || !!inputDrafts?.invalid || (kind!=="app" && !object && !process?.manual) || !steps.length} onClick={run}>{t("Run isolated test")}</Button>
         </div>
       </fieldset></StructuredEditor>
     </Card>

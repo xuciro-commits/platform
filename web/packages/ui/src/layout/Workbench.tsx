@@ -3,7 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } f
 import { ChevronRight, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Redo2, Undo2, X } from "lucide-react";
 import { t } from "../i18n";
 import { cn } from "../lib/cn";
-import { Button } from "../primitives/button";
+import { Button, DefaultButtonSize } from "../primitives/button";
 import { useViewTitle } from "../shell/Workspace";
 import { ViewVisibilityContext, useViewVisible } from "../shell/ViewVisibility";
 import { ContentTabs } from "./ContentTabs";
@@ -196,7 +196,7 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
         <Button variant="ghost" size="sm" aria-label={t("Redo")} title={t("Redo") + " ⇧⌘Z"} disabled={!history.canRedo} onClick={history.redo}><Redo2 /></Button>
       </div>}
       {savingLabel && <span role="status" className={cn("ml-2 text-xs", saving === "error" ? "text-danger" : "text-muted")}>{savingLabel}</span>}
-      <fieldset disabled={inputs?.busy} className="ml-auto flex flex-wrap items-center gap-1">{actions}</fieldset>
+      <fieldset disabled={inputs?.busy} className="ml-auto flex flex-wrap items-center gap-1"><DefaultButtonSize.Provider value="lg">{actions}</DefaultButtonSize.Provider></fieldset>
       {dock && <Button id={`${prefix}-toggle-dock`} variant="ghost" size="sm" aria-label={t("Toggle dock")} aria-controls={`${prefix}-dock`} aria-pressed={showDock && showMain} aria-expanded={showDock && showMain} title="⌘J" onClick={() => setDockOpen(!showDock || !showMain)}>{showDock && showMain ? <PanelBottomClose /> : <PanelBottomOpen />}</Button>}
       {right && <Button id={`${prefix}-toggle-right`} variant="ghost" size="sm" aria-label={t("Toggle inspector panel")} aria-controls={`${prefix}-right`} aria-pressed={showRight} aria-expanded={showRight} title="⌥⌘\\" onClick={() => togglePane("right")}>{showRight ? <PanelRightClose /> : <PanelRightOpen />}</Button>}
     </header>

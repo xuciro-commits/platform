@@ -107,7 +107,7 @@ ${t("Created from template {template} (revision {revision}).", { template: templ
           <code>{pageID}</code><Button variant="ghost" disabled={busy} onClick={() => confirmOwnDiscard(() => { request.current = undefined; setPending(false); })}>{t("Forget local request")}</Button></Panel>}
         {created && <Panel role="status" className="text-sm"><p>{t("The page draft was created. It is not published.")}</p><Button onClick={() => onCreated ? onCreated({ type: "build.page", id: pageID }) : open({ view: "module", params: { page: pageID } })}>{t("Open created page")}</Button></Panel>}
         {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-        <div className="flex flex-wrap items-center gap-3">{onClose && <Button variant="ghost" disabled={busy} onClick={() => confirmOwnDiscard(onClose)}>{t("Cancel")}</Button>}<Button type="submit" variant="primary" disabled={busy || created || !pending && !valid}>{busy ? t("Creating draft…") : pending ? t("Retry original page creation") : t("Create draft in Studio")}</Button>
+        <div className="flex flex-wrap items-center gap-3">{onClose && <Button variant="ghost" disabled={busy} onClick={() => confirmOwnDiscard(onClose)}>{t("Cancel")}</Button>}<Button type="submit" variant="primary" loading={busy} disabled={created || !pending && !valid}>{pending ? t("Retry original page creation") : t("Create draft in Studio")}</Button>
           <p className="text-xs text-muted">{t("Creates a draft only. Review bindings in the page editor, then test and publish through the original release route.")}</p></div>
       </Form>
     </>}

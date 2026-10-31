@@ -82,7 +82,7 @@ export function ReviewDialog({ branch, open, onOpenChange, onProposed }: { branc
       <RebaseBar branch={branch} resolutions={resolutions} />
       <BranchDiffList branch={branch} resolutions={resolutions} />
       {branch.state === "open" && <section aria-label={t("Checks")} className="grid gap-2 border-t border-border pt-3">
-        <div className="flex items-center gap-2"><h3 className="text-xs font-semibold">{t("Checks")}</h3><Button size="sm" variant="ghost" disabled={checking || unresolved > 0} onClick={() => void runCheck()}>{checking ? t("Checking…") : t("Run checks")}</Button></div>
+        <div className="flex items-center gap-2"><h3 className="text-xs font-semibold">{t("Checks")}</h3><Button size="sm" variant="ghost" loading={checking} disabled={unresolved > 0} onClick={() => void runCheck()}>{t("Run checks")}</Button></div>
         {checkRefused && <Rejection message={checkRefused} />}
         {check ? <CheckSummary check={check} titles={titles} /> : !checkRefused && <p role="status" className="text-xs text-muted">{checking ? t("Checking…") : t("Checks run against the merged result in a private copy; nothing is saved.")}</p>}
       </section>}

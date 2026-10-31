@@ -20,7 +20,7 @@ export function NotificationList<T extends NotificationItem>({items,onRead,onOpe
             {n.body && <span className="whitespace-pre-wrap break-words text-muted">{n.body}</span>}
             <span className="break-words text-xs text-muted"><time dateTime={n.at}>{n.at}</time>{n.app ? ` · ${n.app}` : ""}</span><span className="break-all font-mono text-xs text-muted">{n.id}{n.ref?` · ${n.ref}`:""}</span>
           </button>
-          {!n.read&&onRead&&<Button size="sm" disabled={!enabled||busyIDs.includes(n.id)} onClick={()=>{if(enabled&&!busyIDs.includes(n.id))void onRead(n);}}>{busyIDs.includes(n.id)?t("Confirming read…"):t("Mark read")}</Button>}
+          {!n.read&&onRead&&<Button size="sm" loading={busyIDs.includes(n.id)} disabled={!enabled} onClick={()=>{if(enabled&&!busyIDs.includes(n.id))void onRead(n);}}>{t("Mark read")}</Button>}
           {Object.hasOwn(errors,n.id)&&errors[n.id]&&<p role="alert" className="w-full break-words text-xs text-[var(--tone-danger)]">{errors[n.id]}</p>}
         </li>
       ))}

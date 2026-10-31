@@ -43,7 +43,7 @@ function ComputeCallForm({ binding, bindings, record, recordType, live = true }:
     {!live ? <p className="text-xs text-muted">{t("Calculations run when this page is opened by its operator.")}</p> : <>
       {subject && !record && <p className="text-sm text-muted">{t("Select a record to calculate its result.")}</p>}
       {(!bound || Object.values(bindings ?? {}).some((value) => value.source === "input")) && <JsonValueEditor label={t("Calculation input")} value={input} onChange={setInput} schema={descriptor.data?.input} />}
-      <Button disabled={busy || drafts?.invalid || descriptor.isError || descriptor.isLoading || subject && !record} onClick={async () => {
+      <Button loading={busy} disabled={drafts?.invalid || descriptor.isError || descriptor.isLoading || subject && !record} onClick={async () => {
         setBusy(true); setError("");
         try {
           const values = input;
@@ -53,7 +53,7 @@ function ComputeCallForm({ binding, bindings, record, recordType, live = true }:
           setCall(result.call ?? "");
         } catch (failure) { setError(failure instanceof Error ? failure.message : t("The calculation could not be started.")); }
         finally { setBusy(false); }
-      }}>{busy ? t("Calculating…") : t("Calculate")}</Button>
+      }}>{t("Calculate")}</Button>
       {call && <Panel role="status" className="grid min-w-0 gap-2 text-xs">
         <span>{t("Calculation state")}: {answer.data?.state ?? t("Pending")}</span>
         {answer.data?.output !== undefined && <pre className="max-h-72 overflow-auto" aria-label={t("Calculation result")}>{JSON.stringify(answer.data.output, null, 2)}</pre>}

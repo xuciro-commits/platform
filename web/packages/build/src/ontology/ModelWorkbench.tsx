@@ -224,7 +224,7 @@ function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void 
         <fieldset className="grid gap-1"><legend className="mb-2 text-xs">{t("Visible fields")}</legend>{entity?.fields.filter((field) => !field.aside && field.type !== "lines").map((field) => <Checkbox key={field.name} checked={fields.includes(field.name)} onChange={(on) => setFields(on ? [...fields, field.name] : fields.filter((name) => name !== field.name))}>{field.title}</Checkbox>)}</fieldset>
       </fieldset>
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
-      <div className="flex gap-2"><Button type="submit" variant="primary" disabled={!valid || busy}>{busy ? t("Creating draft…") : t("Create page draft")}</Button><Button disabled={busy} onClick={onClose}>{t("Cancel")}</Button></div>
+      <div className="flex gap-2"><Button type="submit" variant="primary" loading={busy} disabled={!valid}>{t("Create page draft")}</Button><Button disabled={busy} onClick={onClose}>{t("Cancel")}</Button></div>
     </Form>
   </Panel>;
 }

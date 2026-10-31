@@ -65,7 +65,7 @@ export function CredentialEditor({ open, onClose, initial, onSaved }: { open: bo
       {incompleteBinding && <p role="status" className="text-sm text-muted">{t("Choose the service and enter its allowed origin before saving. Choosing an AI provider fills its exact ID and origin.")}</p>}
       {error && <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>}
       {pending && <p className="text-xs text-muted">{t("The result is pending. Retry the original encrypted request before editing.")}</p>}
-      <div className="flex justify-end gap-2"><Button disabled={busy} onClick={() => { setValue(""); onClose(); }}>{t("Cancel")}</Button><Button variant="primary" disabled={busy || !draft.id || !draft.title || (!pending && incompleteBinding)} onClick={() => void save()}>{t(pending ? "Retry" : "Save")}</Button></div>
+      <div className="flex justify-end gap-2"><Button disabled={busy} onClick={() => { setValue(""); onClose(); }}>{t("Cancel")}</Button><Button variant="primary" loading={busy} disabled={!draft.id || !draft.title || (!pending && incompleteBinding)} onClick={() => void save()}>{t(pending ? "Retry" : "Save")}</Button></div>
     </div>
   </Dialog>;
 }

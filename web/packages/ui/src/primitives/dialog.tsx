@@ -7,6 +7,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { useOverlayBody } from "./overlay-body";
 import { useOverlayFocus } from "./overlay-focus";
 import { t } from "../i18n";
+import { DefaultButtonSize } from "./button";
 
 const OverlayDepth = createContext(0);
 
@@ -32,7 +33,7 @@ export function OverlayFrame({ open, onOpenChange, title, children, wide, return
   const change=(next:boolean)=>{if(!busy&&!suspended)onOpenChange(next);};
   const focus = useOverlayFocus(returnFocus, fallbackFocus);
   const policy=overlayPolicy({backdrop,closeOnBackdrop,closeOnEsc});
-  const body = useOverlayBody(open, <OverlayDepth.Provider value={useContext(OverlayDepth) + 1}>{own ? <InputDraftProvider isolated scope="dialog">{children}</InputDraftProvider> : children}</OverlayDepth.Provider>);
+  const body = useOverlayBody(open, <OverlayDepth.Provider value={useContext(OverlayDepth) + 1}><DefaultButtonSize.Provider value={undefined}>{own ? <InputDraftProvider isolated scope="dialog">{children}</InputDraftProvider> : children}</DefaultButtonSize.Provider></OverlayDepth.Provider>);
   return (
     <D.Root modal={backdrop} open={open && !suspended} onOpenChange={(next) => { change(next); }}>
       <D.Portal>

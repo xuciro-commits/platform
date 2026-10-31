@@ -10,7 +10,7 @@ export {TagCounts} from "./components/TagCounts";
 export {SearchInput} from "./components/SearchInput";
 export { t, language, languages, setLanguage, register, type Dictionary } from "./i18n";
 export { cn } from "./lib/cn";
-export { Button, type ButtonProps } from "./primitives/button";
+export { Button, DefaultButtonSize, type ButtonProps } from "./primitives/button";
 export { Input, Select, Textarea } from "./primitives/input";
 export { Card, Panel, PanelGroup, PlainPanels } from "./primitives/card";
 export { Tooltip } from "./primitives/tooltip";

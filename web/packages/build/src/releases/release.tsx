@@ -321,7 +321,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         </Select>
       </label>}
       {query.isError && <p role="alert" className="text-sm text-danger">{t("Release review could not be loaded.")}</p>}
-      <Button disabled={invalidSelection || !id || locked} onClick={() => void inspect()}>{busy ? t("Checking…") : t("Check draft and dependencies")}</Button>
+      <Button loading={busy} disabled={invalidSelection || !id || locked} onClick={() => void inspect()}>{t("Check draft and dependencies")}</Button>
     </Card>
     <Card className="grid gap-3 p-3" aria-label={t("Deliver drafts together")}>
       <div className="flex items-center justify-between gap-2">
@@ -346,7 +346,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       </ul> : <p className="text-xs text-muted">{t("No drafts selected yet.")}</p>}
       {joint.length > 128 && <p role="alert" className="text-xs text-warning">{t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")}</p>}
       {jointNote && <p className="text-xs text-muted" role="status">{jointNote}</p>}
-      <Button disabled={invalidSelection || !joint.length || joint.length > 128 || locked} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
+      <Button loading={busy} disabled={invalidSelection || !joint.length || joint.length > 128 || locked} onClick={() => void inspect(joint)}>{t("Check joint candidate")}</Button>
     </Card>
     </>}
     {call?.expired && !error && <Panel role="status" className="p-3 text-sm text-muted">{t("The original handoff expired when the view was reopened. Reopen release review from the application to review its current selection.")}</Panel>}
@@ -414,7 +414,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         </ul>
       </div>}
       {!review.diagnostic && review.candidateId && <div className="grid gap-2">
-        {!savedReview && <Button disabled={locked || Boolean(savedID) || !!branchId} title={branchId ? branchRefusal("publish") : undefined} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>}
+        {!savedReview && <Button loading={busy} disabled={locked || Boolean(savedID) || !!branchId} title={branchId ? branchRefusal("publish") : undefined} onClick={save}>{t("Save immutable candidate")}</Button>}
         {savedID && activeID !== savedID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
         {builder && savedID && functionNames.length > 0 && <div className="grid gap-2 rounded border border-border p-3">
           <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Measured function evaluation")}</h3><ContextHelp title={t("Measured function evaluation")}>{t("Measured evaluations call configured models. Missing or failed reports do not prevent application delivery.")}</ContextHelp></div>
@@ -425,7 +425,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
             </Select>
           </label>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={!planID || locked} onClick={evaluate}>{busy ? t("Starting evaluation…") : t("Run measured evaluation")}</Button>
+            <Button loading={busy} disabled={!planID || locked} onClick={evaluate}>{t("Run measured evaluation")}</Button>
             <Button disabled={locked} onClick={() => { void perform(() => readSaved(savedID, true)); }}>{t("Refresh evaluation reports")}</Button>
           </div>
           {(reports.isError||candidateQuery.isError) && <p role="alert" className="text-xs text-warning">{t("Evaluation reports could not be read. No quality result is claimed.")}</p>}

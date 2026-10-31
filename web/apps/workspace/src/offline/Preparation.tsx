@@ -30,7 +30,7 @@ export function OfflinePreparation({application,release,open,onOpenChange}:{appl
   <div className="grid gap-4">
    <p className="text-sm">{t("Prepare this published application, its first record window and the tasks currently open. Other records and tasks require a connection.")}</p>
    <p className="text-sm text-muted">{t("Saved content is a dated copy. Queued requests wait for the host's current permissions and business decision.")}</p>
-   {definition&&<Panel title={definition.application!.title}><p className="text-xs text-muted">{t("Application version {version}",{version:definition.version})}</p><Button className="mt-3" variant="primary" disabled={busy||!release||navigator.onLine===false||!!storageError} onClick={()=>void prepare()}>{t(busy?"Preparing application…":"Prepare for offline")}</Button></Panel>}
+   {definition&&<Panel title={definition.application!.title}><p className="text-xs text-muted">{t("Application version {version}",{version:definition.version})}</p><Button className="mt-3" variant="primary" loading={busy} disabled={!release||navigator.onLine===false||!!storageError} onClick={()=>void prepare()}>{t("Prepare for offline")}</Button></Panel>}
    {!definition&&<p className="text-sm text-muted">{t("Open a published business application to prepare it.")}</p>}
    {(error||storageError)&&<p role="alert" className="text-sm text-danger">{error||t(storageError)}</p>}
    {saved&&<p role="status" className="text-sm">{saved}</p>}

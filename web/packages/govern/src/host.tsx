@@ -197,7 +197,7 @@ function RuntimeComposition({ tenant, changed }: { tenant: string; changed: () =
         })}
       </div></Disclosure>
       <label className="grid gap-1 text-sm">{t("Reason")}<Input disabled={busy || unconfirmed} value={reason} onChange={event => setReason(event.target.value)} /></label>
-      <div><Button disabled={busy || (!unconfirmed && ((!draft && !ownersDraft) || !reason.trim()))} onClick={() => tenant === me.tenantId ? confirmLeave(() => void save()) : void save()}>{t(busy ? "Saving…" : unconfirmed ? "Retry saved selection" : "Save selection and pause")}</Button></div>
+      <div><Button loading={busy} disabled={(!unconfirmed && ((!draft && !ownersDraft) || !reason.trim()))} onClick={() => tenant === me.tenantId ? confirmLeave(() => void save()) : void save()}>{t(unconfirmed ? "Retry saved selection" : "Save selection and pause")}</Button></div>
     </>}
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
   </Panel>;
@@ -312,7 +312,7 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
       <Checkbox checked={activate} onChange={setActivate}>{t("Activate after promotion")}</Checkbox>
       <ContextHelp title={t("Activate after promotion")}>{t("Repeating the same promotion answers as the first time. A candidate that changes storage cannot be activated here: promote it without activation, then a release holder in the target reviews the upgrade plan in its release workbench.")}</ContextHelp>
       </fieldset>
-      <div><Button type="submit" variant="primary" disabled={locked || overview.isError || artifacts.isError || grants.isError || !chosenArtifact?.verified || !source || !target || source === target || !chosenCandidate || !chosenGrant}>{busy ? t("Promoting…") : t("Promote")}</Button></div>
+      <div><Button type="submit" variant="primary" loading={busy} disabled={locked || overview.isError || artifacts.isError || grants.isError || !chosenArtifact?.verified || !source || !target || source === target || !chosenCandidate || !chosenGrant}>{t("Promote")}</Button></div>
     </Form>
     {(overview.isError || artifacts.isError || grants.isError) && <div className="mt-3"><Notice tone="danger" message={t("Environment, artifact or support-session reads are unavailable. Promotion is not enabled from cached data.")} /></div>}
     {pending && <Panel role="alert" className="mt-3 grid gap-2 p-3">
@@ -394,7 +394,7 @@ export function HostMigrations({ tenant }: { tenant?: string }) {
       </div>
       <label className="grid gap-1 text-sm">{t("Record types")}<Input required value={types} onChange={(e) => setTypes(e.target.value)} placeholder="core.partner, core.person" /></label>
       </fieldset>
-      <div><Button type="submit" variant="primary" disabled={locked || overview.isError || sourceGrants.isError || targetGrants.isError || !source || !target || source === target || !list.length || !chosenSource || !chosenTarget}>{busy ? t("Migrating…") : t("Migrate")}</Button></div>
+      <div><Button type="submit" variant="primary" loading={busy} disabled={locked || overview.isError || sourceGrants.isError || targetGrants.isError || !source || !target || source === target || !list.length || !chosenSource || !chosenTarget}>{t("Migrate")}</Button></div>
     </Form>
     {(overview.isError || sourceGrants.isError || targetGrants.isError) && <Panel role="alert" className="mt-3 p-3">{t("Environment or support-session reads are unavailable. Migration is not enabled from cached data.")}</Panel>}
     {pending && <Panel role="alert" className="mt-3 grid gap-2 p-3">

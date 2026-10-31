@@ -189,7 +189,7 @@ export function AIPlayground({initialModel=""}:{initialModel?:string}) {
         <p className="text-xs text-muted">{t("Design trials require builder access as well as model access.")}</p>
         <Input aria-label={t("System")} placeholder={t("System instructions (optional)")} value={system} onChange={(e) => setSystem(e.target.value)} />
         <Textarea aria-label={t("Prompt")} rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t("Ask something")} />
-        <span className="flex justify-end"><Button variant="primary" disabled={!chosen || !prompt || busy} onClick={() => void send()}>{busy ? t("Waiting…") : t("Send trial · may incur charges")}</Button></span>
+        <span className="flex justify-end"><Button variant="primary" loading={busy} disabled={!chosen || !prompt} onClick={() => void send()}>{t("Send trial · may incur charges")}</Button></span>
         {turns.map((turn, i) => (
           <Card key={i} className="p-3">
             <p className="mb-2 text-xs text-muted">{turn.prompt}</p><p className="mb-2 text-xs text-muted">{t("Generation trial only. Tool calling and structured results require their own evaluations.")}</p>

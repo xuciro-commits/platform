@@ -1,5 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import type { ButtonHTMLAttributes } from "react";
+import { Loader2 } from "lucide-react";
+import { createContext, useContext, type ButtonHTMLAttributes } from "react";
 import { cn } from "../lib/cn";
 import { Tooltip } from "./tooltip";
 
@@ -15,16 +16,23 @@ const button = cva(
         link: "border-transparent font-normal underline hover:opacity-80",
         row: "w-full justify-start border-transparent font-normal hover:bg-row-hover",
       },
-      size: { sm: "h-[var(--ctrl-h-xs)] px-[var(--ctrl-px-xs)]", md: "h-[var(--ctrl-h-sm)] px-[var(--ctrl-px-sm)]", icon: "size-[var(--ctrl-h-sm)]" },
+      size: { sm: "h-[var(--ctrl-h-xs)] px-[var(--ctrl-px-xs)]", md: "h-[var(--ctrl-h-sm)] px-[var(--ctrl-px-sm)]", lg: "h-[var(--ctrl-h-md)] px-[var(--ctrl-px-md)]", icon: "size-[var(--ctrl-h-sm)]" },
     },
     compoundVariants: [{ variant: "link", class: "h-auto px-0" }, { variant: "row", class: "h-auto px-2 py-1 text-left" }],
     defaultVariants: { variant: "default", size: "md" },
   },
 );
 
-export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>;
+export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button> & { loading?: boolean };
 
-export function Button({ className, variant, size, type = "button", title, ...props }: ButtonProps) {
-  const element = <button type={type} data-ui="button" data-variant={variant ?? "default"} className={cn(button({ variant, size }), className)} {...props} />;
-  return title ? <Tooltip content={title} wrap={props.disabled}>{element}</Tooltip> : element;
+export const DefaultButtonSize = createContext<ButtonProps["size"]>(undefined);
+
+export function Button({ className, variant, size, type = "button", title, loading = false, disabled, children, ...props }: ButtonProps) {
+  const inherited = useContext(DefaultButtonSize);
+  const blocked = disabled || loading;
+  const element = <button type={type} data-ui="button" data-variant={variant ?? "default"} disabled={blocked} aria-busy={loading || undefined}
+    className={cn(button({ variant, size: size ?? inherited }), loading && "relative", className)} {...props}>
+    {loading ? <><span className="inline-flex items-center justify-center gap-1.5 opacity-0">{children}</span><Loader2 aria-hidden className="absolute animate-spin motion-reduce:animate-none" /></> : children}
+  </button>;
+  return title ? <Tooltip content={title} wrap={blocked}>{element}</Tooltip> : element;
 }

@@ -34,7 +34,7 @@ export function SaveViewDialog({ type, state, saved, onClose }: { type: string; 
       <Input aria-label={t("Name")} placeholder={t("Name of the view")} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} autoFocus />
       <div className="flex justify-end gap-2">
         <Button type="button" onClick={onClose} disabled={busy}>{t("Cancel")}</Button>
-        <Button type="submit" variant="primary" disabled={!title.trim() || busy}>{busy ? t("Saving…") : t("Save")}</Button>
+        <Button type="submit" variant="primary" loading={busy} disabled={!title.trim()}>{t("Save")}</Button>
       </div>
     </Form>
   </Dialog>;
