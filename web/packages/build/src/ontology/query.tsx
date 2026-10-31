@@ -25,21 +25,20 @@ export function QueryEditor({id}:{id:string}) {
  const apps=useReadQuery<Api.AppInfo[]>("/v1/apps").data ?? [];
  const interfaces=apps.flatMap(app=>app.interfaces??[]);
  const editor=useDefinitionDraft<Draft>({
-  id,type:"build.query",kind:"query",view:"query",empty:empty,normalize:hydrate,joinApplication:false,
+  id,type:"build.query",view:"query",empty:empty,normalize:hydrate,joinApplication:false,
   failure:t("The query could not be saved or loaded. Your draft is still here."),
   payload:draft=>{const {name,title,description,object,interface:interfaceName,by,domain,sort,limit}=draft;return {name,title,description,object:object??"",interface:interfaceName??"",by:by??"",domain,sort,limit};},
  });
- const {draft,query,dirty,busy,error,perform,save,review,discardChanges,confirmDiscard}=editor;
+ const {draft,query,dirty,busy,error,perform,save,discardChanges,confirmDiscard}=editor;
  const object={app:"build",kind:"object" as const,name:draft.object??""},info=definitions.find((d)=>d.ref.kind==="object"&&d.ref.name===draft.object)?.entity;
  const currentShape=interfaces.find(item=>item.name===draft.interface)??draft.interfaceShape,fields=draft.interface?currentShape?.fields:info?.fields;
  const patch=editor.patch;
  const reload=()=>editor.reload(t("Reload the saved query before editing again."));
- const publish=()=>editor.transition("publish");
  const installed=definitions.find((d)=>d.ref.kind==="query"&&d.ref.app==="build"&&d.ref.name===draft.name);
  const versions=Object.keys(installed?.queryVersions??{});
  if(!holds("build", "builder"))return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Queries")} description={query.isError?t("The query could not be loaded."):t("Loading…")}/>;
- return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader crumbs={[{label:t("Queries"),onClick:()=>open({view:"query"})}]} title={draft.title||t("New query")} status={<DraftStatus state={draft.published?"published":"draft"}/>} meta={draft.name?<span className="font-mono">{draft.name}{draft.version?` · v${draft.version}`:""}</span>:undefined} help={t("Publish reusable record reads and bind pages to an exact version.")} actions={<AssetControls type="build.query" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onCancel={discardChanges} onSave={()=>void perform(save)} onReview={()=>void perform(review)} onInstall={()=>void perform(publish)} onReload={()=>confirmDiscard(()=>void perform(reload))} route={{view:"query",params:{id}}}/>}/>
+ return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader crumbs={[{label:t("Queries"),onClick:()=>open({view:"query"})}]} title={draft.title||t("New query")} status={<DraftStatus state={draft.published?"published":"draft"}/>} meta={draft.name?<span className="font-mono">{draft.name}{draft.version?` · v${draft.version}`:""}</span>:undefined} help={t("Publish reusable record reads and bind pages to an exact version.")} actions={<AssetControls type="build.query" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onCancel={discardChanges} onSave={()=>void perform(save)} onReload={()=>confirmDiscard(()=>void perform(reload))} route={{view:"query",params:{id}}}/>}/>
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
  <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
  <Panel title={t("Query settings")} className="grid min-w-0 content-start gap-3">

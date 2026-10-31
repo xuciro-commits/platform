@@ -15,12 +15,12 @@ const emptyValue = (value: unknown) => value == null || value === "" || value ==
 const branchSpec = (draft: WorkflowDraft) => Object.fromEntries(Object.entries(workflowInputs(draft)).map(([name, value]) =>
   [name, ["name", "title", "steps"].includes(name) || !emptyValue(value) ? value : null]));
 
-export function useProcessDraft({ id, view, empty, failure, onDiscard, onPublished }: {
+export function useProcessDraft({ id, view, empty, failure, onDiscard }: {
   id: string; view: "flow" | "automation"; empty: () => WorkflowDraft; failure: string;
-  onDiscard?: () => void; onPublished?: () => Promise<unknown>;
+  onDiscard?: () => void;
 }) {
   const { decide } = useHost(), { open } = useApplicationWorkspace();
-  const { query, scope, branch, save: saveToBranch, publishRefusal } = useDraftRecord<WorkflowDraft>("build.process", id);
+  const { query, scope, branch, save: saveToBranch } = useDraftRecord<WorkflowDraft>("build.process", id);
   const session = useDraftSession<WorkflowDraft>(empty());
   const { draft, dirty } = session;
   const [createID] = useState(() => crypto.randomUUID());
@@ -86,17 +86,6 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard, onPublish
     return target;
   };
   const synchronized = !draft.id || query.data?.record?.revision === confirmed.current.revision;
-  const publish = async () => {
-    if (!draft.id || invalidInputs()) return;
-    if (branch) { setError(publishRefusal!); return; }
-    if (!synchronized) { setError(t("The current flow revision differs from this editing session. Reload before running or reviewing a release.")); return; }
-    if (dirty && !await save()) return;
-    const accepted = confirmed.current;
-    if (!accepted.id || !await decide("build.process.publish", { type: "build.process", id: accepted.id }, {},
-      { expectedRevision: accepted.revision, quiet: true, onRefused: setError })) return;
-    await refresh(accepted, { ...accepted, revision: accepted.revision + 1 }, t("The resource was installed, but its current record could not be reloaded."));
-    await onPublished?.();
-  };
   const reload = async () => {
     const fresh = await query.refetch();
     if (fresh.isSuccess && fresh.data?.record) { load(fresh.data.record); markSaved(); setError(""); onDiscard?.(); }
@@ -108,7 +97,5 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard, onPublish
     catch (problem) { setError(apiErrorMessage(problem) ?? (problem instanceof Error ? problem.message : failure)); }
     finally { lock.current = false; setBusy(false); }
   };
-  const reviewTarget = async () => dirty || !draft.id ? await save() : draft.id;
-  return { session, draft, dirty, createID, branch, query, busy, error, setError, edit, save, publish, perform, reload, reviewTarget,
-    revision: confirmed.current.revision, synchronized, confirmDiscard, discardChanges };
+  return { session, draft, dirty, createID, branch, query, busy, error, setError, edit, save, perform, reload, revision: confirmed.current.revision, synchronized, confirmDiscard, discardChanges };
 }

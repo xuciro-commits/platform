@@ -134,8 +134,8 @@ export function FlowEditor({ id }: { id: string }) {
   const [runInput, setRunInput] = useState<unknown>({}), [runKey, setRunKey] = useState("");
   const [validation, setValidation] = useState<{ valid: boolean; issues: { node?: string; message: string }[] }>();
   const process = useProcessDraft({ id, view: "flow", empty, failure: t("The workflow request could not be completed."),
-    onDiscard: () => { setValidation(undefined); setChosen(""); }, onPublished: () => catalogQuery.refetch() });
-  const { session, draft, dirty, createID, query, busy, error, setError, save, publish, perform, confirmDiscard, discardChanges, revision, synchronized } = process;
+    onDiscard: () => { setValidation(undefined); setChosen(""); } });
+  const { session, draft, dirty, createID, query, busy, error, setError, save, perform, confirmDiscard, discardChanges, revision, synchronized } = process;
   useEffect(() => { setMountedDocks((previous) => previous[dock] ? previous : { ...previous, [dock]: true }); }, [dock]);
   const change = (edit: Edit) => { if (busy) return; process.edit(edit); setValidation(undefined); };
   const installed=useMemo(()=>{try{return query.data?.record?.published?JSON.parse(query.data.record.published) as WorkflowDraft:undefined;}catch{return undefined;}},[query.data?.record?.published]);
@@ -248,13 +248,6 @@ export function FlowEditor({ id }: { id: string }) {
     if (!response.ok) { setError(apiErrorMessage(response.body) ?? t("Workflow validation failed.")); return; }
     setValidation(response.body);
   };
-  const review = async () => {
-    if (process.branch) { if (dirty || !draft.id) await save(); return; }
-    const target = await process.reviewTarget();
-    if (!target) return;
-    if (target !== draft.id) open({ view: "release-review", params: { kind: "flow", id: target } });
-    else setDock("release");
-  };
   const start = async () => {
     if(runInputs.invalid)return;
     const key = runKey || crypto.randomUUID(); setRunKey(key);
@@ -303,7 +296,7 @@ export function FlowEditor({ id }: { id: string }) {
       status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.filter((p) => p.severity !== "warning").length} />} saving={savingState(dirty, busy, error || undefined)}
       history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setValidation(undefined); }, redo: () => { session.redo(); setValidation(undefined); } }}
       actions={<>
-        <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} onReload={() => confirmDiscard(() => void perform(process.reload))} route={{ view: "flow", params: { id } }}
+        <ResourceControls showStatus={false} type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onSave={() => void perform(save)} onCancel={discardChanges} onReload={() => confirmDiscard(() => void perform(process.reload))} route={{ view: "flow", params: { id } }}
           operations={[{ id: "validate", label: t("Validate"), disabled: brokenForm.length > 0, run: () => void perform(check) },
             { id: "run", label: t("Run"), icon: <Play />, disabled: !synchronized || !installed?.manual || dirty, run: () => setDock("run") }]} />
       </>}

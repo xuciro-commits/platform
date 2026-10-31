@@ -27,8 +27,8 @@ export function ConnectionEditor({ id }: { id: string }) {
   const { holds} = useHost(), { open } = useApplicationWorkspace();
   const fieldID = useId();
   const kinds = useReadQuery<{ items: Api.ConnectionKind[] }>("/v1/connection-kinds");
-  const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
-    id, type: "build.connection", kind: "connection", view: "connection", empty,
+  const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, discardChanges, transition } = useDefinitionDraft<Draft>({
+    id, type: "build.connection", view: "connection", empty,
     failure: t("The connection could not be saved or loaded. Your draft is still here."),
     payload: draft => {
       const { name, title, kind, address, secret, allowPrivate, marking } = draft;
@@ -46,7 +46,7 @@ export function ConnectionEditor({ id }: { id: string }) {
   };
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Connections"), onClick: () => open({ view: "connection" }) }]} title={draft.title || t("New connection")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Choose a logical connection kind. Address and credentials can be configured after installation; Check explicitly tests the current environment.")}
-      actions={<ResourceControls type="build.connection" record={draft} dirty={dirty} busy={busy} route={{ view: "connection", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined}
+      actions={<ResourceControls type="build.connection" record={draft} dirty={dirty} busy={busy} route={{ view: "connection", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)}
         operations={[{ id: "check", label: draft.requested ? t("Checking…") : t("Check"), disabled: !!inputs?.invalid || !!draft.requested, run: () => void perform(() => transition("check")) },
           ...(draft.state === "ready" ? [{ id: "retire", label: t("Retire"), disabled: dirty, run: () => void perform(() => transition("retire")) }] : [])]} />} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}

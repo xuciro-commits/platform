@@ -31,8 +31,8 @@ export function Datasets() {
 export function DatasetEditor({ id }: { id: string }) {
   const host = useHost(), { decide , holds} = host, { open } = useApplicationWorkspace();
   const application = useApplicationScope();
-  const { draft, structured, query, dirty, busy, error, setError, inputs, patch, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
-    id, type: "build.dataset", kind: "dataset", view: "dataset", empty,
+  const { draft, structured, query, dirty, busy, error, setError, inputs, patch, perform, save, discardChanges } = useDefinitionDraft<Draft>({
+    id, type: "build.dataset", view: "dataset", empty,
     failure: t("The dataset could not be saved or loaded. Your draft is still here."),
     payload: draft => {
       return { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0, marking: draft.marking ?? "" };
@@ -73,7 +73,7 @@ export function DatasetEditor({ id }: { id: string }) {
     <PageHeader crumbs={[{ label: t("Datasets"), onClick: () => open({ view: "dataset" }) }]} title={draft.title || t("New dataset")} meta={draft.name ? <span className="font-mono">{draft.name}{draft.version ? ` · v${draft.version}` : ""}</span> : undefined} help={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
       actions={<>
         {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}
-        <ResourceControls type="build.dataset" record={draft} dirty={dirty} busy={busy} route={{ view: "dataset", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined}
+        <ResourceControls type="build.dataset" record={draft} dirty={dirty} busy={busy} route={{ view: "dataset", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)}
           operations={holds("build", "builder") && !!draft.schema?.length ? [{ id: "object", label: t("Draft an object from this schema"), disabled: dirty || !!inputs?.invalid, run: () => void perform(draftObject) }] : []} />
       </>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}

@@ -171,6 +171,12 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     openedCandidate.current = candidateID;
     void loadSaved(candidateID);
   }, [mayRelease, locked, candidateID]);
+  const inspectRef = useRef<(drafts?: JointChoice[]) => unknown>(undefined), autoChecked = useRef(false);
+  useEffect(() => {
+    if (autoChecked.current || !builder || initialID || !initialDrafts.length || invalidSelection) return;
+    autoChecked.current = true;
+    void inspectRef.current?.(initialDrafts);
+  }, []);
   if (!mayRelease) {
     return <PageHeader title={t("Release review")} description={t("A builder or publisher role is required to review releases.")} />;
   }
@@ -198,6 +204,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       } catch (error) { setError(error instanceof Error ? error.message : t("Release review could not be loaded.")); }
     });
   };
+  inspectRef.current = inspect;
   const addReferenced = (from: JointChoice) => {
     if (!builder || invalidSelection || !from.id || pendingRef.current) return;
     return perform(async () => {

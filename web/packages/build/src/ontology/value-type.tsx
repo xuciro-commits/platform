@@ -89,11 +89,11 @@ function TryValue({ draft }: { draft: Draft }) {
 export function ValueTypeEditor({ id }: { id: string }) {
   const { definitions, holds } = useHost(), { open } = useApplicationWorkspace();
   const editor = useDefinitionDraft<Draft>({
-    id, type: "build.valuetype", kind: "value-type", view: "value-type", empty, normalize: hydrate, joinApplication: false,
+    id, type: "build.valuetype", view: "value-type", empty, normalize: hydrate, joinApplication: false,
     failure: t("The value type could not be saved or loaded. Your draft is still here."),
     payload: ({ name, title, description, base, constraints, pattern, choices }) => ({ name, title, description, base, constraints: constraints ?? {}, pattern: pattern ?? "", choices: choices ?? [] }),
   });
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, transition, discardChanges } = editor;
+  const { draft, query, dirty, busy, error, inputs, patch, perform, save, discardChanges } = editor;
   const versions = semanticValueTypes(definitions).filter(v => v.binding.ref.app === "build" && v.binding.ref.name === draft.name);
   if (!holds("build", "builder")) return <Workbench storageKey="value-type" title={t("Value type")}><WorkbenchMessage>{t("Only a builder can edit value types.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="value-type" title={t("Value type")}><WorkbenchMessage>{query.isError ? t("The value type could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
@@ -102,8 +102,8 @@ export function ValueTypeEditor({ id }: { id: string }) {
   const changeBase = (base: string) => patch({ base: base as Draft["base"], constraints: {}, pattern: "", choices: [] });
   return <Workbench storageKey="value-type" crumbs={[{ label: t("Value types"), onClick: () => open({ view: "value-type" }) }]} title={draft.title || t("New value type")}
     status={<DraftStatus state={draft.state ?? "draft"} />} saving={savingState(dirty, busy, error || undefined)}
-    actions={<ResourceControls type="build.valuetype" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!draft.id}
-      onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(() => transition("publish"))} onCancel={discardChanges} route={{ view: "value-type", params: { id } }} />}
+    actions={<ResourceControls showStatus={false} type="build.valuetype" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!draft.id}
+      onSave={() => void perform(save)} onCancel={discardChanges} route={{ view: "value-type", params: { id } }} />}
     right={{ label: t("Value type inspector"), tabs: [
       { id: "try", title: t("Try a value"), content: <TryValue draft={draft} /> },
       { id: "versions", title: t("Versions"), badge: versions.length, content: versions.length

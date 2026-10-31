@@ -1,7 +1,7 @@
 import { transactionIssues, transactionIssueText } from "./transaction-edit";
 import { sourceFieldInput } from "@platform/app";
 import { useActionTrial, useHost } from "@platform/app";
-import { notify, t, useUnsavedChanges } from "@platform/ui";
+import { t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
@@ -17,7 +17,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const hydrate = (record: ObjectRecord): Process => ({ ...declarationValue(record, fields), states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], implements: record.implements ?? [], extends: record.extends ?? "" });
   const { entities, drafts } = useAuthoringModel();
   const { open } = useApplicationWorkspace();
-  const { query, scope, branch, save: saveToBranch, publishRefusal, mainRevision } = useDraftRecord<ObjectRecord>("build.object", id);
+  const { query, scope, branch, save: saveToBranch, mainRevision } = useDraftRecord<ObjectRecord>("build.object", id);
   const object = query.data?.record;
   const conversionError = query.data?.valueErrors?.actions;
   const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [], implements: [], extends: "" });
@@ -100,23 +100,11 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     try { await action(); } catch { setRefused(t("The object request could not be completed. Your draft is still here.")); }
     finally { lock.current = false; setBusy(false); }
   };
-  const publish = async () => {
-    setRefused(undefined);
-    if (branch) { setRefused(publishRefusal); return; }
-    if (issues.length) { setRefused(issues.join(" ")); return; }
-    if (dirty && !(await save())) return;
-    if (await decide("build.object.publish", { type: "build.object", id }, {}, { onRefused: setRefused })) notify.success(t("The object is installed with its states and actions."));
-  };
-  const review = async () => {
-    if (branch) { if (!issues.length && dirty) await save(); return; }
-    if (issues.length || (dirty && !await save())) return;
-    open({ view: "release-review", params: { kind: "object", id } });
-  };
   const roles = process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none");
   const approverRoles = ["builder", ...(process.access.length ? process.access.map((a) => a.role) : [])];
   const fromSource = (next: Record<string, unknown>): Process => ({ states: [], actions: [], access: [], fields: [], ...next } as Process);
   const trialObject = (next: Process) => trial("build.object.edit", { type: "build.object", id }, objectChanges(next, baseline.current), branch ? mainRevision : baseRevision.current);
   const structured = { expectedRevision: branch ? mainRevision : baseRevision.current, fieldInput: sourceFieldInput, value: { ...process }, onChange: (next: Record<string, unknown>) => change(fromSource(next)), fields, scope: `build.object:${id}:${source.scope}`, disabled: busy || !!conversionError,
     onTrial: (next: Record<string, unknown>) => trialObject(fromSource(next)) };
-  return { object, ready: loaded.current.startsWith(`${id}:`), structured, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, publish, review, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
+  return { object, ready: loaded.current.startsWith(`${id}:`), structured, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
 }

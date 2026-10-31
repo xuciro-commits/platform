@@ -29,7 +29,7 @@ A builder-first platform for business software, benchmarked on Palantir Foundry:
 ## Page archetypes (pick one)
 
 1. **List** — `PageHeader` (title, `meta` count, help; actions: search, filters toggle, exactly one primary "New …") over a full-width `DataTable`. First column: icon + title with the API name in mono `text-2xs` muted underneath. Row click opens the resource.
-2. **Resource page / editor** — `PageHeader` with `crumbs` back to the list, `icon`, `status`, `meta` (identity in mono). Sections in the order Overview → definition sections → Usage → History. Header actions follow `ResourceControls`: at most two inline operations, Save, Publish split button, ⋯ overflow. Long editors use `Workbench` (tree, editor, inspector).
+2. **Resource page / editor** — `PageHeader` with `crumbs` back to the list, `icon`, `status`, `meta` (identity in mono). Sections go in the app sidebar through `ResourceNavigation` (back link to the list, resource identity, grouped sections in the order Overview → definition → data/usage → rules and history), not in nested tabs. Header actions follow `ResourceControls`: at most two inline operations, the save state ("Saved as draft", "Saved to branch", "Unsaved changes"), "Create" for new records, and a ⋯ overflow (more operations, discard, reload, archive). Long editors use `Workbench` (tree, editor, inspector).
 3. **Object view** — sticky `ObjectHeader`, generated from type metadata.
 4. **Canvas** — `RelationCanvas` / `FlowCanvas` with floating toolbar and right inspector.
 5. **Dashboard** (Home, project overview, Monitoring) — stat tiles, then two columns of `Panel`s with compact rows.
@@ -53,7 +53,7 @@ Multi-field edits open in a right `Sheet`; confirmations stay in `Dialog`.
 - Empty, loading, error and refusal states use `EmptyState`, skeleton rows, `Notice`, `Rejection`; refusals show the server's reason.
 - Disabled actions explain why. Status is a `Tag`/`StatusTag` with a tone.
 - Conditions, criteria, policies and filters use the one Expr builder; record sets use the one set builder.
-- Definitions change on branches; the branch panel shows the staged state; saving opens the review with a field-level diff.
+- Editors autosave into the working state (a draft on main, the branch spec on a branch); a refused save stops autosave and leaves a manual Save. No editor publishes on its own: the branch panel's "Review and save (N)" opens the joint release review on main or the proposal review on a branch.
 
 ## Done means
 

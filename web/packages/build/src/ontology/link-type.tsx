@@ -24,20 +24,19 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  const objects=(authoring.drafts.data?.records??[]).filter(draft=>!draft.archived).map(draft=>({name:`build.${draft.name}`,title:draft.title}));
  const [migration,setMigration]=useState<Api.RelationMigrationPlan>();
  const editor=useDefinitionDraft<Draft>({
-  id,type:"build.linktype",kind:"link-type",view:"link-type",empty:() => ({...empty(),parent:parent??"",child:child??"",via:via??""}),normalize:hydrate,joinApplication:false,
+  id,type:"build.linktype",view:"link-type",empty:() => ({...empty(),parent:parent??"",child:child??"",via:via??""}),normalize:hydrate,joinApplication:false,
   failure:t("The relationship could not be saved or loaded. Your draft is still here."),
   payload:draft=>{const {name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles,required}=draft;return {name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles,required};},
  });
- const {draft,query,dirty,busy,error,setError,perform,save,review,discardChanges,confirmDiscard}=editor;
+ const {draft,query,dirty,busy,error,setError,perform,save,discardChanges,confirmDiscard}=editor;
  const object={app:"build",kind:"object" as const,name:draft.child};
  const patch=(change:Partial<Draft>)=>{editor.patch(change);setMigration(undefined);};
  const reload=()=>editor.reload(t("Reload the saved relationship before editing again."));
- const publish=()=>editor.transition("publish");
  const installed=definitions.find((d)=>d.ref.kind==="link-type"&&d.ref.app==="build"&&d.ref.name===draft.name);
  const versions=Object.keys(installed?.linkVersions??{});
  if(!holds("build", "builder"))return <PageHeader title={t("Link types")} description={t("Only a builder can edit relationships.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Link types")} description={query.isError?t("The relationship could not be loaded."):t("Loading…")}/>;
- return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader crumbs={[{label:t("Link types"),onClick:()=>open({view:"link-type"})}]} title={draft.title||t("New link type")} status={<DraftStatus state={draft.published?"published":"draft"}/>} meta={draft.name?<span className="font-mono">{draft.name}{draft.version?` · v${draft.version}`:""}</span>:undefined} help={t("Declare relationships in their object owner and bind pages to an exact version.")} actions={<AssetControls type="build.linktype" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onCancel={discardChanges} onSave={()=>void perform(save)} onReview={()=>void perform(review)} onInstall={()=>void perform(publish)} onReload={()=>confirmDiscard(()=>void perform(reload))} route={{view:"link-type",params:{id}}}/>}/>
+ return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader crumbs={[{label:t("Link types"),onClick:()=>open({view:"link-type"})}]} title={draft.title||t("New link type")} status={<DraftStatus state={draft.published?"published":"draft"}/>} meta={draft.name?<span className="font-mono">{draft.name}{draft.version?` · v${draft.version}`:""}</span>:undefined} help={t("Declare relationships in their object owner and bind pages to an exact version.")} actions={<AssetControls type="build.linktype" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onCancel={discardChanges} onSave={()=>void perform(save)} onReload={()=>confirmDiscard(()=>void perform(reload))} route={{view:"link-type",params:{id}}}/>}/>
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
  <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
  <Panel title={t("Link type")} className="grid min-w-0 grid-cols-1 content-start gap-3">

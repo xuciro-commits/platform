@@ -1,4 +1,4 @@
-import { PropertyList, ContextHelp, StructuredEditor } from "@platform/ui";
+import { PropertyList, ContextHelp, ResourceNavigation, StructuredEditor } from "@platform/ui";
 import { mixedNames } from "../editor/names";
 import { ObjectLineage } from "./lineage";
 import {actionDestinations,actionResultEdges,actionStateInput,setActionDestination} from "./process-rules";
@@ -7,7 +7,7 @@ import { ShapeEditor } from "./shape";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost, useReadQuery } from "@platform/app";
 import {
-  Button, Card, Checkbox, ContentTabs, DataTable, Disclosure, Input, FlowCanvas, Panel, ProblemList, Select, StatusBar, Textarea, Workbench, useFlowArrangement, cn, notify, t, useViewCall, type WorkbenchProblem,
+  Button, Card, Checkbox, DataTable, Disclosure, Input, FlowCanvas, Panel, ProblemList, Select, StatusBar, Textarea, Workbench, useFlowArrangement, cn, notify, t, useViewCall, type WorkbenchProblem,
   type FlowEdge, type FlowNode, type FlowCatalog,
 } from "@platform/ui";
 import { Boxes, Link2, Plus, Trash2, Zap } from "lucide-react";
@@ -26,20 +26,13 @@ import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../e
 import { FieldFormatEditor, PresentationPanel, ValueTypeBinding } from "./presentation";
 
 const objectGroups = [
-  { id: "structure", title: "Object structure", sections: [{ id: "overview", title: "Overview" }, { id: "presentation", title: "Presentation" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "sets", title: "Record sets" }] },
-  { id: "behavior", title: "Behavior", sections: [{ id: "lifecycle", title: "Lifecycle" }, { id: "actions", title: "Actions" }] },
-  { id: "rules", title: "Rules and access", sections: [{ id: "constraints", title: "Business constraints" }, { id: "versions", title: "Business versions" }, { id: "protocols", title: "Protocols" }, { id: "permissions", title: "Permissions" }] },
-  { id: "data", title: "Data and preview", sections: [{ id: "datasources", title: "Data sources" }, { id: "data", title: "Data" }, { id: "preview", title: "Preview" }] },
+  { id: "overview", title: "", sections: [{ id: "overview", title: "Overview" }] },
+  { id: "definition", title: "Definition", sections: [{ id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "actions", title: "Actions" }, { id: "lifecycle", title: "Lifecycle" }, { id: "sets", title: "Record sets" }, { id: "presentation", title: "Display" }] },
+  { id: "data", title: "Data", sections: [{ id: "datasources", title: "Data sources" }, { id: "data", title: "Usage and lineage" }, { id: "preview", title: "Preview" }] },
+  { id: "rules", title: "Rules and security", sections: [{ id: "permissions", title: "Permissions" }, { id: "constraints", title: "Business constraints" }, { id: "protocols", title: "Protocols" }, { id: "versions", title: "History" }] },
 ] as const;
-type ObjectArea = typeof objectGroups[number]["id"];
-const objectSections = objectGroups.flatMap(group => [...group.sections]);
+const objectSections = objectGroups.flatMap(group => group.sections.map(section => ({ ...section, group: group.title })));
 type Tab = typeof objectSections[number]["id"];
-const sectionForLegacyTab: Record<Tab, ObjectArea> = {
-  overview: "structure", presentation: "structure", properties: "structure", links: "structure", sets: "structure",
-  lifecycle: "behavior", actions: "behavior",
-  constraints: "rules", versions: "rules", protocols: "rules", permissions: "rules",
-  datasources: "data", data: "data", preview: "data",
-};
 export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
   const call = useViewCall();
   const callInput = call?.input;
@@ -73,7 +66,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     change({ ...process, actions: [...process.actions, { name: nameOf("action", process.actions.map((a) => a.name)), title, from: from ? [from] : [], transaction: {subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}] } }] });
     setChosen({ kind: "action", at: process.actions.length });
   };
-  const { save, publish, review, perform } = draft;
+  const { save, perform } = draft;
   const action = chosen?.kind === "action" ? process.actions[chosen.at] : undefined;
   const state = chosen?.kind === "state" ? process.states[chosen.at] : undefined;
   const field = chosen?.kind === "field" ? process.fields[chosen.at] : undefined;
@@ -175,15 +168,14 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   return <Workbench storageKey="object-type" crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }]} title={object.title}
     status={<DraftStatus state={object.state} problems={issues.length} />} saving={savingState(dirty, busy, refused)}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setChosen(undefined); }, redo: () => { session.redo(); setChosen(undefined); } }}
-    actions={<ResourceControls type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} operations={call?.returnValue ? [{ id: "return", label: returnLabel, run: () => call.returnValue?.(undefined) }] : []} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "object-type", params: { id } }} />}
+    actions={<ResourceControls showStatus={false} type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} operations={call?.returnValue ? [{ id: "return", label: returnLabel, run: () => call.returnValue?.(undefined) }] : []} onSave={() => void perform(save)} onCancel={discardChanges} route={{ view: "object-type", params: { id } }} />}
     right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
-    <StructuredEditor {...draft.structured}><ContentTabs compact wrap label={t("Object areas")} value={sectionForLegacyTab[tab]} onChange={value => { const group = objectGroups.find(group => group.id === value); if (group) setTab(group.sections[0].id); }} items={objectGroups.map(group => ({
-      id: group.id, title: t(group.title), content: <ContentTabs compact wrap label={t("Object sections")} value={group.sections.some(section => section.id === tab) ? tab : group.sections[0].id} onChange={value => setTab(value as Tab)} items={group.sections.map(section => ({
-        id: section.id, title: t(section.title), content: <fieldset disabled={busy || blocked} className="flex h-full min-h-0 min-w-0 flex-col">{main[section.id]}</fieldset>,
-      }))} />,
-    }))} /></StructuredEditor>
+    <ResourceNavigation back={{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }} title={object.title || t("New object type")} icon={<Boxes />} meta={object.name}
+      sections={objectSections.map(section => ({ id: section.id, label: t(section.title), group: section.group ? t(section.group) : undefined, badge: section.id === "properties" ? process.fields.length || undefined : undefined }))}
+      value={tab} onChange={value => setTab(value as Tab)} />
+    <StructuredEditor {...draft.structured}><fieldset disabled={busy || blocked} className="flex h-full min-h-0 min-w-0 flex-col">{main[tab]}</fieldset></StructuredEditor>
   </Workbench>;
 }
 

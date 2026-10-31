@@ -37,29 +37,19 @@ export function AgentEditor({ id }: { id: string }) {
   ];
   const roles = [...new Set(["builder", ...objects.flatMap((o) => (o.access ?? []).map((a) => a.role))])];
   const editor = useDefinitionDraft<Draft>({
-    id, type: "build.agent", kind: "agent", view: "agent", empty,
+    id, type: "build.agent", view: "agent", empty,
     normalize: record => ({ ...record, tools: record.tools ?? [], cases: record.cases ?? [] }),
     failure: t("The agent could not be saved. Your draft is still here."),
     payload: ({ name, title, description, instructions, model, modelOptions, tools, steps, tokens, actions, cost, checkpoints, handoffRole, cases }) =>
       ({ name, title, description, instructions, model:model??"", modelOptions:modelOptions??{}, tools, steps: steps || 0, tokens: tokens || 0, actions: actions || 0, cost: cost || 0, checkpoints: checkpoints ?? [], handoffRole: handoffRole ?? "", cases: cases ?? [] }),
   });
-  const { draft, query, dirty, busy, error, setError, patch: change, perform, save, discardChanges } = editor;
+  const { draft, query, dirty, busy, error, patch: change, perform, save, discardChanges } = editor;
   const selection=useReadQuery<Api.ModelSelection>("/v1/ai/model-selection?purpose=agent").data;
   const selectedModel=selection?.models.find(row=>`${row.model.provider}/${row.model.model}`===(draft.model||selection.default));
   const issues: string[] = [];
   if (!/^[a-z][a-z0-9]*$/.test(draft.name) || !(draft.title ?? "").trim() || !(draft.description ?? "").trim()) issues.push(t("Give the agent a lower-case name, a title and a description."));
   if (!(draft.instructions ?? "").trim()) issues.push(t("Write its instructions."));
   if (!(draft.tools ?? []).length) issues.push(t("Give it at least one action or query."));
-  const review = async () => {
-    if (issues.length) { setError(issues.join(" ")); return; }
-    const saved = dirty || id === "new" ? await save(true) : { id: draft.id, revision: draft.revision };
-    if (saved) open({ view: "release-review", params: { kind: "agent", id: saved.id } }, { ifCurrent: { view: "agent", params: { id } }, replace: id === "new" });
-  };
-  const publish = async () => {
-    if (issues.length) { setError(issues.join(" ")); return; }
-    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
-    if (saved) await editor.transition("publish", saved);
-  };
   if (!holds("build", "builder")) return <Workbench storageKey="agent" title={t("Agent")}><WorkbenchMessage>{t("Only a builder can edit agents.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="agent" title={t("Agent")}><WorkbenchMessage>{query.isError ? t("The agent could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const cases = draft.cases ?? [];
@@ -67,7 +57,7 @@ export function AgentEditor({ id }: { id: string }) {
   return <Workbench storageKey="agent" crumbs={[{ label: t("Agent definitions"), onClick: () => open({ view: "agent" }) }]} title={draft.title || t("New agent")}
     status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>
-      <ResourceControls type="build.agent" record={draft} dirty={dirty} busy={busy} publishBlocked={issues.length > 0 ? t("Fix the problems first.") : undefined} empty={!draft.id} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "agent", params: { id } }} />
+      <ResourceControls showStatus={false} type="build.agent" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onSave={() => void perform(save)} onCancel={discardChanges} route={{ view: "agent", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("Agent")}><p className="text-xs text-muted">{t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}</p></ContextHelp>
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. A changed definition stops existing runs.", { name: draft.name, version: draft.version })}</Panel> : null}

@@ -33,8 +33,8 @@ export function MatchEditor({ id }: { id: string }) {
   const pipelineQuery = useReadQuery<{ records: Producer[] }>("/v1/records/build.pipeline?limit=200");
   const sourceQuery = useReadQuery<{ records: Producer[] }>("/v1/records/build.source?limit=200");
   const pipelines = pipelineQuery.data?.records ?? [], sources = sourceQuery.data?.records ?? [];
-  const { draft, structured, query, dirty, busy, error, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
-    id, type: "build.match", kind: "matching", view: "match", empty, normalize: record => ({ ...record, keys: record.keys ?? [], prefer: record.prefer ?? [] }),
+  const { draft, structured, query, dirty, busy, error, patch, perform, save, discardChanges, transition } = useDefinitionDraft<Draft>({
+    id, type: "build.match", view: "match", empty, normalize: record => ({ ...record, keys: record.keys ?? [], prefer: record.prefer ?? [] }),
     failure: t("The matching rule could not be saved or loaded. Your draft is still here."),
     payload: draft => {
       const { name, title, object, keys, prefer } = draft;
@@ -49,7 +49,7 @@ export function MatchEditor({ id }: { id: string }) {
   const setKey = (i: number, change: Partial<Key>) => patch({ keys: (draft.keys ?? []).map((k, j) => j === i ? { ...k, ...change } : k) });
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Matching rules"), onClick: () => open({ view: "match" }) }]} title={draft.title || t("New matching rule")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Object → keys that mean the same thing → whose value wins per field. Publish applies it to every row landing in the object from then on.")}
-      actions={<ResourceControls type="build.match" record={draft} dirty={dirty} busy={busy} route={{ view: "match", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined} onPublish={() => void perform(() => transition("publish"))}
+      actions={<ResourceControls type="build.match" record={draft} dirty={dirty} busy={busy} route={{ view: "match", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)}
         operations={draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []} />} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     {(pipelineQuery.isError || sourceQuery.isError) && <Panel role="alert" className="text-danger">{t("The pipelines or data sources could not be loaded.")}</Panel>}

@@ -21,17 +21,16 @@ export function PropertyTypes() {
 export function PropertyTypeEditor({id}:{id:string}) {
  const {definitions, holds}=useHost(),{open}=useApplicationWorkspace();
  const editor=useDefinitionDraft<Draft>({
-  id,type:"build.propertytype",kind:"property-type",view:"property-type",empty,normalize:hydrate,joinApplication:false,
+  id,type:"build.propertytype",view:"property-type",empty,normalize:hydrate,joinApplication:false,
   failure:t("The shared property could not be saved or loaded. Your draft is still here."),
   payload:({name,title,description,type})=>({name,title,description,type}),
  });
- const {draft,query,dirty,busy,error,patch,perform,save,review,discardChanges,confirmDiscard}=editor;
+ const {draft,query,dirty,busy,error,patch,perform,save,discardChanges,confirmDiscard}=editor;
  const reload=()=>editor.reload(t("Reload the saved shared property before editing again."));
- const publish=()=>editor.transition("publish");
  const versions=semanticPropertyTypes(definitions).filter(p=>p.binding.ref.app==="build"&&p.binding.ref.name===draft.name);
  if(!holds("build", "builder"))return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Shared properties")} description={query.isError?t("The shared property could not be loaded."):t("Loading…")}/>;
- return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader crumbs={[{label:t("Shared properties"),onClick:()=>open({view:"property-type"})}]} title={draft.title||t("New shared property")} status={<DraftStatus state={draft.published?"published":"draft"}/>} meta={draft.name?<span className="font-mono">{draft.name}{draft.version?` · v${draft.version}`:""}</span>:undefined} help={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<AssetControls type="build.propertytype" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onCancel={discardChanges} onSave={()=>void perform(save)} onReview={()=>void perform(review)} onInstall={()=>void perform(publish)} onReload={()=>confirmDiscard(()=>void perform(reload))} route={{view:"property-type",params:{id}}}/>}/>
+ return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader crumbs={[{label:t("Shared properties"),onClick:()=>open({view:"property-type"})}]} title={draft.title||t("New shared property")} status={<DraftStatus state={draft.published?"published":"draft"}/>} meta={draft.name?<span className="font-mono">{draft.name}{draft.version?` · v${draft.version}`:""}</span>:undefined} help={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<AssetControls type="build.propertytype" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onCancel={discardChanges} onSave={()=>void perform(save)} onReload={()=>confirmDiscard(()=>void perform(reload))} route={{view:"property-type",params:{id}}}/>}/>
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
  <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
  <Panel title={t("Shared property settings")} className="grid min-w-0 grid-cols-1 content-start gap-3">

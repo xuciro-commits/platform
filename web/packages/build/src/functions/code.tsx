@@ -115,9 +115,8 @@ export function CodeEditor({ id }: { id: string }) {
   return <Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} title={draft.title || t("New code function")}
     status={<DraftStatus state={draft.module ? "published" : "draft"} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>
-        <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid} onSave={() => void perform(save)}
-          publishBlocked={dirty ? t("Save and compile first.") : !draft.module || draft.state === "compiling" ? t("Compile the function first.") : undefined}
-          operations={[{ id: "compile", label: t("Compile function"), disabled: invalid || !draft.id || draft.state === "compiling", run: () => void perform(compile) }]} onReview={branch ? undefined : () => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
+        <ResourceControls showStatus={false} type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid} onSave={() => void perform(save)}
+          operations={[{ id: "compile", label: t("Compile function"), disabled: invalid || !draft.id || draft.state === "compiling", run: () => void perform(compile) }]} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("Code function")}><p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}

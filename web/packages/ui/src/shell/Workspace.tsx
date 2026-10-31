@@ -1,8 +1,9 @@
 import { useInputDrafts } from "../fields/draft";
 import { useTheme } from "../themes/theme";
 import { Command } from "cmdk";
-import { Bell, ChevronsLeft, Clock, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
+import { ArrowLeft, Bell, ChevronsLeft, Clock, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
+import { createPortal } from "react-dom";
 import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
@@ -50,7 +51,8 @@ type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close
   palette: () => void;
   recent: RecentEntry[];
   favorites: string[]; toggleFavorite: (app: string) => void;
-  applications?: Applications; rail?: Rail; };
+  applications?: Applications; rail?: Rail;
+  sidebarSlot?: HTMLElement | null; claimSidebar?: (panel: string) => () => void; activePanel?: string; };
 type Entry = { id: string; route: Route };
 type Memory = { recent: RecentEntry[]; favorites: string[]; last: Record<string, Route> };
 type Pending = { panels: string[]; run: () => void; owner?: symbol; cancel?: () => void };
@@ -69,6 +71,42 @@ export function useWorkspace(): WorkspaceApi {
   const panel = useContext(PanelContext);
   if (!api) throw new Error("useWorkspace outside <Workspace>");
   return { ...api, open: (route, options) => api.open(route, { ...options, from: panel }), close: route => api.close(route, panel), closeAll: () => api.closeAll(panel), confirmLeave: (run: () => void) => api.confirmLeave(run, panel), transfer: api.transfer && panel ? (_from, route, input, result) => api.transfer!(panel, route, input, result) : undefined };
+}
+
+export type ResourceSection = { id: string; label: string; icon?: ReactNode; badge?: ReactNode; group?: string };
+
+export function ResourceNavigation({ back, title, icon, meta, sections, value, onChange }: {
+  back?: { label: string; onClick: () => void }; title: string; icon?: ReactNode; meta?: ReactNode;
+  sections: ResourceSection[]; value: string; onChange: (id: string) => void;
+}) {
+  const api = useContext(WorkspaceContext);
+  const panel = useContext(PanelContext);
+  const main = !!panel?.startsWith("view:");
+  const claim = api?.claimSidebar;
+  useLayoutEffect(() => main && panel && claim ? claim(panel) : undefined, [main, panel, claim]);
+  const target = api?.sidebarSlot;
+  if (!main || api?.activePanel !== panel || !target) return null;
+  const groups: { label?: string; items: ResourceSection[] }[] = [];
+  for (const section of sections) {
+    const last = groups.at(-1);
+    if (last && last.label === section.group) last.items.push(section); else groups.push({ label: section.group, items: [section] });
+  }
+  return createPortal(<div className="grid gap-1">
+    {back && <button type="button" onClick={back.onClick} className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs text-muted hover:bg-row-hover hover:text-foreground [&_svg]:size-3.5 [&_svg]:shrink-0"><ArrowLeft /><span className="truncate">{back.label}</span></button>}
+    <div className="flex min-w-0 items-center gap-2 px-2 py-1.5">
+      {icon && <span className="grid size-6 shrink-0 place-items-center rounded-md bg-row-selected text-primary [&_svg]:size-3.5">{icon}</span>}
+      <span className="grid min-w-0"><span className="truncate text-sm font-semibold">{title}</span>{meta && <span className="truncate font-mono text-2xs text-muted">{meta}</span>}</span>
+    </div>
+    <nav aria-label={title} className="grid">
+      {groups.map((group, index) => <div key={`${group.label ?? ""}:${index}`} className="mb-1">
+        {group.label && <div className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wider text-muted">{group.label}</div>}
+        {group.items.map(section => <button key={section.id} type="button" onClick={() => onChange(section.id)} aria-current={section.id === value ? "page" : undefined}
+          className={cn("flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-foreground hover:bg-row-hover [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted", section.id === value && "bg-row-selected font-medium text-primary [&_svg]:text-primary")}>
+          {section.icon}<span className="min-w-0 flex-1 truncate">{section.label}</span>{section.badge != null && <span className="shrink-0 text-xs text-muted">{section.badge}</span>}
+        </button>)}
+      </div>)}
+    </nav>
+  </div>, target);
 }
 
 export function useViewTitle(name?: string) {
@@ -345,6 +383,12 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   }, [keyOf, closeSide, guard, setStack, goHome]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [sidebarSlot, setSidebarSlot] = useState<HTMLElement | null>(null);
+  const [claims, setClaims] = useState<string[]>([]);
+  const claimSidebar = useCallback((panel: string) => {
+    setClaims(current => current.includes(panel) ? current : [...current, panel]);
+    return () => setClaims(current => current.filter(id => id !== panel));
+  }, []);
   const workspace = useMemo<WorkspaceApi>(() => ({
     open, notify: toast, close,
     closeAll: () => guard(allPanels(), () => { if (sideRef.current) { forget([sideRef.current.id]); setSide(undefined); } goHome(); }),
@@ -371,8 +415,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       const route = routeOf(id);
       if (route && stackRef.current.at(-1)?.id === id) remember(m => ({ ...m, recent: m.recent.map(entry => keyOf(entry.route) === keyOf(route) ? { ...entry, title: name } : entry) }));
     },
-    recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail,
-  }), [open, close, guard, allPanels, forget, setSide, goHome, unsaved, routeOf, setStack, remember, keyOf, memory, toggleFavorite, applications, rail]);
+    recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail, sidebarSlot, claimSidebar, activePanel: stack.at(-1)?.id,
+  }), [open, close, guard, allPanels, forget, setSide, goHome, unsaved, routeOf, setStack, remember, keyOf, memory, toggleFavorite, applications, rail, sidebarSlot, claimSidebar, stack]);
 
   const returnFrom = useCallback((entry: Entry, ticket: string) => (value: unknown) => guard([entry.id], () => {
     transfers.current.finish(ticket, entry.id, value);
@@ -461,6 +505,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   const sidebar = hasNavigation && (
     <Sidebar app={currentApp} product={product} productIcon={productIcon} nav={nav} navigation={navigation} active={activeKey}
+      resource={!!top && claims.includes(top.id)} slot={setSidebarSlot}
       collapsed={!compact && sidebarCollapsed} onToggle={toggleSidebar} status={status}
       pinned={!!currentApp && memory.favorites.includes(currentApp.id)} onPin={currentApp ? () => toggleFavorite(currentApp.id) : undefined}
       onHome={currentApp ? () => open(currentApp.home) : undefined}
@@ -617,8 +662,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   );
 }
 
-function Sidebar({ app, product, productIcon, nav, navigation, active, collapsed, onToggle, onOpen, status, pinned, onPin, onHome }: {
-  app?: PlatformApplication; product: string; productIcon?: ReactNode; nav: NavSection[]; navigation?: ReactNode; active?: string;
+function Sidebar({ app, product, productIcon, nav, navigation, active, resource, slot, collapsed, onToggle, onOpen, status, pinned, onPin, onHome }: {
+  app?: PlatformApplication; product: string; productIcon?: ReactNode; nav: NavSection[]; navigation?: ReactNode; active?: string; resource: boolean; slot: (element: HTMLElement | null) => void;
   collapsed: boolean; onToggle: () => void; onOpen: (route: Route) => void; status?: ReactNode; pinned: boolean; onPin?: () => void; onHome?: () => void;
 }) {
   const title = app?.title ?? product, icon = app?.icon ?? productIcon;
@@ -642,7 +687,8 @@ function Sidebar({ app, product, productIcon, nav, navigation, active, collapsed
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-2">
       {navigation}
-      {nav.map((section) => (
+      <div ref={slot} />
+      {!resource && nav.map((section) => (
         <div key={section.label} className="mb-2">
           <div className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wider text-muted">{section.label}</div>
           <NavigationItems items={section.items} active={active} onOpen={onOpen} />

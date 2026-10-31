@@ -93,7 +93,7 @@ const asPage = (record: PageRecord, sections: Draft[], document?: PageUI.PageDoc
 export function PageEditor({ id, module }: { id: string; module?: ModuleContext }) {
   const { decide, source, catalog, definitions } = useHost();
   const { open } = useApplicationWorkspace();
-  const { query, scope, branch, mainRevision, publishRefusal } = useDraftRecord<PageRecord>("build.page", id);
+  const { query, scope, branch, mainRevision } = useDraftRecord<PageRecord>("build.page", id);
   const model = useAuthoringModel(), authoringEntity = model.entity;
   const savedPage = query.data?.record;
   const declarationFields = source.entity("build.page")?.fields ?? [], trial = useActionTrial();
@@ -112,9 +112,9 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const [inspectorTab, setInspectorTab] = useState<Record<string, string>>({});
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop"), [zoom, setZoom] = useState(100);
   const [refused, setRefused] = useState<string>();
-  const [saving, setSaving] = useState(false), [publishing, setPublishing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0);
-  const busy = saving || publishing;
+  const busy = saving;
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     if (page) { session.load(loadDraft(savedPage!,authoringEntity,declarationFields)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`; }
     select({ kind: "page" }); setRefused(undefined);
@@ -245,16 +245,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   };
   const nothing = sections.length === 0;
   saveRef.current = save;
-  const publish = async () => {
-    if (branch) { setRefused(publishRefusal); return; }
-    if (invalid || nothing || lock.current || dirty && !await save()) return;
-    lock.current = true; setRefused(undefined); setPublishing(true);
-    try {
-      if (await decide("build.page.publish", { type: "build.page", id }, {}, { onRefused: setRefused })) notify.success(t("The page is in the workspace."));
-    } catch { setRefused(t("The page could not be installed.")); }
-    finally { lock.current = false; setPublishing(false); }
-  };
-  const review = async () => { if (branch) { if (dirty) await save(); return; } if (nothing || invalid || lock.current || dirty && !await save()) return; open({ view: "release-review", params: { kind: "page", id } }); };
   const canvasSelection = sections[chosen];
   const nodeID = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id && node.kind === "widget")?.[0];
   const patchNode = (id: string, patch: Partial<PageUI.PageLayoutNode>) => edit((old) => ({ ...old, document: { ...old.document, nodes: { ...old.document.nodes, [id]: { ...old.document.nodes[id]!, ...patch } } } }), `node:${id}:${Object.keys(patch).join(",")}`);
@@ -341,12 +331,12 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       status={<DraftStatus state={page.state} problems={problemList.length} />} saving={savingState(dirty, saving, refused)}
       history={{ canUndo: session.canUndo && !busy && !preview, canRedo: session.canRedo && !busy && !preview, undo: () => history("undo"), redo: () => history("redo") }}
       actions={<>
-        <ResourceControls type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} operations={[
+        <ResourceControls showStatus={false} type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} operations={[
           { id: "preview", label: preview ? t("Exit preview") : t("Preview"), icon: <Play />, run: () => { setPreview(!preview); setCompatibilityOpen(false); select({ kind: "page" }); } },
         ]} extra={[
           { id: "compatibility", label: t("Review page compatibility…"), disabled: busy || preview, run: () => setCompatibilityOpen(true) },
           ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
-        ]} onSave={() => void save()} onReview={() => void review()} onInstall={() => void publish()} onCancel={discardChanges} route={canvasRoute} />
+        ]} onSave={() => void save()} onCancel={discardChanges} route={canvasRoute} />
       </>}
       onKeyDown={(event) => {
         const command = event.metaKey || event.ctrlKey;

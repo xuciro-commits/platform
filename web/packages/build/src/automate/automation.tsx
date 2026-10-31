@@ -74,7 +74,7 @@ export function AutomationEditor({ id }: { id: string }) {
   const declarationFields = authoringHost.source.entity("build.process")?.fields ?? [];
   const [sourceApplied, setSourceApplied] = useState(false);
   const process = useProcessDraft({ id, view: "automation", empty, failure: t("The automation request could not be completed.") });
-  const { session, draft, dirty, createID, query, busy, error, edit, save, publish, perform, discardChanges, revision } = process;
+  const { session, draft, dirty, createID, query, busy, error, edit, save, perform, discardChanges, revision } = process;
   const [chosen, setChosen] = useState<Chosen>("trigger");
   const objects = useMemo(() => model.entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states, fields: entity.fields })), [model.entities]);
   const object = objects.find((item) => item.type === draft.object);
@@ -101,11 +101,6 @@ export function AutomationEditor({ id }: { id: string }) {
     ...(error ? [{ id: "host", text: error }] : []),
   ];
   const invalid = !editable || problems.some((problem) => problem.id !== "host");
-  const review = async () => {
-    if (process.branch) { if (dirty || !draft.id) await save(); return; }
-    const target = await process.reviewTarget();
-    if (target) open({ view: "release-review", params: { kind: "flow", id: target } });
-  };
   const saveRef = useRef<() => Promise<unknown>>(async () => false); saveRef.current = () => perform(save);
   useAutoSave({enabled: !sourceApplied && editable && !process.branch, generation:JSON.stringify(draft), dirty, invalid, busy, save: () => saveRef.current() });
   if (!holds("build", "builder")) return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{t("Only a builder can edit automations.")}</WorkbenchMessage></Workbench>;
@@ -124,7 +119,7 @@ export function AutomationEditor({ id }: { id: string }) {
     status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.length} />} saving={savingState(dirty, busy, error || undefined)}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: session.undo, redo: session.redo }}
     actions={<>
-      <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} extra={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
+      <ResourceControls showStatus={false} type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} extra={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
     </>}
     right={editable ? { label: t("Automation inspector"), heading: chosenStep?.title || chosenStep?.name || t(chosen === "condition" ? "If" : "When"), scope:String(chosen),locate:()=>setChosen(chosen), content: <DraftInputs.Provider value={{ ...session.inputs, scope: chosenStep ? `step:${chosenStep.name}` : chosen, reveal: () => setChosen(chosen) }}><div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">

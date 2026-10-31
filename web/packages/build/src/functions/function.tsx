@@ -29,7 +29,7 @@ export function FunctionEditor({ id }: { id: string }) {
   const objects = (inventory.data?.records ?? []).filter(object => !object.archived);
   const [chosen, setChosen] = useState<Stage>("settings"), [testing, setTesting] = useState(false);
   const editor = useDefinitionDraft<FunctionDraft>({
-    id, type: "build.function", kind: "function", view: "function", empty, normalize: loaded,
+    id, type: "build.function", view: "function", empty, normalize: loaded,
     failure: t("The function could not be saved or loaded. Your draft is still here."), onDiscard: () => setChosen("settings"),
     payload: ({proposal,conversation,name,title,description,object,fields,instructions,output,model,modelOptions,maxInputBytes,maxOutputBytes,maxTokens,roles}) =>
       ({proposal:proposal??null,conversation:conversation??false,name,title,description,object,fields,instructions,output,model:model??"",modelOptions:modelOptions??{},maxInputBytes,maxOutputBytes,maxTokens,roles}),
@@ -53,16 +53,6 @@ export function FunctionEditor({ id }: { id: string }) {
     if (saved?.reloaded === false) { setError(t("Reload the saved function before editing again.")); return; }
     return saved;
   };
-  const publish = async () => {
-    if (issues.length) { setError(issues.join(" ")); return; }
-    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
-    if (saved) await editor.transition("publish", saved);
-  };
-  const review = async () => {
-    if (issues.length) { setError(issues.join(" ")); return; }
-    const saved = dirty || id === "new" ? await save(true) : { id: draft.id, revision: draft.revision };
-    if (saved) open({ view: "release-review", params: { kind: "function", id: saved.id } }, { ifCurrent: { view: "function", params: { id } }, replace: id === "new" });
-  };
   const reload = () => editor.reload(t("The function could not be saved or loaded. Your draft is still here."));
   if (!holds("build", "builder")) return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{t("Only a builder can edit AI functions.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{query.isError ? t("The function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
@@ -70,8 +60,8 @@ export function FunctionEditor({ id }: { id: string }) {
   return <Workbench storageKey="function" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} title={draft.title || t("New AI function")}
     status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>
-        <ResourceControls type="build.function" record={draft} dirty={dirty} busy={busy} publishBlocked={issues.length > 0 ? t("Fix the problems first.") : undefined} empty={!draft.id} onSave={() => void perform(save)} onReload={() => confirmDiscard(() => void perform(reload))}
-          operations={[{ id: "test", label: testing ? t("Hide test") : t("Test"), disabled: !draft.id || dirty, run: () => setTesting(!testing) }]} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "function", params: { id } }} />
+        <ResourceControls showStatus={false} type="build.function" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onSave={() => void perform(save)} onReload={() => confirmDiscard(() => void perform(reload))}
+          operations={[{ id: "test", label: testing ? t("Hide test") : t("Test"), disabled: !draft.id || dirty, run: () => setTesting(!testing) }]} onCancel={discardChanges} route={{ view: "function", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("AI function")}><p className="text-xs text-muted">{t("Save the declaration, test fixed cases, then review its release candidate.")}</p></ContextHelp>
     {testing && draft.id && !dirty && <Card className="p-3"><CandidateTest functionId={draft.id} embedded /></Card>}

@@ -1,9 +1,8 @@
 import {useInputDrafts} from "@platform/ui";
 import { useRecordArchive } from "@platform/app";
-import { ActionMenu, Button, StatusTag, defineStatuses, t, useWorkspace, type ContextCommand, type Route, type WorkbenchSaving } from "@platform/ui";
-import { ChevronDown, MoreHorizontal, Rocket } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
-import { useDirectInstall } from "../releases/release-profile";
+import { ActionMenu, Button, StatusTag, cn, defineStatuses, t, useWorkspace, type ContextCommand, type Route, type WorkbenchSaving } from "@platform/ui";
+import { Check, MoreHorizontal } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApplicationScope } from "../projects/application-scope";
 import { useCurrentBranch } from "../branches/current";
 
@@ -32,44 +31,48 @@ export function DraftStatus({ state, problems = 0, archived }: { state?: string;
 
 export type EditorOperation = ContextCommand & { busy?: boolean };
 
-export function ResourceControls({ type, record, dirty = false, busy = false, invalid = false, empty = false, onReview, onInstall, onPublish, onSave, onCancel, onReload, route, operations = [], extra = [], publishBlocked }: {
+export function ResourceControls({ type, record, dirty = false, busy = false, invalid = false, empty = false, autosave = true, showStatus = true, onSave, onCancel, onReload, route, operations = [], extra = [] }: {
   type: string; record?: { id?: string; revision?: number; archived?: boolean; state?: string }; dirty?: boolean; busy?: boolean; invalid?: boolean; empty?: boolean;
-  onReview?: () => void; onInstall?: () => void; onPublish?: () => void; onSave?: () => void; onCancel?: () => void; onReload?: () => void; route?: Route;
-  operations?: EditorOperation[]; extra?: ContextCommand[]; publishBlocked?: string;
+  autosave?: boolean; showStatus?: boolean; onSave?: () => void; onCancel?: () => void; onReload?: () => void; route?: Route;
+  operations?: EditorOperation[]; extra?: ContextCommand[];
 }) {
   const inputs=useInputDrafts();invalid ||=!!inputs?.invalid;busy ||=!!inputs?.busy;
   const { open, close } = useWorkspace();
   const application = useApplicationScope();
-  const directInstall = useDirectInstall();
   const archive = useRecordArchive(type);
   const onBranch = !!useCurrentBranch().id;
-  const home: Route = application ? { view: "project", params: { id: application } } : { view: "projects" };
+  const home: Route = route ? { view: route.view, ...(application ? { params: { application } } : {}) } : application ? { view: "project", params: { id: application } } : { view: "projects" };
   const tab: Route | undefined = route && application ? { view: route.view, params: { ...(route.params ?? {}), application } } : route;
   const leave = () => { onCancel?.(); open(home); if (tab) close(tab); };
   const saved = !!record?.id;
-  const blocked = busy || invalid || empty || !!publishBlocked;
-  const blockedReason = invalid ? t("Fix the problems first.") : publishBlocked ?? (empty ? t("Nothing to publish yet.") : undefined);
+  const [stalled, setStalled] = useState(false);
+  const attempt = useRef<number | undefined>(undefined), wasBusy = useRef(busy);
+  useEffect(() => { if (!dirty) { setStalled(false); attempt.current = undefined; } }, [dirty]);
+  useEffect(() => { setStalled(false); }, [record?.revision]);
+  useEffect(() => {
+    if (wasBusy.current && !busy && dirty && attempt.current !== undefined && attempt.current === record?.revision) setStalled(true);
+    wasBusy.current = busy;
+  }, [busy, dirty, record?.revision]);
+  useAutoSave({ enabled: autosave && saved && !!onSave && !record?.archived && !stalled, dirty, invalid, busy, save: async () => { attempt.current = record?.revision; onSave?.(); } });
   const inline = operations.slice(0, 2), more = operations.slice(2);
-  const publishMenu: ContextCommand[] = [
-    ...(onReview && onPublish ? [{ id: "publish-now", label: t("Publish now, without a release"), disabled: blocked, run: onPublish }] : []),
-    ...(directInstall && onInstall ? [{ id: "install", label: t("Install directly (no release)"), disabled: dirty || blocked, run: onInstall }] : []),
-  ];
   const overflow: ContextCommand[] = [
     ...more.map(operation => ({ ...operation, disabled: busy || operation.disabled })),
     ...extra,
-    ...(onReload && saved ? [{ id: "reload", label: t("Reload saved version"), disabled: busy, separatorBefore: more.length + extra.length > 0, run: onReload }] : []),
-    ...(saved && !record?.archived && archive.available ? [{ id: "archive", label: onBranch ? t("Archive on this branch…") : t("Archive…"), danger: true, disabled: dirty || busy, separatorBefore: more.length + extra.length > 0 || !!onReload, run: () => archive.take({ id: record!.id!, revision: record!.revision ?? 0 }, leave) }] : []),
+    ...(saved && dirty && onCancel ? [{ id: "discard", label: t("Discard unsaved changes"), disabled: busy, separatorBefore: more.length + extra.length > 0, run: onCancel }] : []),
+    ...(onReload && saved ? [{ id: "reload", label: t("Reload saved version"), disabled: busy, separatorBefore: more.length + extra.length > 0 && !(dirty && onCancel), run: onReload }] : []),
+    ...(saved && !record?.archived && archive.available ? [{ id: "archive", label: onBranch ? t("Archive on this branch…") : t("Archive…"), danger: true, disabled: dirty || busy, separatorBefore: true, run: () => archive.take({ id: record!.id!, revision: record!.revision ?? 0 }, leave) }] : []),
   ];
-  const publish = onReview ?? onPublish;
-  const saveAction = onBranch ? onSave ?? onReview : onSave;
+  const manual = !autosave || stalled || invalid;
+  const status = busy ? t("Saving…") : dirty ? (stalled ? t("Not saved") : invalid ? t("Fix the problems to save") : t("Unsaved changes")) : onBranch ? t("Saved to branch") : t("Saved as draft");
   return <>
     {inline.map(operation => <Button key={operation.id} disabled={busy || operation.disabled} loading={operation.busy} title={operation.disabled ? operation.reason : undefined} onClick={operation.run}>{operation.icon}{operation.label}</Button>)}
-    {onCancel && (saved ? dirty && <Button variant="ghost" disabled={busy} onClick={onCancel}>{t("Discard changes")}</Button> : <Button variant="ghost" disabled={busy} onClick={leave}>{t("Cancel")}</Button>)}
-    {saveAction && <Button variant={onBranch ? "primary" : "default"} disabled={busy || invalid || saved && !dirty} onClick={saveAction}>{onBranch ? t("Save to branch") : t("Save")}</Button>}
-    {!onBranch && publish && <div className="flex items-center">
-      <Button variant="primary" className={publishMenu.length ? "rounded-r-none" : undefined} disabled={blocked} onClick={publish} title={blockedReason}>{onReview ? <><Rocket />{t("Publish")}</> : t("Publish")}</Button>
-      {publishMenu.length > 0 && <ActionMenu label={t("Publish options")} variant="primary" className="rounded-l-none border-l-primary-foreground/30" icon={<ChevronDown />} commands={publishMenu} />}
-    </div>}
+    {saved ? <>
+      {showStatus && onSave && <span role="status" className={cn("flex items-center gap-1 px-1 text-xs [&_svg]:size-3.5", stalled ? "text-danger" : "text-muted")}>{!dirty && !busy && <Check />}{status}</span>}
+      {onSave && dirty && manual && <Button disabled={busy || invalid} title={invalid ? t("Fix the problems first.") : undefined} onClick={onSave}>{t("Save")}</Button>}
+    </> : <>
+      {onCancel && <Button variant="ghost" disabled={busy} onClick={leave}>{t("Cancel")}</Button>}
+      {onSave && <Button variant="primary" disabled={busy || invalid || empty} title={invalid ? t("Fix the problems first.") : undefined} onClick={onSave}>{t("Create")}</Button>}
+    </>}
     {overflow.length > 0 && <ActionMenu label={t("More actions")} icon={<MoreHorizontal />} commands={overflow} />}
     {archive.dialog}
   </>;

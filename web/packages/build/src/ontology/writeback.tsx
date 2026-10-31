@@ -34,8 +34,8 @@ export function WritebackEditor({ id }: { id: string }) {
   const connectionQuery = useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100");
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired" && c.kind !== "postgres");
   const effects = useReadQuery<Api.IntegrationEffect[]>("/v1/integration-effects", 5000).data ?? [];
-  const { draft, structured, query, dirty, busy, error, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
-    id, type: "build.writeback", kind: "writeback", view: "writeback", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [], result: record.result ?? [] }),
+  const { draft, structured, query, dirty, busy, error, patch, perform, save, discardChanges, transition } = useDefinitionDraft<Draft>({
+    id, type: "build.writeback", view: "writeback", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [], result: record.result ?? [] }),
     failure: t("The writeback could not be saved or loaded. Your draft is still here."),
     payload: draft => {
       const { name, title, connection, object, on, method, transport, path, mapping, result } = draft;
@@ -61,7 +61,7 @@ export function WritebackEditor({ id }: { id: string }) {
   </div>;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Writebacks"), onClick: () => open({ view: "writeback" }) }]} title={draft.title || t("New writeback")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Choose the original object, trigger, connection and request fields. Explicit confirmations and dispatches send only when their declared business operation runs.")}
-      actions={<ResourceControls type="build.writeback" record={draft} dirty={dirty} busy={busy} route={{ view: "writeback", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined} onPublish={() => void perform(() => transition("publish"))}
+      actions={<ResourceControls type="build.writeback" record={draft} dirty={dirty} busy={busy} route={{ view: "writeback", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)}
         operations={draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []} />} />
     {error && <Notice tone="danger" message={error} />}
     {connectionQuery.isError && <Notice tone="danger" message={t("The connections could not be loaded.")} />}

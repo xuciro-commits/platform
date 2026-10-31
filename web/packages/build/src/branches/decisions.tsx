@@ -23,7 +23,7 @@ export function BranchDecisions({ children }: { children: ReactNode }) {
     const decide: Host["decide"] = async (schema, target, payload, options) => {
       const branch = host.holds("build", "builder") ? selectedBranch(host.client) : undefined;
       const cut = schema.lastIndexOf("."), type = schema.slice(0, cut), verb = schema.slice(cut + 1);
-      if (!branch || type !== target.type || !draftTypes.has(type)) return host.decide(schema, target, payload, options);
+      if (!branch || type !== target.type || !draftTypes.has(type)) return host.decide(schema, target, payload, verb === "edit" && type === target.type && draftTypes.has(type) ? { quiet: true, ...options } : options);
       if (onMain.has(verb)) { const reason = branchRefusal(verb); if (options?.onRefused) options.onRefused(reason); else notify.error(reason); return false; }
       if (verb !== "create" && verb !== "edit" && verb !== "archive" && verb !== "compile") return host.decide(schema, target, payload, options);
       const actions = latest.current;
@@ -38,7 +38,7 @@ export function BranchDecisions({ children }: { children: ReactNode }) {
           for (const [name, change] of Object.entries((payload ?? {}) as Record<string, unknown>)) { if (change === null || change === undefined) delete spec[name]; else spec[name] = change; }
           await actions.save(branch, type, target.id, { op: "update", spec });
         }
-        if (!options?.quiet) notify.success(t("Saved to the branch."));
+        if (!options?.quiet && verb !== "edit" && verb !== "create") notify.success(t("Saved to the branch."));
         return true;
       } catch (problem) {
         const reason = problem instanceof Error ? problem.message : String(problem);

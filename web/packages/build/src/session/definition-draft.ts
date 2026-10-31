@@ -12,8 +12,8 @@ import { useDraftRecord } from "../branches/draft-record";
 type DefinitionDraft = { id: string; revision: number; name: string };
 type Saved = { id: string; revision: number; reloaded?: boolean };
 
-export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, view, empty, normalize, payload, failure, joinApplication = true, onDiscard }: {
-  id: string; type: string; kind: string; view: string; empty: () => T;
+export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, empty, normalize, payload, failure, joinApplication = true, onDiscard }: {
+  id: string; type: string; view: string; empty: () => T;
   normalize?: (record: T) => T; payload: (draft: T) => unknown; failure: string;
   joinApplication?: boolean; onDiscard?: () => void;
 }) {
@@ -125,11 +125,5 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
     if (id === "new") showSaved(saved.id);
     else await reload(t("The resource was installed, but its current record could not be reloaded."), saved.revision + 1);
   };
-  const review = async () => {
-    if (inputs?.invalid) return;
-    if (branch) { if (dirty || id === "new") await save(); return; }
-    const saved = dirty || id === "new" ? await save(true) : confirmed.current;
-    if (saved?.id) open({ view: "release-review", params: { kind, id: saved.id } }, { ifCurrent: { view, params: { id } }, replace: id === "new" });
-  };
-  return { draft, structured, createID, query, dirty, joining, busy, error, setError, inputs, patch, perform, save, transition, review, reload, discardChanges, confirmDiscard };
+  return { draft, structured, createID, query, dirty, joining, busy, error, setError, inputs, patch, perform, save, transition, reload, discardChanges, confirmDiscard };
 }

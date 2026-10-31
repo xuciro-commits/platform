@@ -38,8 +38,8 @@ export function DataSourceEditor({ id }: { id: string }) {
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired");
   const datasetQuery = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200");
   const datasets = datasetQuery.data?.records ?? [];
-  const { draft, structured, query, dirty, busy, error, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
-    id, type: "build.source", kind: "source", view: "data-source", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [] }),
+  const { draft, structured, query, dirty, busy, error, patch, perform, save, discardChanges, transition } = useDefinitionDraft<Draft>({
+    id, type: "build.source", view: "data-source", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [] }),
     failure: t("The data source could not be saved or loaded. Your draft is still here."),
     payload: draft => {
       const { name, title, url, object, key, mapping, every, allowPrivate, header, path, connection, profile, entity, filter, since, dataset, stream } = draft;
@@ -62,7 +62,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Data sources"), onClick: () => open({ view: "data-source" }) }]} title={draft.title || t("New data source")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Declare the source, row mapping and schedule. Publishing saves the declaration; Pull now checks the current environment and requests a pull.")}
-      actions={<ResourceControls type="build.source" record={draft} dirty={dirty} busy={busy} route={{ view: "data-source", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined} onPublish={() => void perform(() => transition("publish"))}
+      actions={<ResourceControls type="build.source" record={draft} dirty={dirty} busy={busy} route={{ view: "data-source", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)}
         operations={[
           ...(draft.state === "published" && !draft.stream ? [{ id: "pull", label: draft.requested ? t("Pull requested…") : t("Pull now"), disabled: dirty || !!draft.requested, run: () => void perform(() => transition("pull")) }] : []),
           ...(draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []),
