@@ -42,7 +42,7 @@ export function AlertEditor({ id }: { id: string }) {
   if (id !== "new" && !draft.id) return <PageHeader title={t("Alert rules")} description={query.isError ? t("The alert rule could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 gap-3">
     <PageHeader crumbs={[{ label: t("Alert rules"), onClick: () => open({ view: "alert" }) }]} status={<DraftStatus state={dirty ? "draft" : draft.state} />} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} title={draft.title || t("New alert rule")} help={t("Checked after every change to a record of the object. People holding the role get a notification that opens the record.")}
-      actions={<ResourceControls type="build.alertrule" record={draft} dirty={dirty} busy={busy} onSave={() => void perform(save)} onCancel={discardChanges} route={{ view: "alert", params: { id } }} />} />
+      actions={<ResourceControls type="build.alertrule" record={draft} dirty={dirty} busy={busy} onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "alert", params: { id } }} />} />
     <ContextHelp title={t("Alert rule")}><p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3 lg:grid-cols-2">

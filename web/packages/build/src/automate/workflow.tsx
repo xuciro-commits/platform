@@ -4,7 +4,7 @@ import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import {useInputBuffers} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import {DraftInputs} from "../session/DraftSession";
 import { removeWorkflowSteps, renameWorkflowStep, replaceReferences, workflowBindings, withWorkflowBinding } from "./workflow-edit";
 import {workflowRunMatches} from "./workflow-session";
@@ -293,10 +293,10 @@ export function FlowEditor({ id }: { id: string }) {
   </div>;
   return <>
     <Workbench storageKey="flow" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} title={draft.title || t("New flow")}
-      status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.filter((p) => p.severity !== "warning").length} />} saving={savingState(dirty, busy, error || undefined)}
+      status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.filter((p) => p.severity !== "warning").length} />} busy={busy}
       history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setValidation(undefined); }, redo: () => { session.redo(); setValidation(undefined); } }}
       actions={<>
-        <ResourceControls showStatus={false} type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onSave={() => void perform(save)} onCancel={discardChanges} onReload={() => confirmDiscard(() => void perform(process.reload))} route={{ view: "flow", params: { id } }}
+        <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onSave={() => perform(save)} onCancel={discardChanges} onReload={() => confirmDiscard(() => void perform(process.reload))} route={{ view: "flow", params: { id } }}
           operations={[{ id: "validate", label: t("Validate"), disabled: brokenForm.length > 0, run: () => void perform(check) },
             { id: "run", label: t("Run"), icon: <Play />, disabled: !synchronized || !installed?.manual || dirty, run: () => setDock("run") }]} />
       </>}

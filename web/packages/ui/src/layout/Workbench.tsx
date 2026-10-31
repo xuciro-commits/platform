@@ -13,7 +13,6 @@ export type WorkbenchCrumb = { label: ReactNode; onClick?: () => void };
 export type WorkbenchTab = { id: string; title: ReactNode; badge?: number | string; content: ReactNode };
 export type WorkbenchPanel = { label: string; heading?: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void; scope?: string; locate?: (path?: string) => void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };
 export type WorkbenchHistory = { canUndo: boolean; canRedo: boolean; undo: () => void; redo: () => void };
-export type WorkbenchSaving = "idle" | "dirty" | "saving" | "saved" | "error";
 
 type Side = "left" | "right" | "dock";
 type Layout = { left: number; right: number; dock: number; leftOpen: boolean; rightOpen: boolean; dockOpen: boolean; dockTab?: string };
@@ -30,15 +29,14 @@ const read = (key: string): Layout => {
   } catch { return defaults; }
 };
 
-export function Workbench({ storageKey, crumbs = [], title, status, saving, history, actions, left, right, dock, children, className, onKeyDown, mainLabel }: {
-  storageKey: string; crumbs?: WorkbenchCrumb[]; title?: ReactNode; status?: ReactNode; saving?: WorkbenchSaving; history?: WorkbenchHistory; actions?: ReactNode;
+export function Workbench({ storageKey, crumbs = [], title, status, busy = false, history, actions, left, right, dock, children, className, onKeyDown, mainLabel }: {
+  storageKey: string; crumbs?: WorkbenchCrumb[]; title?: ReactNode; status?: ReactNode; busy?: boolean; history?: WorkbenchHistory; actions?: ReactNode;
   left?: WorkbenchPanel; right?: WorkbenchPanel;
   dock?: WorkbenchPanel;
   children: ReactNode; className?: string; mainLabel?: string;
   onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
 }) {
   const inputs = useInputDrafts(), visible = useViewVisible(), prefix = useId();
-  if (inputs?.dirty && saving !== "saving" && saving !== "error") saving = "dirty";
   useViewTitle(typeof title === "string" ? title : undefined);
   const root = useRef<HTMLDivElement>(null), main = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<Layout>(() => read(storageKey));
@@ -167,7 +165,6 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
       resize(side, sizes[side] + (grow ? 16 : -16));
     }} />;
   const columns = compact ? "minmax(0,1fr)" : `${showLeft ? `${sizes.left}px 6px ` : ""}minmax(0,1fr)${showRight ? ` 6px ${sizes.right}px` : ""}`;
-  const savingLabel = saving === "saving" ? t("Saving…") : saving === "saved" ? t("Saved") : saving === "dirty" ? t("Unsaved changes") : saving === "error" ? t("Not saved") : "";
   const paneHeading = (side: "left" | "right", panel: WorkbenchPanel) => (compact || panel.heading) && <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-1">
     <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{panel.heading ?? panel.label}</h2>
     <Button variant="ghost" size="sm" aria-label={t(side === "left" ? "Close structure panel" : "Close inspector panel")} onClick={() => togglePane(side)}><X /></Button>
@@ -195,12 +192,11 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
         <Button variant="ghost" size="sm" aria-label={t("Undo")} title={t("Undo") + " ⌘Z"} disabled={!history.canUndo} onClick={history.undo}><Undo2 /></Button>
         <Button variant="ghost" size="sm" aria-label={t("Redo")} title={t("Redo") + " ⇧⌘Z"} disabled={!history.canRedo} onClick={history.redo}><Redo2 /></Button>
       </div>}
-      {savingLabel && <span role="status" className={cn("ml-2 text-xs", saving === "error" ? "text-danger" : "text-muted")}>{savingLabel}</span>}
       <fieldset disabled={inputs?.busy} className="ml-auto flex flex-wrap items-center gap-1"><DefaultButtonSize.Provider value="lg">{actions}</DefaultButtonSize.Provider></fieldset>
       {dock && <Button id={`${prefix}-toggle-dock`} variant="ghost" size="sm" aria-label={t("Toggle dock")} aria-controls={`${prefix}-dock`} aria-pressed={showDock && showMain} aria-expanded={showDock && showMain} title="⌘J" onClick={() => setDockOpen(!showDock || !showMain)}>{showDock && showMain ? <PanelBottomClose /> : <PanelBottomOpen />}</Button>}
       {right && <Button id={`${prefix}-toggle-right`} variant="ghost" size="sm" aria-label={t("Toggle inspector panel")} aria-controls={`${prefix}-right`} aria-pressed={showRight} aria-expanded={showRight} title="⌥⌘\\" onClick={() => togglePane("right")}>{showRight ? <PanelRightClose /> : <PanelRightOpen />}</Button>}
     </header>
-    <fieldset disabled={inputs?.busy || saving === "saving"} className="grid min-h-0 min-w-0 flex-1 border-0 p-0" style={{ gridTemplateColumns: columns }}>
+    <fieldset disabled={inputs?.busy || busy} className="grid min-h-0 min-w-0 flex-1 border-0 p-0" style={{ gridTemplateColumns: columns }}>
       {left && <>
         <aside id={`${prefix}-left`} role="region" aria-label={left.label} tabIndex={-1} hidden={!showLeft} style={{ display: showLeft ? undefined : "none" }} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border">
           <ViewVisibilityContext.Provider value={visible && showLeft}>

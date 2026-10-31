@@ -522,7 +522,7 @@ export function CanvasEditorExample(){
 }
 
 export function WorkbenchExample() {
-  return <div className="h-[28rem]"><Workbench storageKey="catalog-example" crumbs={[{ label: "Project" }, { label: "Module" }]} title="Receiving" saving="saved"
+  return <div className="h-[28rem]"><Workbench storageKey="catalog-example" crumbs={[{ label: "Project" }, { label: "Module" }]} title="Receiving"
     history={{ canUndo: true, canRedo: false, undo: () => {}, redo: () => {} }} actions={<Button variant="primary">Publish</Button>}
     left={{ label: "Structure", tabs: [{ id: "layers", title: "Layers", content: <PanelSection title="Pages"><StructureRow label="Inbound tasks" selected /><StructureRow label="Putaway" depth={1} /></PanelSection> }, { id: "widgets", title: "Widgets", content: <p className="p-3 text-xs">Widget library</p> }] }}
     right={{ label: "Inspector", tabs: [{ id: "properties", title: "Properties", content: <p className="p-3 text-xs">Properties</p> }, { id: "events", title: "Events", badge: 2, content: <p className="p-3 text-xs">Events</p> }] }}

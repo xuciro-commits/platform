@@ -6,7 +6,7 @@ import { Button, Checkbox, DateInput, DateTimeInput, EmptyState, Input, Notice, 
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
-import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 
 type Draft = Api.ValueType & { id: string; revision: number; state?: string; published?: string; version?: number; versions?: string[] };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", description: "", base: "text" });
@@ -101,9 +101,9 @@ export function ValueTypeEditor({ id }: { id: string }) {
   const invalid = !!inputs?.invalid || !draft.name || !draft.title || !draft.description;
   const changeBase = (base: string) => patch({ base: base as Draft["base"], constraints: {}, pattern: "", choices: [] });
   return <Workbench storageKey="value-type" crumbs={[{ label: t("Value types"), onClick: () => open({ view: "value-type" }) }]} title={draft.title || t("New value type")}
-    status={<DraftStatus state={draft.state ?? "draft"} />} saving={savingState(dirty, busy, error || undefined)}
-    actions={<ResourceControls showStatus={false} type="build.valuetype" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!draft.id}
-      onSave={() => void perform(save)} onCancel={discardChanges} route={{ view: "value-type", params: { id } }} />}
+    status={<DraftStatus state={draft.state ?? "draft"} />} busy={busy}
+    actions={<ResourceControls type="build.valuetype" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!draft.id}
+      onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "value-type", params: { id } }} />}
     right={{ label: t("Value type inspector"), tabs: [
       { id: "try", title: t("Try a value"), content: <TryValue draft={draft} /> },
       { id: "versions", title: t("Versions"), badge: versions.length, content: versions.length

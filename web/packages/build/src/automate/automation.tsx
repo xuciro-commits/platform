@@ -5,11 +5,11 @@ import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useHost, useReadQuery } from "@platform/app";
 import { ActionMenu, Button, Input, PageHeader, ProblemList, Select, Tag, Workbench, cn, t, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, Brain, Clock, Plus, Trash2, Workflow, Zap } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { DraftInputs } from "../session/DraftSession";
-import { DraftStatus, ResourceControls, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { WorkflowInspector } from "./workflow-inspector";
 import { PERIODS, capabilityKey, initialStep, nextStepName, periodLabel, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { WorkflowRuns } from "./workflow-runs";
@@ -101,8 +101,6 @@ export function AutomationEditor({ id }: { id: string }) {
     ...(error ? [{ id: "host", text: error }] : []),
   ];
   const invalid = !editable || problems.some((problem) => problem.id !== "host");
-  const saveRef = useRef<() => Promise<unknown>>(async () => false); saveRef.current = () => perform(save);
-  useAutoSave({enabled: !sourceApplied && editable && !process.branch, generation:JSON.stringify(draft), dirty, invalid, busy, save: () => saveRef.current() });
   if (!holds("build", "builder")) return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{t("Only a builder can edit automations.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{query.isError ? t("The automation could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const chosenStep = effects.find((step) => `step:${step.name}` === chosen);
@@ -116,10 +114,10 @@ export function AutomationEditor({ id }: { id: string }) {
     open({ view: "flow", params: { id: draft.id || createID } });
   });
   return <Workbench storageKey="automation" crumbs={[{ label: t("Automate"), onClick: () => open({ view: "automation" }) }, { label: t("Automations"), onClick: () => open({ view: "automation" }) }]} title={draft.title || t("New automation")}
-    status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.length} />} saving={savingState(dirty, busy, error || undefined)}
+    status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.length} />} busy={busy}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: session.undo, redo: session.redo }}
     actions={<>
-      <ResourceControls showStatus={false} type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} extra={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
+      <ResourceControls autosave={!sourceApplied && editable && !process.branch} type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} extra={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
     </>}
     right={editable ? { label: t("Automation inspector"), heading: chosenStep?.title || chosenStep?.name || t(chosen === "condition" ? "If" : "When"), scope:String(chosen),locate:()=>setChosen(chosen), content: <DraftInputs.Provider value={{ ...session.inputs, scope: chosenStep ? `step:${chosenStep.name}` : chosen, reveal: () => setChosen(chosen) }}><div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">

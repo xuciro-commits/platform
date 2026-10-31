@@ -14,7 +14,7 @@ export { Button, DefaultButtonSize, type ButtonProps } from "./primitives/button
 export { Input, Select, Textarea } from "./primitives/input";
 export { Card, Panel, PanelGroup, PlainPanels } from "./primitives/card";
 export { Tooltip } from "./primitives/tooltip";
-export { Workbench, ProblemList, StructureRow, PanelSection, type WorkbenchCrumb, type WorkbenchTab, type WorkbenchPanel, type WorkbenchHistory, type WorkbenchSaving, type WorkbenchProblem } from "./layout/Workbench";
+export { Workbench, ProblemList, StructureRow, PanelSection, type WorkbenchCrumb, type WorkbenchTab, type WorkbenchPanel, type WorkbenchHistory, type WorkbenchProblem } from "./layout/Workbench";
 export { ContentTabs } from "./layout/ContentTabs";
 export {validChoiceInput} from "./components/choice";
 export {Separator} from "./primitives/separator";
@@ -59,7 +59,7 @@ export {AIResult,type AIResultProps,type AIResultTurn} from "./components/AIResu
 export {ExternalFrame,validExternalFrame,type ExternalFrameProps,type ExternalFrameConfig} from "./components/ExternalFrame";
 export {StaticImage,validStaticImage,validStaticImageURL,type StaticImageProps,type StaticImageConfig} from "./components/StaticImage";
 export { Sheet } from "./primitives/sheet";
-export { Workspace, ResourceNavigation, ResourceSections, useWorkspace, useViewCall, useViewTitle, useUnsavedChanges, notify, type Applications, type PlatformApplication, type Rail, type RecentEntry, type View, type NavSection, type ShellCommand, type Session, type ResourceSection } from "./shell/Workspace";
+export { Workspace, ResourceNavigation, ResourceSections, useWorkspace, useViewCall, useViewTitle, useUnsavedChanges, useLeaveFlush, notify, type Applications, type PlatformApplication, type Rail, type RecentEntry, type View, type NavSection, type ShellCommand, type Session, type ResourceSection } from "./shell/Workspace";
 export { navigationLinks, routeCovers, type NavItem, type NavLink } from "./shell/Navigation";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";

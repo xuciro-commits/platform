@@ -39,7 +39,7 @@ export function BranchControls() {
       <option value="">main</option>
       {live.map(branch => <option key={branch.id} value={branch.id}>{branch.title}</option>)}
     </Select></Tooltip>;
-  const save = current?.state === "open" ? <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("This branch has no changes.")} onClick={() => setReviewing(true)}>{t("Review and save")}</Button>
+  const save = current?.state === "open" ? <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("This branch has no changes.")} onClick={() => confirmLeave(() => setReviewing(true))}>{t("Review and save")}</Button>
     : current?.state === "proposed" ? <Button size="sm" variant="primary" onClick={() => openProposal(current.id)}>{t("Open proposal")}</Button>
     : <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("Every resource is published.")} onClick={reviewMain}>{t("Review and save")}</Button>;
   const pending = count > 0 ? <Tooltip content={!current ? working.drafts.slice(0, 12).map(draft => `${t(draft.label)} · ${draft.title}`).join("\n") : undefined}><span><Tag label={t("Changes ({n})", { n: count })} tone="warning" /></span></Tooltip>

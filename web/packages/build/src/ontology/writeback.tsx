@@ -61,7 +61,7 @@ export function WritebackEditor({ id }: { id: string }) {
   </div>;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Writebacks"), onClick: () => open({ view: "writeback" }) }]} title={draft.title || t("New writeback")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Choose the original object, trigger, connection and request fields. Explicit confirmations and dispatches send only when their declared business operation runs.")}
-      actions={<ResourceControls type="build.writeback" record={draft} dirty={dirty} busy={busy} route={{ view: "writeback", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)}
+      actions={<ResourceControls type="build.writeback" record={draft} dirty={dirty} busy={busy} route={{ view: "writeback", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
         operations={draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []} />} />
     {error && <Notice tone="danger" message={error} />}
     {connectionQuery.isError && <Notice tone="danger" message={t("The connections could not be loaded.")} />}

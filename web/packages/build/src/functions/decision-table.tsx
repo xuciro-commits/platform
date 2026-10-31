@@ -65,7 +65,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
   if (id !== "new" && !draft.id) return <PageHeader title={t("Decision tables")} description={query.isError ? t("The decision table could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} status={<DraftStatus state={dirty ? "draft" : draft.state} />} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} title={draft.title || t("New decision table")} help={t("A condition cell is empty for any value, or = v, != v, < v, <= v, > v, >= v, a..b, a|b|c. The first row whose conditions all hold decides.")}
-      actions={<ResourceControls type="build.table" record={draft} dirty={dirty} busy={busy} onSave={() => void perform(save)} onCancel={discardChanges} route={{ view: "decision-table", params: { id } }} />} />
+      actions={<ResourceControls type="build.table" record={draft} dirty={dirty} busy={busy} onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "decision-table", params: { id } }} />} />
     <ContextHelp title={t("Decision table")}><p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     <StructuredEditor {...structured} value={{ ...structured.value, ...(draft.rows?{rows: draft.rows.map(row => row.expressions?.length ? { expressions: row.expressions, then: row.then } : { when: row.when, then: row.then })}:{}) }}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3">

@@ -13,7 +13,7 @@ import { DraftStatus } from "../editor/workbench";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
 import { Plus, Shield, Trash2, Zap, Blocks } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
+import { ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { EnterpriseReferenceTypes, Label } from "./process";
 import { actionInputFields, conditionSubjects, inputTypes, nameOf, type Action, type ApproverLevel, type Input_ } from "./object-model";
 import { actionResultEdges } from "./process-rules";
@@ -152,9 +152,9 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
   const inspector = action && pick && inputs[pick.at] ? <div className="p-2"><RowCard title={t("Parameter")} onRemove={() => { patch({ inputs: inputs.filter((_, index) => index !== pick.at) }); setPick(undefined); }}><ParameterEditor input={inputs[pick.at]!} inputs={inputs} entities={entities} onChange={change => patch({ inputs: inputs.map((input, index) => index === pick.at ? { ...input, ...change } : input) })} /></RowCard></div> : <p className="p-3 text-xs text-muted">{t("Select a row to edit it here.")}</p>;
   return <Workbench storageKey="action-type" title={action?.title || t("Action type")}
     crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }, { label: object.title, onClick: () => open({ view: "object-type", params: { id, tab: "actions" } }) }]}
-    status={<DraftStatus state={object.state} problems={issues.length} />} saving={savingState(dirty, busy, refused)}
+    status={<DraftStatus state={object.state} problems={issues.length} />} busy={busy}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setPick(undefined); }, redo: () => { session.redo(); setPick(undefined); } }}
-    actions={<ResourceControls showStatus={false} type="build.object" record={object} dirty={dirty} busy={busy} invalid={draft.issues.length > 0} onSave={() => void draft.perform(draft.save)} onCancel={discardChanges} route={{ view: "action-type", params: { id, action: name ?? "" } }} />}
+    actions={<ResourceControls type="build.object" record={object} dirty={dirty} busy={busy} invalid={draft.issues.length > 0} onSave={() => draft.perform(draft.save)} onCancel={discardChanges} route={{ view: "action-type", params: { id, action: name ?? "" } }} />}
     right={{ label: t("Action inspector"), scope: JSON.stringify([at, pick]), locate: path => { const scope = path?.split("/").find(part => part.startsWith("[")); setPick(scope ? (JSON.parse(scope) as [number, Pick])[1] : pick); }, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Action dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The action can be published with its object type.")} /> }] }}>
     <ResourceNavigation back={{ label: t("Action types"), onClick: () => open({ view: "action-type" }) }} title={action?.title || t("Action type")} icon={<Zap />} meta={action ? `build.${object.name}.${action.name}` : object.title}

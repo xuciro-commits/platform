@@ -4,7 +4,7 @@ import { Braces } from "lucide-react";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { useDraftRecord } from "../branches/draft-record";
 import { apiErrorMessage, type Api } from "@platform/kernel";
@@ -114,9 +114,9 @@ export function CodeEditor({ id }: { id: string }) {
   let published: CodeDraft | undefined;
   try { published = draft.published ? JSON.parse(draft.published) as CodeDraft : undefined; } catch {   }
   return <Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} title={draft.title || t("New code function")}
-    status={<DraftStatus state={draft.module ? "published" : "draft"} />} saving={savingState(dirty, busy, error || undefined)}
+    status={<DraftStatus state={draft.module ? "published" : "draft"} />} busy={busy}
     actions={<>
-        <ResourceControls showStatus={false} type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid} onSave={() => void perform(save)}
+        <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid} onSave={() => perform(save)}
           operations={[{ id: "compile", label: t("Compile function"), disabled: invalid || !draft.id || draft.state === "compiling", run: () => void perform(compile) }]} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("Code function")}><p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p></ContextHelp>

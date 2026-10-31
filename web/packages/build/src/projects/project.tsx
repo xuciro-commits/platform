@@ -10,7 +10,7 @@ import { CompositeRefusalError, type Api } from "@platform/kernel";
 import { ActionMenu, Button, Checkbox, DataTable, Dialog, Disclosure, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ColumnDef, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, ExternalLink, FolderKanban, GitBranch, MoreHorizontal, Plus, Rocket, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
+import { DraftStatus, SaveStatus, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
 import { publishedResourceKind, refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
 import { projectResourceChange } from "./membership";
@@ -291,8 +291,9 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const header = installed?.application?.pages.find((name) => definitions.some((d) => d.ref.app === "build" && d.ref.kind === "page" && d.ref.name === name));
   return <>
     <Workbench storageKey="project" crumbs={[{ label: t("Files"), onClick: () => open({ view: "projects" }) }]} title={project.title || project.name}
-      status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
+      status={<DraftStatus state={project.state} problems={problems.length} />} busy={saving}
       actions={<>
+        {builder && <SaveStatus dirty={dirty} busy={saving} failed={!!error} />}
         {builder && <NewResourceMenu application={id} area={activeArea} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)} />}
         <ActionMenu label={t("More actions")} icon={<MoreHorizontal />} commands={[
           ...(header ? [{ id: "open-app", label: t("Open published app"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } }) }] : []),

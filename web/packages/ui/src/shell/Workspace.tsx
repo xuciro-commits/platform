@@ -42,6 +42,7 @@ export type RecentEntry = { route: Route; title: string; app?: string; at: numbe
 type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect"; ifCurrent?: Route; from?: string; replace?: boolean };
 type Unsaved = {
   register: (panel: string, owner: symbol, discard?: () => void, busy?: boolean) => void;
+  flush: (panel: string, owner: symbol, run?: () => Promise<unknown>) => void;
   ask: (panels: string[], run: () => void, owner?: symbol) => void;
 };
 type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route, from?: string) => void; closeAll: (from?: string) => void; notify: typeof toast; unsaved?: Unsaved;
@@ -148,6 +149,18 @@ export function useUnsavedChanges(dirty: boolean, discard: () => void, busy = fa
   };
 }
 
+export function useLeaveFlush(run: () => Promise<unknown>) {
+  const unsaved = useContext(WorkspaceContext)?.unsaved;
+  const panel = useContext(PanelContext);
+  const owner = useRef(Symbol()), latest = useRef(run);
+  latest.current = run;
+  useLayoutEffect(() => {
+    if (!panel || !unsaved) return;
+    unsaved.flush(panel, owner.current, () => latest.current());
+    return () => unsaved.flush(panel, owner.current);
+  }, [panel, unsaved]);
+}
+
 export const notify = toast;
 
 class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void; closeLabel: string }, { error?: Error }> {
@@ -198,6 +211,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const setSide = useCallback((entry?: Entry & { focus: HTMLElement | null }) => { sideRef.current = entry; setSideState(entry); }, []);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const drafts = useRef(new Map<string, Map<symbol, { discard: () => void; busy: boolean }>>());
+  const flushes = useRef(new Map<string, Map<symbol, () => Promise<unknown>>>());
   const transfers = useRef(new ViewTransfers());
   const [pending, setPending] = useState<Pending>();
   const lastHash = useRef<string | undefined>(undefined);
@@ -205,13 +219,13 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   const routeOf = useCallback((id: string) => stackRef.current.find(entry => entry.id === id)?.route ?? (sideRef.current?.id === id ? sideRef.current.route : undefined), []);
   const forget = useCallback((ids: string[]) => {
-    for (const id of ids) { transfers.current.remove(id); drafts.current.delete(id); }
+    for (const id of ids) { transfers.current.remove(id); drafts.current.delete(id); flushes.current.delete(id); }
     setTitles(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !ids.includes(id))));
   }, []);
   const deferred = useRef<{ panels: string[]; run: () => void; cancel?: () => void; selected?: symbol; timer: ReturnType<typeof setTimeout> }>(undefined);
   const owners = useCallback((id: string, selected?: symbol) => selected === undefined ? [...(drafts.current.get(id)?.values() ?? [])] : [drafts.current.get(id)?.get(selected)].filter(Boolean), []);
   const busyIn = useCallback((panels: string[], selected?: symbol) => panels.some((id) => owners(id, selected).some((owner) => owner?.busy)), [owners]);
-  const guard = useCallback((panels: string[], run: () => void, cancel?: () => void, selected?: symbol) => {
+  const guard = useCallback((panels: string[], run: () => void, cancel?: () => void, selected?: symbol, flushed = false) => {
     if (busyIn(panels, selected)) {
       if (deferred.current) { clearTimeout(deferred.current.timer); deferred.current.cancel?.(); }
       deferred.current = { panels, run, cancel, selected, timer: setTimeout(() => {
@@ -221,7 +235,9 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       return;
     }
     const dirty = panels.filter((id) => !!routeOf(id) && owners(id, selected).length > 0);
-    if (dirty.length) setPending({ panels: dirty, run, owner: selected, cancel });
+    const saves = selected === undefined && !flushed ? dirty.flatMap((id) => [...(flushes.current.get(id)?.values() ?? [])]) : [];
+    if (saves.length) void Promise.all(saves.map((save) => save().catch(() => undefined))).then(() => guard(panels, run, cancel, selected, true));
+    else if (dirty.length) setPending({ panels: dirty, run, owner: selected, cancel });
     else run();
   }, [busyIn, owners, routeOf]);
   const unsaved = useMemo<Unsaved>(() => ({
@@ -239,6 +255,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         clearTimeout(waiting.timer); deferred.current = undefined;
         queueMicrotask(() => guard(waiting.panels, waiting.run, waiting.cancel, waiting.selected));
       }
+    },
+    flush: (panel, owner, run) => {
+      const entries = flushes.current.get(panel) ?? new Map<symbol, () => Promise<unknown>>();
+      if (run) entries.set(owner, run); else entries.delete(owner);
+      if (entries.size) flushes.current.set(panel, entries); else flushes.current.delete(panel);
     },
     ask: (panels, run, selected) => guard(panels, run, undefined, selected),
   }), [busyIn, guard, routeOf]);

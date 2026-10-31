@@ -119,7 +119,7 @@ export function PipelineEditor({ id }: { id: string }) {
   const stepEdges: FlowEdge[] = stepNodes.slice(0, -1).map((node, i) => ({ id: `${node.id}>${stepNodes[i + 1]!.id}`, source: node.id, sourcePort: "rows", target: stepNodes[i + 1]!.id, targetPort: "rows" }));
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Pipelines"), onClick: () => open({ view: "pipeline" }) }]} title={draft.title || t("New pipeline")} status={<><MarkingTag marking={draft.marking} /><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Declare the input, transformations, expectations and output. Publishing saves the declaration; Run now explicitly requests a run with current permissions.")}
-      actions={<ResourceControls type="build.pipeline" record={draft} dirty={dirty} busy={busy} route={{ view: "pipeline", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)}
+      actions={<ResourceControls type="build.pipeline" record={draft} dirty={dirty} busy={busy} route={{ view: "pipeline", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
         operations={[
           { id: "trial", label: t("Trial pipeline"), disabled: !!inputs?.invalid || !draft.input, run: () => void perform(trial) },
           ...(draft.state === "published" ? [{ id: "run", label: draft.requested ? t("Run requested…") : t("Run now"), disabled: dirty || !!draft.requested, run: () => void perform(() => transition("run")) },

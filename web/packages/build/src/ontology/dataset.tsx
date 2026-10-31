@@ -73,7 +73,7 @@ export function DatasetEditor({ id }: { id: string }) {
     <PageHeader crumbs={[{ label: t("Datasets"), onClick: () => open({ view: "dataset" }) }]} title={draft.title || t("New dataset")} meta={draft.name ? <span className="font-mono">{draft.name}{draft.version ? ` · v${draft.version}` : ""}</span> : undefined} help={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
       actions={<>
         {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}
-        <ResourceControls type="build.dataset" record={draft} dirty={dirty} busy={busy} route={{ view: "dataset", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)}
+        <ResourceControls type="build.dataset" record={draft} dirty={dirty} busy={busy} route={{ view: "dataset", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
           operations={holds("build", "builder") && !!draft.schema?.length ? [{ id: "object", label: t("Draft an object from this schema"), disabled: dirty || !!inputs?.invalid, run: () => void perform(draftObject) }] : []} />
       </>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}

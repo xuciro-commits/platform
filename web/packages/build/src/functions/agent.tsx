@@ -3,7 +3,7 @@ import type {Api} from "@platform/kernel";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
-import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { useAuthoringModel } from "../ontology/authoring-model";
 import { useHost, ModelPicker, ModelOptionsEditor, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t } from "@platform/ui";
@@ -55,9 +55,9 @@ export function AgentEditor({ id }: { id: string }) {
   const cases = draft.cases ?? [];
   const setCase = (i: number, patch: Partial<Case>) => change({ cases: cases.map((c, at) => at === i ? { ...c, ...patch } : c) });
   return <Workbench storageKey="agent" crumbs={[{ label: t("Agent definitions"), onClick: () => open({ view: "agent" }) }]} title={draft.title || t("New agent")}
-    status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} saving={savingState(dirty, busy, error || undefined)}
+    status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} busy={busy}
     actions={<>
-      <ResourceControls showStatus={false} type="build.agent" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onSave={() => void perform(save)} onCancel={discardChanges} route={{ view: "agent", params: { id } }} />
+      <ResourceControls type="build.agent" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "agent", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("Agent")}><p className="text-xs text-muted">{t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}</p></ContextHelp>
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. A changed definition stops existing runs.", { name: draft.name, version: draft.version })}</Panel> : null}

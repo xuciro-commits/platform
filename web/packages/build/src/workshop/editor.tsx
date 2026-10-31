@@ -28,7 +28,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
 import { WidgetLibrary } from "./page-editor/WidgetLibrary";
-import { DraftStatus, ResourceControls, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import {type Api as HostApi} from "@platform/kernel";
 import { BindingEditor } from "../automate/workflow-binding";
 import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, layoutID, stashWidget, restoreWidget, setLayoutKind } from "./page-layout";
@@ -166,8 +166,6 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
     .filter(entity => entity.fields.some(field => field.type === "reference" && [page?.object, ...selections.map(selection => selection.object.name)].includes(field.ref))).map(entity => entity.type);
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
-  const saveRef = useRef<() => Promise<unknown>>(async () => false);
-  useAutoSave({ enabled: !sourceApplied && !branch, generation:JSON.stringify(session.draft), dirty, invalid, busy, save: () => saveRef.current() });
   if (!page) return <Workbench storageKey="page" title={t("Page")}><WorkbenchMessage>{query.isError ? t("The page could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const info = authoringEntity(page.object);
 const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s) }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
@@ -245,7 +243,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     finally { lock.current = false; setSaving(false); }
   };
   const nothing = sections.length === 0;
-  saveRef.current = save;
   const canvasSelection = sections[chosen];
   const nodeID = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id && node.kind === "widget")?.[0];
   const patchNode = (id: string, patch: Partial<PageUI.PageLayoutNode>) => edit((old) => ({ ...old, document: { ...old.document, nodes: { ...old.document.nodes, [id]: { ...old.document.nodes[id]!, ...patch } } } }), `node:${id}:${Object.keys(patch).join(",")}`);
@@ -327,15 +324,15 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   ] : [{ label: t("Pages"), onClick: () => open({ view: "module" }) }];
   return <>
     <Workbench storageKey="page" crumbs={crumbs} title={title || page.title}
-      status={<DraftStatus state={page.state} problems={problemList.length} />} saving={savingState(dirty, saving, refused)}
+      status={<DraftStatus state={page.state} problems={problemList.length} />} busy={saving}
       history={{ canUndo: session.canUndo && !busy && !preview, canRedo: session.canRedo && !busy && !preview, undo: () => history("undo"), redo: () => history("redo") }}
       actions={<>
         <SegmentedChoice compact label={t("Editor mode")} value={preview ? "preview" : "edit"} options={[{ value: "edit", label: t("Edit"), icon: <PenLine /> }, { value: "preview", label: t("Preview"), icon: <Play /> }]}
           onChange={(mode) => { setPreview(mode === "preview"); setCompatibilityOpen(false); select({ kind: "page" }); }} />
-        <ResourceControls showStatus={false} type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} extra={[
+        <ResourceControls autosave={!sourceApplied && !branch} type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} extra={[
           { id: "compatibility", label: t("Review page compatibility…"), disabled: busy || preview, run: () => setCompatibilityOpen(true) },
           ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
-        ]} onSave={() => void save()} onCancel={discardChanges} route={canvasRoute} />
+        ]} onSave={() => save()} onCancel={discardChanges} route={canvasRoute} />
       </>}
       onKeyDown={(event) => {
         const command = event.metaKey || event.ctrlKey;

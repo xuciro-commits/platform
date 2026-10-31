@@ -12,7 +12,7 @@ import { useDraftSession } from "../session/DraftSession";
 import { useDraftRecord } from "../branches/draft-record";
 import { readDraftIdentity } from "../branches/identity";
 import { useDraftInventory } from "../branches/records";
-import { DraftStatus, ResourceControls, savingState, useAutoSave, WorkbenchMessage } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import type { Project } from "../projects/project";
 import { PageEditor } from "./editor";
 import { HeaderEditor } from "./HeaderEditor";
@@ -117,7 +117,6 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     catch { setError(t("The module could not be saved.")); return false; }
     finally { lock.current = false; setSaving(false); }
   };
-  useAutoSave({ generation: JSON.stringify(draft), invalid, enabled: !sourceApplied && canEdit && !createdPage && !templates && !branch, dirty, busy: saving || templateBusy, save });
   const edit = (patch: Partial<ModuleDraft>) => { if (canEdit && !lock.current && !createdPage) { setSourceApplied(false); session.edit(old => ({ ...old, ...patch })); } };
   const attachCreatedPage = async (target: { type: string; id: string }) => {
     setCreatedPage(target);
@@ -199,11 +198,11 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const previewPage = pages[0]?.name ?? "";
   return <>
     <Workbench storageKey="module" crumbs={[{ label: t("Files"), onClick: () => open({ view: "projects" }) }, { label: project.title || project.name, onClick: () => open({ view: "project", params: { id: project.id } }) }]} title={t("Module")}
-      status={<DraftStatus state={project.state} problems={problems.filter((problem) => problem.severity !== "info").length} />} saving={savingState(dirty, saving, error)}
+      status={<DraftStatus state={project.state} problems={problems.filter((problem) => problem.severity !== "info").length} />} busy={saving}
       history={{ canUndo: !saving && !createdPage && session.canUndo, canRedo: !saving && !createdPage && session.canRedo, undo: session.undo, redo: session.redo }}
-      actions={<ResourceControls showStatus={false} autosave={false} type="build.app" record={canEdit ? project : undefined} dirty={dirty} busy={saving || !!createdPage} invalid={invalid}
+      actions={<ResourceControls autosave={!sourceApplied && !templates && !branch} type="build.app" record={canEdit ? project : undefined} dirty={dirty} busy={saving || templateBusy || !!createdPage} invalid={invalid}
         operations={canEdit ? [{ id: "new-page", label: t("New page"), icon: <Plus />, disabled: !createPage.available, run: addPage }] : []}
-        onSave={canEdit ? () => void save() : undefined} onReload={reload} route={{ view: "module", params: { id: project.id } }} />}
+        onSave={canEdit ? () => save() : undefined} onReload={reload} route={{ view: "module", params: { id: project.id } }} />}
       left={{ label: t("Module structure"), content: <ModuleTree context={context} focus={focus} onFocus={setFocus} /> }}
       right={{ label: t("Module inspector"),scope:focus, tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: <fieldset disabled={!canEdit || saving || !!createdPage} className="contents">{inspector[tab.id]}</fieldset> })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
       dock={{ label: t("Module dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>

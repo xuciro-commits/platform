@@ -1,7 +1,7 @@
 import { ContextHelp, StructuredEditor , SegmentedChoice } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
 import { useHost, ModelPicker, ModelOptionsEditor, useRecordInventory, useReadQuery } from "@platform/app";
 import { type Api } from "@platform/kernel";
@@ -58,9 +58,9 @@ export function FunctionEditor({ id }: { id: string }) {
   if (id !== "new" && !draft.id) return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{query.isError ? t("The function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const stages: { id: Stage; title: string }[] = [{ id: "settings", title: t("Function settings") }, { id: "source", title: t("Record inputs") }, { id: "model", title: t("Model inference") }, { id: "output", title: t("Strict output") }];
   return <Workbench storageKey="function" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} title={draft.title || t("New AI function")}
-    status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} saving={savingState(dirty, busy, error || undefined)}
+    status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} busy={busy}
     actions={<>
-        <ResourceControls showStatus={false} type="build.function" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onSave={() => void perform(save)} onReload={() => confirmDiscard(() => void perform(reload))}
+        <ResourceControls type="build.function" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onSave={() => perform(save)} onReload={() => confirmDiscard(() => void perform(reload))}
           operations={[{ id: "test", label: testing ? t("Hide test") : t("Test"), disabled: !draft.id || dirty, run: () => setTesting(!testing) }]} onCancel={discardChanges} route={{ view: "function", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("AI function")}><p className="text-xs text-muted">{t("Save the declaration, test fixed cases, then review its release candidate.")}</p></ContextHelp>

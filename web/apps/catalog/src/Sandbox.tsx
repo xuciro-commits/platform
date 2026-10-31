@@ -120,7 +120,7 @@ function SnippetWorkbench({ storageKey }: { storageKey: string }) {
     actions={snippet.own ? <><Button size="sm" variant="ghost" aria-label={t("Rename")} title={t("Rename")} onClick={(event) => { event.stopPropagation(); rename(snippet); }}><Braces /></Button>
       <Button size="sm" variant="ghost" aria-label={t("Delete")} title={t("Delete")} onClick={(event) => { event.stopPropagation(); remove(snippet); }}><Trash2 /></Button></> : undefined} />;
 
-  return <Workbench storageKey="sandbox" mainLabel={t("Editor")} crumbs={[{ label: t("Sandbox") }, { label: selected?.title ?? "" }]} saving={dirty ? "dirty" : "idle"}
+  return <Workbench storageKey="sandbox" mainLabel={t("Editor")} crumbs={[{ label: t("Sandbox") }, { label: selected?.title ?? "" }]}
     onKeyDown={(event) => { if (!(event.metaKey || event.ctrlKey)) return; if (event.key === "Enter") { event.preventDefault(); run(); } if (event.key.toLowerCase() === "s") { event.preventDefault(); save(); } }}
     actions={<>
       <Button size="sm" variant="primary" onClick={run} title="⌘↩"><Play />{t("Run")}</Button>

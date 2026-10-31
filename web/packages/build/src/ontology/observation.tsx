@@ -74,7 +74,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   const editable = can(`build.observation.${draft.id ? "edit" : "create"}`);
   return <div className="grid min-w-0 gap-4">
     <PageHeader crumbs={[{ label: t("Observation sources"), onClick: () => open({ view: "observation-source" }) }]} status={<DraftStatus state={draft.state} />} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} title={draft.title || t("New observation source")} help={t("The source stores a portable declaration. Connection addresses, credentials and original points stay outside the artifact.")} actions={<>
-      <ResourceControls type="build.observation" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} onSave={editable ? () => void perform(save) : undefined} invalid={!!inputDrafts?.invalid} route={{ view: "observation-source", params: { id } }}
+      <ResourceControls type="build.observation" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} onSave={editable ? () => perform(save) : undefined} invalid={!!inputDrafts?.invalid} route={{ view: "observation-source", params: { id } }}
         operations={draft.state === "published" && can("build.observation.retire") ? [{ id: "retire", label: t("Retire source"), disabled: dirty || !!branch, reason: branch ? t("This runs against main. Merge the branch first, then run it there.") : undefined, run: () => transitions.take("build.observation.retire", { ...draft, created: draft.created ?? {}, changed: draft.changed ?? {} }) }] : []} />
     </>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}

@@ -62,7 +62,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Data sources"), onClick: () => open({ view: "data-source" }) }]} title={draft.title || t("New data source")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Declare the source, row mapping and schedule. Publishing saves the declaration; Pull now checks the current environment and requests a pull.")}
-      actions={<ResourceControls type="build.source" record={draft} dirty={dirty} busy={busy} route={{ view: "data-source", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)}
+      actions={<ResourceControls type="build.source" record={draft} dirty={dirty} busy={busy} route={{ view: "data-source", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
         operations={[
           ...(draft.state === "published" && !draft.stream ? [{ id: "pull", label: draft.requested ? t("Pull requested…") : t("Pull now"), disabled: dirty || !!draft.requested, run: () => void perform(() => transition("pull")) }] : []),
           ...(draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []),
