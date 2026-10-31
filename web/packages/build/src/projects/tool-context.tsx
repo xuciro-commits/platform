@@ -1,7 +1,7 @@
 import { useHost } from "@platform/app";
 import { t, useWorkspace, type Route } from "@platform/ui";
 import { ArrowLeft } from "lucide-react";
-import { BranchControls } from "../branches/BranchBar";
+import { BranchControls } from "../branches/BranchControls";
 import { BranchDecisions } from "../branches/decisions";
 import { useStudioApplication } from "./use-studio-application";
 
@@ -15,6 +15,6 @@ export function ToolContext({ route }: { route?: Route }) {
       className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs text-muted hover:bg-row-hover hover:text-foreground [&_svg]:size-3.5 [&_svg]:shrink-0">
       <ArrowLeft /><span className="min-w-0 truncate">{project?.title || project?.name || t("Project")}</span>
     </button>}
-    <BranchControls panel />
+    <BranchControls />
   </div></BranchDecisions>;
 }

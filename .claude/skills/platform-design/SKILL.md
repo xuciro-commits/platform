@@ -34,6 +34,7 @@ A builder-first platform for business software, benchmarked on Palantir Foundry:
 4. **Canvas** — `RelationCanvas` / `FlowCanvas` with floating toolbar and right inspector.
    Workshop pages: left Layers / Widgets / Variables (variables and queries), centre canvas, right config (bindings, events), an Edit/Preview switch in the header, dock with Problems and Live values.
 5. **Dashboard** (Home, project overview, Monitoring) — stat tiles, then two columns of `Panel`s with compact rows.
+   A project page uses `ResourceNavigation` too: Overview (area tiles and Next steps), Contents (Resources, Business concepts), Delivery (Verification and delivery, Runs), Access and settings (Roles, Settings). DevOps Releases is a list of candidates; selecting one shows its review, "New candidate" composes one.
 
 No wizard pages: each resource Overview offers the in-place next step on the golden path (connection → dataset → pipeline → object type → action/function → Workshop → DevOps → Marketplace).
 

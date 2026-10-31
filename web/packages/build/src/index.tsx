@@ -39,7 +39,7 @@ import { ToolContext } from "./projects/tool-context";
 import { studioApplicationID, studioAreaForRoute } from "./projects/studio-model";
 import { FunctionCatalog } from "./functions/catalog";
 import { Interfaces } from "./ontology/ModelWorkbench";
-import { Activity, BellRing, Bot, Boxes, Braces, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, History, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
+import { Activity, BellRing, Bot, Boxes, Braces, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.holds("build", "builder");
 const integrator = (host: Host) => host.holds("build", "integrator");
@@ -95,11 +95,10 @@ const workshopViews: View[] = [
   view("studio-templates", () => t("Templates"), p => <StudioTemplates key={p.template ?? "templates"} initial={p.template} />),
 ];
 const releaseViews: View[] = [
-  { id: "release-review", title: () => t("Release review"), render: p => {
+  { id: "release-review", title: () => t("Releases"), render: p => {
     const selection = releaseDraftsSelection(p.drafts, releaseKinds);
     return <ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}:${p.candidate ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={selection.drafts} selectionError={selection.error} candidateID={p.candidate} applicationName={p.applicationName} />;
   } },
-  view("release-history", () => t("Release history"), () => <ReleaseReview key="history" />),
   view("test-plan", () => t("Business test plans"), p => <CandidateTest key={p.id ?? "new"} planId={p.id} applicationId={p.application} />),
   view("evaluation-set", () => t("Evaluation set"), p => <CandidateTest key={p.id ?? "new"} planId={p.id === "new" ? undefined : p.id} evaluationSet />),
   view("sample-set", () => t("Sample set"), p => <ApplicationSampleAsset key={p.id ?? "new"} id={p.id} />),
@@ -111,9 +110,9 @@ const agentViews: View[] = [
 function referenceContext(route: Route, children: ReactNode) {
   const params = route.params ?? {};
   const application = studioApplicationID(route) ?? (route.view === "module" ? params.id : undefined);
-  return <ApplicationScope application={application} route={route}>{children}</ApplicationScope>;
+  return <ApplicationScope application={application}>{children}</ApplicationScope>;
 }
-const publishing = new Set(["release-review", "release-history"]);
+const publishing = new Set(["release-review"]);
 function AuthoringView({ route, children }: { route: Route; children: ReactNode }) {
   const host = useHost();
   const allowed = builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || publisher(host) && publishing.has(route.view);
@@ -136,6 +135,7 @@ export default defineApp({
   home: { view: "projects" },
   views: contextualViews(projectViews),
   opens: { "build.app": "project" },
+  navigation: route => route?.view === "project" ? navigation(route) : undefined,
   nav: () => [],
 });
 
@@ -264,8 +264,7 @@ const devops = defineApp({
   navigation,
   nav: (host, route) => [
     section(t("Releases"), route, [
-      { label: t("Release review"), icon: <Rocket />, view: "release-review" },
-      { label: t("Release history"), icon: <History />, view: "release-history" },
+      { label: t("Releases"), icon: <Rocket />, view: "release-review" },
     ]),
     ...(builder(host) ? [section(t("Verification"), route, [{ label: t("Business test plans"), icon: <ClipboardCheck />, view: "test-plan" }])] : []),
   ],

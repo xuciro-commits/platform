@@ -11,7 +11,7 @@ import { releaseDraftsValue } from "../releases/selection";
 
 const branchStates = defineStatuses({ open: { label: t("Open"), tone: "info" }, proposed: { label: t("Proposed"), tone: "purple" }, merged: { label: t("Merged"), tone: "success" }, closed: { label: t("Archived"), tone: "neutral" } });
 
-export function BranchControls({ panel = false }: { panel?: boolean }) {
+export function BranchControls() {
   const { holds } = useHost(), { confirmLeave } = useWorkspace();
   const { confirmDiscard } = useUnsavedChanges(false, () => {});
   const builder = holds("build", "builder");
@@ -35,7 +35,7 @@ export function BranchControls({ panel = false }: { panel?: boolean }) {
     { id: "all", label: t("All branches and proposals"), run: () => open({ view: "changes" }) },
     ...(current ? [{ id: "archive", label: t("Archive branch…"), danger: true, separatorBefore: true, run: () => setArchiving(true) }] : []),
   ];
-  const select_ = <Tooltip content={current ? undefined : t("Edits on main are saved as drafts immediately.")}><Select aria-label={t("Branch")} value={current?.id ?? ""} className={panel ? "h-7 min-w-0 flex-1 text-xs" : "h-7 w-auto max-w-56 text-xs"} onChange={event => switchTo(event.target.value || undefined)}>
+  const select_ = <Tooltip content={current ? undefined : t("Edits on main are saved as drafts immediately.")}><Select aria-label={t("Branch")} value={current?.id ?? ""} className="h-7 min-w-0 flex-1 text-xs" onChange={event => switchTo(event.target.value || undefined)}>
       <option value="">main</option>
       {live.map(branch => <option key={branch.id} value={branch.id}>{branch.title}</option>)}
     </Select></Tooltip>;
@@ -50,7 +50,7 @@ export function BranchControls({ panel = false }: { panel?: boolean }) {
     {current && <CloseBranchDialog branch={current} open={archiving} onOpenChange={setArchiving} onClosed={() => select(undefined)} />}
     {reviewing && detail.data && <ReviewDialog branch={detail.data} open onOpenChange={setReviewing} onProposed={openProposal} />}
   </>;
-  if (panel) return <div role="group" aria-label={t("Branch")} className="grid gap-1.5 rounded-md border border-border bg-surface p-2">
+  return <div role="group" aria-label={t("Branch")} className="grid gap-1.5 rounded-md border border-border bg-surface p-2">
     <div className="flex min-w-0 items-center gap-1"><GitBranch aria-hidden className="size-3.5 shrink-0 text-muted" />{select_}<ActionMenu label={t("Branch actions")} icon={<MoreHorizontal />} commands={commands} /></div>
     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       {current && <StatusTag status={current.state} registry={branchStates} />}
@@ -59,19 +59,4 @@ export function BranchControls({ panel = false }: { panel?: boolean }) {
     </div>
     {dialogs}
   </div>;
-  return <div role="group" aria-label={t("Branch")} className="flex min-w-0 flex-wrap items-center gap-2">
-    <GitBranch aria-hidden className="size-4 shrink-0 text-muted" />
-    {select_}
-    <ActionMenu label={t("Branch actions")} icon={<MoreHorizontal />} commands={commands} />
-    {current && <StatusTag status={current.state} registry={branchStates} />}
-    {pending}
-    {save}
-    {dialogs}
-  </div>;
-}
-
-export function BranchBar() {
-  const { holds } = useHost();
-  if (!holds("build", "builder")) return null;
-  return <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface px-2 py-1"><BranchControls /></div>;
 }

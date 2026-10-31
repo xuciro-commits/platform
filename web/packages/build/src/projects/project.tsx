@@ -1,14 +1,14 @@
 import { sourceFieldInput } from "@platform/app";
 import { useDraftInventory } from "../branches/records";
-import { ContextHelp, PageHeader, StructuredEditor , ContentTabs } from "@platform/ui";
+import { ContextHelp, PageHeader, ResourceNavigation, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery } from "@platform/app";
 import { CompositeRefusalError, type Api } from "@platform/kernel";
-import { ActionMenu, Button, Checkbox, DataTable, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ColumnDef, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
-import { ArrowDown, ArrowUp, ExternalLink, FolderKanban, GitBranch, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { ActionMenu, Button, Checkbox, DataTable, Dialog, Disclosure, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ColumnDef, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ArrowDown, ArrowUp, ExternalLink, FolderKanban, GitBranch, MoreHorizontal, Plus, Rocket, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
@@ -28,7 +28,7 @@ import { retireLimit, retirementBatch, retirementIntent } from "./retirement";
 export type { OwnedResource } from "./resource-inventory";
 import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, studioAreas, studioResourceGroups, studioRoute } from "./studio-model";
 import { StudioTemplates } from "../workshop/template-ui";
-import { StudioGuide } from "./studio-guide";
+import { ProjectOverview } from "./project-overview";
 import { installedStudioID, installedStudioRef, studioApplications } from "./studio-applications";
 import { InstalledApplicationHome } from "./InstalledApplicationHome";
 import { ExtensionSettings } from "./ExtensionSettings";
@@ -119,9 +119,9 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const rememberRetirement = (intent: typeof retireIntent) => { pendingRetirement.current = intent; setRetireIntent(intent); };
   const retireable = (item: { kind: { type: string }; record?: { id: string } | undefined }) => !!item.record && !!action(`${item.kind.type}.archive`);
   const [selected, setSelected] = useState<string | undefined>(initialSelected);
-  type Section = "resources" | "runs" | "roles" | "settings" | "concepts" | "guide" | "templates" | "release";
-  const emptyProject = !!project && !project.pages?.length && !project.resources?.length;
-  const initialTab = initialSection === "runs" ? "runs" : initialSection === "concepts" ? "concepts" : initialSection === "templates" && activeArea === "interface" ? "templates" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "release" ? "release" : "resources";
+  type Section = "overview" | "resources" | "runs" | "roles" | "settings" | "concepts" | "templates" | "release";
+  const named = (["runs", "roles", "settings", "concepts"] as const).find(item => item === initialSection);
+  const initialTab: Section = named ?? (initialSection === "templates" && activeArea === "interface" ? "templates" : activeArea === "release" && (area || initialPlan) ? "release" : area || initialSelected ? "resources" : "overview");
   const [tab, selectTab] = useState<Section>(initialTab);
   const [visited, setVisited] = useState<Section[]>([initialTab]);
   const { inventories, owned, available, shared } = useProjectResources(project, "build", builder);
@@ -293,12 +293,9 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
         {builder && <NewResourceMenu application={id} area={activeArea} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button variant="primary" disabled={locked || resourcesUnavailable || !!currentBranch || (!project.pages?.length && !project.resources?.length)} title={currentBranch ? t("A branch is published by merging it. Use Save in the branch bar.") : undefined} onClick={() => {
-            const route = { view: "release-review" as const, params: { kind: "app", id: project.id, application: project.id, applicationName: project.name } };
-            open(route);
-          }}>{t("Publish")}</Button>}
         <ActionMenu label={t("More actions")} icon={<MoreHorizontal />} commands={[
           ...(header ? [{ id: "open-app", label: t("Open published app"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } }) }] : []),
+          ...(builder ? [{ id: "devops", label: t("Release in DevOps…"), icon: <Rocket />, disabled: locked || resourcesUnavailable || !!currentBranch || (!project.pages?.length && !project.resources?.length), run: () => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, applicationName: project.name } }) }] : []),
           ...(builder ? [{ id: "branches", label: branchCount > 0 ? t("Branches ({count})", { count: branchCount }) : t("Branches"), icon: <GitBranch />, disabled: locked, run: () => open({ view: "changes", params: { application: project.id } }) }] : []),
           ...lifecycle.commands,
         ]} />
@@ -314,8 +311,18 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         {createdResource && !pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.")} />
           <div className="flex gap-2"><Button disabled={saving || dirty} onClick={() => void addCreated(createdResource.kind, createdResource.target)}>{t("Retry adding created resource")}</Button>
             <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedResource(undefined))}>{t("Keep resource without project membership")}</Button></div></div>}
-        <ContentTabs strict className="px-3" label={t("Project sections")} value={tab} onChange={id => setTab(id as Section)}
-          items={(["resources", ...(activeArea === "release" ? ["release"] as const : []), "concepts", "guide", "roles", "runs", "settings"] as const).map(item => ({ id: item, title: t(item === "resources" ? "Overview" : item === "release" ? "Verification and delivery" : item === "concepts" ? "Business concepts" : item === "guide" ? "Guided start" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings") }))} />
+        <ResourceNavigation back={{ label: t("Files"), onClick: () => open({ view: "projects" }) }} title={project.title || project.name} icon={<FolderKanban />} meta={project.name} value={tab} onChange={id => setTab(id as Section)} sections={[
+          { id: "overview", label: t("Overview") },
+          { id: "resources", label: t("Resources"), group: t("Contents"), badge: owned.length || undefined },
+          { id: "concepts", label: t("Business concepts"), group: t("Contents") },
+          { id: "release", label: t("Verification and delivery"), group: t("Delivery") },
+          { id: "runs", label: t("Runs"), group: t("Delivery") },
+          { id: "roles", label: t("Roles"), group: t("Access and settings") },
+          { id: "settings", label: t("Settings"), group: t("Access and settings") },
+        ]} />
+        {tab === "overview" && <ProjectOverview project={project} owned={owned} released={!!installed} builder={builder} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)} onDeliver={() => setTab("release")}>
+          {currentBranch && <BranchChangesPanel application={id} />}
+        </ProjectOverview>}
         {tab === "resources" && <div className="flex flex-wrap items-center gap-2 px-4 pt-3 text-xs">
           <strong className="mr-auto">{everything ? t("Everything in this project") : t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
           {!current && <Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} className="w-full sm:w-56" value={filter} onChange={event => setFilter(event.target.value)} />}
@@ -334,7 +341,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             {shared.length > 0 && <optgroup label={t("Published resources (all owners)")}>{shared.map((item) => <option key={refKey(item.ref)} value={JSON.stringify({ kind: "shared", ref: item.ref })}>{item.title} · {item.app} · {item.ref.kind}</option>)}</optgroup>}
             {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
           </Select>}
-          <Button size="sm" onClick={() => open(studioRoute(id, "release", selected))}>{t("Verify application")}</Button>
+          <Button size="sm" onClick={() => setTab("release")}>{t("Verify application")}</Button>
           {picked.size > 0 && <Button size="sm" variant="danger" disabled={locked} onClick={beginRetire}>{t("Retire {count} selected", { count: picked.size })}</Button>}
           {activeArea === "model" && <Button size="sm" onClick={() => open({ view: "object-type", params: { application: id } })}>{t("Open business model")}</Button>}
           {activeArea === "interface" && <><Button size="sm" onClick={() => open({ view: "module", params: { id, application: id } })}>{t("Navigation and header")}</Button><Button size="sm" disabled={locked} onClick={() => setTab("templates")}>{t("New page from template…")}</Button></>}
@@ -376,7 +383,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
               </Panel>)}
               {!visible.length && <p className="py-6 text-sm text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
             </div>}
-            <BranchChangesPanel application={id} />
           </div>
 
         </div>}
@@ -396,12 +402,11 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             <option value="">{t("Default business namespace")}</option>{project.concepts?.map(group => <option key={group.id} value={group.id}>{group.title}</option>)}
           </Select></label>}
         </div>}
-        {visited.includes("guide") && <div hidden={tab !== "guide"}><ViewVisibilityContext.Provider value={visibleView && tab === "guide"}><StudioGuide project={project} owned={owned} disabled={saving || !!pendingPatch || !!createdResource} intent={settings?.description ?? project.description ?? ""} onIntent={description => settings && editSettings({ ...settings, description })} onCreated={(kind, target) => void addCreated(kind, target)} /></ViewVisibilityContext.Provider></div>}
         {visited.includes("templates") && <div hidden={tab !== "templates"} className="p-4"><ViewVisibilityContext.Provider value={visibleView && tab === "templates"}><StudioTemplates initial={initialTemplate} onCreated={target => void addCreated(resourceKinds.find(kind => kind.kind === "page")!, target)} /></ViewVisibilityContext.Provider></div>}
         {visited.includes("release") && <div hidden={tab !== "release"}><ViewVisibilityContext.Provider value={visibleView && tab === "release"}><div className="grid gap-4 p-4" role="region" aria-label={t("Verification and delivery")}>
-          <CandidateTest applicationId={id} planId={initialPlan} embedded />
- {installed && <ApplicationRuntimePanel owner="build" name={project.name} />}
           <ReleaseReview initialKind="app" initialID={id} embedded />
+          {installed && <ApplicationRuntimePanel owner="build" name={project.name} />}
+          <Disclosure className="rounded-md border border-border bg-surface p-3" defaultOpen={!!initialPlan} summary={<span className="text-sm font-semibold">{t("Business test plans")}</span>}><CandidateTest applicationId={id} planId={initialPlan} embedded /></Disclosure>
         </div></ViewVisibilityContext.Provider></div>}
         {visited.includes("runs") && <div hidden={tab !== "runs"}><ViewVisibilityContext.Provider value={visibleView && tab === "runs"}><ApplicationRuns owner="build" name={project.name} project={id} /></ViewVisibilityContext.Provider></div>}
         {retireIntent && <Dialog open onOpenChange={open => { if (!open && !retireLock.current && (!retireIntent.attempted || retireIntent.refusal)) rememberRetirement(undefined); }} title={t("Retire {count} selected", { count: retireIntent.items.length })}>

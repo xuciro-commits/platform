@@ -1,5 +1,6 @@
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, Disclosure, PageHeader, Panel, PropertyList, Select, StatusTag, t, useUnsavedChanges, useViewCall, notify} from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, DataTable, Disclosure, Notice, PageHeader, Panel, PropertyList, Select, StatusTag, t, useUnsavedChanges, useViewCall, notify, type ColumnDef } from "@platform/ui";
+import { Plus, RefreshCw } from "lucide-react";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { matchesResourceKind, refKey, resourceKinds, resourceRef } from "../projects/resources";
@@ -73,7 +74,6 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [extensions, setExtensions] = useState<Api.ReleaseExtensionReview[]>([]);
   const [origin, setOrigin] = useState<{ from: string; at?: string }>();
   const [promotedTo, setPromotedTo] = useState<Api.PromotionTarget[]>([]);
-  const wentTo = (targets?: Api.PromotionTarget[]) => (targets ?? []).map((target) => `${target.tenant} (${target.active ? t("active") : t("awaiting review")})`).join(", ");
   const [confirmedUpgrade, setConfirmedUpgrade] = useState("");
   const [planID, setPlanID] = useState("");
   const [reportID, setReportID] = useState("");
@@ -100,6 +100,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     return initialID && (initialKind === "app" || initialDrafts.length) ? merged([{ kind: initialKind, id: initialID }], initialDrafts) : initialDrafts;
   });
   const [jointNote, setJointNote] = useState("");
+  const [composing, setComposing] = useState(embedded || !!initialID || initialDrafts.length > 0 || !!transferred?.length);
   const applications = useRecordInventory<Record & Api.Application>("build.app", 1000, builder);
   const scopedApplication = scope ? applications.data?.records.find(item => item.id === scope) : undefined;
   const held = new Set([...(scopedApplication?.resources ?? []).map(refKey), ...(scopedApplication?.pages ?? []).map(name => refKey({ app: "build", kind: "page", name }))]);
@@ -108,7 +109,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20${filterName ? `&application=${encodeURIComponent(filterName)}` : ""}`, undefined, mayRelease && (!scope || !!scopedApplication || !!applicationName));
   const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess;
   const activeID = inventory.isError ? "" : inventory.data?.activeId ?? "";
-  const promoted = (inventory.isError ? [] : inventory.data?.candidates ?? []).filter((candidate) => candidate.from && candidate.id !== activeID);
+  const candidates = inventory.isError ? [] : inventory.data?.candidates ?? [];
   const selected = kinds.find((item) => item.kind === kind)!;
   const query = useRecordInventory<Record>(selected.type, 1000, builder);
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
@@ -235,6 +236,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       setError(message); return;
     }
     rememberRequest();
+    if (request.kind === "save" && !embedded) setComposing(false);
     notify.success(t(request.kind === "save" ? "Candidate saved. Activate it to publish the application." : request.kind === "activate" ? "Release activated." : "Evaluation started."));
     try {
       if (request.kind === "evaluate") { setReportID(answer.body.id); await reports.refetch(); }
@@ -280,82 +282,68 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       <p>{t("This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.")}</p>
       <div><Button onClick={() => open({ view: "self-hosting" })}>{t("Open self-hosting")}</Button></div>
     </Panel>}
-    {!embedded && <PageHeader title={t("Release review")} help={t(builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
-      actions={builder && scope && <Button onClick={() => open({ view: "project", params: { id: scope } })}>{t("Back to project")}</Button>} />}
+    {!embedded && <PageHeader title={t("Releases")} meta={inventory.isError ? t("Active release is unavailable.") : activeID ? t("Active release {id}", { id: activeID.split(":").at(-1)?.slice(0, 10) ?? activeID }) : t("No active release yet.")}
+      help={t(builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
+      actions={<>
+        {builder && scope && <Button onClick={() => open({ view: "project", params: { id: scope } })}>{t("Back to project")}</Button>}
+        <Button size="icon" variant="ghost" aria-label={t("Refresh releases")} title={t("Refresh releases")} disabled={locked} onClick={() => void perform(async () => { await inventory.refetch(); if (savedID) await readSaved(savedID); })}><RefreshCw /></Button>
+        {builder && <Button variant="primary" disabled={locked || composing} onClick={() => setComposing(true)}><Plus />{t("New candidate")}</Button>}
+      </>} />}
     {scopeUnresolved && !builder && <Panel role="status" className="p-3 text-sm text-muted">{t("This handoff points at a builder draft, which a publisher does not read. Reopen release review from a saved candidate or a named application.")}</Panel>}
-    <Card className="grid gap-3 p-3" aria-label={t("Saved releases")}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">{t("Saved releases")}</h2>
-        <Button size="sm" disabled={locked} onClick={() => void perform(async () => { await inventory.refetch(); if (savedID) await readSaved(savedID); })}>{t("Refresh releases")}</Button>
-      </div>
-      <p className="break-all text-xs text-muted">{inventory.isError ? t("Active release is unavailable.") : inventory.isPending ? t("Loading…") : activeID ? <>{t("Current active release")}: <code>{activeID}</code></> : t("No active release yet.")}</p>
-      {inventory.isError ? <p role="alert" className="text-sm text-danger">{t("Saved releases could not be loaded.")}</p> : <label className="grid gap-1 text-xs">{t("Saved candidate")}
-        <Select aria-label={t("Saved candidate")} disabled={locked || inventory.isLoading} value={savedReview ? savedID : ""} onChange={(event) => void loadSaved(event.target.value)}>
-          <option value="">{t("Choose a saved candidate")}</option>
-          {inventory.data?.candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title} · {candidate.assets} {t("assets")} · {candidate.id.slice(-8)}{candidate.id === activeID ? ` · ${t("Active")}` : ""}{candidate.promotedTo?.length ? ` · ${t("promoted to {targets}", { targets: wentTo(candidate.promotedTo) })}` : ""}</option>)}
-          {savedReview && !inventory.data?.candidates.some((candidate) => candidate.id === savedID) && <option value={savedID}>{savedID}</option>}
-        </Select>
-      </label>}
-      {promoted.length > 0 && <div className="grid gap-2 rounded border border-border p-3" role="region" aria-label={t("Promoted into this environment")}>
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">{t("Promoted into this environment")} · {promoted.length}</h3>
-          <ContextHelp title={t("Promoted into this environment")}>{t("Candidates another environment promoted here and that still wait for review. Open one to check its upgrade plan and activate it.")}</ContextHelp>
-        </div>
-        <ul className="grid gap-1">
-          {promoted.map((candidate) => <li key={candidate.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span className="break-all">{candidate.title} · {t("from {tenant}", { tenant: candidate.from! })}{candidate.promotedAt ? ` · ${new Date(candidate.promotedAt).toLocaleString()}` : ""} · <code>{candidate.id.slice(-8)}</code></span>
-            <Button size="sm" disabled={locked} onClick={() => void loadSaved(candidate.id)}>{t("Review and activate")}</Button>
-          </li>)}
-        </ul>
-      </div>}
-      {!inventory.isError && inventory.data && <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-        <span>{t("Showing {shown} of {total} candidates", { shown: inventory.data.candidates.length, total: inventory.data.total })}</span>
-        <Button size="sm" disabled={locked || offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>{t("Previous")}</Button>
-        <Button size="sm" disabled={locked || offset + 20 >= inventory.data.total} onClick={() => setOffset(offset + 20)}>{t("Next")}</Button>
-        {activeID && <Button size="sm" disabled={locked} onClick={() => void loadSaved(activeID)}>{t("Review active release")}</Button>}
-      </div>}
-    </Card>
-    {builder && <><Card className="grid gap-3 p-3">
-      {!embedded && <label className="grid gap-1 text-xs">{t("Definition kind")}
-        <Select disabled={locked} value={kind} onChange={(event) => { setKind(event.target.value as ReleaseKind); setId(""); setReview(undefined); setSavedID(""); setSavedReview(false); setPlanID(""); setReportID(""); setError(""); setJoint([]); setJointNote(""); }}>
-          {kinds.map((item) => <option key={item.kind} value={item.kind}>{t(item.label)}</option>)}
-        </Select>
-      </label>}
-      {!embedded && <label className="grid gap-1 text-xs">{t("Saved draft")}
-        <Select disabled={locked} value={id} onChange={(event) => { setId(event.target.value); setReview(undefined); setSavedID(""); setSavedReview(false); setPlanID(""); setReportID(""); setError(""); setJoint([]); setJointNote(""); }}>
-          <option value="">{t("Choose a saved draft")}</option>
-          {records.map((record) => <option key={record.id} value={record.id}>{record.title || record.name} · {record.state}</option>)}
-        </Select>
-      </label>}
-      {query.isError && <p role="alert" className="text-sm text-danger">{t("Release review could not be loaded.")}</p>}
-      <Button loading={busy} disabled={invalidSelection || !id || locked} onClick={() => void inspect()}>{t("Check draft and dependencies")}</Button>
-    </Card>
-    <Card className="grid gap-3 p-3" aria-label={t("Deliver drafts together")}>
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">{t("Deliver drafts together")}</h2>
+    {inventory.isError ? <Notice tone="danger" role="alert" message={t("Saved releases could not be loaded.")} /> : <DataTable data={candidates} columns={candidateColumns(activeID)} getRowId={candidate => candidate.id} searchable={false} loading={inventory.isLoading}
+      height={Math.max(120, Math.min(360, 34 + candidates.length * 36))} rowHeight={36} selectedId={savedReview ? savedID : undefined} onRowClick={candidate => { if (!locked) void loadSaved(candidate.id); }}
+      empty={t("No saved candidates yet.")} />}
+    {!inventory.isError && inventory.data && inventory.data.total > 20 && <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+      <span>{t("Showing {shown} of {total} candidates", { shown: inventory.data.candidates.length, total: inventory.data.total })}</span>
+      <Button size="sm" disabled={locked || offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>{t("Previous")}</Button>
+      <Button size="sm" disabled={locked || offset + 20 >= inventory.data.total} onClick={() => setOffset(offset + 20)}>{t("Next")}</Button>
+    </div>}
+    {builder && composing && <Card className="grid gap-3 p-3" aria-label={t("New candidate")}>
+      <div className="flex items-center gap-2">
+        <h2 className="min-w-0 flex-1 text-sm font-semibold">{t("New candidate")}</h2>
         <ContextHelp title={t("Deliver drafts together")}>{t("Checking an application includes its saved dependency drafts. Review the complete selection and resolve any connection or definition problems before saving; nothing has to be published separately.")}</ContextHelp>
+        {!embedded && <Button size="sm" variant="ghost" disabled={locked} onClick={() => { setComposing(false); setJoint([]); setJointNote(""); }}>{t("Close")}</Button>}
       </div>
+      {!embedded && <div className="grid gap-2 sm:grid-cols-2">
+        <label className="grid gap-1 text-xs">{t("Definition kind")}
+          <Select disabled={locked} value={kind} onChange={(event) => { setKind(event.target.value as ReleaseKind); setId(""); setReview(undefined); setSavedID(""); setSavedReview(false); setPlanID(""); setReportID(""); setError(""); setJoint([]); setJointNote(""); }}>
+            {kinds.map((item) => <option key={item.kind} value={item.kind}>{t(item.label)}</option>)}
+          </Select>
+        </label>
+        <label className="grid gap-1 text-xs">{t("Saved draft")}
+          <Select disabled={locked} value={id} onChange={(event) => { setId(event.target.value); setReview(undefined); setSavedID(""); setSavedReview(false); setPlanID(""); setReportID(""); setError(""); setJoint([]); setJointNote(""); }}>
+            <option value="">{t("Choose a saved draft")}</option>
+            {records.map((record) => <option key={record.id} value={record.id}>{record.title || record.name} · {record.state}</option>)}
+          </Select>
+        </label>
+      </div>}
+      {query.isError && <p role="alert" className="text-sm text-danger">{t("Release review could not be loaded.")}</p>}
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" disabled={!id || locked} onClick={() => {
+        <Button loading={busy} disabled={invalidSelection || !id || locked} onClick={() => void inspect()}>{t("Check draft and dependencies")}</Button>
+        <Button size="sm" variant="ghost" disabled={!id || locked} onClick={() => {
           const selection = merged(joint, [{ kind, id }]);
           if (selection.length > 128) { setJointNote(t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")); return; }
           setJoint(selection); setJointNote("");
         }}>{t("Add selected draft")}</Button>
-        <Button size="sm" disabled={!id || locked} onClick={() => void addReferenced({ kind, id })}>{t("Add the drafts it depends on")}</Button>
-        {scopedApplication && <Button size="sm" disabled={locked} onClick={() => void addReferenced({ kind: "app", id: scopedApplication.id })}>{t("Add the drafts of {title}", { title: scopedApplication.title || scopedApplication.name })}</Button>}
-        <Button size="sm" disabled={!joint.length || joint.length > 128 || locked} onClick={() => { setJoint([]); setJointNote(""); }}>{t("Clear selection")}</Button>
+        <Button size="sm" variant="ghost" disabled={!id || locked} onClick={() => void addReferenced({ kind, id })}>{t("Add the drafts it depends on")}</Button>
+        {scopedApplication && <Button size="sm" variant="ghost" disabled={locked} onClick={() => void addReferenced({ kind: "app", id: scopedApplication.id })}>{t("Add the drafts of {title}", { title: scopedApplication.title || scopedApplication.name })}</Button>}
       </div>
-      {joint.length ? <ul className="grid gap-1" aria-label={t("Joint selection")}>
-        {joint.map((choice) => <li className="flex items-center justify-between gap-2 text-xs" key={jointKey(choice)}>
-          <span>{t(kinds.find((item) => item.kind === choice.kind)?.label ?? choice.kind)} · <code>{choice.id}</code></span>
-          <Button size="sm" disabled={locked} onClick={() => setJoint((current) => current.filter((item) => jointKey(item) !== jointKey(choice)))}>{t("Remove")}</Button>
-        </li>)}
-      </ul> : <p className="text-xs text-muted">{t("No drafts selected yet.")}</p>}
-      {joint.length > 128 && <p role="alert" className="text-xs text-warning">{t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")}</p>}
+      {joint.length > 0 && <div className="grid gap-2 border-t border-border pt-3">
+        <h3 className="text-xs font-semibold">{t("Joint selection")} · {joint.length}</h3>
+        <ul className="grid gap-1" aria-label={t("Joint selection")}>
+          {joint.map((choice) => <li className="flex items-center justify-between gap-2 text-xs" key={jointKey(choice)}>
+            <span>{t(kinds.find((item) => item.kind === choice.kind)?.label ?? choice.kind)} · <code>{choice.id}</code></span>
+            <Button size="sm" variant="ghost" disabled={locked} onClick={() => setJoint((current) => current.filter((item) => jointKey(item) !== jointKey(choice)))}>{t("Remove")}</Button>
+          </li>)}
+        </ul>
+        {joint.length > 128 && <p role="alert" className="text-xs text-warning">{t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")}</p>}
+        <div className="flex gap-2">
+          <Button variant="primary" loading={busy} disabled={invalidSelection || joint.length > 128 || locked} onClick={() => void inspect(joint)}>{t("Check joint candidate")}</Button>
+          <Button variant="ghost" disabled={joint.length > 128 || locked} onClick={() => { setJoint([]); setJointNote(""); }}>{t("Clear selection")}</Button>
+        </div>
+      </div>}
       {jointNote && <p className="text-xs text-muted" role="status">{jointNote}</p>}
-      <Button loading={busy} disabled={invalidSelection || !joint.length || joint.length > 128 || locked} onClick={() => void inspect(joint)}>{t("Check joint candidate")}</Button>
-    </Card>
-    </>}
+    </Card>}
     {call?.expired && !error && <Panel role="status" className="p-3 text-sm text-muted">{t("The original handoff expired when the view was reopened. Reopen release review from the application to review its current selection.")}</Panel>}
     {error && <Card className="p-3"><ReleaseDiagnostic diagnostic={error} application={scope || (kind === "app" ? id : undefined)} builder={builder} locked={locked} onAdd={choice => { setJoint(current => merged(current, [choice])); setError(""); clearReview(); }} /></Card>}
     {pending && <Card role="alert" className="grid gap-2 p-3 text-sm">
@@ -459,4 +447,16 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       </div>}
     </Card>}
   </div>;
+}
+
+function candidateColumns(activeID: string): ColumnDef<Api.ReleaseSummary>[] {
+  return [
+    { id: "title", header: t("Candidate"), meta: { width: 320 }, accessorFn: candidate => candidate.title, cell: ({ row: { original: candidate } }) => <span className="grid min-w-0"><span className="truncate font-medium">{candidate.title}</span><span className="truncate font-mono text-2xs text-muted">{candidate.id}</span></span> },
+    { id: "assets", header: t("Assets"), meta: { width: 90 }, accessorFn: candidate => candidate.assets, cell: ({ getValue }) => <span className="tabular-nums text-muted">{getValue() as number}</span> },
+    { id: "state", header: t("Status"), meta: { width: 220 }, accessorFn: candidate => candidate.id === activeID ? "active" : candidate.from ? "promoted" : "saved", cell: ({ row: { original: candidate } }) => candidate.id === activeID
+      ? <StatusTag status="active" registry={{ active: { label: t("Active"), tone: "success" } }} />
+      : candidate.from ? <StatusTag status="promoted" registry={{ promoted: { label: t("Promoted from {tenant}", { tenant: candidate.from }), tone: "warning" } }} />
+      : <StatusTag status="saved" registry={{ saved: { label: t("Saved"), tone: "info" } }} /> },
+    { id: "promoted", header: t("Promoted to"), meta: { width: 220 }, accessorFn: candidate => (candidate.promotedTo ?? []).map(target => target.tenant).join(", "), cell: ({ row: { original: candidate } }) => <span className="truncate text-xs text-muted">{(candidate.promotedTo ?? []).map(target => `${target.tenant} (${target.active ? t("active") : t("awaiting review")})`).join(", ")}</span> },
+  ];
 }
