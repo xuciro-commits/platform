@@ -9,7 +9,9 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 type ContextView struct {
@@ -118,7 +120,10 @@ type Hit struct {
 	Type  string `json:"type"`
 	ID    string `json:"id"`
 	Title string `json:"title"`
+	Group string `json:"group"`
 }
+
+var searchScopes = map[byte]string{'#': build.AppType, ':': build.ObjectType, '@': controlowner.MemberType}
 
 func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []Hit {
 	if reader == nil || reader.Tenant != t.ID {
@@ -126,24 +131,41 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 	}
 	m := *reader
 	out := []Hit{}
-	if strings.TrimSpace(q) == "" {
+	q = strings.TrimSpace(q)
+	only := ""
+	if q != "" {
+		if scope, ok := searchScopes[q[0]]; ok {
+			only, q = scope, strings.TrimSpace(q[1:])
+		}
+	}
+	if q == "" && only == "" {
 		return out
 	}
+	resources := map[string]bool{}
+	if owner := t.app(build.ID); owner != nil {
+		for _, entity := range owner.Manifest().Entities {
+			resources[entity.Type] = true
+		}
+	}
 	for _, info := range t.Entities(m) {
-		if info.Type == platform.FollowType {
+		if info.Type == platform.FollowType || only != "" && info.Type != only {
 			continue
 		}
 		query := platform.Query{Search: q, Limit: 5}
-		if rest, named := t.names(info, q); named {
+		if rest, named := t.names(info, q); named && only == "" {
 			query.Search = rest
 		}
 		page, err := t.recordsRead(m, info.Type, query, now)
 		if err != nil {
 			continue
 		}
+		group := "object"
+		if resources[info.Type] || info.App != build.ID {
+			group = "resource"
+		}
 		for _, r := range page.Records {
 			v := reflect.ValueOf(r)
-			hit := Hit{Type: info.Type, ID: v.FieldByName("ID").String()}
+			hit := Hit{Type: info.Type, ID: v.FieldByName("ID").String(), Group: group}
 			if f, ok := info.Field(info.Display); ok {
 				hit.Title = v.FieldByIndex(f.Index).String()
 			}

@@ -129,8 +129,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const registry = useRef(definitions);
   registry.current = definitions;
   const recordRoutes = useRef(host?.opens); recordRoutes.current = host?.opens;
-  const searchRecords = useCallback(async (text: string) => (await client.get<{ type: string; id: string; title?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
-    .map((hit) => ({ id: `${hit.type}/${hit.id}`, label: hit.title || hit.id, detail: `${hit.type} · ${hit.id}`,
+  const searchRecords = useCallback(async (text: string) => (await client.get<{ type: string; id: string; title?: string; group?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
+    .map((hit) => ({ id: `${hit.type}/${hit.id}`, label: hit.title || hit.id, detail: `${hit.type} · ${hit.id}`, group: hit.group === "object" ? "object" as const : "resource" as const,
       open: () => { const view = recordRoutes.current?.get(hit.type); location.hash = routeToHash(view ? { view, params: { id: hit.id } } : { view: "record", params: { type: hit.type, id: hit.id } }); } })), [client, identityScope, host?.source.scope]);
   const app = all.find((a) => a.id === current);
   const preparedApplication=activeRoute?.params?.application&&all.some(entry=>entry.id===activeRoute.params!.application)?activeRoute.params.application:app?.id;
@@ -230,7 +230,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   if (discovery.phase === "offline") return bootstrap(t("The live connection is unavailable."), discovery.message, discovery.retry, false);
   if (!host || !apps || !ready || discovery.phase !== "ready") return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
-  const portal = all.map((entry) => portalEntry(entry, host));
+  const portal = all.filter((entry) => entry.portal !== false).map((entry) => portalEntry(entry, host));
   const openApplication = (id: string) => {
     const target = all.find((a) => a.id === id);
     if (!target) return;

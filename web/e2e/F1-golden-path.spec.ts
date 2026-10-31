@@ -39,6 +39,10 @@ test("F1 builder goes from an empty project to an application a business user ac
     await sheet.getByRole("textbox", { name: "Name *" }).fill(objectName);
     await sheet.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByText(`build.${objectName}`, { exact: true })).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+K");
+    await page.getByRole("combobox").fill(`:${objectName}`);
+    await expect(page.getByRole("group", { name: "Resources" }).getByRole("option").first()).toBeVisible();
+    await page.keyboard.press("Escape");
   });
 
   await test.step("4 add an action type", async () => {

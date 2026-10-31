@@ -129,7 +129,7 @@ const section = (label: string, route: Route | undefined, items: Link[]): NavSec
 const navigation = (route?: Route) => <ToolContext route={route} />;
 
 export default defineApp({
-  id: "build", category: "build", title: "Files", icon: <FolderTree />,
+  id: "build", category: "build", portal: false, title: "Files", icon: <FolderTree />,
   description: "Projects and the resources they own: object types, logic, pages and releases.",
   for: builder,
   home: { view: "projects" },

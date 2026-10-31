@@ -1,6 +1,6 @@
 import { useInputDrafts } from "../fields/draft";
 import { useTheme } from "../themes/theme";
-import { Command } from "cmdk";
+import { Command, defaultFilter } from "cmdk";
 import { ArrowLeft, Bell, ChevronsLeft, Clock, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { createPortal } from "react-dom";
@@ -17,6 +17,8 @@ import { ViewTransfers } from "./ViewTransfers";
 import { NavigationItems, navigationLinks, routeCovers, type NavSection } from "./Navigation";
 import { Tooltip } from "../primitives/tooltip";
 
+const paletteScopes = [">", "@", "#", ":"];
+
 const shortcutList: [string, string][] = [
   ["⌘K", "Command palette and search"], ["⌘\\", "Collapse or expand the app sidebar"], ["⌘S", "Save now to your working state"], ["⌘⇧S", "Open Review and save"],
   ["⌘Z / ⇧⌘Z", "Undo / redo"], ["⌘C / ⌘V / ⌘D", "Copy / paste / duplicate"], ["Delete", "Delete the selection"], ["Esc", "Close the top overlay, or clear the selection"],
@@ -32,7 +34,7 @@ export type View = {
   documentKey?: (params: Record<string, string>) => string;
 };
 export type ShellCommand = { id: string; label: string; group?: string; shortcut?: string; run: () => void };
-type SearchHit = { id: string; label: string; detail?: string; open: () => void };
+type SearchHit = { id: string; label: string; detail?: string; group?: "resource" | "object"; open: () => void };
 type RecordSearch = (text: string) => Promise<SearchHit[]>;
 export type Session = {
   tenant: string; principal: string; detail?: string;
@@ -498,7 +500,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const [typed, setTyped] = useState("");
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [recordSearch, setRecordSearch] = useState<{ source: RecordSearch; text: string; attempt: number; hits?: SearchHit[]; error?: string }>();
-  const searching = paletteOpen && !!search && typed.trim().length >= 2;
+  const prefix = paletteScopes.find(scope => typed.trimStart().startsWith(scope)), scoped = !!prefix, commandsOnly = prefix === ">";
+  const searching = paletteOpen && !!search && !commandsOnly && (scoped ? typed.trim().length >= 1 : typed.trim().length >= 2);
   const answer = searching && recordSearch?.source === search && recordSearch.text === typed && recordSearch.attempt === searchAttempt ? recordSearch : undefined;
   const found = answer?.hits ?? [];
   const searchPending = searching && answer?.hits === undefined && answer?.error === undefined;
@@ -640,11 +643,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </nav>
         )}
       </div>
-      <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")}
+      <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")} filter={(value, search, keywords) => defaultFilter(value, paletteScopes.some(scope => search.startsWith(scope)) ? search.slice(1).trim() : search, keywords)}
         overlayClassName="fixed inset-0 z-40 bg-overlay"
         contentClassName="fixed left-1/2 top-[14%] z-50 w-[min(600px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-surface text-foreground shadow-lg">
         <div className="flex items-center gap-2 border-b border-border px-3"><Search className="size-4 shrink-0 text-muted" />
-          <Command.Input value={typed} onValueChange={setTyped} placeholder={t("Search records, go to, open, run…")} className="h-11 w-full bg-transparent text-base outline-none" /></div>
+          <Command.Input value={typed} onValueChange={setTyped} placeholder={t("Search, or type > commands, @ members, # projects, : object types")} className="h-11 w-full bg-transparent text-base outline-none" /></div>
         {searchPending && <p role="status" className="px-3 py-2 text-sm text-muted">{t("Searching records…")}</p>}
         {answer?.error !== undefined && <div role="alert" className="grid gap-1 border-b border-border px-3 py-2 text-sm">
           <p className="text-danger">{t("Record search failed.")} {answer.error}</p>
@@ -652,15 +655,17 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         </div>}
         <Command.List className="max-h-[min(420px,60dvh)] overflow-auto p-1">
           {!searchPending && answer?.error === undefined && <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>}
-          {found.length > 0 && (
-            <Command.Group heading={t("Records")} className={paletteGroup}>
-              {found.map((hit) => (
-                <Command.Item key={hit.id} value={`record ${answer!.text} ${hit.label} ${hit.id}`} className={paletteItem}
-                  onSelect={() => { hit.open(); setPaletteOpen(false); }}>{hit.label}{hit.detail && <span className="ml-auto font-mono text-xs text-muted">{hit.detail}</span>}</Command.Item>
+          {[...commands, ...builtInCommands].length > 0 && (!scoped || commandsOnly) && (
+            <Command.Group heading={t("Commands")} className={paletteGroup}>
+              {[...commands, ...builtInCommands].map((c) => (
+                <Command.Item key={c.id} value={`${c.group ?? ""} ${c.label}`} className={paletteItem}
+                  onSelect={() => { setPaletteOpen(false); c.run(); }}>
+                  {c.label}{(c.shortcut || c.group) && <span className="ml-auto text-xs text-muted">{c.shortcut ?? c.group}</span>}
+                </Command.Item>
               ))}
             </Command.Group>
           )}
-          {nav.length > 0 && pageScope && nav.map((section) => (
+          {nav.length > 0 && pageScope && !scoped && nav.map((section) => (
             <Command.Group key={section.label} heading={currentApp ? `${currentApp.title} · ${section.label}` : section.label} className={paletteGroup}>
               {navigationLinks(section.items).map((item) => (
                 <Command.Item key={routeKey(item.route)} value={`${section.label} ${item.label}`} className={paletteItem}
@@ -668,7 +673,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               ))}
             </Command.Group>
           ))}
-          {applications && applications.apps.length > 0 && (
+          {applications && applications.apps.length > 0 && !scoped && (
             <Command.Group heading={t("Applications")} className={paletteGroup}>
               {applications.apps.map((a) => (
                 <Command.Item key={a.id} value={`app ${a.title} ${applications.categories.find((c) => c.id === a.category)?.label ?? ""}`} className={paletteItem}
@@ -677,22 +682,21 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               ))}
             </Command.Group>
           )}
-          {memory.recent.length > 0 && (
+          {(["resource", "object"] as const).map(group => {
+            const hits = found.filter(hit => (hit.group ?? "resource") === group);
+            return hits.length > 0 && !commandsOnly && <Command.Group key={group} heading={group === "object" ? t("Objects") : t("Resources")} className={paletteGroup}>
+              {hits.map((hit) => (
+                <Command.Item key={hit.id} value={`record ${answer!.text} ${hit.label} ${hit.id}`} className={paletteItem}
+                  onSelect={() => { hit.open(); setPaletteOpen(false); }}>{hit.label}{hit.detail && <span className="ml-auto font-mono text-xs text-muted">{hit.detail}</span>}</Command.Item>
+              ))}
+            </Command.Group>;
+          })}
+          {memory.recent.length > 0 && !typed.trim() && (
             <Command.Group heading={t("Recent")} className={paletteGroup}>
               {memory.recent.slice(0, 8).map((entry) => (
                 <Command.Item key={routeKey(entry.route)} value={`recent ${entry.title} ${routeKey(entry.route)}`} className={paletteItem}
                   onSelect={() => { open(entry.route); setPaletteOpen(false); }}><Clock />{entry.title}
                   {entry.app && <span className="ml-auto text-xs text-muted">{applications?.apps.find(app => app.id === entry.app)?.title}</span>}</Command.Item>
-              ))}
-            </Command.Group>
-          )}
-          {[...commands, ...builtInCommands].length > 0 && (
-            <Command.Group heading={t("Commands")} className={paletteGroup}>
-              {[...commands, ...builtInCommands].map((c) => (
-                <Command.Item key={c.id} value={`${c.group ?? ""} ${c.label}`} className={paletteItem}
-                  onSelect={() => { setPaletteOpen(false); c.run(); }}>
-                  {c.label}{(c.shortcut || c.group) && <span className="ml-auto text-xs text-muted">{c.shortcut ?? c.group}</span>}
-                </Command.Item>
               ))}
             </Command.Group>
           )}

@@ -2247,6 +2247,7 @@ export type Hit = {
   type: string;
   id: string;
   title: string;
+  group: string;
 };
 
 export type HostArtifactView = {

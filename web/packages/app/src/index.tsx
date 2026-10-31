@@ -202,6 +202,7 @@ export type AppUI = {
   id: string;
   surface?: WorkspaceSurface;
   category?: PlatformAppCategory;
+  portal?: boolean;
   description?: string;
   serves?: string[];
   for?: (host: Host) => boolean;

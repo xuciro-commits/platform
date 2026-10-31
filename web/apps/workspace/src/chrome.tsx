@@ -245,7 +245,7 @@ function Saved({ id }: { id: string }) {
 }
 
 export const personalWork = defineApp({
-  id: "my-work", serves: [], category: "govern", title: "Notifications", icon: <Bell />,
+  id: "my-work", serves: [], category: "govern", portal: false, title: "Notifications", icon: <Bell />,
   description: "Your notifications, tasks, requests and pending decisions across applications.",
   home: { view: "notifications" },
   views: [
@@ -272,7 +272,7 @@ export const explorerApplication = defineApp({
 });
 
 export const lineageApplication = defineApp({
-  id: "data-lineage", serves: [], category: "analyze", title: "Data Lineage", icon: <Network />,
+  id: "data-lineage", serves: [], category: "govern", title: "Data Lineage", icon: <Network />,
   description: "How resources depend on each other, and what a change reaches.",
   for: host => host.holds("build", "builder", "integrator"),
   home: { view: "lineage" },
