@@ -97,19 +97,18 @@ POST /v1/submissions
 
 ## 7.7 代码规范
 
-- 手写文件 ≤ 800 行（Go）/ 600 行（TS）；超出按职责拆分，不按“工具函数”拆。
+- 手写文件 ≤ 800 行（Go）/ 600 行（TS）；超出按职责拆分，不按“工具函数”拆。只含字面量的数据文件（各包 `i18n.ts`、`zh-CN.ts`、`pageui/manifest.ts`、`pageui/safety.ts`）不计。
 - 包名表达职责；同一名字不指两样东西（如 `kernel`、`agents`）。
 - 不留兼容分支，除非存储格式需要（且写明版本）。
 - 注释、删除旧路径、新依赖的规则见 AGENTS.md 硬规则。
 
 ## 现存差距
 
-- 宿主根包 `platformserver` 平铺约 180 个文件，`engine/`、`studio/`、`apps/`、`internal/` 与目标包不对应（路线图 P2.11）。
+- 宿主根包 `platformserver` 平铺约 190 个文件，`engine/`、`studio/`、`apps/`、`internal/` 与目标包不对应（路线图 P2.11）。
 - 授权上下文构造在 `Tenant.authorizeDepth`（根包），决定函数在 `platform/authz`，应一并移入 `services/security`，`platform` 只留接口（P2.6）。
 - Expr 求值器在 `internal/rules`，应成为 `expr` 包；`platform/field_policy.go`、`platform/entity.go`、`platform/definition.go`、`kernel/records/record_domain.go` 绕过可注入的规则引擎（P2.5）。
 - AI 分散在 `aigateway`、`apps/ai`、`internal/aistate`、`internal/agents`、`engine/agents`、`platform/ai.go`；两个包都叫 `agents`，`aigateway` 反向依赖 `engine/agents`（P2.7）。
 - 重放仍重新执行旧条目类型（submission、input、effect、usage、agent、delivery、job），违反 R6（P2.13）。
-- 超过 §7.7 限额的手写文件（P2.12）。
 
 ## 相关
 

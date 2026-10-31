@@ -1,30 +1,22 @@
 package packages
 
 import (
-	"bytes"
-	"context"
-	"io"
-	"net/http"
-	"net/url"
-
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-
 	"maps"
-
 	"os"
 	"path/filepath"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-
-	"platformserver/platform"
-	"platformserver/studio/build"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 type Owner struct {
@@ -39,18 +31,23 @@ type Owner struct {
 func New(tenant string) *Owner {
 	return &Owner{tenant: tenant, packages: map[string]*platform.InstalledPackage{}, index: &platform.PackageIndex{}}
 }
+
 func (d *Owner) Attach(host platform.PackageHost) { d.host = host }
+
 func (d *Owner) BindPackageIndex(index *platform.PackageIndex) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.index = index
 }
+
 func (d *Owner) BoundIndex() *platform.PackageIndex { d.mu.Lock(); defer d.mu.Unlock(); return d.index }
+
 func (d *Owner) SnapshotState() platform.PackageState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return platform.PackageState{Packages: maps.Clone(d.packages), Sources: maps.Clone(d.packageSources)}
 }
+
 func (d *Owner) Restore(s platform.PackageState) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -60,6 +57,7 @@ func (d *Owner) Restore(s platform.PackageState) {
 		d.packages = map[string]*platform.InstalledPackage{}
 	}
 }
+
 func (d *Owner) Prepare(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	apply, err := d.decide(c, s)
 	if apply == nil {
@@ -544,489 +542,4 @@ func (d *Owner) Contributions() []platform.Contribution {
 	d.mu.Unlock()
 	slices.SortFunc(out, func(a, b platform.Contribution) int { return strings.Compare(a.Key, b.Key) })
 	return out
-}
-
-func DecodeContent(raw []byte) (platform.PackageDescriptor, error) {
-	var descriptor platform.PackageDescriptor
-	if err := platform.DecodeJSON(raw, &descriptor, "platform package"); err != nil {
-		return platform.PackageDescriptor{}, err
-	}
-	if descriptor.ID == "" && descriptor.Version == "" && descriptor.Namespace == "" {
-		return platform.PackageDescriptor{}, fmt.Errorf("The package file does not describe a platform package")
-	}
-	return descriptor, nil
-}
-
-const MaxPackageImportBytes = 16 << 20
-
-const SchemaPackageImport = "platform.package.import"
-
-const SchemaPackageRemoveSource = "platform.package.remove-source"
-
-func OfferKey(tenant, digest string) string {
-	return "packages/" + tenant + "/offers/" + strings.TrimPrefix(digest, "sha256:") + ".json"
-}
-
-func (d *Owner) decidePackageSource(_ platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
-	var input struct{ ID, Digest string }
-	if json.Unmarshal(s.GetPayload(), &input) != nil || input.ID == "" || !platform.ValidDigest(input.Digest) {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the reviewed package content")
-	}
-	if s.GetSchema().GetName() == SchemaPackageRemoveSource {
-		d.mu.Lock()
-		source, found := d.packageSources[input.Digest]
-		held := d.packages[input.ID]
-		d.mu.Unlock()
-		if !found || source.ID != input.ID {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The package source is unavailable")
-		}
-		if held != nil && held.State != "retired" && held.Version == source.Version {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Uninstall this version before removing its source")
-		}
-		return func(*pb.ChangeRecord) { delete(d.packageSources, input.Digest) }, nil
-	}
-	offer, err := d.Offer(input.Digest)
-	if err != nil || offer.Descriptor.ID != input.ID {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The reviewed package does not match this request")
-	}
-	index, err := d.packageIndex()
-	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package catalogue cannot be read")
-	}
-	if prior, found := index.Find(offer.Descriptor.ID, offer.Descriptor.Version); found {
-		before, _ := json.Marshal(prior)
-		after, _ := json.Marshal(offer.Descriptor)
-		if !bytes.Equal(before, after) {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A package version cannot be replaced; publish a new version")
-		}
-	}
-	if err = d.verifyPackageVersion(offer.Descriptor, d.packagesOf()[input.ID]); err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
-	}
-	return func(*pb.ChangeRecord) {
-		if d.packageSources == nil {
-			d.packageSources = map[string]platform.PackageSource{}
-		}
-		d.packageSources[input.Digest] = platform.PackageSource{ID: input.ID, Version: offer.Descriptor.Version, Digest: input.Digest, Origin: offer.Origin}
-	}, nil
-}
-
-func (d *Owner) sourceIndex(index *platform.PackageIndex) (*platform.PackageIndex, error) {
-	out := &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
-	d.mu.Lock()
-	sources := make([]platform.PackageSource, 0, len(d.packageSources))
-	for _, source := range d.packageSources {
-		sources = append(sources, source)
-	}
-	d.mu.Unlock()
-	slices.SortFunc(sources, func(a, b platform.PackageSource) int { return strings.Compare(a.Digest, b.Digest) })
-	for _, source := range sources {
-		offer, err := d.Offer(source.Digest)
-		if err != nil {
-			return index, err
-		}
-		if prior, found := out.Find(source.ID, source.Version); found {
-			a, _ := json.Marshal(prior)
-			b, _ := json.Marshal(offer.Descriptor)
-			if !bytes.Equal(a, b) {
-				return index, fmt.Errorf("package %s@%s has conflicting contents", source.ID, source.Version)
-			}
-			continue
-		}
-		out.Packages = append(out.Packages, offer.Descriptor)
-	}
-	slices.SortFunc(out.Packages, func(a, b platform.PackageDescriptor) int {
-		if a.ID != b.ID {
-			return strings.Compare(a.ID, b.ID)
-		}
-		return strings.Compare(a.Version, b.Version)
-	})
-	return out, nil
-}
-
-func (d *Owner) packageBlueprint(id, version string) (platform.PackageBlueprint, error) {
-	d.mu.Lock()
-	held := d.packages[id]
-	artifact := ""
-	if held != nil && held.State == "active" && held.Version == version {
-		artifact = held.Artifact
-	}
-	d.mu.Unlock()
-	if artifact == "" {
-		return platform.PackageBlueprint{}, fmt.Errorf("package %s@%s is not the installed active version", id, version)
-	}
-	descriptor, err := d.sealedPackageDescriptor(id, version, artifact)
-	if err != nil {
-		return platform.PackageBlueprint{}, err
-	}
-	if descriptor.Blueprint == nil {
-		return platform.PackageBlueprint{}, fmt.Errorf("package %s@%s has no application blueprint", id, version)
-	}
-	return *descriptor.Blueprint, nil
-}
-
-func (d *Owner) InstalledBlueprint(id, version string) ([]platform.AssetRef, []platform.ReleaseAsset, error) {
-	blueprint, err := d.packageBlueprint(id, version)
-	return blueprint.Roots, blueprint.Assets, err
-}
-
-func (d *Owner) PreparationBlueprint(id, version string) (platform.PackageBlueprint, *platform.InstalledPackage, error) {
-	for _, view := range d.PackageViews() {
-		if view.Descriptor.ID != id || view.Descriptor.Version != version {
-			continue
-		}
-		if view.Installed != nil && view.Installed.Version == version && view.Installed.State == "active" {
-			blueprint, err := d.packageBlueprint(id, version)
-			return blueprint, view.Installed, err
-		}
-		if view.Descriptor.Blueprint != nil {
-			return *view.Descriptor.Blueprint, view.Installed, nil
-		}
-	}
-	return platform.PackageBlueprint{}, nil, fmt.Errorf("application package %s@%s is unavailable", id, version)
-}
-
-func (d *Owner) packageDependents(id string) []string {
-	installed := d.packagesOf()
-	ids := make([]string, 0, len(installed))
-	for other := range installed {
-		ids = append(ids, other)
-	}
-	slices.Sort(ids)
-	var blockers []string
-	for _, other := range ids {
-		held := installed[other]
-		if other == id || held.State == "retired" {
-			continue
-		}
-		var descriptor platform.PackageDescriptor
-		var err error
-		if held.Artifact != "" {
-			descriptor, err = d.sealedPackageDescriptor(other, held.Version, held.Artifact)
-		} else {
-			var index *platform.PackageIndex
-			index, err = d.packageIndex()
-			if err == nil {
-				var found bool
-				descriptor, found = index.Find(other, held.Version)
-				if !found {
-					err = fmt.Errorf("installed declaration %s@%s is unavailable", other, held.Version)
-				}
-			}
-		}
-		if err != nil {
-			blockers = append(blockers, fmt.Sprintf("Package retirement cannot check %s: %s", other, err))
-			continue
-		}
-		if slices.Contains(descriptor.Requires, id) {
-			blockers = append(blockers, fmt.Sprintf("The package %s is still required by %s", id, other))
-		}
-	}
-	return blockers
-}
-
-func (d *Owner) packageRemoval(id string) *platform.PackageRemoval {
-	if held := d.packagesOf()[id]; held != nil && held.State == "retired" {
-		return &platform.PackageRemoval{ID: id, OK: true, Blockers: []string{}}
-	}
-	blockers := d.packageDependents(id)
-	return &platform.PackageRemoval{ID: id, OK: len(blockers) == 0, Blockers: blockers}
-}
-
-func Contract(id string) platform.CapabilityContract {
-	return platform.CapabilityContract{ID: "package." + id, Version: "1", Semantics: "1"}
-}
-
-func Module(p platform.PackageDescriptor) platform.CapabilityModule {
-	module := platform.CapabilityModule{ID: "package." + p.ID, Version: p.Version, Title: p.Title, Scope: "tenant", Replacement: "drain", Provides: []platform.CapabilityContract{Contract(p.ID)}, Requires: slices.Clone(p.Capabilities)}
-	for _, id := range p.Requires {
-		module.Requires = append(module.Requires, Contract(id))
-	}
-	return module
-}
-
-func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *platform.PackageIndex) (platform.CompositionPlan, error) {
-	modules := d.host.BaseModules()
-	installed := d.packagesOf()
-	for id, held := range installed {
-		if id == candidate.ID || held.State != "active" {
-			continue
-		}
-		var descriptor platform.PackageDescriptor
-		var err error
-		if held.Artifact != "" {
-			descriptor, err = d.sealedPackageDescriptor(id, held.Version, held.Artifact)
-		} else {
-			var found bool
-			descriptor, found = index.Find(id, held.Version)
-			if !found {
-				err = fmt.Errorf("installed package %s has no retained declaration", id)
-			}
-		}
-		if err != nil {
-			return platform.CompositionPlan{}, err
-		}
-		modules = append(modules, Module(descriptor))
-	}
-	modules = append(modules, Module(candidate))
-	return platform.ResolveComposition(modules, nil)
-}
-
-type Catalog interface{ BindPackageIndex(*platform.PackageIndex) }
-
-func (d *Owner) Precheck(p platform.PackageDescriptor) platform.Precheck {
-	index, err := d.packageIndex()
-	if err != nil {
-		return platform.Precheck{ID: p.ID, Version: p.Version, Problems: []string{err.Error()}}
-	}
-	if current, found := index.Find(p.ID, p.Version); found {
-		p = current
-	}
-	return d.precheck(p, index)
-}
-
-func (d *Owner) Offer(digest string) (platform.Offer, error) {
-	var offer platform.Offer
-	if !platform.ValidDigest(digest) {
-		return offer, fmt.Errorf("The reviewed package digest is invalid")
-	}
-	raw, err := d.host.GetPackageArtifact(OfferKey(d.tenant, digest))
-	if err != nil {
-		return offer, fmt.Errorf("The reviewed package is unavailable; inspect it again")
-	}
-	sum := sha256.Sum256(raw)
-	if "sha256:"+hex.EncodeToString(sum[:]) != digest {
-		return offer, fmt.Errorf("The reviewed package content changed")
-	}
-	if err = platform.DecodeJSON(raw, &offer, "reviewed package"); err != nil {
-		return offer, err
-	}
-	if err := offer.Descriptor.Validate(); err != nil {
-		return offer, err
-	}
-	return offer, nil
-}
-
-type PackagePreparation struct {
-	Package           string                   `json:"package"`
-	Version           string                   `json:"version"`
-	Applications      []PackageApplication     `json:"applications"`
-	Connections       []PackageConnection      `json:"connections"`
-	AI                []PackageAIRequirement   `json:"ai"`
-	Roles             []PackageRoleRequirement `json:"roles"`
-	Setup             *platform.PackageSetup   `json:"setup,omitempty"`
-	Installed         bool                     `json:"installed"`
-	InstalledVersion  string                   `json:"installedVersion,omitempty"`
-	InstallationState string                   `json:"installationState,omitempty"`
-}
-
-type PackageApplication struct {
-	Ref       platform.AssetRef `json:"ref"`
-	Title     string            `json:"title"`
-	DraftID   string            `json:"draftId,omitempty"`
-	State     string            `json:"state,omitempty"`
-	Published bool              `json:"published"`
-	Pages     []string          `json:"pages"`
-}
-
-type PackageConnection struct {
-	Ref        platform.AssetRef `json:"ref"`
-	Title      string            `json:"title"`
-	DraftID    string            `json:"draftId,omitempty"`
-	Kind       string            `json:"kind"`
-	Credential bool              `json:"credential"`
-	Configured bool              `json:"configured"`
-	Ready      bool              `json:"ready"`
-}
-
-type PackageAIRequirement struct {
-	Problem string            `json:"problem,omitempty"`
-	Ref     platform.AssetRef `json:"ref"`
-	DraftID string            `json:"draftId,omitempty"`
-	Model   string            `json:"model,omitempty"`
-	Ready   bool              `json:"ready"`
-}
-
-type PackageRoleRequirement struct {
-	App       string `json:"app"`
-	Role      string `json:"role"`
-	Held      bool   `json:"held"`
-	Available bool   `json:"available"`
-}
-
-type DraftState struct {
-	platform.Record
-	Name, Title, State, Address, Secret, Published, Model string
-	ModelOptions                                          platform.ModelOptions `json:"modelOptions,omitempty"`
-	MaxTokens                                             int                   `json:"maxTokens,omitempty"`
-	Pages                                                 []string
-}
-
-func Preparation(id, version string, blueprint platform.PackageBlueprint, installed *platform.InstalledPackage, candidate platform.ReleaseCandidate, m platform.Member, source PreparationSource) (PackagePreparation, error) {
-	out := PackagePreparation{Package: id, Version: version, Applications: []PackageApplication{}, Connections: []PackageConnection{}, AI: []PackageAIRequirement{}, Roles: []PackageRoleRequirement{}, Setup: blueprint.Setup}
-	if installed != nil {
-		out.InstalledVersion, out.InstallationState = installed.Version, installed.State
-		out.Installed = installed.Version == version && installed.State == "active"
-	}
-	role := func(app, name string) {
-		if name == "" || slices.ContainsFunc(out.Roles, func(r PackageRoleRequirement) bool { return r.App == app && r.Role == name }) {
-			return
-		}
-		owner := source.App(app)
-		out.Roles = append(out.Roles, PackageRoleRequirement{App: app, Role: name, Held: m.Holds(app, name), Available: owner != nil && slices.Contains(owner.Manifest().AllRoles(), name)})
-	}
-	for _, root := range blueprint.Roots {
-		if root.Kind != platform.AssetApp {
-			continue
-		}
-		artifact, err := platform.ArtifactOfApplication(root, candidate.Assets)
-		if err != nil {
-			return PackagePreparation{}, err
-		}
-		state, err := source.Find(build.AppType, root.Name)
-		if err != nil {
-			return PackagePreparation{}, err
-		}
-		var pages []string
-		for _, asset := range candidate.Assets {
-			if asset.Ref == root {
-				var app platform.Application
-				if err := json.Unmarshal(asset.Body, &app); err != nil {
-					return PackagePreparation{}, err
-				}
-				pages = app.Pages
-			}
-		}
-		out.Applications = append(out.Applications, PackageApplication{Ref: root, Title: artifact.Title, DraftID: state.ID, State: state.State, Published: state.Published != "", Pages: pages})
-		for _, r := range artifact.Roles {
-			role(r.Resource.Ref.App, r.Role)
-		}
-	}
-	for _, asset := range candidate.Assets {
-		if asset.Ref.App != build.ID {
-			continue
-		}
-		switch asset.Ref.Kind {
-		case platform.AssetConnection:
-			var def build.ConnectionDefinition
-			if err := json.Unmarshal(asset.Body, &def); err != nil {
-				return PackagePreparation{}, err
-			}
-			state, err := source.Find(build.ConnectionType, asset.Ref.Name)
-			if err != nil {
-				return PackagePreparation{}, err
-			}
-			out.Connections = append(out.Connections, PackageConnection{Ref: asset.Ref, Title: def.Title, DraftID: state.ID, Kind: def.Kind, Credential: def.Credential, Configured: state.Address != "" && (!def.Credential || state.Secret != ""), Ready: state.State == "ready" && (!def.Credential || state.Secret != "")})
-		case platform.AssetAgent, platform.AssetFunction, platform.AssetEvaluation:
-			typ := build.FunctionType
-			if asset.Ref.Kind == platform.AssetAgent {
-				typ = "build.agent"
-			} else if asset.Ref.Kind == platform.AssetEvaluation {
-				typ = build.TestPlanType
-			}
-			state, err := source.Find(typ, asset.Ref.Name)
-			if err != nil {
-				return PackagePreparation{}, err
-			}
-			var def struct {
-				Model        string                `json:"model"`
-				ModelOptions platform.ModelOptions `json:"modelOptions,omitempty"`
-				MaxTokens    int                   `json:"maxTokens,omitempty"`
-			}
-			if err := json.Unmarshal(asset.Body, &def); err != nil {
-				return PackagePreparation{}, err
-			}
-			model, options, tokens := def.Model, def.ModelOptions, def.MaxTokens
-			if state.ID != "" {
-				model, options, tokens = state.Model, state.ModelOptions, state.MaxTokens
-			}
-			purpose := "generation"
-			if asset.Ref.Kind == platform.AssetAgent {
-				purpose = "agent"
-			}
-			if asset.Ref.Kind == platform.AssetFunction {
-				options = options.Override(platform.ModelOptions{MaxTokens: tokens})
-			}
-			resolved, problem := source.Model(purpose, model, options)
-			ready := problem == ""
-			if ready {
-				model = resolved
-			}
-
-			out.AI = append(out.AI, PackageAIRequirement{Ref: asset.Ref, DraftID: state.ID, Model: model, Ready: ready, Problem: problem})
-		}
-	}
-	if out.Setup != nil {
-		for _, r := range out.Setup.Roles {
-			role(r.App, r.Role)
-		}
-	}
-	slices.SortFunc(out.Roles, func(a, b PackageRoleRequirement) int { return strings.Compare(a.App+"/"+a.Role, b.App+"/"+b.Role) })
-	return out, nil
-}
-
-type PreparationSource struct {
-	Find  func(string, string) (DraftState, error)
-	App   func(string) platform.App
-	Model func(string, string, platform.ModelOptions) (string, string)
-}
-
-func Inspect(ctx context.Context, tenant string, request platform.PackageInspectRequest, send func(*http.Request, bool) (*http.Response, error), files platform.FileStore, check func(context.Context, platform.PackageDescriptor) (platform.Precheck, error)) (platform.PackagePreview, error) {
-	var preview platform.PackagePreview
-	content, origin := []byte(request.Content), "local-file"
-	if (request.URL == "") == (len(content) == 0) {
-		return preview, fmt.Errorf("Choose one package source: a URL or a local package file")
-	}
-	if request.URL != "" {
-		address, err := url.Parse(request.URL)
-		if err != nil || address.Scheme != "https" || address.Host == "" || address.User != nil || address.Fragment != "" {
-			return preview, fmt.Errorf("Use an HTTPS address for a platform package, without embedded credentials")
-		}
-		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
-		if err != nil {
-			return preview, err
-		}
-		req.Header.Set("Accept", "application/json")
-		response, err := send(req, false)
-		if err != nil {
-			return preview, fmt.Errorf("The package could not be downloaded; check its address and try again")
-		}
-		defer response.Body.Close()
-		if response.StatusCode != http.StatusOK {
-			return preview, fmt.Errorf("The package source answered HTTP %d", response.StatusCode)
-		}
-		content, err = io.ReadAll(io.LimitReader(response.Body, MaxPackageImportBytes+1))
-		if err != nil {
-			return preview, fmt.Errorf("The package download could not be read")
-		}
-		address.RawQuery, address.ForceQuery = "", false
-		origin = address.String()
-	}
-	if len(content) == 0 || len(content) > MaxPackageImportBytes {
-		return preview, fmt.Errorf("A platform package must be non-empty and at most 16 MiB")
-	}
-	descriptor, err := DecodeContent(content)
-	if err != nil {
-		return preview, err
-	}
-	if err := descriptor.Validate(); err != nil {
-		return preview, err
-	}
-	precheck, err := check(ctx, descriptor)
-	if err != nil {
-		return preview, err
-	}
-	raw, err := json.Marshal(platform.Offer{Descriptor: descriptor, Origin: origin})
-	if err != nil {
-		return platform.PackagePreview{}, err
-	}
-	sum := sha256.Sum256(raw)
-	digest := "sha256:" + hex.EncodeToString(sum[:])
-	if err = files.Put(ctx, OfferKey(tenant, digest), raw, "application/json"); err != nil {
-		return platform.PackagePreview{}, err
-	}
-	return platform.PackagePreview{Descriptor: descriptor, Digest: digest, Origin: origin, Precheck: precheck}, nil
-
 }
