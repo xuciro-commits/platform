@@ -7,6 +7,9 @@ test("F1 builder goes from an empty project to an application a business user ac
 
   await test.step("1 create a project", async () => {
     await signIn(page, "builder", "/projects");
+    await page.keyboard.press("?");
+    await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "New project", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Create project" });
     await sheet.getByRole("textbox", { name: "Name *" }).fill(name);
@@ -75,7 +78,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await sheet.getByRole("button", { name: "Create", exact: true }).click();
     await expect(other.getByRole("heading", { name: "Next steps" })).toBeVisible();
     await other.context().close();
-    await page.getByRole("button", { name: "Review and save", exact: true }).click();
+    await page.keyboard.press("ControlOrMeta+Shift+S");
     const provenance = page.getByRole("list", { name: "Draft provenance" });
     for (const kind of ["Applications", "Pages", "Object types", "Datasets"]) await expect(provenance.getByText(`${kind} ·`).first()).toBeVisible();
     await expect(provenance.getByText("Applications ·")).toHaveCount(1);

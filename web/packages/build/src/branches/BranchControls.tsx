@@ -1,7 +1,7 @@
 import { useHost } from "@platform/app";
 import { ActionMenu, Button, Select, StatusTag, Tag, defineStatuses, t, useUnsavedChanges, useWorkspace, type ContextCommand , Tooltip } from "@platform/ui";
 import { GitBranch, MoreHorizontal } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBranchDetail, useBranches } from "./api";
 import { CloseBranchDialog, NewBranchDialog } from "./BranchDialogs";
 import { useCurrentBranch } from "./current";
@@ -25,10 +25,23 @@ export function BranchControls() {
   const current = live.find(branch => branch.id === currentId);
   useEffect(() => { if (currentId && list.data && !current) select(undefined); }, [currentId, list.data, current]);
   const working = useWorkingDrafts(builder && !currentId);
+  const shortcut = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    if (!builder) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      shortcut.current?.();
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [builder]);
   if (!builder) return null;
   const count = current ? current.resources.length : working.drafts.length;
   const reviewMain = () => confirmLeave(() => open({ view: "release-review", params: { drafts: releaseDraftsValue(working.drafts.slice(0, 128)) } }));
   const switchTo = (id?: string) => confirmDiscard(() => confirmLeave(() => select(id)));
+  const review = current?.state === "open" ? () => confirmLeave(() => setReviewing(true)) : current?.state === "proposed" ? () => openProposal(current.id) : count ? reviewMain : undefined;
+  shortcut.current = review;
   const commands: ContextCommand[] = [
     { id: "new", label: t("New branch…"), run: () => setCreating(true) },
     ...(current?.state === "proposed" ? [{ id: "proposal", label: t("Open proposal"), run: () => openProposal(current.id) }] : []),

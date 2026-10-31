@@ -4,7 +4,8 @@ import { Command } from "cmdk";
 import { ArrowLeft, Bell, ChevronsLeft, Clock, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { createPortal } from "react-dom";
-import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
 import { routeFromHash, routeKey, routeToHash, type Route } from "./route";
@@ -15,6 +16,12 @@ import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
 import { NavigationItems, navigationLinks, routeCovers, type NavSection } from "./Navigation";
 import { Tooltip } from "../primitives/tooltip";
+
+const shortcutList: [string, string][] = [
+  ["⌘K", "Command palette and search"], ["⌘\\", "Collapse or expand the app sidebar"], ["⌘S", "Save now to your working state"], ["⌘⇧S", "Open Review and save"],
+  ["⌘Z / ⇧⌘Z", "Undo / redo"], ["⌘C / ⌘V / ⌘D", "Copy / paste / duplicate"], ["Delete", "Delete the selection"], ["Esc", "Close the top overlay, or clear the selection"],
+  ["⌥⌘\\ / ⌘J", "Right inspector / bottom dock"], ["↑↓ / Enter", "Move / open"], ["?", "This list"],
+];
 export type { NavSection } from "./Navigation";
 
 export type View = {
@@ -415,6 +422,13 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   }, [keyOf, closeSide, guard, setStack, goHome]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [sideWidth, setSideWidth] = useState(() => { let stored = 480; try { stored = Number(localStorage.getItem("workspace.side-width")) || 480; } catch {   } return Math.min(720, Math.max(360, stored)); });
+  const resizeSide = (width: number, keep = false) => {
+    const next = Math.round(Math.min(720, Math.max(360, width)));
+    setSideWidth(next);
+    if (keep) try { localStorage.setItem("workspace.side-width", String(next)); } catch {   }
+  };
   const [sidebarSlot, setSidebarSlot] = useState<HTMLElement | null>(null);
   const [claims, setClaims] = useState<string[]>([]);
   const claimSidebar = useCallback((panel: string) => {
@@ -503,6 +517,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((v) => !v); }
       if ((e.metaKey || e.ctrlKey) && e.key === "\\") { e.preventDefault(); toggleSidebar(); }
+      if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target instanceof HTMLElement && e.target.closest("input,textarea,select,[contenteditable=true],[role=textbox]"))) { e.preventDefault(); setShortcutsOpen(true); }
       if (e.key === "Escape" && !e.defaultPrevented && compact && mobileNavOpen) setMobileNavOpen(false);
     };
     addEventListener("keydown", onKey);
@@ -571,7 +586,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </header>
         )}
         {!compact && (sidebar || <div />)}
-        <div className={cn("relative grid min-h-0 min-w-0", side && !compact ? "grid-cols-[minmax(0,1fr)_var(--side-pane-width)]" : "grid-cols-1")}>
+        <div style={side && !compact ? { "--side-pane-width": `${sideWidth}px` } as CSSProperties : undefined} className={cn("relative grid min-h-0 min-w-0", side && !compact ? "grid-cols-[minmax(0,1fr)_var(--side-pane-width)]" : "grid-cols-1")}>
           {compact && mobileNavOpen && sidebar && <>
             <button type="button" aria-label={t("Close navigation")} className="fixed inset-x-0 bottom-12 top-10 z-20 bg-overlay" onClick={() => setMobileNavOpen(false)} />
             <div className="fixed bottom-12 left-0 top-10 z-30 flex w-[min(19rem,85vw)] shadow-lg">{sidebar}</div>
@@ -591,8 +606,19 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               </div>;
             })}
           </main>
-          {side && <aside aria-label={sideTitle} data-density={density} className={cn("flex min-h-0 min-w-0 flex-col border-l border-border bg-surface", compact && "fixed inset-x-0 bottom-12 top-10 z-30")}
+          {side && <aside aria-label={sideTitle} data-density={density} className={cn("relative flex min-h-0 min-w-0 flex-col border-l border-border bg-surface", compact && "fixed inset-x-0 bottom-12 top-10 z-30")}
             onKeyDown={event => { if (event.key === "Escape" && !event.defaultPrevented) { event.stopPropagation(); closeSide(); } }}>
+            {!compact && <div role="separator" aria-orientation="vertical" aria-label={t("Resize side window")} aria-valuemin={360} aria-valuemax={720} aria-valuenow={sideWidth} tabIndex={0}
+              className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize outline-none hover:bg-ring/30 focus-visible:bg-ring/40"
+              onKeyDown={event => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); resizeSide(sideWidth + (event.key === "ArrowLeft" ? 16 : -16), true); } }}
+              onPointerDown={event => {
+                event.preventDefault();
+                const startX = event.clientX, startWidth = sideWidth, handle = event.currentTarget;
+                handle.setPointerCapture(event.pointerId);
+                const move = (next: PointerEvent) => resizeSide(startWidth + startX - next.clientX);
+                const up = (next: PointerEvent) => { resizeSide(startWidth + startX - next.clientX, true); handle.removeEventListener("pointermove", move); handle.removeEventListener("pointerup", up); };
+                handle.addEventListener("pointermove", move); handle.addEventListener("pointerup", up);
+              }} />}
             <header className="flex h-10 shrink-0 items-center gap-1 border-b border-border pl-3 pr-1">
               <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{sideTitle}</h2>
               <Button size="icon" variant="ghost" aria-label={t("Open as page")} title={t("Open as page")} onClick={() => { const route = fullRoute(side.route); guard([side.id], () => { forget([side.id]); setSide(undefined); open(route); }); }}><Maximize2 /></Button>
@@ -672,6 +698,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           )}
         </Command.List>
       </Command.Dialog>
+      <Dialog open={shortcutsOpen} title={t("Keyboard shortcuts")} onOpenChange={setShortcutsOpen}>
+        <table className="w-full text-sm"><tbody>
+          {shortcutList.map(([keys, action]) => <tr key={keys} className="border-b border-border last:border-0"><td className="w-32 py-1.5 pr-3 font-mono text-xs">{keys}</td><td className="py-1.5">{t(action)}</td></tr>)}
+        </tbody></table>
+      </Dialog>
       <Dialog open={!!pending} title={t("Unsaved changes")} onOpenChange={(open) => { if (!open) { pending?.cancel?.(); setPending(undefined); } }}>
         <div className="grid gap-3 text-sm">
           <p>{t("Save your work in the editor, or discard the changes to continue.")}</p>

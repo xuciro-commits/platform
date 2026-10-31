@@ -1,5 +1,5 @@
 import { useRecordArchive } from "@platform/app";
-import { ActionMenu, Button, StatusTag, cn, defineStatuses, t, useInputDrafts, useLeaveFlush, useWorkspace, type ContextCommand, type Route } from "@platform/ui";
+import { ActionMenu, Button, StatusTag, cn, defineStatuses, t, useInputDrafts, useLeaveFlush, useViewVisible, useWorkspace, type ContextCommand, type Route } from "@platform/ui";
 import { Check, MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApplicationScope } from "../projects/application-scope";
@@ -62,6 +62,20 @@ export function ResourceControls({ type, record, dirty = false, busy = false, in
     wasBusy.current = busy;
   }, [busy, dirty, record?.revision]);
   useAutoSave({ enabled: autosave && saved && !!onSave && !record?.archived && !stalled, dirty, invalid, busy, save: async () => { attempt.current = record?.revision; await onSave?.(); } });
+  const visible = useViewVisible();
+  const current = useRef({ saved, dirty, busy, invalid, onSave });
+  current.current = { saved, dirty, busy, invalid, onSave };
+  useEffect(() => {
+    if (!visible || !onSave) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      const now = current.current;
+      if (now.saved && now.dirty && !now.busy && !now.invalid) void now.onSave?.();
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [visible, !!onSave]);
   const inline = operations.slice(0, 2), more = operations.slice(2);
   const overflow: ContextCommand[] = [
     ...more.map(operation => ({ ...operation, disabled: busy || operation.disabled })),

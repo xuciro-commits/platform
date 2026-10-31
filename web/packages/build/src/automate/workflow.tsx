@@ -300,7 +300,6 @@ export function FlowEditor({ id }: { id: string }) {
           operations={[{ id: "validate", label: t("Validate"), disabled: brokenForm.length > 0, run: () => void perform(check) },
             { id: "run", label: t("Run"), icon: <Play />, disabled: !synchronized || !installed?.manual || dirty, run: () => setDock("run") }]} />
       </>}
-      onKeyDown={(event) => { if (!(event.metaKey || event.ctrlKey)) return; if (event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy && !brokenForm.length) void perform(save); } }}
       left={{ label: t("Flow structure"), tabs: [
         { id: "steps", title: t("Steps"), badge: draft.steps.length || undefined, content: steps },
         { id: "blocks", title: t("Blocks"), content: library },

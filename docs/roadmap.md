@@ -20,7 +20,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 ## 下一批
 
-P2.8 删除流程残留：以 Flow 命名的宿主文件与 `flow.instance` 视图删除，逻辑流只作为函数引擎。
+P3.14 Workshop 组件目录统一记录类组件；Dialog 只留 480 与 880 两种宽度。
 
 ## P2 内核收敛
 
@@ -46,7 +46,6 @@ P2.8 删除流程残留：以 Flow 命名的宿主文件与 `flow.instance` 视�
 |---|---|---|
 | P3.1 | 审阅并保存的字段级差异与逐项放弃 | 4-interaction M18 |
 | P3.2 | 并发编辑冲突提示 | 4-interaction §4.5 |
-| P3.3 | 侧窗可调宽；⌘⇧S、`?` 快捷键一览；⌘S 全覆盖 | 4-interaction §4.2、§4.9 |
 | P3.4 | 侧栏收敛：Control Panel 8 项与独立 Markings 分区；Monitoring、Data Connection 去除旧项；项目页移除 Business roles | 4-interaction/workbenches、3-information R5 |
 | P3.5 | Search 分组与前缀；门户按四组并隐藏无权应用 | 3-information §3.3、§3.8 |
 | P3.6 | 文件夹后端模型与 Files 文件夹树 | 3-information §3.7 |

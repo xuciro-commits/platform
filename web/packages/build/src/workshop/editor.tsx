@@ -337,7 +337,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       onKeyDown={(event) => {
         const command = event.metaKey || event.ctrlKey;
         const typing = (event.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]");
-        if (command && event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy) void save(); }
         if (preview) return;
         if (!typing && !busy && !incompatible && event.altKey && nodeID && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); canvasEdit(canvasMove(document, nodeID, event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1, sections)); return; }
         if (!typing && !busy && nodeID && (event.key === "Delete" || event.key === "Backspace")) { event.preventDefault(); runSelectionCommand("delete"); return; }
