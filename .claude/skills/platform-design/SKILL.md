@@ -9,11 +9,14 @@ A builder-first platform for business software, benchmarked on Palantir Foundry:
 
 ## Information architecture
 
-- **Rail** (48px, dark, `Workspace` in `ui/src/shell`): Home, Search ⌘K, Projects (builders), Applications, Inbox; Recent; pinned apps; at the bottom Assistant, Control Panel, account (appearance, language, tenant). Nothing else is global. No top menubar, no document tabs.
-- **Applications** are `AppUI` contributions. Each has its own sidebar: app header (icon, title, pin), optional `navigation` node, then at most 8 nav links in labelled sections. Platform pages (home, portal, search) have no sidebar.
-- **Builder tools** (`packages/build/src/index.tsx`): Projects (`build`), Ontology Manager (`ontology`), Data Integration (`data`), Logic (`logic`), Automate (`automate`), Workshop (`workshop`), Releases (`releases`), and Agent definitions merged into `agents`. Every tool sidebar starts with `ToolContext`: a back link to the project when the route carries `application`, and the branch panel (branch selector, state, "Unsaved changes (N)", Save).
-- **Ontology is global** to the tenant, governed by branches and proposals. A project groups the work of one application; lists show everything with a Project column, not per-project copies.
-- **Behaviour** is Action (writes) + Function (computes). Functions are one list with an Engine column (Code, Decision table, AI, Flow logic); "New function" picks the engine. Automations and Agents are their own apps.
+`docs/architecture.md` is the authority (seven levels, Palantir Foundry as the benchmark). This skill holds the frontend detail.
+
+- **Rail** (48px, dark, `Workspace` in `ui/src/shell`): Home, Search ⌘K, Files, Applications, Recent, Favorites; at the bottom Notifications (notifications + inbox tasks + approvals), AIP Assist, Help, Account (appearance, language, tenant). Control Panel is an application in the portal. Nothing else is global. No top menubar, no document tabs.
+- **Applications** are `AppUI` contributions. Each has its own sidebar: app header (icon, title, pin), the branch control for tool apps, then at most 8 nav links in labelled sections. Platform pages (home, files, portal, search) have no sidebar.
+- **Tool apps use Palantir product names, untranslated in every locale**: Data Connection, Pipeline Builder, Dataset Preview, Ontology Manager, Logic, Automate, Workshop, Object Explorer, Agent Studio, DevOps, Marketplace, Data Lineage, Monitoring, Control Panel, AIP Assist. Resource kinds are translated with industry terms.
+- **One resource kind, one app.** An app declares the kinds it owns in `opens`; no kind is declared twice. Other apps reference, never edit.
+- **Files**: Project → Folder → Resource. Every resource has a RID and one owning project; lists show everything with a Project column, not per-project copies.
+- **Ontology Manager** sidebar has two sections: Semantic (object, link, interface, shared property, value type) and Kinetic (action types; functions live in Logic, automations in Automate).
 - Business applications run inside the shell with their own sidebar and `data-density="comfortable"`.
 
 ## Navigation mechanics
@@ -26,10 +29,12 @@ A builder-first platform for business software, benchmarked on Palantir Foundry:
 ## Page archetypes (pick one)
 
 1. **List** — `PageHeader` (title, `meta` count, help; actions: search, filters toggle, exactly one primary "New …") over a full-width `DataTable`. First column: icon + title with the API name in mono `text-2xs` muted underneath. Row click opens the resource.
-2. **Resource page / editor** — `PageHeader` with `crumbs` back to the list, `icon`, `status`, `meta` (identity in mono); sections in `ContentTabs` with `badge` counts. Long editors use `Workbench` (tree, editor, inspector).
+2. **Resource page / editor** — `PageHeader` with `crumbs` back to the list, `icon`, `status`, `meta` (identity in mono). Sections in the order Overview → definition sections → Usage → History. Header actions follow `ResourceControls`: at most two inline operations, Save, Publish split button, ⋯ overflow. Long editors use `Workbench` (tree, editor, inspector).
 3. **Object view** — sticky `ObjectHeader`, generated from type metadata.
 4. **Canvas** — `RelationCanvas` / `FlowCanvas` with floating toolbar and right inspector.
-5. **Dashboard** (Home, project overview) — stat tiles, then two columns of `Panel`s with compact rows.
+5. **Dashboard** (Home, project overview, Monitoring) — stat tiles, then two columns of `Panel`s with compact rows.
+
+No wizard pages: each resource Overview offers the in-place next step on the golden path (connection → dataset → pipeline → object type → action/function → Workshop → DevOps → Marketplace).
 
 Multi-field edits open in a right `Sheet`; confirmations stay in `Dialog`.
 

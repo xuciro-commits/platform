@@ -1,14 +1,15 @@
 # AGENTS.md
 
-业务应用构建平台。Go 宿主在 `capabilities/server/`，内核在 `contract/`，Web 工作区在 `web/`。启动方式见 [README](README.md)，本地配置见 [deploy/local/README](deploy/local/README.md)。
+业务应用构建平台。Go 宿主在 `capabilities/server/`，内核在 `contract/`，Web 工作区在 `web/`。启动方式见 [README](README.md)，本地配置见 [deploy/local/README](deploy/local/README.md)。架构约束见 [docs/architecture.md](docs/architecture.md)：七个层级（EA、产品、IA、IxD、UX、领域、系统）以 Palantir Foundry 为基准，新能力先在其中找到唯一归属。前端细则见 `.claude/skills/platform-design`。
 
 - 先读实现与调用方，再直接解决根因；删除被替换的路径，不扩展无关功能。
-- 不添加代码注释、规范文档、测试或开发检查脚手架。编译指令、类型引用和 shebang 保留。
+- 不添加代码注释、测试或开发检查脚手架；规范只写在 `docs/architecture.md` 与 platform-design 技能，不另建文档。编译指令、类型引用和 shebang 保留。
 - 根据修改范围运行构建、类型检查与 `git diff --check`；没运行的不能报为通过。
 - 保留工作区已有改动。提交、推送按负责人授权。
 - 保留现有数据卷、密钥、租户配置与历史字节；恢复只应用已接受映像，不重跑规则、授权或外部调用。
 - 权威状态的新写入只经接受结果；跨应用走版本化协议，不做跨权威原子性。
 - 规则求值、约束、授权、依赖解析各有一个实现；应用只导入 `platformserver/platform`，客户端复用现有共享包。
 - 租户扩展只经受控编译、隔离执行和版本化制品；业务规则由声明式应用包表达。
+- 一类资源只由一个工具应用打开和编辑；工具应用用 Palantir 产品名，不翻译。
 - 界面保留英文与简体中文，业务数据不翻译。
 - 不提交凭据；应用只保存凭据引用，秘密由部署注入或受控加密托管。
