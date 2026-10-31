@@ -54,7 +54,7 @@ export function ObjectLineage({ object, fields }: { object: string; fields: { na
   return <div className="grid gap-3">
     <Panel title={t("Declared dependencies")} help={t("Published dependencies and reverse impact come from the shared asset description.")}>
       <DependencyGraph asset={ref} labels={presentation.labels} onOpen={openAsset} />
-      <Button size="sm" variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(ref) } })}>{t("Dependencies and capabilities")}</Button>
+      <Button size="sm" variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(ref), node: `object:${object}` } })}>{t("Open in Data Lineage")}</Button>
     </Panel>
     <Panel title={t("Field by field")} help={t("Current source mappings for the published dependencies. Open the original integration to inspect its configuration and recorded outcome.")}>
       <DataTable data={fields} getRowId={field => field.name} searchable={false} height={Math.min(360, 40 + fields.length * 28)} columns={[
@@ -78,6 +78,6 @@ export function DatasetLineage({ dataset }: { dataset: string }) {
   return <Panel title={t("Declared dependencies")} className="grid gap-2 text-xs" help={t("Published dependencies and reverse impact come from the shared asset description.")}>
     <DependencyGraph asset={ref} labels={presentation.labels} onOpen={asset => open(presentation.route(asset))} height={320} />
     <p>{t("Dataset version")}: {record.version ?? "—"}</p>
-    <Button size="sm" variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(ref) } })}>{t("Dependencies and capabilities")}</Button>
+    <Button size="sm" variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(ref), node: `dataset:${dataset}` } })}>{t("Open in Data Lineage")}</Button>
   </Panel>;
 }

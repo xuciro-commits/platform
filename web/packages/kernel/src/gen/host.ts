@@ -2502,6 +2502,34 @@ export type Limit = {
   perMinute?: number;
 };
 
+export type Lineage = {
+  nodes: LineageNode[];
+  edges: LineageEdge[];
+};
+
+export type LineageEdge = {
+  from: string;
+  to: string;
+  version?: number;
+  stale?: boolean;
+};
+
+export type LineageNode = {
+  id: string;
+  kind: string;
+  record?: string;
+  name: string;
+  title: string;
+  state?: string;
+  marking?: string;
+  effective?: string;
+  version?: number;
+  rows?: number;
+  at?: string;
+  error?: string;
+  stale?: boolean;
+};
+
 export type Link = {
   from: string;
   to: string;

@@ -4279,6 +4279,7 @@ register("zh-CN", {
   "Test the application and activate a version.": "测试应用并激活一个版本。",
   "Verify and release": "验证并发布",
   "Next steps": "后续步骤",
+  "Open in Data Lineage": "在 Data Lineage 中打开",
   "Active release {id}": "当前生效版本 {id}",
   "New candidate": "新建候选版本",
   "No saved candidates yet.": "还没有已保存的候选版本。",

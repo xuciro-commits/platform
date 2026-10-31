@@ -73,6 +73,14 @@ func (h *Host) routesIntegration(rt *routes) {
 	})
 	rt.public(transport.Route{Pattern: "POST /a2a/{tenant}/{agent}", Summary: "A2A 1.0 JSON-RPC to a published agent; the caller signs in with the host's issuer", Body: json.RawMessage{}}, h.serveA2A)
 	rt.handle(transport.Route{Pattern: "POST /mcp", Summary: "MCP: the caller's catalog as tools (JSON-RPC)", Body: json.RawMessage{}}, h.mcp)
+	rt.recordRead(transport.Route{Pattern: "GET /v1/lineage", Summary: "Data lineage across connections, sources, datasets, pipelines, object types and writebacks the caller may read, with dataset versions, stale inputs and propagated markings", Answer: Lineage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		out, err := t.lineage(m)
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	rt.handle(transport.Route{Pattern: "GET /v1/integration-effects", Summary: "Build writeback delivery status for builders and integrators, excluding payloads", Answer: []IntegrationEffect{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, err := t.integrationEffects(m, h.Now())
 		if err != nil {

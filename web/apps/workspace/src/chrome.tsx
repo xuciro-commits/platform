@@ -276,7 +276,7 @@ export const lineageApplication = defineApp({
   description: t("How resources depend on each other, and what a change reaches."),
   for: host => host.holds("build", "builder", "integrator"),
   home: { view: "lineage" },
-  views: [{ id: "lineage", title: () => t("Data Lineage"), render: (p) => <Lineage ref={p.ref} /> }],
+  views: [{ id: "lineage", title: () => t("Data Lineage"), render: (p) => <Lineage ref={p.ref} node={p.node} /> }],
   nav: () => [],
 });
 
