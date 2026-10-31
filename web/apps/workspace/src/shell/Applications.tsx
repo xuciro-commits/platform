@@ -13,7 +13,7 @@ function ApplicationTile({ app, role }: { app: PlatformApplication; role?: strin
       <span className="grid min-w-0 gap-0.5"><span className="truncate text-sm font-medium">{app.title}</span>
         {(app.description || role) && <span className="line-clamp-2 text-xs text-muted">{app.description ?? role}</span>}</span>
     </button>
-    <Button variant="ghost" size="icon" aria-label={pinned ? t("Unpin from the rail") : t("Pin to the rail")} aria-pressed={pinned} title={pinned ? t("Unpin from the rail") : t("Pin to the rail")} onClick={() => toggleFavorite(app.id)}
+    <Button variant="ghost" size="icon" aria-label={pinned ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={pinned} title={pinned ? t("Remove from favorites") : t("Add to favorites")} onClick={() => toggleFavorite(app.id)}
       className={`absolute right-1 top-1 ${pinned ? "text-[var(--tone-warning)]" : "text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}>
       <Star fill={pinned ? "currentColor" : "none"} />
     </Button>

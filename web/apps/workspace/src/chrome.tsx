@@ -9,7 +9,7 @@ import { useState, type ReactNode } from "react";
 import { ApplicationsPortal } from "./shell/Applications";
 import { projectionOfSurface } from "./shell/legacy";
 import type { Projection } from "./shell/registry";
-import { Bell, BookOpen, ClipboardList, Inbox as InboxIcon, Send } from "lucide-react";
+import { Bell, ClipboardList, Compass, Inbox as InboxIcon, Network, Send } from "lucide-react";
 
 import { Home } from "./shell/Home";
 import { ObjectExplorer } from "./shell/Explorer";
@@ -245,30 +245,39 @@ function Saved({ id }: { id: string }) {
 }
 
 export const personalWork = defineApp({
-  id: "my-work", serves: [], category: "operate", title: t("Inbox"), icon: <InboxIcon />,
-  description: t("Your tasks, requests, notifications and pending decisions across applications."),
-  home: { view: "inbox" },
+  id: "my-work", serves: [], category: "govern", title: t("Notifications"), icon: <Bell />,
+  description: t("Your notifications, tasks, requests and pending decisions across applications."),
+  home: { view: "notifications" },
   views: [
     { id: "inbox", title: () => t("Inbox"), render: () => <MyInbox /> },
     { id: "requests", title: () => t("My requests"), render: () => <MyRequests /> },
     { id: "notifications", title: () => t("Notifications"), render: () => <Notifications /> },
     { id: "outbox", title: () => t("Outbox"), render: () => <Outbox /> },
   ],
-  nav: host => [{ label: t("My work"), items: [
+  nav: host => [{ label: t("Notifications"), items: [
+    { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" } },
     { label: t("Tasks and approvals"), icon: <InboxIcon />, route: { view: "inbox" } },
     { label: t("My requests"), icon: <ClipboardList />, route: { view: "requests" } },
-    { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" } },
     { label: t("Outbox"), icon: <Send />, route: { view: "outbox" }, badge: host.outbox.filter(entry => entry.state !== "SUBMISSION_STATE_CONFIRMED" && entry.state !== "SUBMISSION_STATE_REJECTED").length || undefined },
   ] }],
 });
 
 export const explorerApplication = defineApp({
-  id: "core", serves: [], category: "ontology", title: t("Master data"), icon: <BookOpen />,
+  id: "object-explorer", serves: [], category: "analyze", title: t("Object Explorer"), icon: <Compass />,
+  description: t("Search, filter and open objects of every type you may read."),
   for: host => host.entities.length > 0,
-  home: { view: "explorer" }, views: [],
-  nav: host => host.role("core") ? [] : [{ label: t("Master data"), items: [
-    { label: t("Object Explorer"), route: { view: "explorer" } },
-  ] }],
+  home: { view: "explorer" },
+  views: [{ id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} /> }],
+  nav: () => [],
+});
+
+export const lineageApplication = defineApp({
+  id: "data-lineage", serves: [], category: "analyze", title: t("Data Lineage"), icon: <Network />,
+  description: t("How resources depend on each other, and what a change reaches."),
+  for: host => host.holds("build", "builder", "integrator"),
+  home: { view: "lineage" },
+  views: [{ id: "lineage", title: () => t("Data Lineage"), render: (p) => <Lineage ref={p.ref} /> }],
+  nav: () => [],
 });
 
 export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[] = () => []): View[] => [
@@ -277,9 +286,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
     render: (p) => { const d = apps().find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
   { id: "home", title: () => t("Home"), render: () => <Home /> },
   { id: "portal", title: () => t("Applications"), render: (p) => <ApplicationsPortal projection={(p.workspace as Projection | undefined) ?? projectionOfSurface(p.surface)} /> },
-  { id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} /> },
   { id: "observations", title: () => t("Observations"), render: p => <Observations app={p.app} name={p.name} record={p.record} /> },
-  { id: "lineage", title: () => t("Lineage"), render: (p) => <Lineage ref={p.ref} /> },
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
   { id: "definition", title: (p) => { const definition = definitions().find(item => item.ref.app === p.app && item.ref.kind === p.kind && item.ref.name === p.name); return definition ? definitionPresentation(definition).title : p.name ?? t("Definition"); }, render: (p) => <StudioReference route={{ view: "definition", params: p }} context={apps().find(app => app.surface === "studio")?.referenceContext}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} application={p.application} /></StudioReference> },

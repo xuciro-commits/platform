@@ -1,7 +1,7 @@
 import type { Route } from "@platform/ui";
 import type { Projection } from "./registry";
 
-export const shellViews = ["flow-instance", "home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "explorer", "lineage", "observations"];
+export const shellViews = ["flow-instance", "home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "observations"];
 
 type Params = Record<string, string>;
 const keep = (params: Params | undefined, ...names: string[]): Params => Object.fromEntries(names.flatMap((name) => params?.[name] ? [[name, params[name]!]] : []));
@@ -42,7 +42,7 @@ export function resolveLegacyRoute(route: Route, context: {
   if (retired) return retired;
   const params = route.params;
   if (route.view === "automation" && !params?.id && !params?.application && params?.surface !== "studio"
-    && (params?.surface === "tenant" || context.application === "runs" || !context.builder)) {
+    && (params?.surface === "tenant" || context.application === "monitoring" || !context.builder)) {
     return { ...route, view: "automation-operations", params: keep(params, "tab") };
   }
   if (route.view !== "flow" || !params?.id || params.id === "new" || params.surface === "studio") return route;

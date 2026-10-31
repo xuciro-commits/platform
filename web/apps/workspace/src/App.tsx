@@ -5,7 +5,7 @@ import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, langua
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { chromeViews, explorerApplication, personalWork } from "./chrome";
+import { chromeViews, explorerApplication, lineageApplication, personalWork } from "./chrome";
 import { availablePackages, packages, type Package } from "./host/packages";
 import { usePlatformHost } from "./host/usePlatformHost";
 import { IDENTITY_KEY, TENANT_KEY, forget, preferred, remember, remembered, type Identity } from "./session/identity";
@@ -87,7 +87,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   const [loadedPackages, setLoadedPackages] = useState<{ scope: string; groups: { source: Package; apps: (AppUI & { serves?: string[] })[] }[] }>();
   const loadedApps = useMemo(() => loadedPackages && loadedPackages.scope === identityScope
-    ? [...loadedPackages.groups.filter((group) => selectedPackages.includes(group.source)).flatMap((group) => group.apps), personalWork, explorerApplication]
+    ? [...loadedPackages.groups.filter((group) => selectedPackages.includes(group.source)).flatMap((group) => group.apps), personalWork, explorerApplication, lineageApplication]
     : undefined, [loadedPackages, packageScope]);
   const [packageAttempt, setPackageAttempt] = useState(0);
   const [packageFailure, setPackageFailure] = useState<string>();
@@ -263,9 +263,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         layoutScope={app?.id} scopeOf={applicationOf}
         views={views} resolveRoute={resolveRoute} home={{ view: "home" }}
-        rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "inbox" }, unread },
-          ...(host.holds("build", "builder") ? { projects: { view: "projects" } } : {}),
-          ...(all.some(entry => entry.id === "platform") ? { settings: { view: "control-panel" } } : {}),
+        rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "notifications" }, unread },
+          ...(host.holds("build", "builder") ? { files: { view: "projects" } } : {}),
           ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
@@ -284,7 +283,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           { id: "observations", label: t("Read observations"), group: t("Ontology"), run: () => { location.hash = "#/observations"; } },
           { id: "explorer", label: t("Object Explorer"), group: t("Ontology"), run: () => { location.hash = "#/explorer"; } },
           ...(host.holds("build", "builder") ? [
-            { id: "lineage", label: t("Lineage"), group: t("Ontology"), run: () => { location.hash = "#/lineage"; } },
+            { id: "lineage", label: t("Data Lineage"), group: t("Ontology"), run: () => { location.hash = "#/lineage"; } },
             { id: "records", label: t("Browse all records"), run: () => { location.hash = "#/records"; } },
             { id: "definitions", label: t("Browse definitions"), run: () => { location.hash = "#/definitions"; } },
           ] : []), ...(app?.commands?.(host) ?? [])]}

@@ -274,4 +274,10 @@ register("zh-CN", {
   "Data and knowledge": "数据与知识",
   "Administration": "管理",
   "Tasks and approvals": "任务与审批",
+  "Data Lineage": "Data Lineage",
+  "Your notifications, tasks, requests and pending decisions across applications.": "你在各应用中的通知、任务、请求与待处理决定。",
+  "Search, filter and open objects of every type you may read.": "搜索、筛选并打开你可读取的各类对象。",
+  "How resources depend on each other, and what a change reaches.": "资源之间的依赖关系，以及一次变更会影响到哪里。",
+  "Analyze": "分析",
+  "Govern": "治理",
 });

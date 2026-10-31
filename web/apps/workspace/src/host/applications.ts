@@ -9,6 +9,8 @@ export function composeApplications(contributions: readonly AppUI[]): ComposedAp
     const primary = sources[0]!;
     return {
       ...primary,
+      navigation: sources.find(app => app.navigation)?.navigation,
+      referenceContext: sources.find(app => app.referenceContext)?.referenceContext,
       serves: [...new Set(sources.flatMap(app => app.serves ?? [app.id]))],
       views: sources.flatMap(app => app.views),
       opens: Object.assign({}, ...sources.map(app => app.opens)),
@@ -26,7 +28,7 @@ export function composeApplications(contributions: readonly AppUI[]): ComposedAp
             sections.set(section.label, { ...section, items: [...previous?.items ?? [], ...section.items] });
           }
         }
-        return [...sections.values()];
+        return [...sections.values()].filter(section => section.items.length > 0);
       },
     };
   });

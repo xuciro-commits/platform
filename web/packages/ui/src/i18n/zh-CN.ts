@@ -1304,7 +1304,7 @@ export default {
   "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
   "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records.": "调用方拥有排名查询与记录授权。此组件不对未排序窗口排名，也不写入记录。",
   "Lineage": "血缘",
-  "Object Explorer": "对象浏览器",
+  "Object Explorer": "Object Explorer",
   "Ontology": "本体",
   "Projects": "项目",
   "All projects": "全部项目",
@@ -1639,4 +1639,6 @@ export default {
   "Open as page": "作为页面打开",
   "Unpin from the rail": "从侧栏取消固定",
   "Pin to the rail": "固定到侧栏",
+  "Pin an application from its sidebar or from Applications.": "在应用侧栏或应用门户中把应用加入收藏。",
+  "AIP Assist": "AIP Assist",
 } as Record<string, string>;

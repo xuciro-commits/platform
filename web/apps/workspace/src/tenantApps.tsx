@@ -37,7 +37,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
       id,
       title: application.title,
       description: application.description,
-      category: held.length ? "business" : "operate",
+      category: held.length ? "business" : "govern",
       icon,
       home: firstPage ? route(firstPage) : overview,
       views: [],

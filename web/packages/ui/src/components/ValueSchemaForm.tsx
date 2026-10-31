@@ -54,7 +54,7 @@ export function schemaIssues(schema: Api.ValueSchema, value: unknown, path = "$"
   if (schema.type === "array") {
     if (!Array.isArray(value)) return issue(t("Enter an array."));
     const issues: SchemaIssue[] = [];
-    if (value.length < (schema.minItems ?? 0)) issues.push({ path, message: t("Use at least {count} items.", { count: schema.minItems }) });
+    if (value.length < (schema.minItems ?? 0)) issues.push({ path, message: t("Use at least {count} items.", { count: schema.minItems ?? 0 }) });
     if (schema.maxItems && value.length > schema.maxItems) issues.push({ path, message: t("Use at most {count} items.", { count: schema.maxItems }) });
     if (schema.items) value.forEach((item, index) => issues.push(...schemaIssues(schema.items!, item, `${path}[${index}]`, depth + 1)));
     return issues;

@@ -25,7 +25,7 @@ export function Lineage({ ref: requested }: { ref?: string }) {
   };
   const focused = descriptors.find(d => assetKey(d.ref) === focus);
   return <div className="grid min-w-0 gap-4">
-    <PageHeader title={t("Lineage")} help={t("Declared dependencies, reverse impact and available capabilities share one versioned description. Select an asset to see what it uses and what a change reaches.")}
+    <PageHeader title={t("Data Lineage")} help={t("Declared dependencies, reverse impact and available capabilities share one versioned description. Select an asset to see what it uses and what a change reaches.")}
       actions={<>
         <Select aria-label={t("App")} value={scopeApp} className="w-40" onChange={event => { setApp(event.target.value); setPicked(""); }}>{apps.map(id => <option key={id} value={id}>{id}</option>)}</Select>
         <Select aria-label={t("Asset")} value={focus} className="w-72" onChange={event => setPicked(event.target.value)}>

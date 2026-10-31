@@ -194,7 +194,7 @@ export type Dashboard = { id: string; title: string; description?: string; for?:
 
 export type WorkspaceSurface = "work" | "studio" | "tenant" | "developer";
 
-export type PlatformAppCategory = "business" | "ontology" | "build" | "operate" | "govern" | "developer";
+export type PlatformAppCategory = "business" | "build" | "analyze" | "govern" | "developer";
 
 export const categoryOf = (app: Pick<AppUI, "category" | "surface">): PlatformAppCategory =>
   app.category ?? ({ studio: "build", tenant: "govern", developer: "developer" } as Record<string, PlatformAppCategory>)[app.surface ?? "work"] ?? "business";

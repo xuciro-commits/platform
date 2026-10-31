@@ -1,7 +1,7 @@
 import "./i18n";
 import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/app";
 import { Button, Card, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
-import { ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, CircleUser, Database, FlaskConical, Grid3x3, History, KeyRound, Languages, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Upload, Users, Workflow } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, CircleUser, Database, FlaskConical, Grid3x3, History, KeyRound, Languages, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Store, Upload, Users, Workflow } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
@@ -34,12 +34,15 @@ function controlPanelNavigation(host: Host): NavSection[] {
       ...(admin(host) ? [item(t("Organisation"), <Building2 />, "organisation")] : []),
       ...(admin(host) || auditor(host) ? [item(t("Members"), <Users />, "members")] : []),
     ] },
-    { label: t("Access and packages"), items: [
+    { label: t("Access"), items: [
       ...(admin(host) || auditor(host) ? [item(t("Roles and permissions"), <KeyRound />, "permissions")] : []),
-      ...(admin(host) || auditor(host) || host.can("build.app.create") ? [item(t("Packages"), <Blocks />, "apps")] : []),
-      item(t("Package guide"), <BookOpen />, "package-help"),
       ...(admin(host) ? [item(t("Capability matrix"), <Grid3x3 />, "matrix"), item(t("Protocols"), <Cable />, "protocols")] : []),
     ] },
+    { label: t("AIP"), items: host.role("ai") ? [
+      item(t("AI playground"), <MessageSquare />, "ai-playground"),
+      item(t("AI usage"), <BarChart3 />, "ai-usage"),
+      ...(host.holds("ai", "admin") ? [item(t("AI configuration"), <Bot />, "ai-configuration"), item(t("Providers and models"), <Bot />, "ai-providers")] : []),
+    ] : [] },
     { label: t("Settings and audit"), items: [
       ...(admin(host) ? [item(t("Credentials"), <KeyRound />, "credentials"), item(t("App settings"), <SlidersHorizontal />, "app-settings"), item(t("Languages and words"), <Languages />, "words")] : []),
       ...(admin(host) || auditor(host) ? [item(t("Audit trail"), <History />, "audit")] : []),
@@ -74,22 +77,23 @@ const controlPanelViews: View[] = [
   { id: "members", title: () => t("Members"), render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "permissions", title: () => t("Roles and permissions"), render: () => <Permissions /> },
-  { id: "apps", title: () => t("Packages"), render: () => <Apps /> },
-  { id: "package-preparation", title: () => t("Prepare package applications"), render: p => <PackagePreparation key={`${p.id}@${p.version}`} id={p.id ?? ""} version={p.version ?? ""} /> },
-  { id: "package-help", title: () => t("Package guide"), render: p => <PackageHelp topic={p.topic} /> },
   { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
   { id: "protocols", title: () => t("Protocols"), render: () => <Protocols /> },
   { id: "app-settings", title: () => t("App settings"), render: () => <AppSettingsView /> },
   { id: "words", title: () => t("Languages and words"), render: () => <Words /> },
   { id: "audit", title: () => t("Audit"), render: () => <Audit /> },
+  { id: "ai-playground", title: () => t("AI playground"), render: p => <AIPlayground initialModel={p.model} /> },
+  { id: "ai-usage", title: () => t("AI usage"), render: () => <AIUsage /> },
+  { id: "ai-configuration", title: () => t("AI configuration"), render: p => <AIConfiguration initialSection={p.section} fromPackage={p.fromPackage} fromVersion={p.fromVersion} /> },
+  { id: "ai-providers", title: () => t("Providers and models"), render: () => <AIProviders /> },
 ];
 
 export const controlPanel = defineApp({
   id: "platform",
-  serves: ["platform"],
+  serves: ["platform", "ai"],
   surface: "tenant",
   category: "govern",
-  description: t("Members, organisation, installed packages, settings and the audit trail."),
+  description: t("Members, roles, AI models, settings and the audit trail."),
   for: () => true,
   title: t("Control Panel"),
   icon: <SlidersHorizontal />,
@@ -98,14 +102,30 @@ export const controlPanel = defineApp({
   nav: controlPanelNavigation,
 });
 
+export const marketplace = defineApp({
+  id: "marketplace", serves: ["platform"], category: "govern", title: t("Marketplace"), icon: <Store />,
+  description: t("Packaged products available to this tenant: install, upgrade and prepare their applications."),
+  for: (host) => admin(host) || auditor(host) || host.can("build.app.create"),
+  home: { view: "apps" },
+  views: [
+    { id: "apps", title: () => t("Packages"), render: () => <Apps /> },
+    { id: "package-preparation", title: () => t("Prepare package applications"), render: p => <PackagePreparation key={`${p.id}@${p.version}`} id={p.id ?? ""} version={p.version ?? ""} /> },
+    { id: "package-help", title: () => t("Package guide"), render: p => <PackageHelp topic={p.topic} /> },
+  ],
+  nav: () => [{ label: t("Marketplace"), items: [
+    { label: t("Packages"), icon: <Blocks />, route: { view: "apps" } },
+    { label: t("Package guide"), icon: <BookOpen />, route: { view: "package-help" } },
+  ] }],
+});
+
 function RunsHome() {
   const host = useHost();
   return host.role("flow") ? <Flows /> : <Automation />;
 }
 
-export const runs = defineApp({
-  id: "runs", serves: ["platform", "flow"], category: "operate", title: t("Runs"), icon: <Route />,
-  description: t("Workflow runs, queued and failed work, and every delivery the host attempted."),
+export const monitoring = defineApp({
+  id: "monitoring", serves: ["platform", "flow"], category: "govern", title: t("Monitoring"), icon: <Activity />,
+  description: t("Health, runs, queued and failed work, and every delivery the host attempted."),
   for: (host) => admin(host) || !!host.role("flow"),
   home: { view: "runs-home" },
   views: [
@@ -115,7 +135,7 @@ export const runs = defineApp({
     { id: "delivery-attempts", title: () => t("Delivery attempts"), render: () => <Deliveries /> },
     { id: "system-health", title: () => t("Health"), render: () => <SystemHealth /> },
   ],
-  nav: (host) => [{ label: t("Runs"), items: [
+  nav: (host) => [{ label: t("Monitoring"), items: [
     ...(host.role("flow") ? [{ label: t("Workflow runs"), icon: <Route />, route: { view: "flows" } }] : []),
     ...(admin(host) ? [
       { label: t("Work queue"), icon: <Workflow />, route: { view: "automation-operations" } },
@@ -126,30 +146,29 @@ export const runs = defineApp({
 });
 
 export const dataConnection = defineApp({
-  id: "data-connection", serves: ["platform"], category: "ontology", title: t("Data Connection"), icon: <Database />,
-  description: t("Connectors that bring facts in, webhooks that carry events out, and their health."),
+  id: "data-connection", serves: ["platform"], category: "build", title: t("Data Connection"), icon: <Database />,
+  description: t("Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out."),
   for: (host) => admin(host) || host.holds("build", "builder", "integrator"),
-  home: (host) => admin(host) ? { view: "integrations" } : { view: "observations" },
+  home: (host) => host.holds("build", "builder", "integrator") ? { view: "connection" } : { view: "integrations" },
   views: [
     { id: "integrations", title: () => t("Connectors"), render: () => <Integrations /> },
     { id: "endpoints", title: () => t("Endpoints"), render: () => <Endpoints /> },
     { id: "effects", title: () => t("Outbound effects"), render: () => <OutboundEffects /> },
   ],
   nav: (host) => [
-    { label: t("Connections"), items: admin(host) ? [
+    { label: t("Sources"), items: [] },
+    { label: t("Streams"), items: [{ label: t("Observations"), icon: <BarChart3 />, route: { view: "observations" } }] },
+    { label: t("Exports"), items: [] },
+    { label: t("Host connectors"), items: admin(host) ? [
       { label: t("Connectors"), icon: <PlugZap />, route: { view: "integrations" } },
       { label: t("Endpoints"), icon: <Cable />, route: { view: "endpoints" } },
+      { label: t("Outbound effects"), icon: <Upload />, route: { view: "effects" } },
     ] : [] },
-    { label: t("Monitoring"), items: [
-      { label: t("Observations"), icon: <BarChart3 />, route: { view: "observations" } },
-      { label: t("Lineage"), icon: <Network />, route: { view: "lineage" } },
-      ...(admin(host) ? [{ label: t("Outbound effects"), icon: <Upload />, route: { view: "effects" } }] : []),
-    ] },
-  ].filter(section => section.items.length > 0),
+  ],
 });
 
 export const agents = defineApp({
-  id: "agents", serves: ["agent"], category: "build", title: t("Agents"), icon: <BrainCircuit />,
+  id: "agents", serves: ["agent"], category: "build", title: t("Agent Studio"), icon: <BrainCircuit />,
   description: t("AI agents, what they are allowed to do, their runs and evaluations."),
   for: (host) => !!host.role("agent"),
   home: { view: "agents" },
@@ -159,35 +178,16 @@ export const agents = defineApp({
     { id: "agent-memories", title: () => t("Agent memories"), render: () => <AgentMemories /> },
     { id: "evaluations", title: () => t("Evaluations"), render: () => <Evaluations /> },
   ],
-  nav: host => [{ label: t("Agents"), items: [
-    { label: t("Agents"), icon: <BrainCircuit />, route: { view: "agents" } },
+  nav: () => [{ label: t("Operate"), items: [
+    { label: t("Agent overview"), icon: <BrainCircuit />, route: { view: "agents" } },
     { label: t("Agent runs"), icon: <Route />, route: { view: "agent-runs" } },
     { label: t("Agent memories"), icon: <BookA />, route: { view: "agent-memories" } },
     { label: t("Evaluations"), icon: <FlaskConical />, route: { view: "evaluations" } },
-    ...(host.can("agent.run.start") ? [{ label: t("Assistant"), icon: <MessageSquare />, route: { view: "assistant" } }] : []),
-  ] }],
-});
-
-export const ai = defineApp({
-  id: "ai", serves: ["ai"], surface: "work", category: "build", title: t("AI assistance"), icon: <MessageSquare />,
-  description: t("Try models and functions, and see usage."),
-  for: (host) => !!host.role("ai"),
-  home: { view: "ai-playground" },
-  views: [
-    { id: "ai-playground", title: () => t("AI playground"), render: p => <AIPlayground initialModel={p.model} /> },
-    { id: "ai-usage", title: () => t("AI usage"), render: () => <AIUsage /> },
-    { id:"ai-configuration",title:()=>t("AI configuration"),render:p=> <AIConfiguration initialSection={p.section} fromPackage={p.fromPackage} fromVersion={p.fromVersion} /> },
-    { id: "ai-providers", title: () => t("Providers and models"), render: () => <AIProviders /> },
-  ],
-  nav: (host) => [{ label: t("AI assistance"), items: [
-    { label: t("Playground"), icon: <MessageSquare />, route: { view: "ai-playground" } },
-    { label: t("Usage"), icon: <BarChart3 />, route: { view: "ai-usage" } },
-    ...(host.holds("ai", "admin") ? [{ label: t("AI configuration"), icon: <Bot />, route: { view: "ai-configuration" } }, { label: t("Providers and models"), icon: <Bot />, route: { view: "ai-providers" } }] : []),
   ] }],
 });
 
 export const knowledge = defineApp({
-  id: "knowledge", serves: ["knowledge"], surface: "work", category: "ontology", title: t("Knowledge"), icon: <BookOpen />,
+  id: "knowledge", serves: ["knowledge"], surface: "work", category: "business", title: t("Knowledge"), icon: <BookOpen />,
   description: t("Documents and the glossary of your organisation."),
   for: (host) => !!host.role("knowledge"),
   home: { view: "knowledge" },
@@ -226,7 +226,7 @@ function MasterDataView({ type }: { type?: string }) {
 }
 
 const masterData = defineApp({
-  id: "core", serves: ["core"], category: "ontology", title: t("Master data"), icon: <BookOpen />,
+  id: "core", serves: ["core"], category: "business", title: t("Master data"), icon: <BookOpen />,
   description: t("Shared master data and accounting records."),
   for: (host) => !!host.role("core"), home: { view: "master-data" },
   views: [{ id: "master-data", title: () => t("Master data"), render: (p) => <MasterDataView type={p.type} /> }],
@@ -239,12 +239,11 @@ const masterData = defineApp({
       const entity = host.entities.find(entity => entity.app === "core" && entity.type === type);
       return entity ? [{ label: entity.plural, icon: <BookOpen />, route: { view: "master-data", params: { type } } }] : [];
     }) })).filter(group => group.items.length > 0),
-    { label: t("Object Explorer"), icon: <Database />, route: { view: "explorer" } },
   ] }],
 });
 
 export const enterprise = defineApp({
-  id: "enterprise", serves: ["enterprise"], category: "ontology", title: t("Organisation directory"), icon: <Network />,
+  id: "enterprise", serves: ["enterprise"], category: "business", title: t("Organisation directory"), icon: <Network />,
   description: t("Units, posts, people and assignments. Historical enterprise content is read-only."),
   for: (host) => admin(host) || host.holds("enterprise", "admin", "viewer"),
   home: { view: "enterprise" },
@@ -252,5 +251,5 @@ export const enterprise = defineApp({
   nav: () => [{label:t("Organisation directory"),items:[{ label: t("Organisation directory"), icon: <Building2 />, route: {view:"enterprise"} }]}],
 });
 
-export const contributions: AppUI[] = [runs, dataConnection, agents, ai, knowledge, hostConsole, masterData, enterprise];
+export const contributions: AppUI[] = [marketplace, monitoring, dataConnection, agents, knowledge, hostConsole, masterData, enterprise];
 export default controlPanel;

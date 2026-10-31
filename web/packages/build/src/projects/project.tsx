@@ -60,7 +60,7 @@ export function ProjectsList() {
     { id: "owner", header: t("Owner"), meta: { width: 120 }, accessorFn: item => item.ref.app, cell: ({ row }) => <span className="font-mono text-xs text-muted">{row.original.ref.app}</span> },
   ];
   return <div className="flex min-h-full flex-col gap-3">
-    <PageHeader title={t("Projects")} meta={t("{count} projects", { count: rows.length })} help={t("A project groups the object types, logic, pages and releases of one application. Installed applications appear here too, and extend through the same branches and releases.")} actions={<>
+    <PageHeader title={t("Files")} meta={t("{count} projects", { count: rows.length })} help={t("A project groups the object types, logic, pages and releases of one application. Installed applications appear here too, and extend through the same branches and releases.")} actions={<>
         <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="w-56" />
         {builder && <Button onClick={() => open({ view: "apps" })}>{t("New from template…")}</Button>}
         {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New project")}</Button>}
@@ -289,7 +289,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const dependencies = dependencyQuery.data;
   const header = installed?.application?.pages.find((name) => definitions.some((d) => d.ref.app === "build" && d.ref.kind === "page" && d.ref.name === name));
   return <>
-    <Workbench storageKey="project" crumbs={[{ label: t("Projects"), onClick: () => open({ view: "projects" }) }]} title={project.title || project.name}
+    <Workbench storageKey="project" crumbs={[{ label: t("Files"), onClick: () => open({ view: "projects" }) }]} title={project.title || project.name}
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
         {builder && <NewResourceMenu application={id} area={activeArea} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)} />}

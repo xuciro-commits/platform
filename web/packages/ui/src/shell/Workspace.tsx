@@ -1,7 +1,7 @@
 import { useInputDrafts } from "../fields/draft";
 import { useTheme } from "../themes/theme";
 import { Command } from "cmdk";
-import { Bell, ChevronsLeft, Clock, FolderKanban, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Settings, Sparkles, Star, X } from "lucide-react";
+import { Bell, ChevronsLeft, Clock, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
@@ -35,7 +35,7 @@ export type Session = {
 
 export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };
 export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };
-export type Rail = { home: Route; applications: Route; projects?: Route; notifications?: { route: Route; unread?: number }; assist?: Route; settings?: Route };
+export type Rail = { home: Route; applications: Route; files?: Route; notifications?: { route: Route; unread?: number }; assist?: Route };
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
 type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect"; ifCurrent?: Route; from?: string; replace?: boolean };
@@ -306,7 +306,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     if (top.route.params?.call) return;
     const scope = routeScope.current ? routeScope.current(top.route) : currentScope.current;
     const title = titles[top.id] ?? registry.current.get(top.route.view)?.title(top.route.params ?? {}) ?? top.route.view;
-    const homes = rail ? [rail.home, rail.applications, ...(rail.projects ? [rail.projects] : [])].map(routeKey) : [];
+    const homes = rail ? [rail.home, rail.applications, ...(rail.files ? [rail.files] : [])].map(routeKey) : [];
     remember((m) => ({
       ...m,
       last: scope ? { ...m.last, [scope]: top.route } : m.last,
@@ -442,10 +442,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const railItems: RailItem[] = rail ? [
     { id: "home", label: t("Home"), icon: <HomeIcon />, active: onRailRoute(rail.home), run: () => open(rail.home) },
     { id: "search", label: t("Search"), icon: <Search />, run: () => setPaletteOpen(true) },
-    ...(rail.projects ? [{ id: "projects", label: t("Projects"), icon: <FolderKanban />, active: onRailRoute(rail.projects), run: () => open(rail.projects!) }] : []),
+    ...(rail.files ? [{ id: "files", label: t("Files"), icon: <FolderTree />, active: onRailRoute(rail.files), run: () => open(rail.files!) }] : []),
     { id: "applications", label: t("Applications"), icon: <Grid2x2 />, active: onRailRoute(rail.applications), run: () => open(rail.applications) },
-    ...(rail.notifications ? [{ id: "inbox", label: t("Inbox"), icon: <Bell />, badge: rail.notifications.unread, active: onRailRoute(rail.notifications.route), run: () => open(rail.notifications!.route) }] : []),
   ] : [];
+  const notificationsItem = rail?.notifications && { id: "notifications", label: t("Notifications"), icon: <Bell />, badge: rail.notifications.unread, active: onRailRoute(rail.notifications.route), run: () => open(rail.notifications!.route) };
   const sessionMenu = session && <SessionMenu rail={!compact} scheme={appearance.scheme} onScheme={appearance.setScheme} session={{ ...session, onAccount: session.onAccount ? () => leave(() => session.onAccount?.()) : undefined, onSwitch: (id) => leave(() => session.onSwitch(id)) }}
     onLanguageSelect={(id) => leave(() => {
       void Promise.resolve(onLanguage?.(id)).catch(() => undefined).finally(() => setLanguage(id));
@@ -476,11 +476,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
             {railItems.map(item => <RailButton key={item.id} {...item} />)}
             <RailList label={t("Recent")} icon={<Clock />} empty={t("Nothing opened yet.")}
               items={memory.recent.slice(0, 12).map((r) => ({ id: routeKey(r.route), label: r.title, detail: r.app ? applications?.apps.find((a) => a.id === r.app)?.title : undefined, run: () => open(r.route) }))} />
-            {pinnedApps.length > 0 && <div className="my-1 h-px w-6 shrink-0 bg-rail-hover" />}
-            {pinnedApps.map(app => <RailButton key={app.id} id={app.id} label={app.title} icon={app.icon} active={pageScope === app.id} run={() => applications!.onSelect(app.id)} />)}
+            <RailList label={t("Favorites")} icon={<Star />} empty={t("Pin an application from its sidebar or from Applications.")}
+              items={pinnedApps.map(app => ({ id: app.id, label: app.title, icon: app.icon, run: () => applications!.onSelect(app.id) }))} />
             <div className="mt-auto flex flex-col items-center gap-1 pt-2">
-              {rail.assist && <RailButton id="assist" label={t("Assistant")} icon={<Sparkles />} active={onRailRoute(rail.assist)} run={() => open(rail.assist!)} />}
-              {rail.settings && <RailButton id="settings" label={t("Control Panel")} icon={<Settings />} active={pageScope !== undefined && pageScope === (scopeOf?.(rail.settings))} run={() => open(rail.settings!)} />}
+              {notificationsItem && <RailButton {...notificationsItem} />}
+              {rail.assist && <RailButton id="assist" label={t("AIP Assist")} icon={<Sparkles />} active={onRailRoute(rail.assist)} run={() => open(rail.assist!)} />}
               {sessionMenu}
             </div>
           </aside>
@@ -533,6 +533,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         {compact && rail && (
           <nav aria-label={t("Platform")} data-ui="rail" className="flex items-center justify-around border-t border-rail-border bg-rail px-2">
             {railItems.map(item => <RailButton key={item.id} {...item} />)}
+            {notificationsItem && <RailButton {...notificationsItem} />}
           </nav>
         )}
       </div>
@@ -635,7 +636,7 @@ function Sidebar({ app, product, productIcon, nav, navigation, active, collapsed
         <span className="grid size-6 shrink-0 place-items-center rounded-md bg-row-selected text-primary [&_svg]:size-3.5">{icon}</span>
         <span className="min-w-0 truncate text-sm font-semibold">{title}</span>
       </button>
-      {onPin && <Button size="icon" variant="ghost" aria-label={pinned ? t("Unpin from the rail") : t("Pin to the rail")} aria-pressed={pinned} title={pinned ? t("Unpin from the rail") : t("Pin to the rail")} onClick={onPin}
+      {onPin && <Button size="icon" variant="ghost" aria-label={pinned ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={pinned} title={pinned ? t("Remove from favorites") : t("Add to favorites")} onClick={onPin}
         className={cn(pinned ? "text-[var(--tone-warning)]" : "text-muted opacity-0 group-hover/app:opacity-100 focus-visible:opacity-100")}><Star fill={pinned ? "currentColor" : "none"} /></Button>}
       <Button size="icon" variant="ghost" aria-label={t("Hide navigation")} title={`${t("Hide navigation")} ⌘\\`} onClick={onToggle} className="text-muted max-md:hidden"><ChevronsLeft /></Button>
     </div>

@@ -39,7 +39,7 @@ import { ToolContext } from "./projects/tool-context";
 import { studioApplicationID, studioAreaForRoute } from "./projects/studio-model";
 import { FunctionCatalog } from "./functions/catalog";
 import { Interfaces } from "./ontology/ModelWorkbench";
-import { Activity, BellRing, Bot, Boxes, Braces, ClipboardCheck, Database, FolderKanban, GitBranch, GitMerge, History, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
+import { Activity, BellRing, Bot, Boxes, Braces, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, History, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.holds("build", "builder");
 const integrator = (host: Host) => host.holds("build", "integrator");
@@ -47,7 +47,7 @@ const publisher = (host: Host) => host.holds("build", "publisher");
 
 const view = (id: string, title: () => string, render: View["render"], documentKey?: View["documentKey"]): View => ({ id, title: () => title(), render, ...(documentKey ? { documentKey } : {}) });
 const projectViews: View[] = [
-  { id: "projects", title: () => t("Projects"), render: () => <ProjectsList /> },
+  { id: "projects", title: () => t("Files"), render: () => <ProjectsList /> },
   { id: "project", documentKey: p => p.id ?? "", title: () => t("Project"), render: p => <ProjectHome key={p.id} id={p.id ?? ""} area={p.area} initialSelected={p.asset} initialSection={p.section} initialPlan={p.plan} initialTemplate={p.template} /> },
 ];
 const ontologyViews: View[] = [
@@ -61,14 +61,20 @@ const ontologyViews: View[] = [
   view("changes", () => t("Branches and proposals"), () => <Branches />),
   { id: "proposal", documentKey: p => p.id ?? "", title: () => t("Proposal"), render: p => <ProposalScreen key={p.id} id={p.id ?? ""} /> },
 ];
-const dataViews: View[] = [
+const connectionViews: View[] = [
   view("connection", () => t("Connections"), p => p.id ? <ConnectionEditor key={p.id} id={p.id} /> : <Connections />),
   view("data-source", () => t("Data sources"), p => p.id ? <DataSourceEditor key={p.id} id={p.id} /> : <DataSources />),
-  view("dataset", () => t("Datasets"), p => p.id ? <DatasetEditor key={p.id} id={p.id} /> : <Datasets />),
+  view("observation-source", () => t("Observation sources"), p => p.id ? <ObservationSourceEditor key={p.id} id={p.id} /> : <ObservationSources />),
+  view("writeback", () => t("Writebacks"), p => p.id ? <WritebackEditor key={p.id} id={p.id} /> : <Writebacks />),
+];
+const pipelineViews: View[] = [
   view("pipeline", () => t("Pipelines"), p => p.id ? <PipelineEditor key={p.id} id={p.id} /> : <Pipelines />),
   view("match", () => t("Matching rules"), p => p.id ? <MatchEditor key={p.id} id={p.id} /> : <Matches />),
-  view("writeback", () => t("Writebacks"), p => p.id ? <WritebackEditor key={p.id} id={p.id} /> : <Writebacks />),
-  view("observation-source", () => t("Observation sources"), p => p.id ? <ObservationSourceEditor key={p.id} id={p.id} /> : <ObservationSources />),
+];
+const datasetViews: View[] = [
+  view("dataset", () => t("Datasets"), p => p.id ? <DatasetEditor key={p.id} id={p.id} /> : <Datasets />),
+];
+const monitoringViews: View[] = [
   view("integration-health", () => t("Integration health"), () => <IntegrationHealth />),
 ];
 const logicViews: View[] = [
@@ -124,12 +130,12 @@ const section = (label: string, route: Route | undefined, items: Link[]): NavSec
 const navigation = (route?: Route) => <ToolContext route={route} />;
 
 export default defineApp({
-  id: "build", category: "build", title: t("Projects"), icon: <FolderKanban />,
-  description: t("Projects group the pages, logic, data and releases of one application."),
+  id: "build", category: "build", title: t("Files"), icon: <FolderTree />,
+  description: t("Projects and the resources they own: object types, logic, pages and releases."),
   for: builder,
   home: { view: "projects" },
   views: contextualViews(projectViews),
-  opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.valuetype": "value-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.alertrule": "alert", "build.agent": "agent", "build.connection": "connection", "build.observation": "observation-source", "build.source": "data-source", "build.dataset": "dataset", "build.pipeline": "pipeline", "build.writeback": "writeback", "build.match": "match" },
+  opens: { "build.app": "project" },
   nav: () => [],
 });
 
@@ -139,44 +145,72 @@ const ontology = defineApp({
   for: builder,
   home: { view: "object-type" },
   views: contextualViews(ontologyViews),
+  opens: { "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.valuetype": "value-type" },
   navigation,
   nav: (_host, route) => [
-    section(t("Ontology"), route, [
-      { label: t("Overview"), icon: <Network />, view: "discover" },
+    section(t("Ontology"), route, [{ label: t("Overview"), icon: <Network />, view: "discover" }]),
+    section(t("Semantic"), route, [
       { label: t("Object types"), icon: <Boxes />, view: "object-type" },
       { label: t("Link types"), icon: <Link2 />, view: "link-type" },
       { label: t("Interfaces"), icon: <Layers />, view: "interfaces" },
       { label: t("Shared properties"), icon: <Tags />, view: "property-type" },
       { label: t("Value types"), icon: <Ruler />, view: "value-type" },
-      { label: t("Action types"), icon: <Zap />, view: "action-type" },
     ]),
+    section(t("Kinetic"), route, [{ label: t("Action types"), icon: <Zap />, view: "action-type" }]),
     section(t("Changes"), route, [{ label: t("Branches and proposals"), icon: <GitBranch />, view: "changes" }]),
   ],
 });
 
-const data = defineApp({
-  id: "data", category: "build", title: t("Data Integration"), icon: <Database />,
-  description: t("Connections, sources, datasets and pipelines that feed the ontology, and writebacks out of it."),
+const connection = defineApp({
+  id: "data-connection", category: "build", title: t("Data Connection"), icon: <Database />,
+  description: t("Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out."),
   for: host => builder(host) || integrator(host),
   home: { view: "connection" },
-  views: contextualViews(dataViews),
+  views: contextualViews(connectionViews),
+  opens: { "build.connection": "connection", "build.source": "data-source", "build.observation": "observation-source", "build.writeback": "writeback" },
   navigation,
   nav: (_host, route) => [
-    section(t("Ingest"), route, [
+    section(t("Sources"), route, [
       { label: t("Connections"), icon: <Plug />, view: "connection" },
       { label: t("Data sources"), icon: <Database />, view: "data-source" },
-      { label: t("Observation sources"), icon: <Radio />, view: "observation-source" },
     ]),
-    section(t("Transform"), route, [
-      { label: t("Datasets"), icon: <TableProperties />, view: "dataset" },
-      { label: t("Pipelines"), icon: <Workflow />, view: "pipeline" },
-      { label: t("Matching rules"), icon: <GitMerge />, view: "match" },
-    ]),
-    section(t("Deliver"), route, [
-      { label: t("Writebacks"), icon: <Link2 />, view: "writeback" },
-      { label: t("Integration health"), icon: <Activity />, view: "integration-health" },
-    ]),
+    section(t("Streams"), route, [{ label: t("Observation sources"), icon: <Radio />, view: "observation-source" }]),
+    section(t("Exports"), route, [{ label: t("Writebacks"), icon: <Link2 />, view: "writeback" }]),
   ],
+});
+
+const pipelineBuilder = defineApp({
+  id: "pipeline-builder", category: "build", title: t("Pipeline Builder"), icon: <Workflow />,
+  description: t("Pipelines that transform datasets, and matching rules that resolve records into objects."),
+  for: builder,
+  home: { view: "pipeline" },
+  views: contextualViews(pipelineViews),
+  opens: { "build.pipeline": "pipeline", "build.match": "match" },
+  navigation,
+  nav: (_host, route) => [section(t("Transform"), route, [
+    { label: t("Pipelines"), icon: <Workflow />, view: "pipeline" },
+    { label: t("Matching rules"), icon: <GitMerge />, view: "match" },
+  ])],
+});
+
+const datasetPreview = defineApp({
+  id: "dataset-preview", category: "build", title: t("Dataset Preview"), icon: <TableProperties />,
+  description: t("Datasets: schema, rows and the object types they back."),
+  for: builder,
+  home: { view: "dataset" },
+  views: contextualViews(datasetViews),
+  opens: { "build.dataset": "dataset" },
+  navigation,
+  nav: (_host, route) => [section(t("Datasets"), route, [{ label: t("Datasets"), icon: <TableProperties />, view: "dataset" }])],
+});
+
+const monitoring = defineApp({
+  id: "monitoring", category: "govern", title: t("Monitoring"), icon: <Activity />,
+  description: t("Health, runs, queued and failed work, and every delivery the host attempted."),
+  for: host => builder(host) || integrator(host),
+  home: { view: "integration-health" },
+  views: contextualViews(monitoringViews),
+  nav: (_host, route) => [section(t("Monitoring"), route, [{ label: t("Integration health"), icon: <Activity />, view: "integration-health" }])],
 });
 
 const logic = defineApp({
@@ -185,6 +219,7 @@ const logic = defineApp({
   for: builder,
   home: { view: "functions" },
   views: contextualViews(logicViews),
+  opens: { "build.process": "flow", "build.function": "function", "build.code": "code", "build.query": "query" },
   navigation,
   nav: (_host, route) => [section(t("Logic"), route, [
     { label: t("Functions"), icon: <Braces />, view: "functions" },
@@ -198,6 +233,7 @@ const automate = defineApp({
   for: builder,
   home: { view: "automation" },
   views: contextualViews(automateViews),
+  opens: { "build.alertrule": "alert" },
   navigation,
   nav: (_host, route) => [section(t("Automate"), route, [
     { label: t("Automations"), icon: <Zap />, view: "automation" },
@@ -211,6 +247,7 @@ const workshop = defineApp({
   for: builder,
   home: { view: "module" },
   views: contextualViews(workshopViews),
+  opens: { "build.page": "module" },
   navigation,
   nav: (_host, route) => [section(t("Workshop"), route, [
     { label: t("Modules"), icon: <PanelsTopLeft />, view: "module" },
@@ -218,9 +255,9 @@ const workshop = defineApp({
   ])],
 });
 
-const releases = defineApp({
-  id: "releases", category: "build", title: t("Releases"), icon: <Rocket />,
-  description: t("Test, review and activate releases of applications."),
+const devops = defineApp({
+  id: "devops", category: "govern", title: t("DevOps"), icon: <Rocket />,
+  description: t("Package project resources into product versions: test, review and activate releases."),
   for: host => builder(host) || publisher(host),
   home: { view: "release-review" },
   views: contextualViews(releaseViews),
@@ -235,12 +272,14 @@ const releases = defineApp({
 });
 
 const agentDefinitions = defineApp({
-  id: "agents", category: "build", title: t("Agents"), icon: <Bot />,
+  id: "agents", category: "build", title: t("Agent Studio"), icon: <Bot />,
   description: t("AI agents, what they are allowed to do, their runs and evaluations."),
   for: builder,
   home: { view: "agent" },
   views: contextualViews(agentViews),
-  nav: (_host, route) => [section(t("Agents"), route, [{ label: t("Agent definitions"), icon: <Shapes />, view: "agent" }])],
+  opens: { "build.agent": "agent" },
+  navigation,
+  nav: (_host, route) => [section(t("Build"), route, [{ label: t("Agent definitions"), icon: <Shapes />, view: "agent" }])],
 });
 
-export const contributions = [ontology, data, logic, automate, workshop, releases, agentDefinitions];
+export const contributions = [ontology, connection, pipelineBuilder, datasetPreview, logic, automate, workshop, agentDefinitions, devops, monitoring];
