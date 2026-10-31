@@ -1,10 +1,11 @@
 import { HostContext, type Host } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api, type Entry } from "@platform/kernel";
 import { notify, t } from "@platform/ui";
-import { useContext, useMemo, useRef, type ReactNode } from "react";
+import { useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { resourceKinds } from "../projects/resources";
 import { BranchFailure, resourcePath, useBranchActions } from "./api";
 import { selectedBranch } from "./current";
+import { ConflictDialog, ConflictSettlers, editConflict, type EditConflict } from "./conflict";
 
 const draftTypes = new Set([...resourceKinds.map(kind => kind.type), "build.app"]);
 const onMain = new Set(["publish", "migrate"]);
@@ -18,11 +19,26 @@ export function BranchDecisions({ children }: { children: ReactNode }) {
   const host = useContext(HostContext);
   const actions = useBranchActions(), latest = useRef(actions);
   latest.current = actions;
+  const [settlers] = useState(() => new Map<string, () => void>()), [conflict, setConflict] = useState<EditConflict>();
   const value = useMemo<Host | null>(() => {
     if (!host) return null;
     const decide: Host["decide"] = async (schema, target, payload, options) => {
       const branch = host.holds("build", "builder") ? selectedBranch(host.client) : undefined;
       const cut = schema.lastIndexOf("."), type = schema.slice(0, cut), verb = schema.slice(cut + 1);
+      const settle = settlers.get(`${target.type}/${target.id}`);
+      if (!branch && verb === "edit" && type === target.type && draftTypes.has(type) && options?.expectedRevision !== undefined && settle) {
+        let refusal: string | undefined, outcome: Entry | undefined;
+        if (await host.decide(schema, target, payload, { quiet: true, ...options, onRefused: reason => { refusal = reason; }, onOutcome: entry => { outcome = entry; options.onOutcome?.(entry); } })) return true;
+        const found = outcome?.outcome === "ERROR_CODE_CONFLICT" ? await editConflict(host, type, target.id, options.expectedRevision, payload) : undefined;
+        if (!found) { const reason = refusal ?? t("The host refused this edit."); if (options.onRefused) options.onRefused(reason); else notify.error(reason); return false; }
+        const keep = await new Promise<"mine" | "theirs">(resolve => setConflict({ ...found, resolve }));
+        const saved = keep === "mine" && await host.decide(schema, target, payload, { quiet: true, ...options, expectedRevision: found.revision });
+        setConflict(undefined);
+        if (keep === "mine" && !saved) return false;
+        if (saved) notify.success(t("Your version is saved over theirs."));
+        settle();
+        return false;
+      }
       if (!branch || type !== target.type || !draftTypes.has(type)) return host.decide(schema, target, payload, verb === "edit" && type === target.type && draftTypes.has(type) ? { quiet: true, ...options } : options);
       if (onMain.has(verb)) { const reason = branchRefusal(verb); if (options?.onRefused) options.onRefused(reason); else notify.error(reason); return false; }
       if (verb !== "create" && verb !== "edit" && verb !== "archive" && verb !== "compile") return host.decide(schema, target, payload, options);
@@ -47,6 +63,6 @@ export function BranchDecisions({ children }: { children: ReactNode }) {
       }
     };
     return { ...host, decide, simulationBranch: () => host.holds("build", "builder") ? selectedBranch(host.client) : undefined };
-  }, [host]);
-  return <HostContext.Provider value={value}>{children}</HostContext.Provider>;
+  }, [host, settlers]);
+  return <HostContext.Provider value={value}><ConflictSettlers settlers={settlers}>{children}</ConflictSettlers><ConflictDialog conflict={conflict} /></HostContext.Provider>;
 }

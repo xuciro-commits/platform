@@ -4,6 +4,7 @@ import { Check, MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApplicationScope } from "../projects/application-scope";
 import { useCurrentBranch } from "../branches/current";
+import { useConflictSettle } from "../branches/conflict";
 
 const draftStates = defineStatuses({ draft: { label: "Draft", tone: "warning" }, published: { label: "Published", tone: "success" }, archived: { label: "Archived", tone: "neutral" } });
 
@@ -61,6 +62,7 @@ export function ResourceControls({ type, record, dirty = false, busy = false, in
     if (wasBusy.current && !busy && dirty && attempt.current !== undefined && attempt.current === record?.revision) setStalled(true);
     wasBusy.current = busy;
   }, [busy, dirty, record?.revision]);
+  useConflictSettle(type, record?.id, busy, onCancel || onReload ? () => { onCancel?.(); onReload?.(); } : undefined);
   useAutoSave({ enabled: autosave && saved && !!onSave && !record?.archived && !stalled, dirty, invalid, busy, save: async () => { attempt.current = record?.revision; await onSave?.(); } });
   const visible = useViewVisible();
   const current = useRef({ saved, dirty, busy, invalid, onSave });
