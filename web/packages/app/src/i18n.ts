@@ -582,7 +582,6 @@ register("zh-CN", {
 
   "Runs": "运行",
   "Model binding could not be read. Check its declared source and permissions.": "无法读取模型绑定，请检查声明的来源与权限。",
-  "Select the model binding context.": "请选择模型绑定所需的上下文。",
   "Loading model fields and relationships…": "正在加载模型字段与关系…",
   "Some records or fields are outside your permissions.": "部分记录或字段不在你的权限范围内。",
   "The original model declares this field read-only": "原模型将此字段声明为只读",

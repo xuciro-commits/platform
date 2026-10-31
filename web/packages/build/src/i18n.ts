@@ -3154,7 +3154,7 @@ register("zh-CN", {
   "Required bindings": "必填绑定",
   "Visible fields": "可见字段",
   "Offered actions": "可用动作",
-  "No readable objects are available. Save an object draft in Studio first.": "当前没有可读对象，请先在工坊保存对象草稿。",
+  "No object types with properties yet. Create an object type and add a property first.": "还没有带属性的对象类型，请先新建对象类型并添加属性。",
   "Choose at least one field. The host still filters unreadable fields.": "至少选择一个字段，宿主仍会过滤无权读取的字段。",
   "Bind saved draft actions or actions already offered to you. Draft bindings are checked at joint publication; execution still requires permission.": "绑定已保存的草稿动作或当前可用动作。草稿绑定将在联合发布时检查；执行仍须取得权限。",
   "Saved object drafts could not be loaded.": "无法加载已保存的对象草稿。",

@@ -27,13 +27,15 @@ export function StudioTemplates({ initial, onCreated, onBusy, onClose, closeGuar
     request.current = undefined; setPending(false); setName(""); setTitle(""); setObjectType(""); setChildType(""); setFields([]); setActions([]); setError("");
   }, busy);
   if (closeGuard) closeGuard.current = () => { if (!lock.current && onClose) confirmOwnDiscard(onClose); };
-  const objects = model.entities.filter((entity) => entity.fields.length > 0);
+  const ontology = new Set((model.drafts.data?.records ?? []).filter((record) => !record.archived).map((record) => `build.${record.name}`));
+  const objects = model.entities.filter((entity) => ontology.has(entity.type) && entity.fields.length > 0);
   const object = objects.find((entity) => entity.type === objectType);
   const offered = model.actions.filter((action) => action.target === objectType);
   const children = objects.flatMap((entity) => entity.fields.filter((field) => field.type === "reference" && field.ref === objectType).map((field) => ({ entity, relation: field.inverse })));
   const child = children.find((c) => c.entity.type === childType);
   const chooseObject = (type: string) => {
-    setObjectType(type); setActions([]); setChildType(""); setError("");
+    setObjectType(type); setChildType(""); setError("");
+    setActions(model.actions.filter((action) => action.target === type && action.schema !== `${type}.archive`).map((action) => action.schema));
     setFields(objects.find((entity) => entity.type === type)?.fields.filter((field) => field.type !== "lines").slice(0, 4).map((field) => field.name) ?? []);
   };
   const toggle = (values: string[], name: string, selected: boolean) => selected ? [...values, name] : values.filter((value) => value !== name);
@@ -83,7 +85,7 @@ ${t("Created from template {template} (revision {revision}).", { template: templ
           </Select>{children.length === 0 && <span className="text-muted">{t("No object refers to this one yet. Add a reference field on the child object first.")}</span>}</label>}
           {model.drafts.isError && <p role="alert" className="text-xs text-danger">{t("Saved object drafts could not be loaded.")}</p>}
           {model.drafts.isPending && <p role="status" className="text-xs text-muted">{t("Loading…")}</p>}
-          {!model.drafts.isPending && !model.drafts.isError && objects.length === 0 && <p className="text-xs text-muted">{t("No readable objects are available. Save an object draft in Studio first.")}</p>}
+          {!model.drafts.isPending && !model.drafts.isError && objects.length === 0 && <p className="text-xs text-muted">{t("No object types with properties yet. Create an object type and add a property first.")}</p>}
           {object && <div className="grid gap-3 sm:grid-cols-2">
             <fieldset className="grid content-start gap-2"><legend className="mb-2 text-xs font-medium">{t("Visible fields")}</legend>
               {object.fields.map((field) => <Checkbox key={field.name} checked={fields.includes(field.name)} disabled={locked}

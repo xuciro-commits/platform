@@ -5,7 +5,7 @@
     "seats": [
       { "id": "admin-1", "subjects": ["admin"], "roles": { "platform": "admin", "build": "builder" } },
       { "id": "builder-1", "subjects": ["builder"], "roles": { "build": "builder" } },
-      { "id": "user-1", "subjects": ["user"], "roles": {} }
+      { "id": "user-1", "subjects": ["user"], "roles": { "build": "user" } }
     ]
   }
 ]

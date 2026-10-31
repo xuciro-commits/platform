@@ -20,7 +20,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 ## 下一批
 
-P3.16 黄金路径单次发布：验收 F1 暴露的摩擦——模板能绑定草稿对象类型且只列本体类型、列表报告提供新建、一次 Review and save 即可用；完成后把 F1 收紧到 5-experience 的成功标准（业务用户执行动作）。
+P3.21 保存状态如实：状态只在写入被接受后显示已保存，编辑即显示 Unsaved changes；完成后删除 F1 第 4 步的固定等待。
 
 ## P2 内核收敛
 
@@ -38,7 +38,7 @@ P3.16 黄金路径单次发布：验收 F1 暴露的摩擦——模板能绑定�
 | P2.11 | 服务包迁移 | 宿主按 7-system §7.2 的目标包逐个迁移，每次迁移删除旧路径 | 7-system §7.2 |
 | P2.12 | 大文件拆分 | `pageui/manifest.ts`（9k 行）、`build_integrations.go`（3.6k 行）等超过 7-system §7.7 限额的手写文件按职责拆分 | 7-system §7.7 |
 | P2.13 | 重放只应用接受映像 | 重放不再重新执行 submission、input、effect、usage、agent、delivery、job 等旧条目；旧条目经版本化迁移转为接受映像 | 7-system/README R6 |
-| P2.14 | 验收补齐 | 内核不变量 K4–K6；F2–F10 随相关批次逐条加入；F1 收紧到目标标准 | 7-system/verification |
+| P2.14 | 验收补齐 | 内核不变量 K4–K6；F2–F10 随相关批次逐条加入 | 7-system/verification |
 
 ## P3 构建者闭环
 
@@ -59,7 +59,6 @@ P3.16 黄金路径单次发布：验收 F1 暴露的摩擦——模板能绑定�
 | P3.13 | Workshop 对象视图模块替换默认对象视图 | 4-interaction §4.3 D |
 | P3.14 | Workshop 组件目录统一记录类组件；Dialog 只留 480 与 880 两种宽度 | 4-interaction/patterns |
 | P3.15 | Object Explorer 分面、Search around、保存 | 4-interaction/workbenches |
-| P3.16 | 黄金路径单次发布：从数据集创建对象类型；模板绑定草稿对象类型、只列本体类型、提供新建；一次 Review and save 即可用 | 5-experience F1 |
 | P3.17 | 监听器、对象类型组、监控视图 | 2-product §2.2 |
 | P3.18 | 条件构建器与对象集构建器各一个实现 | 4-interaction/patterns M10、M11 |
 | P3.19 | 对象合并规则统一实现 | 6-domain §6.5 |
@@ -68,6 +67,7 @@ P3.16 黄金路径单次发布：验收 F1 暴露的摩擦——模板能绑定�
 | P3.22 | 审阅范围：main 上只含本人的工作状态；项目发布包含工作状态 | 6-domain/change §6.19 |
 | P3.23 | 新建表单按 M7：≤ 4 个必填，无 ID、源编辑器与字段表 | 4-interaction M7 |
 | P3.24 | Files 只列项目，不列原生应用 | 3-information §3.7 |
+| P3.25 | 从数据集创建对象类型：数据集 Overview 的“Create object type”映射列到属性、选标题与主键，并把数据集绑定为对象类型数据源 | 5-experience F1、6-domain §6.6 |
 
 ## P4 行业应用
 
