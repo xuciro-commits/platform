@@ -5,7 +5,7 @@ import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
-import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery } from "@platform/app";
+import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord } from "@platform/app";
 import { CompositeRefusalError, type Api } from "@platform/kernel";
 import { ActionMenu, Button, Checkbox, DataTable, Dialog, Disclosure, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ColumnDef, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, ExternalLink, FolderKanban, GitBranch, MoreHorizontal, Plus, Rocket, Trash2 } from "lucide-react";
@@ -39,16 +39,16 @@ export function ProjectsList() {
   const { me, definitions , holds} = useHost();
   const { open } = useWorkspace();
   const projects = useDraftInventory<Project>("build.app", 1000, holds("build", "builder"));
-  const installedApps = useReadQuery<Api.AppInfo[]>("/v1/apps");
   const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
   const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
   const [search, setSearch] = useState("");
   const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }), { essential: true });
   const builder = holds("build", "builder");
   type Row = ReturnType<typeof studioApplications>[number];
-  const rows = studioApplications(installedApps.data ?? [], definitions, projects.data?.records ?? [])
-    .filter(item => `${item.title} ${item.ref.app} ${item.ref.name}`.toLowerCase().includes(search.toLowerCase()));
-  const kindOf = (item: Row) => item.project ? t(item.project.extends ? "Application extension" : "Build application") : t(item.definition?.source === "code" || item.ref.app !== "build" ? "Native code" : "Published application");
+  const rows = studioApplications([], definitions, projects.data?.records ?? [])
+    .filter(item => !!item.project || item.ref.app === "build" && !!item.definition && item.definition.source !== "code")
+    .filter(item => `${item.title} ${item.ref.name}`.toLowerCase().includes(search.toLowerCase()));
+  const kindOf = (item: Row) => item.project ? t(item.project.extends ? "Application extension" : "Project") : t("Managed project");
   const columns: ColumnDef<Row>[] = [
     { id: "title", header: t("Project"), meta: { width: 360, pin: "left" }, accessorFn: item => item.title, cell: ({ row }) => <span className="flex min-w-0 items-center gap-2">
       <span className="grid size-6 shrink-0 place-items-center rounded-sm bg-row-selected text-primary [&_svg]:size-3.5"><FolderKanban /></span>
@@ -58,18 +58,17 @@ export function ProjectsList() {
     { id: "state", header: t("Status"), meta: { width: 120 }, accessorFn: item => item.project?.state ?? "", cell: ({ row }) => <DraftStatus state={row.original.project?.state} /> },
     { id: "pages", header: t("Pages"), meta: { width: 80 }, accessorFn: item => (item.project ?? item.definition?.application)?.pages?.length ?? 0, cell: ({ getValue }) => <span className="tabular-nums text-muted">{getValue() as number}</span> },
     { id: "resources", header: t("Resources"), meta: { width: 100 }, accessorFn: item => (item.project ?? item.definition?.application)?.resources?.length ?? 0, cell: ({ getValue }) => <span className="tabular-nums text-muted">{getValue() as number}</span> },
-    { id: "owner", header: t("Owner"), meta: { width: 120 }, accessorFn: item => item.ref.app, cell: ({ row }) => <span className="font-mono text-xs text-muted">{row.original.ref.app}</span> },
   ];
   return <div className="flex min-h-full flex-col gap-3">
-    <PageHeader title={t("Files")} meta={t("{count} projects", { count: rows.length })} help={t("A project groups the object types, logic, pages and releases of one application. Installed applications appear here too, and extend through the same branches and releases.")} actions={<>
+    <PageHeader title={t("Files")} meta={t("{count} projects", { count: rows.length })} help={t("A project groups the object types, logic, pages and releases of one application. Projects of installed products appear as managed projects and extend through the same branches and releases.")} actions={<>
         <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="w-56" />
         {builder && <Button onClick={() => open({ view: "apps" })}>{t("New from template…")}</Button>}
         {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New project")}</Button>}
       </>} />
     {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
-    {(projects.isError || installedApps.isError) && <Notice tone="warning" role="alert" message={t("Projects could not be loaded.")} />}
+    {projects.isError && <Notice tone="warning" role="alert" message={t("Projects could not be loaded.")} />}
     <div className="min-h-[24rem] flex-1">
-      <DataTable data={rows} columns={columns} getRowId={item => refKey(item.ref)} height="100%" searchable={false} loading={projects.isLoading || installedApps.isLoading}
+      <DataTable data={rows} columns={columns} getRowId={item => refKey(item.ref)} height="100%" searchable={false} loading={projects.isLoading}
         onRowClick={item => open({ view: "project", params: { id: item.id } })} empty={search ? t("No project matches.") : t("No projects yet. Create one to start building.")} />
     </div>
     {create.dialog}
