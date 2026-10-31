@@ -1,7 +1,9 @@
 import "./i18n";
 import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/app";
-import { Button, Card, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
-import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, CircleUser, Database, FlaskConical, Grid3x3, History, KeyRound, Languages, MessageSquare, Network, PlugZap, Route, Server, SlidersHorizontal, Store, Upload, Users, Workflow } from "lucide-react";
+import { Button, Card, ContentTabs, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
+import type { ReactNode } from "react";
+import { Markings } from "./markings";
+import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, Settings, ShieldCheck, Database, FlaskConical, History, KeyRound, Network, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
@@ -24,27 +26,59 @@ import {SystemConsole} from "./system";
 const admin = (host: Host) => host.holds("platform", "admin");
 const auditor = (host: Host) => host.holds("platform", "auditor");
 
+type Area = "permissions" | "ai" | "settings";
+function controlPanelAreas(host: Host): Record<Area, { view: string; title: string }[]> {
+  const shown = (entries: [string, string, boolean][]) => entries.filter(([, , on]) => on).map(([view, title]) => ({ view, title }));
+  return {
+    permissions: shown([["permissions", "Roles and permissions", admin(host) || auditor(host)], ["matrix", "Capability matrix", admin(host)], ["protocols", "Protocols", admin(host)]]),
+    ai: shown([["ai-playground", "AI playground", !!host.role("ai")], ["ai-usage", "AI usage", !!host.role("ai")], ["ai-configuration", "AI configuration", host.holds("ai", "admin")], ["ai-providers", "Providers and models", host.holds("ai", "admin")]]),
+    settings: shown([["words", "Languages and words", admin(host)], ["app-settings", "App settings", admin(host)], ["credentials", "Credentials", admin(host)], ["integrations", "Connectors", admin(host)], ["self-hosting", "System history", !!host.role("system")]]),
+  };
+}
+
+function TabbedArea({ label, tabs, current, children }: { label: string; tabs: { view: string; title: string }[]; current: string; children: ReactNode }) {
+  const { open } = useWorkspace();
+  if (tabs.length < 2) return <>{children}</>;
+  return <div className="grid gap-3">
+    <ContentTabs label={t(label)} items={tabs.map(tab => ({ id: tab.view, title: t(tab.title) }))} value={current} onChange={view => open({ view })} />
+    {children}
+  </div>;
+}
+
+function AreaTabs({ area, current, children }: { area: Area; current: string; children: ReactNode }) {
+  const host = useHost();
+  return <TabbedArea label={area === "ai" ? "AI" : area === "settings" ? "Settings" : "Roles and permissions"} tabs={controlPanelAreas(host)[area]} current={current}>{children}</TabbedArea>;
+}
+
+function monitoringRuns(host: Host) {
+  return [
+    ...(host.role("flow") ? [{ view: "flows", title: "Workflow runs" }] : []),
+    ...(admin(host) ? [{ view: "automation-operations", title: "Work queue" }, { view: "delivery-attempts", title: "Delivery attempts" }, { view: "effects", title: "Outbound effects" }] : []),
+  ];
+}
+
+function RunsTabs({ current, children }: { current: string; children: ReactNode }) {
+  const host = useHost();
+  return <TabbedArea label="Runs" tabs={monitoringRuns(host)} current={current}>{children}</TabbedArea>;
+}
+
 function controlPanelNavigation(host: Host): NavSection[] {
+  const areas = controlPanelAreas(host);
   const item = (label: string, icon: React.ReactNode, view: string) => ({ label, icon, route: { view } });
+  const area = (label: string, icon: React.ReactNode, entries: { view: string }[]) => entries.length ? [{ label, icon, route: { view: entries[0]!.view }, covers: entries.map(entry => entry.view) }] : [];
   const sections: NavSection[] = [
     { label: t("Overview and identity"), items: [
-      item(t("Control Panel"), <SlidersHorizontal />, "control-panel"),
-      ...(host.role("system") ? [item(t("System history"), <Server />, "self-hosting")] : []),
-      item(t("My account"), <CircleUser />, "account"),
+      item(t("Overview"), <SlidersHorizontal />, "control-panel"),
       ...(admin(host) ? [item(t("Organisation"), <Building2 />, "organisation")] : []),
       ...(admin(host) || auditor(host) ? [item(t("Members"), <Users />, "members")] : []),
     ] },
     { label: t("Access"), items: [
-      ...(admin(host) || auditor(host) ? [item(t("Roles and permissions"), <KeyRound />, "permissions")] : []),
-      ...(admin(host) ? [item(t("Capability matrix"), <Grid3x3 />, "matrix"), item(t("Protocols"), <Cable />, "protocols")] : []),
+      ...area(t("Roles and permissions"), <KeyRound />, areas.permissions),
+      ...(admin(host) || auditor(host) ? [item(t("Markings"), <ShieldCheck />, "markings")] : []),
     ] },
-    { label: t("AIP"), items: host.role("ai") ? [
-      item(t("AI playground"), <MessageSquare />, "ai-playground"),
-      item(t("AI usage"), <BarChart3 />, "ai-usage"),
-      ...(host.holds("ai", "admin") ? [item(t("AI configuration"), <Bot />, "ai-configuration"), item(t("Providers and models"), <Bot />, "ai-providers")] : []),
-    ] : [] },
+    { label: t("AIP"), items: area(t("AI"), <Bot />, areas.ai) },
     { label: t("Settings and audit"), items: [
-      ...(admin(host) ? [item(t("Credentials"), <KeyRound />, "credentials"), item(t("App settings"), <SlidersHorizontal />, "app-settings"), item(t("Languages and words"), <Languages />, "words")] : []),
+      ...area(t("Settings"), <Settings />, areas.settings),
       ...(admin(host) || auditor(host) ? [item(t("Audit trail"), <History />, "audit")] : []),
     ] },
   ];
@@ -69,23 +103,25 @@ function ControlPanelOverview() {
 }
 
 const controlPanelViews: View[] = [
- {id:"self-hosting",title:()=>t("System history"),render:()=> <SystemConsole/>},
- { id:"credentials", title:()=>t("Credentials"),render:()=> <Credentials /> },
+  { id: "self-hosting", title: () => t("System history"), render: () => <AreaTabs area="settings" current="self-hosting"><SystemConsole /></AreaTabs> },
+  { id: "credentials", title: () => t("Credentials"), render: () => <AreaTabs area="settings" current="credentials"><Credentials /></AreaTabs> },
+  { id: "markings", title: () => t("Markings"), render: () => <Markings /> },
+  { id: "integrations", title: () => t("Connectors"), render: () => <AreaTabs area="settings" current="integrations"><Integrations /></AreaTabs> },
   { id: "control-panel", title: () => t("Control Panel"), render: () => <ControlPanelOverview /> },
   { id: "account", title: () => t("My account"), render: () => <MyAccount /> },
   { id: "organisation", title: () => t("Organisation"), render: () => <Organisation /> },
   { id: "members", title: () => t("Members"), render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
-  { id: "permissions", title: () => t("Roles and permissions"), render: () => <Permissions /> },
-  { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
-  { id: "protocols", title: () => t("Protocols"), render: () => <Protocols /> },
-  { id: "app-settings", title: () => t("App settings"), render: () => <AppSettingsView /> },
-  { id: "words", title: () => t("Languages and words"), render: () => <Words /> },
+  { id: "permissions", title: () => t("Roles and permissions"), render: () => <AreaTabs area="permissions" current="permissions"><Permissions /></AreaTabs> },
+  { id: "matrix", title: () => t("Capability matrix"), render: () => <AreaTabs area="permissions" current="matrix"><Matrix /></AreaTabs> },
+  { id: "protocols", title: () => t("Protocols"), render: () => <AreaTabs area="permissions" current="protocols"><Protocols /></AreaTabs> },
+  { id: "app-settings", title: () => t("App settings"), render: () => <AreaTabs area="settings" current="app-settings"><AppSettingsView /></AreaTabs> },
+  { id: "words", title: () => t("Languages and words"), render: () => <AreaTabs area="settings" current="words"><Words /></AreaTabs> },
   { id: "audit", title: () => t("Audit"), render: () => <Audit /> },
-  { id: "ai-playground", title: () => t("AI playground"), render: p => <AIPlayground initialModel={p.model} /> },
-  { id: "ai-usage", title: () => t("AI usage"), render: () => <AIUsage /> },
-  { id: "ai-configuration", title: () => t("AI configuration"), render: p => <AIConfiguration initialSection={p.section} fromPackage={p.fromPackage} fromVersion={p.fromVersion} /> },
-  { id: "ai-providers", title: () => t("Providers and models"), render: () => <AIProviders /> },
+  { id: "ai-playground", title: () => t("AI playground"), render: p => <AreaTabs area="ai" current="ai-playground"><AIPlayground initialModel={p.model} /></AreaTabs> },
+  { id: "ai-usage", title: () => t("AI usage"), render: () => <AreaTabs area="ai" current="ai-usage"><AIUsage /></AreaTabs> },
+  { id: "ai-configuration", title: () => t("AI configuration"), render: p => <AreaTabs area="ai" current="ai-configuration"><AIConfiguration initialSection={p.section} fromPackage={p.fromPackage} fromVersion={p.fromVersion} /></AreaTabs> },
+  { id: "ai-providers", title: () => t("Providers and models"), render: () => <AreaTabs area="ai" current="ai-providers"><AIProviders /></AreaTabs> },
 ];
 
 export const controlPanel = defineApp({
@@ -130,40 +166,34 @@ export const monitoring = defineApp({
   home: { view: "runs-home" },
   views: [
     { id: "runs-home", title: () => t("Runs"), render: () => <RunsHome /> },
-    { id: "flows", title: () => t("Workflow runs"), render: () => <Flows /> },
-    { id: "automation-operations", title: () => t("Work queue"), render: () => <Automation /> },
-    { id: "delivery-attempts", title: () => t("Delivery attempts"), render: () => <Deliveries /> },
+    { id: "flows", title: () => t("Workflow runs"), render: () => <RunsTabs current="flows"><Flows /></RunsTabs> },
+    { id: "automation-operations", title: () => t("Work queue"), render: () => <RunsTabs current="automation-operations"><Automation /></RunsTabs> },
+    { id: "delivery-attempts", title: () => t("Delivery attempts"), render: () => <RunsTabs current="delivery-attempts"><Deliveries /></RunsTabs> },
+    { id: "effects", title: () => t("Outbound effects"), render: () => <RunsTabs current="effects"><OutboundEffects /></RunsTabs> },
     { id: "system-health", title: () => t("Health"), render: () => <SystemHealth /> },
   ],
-  nav: (host) => [{ label: t("Monitoring"), items: [
-    ...(host.role("flow") ? [{ label: t("Workflow runs"), icon: <Route />, route: { view: "flows" } }] : []),
-    ...(admin(host) ? [
-      { label: t("Work queue"), icon: <Workflow />, route: { view: "automation-operations" } },
-      { label: t("Delivery attempts"), icon: <History />, route: { view: "delivery-attempts" } },
-      { label: t("Health"), icon: <BarChart3 />, route: { view: "system-health" } },
-    ] : []),
-  ] }],
+  nav: (host) => {
+    const runs = monitoringRuns(host);
+    return [{ label: t("Monitoring"), items: [
+      ...(runs.length ? [{ label: t("Runs"), icon: <Route />, route: { view: runs[0]!.view }, covers: ["runs-home", ...runs.map(run => run.view)] }] : []),
+      ...(admin(host) ? [{ label: t("Health"), icon: <BarChart3 />, route: { view: "system-health" } }] : []),
+    ] }];
+  },
 });
 
 export const dataConnection = defineApp({
   id: "data-connection", serves: ["platform"], category: "build", title: "Data Connection", icon: <Database />,
   description: "Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out.",
   for: (host) => admin(host) || host.holds("build", "builder", "integrator"),
-  home: (host) => host.holds("build", "builder", "integrator") ? { view: "connection" } : { view: "integrations" },
+  home: (host) => host.holds("build", "builder", "integrator") ? { view: "connection" } : { view: "endpoints" },
   views: [
-    { id: "integrations", title: () => t("Connectors"), render: () => <Integrations /> },
-    { id: "endpoints", title: () => t("Endpoints"), render: () => <Endpoints /> },
-    { id: "effects", title: () => t("Outbound effects"), render: () => <OutboundEffects /> },
+    { id: "endpoints", title: () => t("Webhooks"), render: () => <Endpoints /> },
   ],
   nav: (host) => [
     { label: t("Sources"), items: [] },
     { label: t("Streams"), items: [{ label: t("Observations"), icon: <BarChart3 />, route: { view: "observations" } }] },
     { label: t("Exports"), items: [] },
-    { label: t("Host connectors"), items: admin(host) ? [
-      { label: t("Connectors"), icon: <PlugZap />, route: { view: "integrations" } },
-      { label: t("Endpoints"), icon: <Cable />, route: { view: "endpoints" } },
-      { label: t("Outbound effects"), icon: <Upload />, route: { view: "effects" } },
-    ] : [] },
+    { label: t("Webhooks"), items: admin(host) ? [{ label: t("Webhooks"), icon: <Cable />, route: { view: "endpoints" } }] : [] },
   ],
 });
 

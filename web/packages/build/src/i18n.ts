@@ -182,6 +182,7 @@ register("zh-CN", {
   "Application extension": "应用扩展",
   "Published application": "已发布应用",
   "Managed project": "受管项目",
+  "Syncs": "同步",
   "Not projected yet. Rows become objects once this object type is saved and the dataset has a version.": "尚未投影。保存此对象类型且数据集有版本后，行会成为对象。",
   "Projection": "投影",
   "Projection of version {version} is paused: {reason} It retries automatically.": "版本 {version} 的投影已暂停：{reason} 会自动重试。",

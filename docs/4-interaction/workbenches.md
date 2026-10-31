@@ -157,8 +157,8 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 ## 现存差距
 
 - Logic 拥有逻辑流与查询两类旧资源，查询应并入函数或对象集（路线图 P3.11）。
-- Monitoring 没有统一的 Runs 表（同步、构建、投影、自动化、函数、投递），侧栏仍有 Workflow runs、Work queue；Data Connection 有 Observation sources 与管理员项 Connectors、Endpoints、Outbound effects（P3.4）。
-- Control Panel 侧栏约 18 项，无独立 Markings 分区（P3.4）。
+- Monitoring 的 Runs 是 Workflow runs、Work queue、Delivery attempts、Outbound effects 四个标签页，不是统一的运行表（同步、构建、投影、自动化、函数、投递），也没有 Overview 与 Monitoring views（P3.17）。
+- Data Connection 的 Streams 仍分 Observation sources 与 Observations 两项；没有 Listeners（P3.17）。
 - Knowledge、Master data、Organisation directory 是独立业务应用（P2.10）。
 - Marketplace 无安装审阅与升级审阅（P5.3、P5.4）。
 - Object Explorer 无分面、Search around、保存（P3.15）。

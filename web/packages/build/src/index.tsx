@@ -172,7 +172,7 @@ const connection = defineApp({
   nav: (_host, route) => [
     section(t("Sources"), route, [
       { label: t("Connections"), icon: <Plug />, view: "connection" },
-      { label: t("Data sources"), icon: <Database />, view: "data-source" },
+      { label: t("Syncs"), icon: <Database />, view: "data-source" },
     ]),
     section(t("Streams"), route, [{ label: t("Observation sources"), icon: <Radio />, view: "observation-source" }]),
     section(t("Exports"), route, [{ label: t("Writebacks"), icon: <Link2 />, view: "writeback" }]),

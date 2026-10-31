@@ -1544,4 +1544,11 @@ register("zh-CN", {
   "Cleared": "已获准",
   "Cleared through a team": "经团队获准",
   "Not cleared": "未获准",
+  "Webhooks": "Webhook",
+  "Marking": "标记",
+  "What it opens": "可打开的数据",
+  "Cleared members": "获准成员",
+  "{count} markings": "{count} 个标记",
+  "Marked data opens only to members cleared for every marking it carries. Markings follow data lineage, and no role lifts them. Clear a member on their page.": "带标记的数据只对获准其全部标记的成员开放。标记沿数据血缘传播，任何角色都不能解除。在成员页为成员授予许可。",
+  "Members could not be loaded.": "无法加载成员。",
 });

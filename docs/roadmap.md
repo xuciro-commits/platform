@@ -20,7 +20,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 ## 下一批
 
-P3.4 侧栏收敛：Control Panel 8 项与独立 Markings 分区；Monitoring、Data Connection 去除旧项；项目页移除 Business roles。
+P3.5 Search 分组与前缀；门户按四组并隐藏无权应用。
 
 ## P2 内核收敛
 
@@ -46,7 +46,6 @@ P3.4 侧栏收敛：Control Panel 8 项与独立 Markings 分区；Monitoring、
 |---|---|---|
 | P3.1 | 审阅并保存的字段级差异与逐项放弃 | 4-interaction M18 |
 | P3.2 | 并发编辑冲突提示 | 4-interaction §4.5 |
-| P3.4 | 侧栏收敛：Control Panel 8 项与独立 Markings 分区；Monitoring、Data Connection 去除旧项；项目页移除 Business roles | 4-interaction/workbenches、3-information R5 |
 | P3.5 | Search 分组与前缀；门户按四组并隐藏无权应用 | 3-information §3.3、§3.8 |
 | P3.6 | 文件夹后端模型与 Files 文件夹树 | 3-information §3.7 |
 | P3.7 | Discoverer 与项目级读取 | 6-domain/security §6.14 |
@@ -58,7 +57,7 @@ P3.4 侧栏收敛：Control Panel 8 项与独立 Markings 分区；Monitoring、
 | P3.13 | Workshop 对象视图模块替换默认对象视图 | 4-interaction §4.3 D |
 | P3.14 | Workshop 组件目录统一记录类组件 | 4-interaction/patterns |
 | P3.15 | Object Explorer 分面、Search around、保存 | 4-interaction/workbenches |
-| P3.17 | 监听器、对象类型组、监控视图 | 2-product §2.2 |
+| P3.17 | 监听器、对象类型组、监控视图；Monitoring 统一运行表与 Overview | 2-product §2.2、4-interaction/workbenches |
 | P3.18 | 条件构建器与对象集构建器各一个实现 | 4-interaction/patterns M10、M11 |
 | P3.19 | 对象合并规则统一实现 | 6-domain §6.5 |
 | P3.28 | 每位构建者独立的工作状态：草稿在保存前对他人不可见，分支上按人分开 | 6-domain/change §6.19 |

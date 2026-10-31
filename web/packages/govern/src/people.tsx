@@ -4,10 +4,8 @@ import { useState } from "react";
 import { z } from "zod";
 import { active, kind, today, type Chart, type Member } from "./shared";
 import type { Api } from "@platform/kernel";
+import { markingHelp, markingLabels, markings } from "./markings";
 type Grant = Api.Grant;
-const markings = ["confidential", "restricted"];
-const markingLabels: Record<string, string> = { confidential: "Confidential", restricted: "Restricted" };
-const markingHelp: Record<string, string> = { confidential: "Opens data marked confidential.", restricted: "Opens data marked confidential or restricted." };
 const clearance = (g: Grant) => g.app === "platform" && markings.includes(g.role);
 import { ProfileForm, type Account, type TenantRecord } from "./account";
 
