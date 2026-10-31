@@ -126,7 +126,7 @@ function ApplicationSampleForm({ application, selected, samples: suppliedSamples
   </Card>;
 }
 
-function SyntheticRecords({ application, samples, onChange }: Pick<SampleProps, "application" | "samples"> & { onChange: (samples: string) => void }) {
+export function SyntheticRecords({ application, samples, onChange }: Pick<SampleProps, "samples"> & { application?: Project; onChange: (samples: string) => void }) {
   const host = useHost(), model = useAuthoringModel(), capabilities = useAuthoringCapabilities(), inputs = useInputDrafts();
   const [advanced, setAdvanced] = useState(false);
   const keys = useRef(new Map<string, string>());
@@ -144,7 +144,7 @@ function SyntheticRecords({ application, samples, onChange }: Pick<SampleProps, 
       && new Set(parsed.map(group => group.type)).size === parsed.length
       && parsed.every(group => new Set(group.records.map((row: Record<string, unknown>) => row.id)).size === group.records.length)) groups = parsed;
   } catch {   }
-  const members = model.entities.filter(entity => application.resources?.some(ref => ref.kind === "object" && ref.app === entity.app && ref.name === entity.type));
+  const members = application ? model.entities.filter(entity => application.resources?.some(ref => ref.kind === "object" && ref.app === entity.app && ref.name === entity.type)) : model.entities;
   const write = (next: Api.SampleRecords[]) => onChange(JSON.stringify(next, null, 2));
   const dropInputs = (key: string) => inputs?.clear(`${inputs.scope}/record-${key}/`);
   const recordFields = (type: string) => {

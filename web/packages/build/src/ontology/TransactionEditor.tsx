@@ -2,7 +2,7 @@ import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, useProvidedCapabilities, useRecordInventory } from "@platform/app";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import { ContextHelp, Button, Checkbox, Disclosure, Input, InputDraftProvider, Panel, Select, Textarea, t, useInputDrafts, type EntityInfo } from "@platform/ui";
+import { ContextHelp, Button, Checkbox, Disclosure, Input, InputDraftProvider, Panel, Select, Textarea, t, useInputDrafts, type EntityInfo , AdvancedJson } from "@platform/ui";
 import { useState } from "react";
 import { ExpressionEditor, literalExpression, observationContextChoices, type ExpressionChoice } from "../editor/ExpressionEditor";
 import { nameOf, type Input_, type Process } from "./object-model";
@@ -45,7 +45,7 @@ export function TransactionEditor({ value, onChange, process, inputs = [], roles
       step?.scrollIntoView({ block: "nearest" }); step?.focus();
     }}>{transactionIssueText(issue, t)}</Button></li>)}</ul>}
     <StepList steps={value.steps} onChange={steps => onChange({ ...value, steps })} context={context} />
-    <Disclosure summary={t("Transaction source")}><label className={fieldClass}>{t("Transaction definition")}<Textarea parse="json" rows={18} value={JSON.stringify(value, null, 2)} onChange={event => onChange(JSON.parse(event.target.value))} /></label></Disclosure>
+    <AdvancedJson label={t("Transaction definition")} value={value} onChange={next => onChange(next as Api.BusinessTxn)} />
   </Panel></InputDraftProvider>;
 }
 
@@ -182,7 +182,7 @@ function RecordTarget({ value, onChange, context, previous, item }: { value: Api
   return <div className="grid min-w-0 gap-2"><label className={fieldClass}>{t("Record to change")}<Select value={selected} onChange={event => onChange({ type: value.type, ...event.target.value.startsWith("via:") ? { via: event.target.value.slice(4) } : { id: event.target.value === "fixed" ? "" : event.target.value } })}>{options.map(option => <option key={option.value} value={option.value}>{option.title}</option>)}<option value="fixed">{t("A specific record ID")}</option></Select></label>{selected === "fixed" && <label className={fieldClass}>{t("Record ID")}<Input value={value.id ?? ""} onChange={event => onChange({ type: value.type, id: event.target.value })} /></label>}</div>;
 }
 
-function Assignments({ value, onChange, fields, choices, context, scope = "assignments" }: { value: Api.TxnSet[]; onChange: (value: Api.TxnSet[]) => void; fields?: Api.FieldInfo[]; choices: ExpressionChoice[]; context: EditorContext; scope?: string }) {
+export function Assignments({ value, onChange, fields, choices, context, scope = "assignments" }: { value: Api.TxnSet[]; onChange: (value: Api.TxnSet[]) => void; fields?: Api.FieldInfo[]; choices: ExpressionChoice[]; context: Pick<EditorContext, "collections" | "inputs" | "lookup">; scope?: string }) {
   const buffers = useInputDrafts();
   const remove = (index: number) => {
     const prefix = `${buffers?.scope ?? ""}/${scope}/assignment:`;

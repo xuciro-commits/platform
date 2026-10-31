@@ -8,7 +8,7 @@ import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue } from "../editor/declaration";
 import type { Project } from "../projects/project";
-import { ApplicationSamples, type SampleSetRecord } from "./samples";
+import { ApplicationSamples, SyntheticRecords, type SampleSetRecord } from "./samples";
 import { TestPayload } from "./test-inputs";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";
@@ -16,17 +16,28 @@ import { refKey, resourceKinds, resourceRef, resourceRoute } from "../projects/r
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { AppSelect, ModelPicker, useHost } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, Notice, Panel, PageHeader, PropertyList, Select, StatusTag, Textarea, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, JsonTextEditor, Notice, Panel, PageHeader, PropertyList, Select, StatusTag, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { installedObjects, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
+import { installedObjects, parameterSchema, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
+import { organizationSchema } from "./organization";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { applicationDraftSelection, ownerDraft, type JointChoice, type ReleaseKind } from "./selection";
 
-type ObjectDraft = WorkflowObject & { revision: number };
-type FunctionDraft = { id: string; revision: number; name: string; title: string; object: string; conversation?:boolean; output?:{name:string}[] };
+type ObjectDraft = WorkflowObject & { revision: number; fields?: { name: string; title?: string; type: string; choices?: string }[] };
+type FunctionDraft = { id: string; revision: number; name: string; title: string; object: string; conversation?:boolean; fields?: string[]; output?: Api.Field[] };
 type Step = Omit<Api.SimulationStep, "payload" | "expect"> & { payload: string; expect: "accepted" | "refused" };
 type EvaluationCase = { name: string; input: string; expected: string };
+const answerSchema = (fields?: Api.Field[]): Api.ValueSchema | undefined => fields?.length
+  ? { type: "object", properties: Object.fromEntries(fields.map(field => [field.name, parameterSchema(field) ?? { type: "json" }])), required: fields.filter(field => field.required).map(field => field.name) } : undefined;
+const caseInputSchema = (fn?: FunctionDraft, object?: ObjectDraft): Api.ValueSchema | undefined => {
+  if (!fn?.fields?.length || !object?.fields) return undefined;
+  const record: Api.ValueSchema = { type: "object", properties: Object.fromEntries(fn.fields.flatMap(name => {
+    const field = object.fields!.find(item => item.name === name);
+    return field ? [[name, parameterSchema({ name, type: field.type, description: field.title ?? name, choices: field.choices?.split(",").map(item => item.trim()) }) ?? { type: "json" }]] : [];
+  })) };
+  return fn.conversation ? { type: "object", properties: { record, question: { type: "string" }, history: { type: "array", items: { type: "json" } } } } : record;
+};
 type EvaluationPolicy = { compareFields?:string[]; minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
 type TestPlan = { id: string; revision: number; name?:string;functionVersion?:number;definitionVersion?:number; title: string; roots?:Api.AssetRef[];application?:string;candidateId?:string;actors?:string[];sample?:string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; organization?: Api.OrgSeed; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
 
@@ -380,13 +391,13 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
         </div>}
         {kind === "flow" && <Disclosure summary={<span className="text-xs font-medium">{t("Synthetic query samples")}</span>}><div className="mt-2 grid gap-2">
           <ContextHelp title={t("Synthetic query samples")}>{t("Declare sample datasets as [{type, records}]. Tests never copy production records or send native business actions to live owners.")}</ContextHelp>
-          <Textarea parse="json" aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-xs" value={samples} onChange={(event) => { setSamples(event.target.value); setSampleOverride(true); clear(); }} />
+          <SyntheticRecords samples={samples} onChange={(rows) => { setSamples(rows); setSampleOverride(true); clear(); }} />
         </div></Disclosure>}
         {kind !== "function" && <Disclosure summary={t("Synthetic organization")}>
           <div className="grid gap-2">
             <p className="text-xs text-muted">{t("Declare synthetic units, structures, edges and memberships for this isolated trial. Current member roles still apply; live organization data is never copied.")}</p>
             <p className="text-xs text-muted">{t("Leave membership party empty to use the member selected for this trial.")}</p>
-            <Textarea parse="json" aria-label={t("Synthetic organization (JSON)")} rows={5} className="font-mono text-xs" value={organization} onChange={event => { setOrganization(event.target.value); clear(); }} />
+            <JsonTextEditor label={t("Synthetic organization")} value={organization} schema={organizationSchema} space={2} onChange={next => { setOrganization(next); clear(); }} />
           </div>
         </Disclosure>}
         {plans.isError && <p role="alert" className="text-sm text-danger">{t("The saved test plans could not be loaded.")}</p>}
@@ -441,8 +452,8 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
             {cases.map((item, index) => <Card key={index} className="grid gap-2 p-2">
               <div className="flex items-center justify-between"><span className="text-xs font-medium">{t("Evaluation case {n}", { n: index + 1 })}</span><Button disabled={cases.length === 1} onClick={() => { setCases((old) => old.filter((_, i) => i !== index)); clear(); }}>{t("Remove")}</Button></div>
               <label className="grid gap-1 text-xs">{t("Case name")}<Input value={item.name} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, name: e.target.value } : c)); clear(); }} /></label>
-              <label className="grid gap-1 text-xs">{t("Synthetic input (JSON object)")}<Textarea draftKey={`case:${index}:input`} parse="json" rows={3} value={item.input} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, input: e.target.value } : c)); clear(); }} className="font-mono" /></label>
-              <label className="grid gap-1 text-xs">{t("Expected typed answer (JSON object)")}<Textarea draftKey={`case:${index}:expected`} parse="json" rows={3} value={item.expected} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, expected: e.target.value } : c)); clear(); }} className="font-mono" /></label>
+              <JsonTextEditor label={t("Synthetic input")} value={item.input} schema={caseInputSchema(fn, object as ObjectDraft | undefined)} space={2} onChange={(next) => { setCases((old) => old.map((c, i) => i === index ? { ...c, input: next } : c)); clear(); }} />
+              <JsonTextEditor label={t("Expected typed answer")} value={item.expected} schema={answerSchema(fn?.output)} space={2} onChange={(next) => { setCases((old) => old.map((c, i) => i === index ? { ...c, expected: next } : c)); clear(); }} />
             </Card>)}
             <Button disabled={cases.length >= 5} onClick={() => { setCases((old) => [...old, { name: `synthetic${old.length + 1}`, input: "{}", expected: "{}" }]); clear(); }}>{t("Add an evaluation case")}</Button>
           </>}
@@ -505,7 +516,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           {(kind === "flow" || step.action === "build.function-call.start") && <Checkbox checked={!!step.function} onChange={(enabled) => update(index, { function: enabled ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>{t("Supply a fixed model answer")}</Checkbox>}
           {step.function && <fieldset className="grid gap-2 rounded border border-border p-2">
             <legend className="px-1 text-xs">{t("Fixed model answer")}</legend>
-            <label className="grid gap-1 text-xs">{t("Provider answer")}<Textarea draftKey={`step:${index}:function-output`} parse="json" rows={3} value={step.function.output} onChange={(e) => update(index, { function: { ...step.function!, output: e.target.value } })} className="font-mono" /></label>
+            <JsonTextEditor label={t("Provider answer")} value={step.function.output} schema={answerSchema(fn?.output)} onChange={(next) => update(index, { function: { ...step.function!, output: next } })} />
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="grid gap-1 text-xs">{t("Input tokens")}<Input draftKey={`step:${index}:input-tokens`} type="number" min={0} max={1048576} value={step.function.inputTokens} onChange={(e) => update(index, { function: { ...step.function!, inputTokens: Number(e.target.value) } })} /></label>
               <label className="grid gap-1 text-xs">{t("Output tokens")}<Input draftKey={`step:${index}:output-tokens`} type="number" min={0} max={1048576} value={step.function.outputTokens} onChange={(e) => update(index, { function: { ...step.function!, outputTokens: Number(e.target.value) } })} /></label>
@@ -513,7 +524,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
             <label className="grid gap-1 text-xs">{t("Expected function state")}<Select value={step.function.expectState} onChange={(e) => update(index, { function: { ...step.function!, expectState: e.target.value as Api.FunctionFixture["expectState"], expectOutput: e.target.value === "rejected" ? undefined : step.function?.expectOutput } })}>
               <option value="ready">{t("Ready")}</option><option value="rejected">{t("Rejected")}</option>
             </Select></label>
-            {step.function.expectState === "ready" && <label className="grid gap-1 text-xs">{t("Expected typed answer (JSON, optional)")}<Textarea draftKey={`step:${index}:function-expected`} parse="json" rows={3} value={step.function.expectOutput ?? ""} onChange={(e) => update(index, { function: { ...step.function!, expectOutput: e.target.value } })} className="font-mono" /></label>}
+            {step.function.expectState === "ready" && <JsonTextEditor label={t("Expected typed answer (optional)")} value={step.function.expectOutput ?? ""} schema={answerSchema(fn?.output)} onChange={(next) => update(index, { function: { ...step.function!, expectOutput: next } })} />}
           </fieldset>}
           {kind === "flow" && <Checkbox checked={!!step.compute} onChange={(enabled) => {
             const computation = process?.steps.find((node) => node.kind === "compute")?.operation;
@@ -523,9 +534,9 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
             <div className="grid gap-2 sm:grid-cols-2"><label className="grid gap-1 text-xs">{t("Capability owner")}<AppSelect value={step.compute.app ?? "build"} onChange={(app) => update(index, { compute: { ...step.compute!, app } })} /></label>
               <label className="grid gap-1 text-xs">{t("Computation name")}<Input value={step.compute.name} onChange={(event) => update(index, { compute: { ...step.compute!, name: event.target.value } })} /></label></div>
             <label className="grid gap-1 text-xs">{t("Expected computation state")}<Select value={step.compute.expectState} onChange={(event) => update(index, { compute: { ...step.compute!, expectState: event.target.value as Api.ComputeFixture["expectState"] } })}><option value="completed">{t("Completed")}</option><option value="failed">{t("Failed")}</option></Select></label>
-            {step.compute.expectState === "completed" ? <label className="grid gap-1 text-xs">{t("Fixed output (JSON)")}<Textarea draftKey={`step:${index}:compute-output`} parse="json" rows={3} className="font-mono" value={step.compute.output ?? "{}"} onChange={(event) => update(index, { compute: { ...step.compute!, output: event.target.value } })} /></label>
+            {step.compute.expectState === "completed" ? <JsonTextEditor label={t("Fixed output")} value={step.compute.output ?? "{}"} onChange={(next) => update(index, { compute: { ...step.compute!, output: next } })} />
               : <label className="grid gap-1 text-xs">{t("Fixed computation error")}<Input value={step.compute.error ?? ""} onChange={(event) => update(index, { compute: { ...step.compute!, error: event.target.value } })} /></label>}
-            <label className="grid gap-1 text-xs">{t("Expected output (JSON, optional)")}<Textarea draftKey={`step:${index}:compute-expected`} parse="json" rows={2} className="font-mono" value={step.compute.expectOutput ?? ""} onChange={(event) => update(index, { compute: { ...step.compute!, expectOutput: event.target.value || undefined } })} /></label>
+            <JsonTextEditor label={t("Expected output (optional)")} value={step.compute.expectOutput ?? ""} onChange={(next) => update(index, { compute: { ...step.compute!, expectOutput: next || undefined } })} />
           </fieldset>}
         </Card>)}
         <InputProblems />

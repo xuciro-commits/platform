@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { Button, Checkbox, Disclosure, Input, InputDraftProvider, Panel, Select, Textarea, Toggles, t } from "@platform/ui";
+import { Button, Checkbox, Input, InputDraftProvider, Panel, Select, Textarea, Toggles, t } from "@platform/ui";
 import { nameOf, type Process } from "./object-model";
 import { ExpressionEditor, observationContextChoices } from "../editor/ExpressionEditor";
 import { authoringObject, useAuthoringModel } from "./authoring-model";
@@ -42,7 +42,6 @@ export function ConstraintsEditor({ process, parent, onChange }: { process: Proc
           {expressionKinds.has(rule.kind) && <>
             <div className="grid gap-3 sm:col-span-2"><RuleCollectionsEditor value={rule.reads} subject={subject} onChange={reads => patch(at, { reads })} />
               {rule.expr && <ExpressionEditor value={rule.expr} choices={choices} lookup={lookup} collections={rule.reads?.collections} onChange={expr => patch(at, { expr })} />}
-              <Disclosure summary={t("Invariant rule · JSON")}><label className="grid gap-1 text-xs">{t("Invariant rule · JSON")}<Textarea parse="json" rows={8} value={rule.expr ? JSON.stringify(rule.expr, null, 2) : ""} onChange={event => patch(at, { expr: event.target.value.trim() ? JSON.parse(event.target.value) : undefined })} /></label></Disclosure>
             </div>
           </>}
           {rule.kind === "immutable" && <div className="grid gap-3 sm:col-span-2">

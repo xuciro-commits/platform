@@ -1519,6 +1519,7 @@ export default {
   "Apply source before saving.": "保存前请先应用源码。",
   "Copy failed. Select and copy the source.": "复制失败，请选择并复制源码。",
   "Configuration source": "配置源码",
+  "Advanced": "高级",
   "Apply source": "应用源码",
   "Input checks passed. Business rules have not been run.": "输入检查通过，尚未试运行业务规则。",
   "Check inputs": "检查输入",

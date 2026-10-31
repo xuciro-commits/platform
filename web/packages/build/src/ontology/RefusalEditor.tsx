@@ -1,9 +1,10 @@
 import type {Api} from "@platform/kernel";
 import {useHost} from "@platform/app";
-import {Button,Checkbox,Input,Panel,Select,Textarea,t,type EntityInfo} from "@platform/ui";
+import {Button,Checkbox,Input,Panel,Select,t,type EntityInfo} from "@platform/ui";
 import {useState} from "react";
 import {ExpressionEditor,type ExpressionChoice} from "../editor/ExpressionEditor";
 import {nameOf} from "./object-model";
+import {Assignments} from "./TransactionEditor";
 
 export function RefusalEditor({value,onChange,choices,actions,entities,roles}:{value:Api.BusinessTxn;onChange:(value:Api.BusinessTxn)=>void;choices:ExpressionChoice[];actions:string[];entities:EntityInfo[];roles:string[]}) {
  const {source}=useHost(),[scope,setScope]=useState("");
@@ -26,7 +27,7 @@ export function RefusalEditor({value,onChange,choices,actions,entities,roles}:{v
    {item.level==="route"&&<label className="grid gap-1 text-xs">{t("Correction transaction")}<Select value={item.route?.action??""} onChange={event=>patch(index,{route:{type:value.subject,id:"$subject",action:event.target.value}})}><option value="">{t("Choose an action")}</option>{actions.map(action=><option key={action}>{action}</option>)}</Select></label>}
    {item.level!=="block"&&<>
     <label className="grid gap-1 text-xs">{t("Visible refusal record")}<Select value={item.record?.target?.type??""} onChange={event=>patch(index,{record:event.target.value?record(event.target.value):undefined})}><option value="">{item.level==="flag"?t("Choose a related record type"):t("No additional refusal record")}</option>{records.map(entity=><option key={entity.type} value={entity.type}>{entity.title} · {entity.type}</option>)}</Select></label>
-    {item.record&&<label className="grid gap-1 text-xs">{t("Refusal record transaction step")}<Textarea parse="json" rows={9} value={JSON.stringify(item.record,null,2)} onChange={event=>patch(index,{record:JSON.parse(event.target.value)})}/></label>}
+    {item.record&&<fieldset className="grid gap-2"><legend className="text-xs font-medium">{t("Refusal record fields")}</legend><Assignments scope={`refusal-record:${index}`} value={item.record.changes??[]} onChange={changes=>patch(index,{record:{...item.record!,changes}})} fields={source.entity(item.record.target?.type??"")?.fields.filter(field=>!field.readOnly)} choices={choices} context={{lookup:source.entity,inputs:[]}}/></fieldset>}
     <p className="text-xs text-muted">{t("The refusal record must reference the original subject. Actor, reason, time and original values are retained in the audit fact.")}</p>
    </>}
    <Checkbox checked={!!item.escalation} onChange={enabled=>patch(index,{escalation:enabled?{count:3,windowSeconds:3600,reviewerRole:roles[0]??"builder"}:undefined})}>{t("Escalate repeated business refusals")}</Checkbox>

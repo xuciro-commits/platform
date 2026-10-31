@@ -408,7 +408,7 @@ register("zh-CN", {
   "Source key field": "源记录键字段",
   "Source result field": "源结果字段",
   "Reconciliation period (seconds)": "对账周期（秒）",
-  "Expected source value (JSON)": "预期源值（JSON）",
+  "Expected source value": "预期源值",
   "Remove party": "移除确认方",
   "Add confirmation party": "添加确认方",
   "Receipt refusal": "回执拒绝原因",

@@ -1,5 +1,5 @@
 import { type Api } from "@platform/kernel";
-import { InputDraftProvider,InputProblems,useInputDrafts,Button, Panel, Textarea, t, type EntityRecord } from "@platform/ui";
+import { InputDraftProvider,InputProblems,useInputDrafts,Button, JsonValueEditor, Panel, t, type EntityRecord } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { useInvokeCapability, useReadQuery } from "../index";
 
@@ -29,11 +29,11 @@ export function ComputeCall(props:Parameters<typeof ComputeCallForm>[0]) {
 function ComputeCallForm({ binding, bindings, record, recordType, live = true }: {
   binding?: Api.AssetBinding; bindings?: Record<string, Api.Binding>; record?: EntityRecord; recordType: string; live?: boolean;
 }) {
-  const drafts=useInputDrafts(),invoke = useInvokeCapability(), [input, setInput] = useState("{}"), [call, setCall] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const drafts=useInputDrafts(),invoke = useInvokeCapability(), [input, setInput] = useState<unknown>({}), [call, setCall] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const version = Number(binding?.sourceVersion.match(/\.compute-(\d+)$/)?.[1] ?? 0);
   const descriptor = useReadQuery<Api.CapabilityDescriptor>(`/v1/capabilities/${encodeURIComponent(binding?.ref.app ?? "")}/compute/${encodeURIComponent(binding?.ref.name ?? "")}?version=${version}`, undefined, !!binding);
   const answer = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && live);
-  useEffect(() => { setInput(JSON.stringify(example(descriptor.data?.input), null, 2)); setCall(""); setError(""); }, [JSON.stringify(descriptor.data?.input), binding?.sourceVersion]);
+  useEffect(() => { setInput(example(descriptor.data?.input)); setCall(""); setError(""); }, [JSON.stringify(descriptor.data?.input), binding?.sourceVersion]);
   useEffect(() => { setCall(""); }, [record?.id]);
   const subject = Object.values(bindings ?? {}).some((value) => value.source === "subject");
   const bound = Object.keys(bindings ?? {}).length > 0;
@@ -42,12 +42,11 @@ function ComputeCallForm({ binding, bindings, record, recordType, live = true }:
     <p className="text-xs text-muted">{descriptor.data?.title ?? binding.ref.name} · {t("Version")} {version}</p>
     {!live ? <p className="text-xs text-muted">{t("Calculations run when this page is opened by its operator.")}</p> : <>
       {subject && !record && <p className="text-sm text-muted">{t("Select a record to calculate its result.")}</p>}
-      {(!bound || Object.values(bindings ?? {}).some((value) => value.source === "input")) && <label className="grid gap-1 text-xs">{t("Calculation input")}
-        <Textarea parse="json" draftKey="input" rows={6} spellCheck={false} className="font-mono text-xs" value={input} onChange={(event) => setInput(event.target.value)} /></label>}
+      {(!bound || Object.values(bindings ?? {}).some((value) => value.source === "input")) && <JsonValueEditor label={t("Calculation input")} value={input} onChange={setInput} schema={descriptor.data?.input} />}
       <Button disabled={busy || drafts?.invalid || descriptor.isError || descriptor.isLoading || subject && !record} onClick={async () => {
         setBusy(true); setError("");
         try {
-          const values: unknown = JSON.parse(input);
+          const values = input;
           if (unsafeInteger(descriptor.data?.input, values)) throw new Error(t("Enter an integer the browser can represent exactly, or bind a source record."));
           const result = await invoke({ ref: binding.ref, key: crypto.randomUUID(), version, inputs: values,
             bindings, record: subject && record ? `${recordType}/${record.id}` : undefined });
