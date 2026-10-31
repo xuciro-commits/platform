@@ -31,6 +31,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     const sheet = page.getByRole("dialog", { name: "Create object type" });
     await expect(sheet.getByRole("combobox", { name: "Primary key column *" })).toHaveValue("Order no");
     await expect(sheet.getByRole("combobox", { name: "Title column *" })).toHaveValue("Customer");
+    await expect(sheet.getByText("→ amount · decimal")).toBeVisible();
     await sheet.getByRole("textbox", { name: "What people call it *" }).fill("Order");
     await sheet.getByRole("textbox", { name: "Name *" }).fill(objectName);
     await sheet.getByRole("button", { name: "Create", exact: true }).click();

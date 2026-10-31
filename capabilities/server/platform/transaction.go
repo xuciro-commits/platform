@@ -1133,17 +1133,59 @@ func IntegrationCSVRows(body []byte) ([]string, []map[string]any, error) {
 	for i, name := range records[0] {
 		head[i] = strings.TrimSpace(name)
 	}
+	kinds := make([]string, len(head))
+	for i := range head {
+		kinds[i] = csvColumnKind(records[1:], i)
+	}
 	rows := make([]map[string]any, 0, len(records)-1)
 	for _, rec := range records[1:] {
 		row := map[string]any{}
 		for i, name := range head {
-			if i < len(rec) {
+			if i >= len(rec) {
+				continue
+			}
+			value := strings.TrimSpace(rec[i])
+			switch {
+			case kinds[i] == "string":
 				row[name] = rec[i]
+			case value == "":
+				row[name] = nil
+			case kinds[i] == "number":
+				row[name], _ = strconv.ParseFloat(value, 64)
+			default:
+				row[name] = strings.EqualFold(value, "true")
 			}
 		}
 		rows = append(rows, row)
 	}
 	return head, rows, nil
+}
+
+func csvColumnKind(records [][]string, column int) string {
+	kind := ""
+	for _, rec := range records {
+		if column >= len(rec) {
+			continue
+		}
+		value := strings.TrimSpace(rec[column])
+		if value == "" {
+			continue
+		}
+		next := "string"
+		if strings.EqualFold(value, "true") || strings.EqualFold(value, "false") {
+			next = "boolean"
+		} else if n, err := strconv.ParseFloat(value, 64); err == nil && !math.IsInf(n, 0) && !math.IsNaN(n) && !(len(value) > 1 && value[0] == '0' && value[1] != '.') {
+			next = "number"
+		}
+		if kind != "" && kind != next || next == "string" {
+			return "string"
+		}
+		kind = next
+	}
+	if kind == "" {
+		return "string"
+	}
+	return kind
 }
 
 func IntegrationRowsAt(body []byte, path string) ([]map[string]any, error) {
