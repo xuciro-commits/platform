@@ -9,6 +9,7 @@ import { t } from "../i18n";
 import { cn } from "../lib/cn";
 import { Button } from "../primitives/button";
 import { Reasoned } from "./ActionAvailability";
+import { Tooltip } from "../primitives/tooltip";
 
 export type HeaderPill = { key: string; label: string; tone: Tone; icon?: string; title?: string };
 
@@ -24,7 +25,7 @@ export function ObjectIcon({ icon, color, className }: { icon?: string; color?: 
 
 export function FormatPill({ format, text, title }: { format: Api.FieldFormat; text: string; title?: string }) {
   const label = format.label || text;
-  return <span title={title} className="inline-flex"><Tag label={label || "—"} tone={toneOf(format.tone)} icon={format.icon} /></span>;
+  return <Tooltip content={title}><span className="inline-flex"><Tag label={label || "—"} tone={toneOf(format.tone)} icon={format.icon} /></span></Tooltip>;
 }
 
 export function HeaderCommands({ commands, menu, disabled, children }: { commands: ContextCommand[]; menu: ContextCommand[]; disabled: boolean; children?: ReactNode }) {
@@ -45,7 +46,7 @@ export function ObjectHeader({ icon, color, title, subtitle, pills, tags, status
     <div className="grid min-w-0 flex-1 gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <h1 className="min-w-0 break-words text-lg font-semibold">{title}</h1>
-        {pills.map(pill => <span key={pill.key} title={pill.title} className="inline-flex"><Tag label={pill.label} tone={pill.tone} icon={pill.icon} /></span>)}
+        {pills.map(pill => <Tooltip key={pill.key} content={pill.title}><span className="inline-flex"><Tag label={pill.label} tone={pill.tone} icon={pill.icon} /></span></Tooltip>)}
         {tags}
         {status}
       </div>

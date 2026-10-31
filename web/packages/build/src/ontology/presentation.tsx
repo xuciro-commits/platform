@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { ArrowDown, ArrowUp, Check, Plus, Trash2 } from "lucide-react";
 import type { Api } from "@platform/kernel";
-import { Button, IconPicker, Input, Notice, ObjectIcon, Select, Tag, cn, t, toneNames, type EntityInfo, type Tone } from "@platform/ui";
+import { Button, IconPicker, Input, Notice, ObjectIcon, Select, Tag, cn, t, toneNames, type EntityInfo, type Tone , Tooltip } from "@platform/ui";
 import { SemanticValueTypeSelect } from "@platform/app";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 import type { Field, Process } from "./object-model";
@@ -11,9 +11,9 @@ export const valueTypeBases = ["text", "longtext", "integer", "decimal", "date",
 
 export function ToneSwatches({ value, onChange, label, clearable = false, disabled }: { value?: string; onChange: (tone?: Tone) => void; label: string; clearable?: boolean; disabled?: boolean }) {
   return <div role="radiogroup" aria-label={label} className="flex flex-wrap items-center gap-1.5">
-    {toneNames.map(tone => <button key={tone} type="button" role="radio" aria-checked={value === tone} aria-label={t(tone)} title={t(tone)} disabled={disabled} onClick={() => onChange(tone)}
+    {toneNames.map(tone => <Tooltip key={tone} content={t(tone)}><button type="button" role="radio" aria-checked={value === tone} aria-label={t(tone)} disabled={disabled} onClick={() => onChange(tone)}
       className={cn("grid size-6 place-items-center rounded-full border-2 text-primary-foreground transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50", value === tone ? "border-[var(--border-strong)]" : "border-transparent")}
-      style={{ background: `var(--tone-${tone})` }}>{value === tone && <Check className="size-3.5" />}</button>)}
+      style={{ background: `var(--tone-${tone})` }}>{value === tone && <Check className="size-3.5" />}</button></Tooltip>)}
     {clearable && <Button size="sm" variant="ghost" disabled={disabled || !value} onClick={() => onChange(undefined)}>{t("No color")}</Button>}
   </div>;
 }

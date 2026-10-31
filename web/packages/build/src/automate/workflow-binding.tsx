@@ -1,5 +1,5 @@
 import {schemaIssue} from "@platform/app/page-contract";
-import { ContextHelp, InputDraftProvider, Button, Checkbox, Disclosure, Input, Select, Textarea, t } from "@platform/ui";
+import { ContextHelp, InputDraftProvider, Button, Checkbox, Disclosure, Input, Select, Textarea, t , Tooltip } from "@platform/ui";
 import { Braces, ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useDraftInput } from "../session/DraftSession";
@@ -128,12 +128,11 @@ export function DataField({ title, schema, binding, path = [] }: { title: string
   const [expanded, setExpanded] = useState(path.length < 1);
   const entries = Object.entries(commonSchemaProperties(schema));
   return <div className="grid gap-0.5">
-    <div className="flex items-center gap-1 rounded px-1 py-1 hover:bg-row-hover" draggable
-      onDragStart={(event) => { event.dataTransfer.setData(bindingMime, JSON.stringify({ ...binding, path })); event.dataTransfer.effectAllowed = "copy"; }}
-      title={t("Drag this value into a binding")}>
+    <Tooltip content={t("Drag this value into a binding")}><div className="flex items-center gap-1 rounded px-1 py-1 hover:bg-row-hover" draggable
+      onDragStart={(event) => { event.dataTransfer.setData(bindingMime, JSON.stringify({ ...binding, path })); event.dataTransfer.effectAllowed = "copy"; }}>
       {entries.length > 0 ? <Button variant="ghost" type="button" onClick={() => setExpanded(!expanded)} aria-label={t(expanded ? "Collapse fields" : "Expand fields")}>{expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}</Button> : <Braces className="size-3 text-muted" />}
       <span className="min-w-0 flex-1 truncate text-xs">{title}</span><code className="text-[9px] text-muted">{schema?.type ?? "value"}{schema?.nullable ? "?" : ""}</code><GripVertical className="size-3 text-muted" />
-    </div>
+    </div></Tooltip>
     {expanded && entries.length > 0 && <div className="ml-2 border-l border-border pl-2">{entries.map(([name, field]) => <DataField key={name} title={name} schema={field} binding={binding} path={[...path, name]} />)}</div>}
   </div>;
 }

@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { t } from "../../i18n";
 import { FLOW_NODE_DROP, flowPortFits, type FlowAddContext, type FlowCatalog, type FlowNode, type FlowNodeKind } from "./model";
 import { flowNodeIcon, flowNodeGroup, flowShape, notationGlyph, notationOf, notationTitle } from "./notation";
+import { Tooltip } from "../../primitives/tooltip";
 
 function fits(kind: FlowNodeKind, context: FlowAddContext, nodes: FlowNode[], catalog: FlowCatalog) {
   const source = context.source ?? (context.edge ? { node: context.edge.source, port: context.edge.sourcePort } : undefined);
@@ -45,16 +46,16 @@ export function FlowPalette({ catalog, nodes, context, onChoose, onClose }: {
       {groups.map((group) => <div key={group}><div className="px-3 py-2 text-2xs font-semibold uppercase tracking-wide text-muted">{group}</div>
         {kinds.filter((kind) => flowNodeGroup(kind) === group).map((kind) => {
           const notation = kind.notation ?? notationOf(kind.id);
-          return <button key={kind.id} type="button" draggable
+          return <Tooltip key={kind.id} content={kind.description} side="right"><button type="button" draggable
             id={`${listId}-${kinds.indexOf(kind)}`} role="option" aria-selected={kinds.indexOf(kind) === active}
-            className="platform-flow-palette-item" onClick={() => onChoose(kind.id)} title={kind.description}
+            className="platform-flow-palette-item" onClick={() => onChoose(kind.id)}
             onDragStart={(event) => { event.dataTransfer.setData(FLOW_NODE_DROP, kind.id); event.dataTransfer.effectAllowed = "copy"; }}>
             <span className="platform-flow-palette-icon">{flowNodeIcon(kind)}</span>
             <span className="min-w-0 flex-1 text-left"><span className="block truncate font-medium">{kind.title}</span>
               {kind.description && <span className="mt-0.5 block text-xs text-muted">{kind.description}</span>}</span>
             {flowShape(notation, kind.id) !== "task" && <span className="platform-flow-palette-notation" aria-hidden="true"
               title={notationTitle(notation)}>{notationGlyph(notation)}</span>}
-          </button>;
+          </button></Tooltip>;
         })}
       </div>)}
       {!kinds.length && <div className="px-3 py-5 text-xs text-muted">{t("No compatible blocks found.")}</div>}

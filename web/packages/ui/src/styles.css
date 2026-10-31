@@ -157,6 +157,9 @@ body {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
+.platform-tooltip { animation: platform-tooltip-in var(--dur-fast) var(--ease-standard); }
+@keyframes platform-tooltip-in { from { opacity: 0; } to { opacity: 1; } }
+
 .platform-skeleton {
   border-radius: var(--r-sm);
   background: linear-gradient(100deg, var(--row-hover) 30%, color-mix(in oklch, var(--row-hover), var(--foreground) 6%) 50%, var(--row-hover) 70%);

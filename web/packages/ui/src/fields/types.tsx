@@ -12,6 +12,7 @@ import type { Route } from "../shell/route";
 import { t } from "../i18n";
 import { formatDate, formatDateTimeSmart } from "../lib/datetime-format";
 import {StructuredValueInput} from './StructuredValueInput';
+import { Tooltip } from "../primitives/tooltip";
 
 export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (value: V | undefined) => void; invalid?: boolean; autoFocus?: boolean; describedBy?: string };
 export type Operator<V> = { id: string; label: string; needsArg: boolean; test: (value: V | undefined, arg: V | undefined) => boolean };
@@ -131,7 +132,7 @@ export const checkbox = (o: Common): FieldType<boolean> => ({
   display: (v) => v === undefined || v === null ? muted : v ? <Check className="size-3.5 text-[var(--tone-success)]" aria-label="yes" /> : <span className="text-muted">{t("No")}</span>,
   editor: ({ id, value, onChange }) => <span className="inline-flex items-center gap-2">
     <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="size-4 accent-[var(--primary)]" />
-    {!o.required && value !== undefined && <button type="button" className="rounded p-0.5 text-muted hover:bg-row-hover" aria-label={t("Clear value")} title={t("Clear value")} onClick={() => onChange(undefined)}><X className="size-3.5" /></button>}
+    {!o.required && value !== undefined && <Tooltip content={t("Clear value")}><button type="button" className="rounded p-0.5 text-muted hover:bg-row-hover" aria-label={t("Clear value")} onClick={() => onChange(undefined)}><X className="size-3.5" /></button></Tooltip>}
   </span>,
 });
 

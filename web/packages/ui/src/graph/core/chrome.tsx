@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import type { CanvasAction } from "./types";
+import { Tooltip } from "../../primitives/tooltip";
 
 export function CanvasToolbar({ label, children }: { label: string; children: ReactNode }) {
   return <div className="nodrag nopan platform-canvas-toolbar" role="toolbar" aria-label={label}>{children}</div>;
@@ -12,9 +13,9 @@ export function CanvasTool({ label, title, icon, text, onClick, disabled, primar
   label: string; title?: string; icon: ReactNode; text?: string; onClick: () => void;
   disabled?: boolean; primary?: boolean; pressed?: boolean; expanded?: boolean; hasPopup?: "menu" | true;
 }) {
-  return <button type="button" className={cn("platform-canvas-tool", primary && "platform-canvas-tool-primary", pressed && "bg-row-selected")}
-    disabled={disabled} onClick={onClick} title={title ?? label} aria-label={label}
-    aria-pressed={pressed === undefined ? undefined : pressed} aria-expanded={expanded} aria-haspopup={hasPopup}>{icon}{text && <span>{text}</span>}</button>;
+  return <Tooltip content={title ?? label} wrap={disabled}><button type="button" className={cn("platform-canvas-tool", primary && "platform-canvas-tool-primary", pressed && "bg-row-selected")}
+    disabled={disabled} onClick={onClick} aria-label={label}
+    aria-pressed={pressed === undefined ? undefined : pressed} aria-expanded={expanded} aria-haspopup={hasPopup}>{icon}{text && <span>{text}</span>}</button></Tooltip>;
 }
 
 export function CanvasToolDivider() {
@@ -39,8 +40,8 @@ export function CanvasActionBar({ label, children }: { label: string; children: 
 }
 
 export function CanvasActionButton({ action }: { action: CanvasAction }) {
-  return <button type="button" disabled={action.disabled} title={action.hint} onClick={action.run}
-    className={cn("platform-canvas-tool", action.tone === "danger" && "text-[var(--tone-danger)]")}>{action.icon}{action.label && <span>{action.label}</span>}</button>;
+  return <Tooltip content={action.hint} wrap={action.disabled}><button type="button" disabled={action.disabled} aria-label={action.label ? undefined : action.hint} onClick={action.run}
+    className={cn("platform-canvas-tool", action.tone === "danger" && "text-[var(--tone-danger)]")}>{action.icon}{action.label && <span>{action.label}</span>}</button></Tooltip>;
 }
 
 export function CanvasEmpty({ children }: { children?: ReactNode }) {

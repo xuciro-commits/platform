@@ -16,6 +16,7 @@ import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
 import { resolveLayout, rewriteLayout } from "./WorkspaceLayout";
 import { NavigationItems, navigationLinks, type NavSection } from "./Navigation";
+import { Tooltip } from "../primitives/tooltip";
 export type { NavSection } from "./Navigation";
 
 export type View = {
@@ -645,10 +646,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     { id: "applications", label: t("Applications"), icon: <Grid2x2 />, active: active === routeKey(rail.applications), run: () => open(rail.applications) },
   ] : [];
   const railButton = (item: RailItem) => (
-    <button key={item.id} type="button" title={item.label} aria-label={item.label} aria-current={item.active ? "page" : undefined} onClick={item.run}
+    <Tooltip key={item.id} content={item.label} side="right"><button type="button" aria-label={item.label} aria-current={item.active ? "page" : undefined} onClick={item.run}
       className={cn("relative grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground [&_svg]:size-4", item.active && "bg-row-selected text-foreground")}>
       {item.icon}{item.badge ? <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-2xs font-semibold leading-4 text-primary-foreground">{item.badge > 99 ? "99+" : item.badge}</span> : null}
-    </button>
+    </button></Tooltip>
   );
   const sessionMenu = session && <SessionMenu compact={!!rail && !compact} session={{ ...session, onAccount: session.onAccount ? () => leaveViews(() => session.onAccount?.()) : undefined, onSwitch: (id) => leaveViews(() => session.onSwitch(id)) }}
     onLanguageSelect={(id) => leaveViews(() => {
@@ -877,10 +878,10 @@ function AppMenu({ applications, product, icon }: { applications: Applications; 
 function RailList({ label, icon, items, empty }: { label: string; icon: ReactNode; empty: string; items: { id: string; label: string; detail?: string; icon?: ReactNode; run: () => void }[] }) {
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger title={label} aria-label={label}
+      <Tooltip content={label} side="right"><DropdownMenu.Trigger aria-label={label}
         className="grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground data-[state=open]:bg-row-hover data-[state=open]:text-foreground [&_svg]:size-4">
         {icon}
-      </DropdownMenu.Trigger>
+      </DropdownMenu.Trigger></Tooltip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content side="right" align="start" sideOffset={6} className={cn(menuPanel, "max-h-[70vh] min-w-56 max-w-80 overflow-auto")}>
           <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{label}</DropdownMenu.Label>
@@ -903,7 +904,7 @@ function SessionMenu({ session, onLanguageSelect, compact = false }: { session: 
   </span>;
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`} title={compact ? `${session.principal} · ${session.tenant}` : undefined}
+      <Tooltip content={compact ? `${session.principal} · ${session.tenant}` : undefined} side="right"><DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`}
         className={compact ? "grid size-9 place-items-center rounded-md hover:bg-row-hover data-[state=open]:bg-row-hover"
           : "flex h-7 shrink-0 items-center gap-2 rounded-md border border-border px-2 text-sm hover:bg-row-hover"}>
         {avatar}
@@ -914,7 +915,7 @@ function SessionMenu({ session, onLanguageSelect, compact = false }: { session: 
           </span>
           <ChevronDown className="size-3.5 text-muted" />
         </>}
-      </DropdownMenu.Trigger>
+      </DropdownMenu.Trigger></Tooltip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content side={compact ? "right" : "bottom"} align="end" sideOffset={4} className={menuPanel}>
           <DropdownMenu.Label className="px-2 py-1 text-xs">

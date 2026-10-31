@@ -5,6 +5,7 @@ import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { flowBlockHeight, flowNodeWidth, flowShapeBox, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort } from "./model";
 import { eventRing, flowNodeIcon, flowShape, loops, notationGlyph, notationOf, notationTitle, type FlowNotation, type FlowShape } from "./notation";
+import { Tooltip } from "../../primitives/tooltip";
 
 type FlowNodeData = FlowNode & { definition: FlowNodeKind; direction: "right" | "down"; editable: boolean; collapsedView: boolean };
 export type FlowShapeNode = Node<FlowNodeData, "block">;
@@ -24,11 +25,10 @@ function Port({ port, index, count, input, compact, collapsed, direction }: {
   const offset = compact || collapsed ? `${(index + 1) * 100 / (count + 1)}%` : 76 + index * 27 + 13;
   const color = port.channel === "data" ? "var(--chart-6)" : "var(--muted)";
   return <>
-    <Handle type={input ? "target" : "source"} id={port.id} position={position}
+    <Tooltip content={`${port.label} · ${port.type}${port.description ? ` · ${port.description}` : ""}`}><Handle type={input ? "target" : "source"} id={port.id} position={position}
       className={cn("platform-flow-port", port.channel === "data" && "platform-flow-port-data")}
       style={{ ...(vertical ? { left: `${(index + 1) * 100 / (count + 1)}%` } : { top: offset }), background: color }}
-      title={`${port.label} · ${port.type}${port.description ? ` · ${port.description}` : ""}`}
-      aria-label={t(input ? "Input port: {name}, {type}" : "Output port: {name}, {type}", { name: port.label, type: port.type })} />
+      aria-label={t(input ? "Input port: {name}, {type}" : "Output port: {name}, {type}", { name: port.label, type: port.type })} /></Tooltip>
     {!compact && !collapsed && !vertical && <div className={cn("platform-flow-port-label", input ? "platform-flow-port-label-input" : "platform-flow-port-label-output")}
       style={{ top: 76 + index * 27 }} title={`${port.label} · ${port.type}`}>
       <span>{port.label}</span><code>{port.type}</code>
@@ -85,33 +85,31 @@ export function FlowNodeView({ id, data, selected }: NodeProps<FlowShapeNode>) {
     aria-label={compact ? data.label : `${notationTitle(notation)}: ${data.label}`}>
     {!compact && <span className="platform-flow-accent" />}
     <div className="platform-flow-heading">
-      {!compact && <span className="platform-canvas-node-icon" aria-hidden="true" title={notationTitle(notation)}>{flowNodeIcon({ icon: kind.icon, class: kind.class, notation, id: kind.id })}</span>}
+      {!compact && <Tooltip content={notationTitle(notation)}><span className="platform-canvas-node-icon" aria-hidden="true">{flowNodeIcon({ icon: kind.icon, class: kind.class, notation, id: kind.id })}</span></Tooltip>}
       <div className="min-w-0 flex-1">
         {!compact && <div className="platform-canvas-node-caption">{kind.title}{data.version && <span title={data.version}>{data.version}</span>}</div>}
         <div className="platform-canvas-node-title" title={data.label}>{data.label}</div>
         {compact && data.detail && <div className="platform-canvas-node-detail" title={data.detail}>{data.detail}</div>}
       </div>
       {(shape !== "task" || looping) && <span className="platform-flow-glyph" aria-hidden="true">
-        {shape !== "task" && <span title={notationTitle(notation)}>{glyph}</span>}
-        {looping && <span title={t("Repeats")}><Repeat /></span>}
+        {shape !== "task" && <Tooltip content={notationTitle(notation)}><span>{glyph}</span></Tooltip>}
+        {looping && <Tooltip content={t("Repeats")}><span><Repeat /></span></Tooltip>}
       </span>}
-      {!compact && (kind.inputs.length > 0 || kind.outputs.length > 0) && <button type="button" className="nodrag nopan platform-flow-collapse"
-        onClick={(event) => { event.stopPropagation(); onCollapse(id); }} aria-label={t(collapsed ? "Expand block ports" : "Collapse block ports")}
-        title={t(collapsed ? "Expand block ports" : "Collapse block ports")}>{collapsed ? <ChevronDown /> : <ChevronUp />}</button>}
+      {!compact && (kind.inputs.length > 0 || kind.outputs.length > 0) && <Tooltip content={t(collapsed ? "Expand block ports" : "Collapse block ports")}><button type="button" className="nodrag nopan platform-flow-collapse"
+        onClick={(event) => { event.stopPropagation(); onCollapse(id); }} aria-label={t(collapsed ? "Expand block ports" : "Collapse block ports")}>{collapsed ? <ChevronDown /> : <ChevronUp />}</button></Tooltip>}
     </div>
     {!compact && !collapsed && data.detail && <div className="platform-canvas-node-detail px-3" title={data.detail}>{data.detail}</div>}
     {ports}
     { }
     {!compact && !!data.boundary?.length && <div className="platform-flow-boundary" aria-label={t("Attached events")}>
-      {data.boundary.map((event) => <span key={event.id} className="platform-flow-boundary-event"
+      {data.boundary.map((event) => <Tooltip key={event.id} content={event.label ?? notationTitle(event.notation)}><span className="platform-flow-boundary-event"
         style={{ "--block-color": event.tone ? `var(--tone-${event.tone})` : color } as CSSProperties}
-        title={event.label ?? notationTitle(event.notation)} aria-label={event.label ?? notationTitle(event.notation)}>
-        {notationGlyph(event.notation)}</span>)}
+        aria-label={event.label ?? notationTitle(event.notation)}>
+        {notationGlyph(event.notation)}</span></Tooltip>)}
     </div>}
     {!compact && (status || notices > 0) && <div className="platform-flow-status">
       {status && <span style={{ color: `var(--tone-${status.tone})` }} role={data.status === "running" ? "status" : undefined}>{status.icon}{t(status.label)}</span>}
-      {notices > 0 && <span className="ml-auto" style={{ color: errors.length ? "var(--tone-danger)" : "var(--tone-warning)" }}
-        title={data.diagnostics!.map((issue) => issue.message).join("\n")}><AlertTriangle />{notices}</span>}
+      {notices > 0 && <Tooltip content={data.diagnostics!.map((issue) => issue.message).join("\n")}><span className="ml-auto" style={{ color: errors.length ? "var(--tone-danger)" : "var(--tone-warning)" }}><AlertTriangle />{notices}</span></Tooltip>}
     </div>}
   </div>;
 }

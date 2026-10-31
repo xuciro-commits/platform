@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
+import { Tooltip } from "../primitives/tooltip";
 
 export type IconName = string;
 
@@ -71,10 +72,10 @@ export function IconPicker({ value, onChange, disabled, label, id }: {
       <div className="max-h-64 overflow-auto">
         {groups.map((g) => <div key={g.id} className="mb-2">
           <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted">{t(g.title)}</p>
-          <div className="grid grid-cols-6 gap-1">{g.names.map((n) => <button key={n} type="button" title={t(n)} aria-label={t(n)} aria-pressed={n === value}
+          <div className="grid grid-cols-6 gap-1">{g.names.map((n) => <Tooltip key={n} content={t(n)}><button type="button" aria-label={t(n)} aria-pressed={n === value}
             onClick={() => { onChange(n); setOpen(false); setQuery(""); }}
             className={cn("flex h-8 items-center justify-center rounded-md border border-transparent text-muted hover:border-border hover:bg-row-hover hover:text-foreground", n === value && "border-border bg-row-selected text-foreground")}>
-            <IconGlyph name={n} /></button>)}</div>
+            <IconGlyph name={n} /></button></Tooltip>)}</div>
         </div>)}
         {!groups.length && <p className="p-2 text-xs text-muted">{t("Nothing matches.")}</p>}
       </div>

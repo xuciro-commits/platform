@@ -1,13 +1,14 @@
 import type {InputHTMLAttributes,ReactNode} from 'react';
 import {Input} from '../primitives/input';
 import {cn} from '../lib/cn';
+import {Tooltip} from '../primitives/tooltip';
 
 export function InspectorField({label,prefix,unit,className,...input}:Omit<InputHTMLAttributes<HTMLInputElement>,'prefix'> & {label:string;prefix:ReactNode;unit?:string}){
- return <label title={label} className={cn('flex min-w-0 items-center gap-1 rounded-md border border-border bg-canvas px-2 focus-within:border-ring',className)}>
+ return <Tooltip content={label}><label className={cn('flex min-w-0 items-center gap-1 rounded-md border border-border bg-canvas px-2 focus-within:border-ring',className)}>
   <span aria-hidden className="flex w-4 shrink-0 items-center text-xs text-muted [&_svg]:size-3.5">{prefix}</span>
   <Input {...input} aria-label={label} className="h-7 min-w-0 border-0 bg-transparent px-0 text-xs focus-visible:outline-none"/>
   {unit&&<span aria-hidden className="text-2xs text-muted">{unit}</span>}
- </label>;
+ </label></Tooltip>;
 }
 
 export function InspectorSection({title,actions,children}:{title:string;actions?:ReactNode;children:ReactNode}){

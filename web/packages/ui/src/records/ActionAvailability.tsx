@@ -1,5 +1,6 @@
 import { useEffect, useReducer, type ReactNode } from "react";
 import type { Api } from "@platform/kernel";
+import { Tooltip } from "../primitives/tooltip";
 import type { RecordSource } from "./Records";
 
 export type ActionAvailability = { allowed: boolean; reason?: string };
@@ -46,5 +47,5 @@ export function useActionAvailability(source: RecordSource, target: ActionTarget
 }
 
 export function Reasoned({ reason, children }: { reason?: string; children: ReactNode }) {
-  return reason ? <span title={reason} className="inline-flex">{children}</span> : <>{children}</>;
+  return reason ? <Tooltip content={reason} wrap>{children}</Tooltip> : <>{children}</>;
 }

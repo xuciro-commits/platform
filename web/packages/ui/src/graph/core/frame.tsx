@@ -2,6 +2,7 @@ import { Background, Controls, useNodesInitialized, useReactFlow, useStore } fro
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
+import { Tooltip } from "../../primitives/tooltip";
 
 export const fitting = { padding: 0.12, maxZoom: 1 };
 
@@ -16,9 +17,9 @@ export function CanvasFrame({ label, height, children, role = "figure" }: { labe
     style={expanded ? { overflow: "hidden" } : { height, minHeight: 200, resize: "vertical", overflow: "hidden" }}
     role={role} aria-label={label}>
     {children}
-    <button type="button" className="absolute right-2 top-2 z-20 rounded border border-border bg-surface p-1 text-muted shadow-sm hover:bg-row-hover"
-      aria-label={t(expanded ? "Restore canvas" : "Expand canvas")} title={t(expanded ? "Restore canvas" : "Expand canvas")}
-      onClick={() => setExpanded(!expanded)}>{expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}</button>
+    <Tooltip content={t(expanded ? "Restore canvas" : "Expand canvas")} side="left"><button type="button" className="absolute right-2 top-2 z-20 rounded border border-border bg-surface p-1 text-muted shadow-sm hover:bg-row-hover"
+      aria-label={t(expanded ? "Restore canvas" : "Expand canvas")}
+      onClick={() => setExpanded(!expanded)}>{expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}</button></Tooltip>
     {!expanded && <span aria-hidden="true" className="pointer-events-none absolute bottom-0.5 right-0.5 z-10 text-xs leading-none text-muted">◢</span>}
   </div>;
 }

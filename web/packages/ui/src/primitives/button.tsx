@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ButtonHTMLAttributes } from "react";
 import { cn } from "../lib/cn";
+import { Tooltip } from "./tooltip";
 
 const button = cva(
   "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5",
@@ -23,6 +24,7 @@ const button = cva(
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>;
 
-export function Button({ className, variant, size, type = "button", ...props }: ButtonProps) {
-  return <button type={type} data-ui="button" data-variant={variant ?? "default"} className={cn(button({ variant, size }), className)} {...props} />;
+export function Button({ className, variant, size, type = "button", title, ...props }: ButtonProps) {
+  const element = <button type={type} data-ui="button" data-variant={variant ?? "default"} className={cn(button({ variant, size }), className)} {...props} />;
+  return title ? <Tooltip content={title} wrap={props.disabled}>{element}</Tooltip> : element;
 }

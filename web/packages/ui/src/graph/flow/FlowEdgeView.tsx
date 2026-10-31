@@ -7,6 +7,7 @@ import { routedPath } from "../core/layout/edge-routing";
 import type { LayoutRoute } from "../core/layout/types";
 import type { CanvasPosition } from "../core/types";
 import type { FlowEdge } from "./model";
+import { Tooltip } from "../../primitives/tooltip";
 
 type FlowEdgeData = Record<string, unknown> & { definition: FlowEdge; editable: boolean; route?: LayoutRoute };
 export type FlowLineEdge = Edge<FlowEdgeData>;
@@ -30,9 +31,9 @@ export function FlowEdgeView(props: EdgeProps<FlowLineEdge>) {
 
 function EdgeInsert({ x, y, edge, onInsert }: { x: number; y: number; edge: FlowEdge; onInsert: (edge: FlowEdge, position: CanvasPosition) => void }) {
   return <EdgeLabelRenderer>
-    <button type="button" className="nodrag nopan platform-flow-edge-add"
+    <Tooltip content={t("Insert block on connection")}><button type="button" className="nodrag nopan platform-flow-edge-add"
       style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
-      aria-label={t("Insert block on connection")} title={t("Insert block on connection")}
-      onClick={(event) => { event.stopPropagation(); onInsert(edge, { x, y }); }}><Plus className="size-3" /></button>
+      aria-label={t("Insert block on connection")}
+      onClick={(event) => { event.stopPropagation(); onInsert(edge, { x, y }); }}><Plus className="size-3" /></button></Tooltip>
   </EdgeLabelRenderer>;
 }

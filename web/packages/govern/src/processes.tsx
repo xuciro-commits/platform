@@ -1,5 +1,5 @@
 import { Records, ModelPicker, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
-import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t, Chart} from "@platform/ui";
+import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t, Chart, Tooltip } from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 
@@ -71,9 +71,9 @@ export function Evaluations() {
             {agents.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
           </Select>
           <ModelPicker value={model} onChange={setModel} purpose="agent" inherit={false} label={t("Candidate model")} />
-          <span title={t("The agent's declared cases, three runs each, instead of its past runs")}>
+          <Tooltip content={t("The agent's declared cases, three runs each, instead of its past runs")}><span>
             <Checkbox className="text-sm" checked={suite} onChange={setSuite}>{t("Declared cases")}</Checkbox>
-          </span>
+          </span></Tooltip>
           <Button type="submit" variant="primary" disabled={!chosen || !model}>{t("Evaluate")}</Button>
         </Form>
       )}

@@ -7,6 +7,7 @@ import { t } from "../../i18n";
 import { CanvasEdgeLabel, canvasEdgeColor } from "../core/edge";
 import { routePath, type Route } from "../core/route";
 import { relationNodeCaption, relationNodeClasses, relationNodeSize, type RelationEdge, type RelationNode } from "./model";
+import { Tooltip } from "../../primitives/tooltip";
 
 type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean; faded?: boolean };
 export type RelationShapeNode = Node<RelationNodeData>;
@@ -37,7 +38,7 @@ function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
       {caption && <span className="platform-canvas-node-caption"><span className="!max-w-full">{t(caption)}</span></span>}
       <span className="platform-canvas-node-title block">{data.label}</span>
     </span>
-    {data.flag && <span className="platform-relation-flag" title={data.flag} />}
+    {data.flag && <Tooltip content={data.flag}><span className="platform-relation-flag" /></Tooltip>}
     <Sides data={data} />
   </div>;
 }

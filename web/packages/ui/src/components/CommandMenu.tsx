@@ -2,6 +2,7 @@ import {ContextMenu,DropdownMenu} from 'radix-ui';
 import {useId,useRef,type ReactNode} from 'react';
 import {MoreHorizontal} from 'lucide-react';
 import {Button} from '../primitives/button';
+import {Tooltip} from '../primitives/tooltip';
 
 export type ContextCommand={id:string;label:string;disabled?:boolean;reason?:string;icon?:ReactNode;shortcut?:string;danger?:boolean;separatorBefore?:boolean;run:()=>void};
 const panel='z-[100] max-h-80 min-w-44 overflow-auto rounded-md border border-border bg-surface p-1 text-sm shadow-lg';
@@ -28,12 +29,12 @@ export function CommandMenu({children,label,commands,focusKey,compact=false}:{ch
    <DropdownMenu.Root>
     <DropdownMenu.Trigger asChild><Button id={trigger} variant="ghost" size="sm" className={compact?'h-5 w-5 rounded-sm p-0 text-inherit hover:bg-white/15':''} aria-label={label} title={label} data-command-focus={focusKey} onPointerDown={remember} onKeyDown={remember}><MoreHorizontal/></Button></DropdownMenu.Trigger>
     <DropdownMenu.Portal><DropdownMenu.Content aria-label={label} sideOffset={4} align="end" className={panel} onKeyDown={event=>event.stopPropagation()} onCloseAutoFocus={restore}>
-     {commands.map(command=><DropdownMenu.Item key={command.id} title={command.reason} className={commandClass(command)} disabled={command.disabled} onSelect={command.run}><CommandLabel command={command}/></DropdownMenu.Item>)}
+     {commands.map(command=><Tooltip key={command.id} content={command.reason} side="left"><DropdownMenu.Item className={commandClass(command)} disabled={command.disabled} onSelect={command.run}><CommandLabel command={command}/></DropdownMenu.Item></Tooltip>)}
     </DropdownMenu.Content></DropdownMenu.Portal>
    </DropdownMenu.Root>
   </div></ContextMenu.Trigger>
   <ContextMenu.Portal><ContextMenu.Content aria-label={label} className={panel} onKeyDown={event=>event.stopPropagation()} onCloseAutoFocus={restore}>
-   {commands.map(command=><ContextMenu.Item key={command.id} title={command.reason} className={commandClass(command)} disabled={command.disabled} onSelect={command.run}><CommandLabel command={command}/></ContextMenu.Item>)}
+   {commands.map(command=><Tooltip key={command.id} content={command.reason} side="left"><ContextMenu.Item className={commandClass(command)} disabled={command.disabled} onSelect={command.run}><CommandLabel command={command}/></ContextMenu.Item></Tooltip>)}
   </ContextMenu.Content></ContextMenu.Portal>
  </ContextMenu.Root>;
 }

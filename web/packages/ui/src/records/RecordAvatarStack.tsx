@@ -3,6 +3,7 @@ import {renderingLimits} from "../gen/presentation-limits";
 import {timestampParts,validCivilDate} from "../components/date";
 import {entityFrom,type EntityInfo,type EntityRecord} from "./Records";
 import {t} from "../i18n";
+import {Tooltip} from "../primitives/tooltip";
 
 export type RecordAvatarStackProps={records:readonly EntityRecord[];info:EntityInfo;labelField:string;detailFields?:readonly string[];total:number;label?:string};
 const titleTypes=["text","longtext","choice","reference"],scalarTypes=[...titleTypes,"integer","decimal","money","date","datetime","boolean"];
@@ -31,6 +32,6 @@ export function RecordAvatarStack({records,info,labelField,detailFields=[],total
  return <section aria-label={label??t("Record avatars")} className="flex min-w-0 flex-wrap items-center gap-2">{!records.length?<p className="text-xs text-muted">{t(total===0?"No matching people records.":"No people records in this loaded window.")}</p>:<ul className="flex shrink-0">{originalRecords.map(record=>{
   const originalLabel=(labelField==="id"?record.id:record[labelField]) as string|null|undefined,name=originalLabel??record.id;
   const properties=details.map(field=>({field:field!,value:field!.name==="id"?record.id:entity.fields[field!.name]!.display(record[field!.name],record),text:field!.name==="id"?record.id:entity.fields[field!.name]!.text(record[field!.name])})),tooltip=[name,record.id,...properties.map(({field,text})=>`${field.title}: ${text}`)].join(" · ");
-  return <li key={record.id} title={tooltip} className="-ml-1.5 shrink-0 first:ml-0"><span aria-hidden="true" className="inline-flex size-7 items-center justify-center rounded-full border-2 border-surface bg-primary text-2xs font-semibold text-primary-foreground">{initials(name)}</span><div className="sr-only"><span>{name}</span>{" "}<span>{record.id}</span>{properties.length>0&&<dl>{properties.map(({field,value})=><div key={field.name}><dt>{field.title}</dt><dd>{value}</dd></div>)}</dl>}</div></li>;
+  return <Tooltip key={record.id} content={tooltip}><li className="-ml-1.5 shrink-0 first:ml-0"><span aria-hidden="true" className="inline-flex size-7 items-center justify-center rounded-full border-2 border-surface bg-primary text-2xs font-semibold text-primary-foreground">{initials(name)}</span><div className="sr-only"><span>{name}</span>{" "}<span>{record.id}</span>{properties.length>0&&<dl>{properties.map(({field,value})=><div key={field.name}><dt>{field.title}</dt><dd>{value}</dd></div>)}</dl>}</div></li></Tooltip>;
  })}</ul>}<p role="status" className="break-words text-xs text-muted">{t("Showing {shown} of {total} records.",{shown:records.length,total})}</p></section>;
 }

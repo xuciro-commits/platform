@@ -1,5 +1,5 @@
 import { useHost } from "@platform/app";
-import { ActionMenu, Button, Select, StatusTag, Tag, defineStatuses, t, useUnsavedChanges, useWorkspace, type ContextCommand } from "@platform/ui";
+import { ActionMenu, Button, Select, StatusTag, Tag, defineStatuses, t, useUnsavedChanges, useWorkspace, type ContextCommand , Tooltip } from "@platform/ui";
 import { GitBranch, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBranchDetail, useBranches } from "./api";
@@ -33,10 +33,10 @@ export function BranchControls() {
   ];
   return <div role="group" aria-label={t("Branch")} className="flex min-w-0 flex-wrap items-center gap-2">
     <GitBranch aria-hidden className="size-4 shrink-0 text-muted" />
-    <Select aria-label={t("Branch")} title={current ? undefined : t("Edits on main are saved as drafts immediately.")} value={current?.id ?? ""} className="h-7 w-auto max-w-56 text-xs" onChange={event => switchTo(event.target.value || undefined)}>
+    <Tooltip content={current ? undefined : t("Edits on main are saved as drafts immediately.")}><Select aria-label={t("Branch")} value={current?.id ?? ""} className="h-7 w-auto max-w-56 text-xs" onChange={event => switchTo(event.target.value || undefined)}>
       <option value="">main</option>
       {live.map(branch => <option key={branch.id} value={branch.id}>{branch.title}</option>)}
-    </Select>
+    </Select></Tooltip>
     <ActionMenu label={t("Branch actions")} icon={<MoreHorizontal />} commands={commands} />
     {current && <StatusTag status={current.state} registry={branchStates} />}
     {current && count > 0 && <Tag label={t("Unsaved changes ({n})", { n: count })} tone="warning" />}

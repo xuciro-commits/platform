@@ -4,6 +4,7 @@ import {createPortal} from 'react-dom';
 import {t} from '../i18n';
 import {useViewVisible} from '../shell/ViewVisibility';
 import type {LayoutSize} from './LayoutRegion';
+import {Tooltip} from '../primitives/tooltip';
 
 export type CanvasRect={x:number;y:number;width:number;height:number};
 export type CanvasModel=Record<string,{label:string;kind:'widget'|'container';layout?:string;parent?:string;children:string[];horizontal:boolean;fixed?:boolean}>;
@@ -140,10 +141,10 @@ export function CanvasEditor({
   <CanvasSelectionToolbar label={node.label} icon={icon} bounds={selectionBox} viewport={viewport}
     horizontal={horizontal} canMove={!!node.parent&&!node.fixed} canPrevious={index>0&&!node.fixed} canNext={index>=0&&index<siblings.length-1&&!node.fixed}
     onDrag={event=>start({kind:'move',id:selected!,label:node.label},event)} onMove={delta=>onMove(selected!,delta)} commands={commands}/>
-  <div style={{position:'fixed',inset:0,clipPath,pointerEvents:'none',zIndex:61}}>{(['width','height'] as const).map(axis=><div key={axis} role="separator" tabIndex={0} aria-orientation={axis==='width'?'vertical':'horizontal'} aria-label={t(axis==='width'?'Resize region width':'Resize region height')} title={t('Drag to resize; double-click to reset')} style={{position:'fixed',left:axis==='width'?selectionBox.x+selectionBox.width-5:selectionBox.x,top:axis==='height'?selectionBox.y+selectionBox.height-5:selectionBox.y,width:axis==='width'?10:selectionBox.width,height:axis==='height'?10:selectionBox.height,zIndex:61,pointerEvents:'auto',cursor:axis==='width'?'col-resize':'row-resize',touchAction:'none'}}
+  <div style={{position:'fixed',inset:0,clipPath,pointerEvents:'none',zIndex:61}}>{(['width','height'] as const).map(axis=><Tooltip key={axis} content={t('Drag to resize; double-click to reset')}><div role="separator" tabIndex={0} aria-orientation={axis==='width'?'vertical':'horizontal'} aria-label={t(axis==='width'?'Resize region width':'Resize region height')} style={{position:'fixed',left:axis==='width'?selectionBox.x+selectionBox.width-5:selectionBox.x,top:axis==='height'?selectionBox.y+selectionBox.height-5:selectionBox.y,width:axis==='width'?10:selectionBox.width,height:axis==='height'?10:selectionBox.height,zIndex:61,pointerEvents:'auto',cursor:axis==='width'?'col-resize':'row-resize',touchAction:'none'}}
    onPointerDown={e=>startResize(axis,e)} onDoubleClick={()=>onResetSize(selected!,axis)} onKeyDown={e=>{if(e.key==='Home'){e.preventDefault();onResetSize(selected!,axis);return;}const delta=e.key===(axis==='width'?'ArrowRight':'ArrowDown')?8:e.key===(axis==='width'?'ArrowLeft':'ArrowUp')?-8:0;if(!delta)return;e.preventDefault();const rects=measurements(),r=rects[selected!];if(!r)return;const sizes=resize(selected!,axis,r[axis]+delta,rects);if(sizes)onResize(sizes);}}>
    <span className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 rounded bg-primary" style={{width:axis==='width'?3:40,height:axis==='width'?40:3}}/>
-  </div>)}</div>
+  </div></Tooltip>)}</div>
   {resizeGuide&&<div style={{...box(resizeGuide),zIndex:71,pointerEvents:'none',background:'var(--color-primary)'}}/>}
   {resizeLabel&&<span role="status" style={{position:'fixed',left:selectionBox.x+12,top:selectionBox.y+12,zIndex:62}} className="rounded bg-surface p-1 text-xs shadow">{resizeLabel}</span>}
  </>:null;
