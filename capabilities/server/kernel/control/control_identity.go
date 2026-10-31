@@ -478,3 +478,35 @@ var _ platform.IdentitySessions = (*Console)(nil)
 var _ platform.IdentityProfile = (*Console)(nil)
 
 var _ platform.HostIdentities = (*Console)(nil)
+
+func (d *Console) ProjectAccess(m platform.Member, project string) platform.ProjectAccessView {
+	out := platform.ProjectAccessView{Members: []platform.ProjectMember{}, Manage: platform.ProjectManager(m, d.ConsolePolicies.ProjectRole(m.ID, project))}
+	for _, p := range d.ConsolePolicies.ProjectViews() {
+		if p.ID == project && !p.Archived {
+			out.Members = slices.Clone(p.Members)
+		}
+	}
+	listed := map[string]bool{}
+	for _, e := range out.Members {
+		listed[e.Member] = true
+	}
+	def := d.defaults()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, member := range d.members {
+		if !listed[member.ID] && (!out.Manage || member.Agent || !member.Active()) {
+			continue
+		}
+		profile := d.account(member.ID, def).Profile
+		name := profile.DisplayName
+		if name == "" {
+			name = profile.Email
+		}
+		if name == "" {
+			name = member.ID
+		}
+		out.People = append(out.People, platform.ProjectPerson{ID: member.ID, Name: name})
+	}
+	slices.SortFunc(out.People, func(a, b platform.ProjectPerson) int { return strings.Compare(a.Name, b.Name) })
+	return out
+}

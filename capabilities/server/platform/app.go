@@ -720,7 +720,7 @@ type AccessConfig struct {
 
 type ProjectMember struct {
 	Member string `json:"member" field:"required" title:"Member" help:"A member's ID in this tenant"`
-	Role   string `json:"role,omitempty" field:"required,choice:editor" title:"Part" help:"editor: may edit the assets this project names"`
+	Role   string `json:"role,omitempty" field:"required,choice:owner,editor,viewer" title:"Role" help:"owner: edits the project's resources and manages its access; editor: edits its resources; viewer: opens them without editing"`
 }
 
 type ProjectAsset struct {
@@ -731,10 +731,31 @@ type ProjectAsset struct {
 
 type BuildProject struct {
 	Record
-	Name    string          `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"spring-rollout"`
 	Title   string          `json:"title" field:"required,search" title:"What people call it" example:"Spring rollout"`
 	Members []ProjectMember `json:"members,omitempty" title:"Members"`
-	Assets  []ProjectAsset  `json:"assets,omitempty" title:"Assets"`
+}
+
+type ProjectPerson struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func ProjectManager(m Member, role string) bool {
+	if role == ProjectOwnerRole || m.Holds("platform", "admin") {
+		return true
+	}
+	for _, g := range m.Grants {
+		if g.App == "build" && g.Role == "builder" && !strings.HasPrefix(g.By, "project:") {
+			return true
+		}
+	}
+	return false
+}
+
+type ProjectAccessView struct {
+	Members []ProjectMember `json:"members"`
+	Manage  bool            `json:"manage"`
+	People  []ProjectPerson `json:"people,omitempty"`
 }
 
 type Profile struct {
@@ -909,7 +930,8 @@ type IdentityRecovery interface{ CloseTokenSecretWindows() }
 type IdentityCounts interface{ MemberCount() int }
 
 type ProjectAccess interface {
-	EditsProjectAsset(string, ProjectAsset) bool
+	ProjectRole(member, project string) string
+	ProjectAccess(member Member, project string) ProjectAccessView
 }
 
 type AuthorizationState struct {
@@ -948,18 +970,13 @@ func AccessActions() []Action {
 }
 
 func ProjectActions() []Action {
-	admin := []string{"admin"}
 	return []Action{
-		{Schema: SchemaProjectSave, Target: ProjectType, Capability: "projects", Title: "Save project",
-			Description: "Create or change a project and the members and assets it covers.",
+		{Schema: SchemaProjectSave, Target: ProjectType, Capability: "projects", Title: "Save project access",
+			Description: "Set who may edit or open a project's resources. Administrators and builders set it first; afterwards the project's owners manage it.",
 			Payload: []Field{
-				{Name: "name", Type: "string", Required: true},
 				{Name: "title", Type: "string", Required: true},
-				{Name: "members", Type: "json", Description: "member IDs with their part in the project"},
-				{Name: "assets", Type: "json", Description: "app, kind and name of every asset the project covers"},
-			}, Roles: admin},
-		{Schema: SchemaProjectArchive, Target: ProjectType, Capability: "projects", Title: "Archive project",
-			Description: "Archive a project: its members stop editing its assets; history stays.", Payload: []Field{}, Roles: admin},
+				{Name: "members", Type: "json", Description: "member IDs with their role in the project: owner, editor or viewer"},
+			}, Roles: []string{AnyMember}},
 	}
 }
 
@@ -977,14 +994,15 @@ const (
 )
 const Auditor = "auditor"
 const (
-	ProjectType          = "platform.project"
-	SchemaProjectSave    = ProjectType + ".save"
-	SchemaProjectArchive = ProjectType + ".archive"
-	ProjectEditorRole    = "editor"
+	ProjectType       = "platform.project"
+	SchemaProjectSave = ProjectType + ".save"
+	ProjectOwnerRole  = "owner"
+	ProjectEditorRole = "editor"
+	ProjectViewerRole = "viewer"
 )
 
 var auditorReads = []string{"audit", "deliveries", "work", "connectors", "settings",
-	"endpoints", "effects", "health", "personal-reads", "permissions", "access", "members", "projects", "packages", "notifications"}
+	"endpoints", "effects", "health", "personal-reads", "permissions", "access", "members", "packages", "notifications"}
 
 func AuditorMayRead(name string) bool {
 	for _, r := range auditorReads {
@@ -1004,7 +1022,7 @@ type ConsolePolicies interface {
 	TeamGrants(string) []Grant
 	Access() AccessConfig
 	ProjectViews() []BuildProject
-	EditsProjectAsset(string, ProjectAsset) bool
+	ProjectRole(member, project string) string
 	ProjectGrants(string, bool) []Grant
 	ApplyAccess()
 }

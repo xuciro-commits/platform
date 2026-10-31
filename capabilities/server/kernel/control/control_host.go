@@ -230,8 +230,8 @@ func clone(m *platform.Member) platform.Member {
 
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog, Roles: []string{Admin, platform.Auditor},
-		Reads:       []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "projects", "packages", "contributions", "credentials"},
-		ReadSources: map[string]string{"members": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "projects": "record", "packages": "record", "credentials": "record", "contributions": "record"},
+		Reads:       []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "packages", "contributions", "credentials"},
+		ReadSources: map[string]string{"members": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "packages": "record", "credentials": "record", "contributions": "record"},
 		Everyone:    []string{"notifications", "tenant", "account"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: tenantSettings()}
 }
@@ -508,8 +508,6 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return h.GovernanceRead(c, name)
 	case "access":
 		return d.Access(), nil
-	case "projects":
-		return d.ProjectViews(), nil
 	case "packages":
 		return d.PackageViews(), nil
 	}

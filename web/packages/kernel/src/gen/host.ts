@@ -958,10 +958,8 @@ export type BuildProject = {
   changed: Stamp;
   archived?: boolean;
   versionPins?: RecordVersionPin[];
-  name: string;
   title: string;
   members?: ProjectMember[];
-  assets?: ProjectAsset[];
 };
 
 export type BusinessInputChange = {
@@ -3757,15 +3755,20 @@ export type ProfileEntry = {
   icon?: string;
 };
 
-export type ProjectAsset = {
-  app?: string;
-  kind: string;
-  name: string;
+export type ProjectAccessView = {
+  members: ProjectMember[];
+  manage: boolean;
+  people?: ProjectPerson[];
 };
 
 export type ProjectMember = {
   member: string;
   role?: string;
+};
+
+export type ProjectPerson = {
+  id: string;
+  name: string;
 };
 
 export type PromotionResult = {

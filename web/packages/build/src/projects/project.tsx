@@ -29,6 +29,7 @@ export type { OwnedResource } from "./resource-inventory";
 import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, studioAreas, studioResourceGroups, studioRoute } from "./studio-model";
 import { StudioTemplates } from "../workshop/template-ui";
 import { ProjectOverview } from "./project-overview";
+import { ProjectAccess } from "./project-access";
 import { installedStudioID, installedStudioRef, studioApplications } from "./studio-applications";
 import { InstalledApplicationHome } from "./InstalledApplicationHome";
 import { ExtensionSettings } from "./ExtensionSettings";
@@ -119,8 +120,8 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const rememberRetirement = (intent: typeof retireIntent) => { pendingRetirement.current = intent; setRetireIntent(intent); };
   const retireable = (item: { kind: { type: string }; record?: { id: string } | undefined }) => !!item.record && !!action(`${item.kind.type}.archive`);
   const [selected, setSelected] = useState<string | undefined>(initialSelected);
-  type Section = "overview" | "resources" | "runs" | "roles" | "settings" | "concepts" | "templates" | "release";
-  const named = (["runs", "roles", "settings", "concepts"] as const).find(item => item === initialSection);
+  type Section = "overview" | "resources" | "runs" | "access" | "roles" | "settings" | "concepts" | "templates" | "release";
+  const named = (["runs", "access", "roles", "settings", "concepts"] as const).find(item => item === initialSection);
   const initialTab: Section = named ?? (initialSection === "templates" && activeArea === "interface" ? "templates" : activeArea === "release" && (area || initialPlan) ? "release" : area || initialSelected ? "resources" : "overview");
   const [tab, selectTab] = useState<Section>(initialTab);
   const [visited, setVisited] = useState<Section[]>([initialTab]);
@@ -317,7 +318,8 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           { id: "concepts", label: t("Business concepts"), group: t("Contents") },
           { id: "release", label: t("Verification and delivery"), group: t("Delivery") },
           { id: "runs", label: t("Runs"), group: t("Delivery") },
-          { id: "roles", label: t("Roles"), group: t("Access and settings") },
+          { id: "access", label: t("Access"), group: t("Access and settings") },
+          { id: "roles", label: t("Business roles"), group: t("Access and settings") },
           { id: "settings", label: t("Settings"), group: t("Access and settings") },
         ]} />
         {tab === "overview" && <ProjectOverview project={project} owned={owned} released={!!installed} builder={builder} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)} onDeliver={() => setTab("release")}>
@@ -422,6 +424,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             </div>
           </div>
         </Dialog>}
+        {tab === "access" && <ProjectAccess project={id} title={project.title || project.name} />}
         {tab === "roles" && <ProjectRoles owned={owned} />}
         {tab === "settings" && settings && <div className="grid gap-3"><StructuredEditor expectedRevision={baseline.current?.revision ?? project.revision} fieldInput={sourceFieldInput} value={declarationValue(settings, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${declarationHost.source.scope}`} readOnly={!builder} disabled={saving || !!pendingPatch || !!createdResource} onChange={next => { editSettings({ ...next, title: next.title as string, name: next.name as string, description: next.description as string ?? "", icon: next.icon as string ?? "boxes", profile: next.profile as Api.ApplicationProfile ?? {}, entry: next.entry as string ?? "", replacements: next.replacements as NonNullable<Api.Application["replacements"]> ?? [] }); setSourceApplied(true); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, baseline.current?.values ?? {}), baseline.current?.revision ?? project.revision)}><fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
           <ExtensionSettings value={settings} pages={project.pages ?? []} disabled={!builder} onChange={extension => editSettings({ ...settings, ...extension, entry: extension.entry ?? "", replacements: extension.replacements ?? [] })} />

@@ -182,7 +182,7 @@
 
 ### 6.4 安全
 
-- 自主权限：项目角色 Owner、Editor、Viewer、Discoverer；资源继承所属项目。
+- 自主权限：项目角色 Owner、Editor、Viewer、Discoverer；资源继承所属项目。成员关系由授权引擎按 Files 项目 ID 保存，项目覆盖的资源取自项目自身的页面与资源；Owner、Editor 编辑这些资源，Viewer 只打开，Owner 管理访问；首次设置访问需管理员或构建者，项目至少保留一位 Owner；发布仍属构建者。Discoverer 待项目级读取落地后启用。
 - 强制权限：标记随血缘传播，访问需同时满足全部标记。
 - 对象级：行与列安全策略，用 Expr 表达。
 - 业务角色用于动作授权；授权只有一个实现。

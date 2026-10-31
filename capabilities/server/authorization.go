@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	controlowner "platformserver/kernel/control"
+	"reflect"
 
 	"slices"
 	"strings"
@@ -34,15 +35,62 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 	}
 	d, _ := t.app(controlowner.PlatformApp).(platform.ProjectAccess)
 	ref, ok := delegatedAsset(s)
-	if ok {
-		if name := t.draftName(s); name != "" && name != ref.Name && d != nil && d.EditsProjectAsset(m.ID, platform.ProjectAsset{App: ref.App, Kind: ref.Kind, Name: name}) {
-			ref.Name = name
-		}
+	names := []string{ref.Name}
+	if name := t.draftName(s); name != "" {
+		names = append(names, name)
 	}
-	if m.Agent || d == nil || !ok || !d.EditsProjectAsset(m.ID, ref) {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project delegation covers only the draft edits of the assets your projects name; {action} on {target} is outside it", s.GetSchema().GetName(), target(s))
+	if m.Agent || d == nil || !ok || !t.projectEdits(m.ID, d, ref.Kind, names) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project roles cover only the resources of projects where you are an owner or editor; {action} on {target} is outside them", s.GetSchema().GetName(), target(s))
 	}
 	return nil
+}
+
+var projectRefKinds = map[string][]string{
+	"process": {"flow"}, "code": {"compute"}, "table": {"compute"}, "testplan": {"test-plan", "evaluation-set"},
+	"alertrule": {"alert"}, "match": {"matching"}, "linktype": {"link-type"}, "propertytype": {"property-type"}, "valuetype": {"value-type"},
+}
+
+func projectCovers(app build.Application, kind string, names []string) bool {
+	refKinds := append([]string{kind}, projectRefKinds[kind]...)
+	for _, name := range names {
+		switch {
+		case kind == "app" && (name == app.Name || name == app.ID):
+			return true
+		case kind == "page" && slices.Contains(app.Pages, name):
+			return true
+		}
+		for _, ref := range app.Resources {
+			if slices.Contains(refKinds, string(ref.Kind)) && (ref.Name == name || ref.Name == build.ID+"."+name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (t *Tenant) projectEdits(member string, d platform.ProjectAccess, kind string, names []string) bool {
+	t.records.Lock()
+	et := t.records.Type(build.AppType)
+	var covering []string
+	if et != nil {
+		for id, row := range et.Rows().All() {
+			value := row.Value
+			if value.Kind() == reflect.Pointer {
+				value = value.Elem()
+			}
+			app, ok := value.Interface().(build.Application)
+			if ok && !app.Archived && projectCovers(app, kind, names) {
+				covering = append(covering, id)
+			}
+		}
+	}
+	t.records.Unlock()
+	for _, id := range covering {
+		if role := d.ProjectRole(member, id); role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *Tenant) draftName(s *pb.Submission) string {

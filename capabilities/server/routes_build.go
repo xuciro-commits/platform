@@ -19,6 +19,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	controlowner "platformserver/kernel/control"
 	"platformserver/studio/build"
 
 	"platformserver/platform"
@@ -367,6 +369,14 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		WriteJSON(w, http.StatusOK, out)
+	})
+	rt.handle(transport.Route{Pattern: "GET /v1/projects/{id}/access", Summary: "A project's members and roles; owners, builders and administrators also get the people they may add", Answer: platform.ProjectAccessView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		d, _ := t.app(controlowner.PlatformApp).(platform.ProjectAccess)
+		if d == nil || !m.Holds(build.ID, build.Builder) && !m.Holds(controlowner.PlatformApp, controlowner.Admin) {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED})
+			return
+		}
+		WriteJSON(w, http.StatusOK, d.ProjectAccess(m, r.PathValue("id")))
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/releases/active", Summary: "The tenant's active release ID, readable by any member", Answer: releaseowner.ReleaseActive{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, releaseowner.ReleaseActive{ID: t.ActiveRelease()})

@@ -9,7 +9,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 )
@@ -235,52 +234,42 @@ func (d *Policies) Access() platform.AccessConfig {
 	return out
 }
 
+var projectRoles = []string{platform.ProjectOwnerRole, platform.ProjectEditorRole, platform.ProjectViewerRole}
+
 func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
-	if s.GetSchema().GetName() == platform.SchemaProjectArchive {
-		p := d.projects[id]
-		if p == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-		}
-		return func(*pb.ChangeRecord) { p.Archived = true }, nil
-	}
 	var p struct {
-		Name, Title string
-		Members     []platform.ProjectMember `json:"members"`
-		Assets      []platform.ProjectAsset  `json:"assets"`
+		Title   string                   `json:"title"`
+		Members []platform.ProjectMember `json:"members"`
 	}
-	if id == "" || json.Unmarshal(s.GetPayload(), &p) != nil || p.Name == "" || p.Title == "" {
+	if id == "" || json.Unmarshal(s.GetPayload(), &p) != nil || p.Title == "" || d.host == nil {
 		return nil, invalid
 	}
-	if p.Name != strings.ToLower(p.Name) {
-		return nil, invalid
-	}
+	seen := map[string]bool{}
+	owners := 0
 	for _, e := range p.Members {
-		if e.Member == "" || e.Role == "" || e.Role != platform.ProjectEditorRole {
+		if e.Member == "" || seen[e.Member] || !slices.Contains(projectRoles, e.Role) || !slices.Contains(members, e.Member) {
 			return nil, invalid
 		}
-	}
-	for _, a := range p.Assets {
-		if a.Kind == "" || a.Name == "" {
-			return nil, invalid
+		seen[e.Member] = true
+		if e.Role == platform.ProjectOwnerRole {
+			owners++
 		}
 	}
-	if d.host == nil {
-		return nil, invalid
+	if !platform.ProjectManager(c.Member, d.ProjectRole(c.ID, id)) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the project's owners, builders and administrators manage its access")
 	}
-	for _, e := range p.Members {
-		if !slices.Contains(members, e.Member) {
-			return nil, invalid
-		}
+	if owners == 0 {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A project keeps at least one owner")
 	}
 	return func(*pb.ChangeRecord) {
-		p := &platform.BuildProject{Name: p.Name, Title: p.Title, Members: p.Members, Assets: p.Assets}
-		p.ID, p.Changed = id, platform.Stamp{At: time.Now().UTC()}
+		next := &platform.BuildProject{Title: p.Title, Members: p.Members}
+		next.ID, next.Changed = id, platform.Stamp{At: time.Now().UTC()}
 		if prior := d.projects[id]; prior != nil {
-			p.Created, p.Revision = prior.Created, prior.Revision+1
+			next.Created, next.Revision = prior.Created, prior.Revision+1
 		}
-		d.projects[id] = p
+		d.projects[id] = next
 	}, nil
 }
 
@@ -294,29 +283,19 @@ func (d *Policies) ProjectViews() []platform.BuildProject {
 	return out
 }
 
-func (d *Policies) EditsProjectAsset(member string, ref platform.ProjectAsset) bool {
+func (d *Policies) ProjectRole(member, project string) string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	for _, p := range d.projects {
-		if p.Archived || !covers(*p, ref) {
-			continue
-		}
-		for _, e := range p.Members {
-			if e.Member == member && e.Role == platform.ProjectEditorRole {
-				return true
-			}
+	p := d.projects[project]
+	if p == nil || p.Archived {
+		return ""
+	}
+	for _, e := range p.Members {
+		if e.Member == member {
+			return e.Role
 		}
 	}
-	return false
-}
-
-func covers(p platform.BuildProject, ref platform.ProjectAsset) bool {
-	for _, a := range p.Assets {
-		if a.Kind == ref.Kind && a.Name == ref.Name && (a.App == "" || ref.App == "" || a.App == ref.App) {
-			return true
-		}
-	}
-	return false
+	return ""
 }
 
 func (d *Policies) ProjectGrants(member string, agent bool) []platform.Grant {
@@ -332,7 +311,7 @@ func (d *Policies) ProjectGrants(member string, agent bool) []platform.Grant {
 			continue
 		}
 		for _, e := range p.Members {
-			if e.Member == member && e.Role == platform.ProjectEditorRole {
+			if e.Member == member && slices.Contains(projectRoles, e.Role) {
 				out = append(out, platform.Grant{App: "build", Role: "builder", By: "project:" + id, Reason: p.Title})
 				break
 			}

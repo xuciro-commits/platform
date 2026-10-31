@@ -1,5 +1,5 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { PropertyList, ContextHelp, Button, Form, Checkbox, DataTable, type ColumnDef, Sheet, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
+import { PropertyList, Button, Form, Checkbox, DataTable, type ColumnDef, Sheet, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -97,9 +97,7 @@ function Access({ catalog }: { catalog: AppPermissions[] }) {
   const access = useRead<AccessConfig>("/v1/access").data;
   const members = useRead<Member[]>("/v1/members").data ?? [];
   const { decide } = useHost();
-  const projects = useRead<Api.BuildProject[]>("/v1/projects").data ?? [];
-  const [adding, setAdding] = useState<"role" | "policy" | "team" | "project" | null>(null);
-  const [editing, setEditing] = useState<Api.BuildProject>();
+  const [adding, setAdding] = useState<"role" | "policy" | "team" | null>(null);
   if (!access) return null;
   const row = "flex flex-wrap items-center gap-2 text-sm";
   const remove = (schema: string, type: string, id: string) => can(schema) && <Button size="sm" variant="ghost" aria-label={t("Remove")} onClick={() => void decide(schema, { type, id }, {})}>×</Button>;
@@ -118,20 +116,6 @@ function Access({ catalog }: { catalog: AppPermissions[] }) {
         {access.teams.length === 0 && <p className="text-xs text-muted">{t("None.")}</p>}
         <div className="grid gap-1.5">{access.teams.map((x) => <p key={x.id} className={row}><span className="font-medium">{x.name}</span><span className="text-xs text-muted">{x.members.length} {t("members")}</span>{x.grants.map((g) => <Tag key={g.app + g.role} label={`${g.app}: ${g.role}`} />)}{remove("platform.team.remove", "platform.team", x.id)}</p>)}</div>
       </Panel>
-      <Panel title={t("Projects")} actions={can("platform.project.save") && <Button size="sm" onClick={() => { setEditing(undefined); setAdding("project"); }}>{t("Add")}</Button>}>
-        <div className="mb-2 flex justify-end"><ContextHelp title={t("Projects")}>{t("A project's editors hold the builder role within it: they open the Studio and may draft the assets it names, nothing else. Archiving it takes both away.")}</ContextHelp></div>
-        {projects.filter((p) => !p.archived).length === 0 && <p className="text-xs text-muted">{t("None.")}</p>}
-        <div className="grid gap-1.5">{projects.filter((p) => !p.archived).map((p) => <p key={p.id} className={row}>
-          <span className="font-medium">{p.title}</span><span className="font-mono text-xs text-muted">{p.name}</span>
-          <span className="text-xs text-muted">{(p.members ?? []).length} {t("editors")}</span>
-          {(p.assets ?? []).map((a) => <Tag key={`${a.app}:${a.kind}:${a.name}`} label={`${a.kind}: ${a.name}`} />)}
-          {can("platform.project.save") && <Button size="sm" variant="ghost" onClick={() => { setEditing(p); setAdding("project"); }}>{t("Edit")}</Button>}
-          {remove("platform.project.archive", "platform.project", p.id)}
-        </p>)}</div>
-      </Panel>
-      <Sheet isolated open={adding === "project"} onOpenChange={(o) => !o && setAdding(null)} title={editing ? t("Edit project") : t("Save project")}>
-        <ProjectForm key={editing?.id ?? "new"} members={members} project={editing} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.project.save", { type: "platform.project", id }, p)) setAdding(null); }} />
-      </Sheet>
       <Sheet isolated open={adding === "role"} onOpenChange={(o) => !o && setAdding(null)} title={t("Define role")}>
         <RoleForm catalog={catalog} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.role.save", { type: "platform.role", id }, p)) setAdding(null); }} />
       </Sheet>
@@ -208,29 +192,6 @@ function TeamForm({ members, catalog, onSubmit, onCancel }: { members: Member[];
       {field(t("Grants, one per line as app: role"), <Textarea rows={3} value={grants} onChange={(e) => setGrants(e.target.value)} placeholder={"mes: operator\nplatform: auditor"} />)}
       {!valid && <p className="text-xs text-[var(--tone-danger)]">{t("A line names an app or role that does not exist.")}</p>}
       <div className="flex justify-end gap-2"><Button type="button" onClick={onCancel}>{t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!idPattern.test(id) || !name || !valid}>{t("Save team")}</Button></div>
-    </Form>
-  );
-}
-
-const assetKinds = ["object", "linktype", "propertytype", "page", "app", "process", "function", "query", "code", "agent", "alertrule", "pipeline", "dataset", "source", "connection", "writeback", "match", "table", "testplan", "evaluation"];
-
-function ProjectForm({ members, project, onSubmit, onCancel }: { members: Member[]; project?: Api.BuildProject; onSubmit: (id: string, p: unknown) => Promise<void>; onCancel: () => void }) {
-  const [id, setId] = useState(project?.id ?? "");
-  const [title, setTitle] = useState(project?.title ?? "");
-  const [chosen, setChosen] = useState<string[]>((project?.members ?? []).map((m) => m.member));
-  const [assets, setAssets] = useState((project?.assets ?? []).map((a) => `${a.kind} ${a.name}${a.app ? ` ${a.app}` : ""}`).join("\n"));
-  const parsed = assets.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => { const [kind, name, app] = l.split(/[:\s]+/); return { kind: kind ?? "", name: name ?? "", ...(app ? { app } : {}) }; });
-  const valid = parsed.every((a) => assetKinds.includes(a.kind) && !!a.name);
-  return (
-    <Form className="grid gap-3" onSubmit={() => { return onSubmit(id, { name: id, title, members: chosen.map((member) => ({ member, role: "editor" })), assets: parsed }); }}>
-      {field(t("Project ID"), <Input value={id} disabled={!!project} onChange={(e) => setId(e.target.value)} placeholder="spring-rollout" />)}
-      {field(t("Title"), <Input value={title} onChange={(e) => setTitle(e.target.value)} />)}
-      <fieldset className="grid max-h-48 gap-1 overflow-auto text-sm"><legend className="text-xs text-muted">{t("Editors")}</legend>
-        {members.map((m) => <Checkbox key={m.id} checked={chosen.includes(m.id)} onChange={(checked) => setChosen(checked ? [...chosen, m.id] : chosen.filter((y) => y !== m.id))}>{m.profile.displayName || m.id}</Checkbox>)}
-      </fieldset>
-      {field(t("Assets, one per line as kind name"), <Textarea rows={4} value={assets} onChange={(e) => setAssets(e.target.value)} placeholder={"object visit\npage front-desk"} />)}
-      {!valid && <p className="text-xs text-[var(--tone-danger)]">{t("A line names an unknown asset kind or no name. Kinds: {kinds}", { kinds: assetKinds.join(", ") })}</p>}
-      <div className="flex justify-end gap-2"><Button type="button" onClick={onCancel}>{t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!idPattern.test(id) || !title || !valid}>{t("Save project")}</Button></div>
     </Form>
   );
 }
