@@ -1778,6 +1778,25 @@ export type Draft = {
   step: number;
 };
 
+export type DraftChange = {
+  ref: AssetRef;
+  type: string;
+  id: string;
+  title: string;
+  variant?: string;
+  published: boolean;
+  changed: Stamp;
+  owner: string;
+  fields: DraftChangeField[];
+  diagnostic?: string;
+};
+
+export type DraftChangeField = {
+  name: string;
+  before?: unknown;
+  after?: unknown;
+};
+
 export type Edge = {
   periods?: Period[];
   structure: string;
@@ -4072,6 +4091,12 @@ export type ReleaseAsset = {
 
 export type ReleaseDraftClosure = {
   drafts: JointDraftRef[];
+};
+
+export type ReleaseDraftRestore = {
+  type: string;
+  action: string;
+  payload: unknown;
 };
 
 export type ReleaseDraftsRequest = {

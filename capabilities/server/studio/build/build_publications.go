@@ -128,6 +128,52 @@ func (b *Build) WorkingDrafts(owner string) ([]DraftChange, error) {
 	return slices.DeleteFunc(changes, func(change DraftChange) bool { return change.Owner != owner }), nil
 }
 
+func (b *Build) draftEntities(kind platform.AssetKind) []platform.Entity {
+	var out []platform.Entity
+	for _, entity := range b.Manifest().Entities {
+		ref, err := draftAssetRef(entity.Type, "")
+		if err == nil && (ref.Kind == kind || entity.Type == TestPlanType && kind == platform.AssetEvaluation) {
+			out = append(out, entity)
+		}
+	}
+	return out
+}
+
+func (b *Build) DraftChangeOf(kind platform.AssetKind, id string) (DraftChange, bool, error) {
+	c := b.host.Automation(platform.Caller{}, ID)
+	for _, entity := range b.draftEntities(kind) {
+		changes, err := b.SavedDraftChanges(c, "", entity.Type, id)
+		if err != nil {
+			return DraftChange{}, false, err
+		}
+		if len(changes) > 0 {
+			return changes[0], true, nil
+		}
+	}
+	return DraftChange{}, false, nil
+}
+
+func (b *Build) DraftPublished(kind platform.AssetKind, id string) (string, string, bool, error) {
+	c := b.host.Automation(platform.Caller{}, ID)
+	domain, _ := json.Marshal([][]any{{"id", "=", id}})
+	for _, entity := range b.draftEntities(kind) {
+		rows, _, err := c.FindOf(reflect.TypeOf(entity.Model), platform.Query{Domain: domain, Limit: 1})
+		if err != nil {
+			return "", "", false, err
+		}
+		for _, row := range rows {
+			var meta struct {
+				platform.Record
+				Published string
+			}
+			if json.Unmarshal(platform.Raw(row), &meta) == nil && meta.ID == id && !meta.Archived {
+				return entity.Type, meta.Published, true, nil
+			}
+		}
+	}
+	return "", "", false, nil
+}
+
 func draftOwner(r platform.Record) string {
 	if r.Changed.By == "" || strings.HasPrefix(r.Changed.By, "app:") {
 		return r.Created.By

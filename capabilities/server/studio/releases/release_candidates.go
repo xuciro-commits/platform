@@ -67,6 +67,12 @@ type ReleaseWorkingState struct {
 	Drafts []ReleaseWorkingDraft `json:"drafts"`
 }
 
+type ReleaseDraftRestore struct {
+	Type    string          `json:"type"`
+	Action  string          `json:"action"`
+	Payload json.RawMessage `json:"payload"`
+}
+
 type ReleaseWorkingDraft struct {
 	Kind  platform.AssetKind `json:"kind"`
 	ID    string             `json:"id"`

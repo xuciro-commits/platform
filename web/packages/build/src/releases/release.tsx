@@ -7,6 +7,7 @@ import { matchesResourceKind, refKey, resourceKinds, resourceRef } from "../proj
 import { branchRefusal } from "../branches/decisions";
 import { useCurrentBranch } from "../branches/current";
 import { diagnose } from "./diagnostics";
+import { DraftChanges } from "./draft-changes";
 import { useEffect, useRef, useState } from "react";
 
 export { releaseCommandBytes, releaseDraftsSelection, releaseDraftsValue } from "./selection";
@@ -398,7 +399,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {(review.drafts?.length ?? 0) > 0 && <div>
         <h3 className="text-xs font-semibold">{t("Delivered together")} · {review.drafts!.length}</h3>
         <ul className="mt-1 grid gap-1 text-xs" aria-label={t("Draft provenance")}>
-          {review.drafts!.map((draft) => <li key={`${draft.kind}/${draft.id}`}>{t(kinds.find((item) => item.kind === draft.kind)?.label ?? draft.kind)} · <code>{draft.id}</code></li>)}
+          {review.drafts!.map((draft) => <DraftChanges key={`${draft.kind}/${draft.id}`} draft={{ kind: draft.kind as ReleaseKind, id: draft.id }} label={t(kinds.find((item) => item.kind === draft.kind)?.label ?? draft.kind)} locked={locked || savedReview}
+            onDiscarded={() => { const remaining = joint.filter(item => jointKey(item) !== jointKey({ kind: draft.kind as ReleaseKind, id: draft.id })); setJoint(remaining); if (remaining.length) void inspect(remaining); else clearReview(); }} />)}
         </ul>
         <p className="mt-1 text-xs text-muted">{t("The saved candidate keeps these drafts as the assets it includes.")}</p>
       </div>}

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -64,6 +65,88 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 		drafts = []build.JointDraftRef{}
 	}
 	return releaseowner.ReleaseDraftClosure{Drafts: drafts}, nil
+}
+
+func (t *Tenant) builderDrafts(m platform.Member, permission string) (build.ConstructionDrafts, error) {
+	if err := t.admits(m); err != nil {
+		return nil, err
+	}
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, permission, "read", []string{build.Builder}, true)); err != nil {
+		return nil, err
+	}
+	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+	if !ok {
+		return nil, fmt.Errorf("tenant has no builder")
+	}
+	return owner, nil
+}
+
+func (t *Tenant) DraftChange(m platform.Member, kind platform.AssetKind, id string) (build.DraftChange, error) {
+	owner, err := t.builderDrafts(m, "GET /v1/releases/drafts/change")
+	if err != nil {
+		return build.DraftChange{}, err
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	change, found, err := owner.DraftChangeOf(kind, id)
+	if err == nil && !found {
+		err = fmt.Errorf("The draft has no working changes")
+	}
+	return change, err
+}
+
+func (t *Tenant) DraftRestore(m platform.Member, kind platform.AssetKind, id string, now time.Time) (releaseowner.ReleaseDraftRestore, error) {
+	owner, err := t.builderDrafts(m, "GET /v1/releases/drafts/restore")
+	if err != nil {
+		return releaseowner.ReleaseDraftRestore{}, err
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	typ, published, found, err := owner.DraftPublished(kind, id)
+	if err != nil || !found {
+		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The draft is unavailable")
+	}
+	if published == "" {
+		return releaseowner.ReleaseDraftRestore{Type: typ, Action: "archive", Payload: json.RawMessage(`{}`)}, nil
+	}
+	var asset platform.ReleaseAsset
+	if err := json.Unmarshal([]byte(published), &asset); err != nil || asset.Ref.Kind == "" {
+		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The installed version of this draft cannot be restored")
+	}
+	lifecycle, ok := owner.(platform.AssetLifecycleOwner)
+	if !ok {
+		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("tenant has no builder")
+	}
+	drafts, err := lifecycle.ReleaseDrafts([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{DraftsOnly: true, Member: m, At: now})
+	if err != nil {
+		return releaseowner.ReleaseDraftRestore{}, err
+	}
+	var info *platform.EntityInfo
+	for _, entity := range t.Entities(m) {
+		if entity.Type == typ {
+			info = &entity
+		}
+	}
+	for _, draft := range drafts {
+		if draft.Type != typ || info == nil {
+			continue
+		}
+		payload, err := releaseowner.AssetDraftPayload(*info, draft.Image)
+		if err != nil {
+			return releaseowner.ReleaseDraftRestore{}, err
+		}
+		fields := map[string]json.RawMessage{}
+		_ = json.Unmarshal(payload, &fields)
+		for _, field := range info.Fields {
+			if _, ok := fields[field.Name]; !ok && !field.ReadOnly && !field.Aside {
+				fields[field.Name] = json.RawMessage("null")
+			}
+		}
+		payload, _ = json.Marshal(fields)
+		return releaseowner.ReleaseDraftRestore{Type: typ, Action: "edit", Payload: payload}, nil
+	}
+	return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The installed version of this draft cannot be restored")
 }
 
 func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingState, error) {

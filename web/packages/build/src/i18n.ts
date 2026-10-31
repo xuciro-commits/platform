@@ -4310,4 +4310,13 @@ register("zh-CN", {
   "The object type could not be created. Your choices are still here.": "无法创建对象类型，已保留你的选择。",
   "Upload CSV": "上传 CSV",
   "No rows yet. Upload a CSV, or publish a source or pipeline that writes this dataset.": "还没有行。上传 CSV，或发布写入此数据集的来源或管道。",
+  "No working changes.": "没有工作中的改动。",
+  "New: nothing of it is installed yet.": "新建：尚未安装任何部分。",
+  "Field changes": "字段改动",
+  "Discard changes": "放弃改动",
+  "The draft could not be discarded.": "无法放弃该草稿。",
+  "The draft returns to what is installed; a draft that was never installed is archived. Its other drafts stay in your working state.": "草稿恢复为已安装的内容；从未安装的草稿会被归档。其他草稿仍留在你的工作状态中。",
+  "The draft has no working changes": "该草稿没有工作中的改动",
+  "The draft is unavailable": "该草稿不可用",
+  "The installed version of this draft cannot be restored": "无法恢复该草稿的已安装版本",
 });

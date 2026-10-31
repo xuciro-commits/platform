@@ -623,6 +623,8 @@ type ConstructionDrafts interface {
 	ApplicationDrafts(string) ([]JointDraftRef, error)
 	ReferencedDrafts(platform.AssetKind, string, string) ([]JointDraftRef, error)
 	WorkingDrafts(string) ([]DraftChange, error)
+	DraftChangeOf(platform.AssetKind, string) (DraftChange, bool, error)
+	DraftPublished(platform.AssetKind, string) (string, string, bool, error)
 	SavedObjectActions(platform.Caller) ([]platform.Action, error)
 	DraftReleaseAssetsMulti([]JointDraftRef, platform.Member) (JointDraftAssets, error)
 	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)

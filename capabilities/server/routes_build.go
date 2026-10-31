@@ -202,6 +202,22 @@ func (h *Host) routesBuild(rt *routes) {
 		answer.PromotedTo = h.promotionsOf(t.ID, answer.Preview.CandidateID)
 		WriteJSON(w, http.StatusOK, answer)
 	})
+	rt.authorized(transport.Route{Pattern: "GET /v1/releases/drafts/change", Summary: "Builder-only field-level difference between one draft and what is installed", Query: []transport.Param{{Name: "kind", Description: "Draft kind"}, {Name: "id", Description: "Draft id"}}, Answer: build.DraftChange{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, err := t.DraftChange(m, platform.AssetKind(r.URL.Query().Get("kind")), r.URL.Query().Get("id"))
+		if err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
+	rt.authorized(transport.Route{Pattern: "GET /v1/releases/drafts/restore", Summary: "Builder-only action and payload that discard one draft's working changes: an edit back to what is installed, or archiving a draft never installed", Query: []transport.Param{{Name: "kind", Description: "Draft kind"}, {Name: "id", Description: "Draft id"}}, Answer: releaseowner.ReleaseDraftRestore{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, err := t.DraftRestore(m, platform.AssetKind(r.URL.Query().Get("kind")), r.URL.Query().Get("id"), h.Now())
+		if err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/releases/drafts/working", Summary: "Builder-only working state on main: the drafts whose latest edit is the caller's and that differ from what is installed", Answer: releaseowner.ReleaseWorkingState{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.WorkingDrafts(m)
 		if err != nil {

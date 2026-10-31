@@ -86,6 +86,9 @@ test("F1 builder goes from an empty project to an application a business user ac
     const provenance = page.getByRole("list", { name: "Draft provenance" });
     for (const kind of ["Applications", "Pages", "Object types", "Datasets"]) await expect(provenance.getByText(`${kind} ·`).first()).toBeVisible();
     await expect(provenance.getByText("Applications ·")).toHaveCount(1);
+    const page_draft = provenance.getByRole("listitem").filter({ hasText: "Pages ·" }).first();
+    await page_draft.getByText("Changes", { exact: true }).click();
+    await expect(page_draft.getByText("New: nothing of it is installed yet.")).toBeVisible();
     await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
     await page.getByRole("button", { name: "Activate release", exact: true }).click();
     await expect(page.getByText("Release active for operators.")).toBeVisible({ timeout: 60_000 });
