@@ -951,17 +951,6 @@ export type Budget = {
   Cost: number;
 };
 
-export type BuildProject = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  title: string;
-  members?: ProjectMember[];
-};
-
 export type BusinessInputChange = {
   field: string;
   before?: unknown;
