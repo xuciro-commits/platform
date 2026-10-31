@@ -41,7 +41,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 ## Dataset Preview
 
 - 侧栏：Datasets、Media sets。
-- 数据集页面：Overview（行数、版本、标记、来源、下一步“从此数据集创建对象类型”）→ Schema（列、类型、描述）→ Preview（表格 + 右侧列统计面板：空值、去重数、分布）→ Transactions（版本表，可切换预览版本）。
+- 数据集页面：Overview（行数、版本、标记、来源；“Upload CSV”写入新版本，列序取表头；“Create object type”在 Sheet 中选主键列、标题列与要映射的列，生成的对象类型以该数据集为数据源）→ Schema（列、类型、描述）→ Preview（表格 + 右侧列统计面板：空值、去重数、分布）→ Transactions（版本表，可切换预览版本）。
 - 标记显示在页头状态区；未获准时 Preview 显示无权状态（M12）。
 
 ## Ontology Manager

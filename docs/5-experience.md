@@ -29,7 +29,7 @@ read-when: 设计或改变一条用户任务路径、写界面文案与翻译、
 ### F1 构建者：从空租户到可用应用（黄金路径）
 
 1. Home → “New project”，命名项目。
-2. 项目 Overview → 下一步“Connect data”（可选）→ 新建源与同步 → 得到数据集。
+2. 项目 Overview → 下一步“Connect data”（新建源与同步），或 New → Dataset → “Upload CSV” → 得到数据集。
 3. 数据集 Overview → “Create object type” → 映射列到属性，选标题与主键。
 4. 对象类型 Actions → “New action type”（模板：创建、修改、删除、改状态）。
 5. 项目 Overview → “Open Workshop” → 从模板生成模块（对象表 + 详情 + 动作按钮）。
@@ -158,7 +158,6 @@ read-when: 设计或改变一条用户任务路径、写界面文案与翻译、
 
 ## 现存差距
 
-- F1 第 2–3 步：数据集的“Draft an object from this schema”只按列生成属性，不选标题与主键，也不把数据集绑定为数据源（路线图 P3.25）。
 - F5 依赖的工作项内置对象类型未建成（P2.4）。
 - F7 安装与升级审阅未实现（P5.3）。
 - F2–F10 没有验收用例（P2.14）。

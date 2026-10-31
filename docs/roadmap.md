@@ -20,7 +20,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 ## 下一批
 
-P3.25 从数据集创建对象类型：数据集 Overview 的“Create object type”在 Sheet 中映射列到属性、选标题与主键，并把数据集绑定为对象类型数据源；完成后 F1 走数据集分支。
+P3.22 审阅范围：main 上的 Review and save 只含本人的工作状态，他人的无效草稿不再阻塞本人保存；项目发布包含该项目的工作状态。
 
 ## P2 内核收敛
 
@@ -65,7 +65,8 @@ P3.25 从数据集创建对象类型：数据集 Overview 的“Create object ty
 | P3.20 | 切换语言不整页刷新 | 7-system/web R6 |
 | P3.22 | 审阅范围：main 上只含本人的工作状态；项目发布包含工作状态 | 6-domain/change §6.19 |
 | P3.24 | Files 只列项目，不列原生应用 | 3-information §3.7 |
-| P3.25 | 从数据集创建对象类型：数据集 Overview 的“Create object type”映射列到属性、选标题与主键，并把数据集绑定为对象类型数据源 | 5-experience F1、6-domain §6.6 |
+| P3.26 | 数据源投影可见：投影有运行记录与重试，拒绝的行与暂停原因显示在对象类型 Datasources 与 Monitoring | 7-system §7.5 |
+| P3.27 | CSV 上传推断列类型（数字、布尔、日期） | 6-domain §6.6 |
 
 ## P4 行业应用
 

@@ -15,21 +15,26 @@ test("F1 builder goes from an empty project to an application a business user ac
     await expect(page.getByRole("heading", { name: "Next steps" })).toBeVisible();
   });
 
-  await test.step("3 define an object type from the next step", async () => {
-    await page.getByRole("button", { name: "New object type", exact: true }).click();
+  await test.step("2 bring data in as a dataset", async () => {
+    await page.getByRole("button", { name: "New", exact: true }).first().click();
+    await page.getByRole("menuitem", { name: "Dataset", exact: true }).click();
+    await page.getByRole("textbox", { name: "Dataset name" }).fill(`${name}rows`);
+    await page.getByRole("textbox", { name: "Dataset title" }).fill("Order rows");
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Upload CSV" })).toBeVisible();
+    await page.locator('input[type="file"]').setInputFiles({ name: "orders.csv", mimeType: "text/csv", buffer: Buffer.from("Order no,Customer,Amount\nSO-1,Acme,120\nSO-2,Globex,80\n") });
+    await expect(page.getByRole("cell", { name: "Globex" })).toBeVisible();
+  });
+
+  await test.step("3 create an object type from the dataset", async () => {
+    await page.getByRole("button", { name: "Create object type", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Create object type" });
-    await sheet.getByRole("textbox", { name: "Name *" }).fill(objectName);
+    await expect(sheet.getByRole("combobox", { name: "Primary key column *" })).toHaveValue("Order no");
+    await expect(sheet.getByRole("combobox", { name: "Title column *" })).toHaveValue("Customer");
     await sheet.getByRole("textbox", { name: "What people call it *" }).fill("Order");
+    await sheet.getByRole("textbox", { name: "Name *" }).fill(objectName);
     await sheet.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByText(`build.${objectName}`, { exact: true })).toBeVisible();
-    const sections = page.getByRole("navigation", { name: "Order" });
-    await sections.getByRole("button", { name: "Properties", exact: true }).click();
-    await page.getByRole("button", { name: "Add a property", exact: true }).click();
-    await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue("field");
-    await page.getByRole("button", { name: "Close inspector panel" }).click();
-    await sections.getByRole("button", { name: "Lifecycle", exact: true }).click();
-    await page.getByRole("button", { name: "Add a state", exact: true }).click();
-    await page.getByRole("button", { name: "Close inspector panel" }).click();
   });
 
   await test.step("4 add an action type", async () => {
@@ -61,26 +66,26 @@ test("F1 builder goes from an empty project to an application a business user ac
 
   await test.step("6 review and save once", async () => {
     await page.getByRole("button", { name: "Review and save", exact: true }).click();
-    for (const kind of ["Applications", "Pages", "Object types"]) await expect(page.getByText(`${kind} ·`).first()).toBeVisible();
+    for (const kind of ["Applications", "Pages", "Object types", "Datasets"]) await expect(page.getByText(`${kind} ·`).first()).toBeVisible();
     await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
     await page.getByRole("button", { name: "Activate release", exact: true }).click();
     await expect(page.getByText("Release active for operators.")).toBeVisible({ timeout: 60_000 });
   });
 
-  await test.step("7 a business user opens the application and creates an order", async () => {
+  await test.step("7 a business user sees the dataset rows as orders and creates one", async () => {
     const user = await (await browser.newContext()).newPage();
     await signIn(user, "user");
     await user.getByRole("button", { name: "Applications", exact: true }).first().click();
     await user.getByRole("region", { name: "Business applications" }).getByRole("button", { name: label, exact: true }).click();
     const app = user.getByRole("region", { name: "Orders" });
     await expect(app.getByRole("heading", { name: "Orders", level: 1 })).toBeVisible();
-    await expect(app.getByText("No orders")).toBeVisible();
+    await expect(app.getByRole("cell", { name: "Globex" })).toBeVisible({ timeout: 30_000 });
     await app.getByRole("button", { name: "Create order", exact: true }).click();
     const form = user.getByRole("dialog", { name: "Create order" });
-    await expect(form.getByRole("textbox")).toHaveCount(1);
     await expect(form.getByRole("button", { name: "Source editor" })).toHaveCount(0);
-    await form.getByRole("textbox", { name: /^Field/ }).fill("First order");
+    await form.getByRole("textbox", { name: /^Order no/ }).fill("SO-3");
+    await form.getByRole("textbox", { name: /^Customer/ }).fill("Initech");
     await form.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(app.getByRole("cell", { name: "First order" })).toBeVisible({ timeout: 30_000 });
+    await expect(app.getByRole("cell", { name: "Initech" })).toBeVisible({ timeout: 30_000 });
   });
 });

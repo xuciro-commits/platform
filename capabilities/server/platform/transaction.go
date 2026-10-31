@@ -1118,29 +1118,32 @@ func IntegrationNormalize(v, how string) string {
 	return v
 }
 
-func IntegrationCSVRows(body []byte) ([]map[string]any, error) {
+func IntegrationCSVRows(body []byte) ([]string, []map[string]any, error) {
 	r := csv.NewReader(bytes.NewReader(body))
 	r.FieldsPerRecord = -1
 	r.LazyQuotes = true
 	records, err := r.ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("the answer is not CSV: %v", err)
+		return nil, nil, fmt.Errorf("the answer is not CSV: %v", err)
 	}
 	if len(records) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
-	head := records[0]
+	head := make([]string, len(records[0]))
+	for i, name := range records[0] {
+		head[i] = strings.TrimSpace(name)
+	}
 	rows := make([]map[string]any, 0, len(records)-1)
 	for _, rec := range records[1:] {
 		row := map[string]any{}
 		for i, name := range head {
 			if i < len(rec) {
-				row[strings.TrimSpace(name)] = rec[i]
+				row[name] = rec[i]
 			}
 		}
 		rows = append(rows, row)
 	}
-	return rows, nil
+	return head, rows, nil
 }
 
 func IntegrationRowsAt(body []byte, path string) ([]map[string]any, error) {

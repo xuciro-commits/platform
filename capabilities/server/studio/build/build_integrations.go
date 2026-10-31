@@ -751,10 +751,10 @@ func (b *Build) datasetVersionEntity() platform.Entity {
 
 func datasetActions() []platform.Action {
 	return []platform.Action{{Schema: SchemaDatasetLoad, Target: DatasetType, Capability: "integrations", Title: "Load a version", Description: "Append the rows one pull or run produced as the dataset's next version.", Roles: []string{Builder, Integrator},
-		Payload: []platform.Field{{Name: "rows", Type: "json", Required: true, Description: "The rows, an array of objects"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "string", Description: "The marking the rows carry; raises the dataset's"}}}}
+		Payload: []platform.Field{{Name: "rows", Type: "json", Description: "The rows, an array of objects"}, {Name: "csv", Type: "longtext", Description: "Or the rows as CSV under a header line"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "string", Description: "The marking the rows carry; raises the dataset's"}}}}
 }
 
-func DatasetSchema(rows []map[string]any) []DatasetField {
+func DatasetSchema(rows []map[string]any, order []string) []DatasetField {
 	types := map[string]string{}
 	for _, row := range rows {
 		for k, v := range row {
@@ -773,7 +773,23 @@ func DatasetSchema(rows []map[string]any) []DatasetField {
 		}
 		out = append(out, DatasetField{Name: k, Type: t})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	rank := map[string]int{}
+	for _, name := range order {
+		if _, ok := rank[name]; !ok {
+			rank[name] = len(rank)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, aok := rank[out[i].Name]
+		b, bok := rank[out[j].Name]
+		if aok != bok {
+			return aok
+		}
+		if aok {
+			return a < b
+		}
+		return out[i].Name < out[j].Name
+	})
 	return out
 }
 
@@ -781,6 +797,7 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
 			Rows     []map[string]any `json:"rows"`
+			CSV      string           `json:"csv"`
 			Producer string           `json:"producer"`
 			Marking  string           `json:"marking"`
 		}
@@ -792,14 +809,25 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 		}
-		if json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Rows == nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A load carries an array of rows")
+		if json.Unmarshal(s.GetPayload(), &payload) != nil || (payload.Rows == nil) == (payload.CSV == "") {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A load carries an array of rows or a CSV body")
+		}
+		var order []string
+		for _, f := range ds.Schema {
+			order = append(order, f.Name)
+		}
+		if payload.CSV != "" {
+			columns, rows, err := platform.IntegrationCSVRows([]byte(payload.CSV))
+			if err != nil || len(rows) == 0 {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The file is not CSV with a header line and at least one row")
+			}
+			payload.Rows, order = rows, append(order, columns...)
 		}
 		if len(payload.Rows) > ValueSourceRows {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A version holds at most {n} rows", ValueSourceRows)
 		}
 		return func(r *pb.ChangeRecord) {
-			schema := DatasetSchema(payload.Rows)
+			schema := DatasetSchema(payload.Rows, order)
 			var drift []string
 			before := map[string]bool{}
 			for _, f := range ds.Schema {
@@ -3589,7 +3617,8 @@ type SourceRow struct {
 
 func (s Source) Decode(body []byte) ([]map[string]any, error) {
 	if s.Profile == "csv" {
-		return platform.IntegrationCSVRows(body)
+		_, rows, err := platform.IntegrationCSVRows(body)
+		return rows, err
 	}
 	return platform.IntegrationRowsAt(body, s.Path)
 }

@@ -314,8 +314,8 @@ func checkDataSources(o Object) error {
 	}
 	for _, source := range o.DataSources {
 		identity := source.Kind + "/" + source.Source
-		if source.Kind != "source" && source.Kind != "pipeline" || source.Source == "" || source.Key == "" || len(source.Columns) == 0 || seen[identity] {
-			return fmt.Errorf("data source needs a unique source or pipeline, key column, and mapped columns")
+		if !slices.Contains([]string{"source", "pipeline", "dataset"}, source.Kind) || source.Source == "" || source.Key == "" || len(source.Columns) == 0 || seen[identity] {
+			return fmt.Errorf("data source needs a unique dataset, source or pipeline, key column, and mapped columns")
 		}
 		seen[identity] = true
 		columns := map[string]bool{}

@@ -788,6 +788,7 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 				t.PullSources(Now())
 				t.CheckConnections(Now())
 				t.RunPipelines(Now())
+				t.ProjectDatasets(Now())
 				t.Embed(Now())
 				t.PurgeTranscripts(Now())
 				t.SweepUploads(Now())

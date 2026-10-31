@@ -137,9 +137,7 @@ func lineageGraph(in lineageInputs) Lineage {
 	for _, o := range in.objects {
 		add(LineageNode{ID: "object:" + lineageObjectType(o.Name), Kind: "object", Record: o.ID, Name: lineageObjectType(o.Name), Title: o.Title, State: o.State})
 	}
-	sourceByName := map[string]string{}
 	for _, s := range in.sources {
-		sourceByName[s.Name] = "source:" + s.ID
 		node := LineageNode{ID: "source:" + s.ID, Kind: "source", Record: s.ID, Name: s.Name, Title: s.Title, State: s.State}
 		if s.Last != nil {
 			node.Rows = s.Last.Rows
@@ -148,9 +146,7 @@ func lineageGraph(in lineageInputs) Lineage {
 		}
 		add(node)
 	}
-	pipelineByName := map[string]string{}
 	for _, p := range in.pipelines {
-		pipelineByName[p.Name] = "pipeline:" + p.ID
 		node := LineageNode{ID: "pipeline:" + p.ID, Kind: "pipeline", Record: p.ID, Name: p.Name, Title: p.Title, State: p.State, Marking: p.Marking}
 		if p.Last != nil {
 			node.Rows = p.Last.Written
@@ -190,11 +186,8 @@ func lineageGraph(in lineageInputs) Lineage {
 	for _, o := range in.objects {
 		id := "object:" + lineageObjectType(o.Name)
 		for _, binding := range o.DataSources {
-			switch binding.Kind {
-			case "source":
-				link(LineageEdge{From: sourceByName[binding.Source], To: id})
-			case "pipeline":
-				link(LineageEdge{From: pipelineByName[binding.Source], To: id})
+			if binding.Kind == "source" || binding.Kind == "pipeline" || binding.Kind == "dataset" {
+				link(LineageEdge{From: binding.Kind + ":" + binding.Source, To: id})
 			}
 		}
 	}

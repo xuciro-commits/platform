@@ -110,6 +110,7 @@ POST /v1/submissions
 - AI 分散在 `aigateway`、`apps/ai`、`internal/aistate`、`internal/agents`、`engine/agents`、`platform/ai.go`；两个包都叫 `agents`，`aigateway` 反向依赖 `engine/agents`（P2.7）。
 - 重放仍重新执行旧条目类型（submission、input、effect、usage、agent、delivery、job），违反 R6（P2.13）。
 - 超过 §7.7 限额的手写文件（P2.12）。
+- 数据集到对象类型的投影在宿主定时器中逐行提交，没有运行记录与重试；拒绝与暂停只写宿主日志，对象类型 Datasources 与 Monitoring 看不到（P3.26）。
 
 ## 相关
 

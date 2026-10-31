@@ -20,29 +20,30 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
 export function ObjectDataSourcesEditor({ process, parent, refused, onChange }: { process: Process; parent: string; refused?: string; onChange: (next: Process) => void }) {
   const sources = useReadQuery<{ records: Published[] }>("/v1/records/build.source?limit=500");
   const pipelines = useReadQuery<{ records: Published[] }>("/v1/records/build.pipeline?limit=500");
+  const datasets = useReadQuery<{ records: Published[] }>("/v1/records/build.dataset?limit=500");
   const bindings = process.datasources ?? [];
   const writable = process.fields.filter(field => !field.readOnly && !field.aliasOf && !field.formula && !field.formulaExpr);
   const set = (next: Api.DataSourceBinding[]) => onChange({ ...process, datasources: next.length ? next : undefined });
   const patch = (at: number, values: Partial<Api.DataSourceBinding>) => set(bindings.map((binding, index) => index === at ? { ...binding, ...values } : binding));
-  const choices = (kind: string) => (kind === "pipeline" ? pipelines : sources).data?.records.filter(record => record.state === "published") ?? [];
-  const targetOf = (kind: string, id: string) => { const record = (kind === "pipeline" ? pipelines : sources).data?.records.find(entry => entry.id === id); return kind === "pipeline" ? record?.outputObject : record?.object; };
+  const choices = (kind: string) => kind === "dataset" ? datasets.data?.records ?? [] : (kind === "pipeline" ? pipelines : sources).data?.records.filter(record => record.state === "published") ?? [];
+  const targetOf = (kind: string, id: string) => { if (kind === "dataset") return undefined; const record = (kind === "pipeline" ? pipelines : sources).data?.records.find(entry => entry.id === id); return kind === "pipeline" ? record?.outputObject : record?.object; };
   const add = () => {
-    const first = choices("source")[0];
-    set([...bindings, { kind: "source", source: first?.id ?? "", key: "", columns: [] }]);
+    const first = choices("dataset")[0];
+    set([...bindings, { kind: "dataset", source: first?.id ?? "", key: "", columns: [] }]);
   };
   return <div className="grid max-w-4xl content-start gap-3 p-4">
     <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Data sources")}</h2><Button size="sm" onClick={add}><Plus />{t("Add a data source")}</Button></div>
-    <ContextHelp title={t("Data sources")}><p className="text-sm text-muted">{t("The object declares which published sources and pipelines feed it, how a row is identified and which column feeds which attribute. Each attribute chooses what wins when a person edited it and a source also has a value.")}</p></ContextHelp>
+    <ContextHelp title={t("Data sources")}><p className="text-sm text-muted">{t("The object declares which datasets, pipelines or sources feed it, how a row is identified and which column feeds which attribute. Each attribute chooses what wins when a person edited it and a source also has a value.")}</p></ContextHelp>
     {refused && <Rejection message={refused} />}
-    {(sources.isError || pipelines.isError) && <Notice tone="danger" message={t("The published sources and pipelines could not be loaded.")} />}
+    {(sources.isError || pipelines.isError || datasets.isError) && <Notice tone="danger" message={t("The datasets, published sources and pipelines could not be loaded.")} />}
     {!bindings.length && <EmptyState title={t("No data sources declared")} hint={t("Without a declaration a Source or Pipeline keeps its own key and field mapping.")} className="rounded-md border border-border p-6" />}
     {bindings.map((binding, at) => {
       const known = choices(binding.kind), target = targetOf(binding.kind, binding.source);
       return <InputDraftProvider key={at} scope={JSON.stringify({ kind: "datasource", at })}><Panel title={t("Data source {number}", { number: at + 1 })} actions={<Button size="sm" variant="ghost" aria-label={t("Remove data source")} onClick={() => set(bindings.filter((_, index) => index !== at))}><Trash2 />{t("Remove")}</Button>}>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className={fieldClass}>{t("Kind")}<Select value={binding.kind} onChange={event => patch(at, { kind: event.target.value, source: choices(event.target.value)[0]?.id ?? "" })}>
-            <option value="source">{t("Source")}</option><option value="pipeline">{t("Pipeline")}</option></Select></label>
-          <label className={fieldClass}>{binding.kind === "pipeline" ? t("Pipeline") : t("Source")}<Select value={binding.source} onChange={event => patch(at, { source: event.target.value })}>
+            <option value="dataset">{t("Dataset")}</option><option value="pipeline">{t("Pipeline")}</option><option value="source">{t("Source")}</option></Select></label>
+          <label className={fieldClass}>{binding.kind === "dataset" ? t("Dataset") : binding.kind === "pipeline" ? t("Pipeline") : t("Source")}<Select value={binding.source} onChange={event => patch(at, { source: event.target.value })}>
             {!known.some(record => record.id === binding.source) && <option value={binding.source}>{binding.source || t("Choose…")}</option>}
             {known.map(record => <option key={record.id} value={record.id}>{record.title || record.name} · {record.name}</option>)}</Select></label>
           <label className={fieldClass}>{t("Key column")}<Input value={binding.key} placeholder="id" onChange={event => patch(at, { key: event.target.value })} />

@@ -86,6 +86,8 @@ type Tenant struct {
 	acted                 int
 	works                 platform.Works
 	opsMu                 sync.Mutex
+	projectionMu          sync.Mutex
+	projected             map[string]int
 	work                  automation.WorkBoard
 	Quota                 int
 	quota                 automation.Quota

@@ -362,15 +362,7 @@ func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, 
 			continue
 		}
 		key := "integration:" + execution.ID + ":" + row.Key
-		sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: et.Info().App, IdempotencyKey: key,
-			Target: &pb.EntityRef{Type: plan.Object, Id: row.ID}, Schema: &pb.SchemaRef{Name: plan.Object + row.Verb, Version: 1}, Payload: row.Payload}
-		var err *kernel.Error
-		if plan.Binding != nil {
-			_, err = t.submitSource(member, sub, now, &sourceSubmission{binding: plan.Binding, row: row})
-		} else {
-			_, err = t.Submit(member, sub, now)
-		}
-		if err != nil {
+		if err := t.submitIntegrationRow(member, et.Info().App, plan.Object, plan.Binding, row, key, now); err != nil {
 			if !t.integrationRefused(et.Info().App, key) {
 				return false
 			}
@@ -380,6 +372,17 @@ func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, 
 		}
 	}
 	return true
+}
+
+func (t *Tenant) submitIntegrationRow(member platform.Member, app, object string, binding *platform.DataSourceBinding, row build.SourceRow, key string, now time.Time) *kernel.Error {
+	sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: app, IdempotencyKey: key,
+		Target: &pb.EntityRef{Type: object, Id: row.ID}, Schema: &pb.SchemaRef{Name: object + row.Verb, Version: 1}, Payload: row.Payload}
+	if binding != nil {
+		_, err := t.submitSource(member, sub, now, &sourceSubmission{binding: binding, row: row})
+		return err
+	}
+	_, err := t.Submit(member, sub, now)
+	return err
 }
 
 func (t *Tenant) connectionMarking(connection string) string {
