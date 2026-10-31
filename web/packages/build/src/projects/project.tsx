@@ -8,7 +8,7 @@ import { ReleaseReview } from "../releases/release";
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery } from "@platform/app";
 import { CompositeRefusalError, type Api } from "@platform/kernel";
 import { ActionMenu, Button, Checkbox, DataTable, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ColumnDef, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
-import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, FolderKanban, GitBranch, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
@@ -32,7 +32,7 @@ import { StudioGuide } from "./studio-guide";
 import { installedStudioID, installedStudioRef, studioApplications } from "./studio-applications";
 import { InstalledApplicationHome } from "./InstalledApplicationHome";
 import { ExtensionSettings } from "./ExtensionSettings";
-import { ApplicationLifecycleControls } from "./application-lifecycle";
+import { useApplicationLifecycle } from "./application-lifecycle";
 
 export function ProjectsList() {
   const { me, definitions , holds} = useHost();
@@ -274,6 +274,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const current = selected ? owned.find(item => refKey(item.ref) === selected || item.record?.id === selected || item.ref.name === selected) : undefined;
   const selectedKey = current ? refKey(current.ref) : selected;
   const dependencyQuery = useDependencies(current?.ref, undefined, !!current?.installed);
+  const lifecycle = useApplicationLifecycle({ project: builder ? project : undefined, disabled: saving || !!pendingPatch || !!createdResource || !!retireIntent, before: confirmDiscard });
   if (!project) return <WorkbenchFrame title={t("Project")}>{query.isError ? t("The project could not be loaded.") : t("Loading…")}</WorkbenchFrame>;
   const statusOf = (item: OwnedResource) => item.record ? (item.record.state === "published" ? undefined : t("draft")) : item.installed ? t("published") : item.missing ? t("missing") : undefined;
   const tree = <div className="grid min-w-0 content-start">
@@ -291,29 +292,17 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     <Workbench storageKey="project" crumbs={[{ label: t("Projects"), onClick: () => open({ view: "projects" }) }]} title={project.title || project.name}
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
-        {builder && <ApplicationLifecycleControls project={project} disabled={saving || !!pendingPatch || !!createdResource || !!retireIntent} before={confirmDiscard} />}
-        {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
-        {builder && <Button size="sm" disabled={locked} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Branches")}{branchCount > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{branchCount}</span>}</Button>}
-        {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" disabled={locked} onChange={(event) => {
-          let choice: { kind?: string; id?: string; ref?: Api.AssetRef };
-          try { choice = JSON.parse(event.target.value); } catch { return; }
-          if (choice.kind === "shared" && choice.ref) {
-            const found = shared.find(item => refKey(item.ref) === refKey(choice.ref!));
-            const current = latestProject.current;
-            if (found && current) void patch({ resources: [...(current.resources ?? []).filter(ref => refKey(ref) !== refKey(found.ref)), found.ref] }, current.revision);
-            return;
-          }
-          const found = available.find(item => item.kind.kind === choice.kind && item.record.id === choice.id);
-          if (found) void addExisting(found.kind, found.record); }}>
-          <option value="">{t("Add existing…")}</option>
-          {shared.length > 0 && <optgroup label={t("Published resources (all owners)")}>{shared.map((item) => <option key={refKey(item.ref)} value={JSON.stringify({ kind: "shared", ref: item.ref })}>{item.title} · {item.app} · {item.ref.kind}</option>)}</optgroup>}
-          {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
-        </Select>}
         {builder && <NewResourceMenu application={id} area={activeArea} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={locked || resourcesUnavailable || !!currentBranch || (!project.pages?.length && !project.resources?.length)} title={currentBranch ? t("A branch is published by merging it. Use Save in the branch bar.") : undefined} onClick={() => {
+        {builder && <Button variant="primary" disabled={locked || resourcesUnavailable || !!currentBranch || (!project.pages?.length && !project.resources?.length)} title={currentBranch ? t("A branch is published by merging it. Use Save in the branch bar.") : undefined} onClick={() => {
             const route = { view: "release-review" as const, params: { kind: "app", id: project.id, application: project.id, applicationName: project.name } };
             open(route);
           }}>{t("Publish")}</Button>}
+        <ActionMenu label={t("More actions")} icon={<MoreHorizontal />} commands={[
+          ...(header ? [{ id: "open-app", label: t("Open published app"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } }) }] : []),
+          ...(builder ? [{ id: "branches", label: branchCount > 0 ? t("Branches ({count})", { count: branchCount }) : t("Branches"), icon: <GitBranch />, disabled: locked, run: () => open({ view: "changes", params: { application: project.id } }) }] : []),
+          ...lifecycle.commands,
+        ]} />
+        {lifecycle.dialog}
       </>}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
@@ -330,6 +319,21 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         {tab === "resources" && <div className="flex flex-wrap items-center gap-2 px-4 pt-3 text-xs">
           <strong className="mr-auto">{everything ? t("Everything in this project") : t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
           {!current && <Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} className="w-full sm:w-56" value={filter} onChange={event => setFilter(event.target.value)} />}
+          {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="w-auto max-w-56" disabled={locked} onChange={(event) => {
+            let choice: { kind?: string; id?: string; ref?: Api.AssetRef };
+            try { choice = JSON.parse(event.target.value); } catch { return; }
+            if (choice.kind === "shared" && choice.ref) {
+              const found = shared.find(item => refKey(item.ref) === refKey(choice.ref!));
+              const current = latestProject.current;
+              if (found && current) void patch({ resources: [...(current.resources ?? []).filter(ref => refKey(ref) !== refKey(found.ref)), found.ref] }, current.revision);
+              return;
+            }
+            const found = available.find(item => item.kind.kind === choice.kind && item.record.id === choice.id);
+            if (found) void addExisting(found.kind, found.record); }}>
+            <option value="">{t("Add existing…")}</option>
+            {shared.length > 0 && <optgroup label={t("Published resources (all owners)")}>{shared.map((item) => <option key={refKey(item.ref)} value={JSON.stringify({ kind: "shared", ref: item.ref })}>{item.title} · {item.app} · {item.ref.kind}</option>)}</optgroup>}
+            {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
+          </Select>}
           <Button size="sm" onClick={() => open(studioRoute(id, "release", selected))}>{t("Verify application")}</Button>
           {picked.size > 0 && <Button size="sm" variant="danger" disabled={locked} onClick={beginRetire}>{t("Retire {count} selected", { count: picked.size })}</Button>}
           {activeArea === "model" && <Button size="sm" onClick={() => open({ view: "object-type", params: { application: id } })}>{t("Open business model")}</Button>}

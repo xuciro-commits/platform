@@ -1,3 +1,4 @@
+import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { PropertyList, StructuredEditor , PanelGroup , Notice } from "@platform/ui";
 import {formulaText} from "../editor/rule-text";
 import { useDefinitionDraft } from "../session/definition-draft";
@@ -117,18 +118,13 @@ export function PipelineEditor({ id }: { id: string }) {
   ].map((node, i) => ({ ...node, position: { x: i * 268, y: 0 } }));
   const stepEdges: FlowEdge[] = stepNodes.slice(0, -1).map((node, i) => ({ id: `${node.id}>${stepNodes[i + 1]!.id}`, source: node.id, sourcePort: "rows", target: stepNodes[i + 1]!.id, targetPort: "rows" }));
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New pipeline")} help={t("Declare the input, transformations, expectations and output. Publishing saves the declaration; Run now explicitly requests a run with current permissions.")}
-      actions={<div className="flex min-w-0 flex-wrap items-center gap-2">
-        <MarkingTag marking={draft.marking} />
-        <Button onClick={() => open({ view: "pipeline" })}>{t("Pipelines")}</Button>
-        <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-        <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save pipeline")}</Button>
-        <Button disabled={busy || !!inputs?.invalid || !draft.input} onClick={() => void perform(trial)}>{t("Trial pipeline")}</Button>
-        <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
-        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
-        {draft.state === "published" && <Button disabled={busy || dirty || !!draft.requested} onClick={() => void perform(() => transition("run"))}>{draft.requested ? t("Run requested…") : t("Run now")}</Button>}
-        {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
-      </div>} />
+    <PageHeader crumbs={[{ label: t("Pipelines"), onClick: () => open({ view: "pipeline" }) }]} title={draft.title || t("New pipeline")} status={<><MarkingTag marking={draft.marking} /><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Declare the input, transformations, expectations and output. Publishing saves the declaration; Run now explicitly requests a run with current permissions.")}
+      actions={<ResourceControls type="build.pipeline" record={draft} dirty={dirty} busy={busy} route={{ view: "pipeline", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined} onPublish={() => void perform(() => transition("publish"))}
+        operations={[
+          { id: "trial", label: t("Trial pipeline"), disabled: !!inputs?.invalid || !draft.input, run: () => void perform(trial) },
+          ...(draft.state === "published" ? [{ id: "run", label: draft.requested ? t("Run requested…") : t("Run now"), disabled: dirty || !!draft.requested, run: () => void perform(() => transition("run")) },
+            { id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []),
+        ]} />} />
     {error && <Notice tone="danger" message={error} />}
     {objects.isError && holds("build", "builder") && <Notice tone="danger" message={t("Object drafts could not be loaded. Installed definitions are still available.")} />}
     {previewResult && <Panel title={t("Draft trial")} role="region" aria-label={t("Pipeline trial results")} className="grid min-w-0 gap-3">

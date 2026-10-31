@@ -25,7 +25,7 @@ export function Alerts() {
 
 export function AlertEditor({ id }: { id: string }) {
   const { holds} = useHost(), { open } = useApplicationWorkspace();
-  const { draft, structured, query, dirty, joining, busy, error, inputs, patch: change, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, joining, busy, error, patch: change, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
     id, type: "build.alertrule", kind: "alert", view: "alert", empty,
     failure: t("The alert rule could not be saved. Your draft is still here."),
     payload: ({ name, title, object, field, operator, value, message, role, every, active }) => ({
@@ -41,13 +41,8 @@ export function AlertEditor({ id }: { id: string }) {
   if (!holds("build", "builder")) return <PageHeader title={t("Alert rules")} description={t("Only a builder can edit alert rules.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Alert rules")} description={query.isError ? t("The alert rule could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 gap-3">
-    <PageHeader title={draft.title || t("New alert rule")} help={t("Checked after every change to a record of the object. People holding the role get a notification that opens the record.")}
-      actions={<div className="flex flex-wrap gap-2">
-        <Button variant="ghost" onClick={() => open({ view: "alert" })}>{t("Alert rules")}</Button>
-        <Button disabled={busy || !!inputs?.invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save alert rule")}</Button>
-        <ResourceControls type="build.alertrule" record={draft} dirty={dirty} busy={busy} onReview={() => void perform(review)} onCancel={discardChanges} route={{ view: "alert", params: { id } }} />
-        <DraftStatus state={dirty ? "draft" : draft.state} />
-      </div>} />
+    <PageHeader crumbs={[{ label: t("Alert rules"), onClick: () => open({ view: "alert" }) }]} status={<DraftStatus state={dirty ? "draft" : draft.state} />} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} title={draft.title || t("New alert rule")} help={t("Checked after every change to a record of the object. People holding the role get a notification that opens the record.")}
+      actions={<ResourceControls type="build.alertrule" record={draft} dirty={dirty} busy={busy} onSave={() => void perform(save)} onReview={() => void perform(review)} onCancel={discardChanges} route={{ view: "alert", params: { id } }} />} />
     <ContextHelp title={t("Alert rule")}><p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3 lg:grid-cols-2">

@@ -1,3 +1,4 @@
+import { ResourceControls } from "../editor/workbench";
 import { PropertyList, StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
@@ -69,15 +70,12 @@ export function DatasetEditor({ id }: { id: string }) {
   const versions = Array.from({ length: Math.min(latest, keep) }, (_, i) => latest - i);
   const rows = versionQuery.data?.record?.data ?? [], columns = draft.schema?.map((f) => f.name) ?? Object.keys(rows[0] ?? {});
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New dataset")} help={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
-      actions={<div className="flex min-w-0 flex-wrap gap-2">
-        <Button onClick={() => open({ view: "dataset" })}>{t("Datasets")}</Button>
-        {holds("build", "builder") && !!draft.schema?.length && <Button disabled={busy || dirty || !!inputs?.invalid} onClick={() => void perform(draftObject)}>{t("Draft an object from this schema")}</Button>}
-        <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-        <Button variant="primary" disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save dataset")}</Button>
-        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
+    <PageHeader crumbs={[{ label: t("Datasets"), onClick: () => open({ view: "dataset" }) }]} title={draft.title || t("New dataset")} meta={draft.name ? <span className="font-mono">{draft.name}{draft.version ? ` · v${draft.version}` : ""}</span> : undefined} help={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
+      actions={<>
         {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}
-      </div>} />
+        <ResourceControls type="build.dataset" record={draft} dirty={dirty} busy={busy} route={{ view: "dataset", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined}
+          operations={holds("build", "builder") && !!draft.schema?.length ? [{ id: "object", label: t("Draft an object from this schema"), disabled: dirty || !!inputs?.invalid, run: () => void perform(draftObject) }] : []} />
+      </>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Dataset")} className="grid min-w-0 content-start gap-3">

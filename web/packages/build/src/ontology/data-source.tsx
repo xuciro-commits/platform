@@ -1,3 +1,4 @@
+import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { PropertyList, StructuredEditor , PanelGroup , Notice } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { ResourceList } from "../editor/ResourceList";
@@ -37,7 +38,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired");
   const datasetQuery = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200");
   const datasets = datasetQuery.data?.records ?? [];
-  const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, busy, error, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.source", kind: "source", view: "data-source", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [] }),
     failure: t("The data source could not be saved or loaded. Your draft is still here."),
     payload: draft => {
@@ -60,17 +61,13 @@ export function DataSourceEditor({ id }: { id: string }) {
   const last = draft.last;
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New data source")} help={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Declare the source, row mapping and schedule. Publishing saves the declaration; Pull now checks the current environment and requests a pull.")}
-      actions={<div className="flex min-w-0 flex-wrap gap-2">
-        <Button onClick={() => open({ view: "data-source" })}>{t("Data sources")}</Button>
-        <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-        <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save data source")}</Button>
-        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
-        <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
-        {draft.state === "published" && !draft.stream && <Button disabled={busy || dirty || !!draft.requested} onClick={() => void perform(() => transition("pull"))}>{draft.requested ? t("Pull requested…") : t("Pull now")}</Button>}
-        {draft.state === "published" && !draft.stream && !!draft.since && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("reset"))}>{t("Reset cursor")}</Button>}
-        {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
-      </div>} />
+    <PageHeader crumbs={[{ label: t("Data sources"), onClick: () => open({ view: "data-source" }) }]} title={draft.title || t("New data source")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Declare the source, row mapping and schedule. Publishing saves the declaration; Pull now checks the current environment and requests a pull.")}
+      actions={<ResourceControls type="build.source" record={draft} dirty={dirty} busy={busy} route={{ view: "data-source", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined} onPublish={() => void perform(() => transition("publish"))}
+        operations={[
+          ...(draft.state === "published" && !draft.stream ? [{ id: "pull", label: draft.requested ? t("Pull requested…") : t("Pull now"), disabled: dirty || !!draft.requested, run: () => void perform(() => transition("pull")) }] : []),
+          ...(draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []),
+          ...(draft.state === "published" && !draft.stream && !!draft.since ? [{ id: "reset", label: t("Reset cursor"), disabled: dirty, run: () => void perform(() => transition("reset")) }] : []),
+        ]} />} />
     {error && <Notice tone="danger" message={error} />}
     {connectionQuery.isError && <Notice tone="danger" message={t("The connections could not be loaded.")} />}
     {datasetQuery.isError && <Notice tone="danger" message={t("The datasets could not be loaded.")} />}

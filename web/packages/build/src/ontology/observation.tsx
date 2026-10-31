@@ -9,7 +9,7 @@ import { ObservationRead, SemanticObjectSelect, SemanticPropertySelect, useHost,
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 import { useDraftRecord } from "../branches/draft-record";
-import { ResourceControls } from "../editor/workbench";
+import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
 
@@ -75,10 +75,9 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   if (id !== "new" && !draft.id) return <PageHeader title={t("Observation source")} description={query.isError ? t("The observation source could not be loaded.") : t("Loading…")} />;
   const editable = can(`build.observation.${draft.id ? "edit" : "create"}`);
   return <div className="grid min-w-0 gap-4">
-    <PageHeader title={draft.title || t("New observation source")} help={t("The source stores a portable declaration. Connection addresses, credentials and original points stay outside the artifact.")} actions={<>
-      <Button variant="ghost" onClick={() => open({ view: "observation-source" })}>{t("Observation sources")}</Button>
-      <ResourceControls type="build.observation" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} onSave={editable ? () => void perform(save) : undefined} onReview={editable && !branch ? () => void perform(review) : undefined} onInstall={editable && !branch ? () => void perform(install) : undefined} invalid={!!inputDrafts?.invalid} route={{ view: "observation-source", params: { id } }} />
-      {draft.state === "published" && can("build.observation.retire") && <Button disabled={busy || dirty || !!branch} title={branch ? t("This runs against main. Merge the branch first, then run it there.") : undefined} onClick={() => transitions.take("build.observation.retire", { ...draft, created: draft.created ?? {}, changed: draft.changed ?? {} })}>{t("Retire source")}</Button>}
+    <PageHeader crumbs={[{ label: t("Observation sources"), onClick: () => open({ view: "observation-source" }) }]} status={<DraftStatus state={draft.state} />} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} title={draft.title || t("New observation source")} help={t("The source stores a portable declaration. Connection addresses, credentials and original points stay outside the artifact.")} actions={<>
+      <ResourceControls type="build.observation" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} onSave={editable ? () => void perform(save) : undefined} onReview={editable && !branch ? () => void perform(review) : undefined} onInstall={editable && !branch ? () => void perform(install) : undefined} invalid={!!inputDrafts?.invalid} route={{ view: "observation-source", params: { id } }}
+        operations={draft.state === "published" && can("build.observation.retire") ? [{ id: "retire", label: t("Retire source"), disabled: dirty || !!branch, reason: branch ? t("This runs against main. Merge the branch first, then run it there.") : undefined, run: () => transitions.take("build.observation.retire", { ...draft, created: draft.created ?? {}, changed: draft.changed ?? {} }) }] : []} />
     </>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     <StructuredEditor expectedRevision={draft.id ? branch ? mainRevision : draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.observation:${id}:${authoringHost.source.scope}`} readOnly={!editable} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setEdited(true); setError(""); }} onTrial={next => trial(`build.observation.${draft.id ? "edit" : "create"}`, { type: "build.observation", id: draft.id || createID }, next, draft.id ? branch ? mainRevision : draft.revision : 0)}><fieldset disabled={busy || !editable} className="grid min-w-0 gap-3 lg:grid-cols-2">

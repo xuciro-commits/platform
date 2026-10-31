@@ -18,7 +18,7 @@ const cell = "h-8 min-w-24 px-2 text-xs";
 
 export function DecisionTableEditor({ id }: { id: string }) {
   const { holds} = useHost(), { open } = useApplicationWorkspace();
-  const { draft, structured, query, dirty, joining, busy, error, inputs: inputDrafts, patch, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, joining, busy, error, patch, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
     id, type: "build.table", kind: "table", view: "decision-table", empty,
     normalize: record => ({ ...record, rows: (record.rows ?? []).map(row => ({ ...row, when: row.when ?? row.expressions?.map(cellRuleText) ?? [] })), default: record.default ?? [] }),
     failure: t("The decision table could not be saved or loaded. Your draft is still here."),
@@ -64,13 +64,8 @@ export function DecisionTableEditor({ id }: { id: string }) {
   if (!holds("build", "builder")) return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Decision tables")} description={query.isError ? t("The decision table could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New decision table")} help={t("A condition cell is empty for any value, or = v, != v, < v, <= v, > v, >= v, a..b, a|b|c. The first row whose conditions all hold decides.")}
-      actions={<div className="flex min-w-0 flex-wrap gap-2">
-        <Button onClick={() => open({ view: "decision-table" })}>{t("Decision tables")}</Button>
-        <Button disabled={busy || !!inputDrafts?.invalid || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save decision table")}</Button>
-        <ResourceControls type="build.table" record={draft} dirty={dirty} busy={busy} onReview={() => void perform(review)} onCancel={discardChanges} route={{ view: "decision-table", params: { id } }} />
-        <DraftStatus state={dirty ? "draft" : draft.state} />
-      </div>} />
+    <PageHeader crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} status={<DraftStatus state={dirty ? "draft" : draft.state} />} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} title={draft.title || t("New decision table")} help={t("A condition cell is empty for any value, or = v, != v, < v, <= v, > v, >= v, a..b, a|b|c. The first row whose conditions all hold decides.")}
+      actions={<ResourceControls type="build.table" record={draft} dirty={dirty} busy={busy} onSave={() => void perform(save)} onReview={() => void perform(review)} onCancel={discardChanges} route={{ view: "decision-table", params: { id } }} />} />
     <ContextHelp title={t("Decision table")}><p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     <StructuredEditor {...structured} value={{ ...structured.value, ...(draft.rows?{rows: draft.rows.map(row => row.expressions?.length ? { expressions: row.expressions, then: row.then } : { when: row.when, then: row.then })}:{}) }}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3">

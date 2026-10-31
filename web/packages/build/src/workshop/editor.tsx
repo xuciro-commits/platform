@@ -20,10 +20,10 @@ import {interfaceQueryForSection,pageLayoutDiagnostics} from "@platform/app";
 import { recordPaths } from "../ontology/record-paths";
 import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, pageVariableContract, widgetContract, widgetContracts, useHost, useProvidedCapabilities, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  ActionMenu, Button, CanvasEditor, CanvasRegion, Checkbox, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
+  Button, CanvasEditor, CanvasRegion, Checkbox, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
-import { Copy, Clipboard, Columns2, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
+import { Copy, Clipboard, Columns2, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
@@ -341,12 +341,12 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       status={<DraftStatus state={page.state} problems={problemList.length} />} saving={savingState(dirty, saving, refused)}
       history={{ canUndo: session.canUndo && !busy && !preview, canRedo: session.canRedo && !busy && !preview, undo: () => history("undo"), redo: () => history("redo") }}
       actions={<>
-        <Button size="sm" variant={preview ? "primary" : "ghost"} aria-pressed={preview} onClick={() => { setPreview(!preview); setCompatibilityOpen(false); select({ kind: "page" }); }}><Play />{t("Preview")}</Button>
-        <ActionMenu label={t("More page commands")} icon={<MoreHorizontal />} commands={[
+        <ResourceControls type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} operations={[
+          { id: "preview", label: preview ? t("Exit preview") : t("Preview"), icon: <Play />, run: () => { setPreview(!preview); setCompatibilityOpen(false); select({ kind: "page" }); } },
+        ]} extra={[
           { id: "compatibility", label: t("Review page compatibility…"), disabled: busy || preview, run: () => setCompatibilityOpen(true) },
           ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
-        ]} />
-        <ResourceControls type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} onSave={() => void save()} onReview={() => void review()} onInstall={() => void publish()} onCancel={discardChanges} route={canvasRoute} />
+        ]} onSave={() => void save()} onReview={() => void review()} onInstall={() => void publish()} onCancel={discardChanges} route={canvasRoute} />
       </>}
       onKeyDown={(event) => {
         const command = event.metaKey || event.ctrlKey;

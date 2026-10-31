@@ -112,12 +112,12 @@ export function CodeEditor({ id }: { id: string }) {
   const invalid = !!inputs?.invalid;
   let published: CodeDraft | undefined;
   try { published = draft.published ? JSON.parse(draft.published) as CodeDraft : undefined; } catch {   }
-  return <Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "code" }) }, { label: t("Code functions"), onClick: () => open({ view: "code" }) }]} title={draft.title || t("New code function")}
+  return <Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} title={draft.title || t("New code function")}
     status={<DraftStatus state={draft.module ? "published" : "draft"} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>
-        <Button size="sm" disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
-        <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
-        <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || dirty || !draft.module || draft.state === "compiling"} onReview={branch ? undefined : () => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
+        <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid} onSave={() => void perform(save)}
+          publishBlocked={dirty ? t("Save and compile first.") : !draft.module || draft.state === "compiling" ? t("Compile the function first.") : undefined}
+          operations={[{ id: "compile", label: t("Compile function"), disabled: invalid || !draft.id || draft.state === "compiling", run: () => void perform(compile) }]} onReview={branch ? undefined : () => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("Code function")}><p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}

@@ -160,15 +160,22 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     for (const id of ids) { transfers.current.remove(id); drafts.current.delete(id); }
     setTitles(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !ids.includes(id))));
   }, []);
+  const deferred = useRef<{ panels: string[]; run: () => void; cancel?: () => void; selected?: symbol; timer: ReturnType<typeof setTimeout> }>(undefined);
+  const owners = useCallback((id: string, selected?: symbol) => selected === undefined ? [...(drafts.current.get(id)?.values() ?? [])] : [drafts.current.get(id)?.get(selected)].filter(Boolean), []);
+  const busyIn = useCallback((panels: string[], selected?: symbol) => panels.some((id) => owners(id, selected).some((owner) => owner?.busy)), [owners]);
   const guard = useCallback((panels: string[], run: () => void, cancel?: () => void, selected?: symbol) => {
-    const owners = (id: string) => selected === undefined ? [...(drafts.current.get(id)?.values() ?? [])] : [drafts.current.get(id)?.get(selected)].filter(Boolean);
-    if (panels.some((id) => owners(id).some((owner) => owner?.busy))) {
-      toast.error(t("An operation is in progress. Wait for its result before leaving.")); cancel?.(); return;
+    if (busyIn(panels, selected)) {
+      if (deferred.current) { clearTimeout(deferred.current.timer); deferred.current.cancel?.(); }
+      deferred.current = { panels, run, cancel, selected, timer: setTimeout(() => {
+        const waiting = deferred.current; deferred.current = undefined;
+        toast.error(t("An operation is in progress. Wait for its result before leaving.")); waiting?.cancel?.();
+      }, 1500) };
+      return;
     }
-    const dirty = panels.filter((id) => !!routeOf(id) && owners(id).length > 0);
+    const dirty = panels.filter((id) => !!routeOf(id) && owners(id, selected).length > 0);
     if (dirty.length) setPending({ panels: dirty, run, owner: selected, cancel });
     else run();
-  }, [routeOf]);
+  }, [busyIn, owners, routeOf]);
   const unsaved = useMemo<Unsaved>(() => ({
     register: (panel, owner, discard, busy = false) => {
       if ((discard || busy) && routeOf(panel)) {
@@ -179,9 +186,14 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         entries?.delete(owner);
         if (!entries?.size) drafts.current.delete(panel);
       }
+      const waiting = deferred.current;
+      if (waiting && !busyIn(waiting.panels, waiting.selected)) {
+        clearTimeout(waiting.timer); deferred.current = undefined;
+        queueMicrotask(() => guard(waiting.panels, waiting.run, waiting.cancel, waiting.selected));
+      }
     },
     ask: (panels, run, selected) => guard(panels, run, undefined, selected),
-  }), [guard, routeOf]);
+  }), [busyIn, guard, routeOf]);
   const allPanels = useCallback(() => [...stackRef.current.map(entry => entry.id), ...(sideRef.current ? [sideRef.current.id] : [])], []);
 
   useEffect(() => {

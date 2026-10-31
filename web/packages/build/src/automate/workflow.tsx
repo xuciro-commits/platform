@@ -11,10 +11,10 @@ import {workflowRunMatches} from "./workflow-session";
 import { useProcessDraft } from "./process-draft";
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
-import { ActionMenu, Button, FLOW_NODE_DROP, FlowCanvas, Input, Panel, ProblemList, StructureRow, Workbench,
+import { Button, FLOW_NODE_DROP, FlowCanvas, Input, Panel, ProblemList, StructureRow, Workbench,
   flowBlockHeight, flowNodeIcon, flowNodeWidth, flowPlacement, flowPortFits, useFlowArrangement, loops, notationOf, t,
   type FlowAddContext, type FlowBoundary, type FlowCatalog, type FlowEdge, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort, type WorkbenchProblem } from "@platform/ui";
-import { MoreHorizontal, Play, Plus, Search, Settings2 } from "lucide-react";
+import { Play, Plus, Search, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {useQueries} from "@tanstack/react-query";
 import { DataField, JSONEditor } from "./workflow-binding";
@@ -299,16 +299,13 @@ export function FlowEditor({ id }: { id: string }) {
     {!draft.steps.length && <p className="px-2 py-1 text-xs text-muted">{t("Drag a block onto the map, or pick one from the library.")}</p>}
   </div>;
   return <>
-    <Workbench storageKey="flow" crumbs={[{ label: t("Automate"), onClick: () => open({ view: "automation" }) }, { label: t("Flows"), onClick: () => open({ view: "flow" }) }]} title={draft.title || t("New flow")}
+    <Workbench storageKey="flow" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} title={draft.title || t("New flow")}
       status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.filter((p) => p.severity !== "warning").length} />} saving={savingState(dirty, busy, error || undefined)}
       history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setValidation(undefined); }, redo: () => { session.redo(); setValidation(undefined); } }}
       actions={<>
-        <Button size="sm" variant="ghost" disabled={busy || brokenForm.length > 0} onClick={() => void perform(check)}>{t("Validate")}</Button>
-        <Button size="sm" variant={dock === "run" ? "primary" : "ghost"} disabled={busy || !synchronized || !installed?.manual || dirty} onClick={() => setDock("run")}><Play />{t("Run")}</Button>
-        {draft.id && <ActionMenu label={t("More flow commands")} icon={<MoreHorizontal />} commands={[
-          { id: "reload", label: t("Reload saved flow"), disabled: busy, run: () => confirmDiscard(() => void perform(process.reload)) },
-        ]} />}
-        <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "flow", params: { id } }} />
+        <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} onReload={() => confirmDiscard(() => void perform(process.reload))} route={{ view: "flow", params: { id } }}
+          operations={[{ id: "validate", label: t("Validate"), disabled: brokenForm.length > 0, run: () => void perform(check) },
+            { id: "run", label: t("Run"), icon: <Play />, disabled: !synchronized || !installed?.manual || dirty, run: () => setDock("run") }]} />
       </>}
       onKeyDown={(event) => { if (!(event.metaKey || event.ctrlKey)) return; if (event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy && !brokenForm.length) void perform(save); } }}
       left={{ label: t("Flow structure"), tabs: [

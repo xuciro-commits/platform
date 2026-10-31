@@ -7,8 +7,7 @@ import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, useOpenRecord, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
 import { Button, Input, PageHeader, Panel, Select, Textarea, RecordLookup, InterfaceRecordLookup, t, type InterfaceRecordIdentity, type InterfaceRecordPageData, type RecordPageData, type RecordSource } from "@platform/ui";
 import { ObjectSetEditor } from "../editor/ObjectSetEditor";
-import { ResourceControls as AssetControls } from "../editor/workbench";
-import { useDirectInstall } from "../releases/release-profile";
+import { DraftStatus, ResourceControls as AssetControls } from "../editor/workbench";
 
 type Term = [string,string,string|number|boolean];
 type Draft = Omit<Api.NamedQuery,"domain"> & { id:string; revision:number; domain:Term[]; published?:string; version?:number };
@@ -30,22 +29,18 @@ export function QueryEditor({id}:{id:string}) {
   failure:t("The query could not be saved or loaded. Your draft is still here."),
   payload:draft=>{const {name,title,description,object,interface:interfaceName,by,domain,sort,limit}=draft;return {name,title,description,object:object??"",interface:interfaceName??"",by:by??"",domain,sort,limit};},
  });
- const {draft,query,dirty,busy,error,inputs,perform,save,review,discardChanges,confirmDiscard}=editor;
+ const {draft,query,dirty,busy,error,perform,save,review,discardChanges,confirmDiscard}=editor;
  const object={app:"build",kind:"object" as const,name:draft.object??""},info=definitions.find((d)=>d.ref.kind==="object"&&d.ref.name===draft.object)?.entity;
  const currentShape=interfaces.find(item=>item.name===draft.interface)??draft.interfaceShape,fields=draft.interface?currentShape?.fields:info?.fields;
  const patch=editor.patch;
  const reload=()=>editor.reload(t("Reload the saved query before editing again."));
  const publish=()=>editor.transition("publish");
- const directInstall = useDirectInstall();
  const installed=definitions.find((d)=>d.ref.kind==="query"&&d.ref.app==="build"&&d.ref.name===draft.name);
  const versions=Object.keys(installed?.queryVersions??{});
  if(!holds("build", "builder"))return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Queries")} description={query.isError?t("The query could not be loaded."):t("Loading…")}/>;
- return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New query")} help={t("Publish reusable record reads and bind pages to an exact version.")} actions={<div className="flex flex-wrap gap-2"><Button onClick={()=>open({view:"query"})}>{t("Queries")}</Button><AssetControls type="build.query" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"query",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved query")}</Button><Button disabled={busy||inputs?.invalid||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save query")}</Button>{directInstall&&<Button disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
- <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
- {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
+ return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader crumbs={[{label:t("Queries"),onClick:()=>open({view:"query"})}]} title={draft.title||t("New query")} status={<DraftStatus state={draft.published?"published":"draft"}/>} meta={draft.name?<span className="font-mono">{draft.name}{draft.version?` · v${draft.version}`:""}</span>:undefined} help={t("Publish reusable record reads and bind pages to an exact version.")} actions={<AssetControls type="build.query" record={draft} dirty={dirty} busy={busy} empty={!draft.id} onCancel={discardChanges} onSave={()=>void perform(save)} onReview={()=>void perform(review)} onInstall={()=>void perform(publish)} onReload={()=>confirmDiscard(()=>void perform(reload))} route={{view:"query",params:{id}}}/>}/>
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
- {dirty&&<Panel role="status">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
  <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
  <Panel title={t("Query settings")} className="grid min-w-0 content-start gap-3">
  <label className="grid min-w-0 gap-1 text-xs">{t("Query name")}<Input disabled={!!draft.published} value={draft.name} onChange={(e)=>patch({name:e.target.value})}/></label>

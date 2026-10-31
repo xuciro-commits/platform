@@ -67,13 +67,11 @@ export function FunctionEditor({ id }: { id: string }) {
   if (!holds("build", "builder")) return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{t("Only a builder can edit AI functions.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{query.isError ? t("The function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const stages: { id: Stage; title: string }[] = [{ id: "settings", title: t("Function settings") }, { id: "source", title: t("Record inputs") }, { id: "model", title: t("Model inference") }, { id: "output", title: t("Strict output") }];
-  return <Workbench storageKey="function" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "function" }) }, { label: t("AI functions"), onClick: () => open({ view: "function" }) }]} title={draft.title || t("New AI function")}
+  return <Workbench storageKey="function" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} title={draft.title || t("New AI function")}
     status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>
-        <Button size="sm" disabled={busy || !draft.id} variant="ghost" onClick={() => confirmDiscard(() => void perform(reload))}>{t("Reload saved function")}</Button>
-        <Button size="sm" disabled={busy || (!dirty && id !== "new")} onClick={() => void perform(save)}>{t("Save function")}</Button>
-        <Button size="sm" variant={testing ? "primary" : "ghost"} aria-pressed={testing} disabled={busy || !draft.id || dirty} onClick={() => setTesting(!testing)}>{t("Test")}</Button>
-        <ResourceControls type="build.function" record={draft} dirty={dirty} busy={busy} invalid={issues.length > 0 || !draft.id} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "function", params: { id } }} />
+        <ResourceControls type="build.function" record={draft} dirty={dirty} busy={busy} publishBlocked={issues.length > 0 ? t("Fix the problems first.") : undefined} empty={!draft.id} onSave={() => void perform(save)} onReload={() => confirmDiscard(() => void perform(reload))}
+          operations={[{ id: "test", label: testing ? t("Hide test") : t("Test"), disabled: !draft.id || dirty, run: () => setTesting(!testing) }]} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "function", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("AI function")}><p className="text-xs text-muted">{t("Save the declaration, test fixed cases, then review its release candidate.")}</p></ContextHelp>
     {testing && draft.id && !dirty && <Card className="p-3"><CandidateTest functionId={draft.id} embedded /></Card>}

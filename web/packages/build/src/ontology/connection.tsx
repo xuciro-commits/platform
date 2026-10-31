@@ -1,3 +1,4 @@
+import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -44,15 +45,10 @@ export function ConnectionEditor({ id }: { id: string }) {
     patch({ kind: option.kind as Api.Connection["kind"] });
   };
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New connection")} help={t("Choose a logical connection kind. Address and credentials can be configured after installation; Check explicitly tests the current environment.")}
-      actions={<div className="flex min-w-0 flex-wrap gap-2">
-        <Button onClick={() => open({ view: "connection" })}>{t("Connections")}</Button>
-        <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-        <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save connection")}</Button>
-        <Button variant="primary" disabled={busy || !!inputs?.invalid || !!draft.requested} onClick={() => void perform(() => transition("check"))}>{draft.requested ? t("Checking…") : t("Check")}</Button>
-        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
-        {draft.state === "ready" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("retire"))}>{t("Retire")}</Button>}
-      </div>} />
+    <PageHeader crumbs={[{ label: t("Connections"), onClick: () => open({ view: "connection" }) }]} title={draft.title || t("New connection")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Choose a logical connection kind. Address and credentials can be configured after installation; Check explicitly tests the current environment.")}
+      actions={<ResourceControls type="build.connection" record={draft} dirty={dirty} busy={busy} route={{ view: "connection", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined}
+        operations={[{ id: "check", label: draft.requested ? t("Checking…") : t("Check"), disabled: !!inputs?.invalid || !!draft.requested, run: () => void perform(() => transition("check")) },
+          ...(draft.state === "ready" ? [{ id: "retire", label: t("Retire"), disabled: dirty, run: () => void perform(() => transition("retire")) }] : [])]} />} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("System")} className="grid min-w-0 content-start gap-3">

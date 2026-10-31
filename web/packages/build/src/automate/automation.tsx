@@ -4,7 +4,7 @@ import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useHost, useReadQuery } from "@platform/app";
 import { ActionMenu, Button, Input, PageHeader, ProblemList, Select, Tag, Workbench, cn, t, type WorkbenchProblem } from "@platform/ui";
-import { ArrowDown, ArrowUp, Brain, Clock, MoreHorizontal, Plus, Trash2, Workflow, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, Brain, Clock, Plus, Trash2, Workflow, Zap } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
@@ -124,8 +124,7 @@ export function AutomationEditor({ id }: { id: string }) {
     status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.length} />} saving={savingState(dirty, busy, error || undefined)}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: session.undo, redo: session.redo }}
     actions={<>
-      <ActionMenu label={t("More automation commands")} icon={<MoreHorizontal />} commands={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} />
-      <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
+      <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} extra={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
     </>}
     right={editable ? { label: t("Automation inspector"), heading: chosenStep?.title || chosenStep?.name || t(chosen === "condition" ? "If" : "When"), scope:String(chosen),locate:()=>setChosen(chosen), content: <DraftInputs.Provider value={{ ...session.inputs, scope: chosenStep ? `step:${chosenStep.name}` : chosen, reveal: () => setChosen(chosen) }}><div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">

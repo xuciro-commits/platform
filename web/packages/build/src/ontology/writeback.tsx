@@ -1,3 +1,4 @@
+import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { StructuredEditor , PanelGroup , Notice } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { ResourceList } from "../editor/ResourceList";
@@ -33,7 +34,7 @@ export function WritebackEditor({ id }: { id: string }) {
   const connectionQuery = useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100");
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired" && c.kind !== "postgres");
   const effects = useReadQuery<Api.IntegrationEffect[]>("/v1/integration-effects", 5000).data ?? [];
-  const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, busy, error, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.writeback", kind: "writeback", view: "writeback", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [], result: record.result ?? [] }),
     failure: t("The writeback could not be saved or loaded. Your draft is still here."),
     payload: draft => {
@@ -59,15 +60,9 @@ export function WritebackEditor({ id }: { id: string }) {
     <div><Button size="sm" disabled={!draft.object} onClick={() => patch({ [key]: [...list, { from: "", to: "", convert: "" }] })}>{key === "mapping" ? t("Add body field") : t("Add answer field")}</Button></div>
   </div>;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New writeback")} help={t("Choose the original object, trigger, connection and request fields. Explicit confirmations and dispatches send only when their declared business operation runs.")}
-      actions={<div className="flex min-w-0 flex-wrap gap-2">
-        <Button onClick={() => open({ view: "writeback" })}>{t("Writebacks")}</Button>
-        <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-        <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save writeback")}</Button>
-        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
-        <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
-        {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
-      </div>} />
+    <PageHeader crumbs={[{ label: t("Writebacks"), onClick: () => open({ view: "writeback" }) }]} title={draft.title || t("New writeback")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Choose the original object, trigger, connection and request fields. Explicit confirmations and dispatches send only when their declared business operation runs.")}
+      actions={<ResourceControls type="build.writeback" record={draft} dirty={dirty} busy={busy} route={{ view: "writeback", params: { id } }} onCancel={discardChanges} onSave={() => void perform(save)} onReview={holds("build", "builder") ? () => void perform(review) : undefined} onPublish={() => void perform(() => transition("publish"))}
+        operations={draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []} />} />
     {error && <Notice tone="danger" message={error} />}
     {connectionQuery.isError && <Notice tone="danger" message={t("The connections could not be loaded.")} />}
     {holds("build", "builder") && model.drafts.isError && <Notice tone="danger" message={t("The saved object definitions could not be loaded.")} />}
