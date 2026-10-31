@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"slices"
@@ -50,6 +51,9 @@ type ValueSchema struct {
 	Enum          []string               `json:"enum,omitempty"`
 	Description   string                 `json:"description,omitempty"`
 	MaxLength     int                    `json:"maxLength,omitempty"`
+	Minimum       *float64               `json:"minimum,omitempty"`
+	Maximum       *float64               `json:"maximum,omitempty"`
+	MinItems      int                    `json:"minItems,omitempty"`
 	MaxItems      int                    `json:"maxItems,omitempty"`
 }
 
@@ -59,13 +63,16 @@ func (s ValueSchema) check(depth int, remaining *int) error {
 	if *remaining < 0 {
 		return fmt.Errorf("schema exceeds its node bound")
 	}
-	if depth > 12 || len(s.Description) > 1024 || len(s.Properties) > 64 || s.MaxLength < 0 || s.MaxLength > 1<<20 || s.MaxItems < 0 || s.MaxItems > 10000 {
+	if depth > 12 || len(s.Description) > 1024 || len(s.Properties) > 64 || s.MaxLength < 0 || s.MaxLength > 1<<20 || s.MinItems < 0 || s.MaxItems < 0 || s.MinItems > 10000 || s.MaxItems > 10000 || s.MaxItems > 0 && s.MinItems > s.MaxItems {
 		return fmt.Errorf("schema exceeds its structural bound")
+	}
+	if s.Minimum != nil && (math.IsNaN(*s.Minimum) || math.IsInf(*s.Minimum, 0)) || s.Maximum != nil && (math.IsNaN(*s.Maximum) || math.IsInf(*s.Maximum, 0)) || s.Minimum != nil && s.Maximum != nil && *s.Minimum > *s.Maximum {
+		return fmt.Errorf("schema numeric bounds are invalid")
 	}
 	if !slices.Contains([]string{"object", "array", "string", "integer", "number", "boolean", "variant"}, s.Type) {
 		return fmt.Errorf("unsupported schema type %q", s.Type)
 	}
-	if s.Type != "object" && (len(s.Properties) > 0 || len(s.Required) > 0) || s.Type != "array" && (s.Items != nil || s.MaxItems != 0) || s.Type != "string" && (len(s.Enum) > 0 || s.MaxLength != 0) {
+	if s.Type != "object" && (len(s.Properties) > 0 || len(s.Required) > 0) || s.Type != "array" && (s.Items != nil || s.MinItems != 0 || s.MaxItems != 0) || s.Type != "string" && (len(s.Enum) > 0 || s.MaxLength != 0) || s.Type != "number" && s.Type != "integer" && (s.Minimum != nil || s.Maximum != nil) {
 		return fmt.Errorf("schema keywords do not match type %s", s.Type)
 	}
 	if s.Type != "variant" && (s.Discriminator != "" || len(s.Variants) > 0) {
@@ -254,7 +261,7 @@ func (s ValueSchema) validate(v any, path string) error {
 		}
 	case "array":
 		a, ok := v.([]any)
-		if !ok || s.MaxItems > 0 && len(a) > s.MaxItems {
+		if !ok || len(a) < s.MinItems || s.MaxItems > 0 && len(a) > s.MaxItems {
 			return bad()
 		}
 		for i, v := range a {
@@ -280,12 +287,17 @@ func (s ValueSchema) validate(v any, path string) error {
 			return bad()
 		}
 		if s.Type == "integer" {
-			if _, err := strconv.ParseInt(string(n), 10, 64); err != nil {
+			integer, err := strconv.ParseInt(string(n), 10, 64)
+			if err != nil {
 				return fmt.Errorf("%s requires a signed JSON integer", path)
+			}
+			value := new(big.Rat).SetInt64(integer)
+			if s.Minimum != nil && value.Cmp(new(big.Rat).SetFloat64(*s.Minimum)) < 0 || s.Maximum != nil && value.Cmp(new(big.Rat).SetFloat64(*s.Maximum)) > 0 {
+				return bad()
 			}
 		} else {
 			number, err := strconv.ParseFloat(string(n), 64)
-			if err != nil || math.IsInf(number, 0) || math.IsNaN(number) {
+			if err != nil || math.IsInf(number, 0) || math.IsNaN(number) || s.Minimum != nil && number < *s.Minimum || s.Maximum != nil && number > *s.Maximum {
 				return bad()
 			}
 		}

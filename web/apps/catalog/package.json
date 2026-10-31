@@ -7,9 +7,9 @@
     "./view": "./src/Catalog.tsx"
   },
   "scripts": {
-    "dev": "node ../../../scripts/rule-browser.mjs && vite",
+    "dev": "node ../../../scripts/generate-catalog.mjs && node ../../../scripts/rule-browser.mjs && vite",
     "typecheck": "tsc -p .",
-    "build": "node ../../../scripts/rule-browser.mjs && vite build"
+    "build": "node ../../../scripts/generate-catalog.mjs && node ../../../scripts/rule-browser.mjs && vite build"
   },
   "dependencies": {
     "@platform/app": "workspace:*",

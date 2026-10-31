@@ -4975,6 +4975,9 @@ export type ValueSchema = {
   enum?: string[];
   description?: string;
   maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  minItems?: number;
   maxItems?: number;
 };
 

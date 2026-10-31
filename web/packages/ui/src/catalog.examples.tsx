@@ -13,6 +13,11 @@ import {InputDraftProvider} from "./fields/draft";
 import { IconPicker, IconGlyph } from "./components/IconPicker";
 import { GroupedList } from "./components/GroupedList";
 import { z } from "zod";
+import type { Api } from "@platform/kernel";
+import { Tooltip } from "./primitives/tooltip";
+import { PanelGroup } from "./primitives/card";
+import { ValueSchemaForm, schemaValue } from "./components/ValueSchemaForm";
+import { JsonValueEditor } from "./components/JsonValueEditor";
 export function StructuredEditorExample(){
  const [value,setValue]=useState<Record<string,unknown>>({name:"example",enabled:false,quantity:0});
  return <InputDraftProvider scope="catalog-source"><StructuredEditor scope="catalog-source" value={value} onChange={setValue} fields={[{name:"name",title:t("Name"),type:"text",required:true,example:"example"},{name:"enabled",title:t("Enabled"),type:"boolean"},{name:"quantity",title:t("Quantity"),type:"integer",constraints:{min:0}}]}><Input aria-label={t("Name")} value={String(value.name??"")} onChange={event=>setValue({...value,name:event.target.value})}/></StructuredEditor></InputDraftProvider>;
@@ -136,6 +141,12 @@ export function Checkboxes() {
 export function Panels() {
   return <div className="grid gap-3"><Card className="p-3">{t("Shared content surface")}</Card><Panel title={t("Inspector")} description={t("A heading, properties and actions share one panel.")} actions={<Button size="sm">{t("Edit")}</Button>}><PropertyList items={[[t("Name"), "Sample Alpha"], [t("Status"), <Tag label={t("Pending")} tone="info" />]]} /></Panel></div>;
 }
+export function TooltipExample() {
+  return <Tooltip content={t("This hint is available on hover and keyboard focus.")}><Button>{t("Focus or hover")}</Button></Tooltip>;
+}
+export function PanelGroupExample() {
+  return <PanelGroup className="max-w-md"><Panel title={t("Identity")}><p>{t("Shared content surface")}</p></Panel><Panel title={t("Details")}><p>{t("Related properties stay together.")}</p></Panel></PanelGroup>;
+}
 export function Forms() {
   const [submitted, setSubmitted] = useState(false);
   return <Form className="flex flex-wrap items-center gap-2" onSubmit={() => setSubmitted(true)}><Input aria-label={t("Name")} required placeholder={t("Name")} /><Button type="submit">{t("Save")}</Button>{submitted && <Tag tone="success" label={t("Submitted locally")} />}</Form>;
@@ -200,6 +211,24 @@ const schema = z.object({ name: z.string().min(1), quantity: z.number().min(0) }
 export function SchemaForms() {
   const [saved, setSaved] = useState(false);
   return <div className="grid max-w-lg gap-3"><EntityForm schema={schema} fields={[{ name: "name", label: t("Name"), required: true }, { name: "quantity", label: t("Quantity"), kind: "number" }]} defaultValues={{ name: "Sample Alpha", quantity: 12 }} onSubmit={() => setSaved(true)} />{saved && <Tag label={t("Submitted locally")} tone="success" />}</div>;
+}
+const valueFormSchema: Api.ValueSchema = { type: "variant", discriminator: "kind", variants: {
+  basic: { type: "object", required: ["kind", "title", "quantity", "tags"], properties: {
+    kind: { type: "string", enum: ["basic"] }, title: { type: "string" }, quantity: { type: "integer", minimum: 1, maximum: 5 },
+    tags: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3 }, note: { type: "string", nullable: true },
+  } },
+  extended: { type: "object", required: ["kind", "title", "quantity", "tags"], properties: {
+    kind: { type: "string", enum: ["extended"] }, title: { type: "string" }, quantity: { type: "integer", minimum: 1, maximum: 10 },
+    tags: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4 }, detail: { type: "string" },
+  } },
+} };
+export function ValueSchemaFormExample() {
+  const [value, setValue] = useState<unknown>(() => schemaValue(valueFormSchema));
+  return <div className="max-w-md"><ValueSchemaForm schema={valueFormSchema} value={value} onChange={setValue} label={t("Configuration")} /></div>;
+}
+export function JsonValueEditorExample() {
+  const [value, setValue] = useState<unknown>(() => schemaValue(valueFormSchema));
+  return <div className="max-w-md"><JsonValueEditor schema={valueFormSchema} value={value} onChange={setValue} label={t("Configuration")} /></div>;
 }
 export function RecordForms() {
   const [saved, setSaved] = useState(false);
