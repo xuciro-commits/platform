@@ -191,5 +191,5 @@ read-when: 使用或新建一个界面组件，或实现表格、表单、侧窗
 ## 现存差距
 
 - 记录类组件（RecordKanban、RecordGantt、RecordMap 等 20 余个）未按 Workshop 组件目录统一（路线图 P3.14）。
-- 条件构建器 M10 与对象集构建器 M11 在各工具中的实现未统一（P3.18）。
+- 条件构建器 M10 与对象集构建器 M11 未统一（P3.18）。M10 以 build `editor/ExpressionEditor`（编辑 Expr）为准；重复者：自动化的 `PredicateEditor`（Predicate，宿主经 `Predicate.lower` 转 Expr）、Workshop `QueriesPanel` 的条件行（PageQueryCondition）、`VariablesPanel` 的运算行（PageExpression）、`SetBuilder` 内置的 `domain` 条件行（命名查询仍依赖，随 P3.11 删除）。前三者要求存储格式经版本化迁移改为 Expr。M11 以 app `sets/SetBuilder`（经 build `ObjectSetEditor` 注入 M10）为准；缺构建器内的结果预览（只有 Explore 有）与 `ids`、搜索、参数、asOf 的界面；`RecordSetsEditor` 应复用其关系选择。
 - 差异审阅 M18 的审阅并保存：破坏性变更（删除或改类型的具名成员）只给通用影响说明，未列出具体受影响的下游资源；左侧列表没有逐项问题数（P3.30）。
