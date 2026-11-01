@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/studio/build"
 )
@@ -444,5 +446,112 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k6")
+	member := live.member(t)
+	objects := []struct{ id, name, title string }{{"OBJ1", "alpha", "Alpha"}, {"OBJ2", "beta", "Beta"}}
+	for _, object := range objects {
+		live.accept(t, "build.object.create", build.ObjectType, object.id, invariantObject(object.name, object.title))
+	}
+	mainBefore := bytes.Clone(live.recordImage(t)[build.ObjectType])
+	if len(mainBefore) == 0 {
+		t.Fatal("main has no object drafts")
+	}
+	branch, refusal := live.CreateBranch(member, BranchCreateRequest{Name: "k6", Title: "K6 branch"}, invariantClock)
+	if refusal != nil {
+		t.Fatalf("create branch: %v", refusal)
+	}
+	for _, object := range objects {
+		saved, refusal := live.SaveBranchResource(member, branch.ID, build.ObjectType, object.id, BranchSaveRequest{
+			Spec: platform.Raw(invariantObject(object.name, object.title+", branched")),
+		}, invariantClock)
+		if refusal != nil {
+			t.Fatalf("save %s into branch: %v", object.id, refusal)
+		}
+		if !slices.ContainsFunc(saved.Resources, func(resource BranchResourceStatus) bool {
+			return resource.Type == build.ObjectType && resource.ID == object.id && resource.Op == "update"
+		}) {
+			t.Fatalf("branch save omitted %s: %+v", object.id, saved.Resources)
+		}
+		if !bytes.Equal(mainBefore, live.recordImage(t)[build.ObjectType]) {
+			t.Fatalf("saving %s into the branch changed main's object drafts", object.id)
+		}
+	}
+	if _, refusal := live.ProposeBranch(member, branch.ID, BranchProposeRequest{}, invariantClock); refusal != nil {
+		t.Fatalf("propose branch: %v", refusal)
+	}
+	if !bytes.Equal(mainBefore, live.recordImage(t)[build.ObjectType]) {
+		t.Fatal("proposing the branch changed main's object drafts before merge")
+	}
+	sealedBefore := len(live.entries)
+	merged, refusal := live.MergeBranch(member, branch.ID, BranchMergeRequest{}, invariantClock)
+	if refusal != nil || merged.Branch.State != build.BranchMerged || merged.Candidate == "" || merged.CandidateError != "" {
+		t.Fatalf("merge branch: result=%+v refusal=%v", merged, refusal)
+	}
+	mergeResults, candidateResults := 0, 0
+	for _, entry := range live.entries[sealedBefore:] {
+		if entry.Kind != "accepted-result" {
+			t.Fatalf("merge journal entry has kind %q; want accepted-result", entry.Kind)
+		}
+		var envelope struct{ Kind string }
+		if err := json.Unmarshal(entry.Body, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		switch envelope.Kind {
+		case "record-batch":
+			batch, receipt, err := acceptedformat.DecodeBatch(entry.Body)
+			if err != nil {
+				t.Fatalf("decode merge result: %v", err)
+			}
+			submission := receipt.GetSubmission()
+			if submission.GetSchema().GetName() != build.BranchType+".merge" || submission.GetTarget().GetType() != build.BranchType || submission.GetTarget().GetId() != branch.ID {
+				t.Fatalf("merge emitted a separate resource result: %v", submission)
+			}
+			mergeResults++
+			children := map[string]int{}
+			for _, decision := range batch.Decisions {
+				child := new(pb.ChangeRecord)
+				if err := protojson.Unmarshal(decision.Receipt, child); err != nil {
+					t.Fatal(err)
+				}
+				if child.GetSubmission().GetSchema().GetName() == "build.object.edit" {
+					children[child.GetSubmission().GetTarget().GetId()]++
+				}
+			}
+			if len(children) != len(objects) {
+				t.Fatalf("the merge result contains object edits %v; want %d objects", children, len(objects))
+			}
+			for _, object := range objects {
+				if children[object.id] != 1 || !slices.ContainsFunc(batch.Rows, func(row acceptedformat.BatchRow) bool {
+					return row.Type == build.ObjectType && row.ID == object.id
+				}) {
+					t.Fatalf("the single merge result omits an edit or row for %s: children=%v", object.id, children)
+				}
+			}
+		case "release-result":
+			saved, err := acceptedformat.DecodeRelease(entry.Body)
+			if err != nil || saved.CandidateID != merged.Candidate || saved.Key != "release:branch:"+branch.ID+":merge" || saved.Active {
+				t.Fatalf("merge candidate save: result=%+v error=%v", saved, err)
+			}
+			candidateResults++
+		default:
+			t.Fatalf("merge emitted unexpected accepted result %q", envelope.Kind)
+		}
+	}
+	if mergeResults != 1 || candidateResults != 1 {
+		t.Fatalf("merge sealed %d merge results and %d candidate saves; want one of each", mergeResults, candidateResults)
+	}
+	for _, object := range objects {
+		view, refusal := live.RecordOf(member, build.ObjectType, object.id, invariantClock)
+		if refusal != nil {
+			t.Fatalf("read merged object %s: %v", object.id, refusal)
+		}
+		current, ok := view.Record.(build.Object)
+		if !ok || current.Title != object.title+", branched" || current.Revision != 2 {
+			t.Fatalf("main object %s after merge: %+v; want the branch title at revision 2", object.id, view.Record)
+		}
 	}
 }
