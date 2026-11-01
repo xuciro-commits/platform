@@ -74,7 +74,7 @@ P3.17 监听器、监控视图。
 
 代码中与规范冲突、尚未排期的小项；顺手修掉即删除。
 
-- `web/packages/platform` 为空目录；`cmd/compute` 只有 Dockerfile；`cmd/webhook-sink` 在接收端合并后仍保留。
+- `web/packages/platform` 为空目录；`cmd/compute` 只有 Dockerfile。
 - “kernel”一词指三处：`capabilities/server/kernel`、`contract/go/kernel`、`web/packages/kernel`。
 - `journal/` 是持久化而非会计；改名为 `store` 或并入持久化包时一并处理（P2.11）。
 - Workspace 构建仍有大于 500 kB 的分块与三处无效动态导入告警；先测量实际加载成本，再决定拆包。
