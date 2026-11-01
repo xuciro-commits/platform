@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Implements a designed, scoped change in this repository's local checkout and reports back for review. Use for every step the lead has already designed and briefed with spec sections and a file scope.
-model: sonnet
+model: apikeyfan/claude-sonnet-5-5[1m]
 maxTurns: 120
 ---
 

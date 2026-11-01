@@ -1,7 +1,7 @@
 ---
 name: frontend-worker
 description: Frontend implementer confined to web/**. Spawn for the React/UI/i18n slice of a batch; pair with backend-worker on a disjoint file list so both run in parallel.
-model: sonnet
+model: apikeyfan/claude-sonnet-5-5[1m]
 tools: Read, Edit, Write, Bash
 maxTurns: 120
 ---

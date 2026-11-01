@@ -97,12 +97,14 @@ read-when: 新建或修改页面、面板、表单、表格、弹窗
 | 角色 | 承担 | 模型 |
 |---|---|---|
 | 负责人 | 方向、持久代价的决定、浏览器走查与观感判断 | — |
-| 主代理 | 设计、规范、拆分批次、审查合并 | Opus |
-| `implementer` | 按已设计的批次实现、检查、提交 | Sonnet |
-| `backend-worker` | 只在 `capabilities/**`、`contract/**` 内施工 | Sonnet |
-| `frontend-worker` | 只在 `web/**` 内施工 | Sonnet |
-| `reviewer` | 对照规范审查差异，只读；全新上下文、换一个模型家族审 | 与作者不同家族的强模型 |
-| `scout` | 资料收集、代码定位，只读，可并发多个 | 免费 Flash（Haiku） |
-| `entropy-reducer` | 里程碑结束做减法：扫重复与死代码并精简，不改外部行为 | Sonnet 或 Opus |
+| 主代理 | 设计、规范、拆分批次、审查合并 | Claude Opus 5.5（高） |
+| `implementer` | 按已设计的批次实现、检查、提交 | Claude Sonnet 5.5 |
+| `backend-worker` | 只在 `capabilities/**`、`contract/**` 内施工 | GPT-6.1 Sol（高） |
+| `frontend-worker` | 只在 `web/**` 内施工 | Claude Sonnet 5.5 |
+| `reviewer` | 对照规范审查差异，只读；全新上下文、换一个模型家族审 | GPT-6.1 Sol（高，非 Claude 家族） |
+| `scout` | 资料收集、代码定位，只读，可并发多个 | Deepseek-V4.1-Flash（免费） |
+| `entropy-reducer` | 里程碑结束做减法：扫重复与死代码并精简，不改外部行为 | GPT-6.1 Sol（高） |
 
 委派原则：定位与机械活交给免费 `scout`（省 60-90% 主模型 token）；需要取舍的设计留在主代理；独立审查用全新上下文、不同家族的 `reviewer`；每批收尾用 `entropy-reducer` 收敛膨胀。并行多个施工手时按目录划界，先在 main 上冻结契约与共享类型，再分发互不重叠的文件清单。
+
+角色与模型写在两处且内容一致：Codex 读 `~/.codex/config.toml` 的 `[agents]`（全局，`spawn_agent` 据此调度），各工具读 `.claude/agents/*.md` 的 frontmatter。换工具时调度配置需在新工具重建，角色提示词可复用；Magpie 负责把模型 slug 路由到对应渠道。

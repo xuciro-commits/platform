@@ -1,7 +1,7 @@
 ---
 name: scout
 description: Read-only codebase scout. Locates call chains, interface definitions, related files and similar implementations, then distills them to file paths with line numbers. Spawn 2-3 in parallel before a large grep; keep the lead model off mechanical lookups.
-model: haiku
+model: workbuddy-ai/deepseek-v4.1-flash
 tools: Read, Grep, Glob
 maxTurns: 30
 ---

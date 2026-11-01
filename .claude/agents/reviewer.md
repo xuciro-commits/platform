@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Read-only review of a diff or commit range against this repository's specs (docs/) and AGENTS.md. Use after a large or risky batch, before pushing, with a fresh context.
-model: sonnet
+model: apikeyfan/gpt-6.1-sol
 tools: Read, Grep, Glob, Bash
 maxTurns: 60
 ---

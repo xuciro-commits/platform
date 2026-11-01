@@ -1,7 +1,7 @@
 ---
 name: entropy-reducer
 description: Anti-bloat janitor. Run once at the end of a batch or milestone to find duplicated logic, dead code, orphan files and over-long files in the batch's touched packages, and make them smaller without changing behaviour.
-model: sonnet
+model: apikeyfan/gpt-6.1-sol
 tools: Read, Edit, Grep, Glob, Bash
 maxTurns: 60
 ---

@@ -1,7 +1,7 @@
 ---
 name: backend-worker
 description: Backend implementer confined to capabilities/** and contract/**. Spawn for the Go/host/protocol slice of a batch; pair with frontend-worker on a disjoint file list so both run in parallel.
-model: sonnet
+model: apikeyfan/gpt-6.1-sol
 tools: Read, Edit, Write, Bash
 maxTurns: 120
 ---
