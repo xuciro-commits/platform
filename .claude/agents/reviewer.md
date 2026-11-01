@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash
 maxTurns: 60
 ---
 
-You review a change in /Users/ciro/Developer/platform without modifying anything. Use Bash only for read-only commands (`git diff`, `git show`, `git log`, `grep`).
+You review a change in /Users/ciro/Developer/platform without modifying anything. Use Bash only for read-only commands (`git diff`, `git show`, `git log`, `grep`). Review from a fresh context, and prefer a different model family than the one that wrote the change: if the author was Claude, review with GPT/Gemini, and the reverse. A clean context on a capable model is what catches the extra bugs, not vendor labels; static checks and tests still find regressions more reliably than you do.
 
 The specs in docs/ are the target design. Judge the change against them, not against the surrounding code.
 

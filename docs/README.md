@@ -99,7 +99,10 @@ read-when: 新建或修改页面、面板、表单、表格、弹窗
 | 负责人 | 方向、持久代价的决定、浏览器走查与观感判断 | — |
 | 主代理 | 设计、规范、拆分批次、审查合并 | Opus |
 | `implementer` | 按已设计的批次实现、检查、提交 | Sonnet |
-| `reviewer` | 对照规范审查差异，只读 | Sonnet |
-| Explore | 资料收集、代码定位，只读 | Haiku 或 Sonnet |
+| `backend-worker` | 只在 `capabilities/**`、`contract/**` 内施工 | Sonnet |
+| `frontend-worker` | 只在 `web/**` 内施工 | Sonnet |
+| `reviewer` | 对照规范审查差异，只读；全新上下文、换一个模型家族审 | 与作者不同家族的强模型 |
+| `scout` | 资料收集、代码定位，只读，可并发多个 | 免费 Flash（Haiku） |
+| `entropy-reducer` | 里程碑结束做减法：扫重复与死代码并精简，不改外部行为 | Sonnet 或 Opus |
 
-委派原则：资料收集与机械修改交给便宜的模型；需要取舍的设计留在主代理；独立审查用全新上下文的 `reviewer`。
+委派原则：定位与机械活交给免费 `scout`（省 60-90% 主模型 token）；需要取舍的设计留在主代理；独立审查用全新上下文、不同家族的 `reviewer`；每批收尾用 `entropy-reducer` 收敛膨胀。并行多个施工手时按目录划界，先在 main 上冻结契约与共享类型，再分发互不重叠的文件清单。
