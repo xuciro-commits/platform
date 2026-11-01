@@ -3728,6 +3728,7 @@ export type Process = {
   steps: ProcessStep[];
   lanes?: ProcessLane[];
   layout?: Record<string, NodePosition>;
+  paused?: boolean;
   state: "draft" | "published";
   version?: number;
   published?: string;
