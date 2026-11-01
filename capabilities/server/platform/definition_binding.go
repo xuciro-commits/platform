@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"platformserver/internal/rules"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -89,147 +88,221 @@ func (b Binding) Resolve(r *Run, subject json.RawMessage) (json.RawMessage, erro
 	return slices.Clone(raw), nil
 }
 
-type Predicate struct {
-	Op    string      `json:"op" enum:"eq,neq,gt,gte,lt,lte,contains,exists,all,any,not"`
-	Left  *Binding    `json:"left,omitempty"`
-	Right *Binding    `json:"right,omitempty"`
-	Terms []Predicate `json:"terms,omitempty"`
+var conditionOps = map[string]string{"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=", "contains": "contains"}
+
+func ConditionRef(b Binding) string {
+	parts := []string{b.Source}
+	if b.Source == "step" {
+		parts = append(parts, b.Step)
+	}
+	return strings.Join(append(parts, b.Path...), ".")
 }
 
-func (p Predicate) Check() error { return p.check(0) }
-
-func (p Predicate) check(depth int) error {
-	if depth > 16 {
-		return fmt.Errorf("predicate nesting exceeds its bound")
-	}
-	switch p.Op {
-	case "all", "any", "not":
-		if p.Left != nil || p.Right != nil || len(p.Terms) == 0 || len(p.Terms) > 32 || p.Op == "not" && len(p.Terms) != 1 {
-			return fmt.Errorf("logical predicate needs bounded terms")
+func ConditionBinding(ref string) (Binding, error) {
+	parts := strings.Split(ref, ".")
+	b := Binding{Source: parts[0], Path: parts[1:]}
+	switch b.Source {
+	case "step":
+		if len(parts) < 2 {
+			return Binding{}, fmt.Errorf("condition reference %s needs a node", ref)
 		}
-		for _, term := range p.Terms {
-			if err := term.check(depth + 1); err != nil {
-				return err
-			}
+		b.Step, b.Path = parts[1], parts[2:]
+	case "index", "answer":
+		if len(b.Path) > 0 {
+			return Binding{}, fmt.Errorf("condition reference %s has no fields", ref)
 		}
-	case "eq", "neq", "gt", "gte", "lt", "lte", "contains", "exists":
-		if p.Left == nil || len(p.Terms) > 0 || p.Op != "exists" && p.Right == nil || p.Op == "exists" && p.Right != nil {
-			return fmt.Errorf("predicate needs matching operands")
-		}
-		if err := p.Left.Check(); err != nil {
-			return err
-		}
-		if p.Right != nil {
-			return p.Right.Check()
-		}
+	case "input", "subject", "item":
 	default:
-		return fmt.Errorf("unknown predicate operator %s", p.Op)
+		return Binding{}, fmt.Errorf("condition reference %s names no workflow value", ref)
 	}
-	return nil
+	if len(b.Path) == 0 {
+		b.Path = nil
+	}
+	return b, b.Check()
 }
 
-type predicateBindings struct {
-	left, right Binding
-	exists      bool
+func ConditionRefs(e Expr) []string {
+	var out []string
+	var visit func(Expr)
+	visit = func(e Expr) {
+		if e.Ref != "" && !slices.Contains(out, e.Ref) {
+			out = append(out, e.Ref)
+		}
+		for _, arg := range e.Args {
+			visit(arg)
+		}
+		if e.In != nil {
+			visit(*e.In)
+		}
+	}
+	visit(e)
+	return out
 }
 
-type predicateValues struct {
-	run      *Run
-	subject  json.RawMessage
-	groups   []predicateBindings
-	resolved map[int]bool
-	values   map[string]rules.Value
-	failure  error
+func ConditionBindings(e Expr) ([]Binding, error) {
+	var out []Binding
+	for _, ref := range ConditionRefs(e) {
+		b, err := ConditionBinding(ref)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, nil
 }
 
-func (v *predicateValues) Ref(name string) (rules.Value, bool) {
-	indexText, _, found := strings.Cut(name, ".")
-	index, err := strconv.Atoi(indexText)
-	if !found || err != nil || index < 0 || index >= len(v.groups) {
+func compileCondition(e Expr) (*rules.Program, error) {
+	if e.Kind != "boolean" {
+		return nil, fmt.Errorf("condition must be a boolean expression")
+	}
+	var plain func(Expr) bool
+	plain = func(e Expr) bool {
+		if e.Agg != nil || e.Window != nil || e.In != nil || e.Op == "path" || strings.HasPrefix(e.Op, "$") {
+			return false
+		}
+		return !slices.ContainsFunc(e.Args, func(arg Expr) bool { return !plain(arg) })
+	}
+	if !plain(e) {
+		return nil, fmt.Errorf("a workflow condition compares workflow values only; it cannot read the clock, the caller or collections")
+	}
+	schema := rules.Schema{Refs: map[string]rules.Type{}}
+	for _, ref := range ConditionRefs(e) {
+		if _, err := ConditionBinding(ref); err != nil {
+			return nil, err
+		}
+		schema.Refs[ref] = rules.Type{Kind: "json"}
+	}
+	return rules.CompilePredicate(e, schema)
+}
+
+func CheckCondition(e Expr) error {
+	_, err := compileCondition(e)
+	return err
+}
+
+type conditionValues struct {
+	run     *Run
+	subject json.RawMessage
+}
+
+func (v conditionValues) Ref(name string) (rules.Value, bool) {
+	b, err := ConditionBinding(name)
+	if err != nil {
 		return rules.Value{}, false
 	}
-	group := v.groups[index]
-	kind := "json"
-	if group.exists {
-		kind = "boolean"
+	raw, err := b.Resolve(v.run, v.subject)
+	if err != nil {
+		raw = json.RawMessage("null")
 	}
-	if !v.resolved[index] {
-		v.resolved[index] = true
-		left, err := group.left.Resolve(v.run, v.subject)
-		if group.exists {
-			v.values[indexText+".left"] = rules.Present("boolean", err == nil && !bytes.Equal(bytes.TrimSpace(left), []byte("null")))
-		} else {
-			if err == nil {
-				var right json.RawMessage
-				right, err = group.right.Resolve(v.run, v.subject)
-				if err == nil {
-					v.values[indexText+".left"] = rules.PresentRaw("json", left)
-					v.values[indexText+".right"] = rules.PresentRaw("json", right)
-				}
-			}
-			if err != nil {
-				v.failure = err
-			}
-		}
-	}
-	if value, ok := v.values[name]; ok {
-		return value, true
-	}
-	if v.failure != nil {
-		return rules.Value{Kind: kind, Status: "binding-error"}, true
-	}
-	return rules.Missing(kind), true
+	return rules.PresentRaw("json", raw), true
 }
 
-func (p Predicate) lower(groups *[]predicateBindings, schema *rules.Schema) rules.Expr {
-	if p.Op == "all" || p.Op == "any" || p.Op == "not" {
-		parts := make([]rules.Expr, len(p.Terms))
-		for i, term := range p.Terms {
-			parts[i] = term.lower(groups, schema)
-		}
-		if len(parts) == 1 && p.Op != "not" {
-			return parts[0]
-		}
-		op := map[string]string{"all": "and", "any": "or", "not": "not"}[p.Op]
-		return rules.Expr{Op: op, Kind: "boolean", Args: parts}
-	}
-	index := strconv.Itoa(len(*groups))
-	group := predicateBindings{left: *p.Left, exists: p.Op == "exists"}
-	if p.Right != nil {
-		group.right = *p.Right
-	}
-	*groups = append(*groups, group)
-	if group.exists {
-		schema.Refs[index+".left"] = rules.Type{Kind: "boolean"}
-		return rules.RefOf("boolean", index+".left")
-	}
-	schema.Refs[index+".left"] = rules.Type{Kind: "json"}
-	schema.Refs[index+".right"] = rules.Type{Kind: "json"}
-	op := map[string]string{"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=", "contains": "contains"}[p.Op]
-	return rules.Expr{Op: op, Kind: "boolean", Args: []rules.Expr{rules.RefOf("json", index+".left"), rules.RefOf("json", index+".right")}}
-}
-
-func (p Predicate) Test(r *Run, subject json.RawMessage) (bool, error) {
-	if err := p.Check(); err != nil {
-		return false, err
-	}
-	groups := []predicateBindings{}
-	schema := rules.Schema{Refs: map[string]rules.Type{}}
-	expr := p.lower(&groups, &schema)
-	program, err := rules.CompilePredicate(expr, schema)
+func TestCondition(e Expr, r *Run, subject json.RawMessage) (bool, error) {
+	program, err := compileCondition(e)
 	if err != nil {
 		return false, err
 	}
-	values := &predicateValues{run: r, subject: subject, groups: groups, resolved: map[int]bool{}, values: map[string]rules.Value{}}
-	answer, err := program.EvalSource(values)
-	if values.failure != nil {
-		return false, values.failure
-	}
+	answer, err := program.EvalSource(conditionValues{run: r, subject: subject})
 	if issue, ok := err.(*rules.Issue); ok {
 		if issue.Message == "malformed typed value" {
-			return false, fmt.Errorf("predicate operands are invalid JSON")
+			return false, fmt.Errorf("condition operands are invalid JSON")
 		}
 		return false, fmt.Errorf("%s", issue.Message)
 	}
 	return err == nil && string(answer.Value.Data) == "true", err
+}
+
+type conditionV1 struct {
+	Op    string        `json:"op"`
+	Left  *Binding      `json:"left,omitempty"`
+	Right *Binding      `json:"right,omitempty"`
+	Terms []conditionV1 `json:"terms,omitempty"`
+}
+
+func (p conditionV1) operand(b *Binding) (Expr, error) {
+	if err := b.Check(); err != nil {
+		return Expr{}, err
+	}
+	if b.Source == "literal" {
+		return Expr{Kind: "json", Lit: &rules.Literal{Value: b.Value}}, nil
+	}
+	if slices.ContainsFunc(b.Path, func(part string) bool { return strings.Contains(part, ".") }) {
+		return Expr{}, fmt.Errorf("condition path %s cannot name a field containing a dot", strings.Join(b.Path, "/"))
+	}
+	return rules.RefOf("json", ConditionRef(*b)), nil
+}
+
+func (p conditionV1) expr(depth int) (Expr, error) {
+	if depth > 16 {
+		return Expr{}, fmt.Errorf("condition nesting exceeds its bound")
+	}
+	switch p.Op {
+	case "all", "any", "not":
+		if p.Left != nil || p.Right != nil || len(p.Terms) == 0 || len(p.Terms) > 32 || p.Op == "not" && len(p.Terms) != 1 {
+			return Expr{}, fmt.Errorf("logical condition needs bounded terms")
+		}
+		args := make([]Expr, len(p.Terms))
+		for i, term := range p.Terms {
+			arg, err := term.expr(depth + 1)
+			if err != nil {
+				return Expr{}, err
+			}
+			args[i] = arg
+		}
+		if len(args) == 1 && p.Op != "not" {
+			return args[0], nil
+		}
+		return Expr{Op: map[string]string{"all": "and", "any": "or", "not": "not"}[p.Op], Kind: "boolean", Args: args}, nil
+	}
+	op, ok := conditionOps[p.Op]
+	if p.Op == "exists" {
+		op, ok = "is-not-null", true
+	}
+	if !ok {
+		return Expr{}, fmt.Errorf("unknown condition operator %s", p.Op)
+	}
+	if p.Left == nil || len(p.Terms) > 0 || (p.Op == "exists") != (p.Right == nil) {
+		return Expr{}, fmt.Errorf("condition needs matching operands")
+	}
+	args := []*Binding{p.Left}
+	if p.Right != nil {
+		args = append(args, p.Right)
+	}
+	e := Expr{Op: op, Kind: "boolean"}
+	for _, b := range args {
+		arg, err := p.operand(b)
+		if err != nil {
+			return Expr{}, err
+		}
+		e.Args = append(e.Args, arg)
+	}
+	return e, nil
+}
+
+func UpgradeCondition(raw json.RawMessage) (*Expr, error) {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, nil
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &keys); err != nil {
+		return nil, err
+	}
+	if keys["left"] == nil && keys["right"] == nil && keys["terms"] == nil {
+		var e Expr
+		if err := json.Unmarshal(raw, &e); err != nil {
+			return nil, err
+		}
+		return &e, nil
+	}
+	var legacy conditionV1
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&legacy); err != nil {
+		return nil, err
+	}
+	e, err := legacy.expr(0)
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
 }

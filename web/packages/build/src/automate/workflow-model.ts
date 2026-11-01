@@ -1,10 +1,9 @@
-import { workflowBindings } from "./workflow-edit";
+import { alwaysCondition, conditionOperand, workflowBindings } from "./workflow-edit";
 import type { Api } from "@platform/kernel";
 import { t, type FlowEdge, type FlowDiagnostic, type FlowNodeClass, type Tone } from "@platform/ui";
 
 export type ValueSchema = Api.ValueSchema;
 export type Binding = Api.Binding;
-export type Predicate = Api.Predicate;
 export type WorkflowStep = Api.ProcessStep;
 type WorkflowKind = WorkflowStep["kind"];
 export type WorkflowDraft = Partial<Api.Process> & Pick<Api.Process, "id" | "revision" | "name" | "title" | "steps"> & { object: string; when: string };
@@ -70,10 +69,8 @@ export function controlEdges(draft: WorkflowDraft): FlowEdge[] {
   return draft.steps.flatMap((step) => stepPaths(step).map((path) => ({ id: `${step.name}:${path.port}`, source: step.name, sourcePort: path.port, target: path.target, targetPort: "in", label: path.title, channel: "control" as const, tone: path.port === "error" ? "danger" as const : undefined })));
 }
 export function bindingPortLabel(port: string): string {
-  if (!port.startsWith("binding:condition")) return port.slice(port.indexOf(":") + 1);
-  const indices = [...port.matchAll(/\.terms\.(\d+)/g)].map((item) => Number(item[1]) + 1);
-  const side = t(port.endsWith(".left") ? "Left value" : "Right value");
-  return indices.length ? `${t("Condition {n}", { n: indices.join(".") })} · ${side}` : `${t("Condition")} · ${side}`;
+  const slot = /^binding:condition\.(\d+)$/.exec(port);
+  return slot ? t("Condition · operand {n}", { n: Number(slot[1]) + 1 }) : port.slice(port.indexOf(":") + 1);
 }
 export function dataEdges(draft: WorkflowDraft): FlowEdge[] {
   return draft.steps.flatMap((step) => workflowBindings(step).flatMap(({ port, binding }) => binding?.source === "step" && binding.step
@@ -106,10 +103,10 @@ export function initialStep(capability: Capability, steps: WorkflowStep[]): Work
   if (step.kind === "compute") Object.assign(step, { operation: { app: capability.ref.app, name: capability.ref.name, version: capability.revision ?? 0 },
     ...(capability.input && (capability.input.type !== "object" || capability.input.nullable) ? { value: { source: "input" } } : {}) });
   if (step.kind === "ask") Object.assign(step, { ask: "user", answers: ["approve", "reject"], cases: { approve: "", reject: "" } });
-  if (step.kind === "branch") Object.assign(step, { condition: { op: "eq", left: { source: "literal", value: true }, right: { source: "literal", value: true } }, cases: { true: "", false: "" } });
+  if (step.kind === "branch") Object.assign(step, { condition: alwaysCondition(), cases: { true: "", false: "" } });
   if (step.kind === "switch") Object.assign(step, { value: { source: "input" }, cases: { value: "" } });
   if (step.kind === "foreach") Object.assign(step, { collection: { source: "literal", value: [] }, maxIterations: 100, concurrency: 1 });
-  if (step.kind === "while") Object.assign(step, { condition: { op: "eq", left: { source: "literal", value: false }, right: { source: "literal", value: true } }, maxIterations: 100, concurrency: 1 });
+  if (step.kind === "while") Object.assign(step, { condition: { op: "=", kind: "boolean", args: [conditionOperand({ source: "literal", value: false }), conditionOperand({ source: "literal", value: true })] }, maxIterations: 100, concurrency: 1 });
   if (step.kind === "fork") Object.assign(step, { branches: [], mode: "all" });
   if (step.kind === "wait") Object.assign(step, { untilSeconds: 60 });
   if (step.kind === "end" || step.kind === "join") Object.assign(step, { value: { source: "input" } });
@@ -140,3 +137,30 @@ export function workflowDiagnostics(draft: WorkflowDraft, validation?: { issues:
 
 export const PERIODS = ["15m", "1h", "24h", "168h"] as const;
 export const periodLabel = (every: string) => ({ "15m": t("every 15 minutes"), "1h": t("every hour"), "24h": t("every day"), "168h": t("every week") })[every] ?? t("every {period}", { period: every });
+export function pathSchema(schema: ValueSchema | undefined, path: string[] = []): ValueSchema | undefined {
+  for (const name of path) schema = commonSchemaProperties(schema)[name];
+  return schema;
+}
+export function bindingSchema(binding: Binding, draft: WorkflowDraft, capabilities: Capability[], seen: Set<string>): ValueSchema | undefined {
+  let schema: ValueSchema | undefined;
+  if (binding.source === "input") schema = draft.inputSchema;
+  else if (binding.source === "index") schema = { type: "integer" };
+  else if (binding.source === "answer") schema = { type: "string" };
+  else if (binding.source === "literal") {
+    const value = binding.value;
+    schema = Array.isArray(value) ? { type: "array" } : value !== null && typeof value === "object" ? { type: "object" } : typeof value === "boolean" ? { type: "boolean" } : typeof value === "number" ? { type: Number.isInteger(value) ? "integer" : "number" } : typeof value === "string" ? { type: "string" } : undefined;
+  } else if (binding.source === "step" && binding.step) {
+    const step = draft.steps.find((item) => item.name === binding.step);
+    if (step && !seen.has(step.name)) schema = outputSchema(step, draft, capabilities, new Set([...seen, step.name]));
+  }
+  return pathSchema(schema, binding.path);
+}
+export function outputSchema(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capability[], seen = new Set<string>([step.name])): ValueSchema | undefined {
+  if (step.kind === "payload") return draft.inputSchema;
+  if ((step.kind === "transform" || step.kind === "end" || step.kind === "join") && step.value) return bindingSchema(step.value, draft, capabilities, seen);
+  if (step.kind === "transform") return { type: "object", properties: Object.fromEntries(Object.entries(step.inputs ?? {}).flatMap(([name, value]) => {
+    const schema = bindingSchema(value, draft, capabilities, seen); return schema ? [[name, schema]] : [];
+  })) };
+  if (step.kind === "ask") return { type: "object", properties: { answer: { type: "string", enum: step.answers } } };
+  return sourceCapability(step, capabilities)?.output;
+}

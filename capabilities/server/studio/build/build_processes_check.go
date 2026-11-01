@@ -145,7 +145,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 			}
 		}
 		if step.Condition != nil {
-			if err := step.Condition.Check(); err != nil {
+			if err := platform.CheckCondition(*step.Condition); err != nil {
 				return problem(err.Error())
 			}
 		}
@@ -537,7 +537,11 @@ func CheckProcessScopes(p Process) error {
 			}
 		}
 		if node.Condition != nil {
-			bindings = append(bindings, predicateBindings(*node.Condition)...)
+			refs, err := platform.ConditionBindings(*node.Condition)
+			if err != nil {
+				return fmt.Errorf("Node %s: %v", node.Name, err)
+			}
+			bindings = append(bindings, refs...)
 		}
 		for _, binding := range bindings {
 			if binding.Source == "item" || binding.Source == "index" {
@@ -559,18 +563,4 @@ func CheckProcessScopes(p Process) error {
 		}
 	}
 	return nil
-}
-
-func predicateBindings(p platform.Predicate) []platform.Binding {
-	var out []platform.Binding
-	if p.Left != nil {
-		out = append(out, *p.Left)
-	}
-	if p.Right != nil {
-		out = append(out, *p.Right)
-	}
-	for _, term := range p.Terms {
-		out = append(out, predicateBindings(term)...)
-	}
-	return out
 }

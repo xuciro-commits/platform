@@ -3647,13 +3647,6 @@ export type Precheck = {
   bindings?: CapabilityBinding[];
 };
 
-export type Predicate = {
-  op: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "contains" | "exists" | "all" | "any" | "not";
-  left?: Binding;
-  right?: Binding;
-  terms?: Predicate[];
-};
-
 export type Process = {
   id: string;
   revision: number;
@@ -3705,7 +3698,7 @@ export type ProcessStep = {
   inputs?: Record<string, Binding>;
   value?: Binding;
   target?: Binding;
-  condition?: Predicate;
+  condition?: Expr;
   collection?: Binding;
   waitUntil?: Binding;
   cases?: Record<string, string>;

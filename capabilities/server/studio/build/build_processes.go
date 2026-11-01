@@ -296,7 +296,7 @@ type ProcessStep struct {
 	Inputs         map[string]platform.Binding `json:"inputs,omitempty" type:"json"`
 	Value          *platform.Binding           `json:"value,omitempty" type:"json"`
 	Target         *platform.Binding           `json:"target,omitempty" type:"json"`
-	Condition      *platform.Predicate         `json:"condition,omitempty" type:"json"`
+	Condition      *platform.Expr              `json:"condition,omitempty" type:"json"`
 	Collection     *platform.Binding           `json:"collection,omitempty" type:"json"`
 	WaitUntil      *platform.Binding           `json:"waitUntil,omitempty" type:"json" title:"Wait until timestamp"`
 	Cases          map[string]string           `json:"cases,omitempty" type:"json"`
@@ -371,10 +371,18 @@ func (s *ProcessStep) UnmarshalJSON(raw []byte) error {
 	type current ProcessStep
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	var node current
+	var node struct {
+		current
+		Condition json.RawMessage `json:"condition,omitempty"`
+	}
 	if err := decoder.Decode(&node); err != nil {
 		return err
 	}
-	*s = ProcessStep(node)
+	condition, err := platform.UpgradeCondition(node.Condition)
+	if err != nil {
+		return err
+	}
+	*s = ProcessStep(node.current)
+	s.Condition = condition
 	return nil
 }

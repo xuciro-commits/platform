@@ -121,9 +121,8 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 			if prior, ok := ReadPublication[Process](processes[i].Published); ok {
 				priorAsset, err := processReleaseAsset(prior, asset.SourceVersion)
 				if err == nil {
-					var a, z any
-					_ = json.Unmarshal(priorAsset.Body, &a)
-					_ = json.Unmarshal(asset.Body, &z)
+					a, _ := upgradedProcessBody(priorAsset.Body)
+					z, _ := upgradedProcessBody(asset.Body)
 					if reflect.DeepEqual(a, z) {
 						continue
 					}

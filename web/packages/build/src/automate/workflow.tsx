@@ -21,7 +21,7 @@ import { DataField, JSONEditor } from "./workflow-binding";
 import { schemaIssue } from "@platform/app/page-contract";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
 import { bindingPortLabel, capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle, workflowStepClass,
-  type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
+  bindingSchema, outputSchema, pathSchema, type Binding, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
 import { WorkflowRuns, type WorkflowRun } from "./workflow-runs";
@@ -49,33 +49,6 @@ const definitionKind = (capability: Capability): FlowNodeKind => {
   }
   return { id: capabilityKey(capability), title: t(capability.title), description: t(capability.description), class: workflowStepClass(capability.kind), group: t(capability.group), tone: capability.tone, inputs, outputs };
 };
-function pathSchema(schema: ValueSchema | undefined, path: string[] = []): ValueSchema | undefined {
-  for (const name of path) schema = commonSchemaProperties(schema)[name];
-  return schema;
-}
-function bindingSchema(binding: Binding, draft: WorkflowDraft, capabilities: Capability[], seen: Set<string>): ValueSchema | undefined {
-  let schema: ValueSchema | undefined;
-  if (binding.source === "input") schema = draft.inputSchema;
-  else if (binding.source === "index") schema = { type: "integer" };
-  else if (binding.source === "answer") schema = { type: "string" };
-  else if (binding.source === "literal") {
-    const value = binding.value;
-    schema = Array.isArray(value) ? { type: "array" } : value !== null && typeof value === "object" ? { type: "object" } : typeof value === "boolean" ? { type: "boolean" } : typeof value === "number" ? { type: Number.isInteger(value) ? "integer" : "number" } : typeof value === "string" ? { type: "string" } : undefined;
-  } else if (binding.source === "step" && binding.step) {
-    const step = draft.steps.find((item) => item.name === binding.step);
-    if (step && !seen.has(step.name)) schema = outputSchema(step, draft, capabilities, new Set([...seen, step.name]));
-  }
-  return pathSchema(schema, binding.path);
-}
-function outputSchema(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capability[], seen = new Set<string>([step.name])): ValueSchema | undefined {
-  if (step.kind === "payload") return draft.inputSchema;
-  if ((step.kind === "transform" || step.kind === "end" || step.kind === "join") && step.value) return bindingSchema(step.value, draft, capabilities, seen);
-  if (step.kind === "transform") return { type: "object", properties: Object.fromEntries(Object.entries(step.inputs ?? {}).flatMap(([name, value]) => {
-    const schema = bindingSchema(value, draft, capabilities, seen); return schema ? [[name, schema]] : [];
-  })) };
-  if (step.kind === "ask") return { type: "object", properties: { answer: { type: "string", enum: step.answers } } };
-  return sourceCapability(step, capabilities)?.output;
-}
 function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capability[]): FlowNodeKind {
   const capability = sourceCapability(step, capabilities);
   const root = capability ? definitionKind(capability) : { id: step.kind, title: workflowKindTitle(step.kind), class: workflowStepClass(step.kind), group: t("Flow"), inputs: [] as FlowPort[], outputs: [] as FlowPort[] };
@@ -305,7 +278,7 @@ export function FlowEditor({ id }: { id: string }) {
         { id: "blocks", title: t("Blocks"), content: library },
         { id: "data", title: t("Data"), content: data },
       ] }}
-      right={{ label: t("Flow inspector"), heading: node?.title || node?.name || t("Workflow settings"), scope: node ? `step:${node.name}` : "settings", open: inspectorOpen, onOpenChange: setInspectorOpen, content: <DraftInputs.Provider value={{...session.inputs,scope:node ? `step:${node.name}` : "settings",reveal:()=>setChosen(node?.name??"")}}><div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
+      right={{ label: t("Flow inspector"), heading: node?.title || node?.name || t("Workflow settings"), scope: node ? `step:${node.name}` : "settings", open: inspectorOpen, onOpenChange: setInspectorOpen, content: <DraftInputs.Provider value={{...session.inputs,scope:node ? `step:${node.name}` : "settings",reveal:()=>setChosen(node?.name??"")}}><div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} subject={draft.object || undefined} inputSchema={draft.inputSchema} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
         onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
         onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} />
         : <WorkflowSettings draft={draft} onChange={change} objects={objects} />}</div></DraftInputs.Provider> }}

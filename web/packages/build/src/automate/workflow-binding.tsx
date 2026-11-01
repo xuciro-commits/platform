@@ -3,7 +3,7 @@ import { ContextHelp, InputDraftProvider, Button, Checkbox, Disclosure, Input, S
 import { Braces, ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useDraftInput } from "../session/DraftSession";
-import { commonSchemaProperties, type Binding, type Predicate, type ValueSchema, type WorkflowStep } from "./workflow-model";
+import { commonSchemaProperties, type Binding, type ValueSchema, type WorkflowStep } from "./workflow-model";
 
 const bindingMime = "application/platform-binding";
 
@@ -56,22 +56,6 @@ export function BindingEditor({ label, value, onChange, steps, schema, optional 
         : <Input aria-label={t("Field path")} placeholder={t("Whole value, or field.path")} value={(binding.path ?? []).join(".")} onChange={(event) => onChange({ ...binding, path: event.target.value ? event.target.value.split(".") : [] })} />}
     </>}
     <p className="text-2xs leading-4 text-muted">{schema?.description ?? t("Drag a field from available data, or choose a typed source.")}</p>
-  </div>;
-}
-
-export function PredicateEditor({ value, onChange, steps, depth = 0, path = "condition" }: { value: Predicate; onChange: (predicate: Predicate) => void; steps: WorkflowStep[]; depth?: number; path?: string }) {
-  const logical = ["all", "any", "not"].includes(value.op);
-  return <div className="grid gap-2 rounded-lg border border-border p-2">
-    <Select aria-label={t("Condition operator")} value={value.op} onChange={(event) => {
-      const op = event.target.value as Predicate["op"];
-      onChange(["all", "any", "not"].includes(op) ? { op, terms: [value.left ? { ...value, op: "eq", terms: undefined } : { op: "eq", left: { source: "literal", value: true }, right: { source: "literal", value: true } }] }
-        : { op, left: value.left ?? { source: "input" }, ...(op === "exists" ? {} : { right: value.right ?? { source: "literal", value: true } }) });
-    }}>{(["eq", "neq", "gt", "gte", "lt", "lte", "contains", "exists", ...(depth < 4 ? ["all", "any", "not"] : [])] as Predicate["op"][]).map((op) => <option key={op} value={op}>{t(({ eq: "Equals", neq: "Does not equal", gt: "Greater than", gte: "Greater or equal", lt: "Less than", lte: "Less or equal", contains: "Contains", exists: "Exists", all: "All conditions", any: "Any condition", not: "Not" })[op])}</option>)}</Select>
-    {logical ? <>{value.terms?.map((term, i) => <div key={i} className="grid gap-1"><PredicateEditor path={`${path}.terms.${i}`} value={term} onChange={(next) => onChange({ ...value, terms: value.terms!.map((old, index) => index === i ? next : old) })} steps={steps} depth={depth + 1} />
-      {value.op !== "not" && value.terms!.length > 1 && <Button variant="ghost" onClick={() => onChange({ ...value, terms: value.terms!.filter((_, index) => index !== i) })}>{t("Remove condition")}</Button>}</div>)}
-      {value.op !== "not" && <Button onClick={() => onChange({ ...value, terms: [...(value.terms ?? []), { op: "eq", left: { source: "input" }, right: { source: "literal", value: true } }] })}>{t("Add condition")}</Button>}</>
-      : <><BindingEditor draftKey={`${path}.left`} label={t("Left value")} value={value.left} onChange={(left) => onChange({ ...value, left })} steps={steps} />
-        {value.op !== "exists" && <BindingEditor draftKey={`${path}.right`} label={t("Right value")} value={value.right} onChange={(right) => onChange({ ...value, right })} steps={steps} />}</>}
   </div>;
 }
 

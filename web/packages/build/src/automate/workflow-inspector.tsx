@@ -2,13 +2,13 @@ import { ContextHelp, Button, Checkbox, ContentTabs, Disclosure, Input, Select, 
 import type { Api } from "@platform/kernel";
 import { ArrowDownToLine, Plus } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { BindingEditor, JSONEditor, PredicateEditor, SchemaEditor } from "./workflow-binding";
+import { BindingEditor, JSONEditor, SchemaEditor } from "./workflow-binding";
+import { WorkflowCondition, alwaysCondition } from "./workflow-condition";
 import { PERIODS, parameterSchema, periodLabel, sourceCapability, type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { ProtocolSelect, RoleSelect, useHost } from "@platform/app";
 import { useDraftInput } from "../session/DraftSession";
 
 const textSchema: ValueSchema = { type: "string" };
-const emptyPredicate = () => ({ op: "eq" as const, left: { source: "input" as const }, right: { source: "literal" as const, value: true } });
 const fieldClass = "grid gap-1 text-xs";
 
 function IdentifierInput({ value, label, draftKey, onCommit, invalid }: { value: string; label: string; draftKey: string; onCommit: (name: string) => void; invalid?: (name: string) => boolean }) {
@@ -70,8 +70,8 @@ export function WorkflowSettings({ draft, onChange, objects }: { draft: Workflow
   </div>;
 }
 
-export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, onRename, onMakeEntry, flows, output, linear = false }: {
-  step: WorkflowStep; steps: WorkflowStep[]; lanes: Api.ProcessLane[]; capabilities: Capability[]; onChange: (patch: Partial<WorkflowStep>) => void; onRename: (name: string) => void;
+export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, onRename, onMakeEntry, flows, output, linear = false, subject, inputSchema }: {
+  step: WorkflowStep; steps: WorkflowStep[]; lanes: Api.ProcessLane[]; capabilities: Capability[]; onChange: (patch: Partial<WorkflowStep>) => void; onRename: (name: string) => void; subject?: string; inputSchema?: ValueSchema;
   onMakeEntry: () => void; linear?: boolean; flows: { id: string; title: string; version: number }[]; output?: unknown;
 }) {
   const [tab, setTab] = useState<"settings" | "input" | "output">("input");
@@ -82,7 +82,7 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
   const others = steps.filter((item) => item.name !== step.name);
   const field = (label: string, element: ReactNode) => <label className={fieldClass}>{t(label)}{element}</label>;
   const binding = (label: string, name: "value" | "target" | "collection" | "waitUntil", schema?: ValueSchema, optional = false) => <BindingEditor draftKey={name} label={t(label)} value={step[name]} schema={schema} optional={optional} steps={others} onChange={(value) => onChange({ [name]: value })} />;
-  const condition = <PredicateEditor value={step.condition ?? emptyPredicate()} steps={others} onChange={(condition) => onChange({ condition })} />;
+  const condition = <WorkflowCondition value={step.condition ?? alwaysCondition()} steps={others} all={steps} capabilities={capabilities} subject={subject} inputSchema={inputSchema} onChange={(condition) => onChange({ condition })} />;
   const paths = <div className="grid gap-2">
     {step.kind === "switch" && <Button onClick={() => { let key = "case"; while (key in (step.cases ?? {})) key += "2"; onChange({ cases: { ...step.cases, [key]: "" } }); }}>{t("Add case")}</Button>}
     {(step.kind === "branch" || step.kind === "switch" || step.kind === "ask") && Object.entries(step.cases ?? {}).map(([key, target]) => <div key={key} className="grid gap-1 rounded border border-border p-2">
@@ -137,7 +137,7 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
             const answers = event.target.value.split("\n"); onChange({ answers, cases: Object.fromEntries(answers.map((answer) => [answer, step.cases?.[answer] ?? ""])) });
           }} />)}{paths}<ContextHelp title={t("Human task")}><p className="text-xs text-muted">{t("People answer in the existing inbox; this block suspends without occupying a worker.")}</p></ContextHelp></>}
         {step.kind === "wait" && <>
-          {field("Wait for", <Select value={step.waitUntil ? "deadline" : step.condition ? "condition" : "duration"} onChange={event => onChange(event.target.value === "deadline" ? { waitUntil: { source: "literal", value: '""' }, condition: undefined, untilSeconds: undefined } : event.target.value === "condition" ? { waitUntil: undefined, condition: emptyPredicate(), untilSeconds: undefined } : { waitUntil: undefined, condition: undefined, untilSeconds: 60 })}><option value="duration">{t("Duration")}</option><option value="deadline">{t("Declared deadline")}</option><option value="condition">{t("Condition")}</option></Select>)}
+          {field("Wait for", <Select value={step.waitUntil ? "deadline" : step.condition ? "condition" : "duration"} onChange={event => onChange(event.target.value === "deadline" ? { waitUntil: { source: "literal", value: '""' }, condition: undefined, untilSeconds: undefined } : event.target.value === "condition" ? { waitUntil: undefined, condition: alwaysCondition(), untilSeconds: undefined } : { waitUntil: undefined, condition: undefined, untilSeconds: 60 })}><option value="duration">{t("Duration")}</option><option value="deadline">{t("Declared deadline")}</option><option value="condition">{t("Condition")}</option></Select>)}
           {step.waitUntil ? <>{binding("Deadline timestamp", "waitUntil", textSchema)}<p className="text-xs text-muted">{t("The workflow saves this exact timestamp when entering the wait. Unreadable or invalid deadlines follow the original error path.")}</p></> : step.condition ? condition : field("Wait duration (seconds)", <Input draftKey="untilSeconds" type="number" min={0} max={2592000} value={step.untilSeconds ?? 60} onChange={event => onChange({ untilSeconds: Number(event.target.value) })} />)}
         </>}
         {step.kind === "subflow" && <>{field("Workflow", <Select value={step.flow ?? ""} onChange={(event) => onChange({ flow: event.target.value, flowVersion: flows.find((flow) => flow.id === event.target.value)?.version ?? 1 })}><option value="">{t("Choose a workflow")}</option>{flows.map((flow) => <option key={`${flow.id}:${flow.version}`} value={flow.id}>{flow.title} · v{flow.version}</option>)}</Select>)}

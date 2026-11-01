@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
-import type { Api } from "@platform/kernel";
-import { Button, Checkbox, Input, Select, humanizeKernelError, t, type EntityInfo } from "@platform/ui";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { objectSetPath, type Api } from "@platform/kernel";
+import { Button, Checkbox, DataTable, Input, Select, columnsFor, entityFrom, humanizeKernelError, t, type EntityInfo, type EntityRecord } from "@platform/ui";
 import { useHost, useReadQuery } from "../index";
 
 type Term = [string, string, string | number | boolean];
@@ -25,6 +25,7 @@ export type SetBuilderProps = {
   around?: boolean;
   locked?: boolean;
   count?: boolean;
+  preview?: boolean;
   interfaces?: Api.Interface[];
   draftKey?: string;
 };
@@ -66,11 +67,11 @@ function useSetContext(extra?: Api.Interface[]) {
   return { entities, interfaces, links, lookup: (type: string) => source.entity(type) };
 }
 
-export function SetBuilder({ value, onChange, filter, search = true, combine = true, around = true, locked = false, count = true, interfaces, draftKey = "set" }: SetBuilderProps) {
+export function SetBuilder({ value, onChange, filter, search = true, combine = true, around = true, locked = false, count = true, preview = count, interfaces, draftKey = "set" }: SetBuilderProps) {
   const context = useSetContext(interfaces);
   return <div className="grid min-w-0 gap-2 text-xs" aria-label={t("Object set builder")}>
     <SetNode value={value} onChange={onChange} depth={0} path={draftKey} context={context} filter={filter} search={search} combine={combine} around={around} locked={locked} />
-    {count && <SetCount set={value} />}
+    {count && <SetResult set={value} preview={preview} />}
   </div>;
 }
 
@@ -209,24 +210,39 @@ function CombinedSet({ mode, value, onChange, depth, path, context, filter, sear
   </div>;
 }
 
-function SetCount({ set }: { set: Api.ObjectSet }) {
+const previewRows = 20;
+const resultType = (set: Api.ObjectSet): string | undefined => set.object || (set.union ?? set.intersect ?? set.subtract ?? []).map(resultType).find(Boolean);
+
+function SetResult({ set, preview }: { set: Api.ObjectSet; preview: boolean }) {
   const { client, source } = useHost();
   const key = JSON.stringify(set), complete = objectSetComplete(set);
-  const [answer, setAnswer] = useState<{ key: string; scope: unknown; count?: number; partial?: boolean; error?: string }>();
+  const [answer, setAnswer] = useState<{ key: string; scope: unknown; count?: number; partial?: boolean; page?: Api.RecordPage; error?: string }>();
   useEffect(() => {
     if (!complete) return;
     let active = true;
     const handle = setTimeout(() => {
-      client.objectSetCount(set).then(
-        result => { if (active) setAnswer({ key, scope: source.scope, count: result.count, partial: result.partial }); },
+      const page = preview ? client.get<Api.RecordPage>(objectSetPath("load", { set, limit: previewRows }), true).catch(() => undefined) : Promise.resolve(undefined);
+      Promise.all([client.objectSetCount(set), page]).then(
+        ([result, rows]) => { if (active) setAnswer({ key, scope: source.scope, count: result.count, partial: result.partial, page: rows }); },
         error => { if (active) setAnswer({ key, scope: source.scope, error: humanizeKernelError(error instanceof Error ? error.message : String(error)) }); },
       );
     }, 300);
     return () => { active = false; clearTimeout(handle); };
-  }, [key, complete, source.scope]);
+  }, [key, complete, preview, source.scope]);
+  const type = resultType(set), info = type ? source.entity(type) : undefined;
+  const columns = useMemo(() => {
+    const entity = info ? entityFrom(info, {}, source) : undefined;
+    return [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 110 } }, ...(entity && info ? columnsFor(entity, info.fields.filter(field => !field.readOnly).slice(0, 3).map(field => field.name)) : [])];
+  }, [info, source]);
   if (!complete) return <p role="status" className="text-muted">{t("Complete the set to count its records.")}</p>;
   const current = answer?.key === key && answer.scope === source.scope ? answer : undefined;
   if (!current) return <p role="status" className="text-muted">{t("Counting…")}</p>;
   if (current.error) return <p role="alert" className="text-danger">{current.error}</p>;
-  return <p role="status" className="tabular-nums text-muted">{current.partial ? t("At least {count} records", { count: current.count!.toLocaleString() }) : t("{count} records", { count: current.count!.toLocaleString() })}</p>;
+  const rows = (current.page?.records ?? []) as EntityRecord[];
+  return <div className="grid min-w-0 gap-1" role="region" aria-label={t("Set result")}>
+    <p role="status" className="tabular-nums text-muted">{current.partial ? t("At least {count} records", { count: current.count!.toLocaleString() }) : t("{count} records", { count: current.count!.toLocaleString() })}</p>
+    {current.partial && <p className="text-warning">{t("Some records are hidden by markings or row policies.")}</p>}
+    {preview && <DataTable data={rows} columns={columns as never} getRowId={(row: EntityRecord) => row.id} height={Math.min(320, 40 + rows.length * 28)} searchable={false} empty={t("No records match this set.")} />}
+    {preview && !current.partial && current.count! > rows.length && <p className="text-muted">{t("Showing the first {shown} of {total} records.", { shown: rows.length, total: current.count!.toLocaleString() })}</p>}
+  </div>;
 }

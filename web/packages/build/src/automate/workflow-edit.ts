@@ -1,17 +1,50 @@
-import type { Binding, Predicate, WorkflowDraft, WorkflowStep } from "./workflow-model";
+import type { Api } from "@platform/kernel";
+import type { Binding, WorkflowDraft, WorkflowStep } from "./workflow-model";
+
+export const alwaysCondition = (): Api.Expr => ({ op: "", kind: "boolean", lit: { value: true } });
+
+export function conditionRef(binding: Binding): string {
+  return [binding.source, ...(binding.source === "step" ? [binding.step ?? ""] : []), ...(binding.path ?? [])].join(".");
+}
+
+export function conditionBinding(ref: string): Binding | undefined {
+  const [source, ...rest] = ref.split(".");
+  if (source === "step") return rest[0] ? { source, step: rest[0], path: rest.slice(1) } : undefined;
+  if (source === "input" || source === "subject" || source === "item") return { source, path: rest };
+  if ((source === "index" || source === "answer") && !rest.length) return { source };
+}
+
+export function conditionOperand(binding: Binding | undefined): Api.Expr {
+  return !binding || binding.source === "literal" ? { op: "", kind: "json", lit: { value: binding?.value ?? null } } : { op: "", kind: "json", ref: conditionRef(binding) };
+}
+
+export function conditionSlots(expr: Api.Expr): Binding[] {
+  const out: Binding[] = [];
+  const visit = (e: Api.Expr) => {
+    if (e.kind === "json" && e.ref) { const binding = conditionBinding(e.ref); if (binding) out.push(binding); }
+    else if (e.kind === "json" && e.lit) out.push({ source: "literal", value: e.lit.value });
+    e.args?.forEach(visit);
+    if (e.in) visit(e.in);
+  };
+  visit(expr);
+  return out;
+}
+
+export function withConditionSlot(expr: Api.Expr, slot: number, binding: Binding | undefined): Api.Expr {
+  let at = 0;
+  const visit = (e: Api.Expr): Api.Expr => {
+    if (e.kind === "json" && (e.ref && conditionBinding(e.ref) || e.lit)) return at++ === slot ? conditionOperand(binding) : e;
+    return { ...e, ...(e.args ? { args: e.args.map(visit) } : {}), ...(e.in ? { in: visit(e.in) } : {}) };
+  };
+  return visit(expr);
+}
 
 export function workflowBindings(step: WorkflowStep): { port: string; binding?: Binding }[] {
   const bindings: { port: string; binding?: Binding }[] = [
     ...Object.entries(step.inputs ?? {}).map(([name, binding]) => ({ port: `input:${name}`, binding })),
     ...(["value", "target", "collection", "waitUntil"] as const).flatMap((name) => step[name] ? [{ port: `binding:${name}`, binding: step[name] }] : []),
   ];
-  const visit = (predicate: Predicate, path: string) => {
-    const logical = ["all", "any", "not"].includes(predicate.op);
-    if (predicate.left || !logical) bindings.push({ port: `binding:${path}.left`, binding: predicate.left });
-    if (predicate.right || !logical && predicate.op !== "exists") bindings.push({ port: `binding:${path}.right`, binding: predicate.right });
-    predicate.terms?.forEach((term, index) => visit(term, `${path}.terms.${index}`));
-  };
-  if (step.condition) visit(step.condition, "condition");
+  if (step.condition) conditionSlots(step.condition).forEach((binding, index) => bindings.push({ port: `binding:condition.${index}`, binding }));
   return bindings;
 }
 
@@ -22,19 +55,9 @@ export function withWorkflowBinding(step: WorkflowStep, port: string, binding: B
     return { ...step, inputs };
   }
   if (["binding:value", "binding:target", "binding:collection", "binding:waitUntil"].includes(port)) return { ...step, [port.slice(8)]: binding };
-  const match = /^binding:condition((?:\.terms\.\d+)*)\.(left|right)$/.exec(port);
-  if (!match || !step.condition) return step;
-  const indices = [...match[1]!.matchAll(/\.terms\.(\d+)/g)].map((item) => Number(item[1]));
-  const side = match[2] as "left" | "right";
-  const replace = (predicate: Predicate, depth: number): Predicate => {
-    if (depth === indices.length) return { ...predicate, [side]: binding };
-    const index = indices[depth]!;
-    if (!predicate.terms?.[index]) return predicate;
-    const term = replace(predicate.terms[index]!, depth + 1);
-    return term === predicate.terms[index] ? predicate : { ...predicate, terms: predicate.terms.map((item, at) => at === index ? term : item) };
-  };
-  const condition = replace(step.condition, 0);
-  return condition === step.condition ? step : { ...step, condition };
+  const slot = /^binding:condition\.(\d+)$/.exec(port);
+  if (!slot || !step.condition) return step;
+  return { ...step, condition: withConditionSlot(step.condition, Number(slot[1]), binding) };
 }
 
 export function replaceReferences(step: WorkflowStep, old: string, next: string): WorkflowStep {

@@ -1327,4 +1327,8 @@ register("zh-CN", {
   "No eligible recipient is configured": "未配置符合资格的接收人",
   "Unavailable value type: {name}": "值类型不可用：{name}",
   "No value type": "无值类型",
+  "Set result": "集合结果",
+  "Some records are hidden by markings or row policies.": "部分记录因标记或行策略不可见。",
+  "No records match this set.": "没有记录符合此集合。",
+  "Showing the first {shown} of {total} records.": "显示 {total} 条记录中的前 {shown} 条。",
 });

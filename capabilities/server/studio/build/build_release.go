@@ -500,14 +500,53 @@ func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
 	if err != nil {
 		return p, err
 	}
-	var got, want any
-	if json.Unmarshal(asset.Body, &got) != nil || json.Unmarshal(expected.Body, &want) != nil || expected.Ref != asset.Ref || !reflect.DeepEqual(got, want) {
+	got, err := upgradedProcessBody(asset.Body)
+	var want any
+	if err != nil || json.Unmarshal(expected.Body, &want) != nil || expected.Ref != asset.Ref || !reflect.DeepEqual(got, want) {
 		return p, fmt.Errorf("process %s definition and compiled bindings differ", asset.Ref)
 	}
 	p.ID, p.Version, p.State = asset.Ref.Name, 1, "published"
 	p.Published = published(p)
 	p.Versions = []string{p.Published}
 	return p, nil
+}
+
+func upgradedProcessBody(raw json.RawMessage) (any, error) {
+	var body any
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, err
+	}
+	var walk func(any) error
+	walk = func(value any) error {
+		switch node := value.(type) {
+		case map[string]any:
+			for key, child := range node {
+				if condition, ok := child.(map[string]any); ok && key == "condition" && (condition["left"] != nil || condition["terms"] != nil) {
+					legacy, _ := json.Marshal(condition)
+					upgraded, err := platform.UpgradeCondition(legacy)
+					if err != nil {
+						return err
+					}
+					current, _ := json.Marshal(upgraded)
+					var decoded any
+					_ = json.Unmarshal(current, &decoded)
+					node[key] = decoded
+					continue
+				}
+				if err := walk(child); err != nil {
+					return err
+				}
+			}
+		case []any:
+			for _, child := range node {
+				if err := walk(child); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	return body, walk(body)
 }
 
 func definitionBody(value Object, typ string) (json.RawMessage, error) {

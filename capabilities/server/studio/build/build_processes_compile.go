@@ -79,14 +79,14 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 		}
 		predicate := func(c platform.Caller, r *platform.Run) (bool, *kernel.Error) {
 			raw := json.RawMessage("{}")
-			if predicateSubject(*s.Condition) {
+			if slices.ContainsFunc(platform.ConditionRefs(*s.Condition), func(ref string) bool { return ref == "subject" || strings.HasPrefix(ref, "subject.") }) {
 				var err *kernel.Error
 				raw, err = subject(c, r)
 				if err != nil {
 					return false, err
 				}
 			}
-			holds, problem := s.Condition.Test(r, raw)
+			holds, problem := platform.TestCondition(*s.Condition, r, raw)
 			if problem != nil {
 				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, problem.Error())
 			}
@@ -301,16 +301,4 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 		fl.Steps = append(fl.Steps, step)
 	}
 	return fl
-}
-
-func predicateSubject(p platform.Predicate) bool {
-	if p.Left != nil && p.Left.Source == "subject" || p.Right != nil && p.Right.Source == "subject" {
-		return true
-	}
-	for _, term := range p.Terms {
-		if predicateSubject(term) {
-			return true
-		}
-	}
-	return false
 }

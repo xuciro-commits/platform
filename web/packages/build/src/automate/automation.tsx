@@ -14,7 +14,7 @@ import { WorkflowInspector } from "./workflow-inspector";
 import { PERIODS, capabilityKey, initialStep, nextStepName, periodLabel, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { WorkflowRuns } from "./workflow-runs";
 import { useAuthoringCapabilities, useAuthoringModel } from "../ontology/authoring-model";
-import { PredicateEditor } from "./workflow-binding";
+import { WorkflowCondition, alwaysCondition } from "./workflow-condition";
 import { renameWorkflowStep } from "./workflow-edit";
 import { automationParts, relinkAutomation, removeAutomationStep } from "./automation-model";
 import { useProcessDraft } from "./process-draft";
@@ -129,10 +129,10 @@ export function AutomationEditor({ id }: { id: string }) {
         {!draft.every && <ContextHelp title={t("Trigger")}><p className="text-xs text-muted">{t("The record that reached the state is the subject of every effect: actions run on it, functions read it.")}</p></ContextHelp>}
       </div>}
       {chosen === "condition" && condition && <div className="grid gap-3">
-        <PredicateEditor value={condition.condition ?? { op: "eq", left: { source: "subject" }, right: { source: "literal", value: "" } }} steps={draft.steps.filter((step) => step !== condition)} onChange={(predicate) => setSteps({ ...condition, condition: predicate }, effects)} />
+        <WorkflowCondition value={condition.condition ?? alwaysCondition()} all={draft.steps} capabilities={capabilities} subject={draft.object || undefined} inputSchema={draft.inputSchema} steps={draft.steps.filter((step) => step !== condition)} onChange={(expr) => setSteps({ ...condition, condition: expr }, effects)} />
         <Button variant="ghost" size="sm" onClick={() => removeStep(condition.name)}><Trash2 />{t("Remove the condition")}</Button>
       </div>}
-      {chosenStep && <WorkflowInspector step={chosenStep} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []}
+      {chosenStep && <WorkflowInspector step={chosenStep} steps={draft.steps} subject={draft.object || undefined} inputSchema={draft.inputSchema} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []}
         onChange={(patch) => setSteps(condition, effects.map((step) => step.name === chosenStep.name ? { ...step, ...patch } : step))}
         onRename={(name) => { const old = chosenStep.name; if (/^[a-z][a-z0-9]*$/.test(name) && !draft.steps.some((step) => step.name === name)) {
           setSourceApplied(false); session.edit((current) => renameWorkflowStep(current, old, name));
@@ -152,7 +152,7 @@ export function AutomationEditor({ id }: { id: string }) {
     </div> : <div className="mx-auto grid w-full max-w-2xl content-start gap-2 p-4">
       {card("trigger", t("When"), <p className="text-sm">{draft.every || draft.object && draft.when ? sentence((type) => objects.find((item) => item.type === type)?.title ?? type, (type, name) => objects.find((item) => item.type === type)?.states.find((state) => state.name === name)?.title ?? name, draft) : <span className="text-muted">{t("Choose the object type and the state that start it.")}</span>}</p>)}
       {condition ? card("condition", t("If"), <p className="text-sm">{t("Condition")}</p>)
-        : <Button variant="ghost" size="sm" className="w-fit" disabled={!draft.object && !draft.every} onClick={() => { const conditionName = nextStepName(draft.steps, "when"), stop = nextStepName([...draft.steps, { name: conditionName } as WorkflowStep], "stop"); setSteps({ name: conditionName, kind: "branch", cases: { false: stop }, condition: { op: "eq", left: draft.every ? { source: "input" } : { source: "subject", path: [object?.fields[0]?.name ?? ""] }, right: { source: "literal", value: "" } } }, effects, [...draft.steps, { name: stop, kind: "end", value: { source: "input" } }]); setChosen("condition"); }}><Plus />{t("Add a condition")}</Button>}
+        : <Button variant="ghost" size="sm" className="w-fit" disabled={!draft.object && !draft.every} onClick={() => { const conditionName = nextStepName(draft.steps, "when"), stop = nextStepName([...draft.steps, { name: conditionName } as WorkflowStep], "stop"); setSteps({ name: conditionName, kind: "branch", cases: { false: stop }, condition: { op: "=", kind: "boolean", args: [{ op: "", kind: "json", ref: draft.every ? "input" : `subject.${object?.fields[0]?.name ?? "id"}` }, { op: "", kind: "json", lit: { value: "" } }] } }, effects, [...draft.steps, { name: stop, kind: "end", value: { source: "input" } }]); setChosen("condition"); }}><Plus />{t("Add a condition")}</Button>}
       {effects.map((step, at) => card(`step:${step.name}`, at === 0 ? t("Then") : t("And then"), <p className="flex items-center gap-2 text-sm">{step.kind === "ai" ? <Brain className="size-4 text-muted" /> : <Zap className="size-4 text-muted" />}<span className="min-w-0 flex-1 truncate">{step.title || step.name}</span><span className="font-mono text-xs text-muted">{step.act ?? step.function?.name ?? step.operation?.name}</span></p>,
         <>
           <Button variant="ghost" size="sm" aria-label={t("Move up")} disabled={at === 0} onClick={(event) => { event.stopPropagation(); const next = [...effects]; [next[at - 1], next[at]] = [next[at]!, next[at - 1]!]; setSteps(condition, next); }}><ArrowUp /></Button>
