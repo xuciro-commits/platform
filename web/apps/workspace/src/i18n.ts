@@ -230,7 +230,7 @@ register("zh-CN", {
   "Open prepared application": "打开已准备应用",
   "Remove preparation": "删除准备内容",
   "Local form drafts": "本地表单草稿",
-  "Open the same create or record action to continue a saved draft. Earlier definitions retain their original inputs here.": "打开原来的创建或记录操作即可继续草稿。旧定义的原始输入保留在此处。",
+  "Open the same create or record action to continue a saved draft. Earlier definitions retain their original inputs here.": "打开原来的创建或记录动作即可继续草稿。旧定义的原始输入保留在此处。",
   "Saved draft inputs": "已保存的草稿输入",
   "Discard local draft": "删除本地草稿",
   "Prepared at {time}.": "已于 {time} 准备完成。",
