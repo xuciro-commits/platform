@@ -257,7 +257,7 @@ func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []
 			owners++
 		}
 	}
-	if !platform.ProjectManager(c.Member, d.ProjectRole(c.ID, id)) {
+	if !platform.ProjectManager(c.Member, d.projectRole(c.ID, id)) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the project's owners, builders and administrators manage its access")
 	}
 	if owners == 0 {
@@ -286,6 +286,10 @@ func (d *Policies) ProjectViews() []platform.BuildProject {
 func (d *Policies) ProjectRole(member, project string) string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	return d.projectRole(member, project)
+}
+
+func (d *Policies) projectRole(member, project string) string {
 	p := d.projects[project]
 	if p == nil || p.Archived {
 		return ""
