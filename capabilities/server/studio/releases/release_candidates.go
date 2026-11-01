@@ -37,6 +37,7 @@ type ReleasePreview struct {
 	Changed          []platform.AssetRef   `json:"changed"`
 	Diagnostic       string                `json:"diagnostic,omitempty"`
 	Drafts           []build.JointDraftRef `json:"drafts,omitempty"`
+	DraftReviews     []ReleaseDraftReview  `json:"draftReviews,omitempty"`
 	CandidateActions []platform.Action     `json:"candidateActions"`
 }
 
@@ -620,11 +621,20 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 	if owner == nil {
 		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
-	assets, diagnostic := owner.DraftReleaseAssetsMulti(drafts, member)
+	assets, diagnostic := owner.DraftReleaseAssetsMulti(drafts, member, p.withReview)
 	reply := ReleasePreview{CandidateActions: []platform.Action{}, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
 	for _, draft := range drafts {
 		if draft.ID != "" && !slices.Contains(reply.Drafts, draft) {
 			reply.Drafts = append(reply.Drafts, draft)
+			review := ReleaseDraftReview{Kind: draft.Kind, ID: draft.ID, Issues: []string{}, Downstream: []ReleaseDraftResource{}}
+			for _, check := range assets.Checks {
+				if check.Kind == draft.Kind && check.ID == draft.ID {
+					review.Checked, review.Issues = check.Checked, append(review.Issues, check.Issues...)
+					review.Change = check.Change
+					break
+				}
+			}
+			reply.DraftReviews = append(reply.DraftReviews, review)
 		}
 	}
 	if diagnostic != nil {
@@ -699,6 +709,7 @@ type Planner struct {
 	Registry    func() (*platform.AssetRegistry, error)
 	Drafts      build.ConstructionDrafts
 	Validate    func(platform.ReleaseCandidate, platform.Member, time.Time) error
+	withReview  bool
 }
 
 func (p Planner) WithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef) (platform.ReleaseCandidate, error) {
@@ -710,10 +721,21 @@ func (p Planner) WithBindings(roots []platform.AssetRef, available []platform.Re
 }
 
 func (p Planner) PreviewWithActions(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, error) {
+	p.withReview = true
 	reply, candidate, err := p.Preview(drafts, member)
 	reply.CandidateActions = []platform.Action{}
 	if err != nil {
 		return reply, err
+	}
+	if err := p.reviewDrafts(&reply); err != nil {
+		return reply, err
+	}
+	if reply.Diagnostic != "" {
+		for i := range reply.DraftReviews {
+			if len(reply.DraftReviews[i].Issues) == 0 {
+				reply.DraftReviews[i].Checked = false
+			}
+		}
 	}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {

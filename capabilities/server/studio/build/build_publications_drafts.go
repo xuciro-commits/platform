@@ -75,7 +75,19 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 				}
 			}
 			change := DraftChange{Ref: ref, Type: entity.Type, ID: meta.ID, Title: meta.Title, Variant: meta.Kind, Published: meta.Published != "", Changed: meta.Changed, Owner: draftOwner(meta.Record), Fields: []DraftChangeField{}}
-			before, after, portable, err := b.draftComparison(record, meta.Published, info)
+			if change.Published {
+				var original struct {
+					Name string
+					Ref  platform.AssetRef
+				}
+				if json.Unmarshal([]byte(meta.Published), &original) == nil {
+					change.Prior = original.Ref
+					if change.Prior.Kind == "" && original.Name != "" {
+						change.Prior, _ = draftAssetRef(entity.Type, original.Name)
+					}
+				}
+			}
+			before, after, portable, err := b.draftComparison(record, meta.Published, info, ref)
 			if err != nil {
 				change.Diagnostic = err.Error()
 			} else {
@@ -137,8 +149,8 @@ func (b *Build) draftEntities(kind platform.AssetKind) []platform.Entity {
 	return out
 }
 
-func (b *Build) DraftChangeOf(kind platform.AssetKind, id string) (DraftChange, bool, error) {
-	c := b.host.Automation(platform.Caller{}, ID)
+func (b *Build) DraftChangeOf(member platform.Member, kind platform.AssetKind, id string) (DraftChange, bool, error) {
+	c := b.host.Caller(platform.Caller{}, member, ID)
 	for _, entity := range b.draftEntities(kind) {
 		changes, err := b.SavedDraftChanges(c, "", entity.Type, id)
 		if err != nil {
@@ -179,7 +191,7 @@ func draftOwner(r platform.Record) string {
 	return r.Changed.By
 }
 
-func (b *Build) draftComparison(record any, published string, info platform.EntityInfo) (before, after map[string]json.RawMessage, portable bool, err error) {
+func (b *Build) draftComparison(record any, published string, info platform.EntityInfo, ref platform.AssetRef) (before, after map[string]json.RawMessage, portable bool, err error) {
 	current := platform.Raw(record)
 	previous := json.RawMessage(`{}`)
 	if published != "" {
@@ -187,17 +199,19 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 		if json.Unmarshal([]byte(published), &frozen) == nil && frozen.Ref.Kind != "" && len(frozen.Body) > 0 {
 			portable = true
 			previous = frozen.Body
-			var asset platform.ReleaseAsset
-			switch r := record.(type) {
-			case Alert:
-				asset, err = alertReleaseAsset(r, max(1, r.DefinitionVersion))
-			case SampleSetRecord:
-				asset, err = sampleSetAsset(r, max(1, r.DefinitionVersion))
-			case TestPlan:
-				asset, err = b.testPlanAsset(r, max(1, r.DefinitionVersion))
-			default:
-				_, ordinal, _, _ := integrationMetadata(record)
-				asset, err = b.integrationAsset(frozen.Ref.Kind, record, max(1, ordinal))
+			asset, compiled := b.jointDeclarations[ref]
+			if !compiled {
+				switch r := record.(type) {
+				case Alert:
+					asset, err = alertReleaseAsset(r, max(1, r.DefinitionVersion))
+				case SampleSetRecord:
+					asset, err = sampleSetAsset(r, max(1, r.DefinitionVersion))
+				case TestPlan:
+					asset, err = b.testPlanAsset(r, max(1, r.DefinitionVersion))
+				default:
+					_, ordinal, _, _ := integrationMetadata(record)
+					asset, err = b.integrationAsset(frozen.Ref.Kind, record, max(1, ordinal))
+				}
 			}
 			current = asset.Body
 		} else {

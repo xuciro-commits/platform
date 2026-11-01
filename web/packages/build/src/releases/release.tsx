@@ -398,7 +398,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       </div>}
       {(review.drafts?.length ?? 0) > 0 && <div>
         <h3 className="text-xs font-semibold">{t("Delivered together")} · {review.drafts!.length}</h3>
-        <div className="mt-1"><DraftReview drafts={review.drafts!.map(draft => ({ kind: draft.kind as ReleaseKind, id: draft.id }))} labelOf={draftKind => t(kinds.find((item) => item.kind === draftKind)?.label ?? draftKind)} locked={locked || savedReview}
+        <div className="mt-1"><DraftReview reviews={review.draftReviews ?? []} labelOf={draftKind => t(kinds.find((item) => item.kind === draftKind)?.label ?? draftKind)} locked={locked || savedReview}
           onDiscarded={draft => { const remaining = joint.filter(item => jointKey(item) !== jointKey(draft)); setJoint(remaining); if (remaining.length) void inspect(remaining); else clearReview(); }} /></div>
         <p className="mt-1 text-xs text-muted">{t("The saved candidate keeps these drafts as the assets it includes.")}</p>
       </div>}

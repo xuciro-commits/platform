@@ -1780,6 +1780,7 @@ export type Draft = {
 
 export type DraftChange = {
   ref: AssetRef;
+  prior?: AssetRef;
   type: string;
   id: string;
   title: string;
@@ -4093,10 +4094,24 @@ export type ReleaseDraftClosure = {
   drafts: JointDraftRef[];
 };
 
+export type ReleaseDraftResource = {
+  ref: AssetRef;
+  title: string;
+};
+
 export type ReleaseDraftRestore = {
   type: string;
   action: string;
   payload: unknown;
+};
+
+export type ReleaseDraftReview = {
+  kind: string;
+  id: string;
+  checked: boolean;
+  issues: string[];
+  change?: DraftChange;
+  downstream: ReleaseDraftResource[];
 };
 
 export type ReleaseDraftsRequest = {
@@ -4147,6 +4162,7 @@ export type ReleasePreview = {
   changed: AssetRef[];
   diagnostic?: string;
   drafts?: JointDraftRef[];
+  draftReviews?: ReleaseDraftReview[];
   candidateActions: Action[];
 };
 

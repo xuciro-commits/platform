@@ -7,6 +7,7 @@ import (
 	"platformserver/platform"
 	"platformserver/studio/build"
 	releaseowner "platformserver/studio/releases"
+	"slices"
 	"time"
 )
 
@@ -89,7 +90,7 @@ func (t *Tenant) DraftChange(m platform.Member, kind platform.AssetKind, id stri
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	change, found, err := owner.DraftChangeOf(kind, id)
+	change, found, err := owner.DraftChangeOf(m, kind, id)
 	if err == nil && !found {
 		err = fmt.Errorf("The draft has no working changes")
 	}
@@ -111,16 +112,26 @@ func (t *Tenant) DraftRestore(m platform.Member, kind platform.AssetKind, id str
 		return releaseowner.ReleaseDraftRestore{Type: typ, Action: "archive", Payload: json.RawMessage(`{}`)}, nil
 	}
 	var asset platform.ReleaseAsset
-	if err := json.Unmarshal([]byte(published), &asset); err != nil || asset.Ref.Kind == "" {
+	if err := json.Unmarshal([]byte(published), &asset); err != nil {
 		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The installed version of this draft cannot be restored")
 	}
-	lifecycle, ok := owner.(platform.AssetLifecycleOwner)
-	if !ok {
-		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("tenant has no builder")
-	}
-	drafts, err := lifecycle.ReleaseDrafts([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{DraftsOnly: true, Member: m, At: now})
-	if err != nil {
-		return releaseowner.ReleaseDraftRestore{}, err
+	image := json.RawMessage(published)
+	if asset.Ref.Kind != "" {
+		lifecycle, ok := owner.(platform.AssetLifecycleOwner)
+		if !ok {
+			return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("tenant has no builder")
+		}
+		drafts, err := lifecycle.ReleaseDrafts([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{DraftsOnly: true, Member: m, At: now})
+		if err != nil {
+			return releaseowner.ReleaseDraftRestore{}, err
+		}
+		image = nil
+		for _, draft := range drafts {
+			if draft.Type == typ {
+				image = draft.Image
+				break
+			}
+		}
 	}
 	var info *platform.EntityInfo
 	for _, entity := range t.Entities(m) {
@@ -128,25 +139,22 @@ func (t *Tenant) DraftRestore(m platform.Member, kind platform.AssetKind, id str
 			info = &entity
 		}
 	}
-	for _, draft := range drafts {
-		if draft.Type != typ || info == nil {
-			continue
-		}
-		payload, err := releaseowner.AssetDraftPayload(*info, draft.Image)
-		if err != nil {
-			return releaseowner.ReleaseDraftRestore{}, err
-		}
-		fields := map[string]json.RawMessage{}
-		_ = json.Unmarshal(payload, &fields)
-		for _, field := range info.Fields {
-			if _, ok := fields[field.Name]; !ok && !field.ReadOnly && !field.Aside {
-				fields[field.Name] = json.RawMessage("null")
-			}
-		}
-		payload, _ = json.Marshal(fields)
-		return releaseowner.ReleaseDraftRestore{Type: typ, Action: "edit", Payload: payload}, nil
+	if info == nil || len(image) == 0 {
+		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The installed version of this draft cannot be restored")
 	}
-	return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The installed version of this draft cannot be restored")
+	payload, err := releaseowner.AssetDraftPayload(*info, image)
+	if err != nil {
+		return releaseowner.ReleaseDraftRestore{}, err
+	}
+	fields := map[string]json.RawMessage{}
+	_ = json.Unmarshal(payload, &fields)
+	for _, field := range info.Fields {
+		if _, ok := fields[field.Name]; !ok && !field.ReadOnly && !field.Aside {
+			fields[field.Name] = json.RawMessage("null")
+		}
+	}
+	payload, _ = json.Marshal(fields)
+	return releaseowner.ReleaseDraftRestore{Type: typ, Action: "edit", Payload: payload}, nil
 }
 
 func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingState, error) {
@@ -188,7 +196,24 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 	if refusal != nil {
 		return releaseowner.ReleasePreview{}, refusal
 	}
-	return world.releasePlannerLocked().PreviewWithActions(drafts, m)
+	reply, err := world.releasePlannerLocked().PreviewWithActions(drafts, m)
+	if err != nil {
+		return reply, err
+	}
+	definitions, err := world.definitionsFor(m)
+	if err != nil {
+		return reply, err
+	}
+	visible := map[platform.AssetRef]bool{}
+	for _, definition := range definitions {
+		visible[definition.Ref] = true
+	}
+	for i := range reply.DraftReviews {
+		reply.DraftReviews[i].Downstream = slices.DeleteFunc(reply.DraftReviews[i].Downstream, func(resource releaseowner.ReleaseDraftResource) bool {
+			return !visible[resource.Ref]
+		})
+	}
+	return reply, nil
 }
 
 func (t *Tenant) releasePlannerLocked() releaseowner.Planner {

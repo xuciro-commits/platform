@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
@@ -12,8 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.Member) (JointDraftAssets, error) {
-	var result JointDraftAssets
+func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.Member, review bool) (result JointDraftAssets, err error) {
 	if len(drafts) == 0 {
 		return result, fmt.Errorf("select at least one saved draft")
 	}
@@ -28,6 +28,11 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 		}
 		seen[ref] = true
 	}
+	checkIndexes := make(map[JointDraftRef]int, len(drafts))
+	for _, draft := range drafts {
+		checkIndexes[draft] = len(result.Checks)
+		result.Checks = append(result.Checks, JointDraftCheck{Kind: draft.Kind, ID: draft.ID})
+	}
 	objects, pages, apps, err := b.releaseInventory()
 	if err != nil {
 		return result, err
@@ -40,6 +45,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	if err != nil {
 		return result, err
 	}
+	result.Before = before
 	restore, restoreMode, restoreDeclarations := b.jointEntities, b.jointMode, b.jointDeclarations
 	if len(drafts) > 1 {
 		b.jointMode = true
@@ -49,7 +55,25 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	if b.jointDeclarations == nil {
 		b.jointDeclarations = map[platform.AssetRef]platform.ReleaseAsset{}
 	}
-	defer func() { b.jointEntities, b.jointMode, b.jointDeclarations = restore, restoreMode, restoreDeclarations }()
+	defer func() {
+		if review {
+			for i := range result.Checks {
+				check := &result.Checks[i]
+				change, found, problem := b.DraftChangeOf(member, check.Kind, check.ID)
+				if found {
+					check.Change = &change
+					if change.Diagnostic != "" {
+						problem = fmt.Errorf("%s", change.Diagnostic)
+					}
+				}
+				if problem != nil && !slices.Contains(check.Issues, problem.Error()) {
+					check.Issues = append(check.Issues, problem.Error())
+					err = errors.Join(err, problem)
+				}
+			}
+		}
+		b.jointEntities, b.jointMode, b.jointDeclarations = restore, restoreMode, restoreDeclarations
+	}()
 
 	inv := draftInventories{objects: objects, pages: pages, apps: apps, processes: processes}
 	overrides := map[platform.AssetRef]platform.ReleaseAsset{}
@@ -67,15 +91,23 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	slices.SortStableFunc(declarations, func(a, b JointDraftRef) int {
 		return cmp.Compare(priority(a.Kind), priority(b.Kind))
 	})
+	var problems []error
 	for _, draft := range declarations {
 		if !recordKind(draft.Kind) {
 			_, after, prior, next, hadPrior, err := b.singleDraftAssets(draft.Kind, draft.ID)
+			check := &result.Checks[checkIndexes[draft]]
+			check.Checked = true
 			if err != nil {
-				return result, err
+				check.Issues = append(check.Issues, err.Error())
+				problems = append(problems, err)
+				continue
 			}
 			asset, ok := findReleaseAsset(after, next)
 			if !ok {
-				return result, fmt.Errorf("draft %s did not produce %s", draft.ID, next)
+				err = fmt.Errorf("draft %s did not produce %s", draft.ID, next)
+				check.Issues = append(check.Issues, err.Error())
+				problems = append(problems, err)
+				continue
 			}
 			overrides[next] = asset
 			b.jointDeclarations[next] = asset
@@ -94,6 +126,8 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 			continue
 		}
 		prior, next, hadPrior, err := b.applyRecordDraft(&inv, draft.Kind, draft.ID, member)
+		check := &result.Checks[checkIndexes[draft]]
+		check.Checked = true
 		if hadPrior {
 			result.Priors = append(result.Priors, prior)
 			if prior != next {
@@ -104,8 +138,12 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 			result.Nexts = append(result.Nexts, next)
 		}
 		if err != nil {
-			return result, err
+			check.Issues = append(check.Issues, err.Error())
+			problems = append(problems, err)
 		}
+	}
+	if len(problems) > 0 {
+		return result, errors.Join(problems...)
 	}
 	recordAssets, err := releaseAssets(inv.objects, inv.pages, inv.apps, inv.processes, b.Manifest().Version)
 	if err == nil {
@@ -147,7 +185,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	for _, substitute := range overrides {
 		after = append(after, substitute)
 	}
-	result.Before, result.After = before, after
+	result.After = after
 	return result, nil
 }
 
@@ -310,7 +348,7 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if !recordKind(kind) {
 		return nil, nil, prior, next, false, fmt.Errorf("draft kind %q cannot be previewed", kind)
 	}
-	assets, err := b.DraftReleaseAssetsMulti([]JointDraftRef{{Kind: kind, ID: id}}, platform.Member{})
+	assets, err := b.DraftReleaseAssetsMulti([]JointDraftRef{{Kind: kind, ID: id}}, platform.Member{}, false)
 	if err != nil {
 		return nil, nil, prior, next, false, err
 	}
@@ -451,6 +489,15 @@ type JointDraftAssets struct {
 	After  []platform.ReleaseAsset `json:"-"`
 	Priors []platform.AssetRef     `json:"-"`
 	Nexts  []platform.AssetRef     `json:"-"`
+	Checks []JointDraftCheck       `json:"-"`
+}
+
+type JointDraftCheck struct {
+	Kind    platform.AssetKind `json:"kind"`
+	ID      string             `json:"id"`
+	Checked bool               `json:"checked"`
+	Issues  []string           `json:"issues"`
+	Change  *DraftChange       `json:"change,omitempty"`
 }
 
 const JointDraftLimit = 128
@@ -462,6 +509,7 @@ type JointDraftRef struct {
 
 type DraftChange struct {
 	Ref        platform.AssetRef  `json:"ref"`
+	Prior      platform.AssetRef  `json:"prior,omitzero"`
 	Type       string             `json:"type"`
 	ID         string             `json:"id"`
 	Title      string             `json:"title"`
