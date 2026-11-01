@@ -19,7 +19,7 @@ import (
 type MonitoringRun struct {
 	Type               string                  `json:"type" enum:"sync,build,automation,function,delivery"`
 	ID                 string                  `json:"id"`
-	Source             string                  `json:"source" enum:"source,pipeline,code,projection,function,compute,work,effect"`
+	Source             string                  `json:"source" enum:"source,pipeline,code,projection,function,compute,work,effect,flow,agent"`
 	Title              string                  `json:"title"`
 	ResourceRef        *platform.AssetRef      `json:"resourceRef,omitempty"`
 	RecordRef          string                  `json:"recordRef,omitempty"`
@@ -308,6 +308,62 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter MonitoringRunFilter, n
 		appendRun(MonitoringRun{Type: "function", Source: "function", ID: "function:" + function.ID, Title: function.Function, ResourceRef: &platform.AssetRef{App: cmp.Or(function.App, build.ID), Kind: platform.AssetFunction, Name: function.Function}, RecordRef: build.FunctionCallType + "/" + function.ID, When: function.Created.At, Status: status, OwnerStatus: function.State})
 	}
 	out.Coverage = append(out.Coverage, coverage)
+	coverage = MonitoringCoverage{Source: "flow", Basis: "retained", Limitation: "permission-filtered"}
+	flows, refusal := monitoringRecords[platform.FlowInstance](t, m, platform.FlowInstanceType, &coverage, now)
+	if refusal != nil {
+		return out, refusal
+	}
+	for _, flow := range flows {
+		app, _, _ := strings.Cut(flow.Flow, ".")
+		run := MonitoringRun{Type: "automation", Source: "flow", ID: "flow:" + flow.ID, Title: cmp.Or(flow.Title, flow.Flow), ResourceRef: &platform.AssetRef{App: app, Kind: platform.AssetFlow, Name: flow.Flow}, RecordRef: platform.FlowInstanceType + "/" + flow.ID, When: flow.Changed.At, Status: "unknown", OwnerStatus: flow.State}
+		if run.When.IsZero() {
+			run.When = flow.Created.At
+		}
+		switch flow.State {
+		case "running", "compensating":
+			run.Status = "running"
+		case "waiting":
+			run.Status = "pending"
+		case "done":
+			run.Status = "ok"
+		case "stuck", "compensated":
+			run.Status = "failed"
+		case "canceled":
+			run.Status = "cancelled"
+		}
+		if flow.State == "stuck" && !flow.Archived {
+			retry(&run, automation.SchemaFlowRetry, platform.FlowInstanceType, flow.ID, "retry")
+		}
+		appendRun(run)
+	}
+	out.Coverage = append(out.Coverage, coverage)
+	coverage = MonitoringCoverage{Source: "agent", Basis: "retained", Limitation: "permission-filtered"}
+	agents, refusal := monitoringRecords[platform.AgentRunRecord](t, m, platform.RunType, &coverage, now)
+	if refusal != nil {
+		return out, refusal
+	}
+	for _, agent := range agents {
+		app, name, _ := strings.Cut(agent.Agent, ".")
+		run := MonitoringRun{Type: "function", Source: "agent", ID: "agent:" + agent.ID, Title: cmp.Or(agent.Title, agent.Agent), ResourceRef: &platform.AssetRef{App: app, Kind: platform.AssetAgent, Name: name}, RecordRef: platform.RunType + "/" + agent.ID, When: agent.Changed.At, Status: "unknown", OwnerStatus: agent.State}
+		if run.When.IsZero() {
+			run.When = agent.Created.At
+		}
+		switch agent.State {
+		case "running":
+			run.Status = "running"
+		case "waiting":
+			run.Status = "pending"
+		case "done":
+			run.Status = "ok"
+		case "stopped":
+			run.Status = "failed"
+			if strings.HasPrefix(agent.Stopped, "stopped by ") {
+				run.Status = "cancelled"
+			}
+		}
+		appendRun(run)
+	}
+	out.Coverage = append(out.Coverage, coverage)
 	coverage = MonitoringCoverage{Source: "work", Basis: "current"}
 	value, refusal := t.read(m, "work")
 	if refusal != nil && refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED && refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
@@ -386,9 +442,7 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter MonitoringRunFilter, n
 		coverage.Limitation = "permission-filtered"
 	}
 	out.Coverage = append(out.Coverage, coverage,
-		MonitoringCoverage{Source: "delivery-attempts", Basis: "retained", Limitation: "not-included"},
-		MonitoringCoverage{Source: "flow", Basis: "retained", Limitation: "not-included"},
-		MonitoringCoverage{Source: "agent", Basis: "retained", Limitation: "not-included"})
+		MonitoringCoverage{Source: "delivery-attempts", Basis: "retained", Limitation: "not-included"})
 	slices.SortFunc(out.Runs, func(a, b MonitoringRun) int {
 		if order := b.When.Compare(a.When); order != 0 {
 			return order

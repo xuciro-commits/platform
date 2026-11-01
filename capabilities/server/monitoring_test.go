@@ -15,6 +15,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/work"
+	"platformserver/engine/agents"
 	"platformserver/engine/authorization"
 	"platformserver/engine/automation"
 	"platformserver/engine/business"
@@ -26,7 +28,13 @@ import (
 )
 
 type monitoringFixture struct {
-	ledger *platform.Ledger
+	ledger      *platform.Ledger
+	undoBlocked bool
+}
+
+type monitoringEvent struct {
+	platform.Record
+	Title string `json:"title"`
 }
 
 func (a *monitoringFixture) AcceptedLedger() *platform.Ledger { return a.ledger }
@@ -38,12 +46,46 @@ func (a *monitoringFixture) Snapshot() (json.RawMessage, error) {
 	return a.ledger.Snapshot()
 }
 func (a *monitoringFixture) Restore(raw json.RawMessage) error { return a.ledger.Restore(raw) }
-func (a *monitoringFixture) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+func (a *monitoringFixture) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		if s.GetSchema().GetName() == "probe.undo" && a.undoBlocked {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The probe undo failed")
+		}
+		return func(r *pb.ChangeRecord) {
+			c.Put(r, monitoringEvent{Record: platform.Record{ID: s.GetTarget().GetId()}, Title: s.GetSchema().GetName()})
+		}, nil
+	})
 }
 func (a *monitoringFixture) Manifest() platform.Manifest {
+	failed := platform.Step{Name: "fail", End: true, NoRetry: true, Output: func(platform.Caller, *platform.Run) (json.RawMessage, *kernel.Error) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The probe Flow failed")
+	}}
+	target := func(_ platform.Caller, r *platform.Run) string { return "step:" + r.ID }
+	var flows []platform.Flow
+	for _, name := range []string{"waiting", "done", "compensated", "rollback"} {
+		flow := platform.Flow{Name: name, Title: "Probe " + name, Version: 1, Owners: []string{"runner"}, Start: platform.Start{
+			On: []string{"probe.start"}, Begin: func(_ platform.Caller, e platform.Event) (string, any, bool) {
+				var input struct{ Flow string }
+				json.Unmarshal(e.Record.GetSubmission().GetPayload(), &input)
+				return e.Record.GetSubmission().GetTarget().GetId(), nil, input.Flow == name
+			},
+		}}
+		switch name {
+		case "waiting":
+			flow.Steps = []platform.Step{{Name: "wait", Wait: &platform.Wait{Until: func(platform.Caller, *platform.Run) bool { return false }}}}
+		case "done":
+			flow.Steps = []platform.Step{{Name: "end", End: true}}
+		case "compensated":
+			flow.Steps = []platform.Step{failed}
+		case "rollback":
+			flow.Steps = []platform.Step{{Name: "act", Act: &platform.Act{Action: "probe.step", Target: target}, Undo: &platform.Act{Action: "probe.undo", Target: target}, Next: "fail"}, failed}
+		}
+		flows = append(flows, flow)
+	}
 	return platform.Manifest{ID: "probe", Title: "Probe", Version: "1", Actions: a.ledger.Catalog, Roles: []string{"runner"},
-		Jobs: []platform.Job{{Name: "failed", Title: "Failed probe job", Every: time.Minute}},
+		Entities: []platform.Entity{{Type: "probe.event", Title: "Probe event", Model: monitoringEvent{}, Display: "title"}}, Flows: flows,
+		Agents: []platform.Agent{{Name: "helper", Title: "Probe helper", Instructions: "Answer the goal", Budget: platform.Budget{Steps: 10, Tokens: 1000, Actions: 10}}},
+		Jobs:   []platform.Job{{Name: "failed", Title: "Failed probe job", Every: time.Minute}},
 		Operations: []platform.Operation{{Name: "echo", Title: "Echo", Roles: []string{"runner"},
 			Input: platform.ValueSchema{Type: "string"}, Output: platform.ValueSchema{Type: "string"}, Binding: platform.OperationBinding{Kind: "native"},
 			Limits: platform.OperationLimits{TimeoutMillis: 100, MemoryPages: 1, MaxInputBytes: 1024, MaxOutputBytes: 1024}}}}
@@ -66,13 +108,17 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: authorization.NewPolicies(), Packages: packages.New(id), Actions: actions}
-	}, platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, build.ID: build.Builder, "probe": "runner"}}},
+	}, platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, build.ID: build.Builder, "probe": "runner", platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}}},
 		platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
 		platform.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
-		platform.Seat{Subjects: []string{"scoped"}, Member: platform.Member{ID: "scoped", Roles: map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin}, Scopes: []string{build.SchemaSourcePulled}}},
+		platform.Seat{Subjects: []string{"scoped"}, Member: platform.Member{ID: "scoped", Roles: map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}, Scopes: []string{build.SchemaSourcePulled}}},
 		platform.Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{}}})
-	probe := &monitoringFixture{ledger: platform.NewLedger(id, "probe", platform.NewCatalog())}
-	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id), probe)
+	var actions []platform.Action
+	for _, schema := range []string{"probe.start", "probe.step", "probe.undo"} {
+		actions = append(actions, platform.Action{Schema: schema, Target: "probe.event", Title: schema, Description: "Drive the monitoring owner boundary probe", Roles: []string{"runner"}, Payload: []platform.Field{{Name: "flow", Type: "text"}}})
+	}
+	probe := &monitoringFixture{ledger: platform.NewLedger(id, "probe", platform.NewCatalog(actions...), "probe.event"), undoBlocked: true}
+	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id), work.New(id), automation.New(id), agents.New(id), probe)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -224,12 +270,17 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 				t.Fatalf("builder received administrator-only data: %+v", run)
 			}
 		}
-		for _, source := range []string{"delivery-attempts", "flow", "agent"} {
+		for _, source := range []string{"flow", "agent"} {
 			if !slices.ContainsFunc(adminPage.Coverage, func(c MonitoringCoverage) bool {
-				return c.Source == source && !c.Readable && c.Limitation == "not-included"
+				return c.Source == source && c.Readable && c.Basis == "retained" && c.Limitation == "permission-filtered"
 			}) {
 				t.Fatalf("missing explicit coverage for %s", source)
 			}
+		}
+		if !slices.ContainsFunc(adminPage.Coverage, func(c MonitoringCoverage) bool {
+			return c.Source == "delivery-attempts" && !c.Readable && c.Limitation == "not-included"
+		}) {
+			t.Fatal("delivery attempts coverage changed")
 		}
 		page1 := read("admin", "?limit=2")
 		page2 := read("admin", "?offset=2&limit=2")
@@ -289,6 +340,166 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		handler.ServeHTTP(recorder, req)
 		if recorder.Code != http.StatusOK || find(read("admin", "?limit=100"), run.ID).Status != "pending" {
 			t.Fatalf("original retry failed: HTTP %d: %s", recorder.Code, recorder.Body)
+		}
+	})
+	t.Run("flow and agent owner authorization and recovery", func(t *testing.T) {
+		beforeAdmin, beforeBuilder := read("admin", "?limit=100").Overview, read("builder", "?limit=100").Overview
+		submit := func(member, app, schema, typ, id string, payload any) {
+			t.Helper()
+			m, _ := live.Member(member)
+			s := &pb.Submission{TenantId: live.ID, PrincipalId: member, Authority: app, IdempotencyKey: schema + ":" + id,
+				Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
+			if _, refusal := live.Submit(m, s, now); refusal != nil {
+				t.Fatalf("%s %s: %v", member, schema, refusal)
+			}
+		}
+		startFlow := func(member, name, key string) string {
+			t.Helper()
+			submit(member, "probe", "probe.start", "probe.event", key, map[string]string{"flow": name})
+			live.mu.Lock()
+			defer live.mu.Unlock()
+			for _, task := range slices.Clone(live.work.Queued(platform.FlowApp)) {
+				if outcome := live.acceptWork(task, now); outcome != "ok" {
+					t.Fatalf("Flow delivery: %s", outcome)
+				}
+			}
+			return "probe." + name + ":" + key
+		}
+		waiting := startFlow("builder", "waiting", "waiting")
+		done := startFlow("builder", "done", "done")
+		compensated := startFlow("builder", "compensated", "compensated")
+		rollback := startFlow("builder", "rollback", "rollback")
+		cancelled := startFlow("builder", "waiting", "cancelled")
+		submit("admin", platform.FlowApp, automation.SchemaFlowStop, platform.FlowInstanceType, cancelled, map[string]any{})
+		privateFlow := startFlow("other", "compensated", "private-flow")
+		for _, id := range []string{"running", "waiting", "done", "failed", "cancelled", "private-agent"} {
+			member := "builder"
+			if id == "private-agent" {
+				member = "other"
+			}
+			submit(member, platform.AgentApp, platform.SchemaRunStart, platform.RunType, id, map[string]string{"agent": "probe.helper", "goal": "Goal " + id})
+		}
+		for _, step := range []platform.AgentResultStep{
+			{Run: "waiting", Tool: "ask", Arguments: platform.Raw(map[string]string{"question": "What next?"})},
+			{Run: "done", Content: "Completed the goal"},
+			{Run: "failed", Stop: "the model failed 3 times"},
+			{Run: "private-agent", Stop: "no model is set for agents"},
+		} {
+			if !live.applyAgentStep(step, now.Add(time.Second), false) {
+				t.Fatalf("the Agent result was not accepted: %+v", step)
+			}
+		}
+		submit("builder", platform.AgentApp, platform.SchemaRunCancel, platform.RunType, "cancelled", map[string]any{})
+		beforeRecords, beforeEntries := live.recordImage(t), len(live.entries)
+		adminPage, builderPage, otherPage := read("admin", "?limit=100"), read("builder", "?limit=100"), read("other", "?limit=100")
+		if len(live.entries) != beforeEntries || len(differingTypes(beforeRecords, live.recordImage(t))) != 0 {
+			t.Fatal("monitoring changed Flow or Agent accepted records")
+		}
+		for _, page := range []MonitoringRunPage{adminPage, builderPage} {
+			for id, want := range map[string]string{waiting: "pending", done: "ok", compensated: "failed", rollback: "running", cancelled: "cancelled"} {
+				run := find(page, "flow:"+id)
+				view, refusal := live.RecordOf(admin, platform.FlowInstanceType, id, now)
+				if refusal != nil {
+					t.Fatal(refusal)
+				}
+				x := view.Record.(platform.FlowInstance)
+				ref := platform.AssetRef{App: "probe", Kind: platform.AssetFlow, Name: x.Flow}
+				if run.Type != "automation" || run.Source != "flow" || run.Status != want || run.OwnerStatus != x.State || run.RecordRef != platform.FlowInstanceType+"/"+id || run.ResourceRef == nil || *run.ResourceRef != ref || run.Title != x.Title || !run.When.Equal(x.Changed.At) || run.Retryable {
+					t.Fatalf("Flow owner projection: %+v; owner=%+v", run, x)
+				}
+			}
+			for id, want := range map[string]string{"running": "running", "waiting": "pending", "done": "ok", "failed": "failed", "cancelled": "cancelled"} {
+				run := find(page, "agent:"+id)
+				view, refusal := live.RecordOf(admin, platform.RunType, id, now)
+				if refusal != nil {
+					t.Fatal(refusal)
+				}
+				x := view.Record.(platform.AgentRunRecord)
+				ref := platform.AssetRef{App: "probe", Kind: platform.AssetAgent, Name: "helper"}
+				if run.Type != "function" || run.Source != "agent" || run.Status != want || run.OwnerStatus != x.State || run.RecordRef != platform.RunType+"/"+id || run.ResourceRef == nil || *run.ResourceRef != ref || run.Title != x.Title || !run.When.Equal(x.Changed.At) || run.Retryable || run.RetrySchema != "" || run.RetryTarget != nil {
+					t.Fatalf("Agent owner projection: %+v; owner=%+v", run, x)
+				}
+			}
+		}
+		find(adminPage, "flow:"+privateFlow)
+		find(adminPage, "agent:private-agent")
+		for _, run := range builderPage.Runs {
+			if run.ID == "flow:"+privateFlow || run.ID == "agent:private-agent" {
+				t.Fatalf("another participant's run was disclosed: %+v", run)
+			}
+		}
+		for _, run := range otherPage.Runs {
+			if (run.Source == "flow" || run.Source == "agent") && run.ID != "flow:"+privateFlow && run.ID != "agent:private-agent" {
+				t.Fatalf("the other participant received builder's run: %+v", run)
+			}
+		}
+		if page := read("user", "?limit=100"); page.Total != 0 || page.Overview != (MonitoringOverview{}) {
+			t.Fatalf("an unrelated member received runs or counts: %+v", page)
+		}
+		for _, check := range []struct {
+			before, after MonitoringOverview
+			failed        int
+		}{{beforeAdmin, adminPage.Overview, 4}, {beforeBuilder, builderPage.Overview, 2}} {
+			if check.after.FailedRuns != check.before.FailedRuns+check.failed || check.after.DelayedSyncs != check.before.DelayedSyncs || check.after.FailedDeliveries != check.before.FailedDeliveries {
+				t.Fatalf("Flow and Agent overview changed another owner's counts: %+v", check)
+			}
+		}
+		for _, check := range []struct{ typ, id string }{{"automation", "flow:" + waiting}, {"function", "agent:running"}} {
+			page := read("builder", "?type="+check.typ+"&limit=100")
+			find(page, check.id)
+			if page.Overview != builderPage.Overview {
+				t.Fatal("type filtering changed the overview")
+			}
+		}
+		for attempt := 1; attempt <= 4; attempt++ {
+			live.mu.Lock()
+			outcome := live.acceptWork(live.work.Job("job:flow/timers"), now.Add(time.Duration(attempt)*time.Minute))
+			live.mu.Unlock()
+			if outcome != "ok" {
+				t.Fatalf("Flow undo retry %d: %s", attempt, outcome)
+			}
+		}
+		page := read("admin", "?limit=100")
+		run := find(page, "flow:"+rollback)
+		if run.Status != "failed" || run.OwnerStatus != "stuck" || !run.Retryable || run.RetrySchema != automation.SchemaFlowRetry || run.RetryTarget == nil || *run.RetryTarget != (MonitoringRetryTarget{Type: platform.FlowInstanceType, ID: rollback}) || run.RetrySchemaVersion == nil || run.RetrySchemaVersion.Check() != nil || run.RetryKind != "retry" {
+			t.Fatalf("the stuck Flow has no original recovery action: %+v", run)
+		}
+		if page.Overview.FailedRuns != adminPage.Overview.FailedRuns+1 || find(read("builder", "?limit=100"), run.ID).Retryable || find(read("scoped", "?limit=100"), run.ID).Retryable {
+			t.Fatal("the stuck Flow lost its failure or disclosed an unauthorized retry")
+		}
+		for _, member := range []string{"builder", "admin"} {
+			if member == "admin" {
+				live.app("probe").(*monitoringFixture).undoBlocked = false
+			}
+			s := &pb.Submission{TenantId: live.ID, PrincipalId: member, Authority: platform.FlowApp, IdempotencyKey: "monitoring-flow-retry:" + member,
+				Target: &pb.EntityRef{Type: run.RetryTarget.Type, Id: run.RetryTarget.ID}, Schema: &pb.SchemaRef{Name: run.RetrySchema, Version: run.RetrySchemaVersion.Family}, Payload: platform.Raw(map[string]any{})}
+			raw, err := protojson.Marshal(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/v1/submissions", bytes.NewReader(raw))
+			req.Header.Set("Authorization", "Bearer "+member)
+			req.Header.Set(TenantHeader, live.ID)
+			req.Header.Set(SchemaVersionHeader, run.RetrySchemaVersion.Version)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+			want := http.StatusForbidden
+			if member == "admin" {
+				want = http.StatusOK
+			}
+			if recorder.Code != want {
+				t.Fatalf("%s Flow retry: HTTP %d: %s", member, recorder.Code, recorder.Body)
+			}
+		}
+		after := read("admin", "?limit=100")
+		recovered := find(after, run.ID)
+		view, refusal := live.RecordOf(admin, platform.FlowInstanceType, rollback, now)
+		if refusal != nil {
+			t.Fatal(refusal)
+		}
+		x := view.Record.(platform.FlowInstance)
+		if recovered.Status != "failed" || recovered.OwnerStatus != "compensated" || recovered.Retryable || after.Overview != page.Overview || !slices.ContainsFunc(x.Trace, func(line platform.FlowTraceLine) bool { return line.What == "retried" && line.By == "admin" }) || !slices.ContainsFunc(x.Trace, func(line platform.FlowTraceLine) bool { return line.What == "undone" }) {
+			t.Fatalf("the Flow owner did not complete its original recovery: %+v; owner=%+v", recovered, x)
 		}
 	})
 	t.Run("operation source permissions are rechecked", func(t *testing.T) {

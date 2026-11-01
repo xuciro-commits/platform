@@ -157,7 +157,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 ## 现存差距
 
 - Logic 拥有逻辑流与查询两类旧资源，查询应并入函数或对象集（路线图 P3.11）。
-- Monitoring 的 Runs 已是按类型筛选的统一运行表（同步、构建、自动化、函数、投递），并有 Overview；Flow 实例与 Agent 运行暂未并入统一表，Monitoring views 未实现（P3.17）。
+- Monitoring 的 Runs 已是按类型筛选的统一运行表（同步、构建、自动化、函数、投递，含 Flow 实例与 Agent 运行），并有 Overview；Monitoring views 未实现（P3.17）。
 - Data Connection 的 Streams 仍分 Observation sources 与 Observations 两项；没有 Listeners（P3.17）。
 - Knowledge、Master data、Organisation directory 是独立业务应用（P2.10）。
 - Marketplace 无安装审阅与升级审阅（P5.3、P5.4）。

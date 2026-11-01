@@ -2812,7 +2812,7 @@ export type MonitoringRetryTarget = {
 export type MonitoringRun = {
   type: "sync" | "build" | "automation" | "function" | "delivery";
   id: string;
-  source: "source" | "pipeline" | "code" | "projection" | "function" | "compute" | "work" | "effect";
+  source: "source" | "pipeline" | "code" | "projection" | "function" | "compute" | "work" | "effect" | "flow" | "agent";
   title: string;
   resourceRef?: AssetRef;
   recordRef?: string;
