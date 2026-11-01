@@ -175,6 +175,7 @@ func (h *Host) Handler() http.Handler {
 	h.routesCore(rt)
 	h.routesDiscovery(rt)
 	h.routesApplications(rt)
+	h.routesMonitoring(rt)
 	h.routesRecords(rt)
 	h.routesBuild(rt)
 	h.routesBranches(rt)

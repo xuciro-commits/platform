@@ -28,6 +28,7 @@ type WorkLoop struct {
 
 type Task struct {
 	platform.ScheduledTask
+	Status  string       `json:"status,omitempty" source:"record"`
 	Since   int          `json:"-"`
 	Event   *QueuedEvent `json:"-"`
 	Job     platform.Job `json:"-"`
@@ -165,6 +166,31 @@ func (b *WorkBoard) All(apps []platform.App) []Task {
 	}
 	for _, f := range b.Failed {
 		out = append(out, *f)
+	}
+	for i := range out {
+		task := &out[i]
+		task.Status = "unknown"
+		if task.Kind == "job" {
+			switch {
+			case task.Last.IsZero():
+				task.Status = "pending"
+			case task.Error != "":
+				task.Status = "failed"
+			default:
+				task.Status = "ok"
+			}
+		} else {
+			switch task.State {
+			case "queued", "retrying":
+				task.Status = "pending"
+			case "running":
+				task.Status = "running"
+			case "failed":
+				task.Status = "failed"
+			case "done":
+				task.Status = "ok"
+			}
+		}
 	}
 	return out
 }

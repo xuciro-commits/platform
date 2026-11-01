@@ -1,10 +1,10 @@
 import type { Api } from "@platform/kernel";
-import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
+import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, DataTable, Sheet, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, humanizeKernelError, useWorkspace } from "@platform/ui";
 import { type UseQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
+import { when, type AppSettings, type AuditEntry, type Connector, type EndpointView, type ProtocolInfo, type SettingValue } from "./shared";
 
 export function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; children: (data: T) => ReactNode }) {
   if (query.isPending) return <p role="status" className="text-sm text-muted">{t("Loading…")}</p>;
@@ -13,51 +13,6 @@ export function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; c
     <Button size="sm" variant="ghost" onClick={() => void query.refetch()}>{t("Retry")}</Button>
   </div>;
   return <>{children(query.data as T)}{query.isError && <p role="status" className="text-xs text-muted">{t("Showing the last known answer; refreshing failed.")}</p>}</>;
-}
-
-export function Automation() {
-  const appsQuery = useRead<Api.AppInfo[]>("/v1/apps");
-  const { decide } = useHost();
-  const work = useRead<Task[]>("/v1/work");
-  const tone = (state: string) => (({ failed: "danger", retrying: "warning", queued: "info" }) as const)[state as "failed"] ?? "neutral";
-  const taskColumns: ColumnDef<Task, any>[] = [
-    { accessorKey: "kind", header: t("Kind"), meta: { width: 110 }, cell: c => t(c.getValue()) },
-    { accessorKey: "app", header: t("App"), meta: { width: 100 } },
-    { accessorKey: "title", header: t("Work"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "state", header: t("State"), meta: { width: 100 }, cell: (c) => <Tag label={t(c.getValue())} tone={tone(c.getValue())} /> },
-    { accessorKey: "attempts", header: t("Runs"), meta: { width: 70, align: "right" } },
-    { accessorKey: "last", header: t("Last"), meta: { width: 170 }, cell: (c) => when(c.getValue()) },
-    { accessorKey: "due", header: t("Next"), meta: { width: 170 }, cell: ({ row: { original: t } }) => (t.state === "failed" ? "—" : when(t.due)) },
-    { accessorKey: "error", header: t("Last error"), meta: { width: 170 }, cell: (c) => c.getValue() ? <Tag label={c.getValue()} tone="danger" /> : "" },
-    { id: "retry", header: t("Actions"), meta: { width: 112 }, minSize: 112, cell: ({ row: { original: w } }) => (w.state === "failed" || w.kind === "job") &&
-      <Button size="sm" onClick={() => void decide("platform.work.retry", { type: "platform.work", id: w.id }, {})}>{w.kind === "job" ? t("Run now") : t("Retry")}</Button> },
-  ];
-  return <>
-    <PageHeader title={t("Work queue")} help={t("Apps react to their own decisions and to protocol events after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision.")} />
-    <ReadResult query={appsQuery}>{apps => {
-      const subscriptions = apps.flatMap(app => app.subscribes.map(action => ({ app: app.id, action })));
-      return <div className="mb-3 flex flex-wrap gap-2 text-sm">{subscriptions.length
-        ? subscriptions.map(s => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)
-        : <span className="text-muted">{t("No apps subscribe to events. Scheduled jobs can still run.")}</span>}</div>;
-    }}</ReadResult>
-    <ReadResult query={work}>{(rows) => <DataTable storageKey="monitoring:work-queue" data={rows} columns={taskColumns} getRowId={(task) => task.id} height="calc(100dvh - 260px)" searchable={false} empty={t("Nothing queued, no jobs")} />}</ReadResult>
-  </>;
-}
-
-export function Deliveries() {
-  const deliveries = useRead<Delivery[]>("/v1/deliveries");
-  const columns: ColumnDef<Delivery, any>[] = [
-    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
-    { accessorKey: "action", header: t("Event"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "target", header: t("Target"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "subscriber", header: t("Delivered to"), meta: { width: 120 } },
-    { accessorKey: "attempt", header: t("Attempt"), meta: { width: 80, align: "right" } },
-    { accessorKey: "outcome", header: t("Outcome"), meta: { width: 200 }, cell: (c) => <Tag label={c.getValue()} tone={c.getValue() === "ok" ? "success" : "danger"} /> },
-  ];
-  return <>
-    <PageHeader title={t("Delivery attempts")} help={t("Every outbound delivery the host has retried, oldest first. Attempts appear as endpoints receive effects; nothing here is authored by hand.")} />
-    <ReadResult query={deliveries}>{(rows) => <DataTable storageKey="monitoring:deliveries" data={[...rows].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}${d.attempt}`} height="calc(100dvh - 220px)" empty={t("No deliveries yet")} />}</ReadResult>
-  </>;
 }
 
 export function SystemHealth() {
@@ -203,37 +158,6 @@ export function Endpoints() {
           </span>
         </div>
       </Sheet>
-  </>;
-}
-
-export function OutboundEffects() {
-  const host = useHost(), { decide } = host;
-  const [resolving, setResolving] = useState<string>();
-  const effects = useRead<Effect[]>("/v1/effects");
-  const tone = (s: string) => (({ delivered: "success", compensated:"success", unknown:"warning", retrying: "warning", pending: "info", held: "warning", failed: "danger", rejected: "danger" }) as const)[s as "failed"] ?? "neutral";
-  const effectColumns: ColumnDef<Effect, any>[] = [
-    { accessorKey: "at", header: t("Event at"), meta: { width: 160 }, cell: (c) => when(c.getValue()) },
-    { accessorKey: "endpoint", header: t("Endpoint"), meta: { width: 110 } },
-    { accessorKey: "event", header: t("Event"), meta: { width: 220 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "target", header: t("Entity"), meta: { width: 200 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "state", header: t("State"), meta: { width: 130 }, cell: ({ row: { original: x } }) =>
-      <Tag label={x.state === "held" ? `held · ${x.agent}` : x.state} tone={tone(x.state)} /> },
-    { accessorKey: "attempts", header: t("Tries"), meta: { width: 60, align: "right" } },
-    { accessorKey: "due", header: t("Next"), meta: { width: 160 }, cell: ({ row: { original: x } }) => (x.state === "retrying" ? when(x.due) : "—") },
-    { accessorKey: "error", header: t("Last answer"), meta: { width: 200 }, cell: (c) => <span className="text-xs">{c.getValue() ?? ""}</span> },
-    { accessorKey: "callbackError", header: t("Receipt refusal"), meta: { width: 240 }, cell: (c) => <span className="text-xs text-danger">{c.getValue() ?? ""}</span> },
-    { id: "act", header: t("Actions"), meta: { width: 240 }, minSize: 220, cell: ({ row: { original: x } }) => <span className="flex gap-1">
-      {x.state==="unknown"&&<Button size="sm" onClick={()=>setResolving(x.id)}>{t("Resolve unknown delivery")}</Button>}
-      {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decide("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>{t("Retry")}</Button>}
-      {x.state === "held" && <Button size="sm" onClick={() => void decide("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>{t("Approve")}</Button>}
-      {(x.state === "held" || x.state === "pending" || x.state === "retrying") &&
-        <Button size="sm" variant="danger" onClick={() => void decide("platform.effect.discard", { type: "platform.effect", id: x.id }, {})}>{t("Discard")}</Button>}
-    </span> },
-  ];
-  return <>
-    <PageHeader title={t("Outbound effects")} help={t("Every delivery an application's emitted event produces, and what the receiver made of it. Effects appear once an app declares and emits events; endpoints decide where they go.")} />
-      {resolving&&host.action("platform.effect.resolve")&&<Panel title={t("Resolve unknown delivery")}><DeclaredActionForm declared={host.action("platform.effect.resolve")!} target={{type:"platform.effect",id:resolving}} revision={0} initial={{outcome:"delivered"}} onCancel={()=>setResolving(undefined)} onCompleted={()=>{setResolving(undefined);void effects.refetch();}} enabled/></Panel>}
-    <ReadResult query={effects}>{(rows) => <DataTable storageKey="monitoring:effects" data={rows} columns={effectColumns} getRowId={(effect) => effect.id} height="calc(100dvh - 220px)" empty={t("Nothing sent yet")} />}</ReadResult>
   </>;
 }
 

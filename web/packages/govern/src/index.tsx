@@ -3,7 +3,7 @@ import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/ap
 import { Button, Card, ContentTabs, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
 import type { ReactNode } from "react";
 import { Markings } from "./markings";
-import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, Settings, ShieldCheck, FlaskConical, History, KeyRound, Network, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Network, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
@@ -13,11 +13,12 @@ import { Apps, Matrix, Protocols } from "./apps";
 import { PackageHelp } from "./package-sources";
 import { PackagePreparation } from "./package-preparation";
 import { Words } from "./words";
-import { Automation, Deliveries, SystemHealth, Integrations, Endpoints, OutboundEffects, AppSettingsView, Audit } from "./operations";
+import { SystemHealth, Integrations, Endpoints, AppSettingsView, Audit } from "./operations";
+import { MonitoringOverviewView, MonitoringRunsView } from "./monitoring";
 import { AIConfiguration } from "./ai-configuration";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
 import { Credentials } from "./credentials";
-import { Flows, Agents, AgentRuns, AgentMemories, Evaluations } from "./processes";
+import { Agents, AgentRuns, AgentMemories, Evaluations } from "./processes";
 import { Glossary, Knowledge } from "./knowledge";
 import { HostMigrations, HostOverview, HostPromotions, HostTenant } from "./host";
 
@@ -48,18 +49,6 @@ function TabbedArea({ label, tabs, current, children }: { label: string; tabs: {
 function AreaTabs({ area, current, children }: { area: Area; current: string; children: ReactNode }) {
   const host = useHost();
   return <TabbedArea label={area === "ai" ? "AI" : area === "settings" ? "Settings" : "Roles and permissions"} tabs={controlPanelAreas(host)[area]} current={current}>{children}</TabbedArea>;
-}
-
-function monitoringRuns(host: Host) {
-  return [
-    ...(host.role("flow") ? [{ view: "flows", title: "Workflow runs" }] : []),
-    ...(admin(host) ? [{ view: "automation-operations", title: "Work queue" }, { view: "delivery-attempts", title: "Delivery attempts" }, { view: "effects", title: "Outbound effects" }] : []),
-  ];
-}
-
-function RunsTabs({ current, children }: { current: string; children: ReactNode }) {
-  const host = useHost();
-  return <TabbedArea label="Runs" tabs={monitoringRuns(host)} current={current}>{children}</TabbedArea>;
 }
 
 function controlPanelNavigation(host: Host): NavSection[] {
@@ -155,34 +144,28 @@ export const marketplace = defineApp({
   ] }],
 });
 
-function RunsHome() {
-  const host = useHost();
-  return host.role("flow") ? <Flows /> : <Automation />;
-}
-
 export function createMonitoring(host: Host, integration?: Pick<AppUI, "for" | "views" | "nav">): AppUI {
   const operating = admin(host) || !!host.role("flow");
   const integrating = !!integration && (!integration.for || integration.for(host));
   return defineApp({
     id: "monitoring", serves: ["platform", "flow", "build"], category: "govern", title: "Monitoring", icon: <Activity />,
-    description: "Health, runs, queued and failed work, and every delivery the host attempted.",
+    description: "Overview, every run the host knows about, and its own health.",
     for: host => admin(host) || !!host.role("flow") || !!integration && (!integration.for || integration.for(host)),
-    home: { view: operating ? "runs-home" : "integration-health" },
+    home: { view: operating ? "monitoring-overview" : "integration-health" },
     views: [
       ...(integrating ? integration.views : []),
       ...(operating ? [
-        { id: "runs-home", title: () => t("Runs"), render: () => <RunsHome /> },
-        { id: "flows", title: () => t("Workflow runs"), render: () => <RunsTabs current="flows"><Flows /></RunsTabs> },
-        { id: "automation-operations", title: () => t("Work queue"), render: () => <RunsTabs current="automation-operations"><Automation /></RunsTabs> },
-        { id: "delivery-attempts", title: () => t("Delivery attempts"), render: () => <RunsTabs current="delivery-attempts"><Deliveries /></RunsTabs> },
-        { id: "effects", title: () => t("Outbound effects"), render: () => <RunsTabs current="effects"><OutboundEffects /></RunsTabs> },
+        { id: "monitoring-overview", title: () => t("Overview"), render: () => <MonitoringOverviewView /> },
+        { id: "monitoring-runs", title: () => t("Runs"), render: (p: Record<string, string>) => <MonitoringRunsView type={p.type} status={p.status} /> },
         { id: "system-health", title: () => t("Health"), render: () => <SystemHealth /> },
       ] : []),
     ],
     nav: (host) => {
-      const runs = monitoringRuns(host);
       return [{ label: t("Monitoring"), items: [
-        ...(runs.length ? [{ label: t("Runs"), icon: <Route />, route: { view: runs[0]!.view }, covers: ["runs-home", ...runs.map(run => run.view)] }] : []),
+        ...(admin(host) || host.role("flow") ? [
+          { label: t("Overview"), icon: <LayoutDashboard />, route: { view: "monitoring-overview" } },
+          { label: t("Runs"), icon: <Route />, route: { view: "monitoring-runs" } },
+        ] : []),
         ...(admin(host) ? [{ label: t("Health"), icon: <BarChart3 />, route: { view: "system-health" } }] : []),
         ...(integrating ? integration.nav(host).flatMap(section => section.items) : []),
       ] }];

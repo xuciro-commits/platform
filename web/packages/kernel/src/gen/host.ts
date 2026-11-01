@@ -2791,6 +2791,50 @@ export type ModelViewBinding = {
   expressions?: Record<string, Expr>;
 };
 
+export type MonitoringCoverage = {
+  source: string;
+  readable: boolean;
+  basis: "latest" | "current" | "retained";
+  limitation?: string;
+};
+
+export type MonitoringOverview = {
+  failedRuns: number;
+  delayedSyncs: number;
+  failedDeliveries: number;
+};
+
+export type MonitoringRetryTarget = {
+  type: string;
+  id: string;
+};
+
+export type MonitoringRun = {
+  type: "sync" | "build" | "automation" | "function" | "delivery";
+  id: string;
+  source: "source" | "pipeline" | "code" | "projection" | "function" | "compute" | "work" | "effect";
+  title: string;
+  resourceRef?: AssetRef;
+  recordRef?: string;
+  when?: string;
+  status: "ok" | "failed" | "pending" | "running" | "warning" | "paused" | "cancelled" | "unknown";
+  ownerStatus?: string;
+  retryable: boolean;
+  retrySchema?: string;
+  retryTarget?: MonitoringRetryTarget;
+  retrySchemaVersion?: SchemaVersion;
+  retryKind?: "retry" | "rerun";
+};
+
+export type MonitoringRunPage = {
+  runs: MonitoringRun[];
+  total: number;
+  offset: number;
+  limit: number;
+  overview: MonitoringOverview;
+  coverage: MonitoringCoverage[];
+};
+
 export type NamedQuery = {
   name: string;
   title: string;
@@ -4667,6 +4711,7 @@ export type Task = {
   due?: string;
   error?: string;
   withheld?: boolean;
+  status?: string;
 };
 
 export type TaskSummary = {

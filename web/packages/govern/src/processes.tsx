@@ -1,32 +1,7 @@
 import { Records, ModelPicker, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
-import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t, Chart, Tooltip } from "@platform/ui";
+import { ContextHelp, Button, Checkbox, DataTable, Form, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, t, Chart, Tooltip } from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
-
-export function Flows() {
-  const flows = useRead<FlowDefinition[]>("/v1/flows").data ?? [];
-  const [shown, setShown] = useState<string>();
-  const definition = flows.find((f) => `${f.id}@${f.version}` === shown);
-  const columns: ColumnDef<FlowDefinition, any>[] = [
-    { accessorKey: "title", header: t("Flow") },
-    { accessorKey: "id", header: "ID", meta: { width: 220 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "version", header: t("Version"), meta: { width: 80, align: "right" } },
-    { id: "start", header: t("Starts on"), meta: { width: 260 }, accessorFn: (f) => (f.start ?? []).join(", ") },
-    { id: "steps", header: t("Steps"), meta: { width: 70, align: "right" }, accessorFn: (f) => f.steps.length },
-  ];
-  return (
-    <>
-      <PageHeader title={t("Workflow runs")} help={t("Long-running processes the apps declare. Each instance is a record: open one to see where it stands and why it moved.")} />
-      <DataTable storageKey="automate:flows" data={flows} columns={columns} getRowId={(f) => `${f.id}@${f.version}`} height={180} empty={t("No app declares a flow")}
-        selectedId={shown} onRowClick={(f) => setShown(shown === `${f.id}@${f.version}` ? undefined : `${f.id}@${f.version}`)} />
-      {definition
-        ? <div className="mt-3 grid gap-1"><h2 className="text-sm font-semibold">{definition.title} <span className="font-mono text-xs text-muted">{definition.id} v{definition.version}</span></h2><FlowGraph definition={definition} /></div>
-        : flows.length > 0 && <p className="mt-2 text-xs text-muted">{t("Click a flow to see its steps.")}</p>}
-      <h2 className="mt-4 mb-2 text-sm font-semibold">{t("Instances")}</h2>
-      <Records type="flow.instance" help={t("Every run of every flow, newest changes first.")} />
-    </>
-  );
-}
 
 export function Agents() {
   const agents = useRead<AgentInfo[]>("/v1/agents").data ?? [];
