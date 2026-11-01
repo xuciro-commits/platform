@@ -323,8 +323,9 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
   );
 }
 
-export function RecordDetail({ type, id, fields, allowed, advice }: { type: string; id: string; fields?: string[]; allowed?: string[]; advice?: { action: string; fields: string[] } }) {
-  const { source, can, decide, client, me, catalog, resend,refresh } = useHost();
+export function RecordDetail({ type, id, fields, allowed, advice, source: recordSource, recordTabs, onOpen }: { type: string; id: string; fields?: string[]; allowed?: string[]; advice?: { action: string; fields: string[] }; source?: RecordSource; recordTabs?: readonly string[]; onOpen?: (type: string, record: EntityRecord) => void }) {
+  const { source: hostSource, can, decide, client, me, catalog, resend,refresh } = useHost();
+  const source = recordSource ?? hostSource;
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
@@ -354,7 +355,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   </div>;
   return (
     <>
-      <RecordPage source={source} type={type} id={id} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
+      <RecordPage source={source} type={type} id={id} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields} recordTabs={recordTabs}
         work={view => {
           const dispatchTask = type === "work.task" && typeof view.record.ref === "string" && view.record.ref.startsWith("build.dispatch/") ? view.record.ref.slice("build.dispatch/".length) : undefined;
           const call = type === "build.function-call" ? view.record : undefined;
@@ -375,13 +376,13 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
             {call && !call.withheld && call.state !== "pending" && call.metered === false && <p className="text-xs text-muted">{t("No model call was measured for this result.")}</p>}
             {type === "build.function-call" ? <ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={() => void refresh?.()} /> : advice && <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} />}
           </>;
-        }} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
+        }} onOpen={onOpen ?? ((t, r) => openRecord({ type: t, id: r.id }))}
         can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); }, actions: task => task.ref?.startsWith("build.dispatch/") ? <Button size="sm" onClick={() => openRecord(task.ref!, { window: "tab" })}>{t("Review dispatch")}</Button> : null } : undefined}
         actions={(r) => <>
           <RecordObservations type={type} id={r.id} />
-          <RecordActions type={type} record={r} allowed={advice ? (allowed ?? catalog.map((a) => a.schema)).filter((schema) => schema !== advice!.action) : allowed} />
+          <RecordActions type={type} record={r} allowed={advice ? (allowed ?? catalog.map((a) => a.schema)).filter((schema) => schema !== advice!.action) : allowed} steps={recordTabs !== undefined} />
           <OpenInMenu type={type} />
           {can(`${type}.edit`) && (!allowed || allowed.includes(`${type}.edit`)) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
         </>}
@@ -391,6 +392,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
           ...(can("agent.run.start") ? [{ id: "assistant", label: t("Ask the assistant"), run: () => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "beside" }) }] : []),
           ...(can(`${type}.archive`) && (!allowed || allowed.includes(`${type}.archive`)) && !r.archived ? [{ id: "archive", label: t("Archive"), danger: true, separatorBefore: true, run: () => archive.take(r) }] : []),
         ]} />
+      {recordTabs && <RefusalHistory key={`${type}/${id}`} type={type} id={id} />}
       {archive.dialog}
       {transition.dialog}
       {editing&&catalog.find(action=>action.schema===`${type}.edit`)&&<DeclaredActionDialog frame="drawer" declared={catalog.find(action=>action.schema===`${type}.edit`)!} type={type} record={editing} initial={editing} onClose={()=>setEditing(undefined)} onCompleted={()=>setEditing(undefined)}/>}
@@ -423,6 +425,7 @@ export { SetBuilder, LinkTypePicker, objectSetComplete, type SetBuilderProps, ty
 export { NewActions, PayloadFields, DeclaredActionForm, DeclaredActionDialog, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions/actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages/pages";
 export { ComposedPage, SectionView, isComposed } from "./pages/sections";
+export { ObjectRecordView } from "./pages/ObjectRecordView";
 export { createWidgetDefinitions, createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetImplementation, type WidgetContract, type WidgetID } from "./widgets/registry";
 export { pageVariableContract, pageVariableValues, pageVariableDiagnostics } from "./runtime/PageRuntime";
 export type { VariableResult as PageVariableValue } from "./runtime/variables";

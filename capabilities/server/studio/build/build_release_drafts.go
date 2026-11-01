@@ -404,6 +404,12 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 					return JointDraftRef{Kind: want, ID: p.ID}, true
 				}
 			}
+		case platform.AssetApp:
+			for _, app := range apps {
+				if app.Published == "" && app.Name == name {
+					return JointDraftRef{Kind: want, ID: app.ID}, true
+				}
+			}
 		case platform.AssetFlow:
 			for _, p := range processes {
 				if p.Published == "" && (p.Name == name || TypeOf(p.Name) == name) {
@@ -425,6 +431,13 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 			i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved object draft %s", next.ID)
+			}
+			if view := objects[i].ObjectView; view != nil {
+				for _, ref := range []platform.AssetRef{view.Application, view.Page} {
+					if ref.App == ID {
+						dependencies[ref.Kind] = append(dependencies[ref.Kind], ref.Name)
+					}
+				}
 			}
 			for _, field := range objects[i].Fields {
 				if field.Type == "reference" && field.Ref != "" {

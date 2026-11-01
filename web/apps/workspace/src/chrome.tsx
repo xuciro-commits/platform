@@ -1,8 +1,8 @@
 import "./i18n";
-import { Observations, RecordObservations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, FlowInstanceView, PagePreview, PageWorkspace, ObjectRecordView, Records, RunView, Search, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
-  Button, DataTable, Disclosure, Inbox, NotificationList, PageHeader, Panel, RecordList, RecordPage, Select, StatusTag, defineStatuses, submissionStatuses,
+  Button, DataTable, Disclosure, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
   useWorkspace, type ColumnDef, type InboxTask, type Route, type View,
  t } from "@platform/ui";
 import { useState, type ReactNode } from "react";
@@ -24,14 +24,6 @@ function StudioReference({ route, context, children }: { route: Route; context?:
 
 const requestStates = defineStatuses({ pending: { label: "Pending", tone: "warning" }, approved: { label: "Approved", tone: "success" },
   rejected: { label: "Rejected", tone: "danger" }, refused: { label: "Refused when run", tone: "danger" }, withdrawn: { label: "Withdrawn", tone: "neutral" } });
-
-function RecordInspection({ type, id }: { type: string; id: string }) {
-  const { source } = useHost();
-  const openRecord = useOpenRecord();
-  return <RecordPage key={`${source.scope}:${type}/${id}`} source={source} type={type} id={id} recordTabs={["properties", "links", "history"]}
-    onOpen={(type, record) => openRecord({ type, id: record.id })}
-    actions={() => <><Button onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open record")}</Button><RecordObservations type={type} id={id} /></>} />;
-}
 
 function MyInbox() {
   const tasks = useRead<InboxTask[]>("/v1/inbox") ?? [];
@@ -292,7 +284,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "definition", title: (p) => { const definition = definitions().find(item => item.ref.app === p.app && item.ref.kind === p.kind && item.ref.name === p.name); return definition ? definitionPresentation(definition).title : p.name ?? t("Definition"); }, render: (p) => <StudioReference route={{ view: "definition", params: p }} context={apps().find(app => app.surface === "studio")?.referenceContext}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} application={p.application} /></StudioReference> },
   { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title || p.name || t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
   { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference route={{ view: "page-preview", params: p }} context={apps().find(app => app.surface === "studio")?.referenceContext}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
-  { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => p.inspect === "true" ? <RecordInspection type={p.type ?? ""} id={p.id ?? ""} /> : <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
+  { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <ObjectRecordView type={p.type ?? ""} id={p.id ?? ""} inspect={p.inspect === "true"} route={{ view: "record", params: p }} /> },
   { id: "application-overview", title: (p) => definitions().find((d) => d.ref.kind === "app" && d.ref.app === p.app && d.application?.name === p.name)?.application?.title ?? t("Application overview"), render: (p) => <ApplicationOverview owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "operation-run", title: (p) => p.id ?? t("Run"), render: (p) => <OperationRunView id={p.id ?? ""} application={p.application} project={p.project} subject={p.subject} /> },

@@ -5,6 +5,7 @@ import { Button, IconPicker, Input, Notice, ObjectIcon, Select, Tag, cn, t, tone
 import { SemanticValueTypeSelect } from "@platform/app";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 import type { Field, Process } from "./object-model";
+import { ObjectViewSelect } from "./ObjectViewSelect";
 
 export const titleFieldTypes = ["text", "longtext", "choice"];
 export const valueTypeBases = ["text", "longtext", "integer", "decimal", "date", "datetime"];
@@ -18,7 +19,7 @@ export function ToneSwatches({ value, onChange, label, clearable = false, disabl
   </div>;
 }
 
-export function PresentationPanel({ title, process, onChange }: { title: string; process: Process; onChange: (process: Process) => void }) {
+export function PresentationPanel({ title, object, process, onChange }: { title: string; object: string; process: Process; onChange: (process: Process) => void }) {
   const candidates = process.fields.filter(field => titleFieldTypes.includes(field.type));
   const unavailable = !!process.display && !candidates.some(field => field.name === process.display);
   return <div className="grid max-w-xl content-start gap-4 p-4">
@@ -36,6 +37,7 @@ export function PresentationPanel({ title, process, onChange }: { title: string;
       </Select>
       <span className="text-muted">{t("The text, long text or choice property that names one record in headers and links.")}</span>
     </label>
+    <ObjectViewSelect object={object} value={process.objectView} onChange={objectView => onChange({ ...process, objectView })} />
   </div>;
 }
 

@@ -166,6 +166,7 @@ func compatibleObjectSchema(previous, next Object) bool {
 		object.Record = platform.Record{}
 		object.Title, object.Plural, object.Description = "", "", ""
 		object.Icon, object.Color, object.Display = "", "", ""
+		object.ObjectView = nil
 		object.State, object.Installed, object.Published = "", "", ""
 		object.ExtensionSource, object.SchemaVersions = nil, nil
 		object.Fields = nil

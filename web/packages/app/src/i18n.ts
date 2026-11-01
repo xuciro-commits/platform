@@ -1,6 +1,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "This object's Workshop view is unavailable. Ask a builder to check its module and page.": "此对象的 Workshop 视图不可用。请构建者检查模块和页面。",
+  "This object's Workshop view does not accept its current object. Ask a builder to check the page inputs.": "此对象的 Workshop 视图无法接收当前对象。请构建者检查页面输入。",
   "Object set builder": "对象集合构建器",
   "Set kind": "集合类型",
   "Search around": "沿关系扩展",

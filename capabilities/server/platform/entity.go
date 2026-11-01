@@ -69,6 +69,7 @@ type Entity struct {
 	RecordFormat    string
 	RecordImages    []RecordImageFormat
 	Display         string
+	ObjectView      *ObjectView `json:"objectView,omitempty"`
 	Icon            string
 	Color           string
 	Scope           Scope
@@ -390,6 +391,7 @@ type EntityInfo struct {
 	KnowledgeFiles  bool                `json:"knowledgeFiles,omitempty"`
 	App             string              `json:"app"`
 	Display         string              `json:"display"`
+	ObjectView      *ObjectView         `json:"objectView,omitempty"`
 	Icon            string              `json:"icon,omitempty"`
 	Color           string              `json:"color,omitempty"`
 	Fields          []FieldInfo         `json:"fields"`

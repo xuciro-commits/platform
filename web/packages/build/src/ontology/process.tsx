@@ -106,7 +106,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       </fieldset>
       {object.state === "published" && <Button className="w-fit" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
     </div>,
-    presentation: <PresentationPanel title={object.title} process={process} onChange={change} />,
+    presentation: <PresentationPanel title={object.title} object={parent} process={process} onChange={change} />,
     properties: <div className="grid content-start gap-3 p-4">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Properties")}</h2><Button size="sm" onClick={addField}><Plus />{t("Add a property")}</Button></div>
       <DataTable storageKey="ontology:properties" data={process.fields.map((field, at) => ({ field, at }))} getRowId={({ at }) => String(at)}

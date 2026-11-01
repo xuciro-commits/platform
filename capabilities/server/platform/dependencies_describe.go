@@ -126,6 +126,13 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		if historical {
 			break
 		}
+		if info.ObjectView != nil {
+			if err := info.ObjectView.Check(); err != nil {
+				return out, err
+			}
+			add(info.ObjectView.Application)
+			add(info.ObjectView.Page)
+		}
 		capability("interface", asset.Ref.Name, CapabilityPure, nil, ValueSchema{}, CapabilityEntitySchema(info), nil)
 		for _, name := range info.Implements {
 			owner, _, _ := strings.Cut(name, ".")

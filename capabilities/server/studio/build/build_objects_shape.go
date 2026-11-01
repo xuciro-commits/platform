@@ -284,7 +284,7 @@ func CompileObjectShape(o Object) platform.Entity {
 			localRules[field.Name] = *field.FormulaExpr
 		}
 	}
-	return platform.Entity{LocalRules: localRules, Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: fieldFormats(o.Fields), ValueTypeBindings: valueTypeBindings(o.Fields), Model: model, Display: display, Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
+	return platform.Entity{LocalRules: localRules, Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: fieldFormats(o.Fields), ValueTypeBindings: valueTypeBindings(o.Fields), Model: model, Display: display, ObjectView: o.ObjectView, Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
 }
 
 func goType(kind string) reflect.Type {

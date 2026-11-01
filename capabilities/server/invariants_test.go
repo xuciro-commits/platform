@@ -1,12 +1,16 @@
 package platformserver
 
 import (
+	"bytes"
+	"encoding/json"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/platform"
 	"platformserver/studio/build"
 )
 
@@ -37,6 +41,149 @@ func TestInvariantK1ReplayIsByteIdentical(t *testing.T) {
 		restored := live.restore(t, live.entries)
 		if differing := differingTypes(want, restored.recordImage(t)); len(differing) != 0 {
 			t.Fatalf("replay %d differs from the live record store in %v", replay, differing)
+		}
+	}
+}
+
+func TestInvariantK1ObjectViewReleaseReplayPreservesHistory(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k1-object-view")
+	object := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}
+	list := platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: "alphalist"}
+	detail := platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: "alphadetail"}
+	application := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "alphaworkspace"}
+	live.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
+	live.accept(t, "build.object.publish", build.ObjectType, "OBJ1", map[string]any{})
+	live.accept(t, "build.page.create", build.PageType, "LIST1", map[string]any{
+		"name": list.Name, "title": "Alpha list", "object": object.Name, "list": []string{"note"}, "detail": []string{"note"},
+	})
+	detailDraft := map[string]any{
+		"name": detail.Name, "title": "Alpha detail", "object": object.Name,
+		"sections": []build.Section{{ID: "details", Widget: "detail", Fields: []string{"note"}, RecordVariable: "currentObject"}},
+		"document": platform.PageDocument{
+			FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root",
+			Nodes:     map[string]platform.PageLayoutNode{"root": {Kind: "section", Section: "details"}},
+			Variables: map[string]platform.PageVariable{"currentObject": {Scope: "page", Type: "record", Mode: "input"}},
+			Interface: &platform.PageInterface{Version: 1, Inputs: map[string]platform.PagePort{
+				"currentObject": {Variable: "currentObject", Type: "record", Object: &object, Required: true},
+			}},
+		},
+	}
+	live.accept(t, "build.page.create", build.PageType, "DETAIL1", detailDraft)
+	live.accept(t, "build.app.create", build.AppType, "APP1", map[string]any{
+		"name": application.Name, "title": "Alpha workspace", "pages": []string{list.Name, detail.Name}, "resources": []platform.AssetRef{object},
+	})
+	drafts := []build.JointDraftRef{
+		{Kind: platform.AssetObject, ID: "OBJ1"}, {Kind: platform.AssetPage, ID: "LIST1"},
+		{Kind: platform.AssetPage, ID: "DETAIL1"}, {Kind: platform.AssetApp, ID: "APP1"},
+	}
+	publish := func(key string) string {
+		t.Helper()
+		preview, err := live.PreviewReleaseDrafts(live.member(t), drafts, "", invariantClock)
+		if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
+			t.Fatalf("%s preview: %+v: %v", key, preview, err)
+		}
+		for _, ref := range []platform.AssetRef{object, list, detail, application} {
+			if !slices.Contains(preview.Included, ref) {
+				t.Fatalf("%s preview omits %s", key, ref)
+			}
+		}
+		id, err := live.SaveReleaseCandidates(live.member(t), drafts, preview.CandidateID, key, invariantClock)
+		if err != nil || id != preview.CandidateID {
+			t.Fatalf("%s save: id=%s: %v", key, id, err)
+		}
+		if active, err := live.ActivateRelease(live.member(t), id, key, invariantClock); err != nil || active != id {
+			t.Fatalf("%s activate: id=%s: %v", key, active, err)
+		}
+		return id
+	}
+	pagePublication := func(tenant *invariantTenant) build.Page {
+		t.Helper()
+		view, refusal := tenant.RecordOf(tenant.member(t), build.PageType, "DETAIL1", invariantClock)
+		if refusal != nil {
+			t.Fatalf("read detail publication: %v", refusal)
+		}
+		raw, err := json.Marshal(view.Record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var page build.Page
+		if err := json.Unmarshal(raw, &page); err != nil {
+			t.Fatal(err)
+		}
+		return page
+	}
+	oldID := publish("before-object-view")
+	oldBytes := bytes.Clone(live.releases.Raw(oldID))
+	oldPage := pagePublication(live)
+	if oldPage.Published == "" || !slices.Contains(oldPage.Versions, oldPage.Published) {
+		t.Fatal("the first joint release did not retain its page publication")
+	}
+	oldCandidate, err := platform.ReadCandidate(oldID, oldBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, asset := range oldCandidate.Assets {
+		if asset.Ref == object {
+			var saved build.Object
+			if err := json.Unmarshal(asset.Body, &saved); err != nil || saved.ObjectView != nil {
+				t.Fatalf("the old candidate already contains an object view: %+v: %v", saved.ObjectView, err)
+			}
+		}
+	}
+	wantView := &platform.ObjectView{Application: application, Page: detail}
+	objectDraft := invariantObject("alpha", "Alpha")
+	objectDraft["objectView"] = wantView
+	live.accept(t, "build.object.edit", build.ObjectType, "OBJ1", objectDraft)
+	detailDraft["title"] = "Alpha object view"
+	live.accept(t, "build.page.edit", build.PageType, "DETAIL1", detailDraft)
+	activeID := publish("with-object-view")
+	if activeID == oldID || !bytes.Equal(oldBytes, live.releases.Raw(oldID)) {
+		t.Fatal("adding the object view reused or rewrote the old candidate")
+	}
+	currentPage := pagePublication(live)
+	if currentPage.Published == oldPage.Published || !slices.Contains(currentPage.Versions, oldPage.Published) {
+		t.Fatal("the changed object page lost its original publication bytes")
+	}
+	for _, raw := range oldPage.Versions {
+		if !slices.Contains(currentPage.Versions, raw) {
+			t.Fatal("the changed object page rewrote a historical publication")
+		}
+	}
+	live.accept(t, "build.alpha.create", object.Name, "A1", map[string]any{"note": "saved under the object view release"})
+	want := live.recordImage(t)
+	if len(want[object.Name]) == 0 {
+		t.Fatal("the joint release did not accept a business object record")
+	}
+	activeBytes := bytes.Clone(live.releases.Raw(activeID))
+	var liveInfo platform.EntityInfo
+	for _, info := range live.Entities(live.member(t)) {
+		if info.Type == object.Name {
+			liveInfo = info
+		}
+	}
+	if !reflect.DeepEqual(liveInfo.ObjectView, wantView) {
+		t.Fatalf("live entity object view: %+v; want %+v", liveInfo.ObjectView, wantView)
+	}
+	for replay := 1; replay <= 2; replay++ {
+		restored := live.restore(t, live.entries)
+		if differing := differingTypes(want, restored.recordImage(t)); len(differing) != 0 {
+			t.Fatalf("replay %d differs from the live record store in %v", replay, differing)
+		}
+		if restored.ActiveRelease() != activeID || !bytes.Equal(oldBytes, restored.releases.Raw(oldID)) || !bytes.Equal(activeBytes, restored.releases.Raw(activeID)) {
+			t.Fatalf("replay %d changed a saved candidate or active release", replay)
+		}
+		page := pagePublication(restored)
+		if page.Published != currentPage.Published || !reflect.DeepEqual(page.Versions, currentPage.Versions) {
+			t.Fatalf("replay %d changed the page publication or history bytes", replay)
+		}
+		var restoredInfo platform.EntityInfo
+		for _, info := range restored.Entities(restored.member(t)) {
+			if info.Type == object.Name {
+				restoredInfo = info
+			}
+		}
+		if !reflect.DeepEqual(restoredInfo.ObjectView, liveInfo.ObjectView) {
+			t.Fatalf("replay %d changed EntityInfo.ObjectView: %+v", replay, restoredInfo.ObjectView)
 		}
 	}
 }

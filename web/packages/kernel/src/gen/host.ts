@@ -1977,6 +1977,7 @@ export type EntityInfo = {
   knowledgeFiles?: boolean;
   app: string;
   display: string;
+  objectView?: ObjectView;
   icon?: string;
   color?: string;
   fields: FieldInfo[];
@@ -2862,6 +2863,11 @@ export type ObjectSetRequest = {
   maxRows?: number;
   collection?: RecordSetRef;
   format?: boolean;
+};
+
+export type ObjectView = {
+  application: AssetRef;
+  page: AssetRef;
 };
 
 export type ObservationCoverage = {

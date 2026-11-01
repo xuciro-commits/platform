@@ -29,16 +29,16 @@ export function ApplicationSessionsProvider({ children }: { children: ReactNode 
 
 export const AuthoringPreview = createContext(false);
 
-export function ApplicationPage({ pageRef, route, applicationRef, preview: requestedPreview = false, children }: { pageRef: Api.AssetRef; route: Route; applicationRef?: Api.AssetRef; preview?: boolean; children: ReactNode }) {
+export function ApplicationPage({ pageRef, route, applicationRef, instance: fixedInstance, onPage, preview: requestedPreview = false, children }: { pageRef: Api.AssetRef; route: Route; applicationRef?: Api.AssetRef; instance?: string; onPage?: (name: string) => void; preview?: boolean; children: ReactNode }) {
   const preview = useContext(AuthoringPreview) || requestedPreview;
   const { definitions, source,refresh } = useHost(), workspace = useWorkspace(), hub = useContext(Hub);
   const appearance=useTheme();
   const [localPreview] = useState(() => `preview:${crypto.randomUUID()}`);
   const holders = definitions.filter((d) => d.application && d.ref.app === pageRef.app && d.application.pages.includes(pageRef.name));
-  const requested = preview ? route.params?.previewApplication ?? (applicationRef ? `${applicationRef.app}:${applicationRef.name}` : route.params?.application) : route.params?.application;
+  const requested = preview ? route.params?.previewApplication ?? (applicationRef ? `${applicationRef.app}:${applicationRef.name}` : route.params?.application) : applicationRef ? `${applicationRef.app}:${applicationRef.name}` : route.params?.application;
   const id = requested ?? (holders.length === 1 ? idOf(holders[0]!) : "");
   const definition = holders.find((d) => idOf(d) === id);
-  const instance = preview ? route.params?.previewInstance ?? (applicationRef ? undefined : route.params?.instance) ?? localPreview : route.params?.instance ?? "main";
+  const instance = fixedInstance ?? (preview ? route.params?.previewInstance ?? (applicationRef ? undefined : route.params?.instance) ?? localPreview : route.params?.instance ?? "main");
   const sessionParams = (application: string, instance: string): Record<string, string> => preview ? { ...(route.params?.application ? { application: route.params.application } : {}), previewApplication: application, previewInstance: instance } : { application, instance };
   const identity = JSON.stringify([source.scope, definition?.ref, definition?.version, definition?.application, instance, preview]);
   const session = definition && hub && /^[A-Za-z0-9._:-]{1,80}$/.test(instance) ? hub.get(identity, definition.application?.variables ?? {},{source,queries:definition.application?.queries??{}}) : undefined;
@@ -50,7 +50,7 @@ export function ApplicationPage({ pageRef, route, applicationRef, preview: reque
     return () => session.detach(owner);
   }, [session, owner, routeKey]);
   const context = useMemo(() => definition && session ? { definition, session, instance, identity, preview, routeParams: sessionParams(id, instance) } : undefined, [definition, session, instance, identity, preview, id, route.params?.application]);
-  const showSessionControls = holders.length > 0 && (preview || holders.length > 1 || Object.keys(definition?.application?.variables ?? {}).length > 0);
+  const showSessionControls = !fixedInstance && holders.length > 0 && (preview || holders.length > 1 || Object.keys(definition?.application?.variables ?? {}).length > 0);
   const headerValid=validApplicationHeader(definition?.application?.header,definition?.application?.pages??[]);
   const collapsed=useSyncExternalStore(session?.subscribe??emptySubscribe,session?.headerSnapshot??(()=>undefined),()=>undefined);
   const navigate = (application: string, instance: string) => { const params:Record<string,string> = { ...route.params, ...sessionParams(application, instance) }; delete params.call; workspace.open({ ...route, params }); };
@@ -64,7 +64,7 @@ export function ApplicationPage({ pageRef, route, applicationRef, preview: reque
     </div>}
     {definition && !session && <Panel role="alert">{t("The application instance is unavailable.")}</Panel>}
     {!headerValid&&<Panel role="alert">{t("The application header configuration is invalid.")}</Panel>}
-    {headerValid&&definition?.application?.header?<ApplicationHeader key={identity} header={definition.application.header} collapsed={collapsed} onCollapsedChange={session?.setHeaderCollapsed} pages={definition.application.pages.flatMap(name=>{const page=definitions.find(d=>d.ref.app===pageRef.app&&d.ref.kind==="page"&&d.ref.name===name)?.page;return page?[{name,title:page.title}]:[];})} currentPage={pageRef.name} onPage={name=>workspace.open({view:preview?"page-preview":"page",params:{app:pageRef.app,kind:"page",name,...sessionParams(id,instance)}})} onRefresh={refresh?()=>void refresh():undefined} onTheme={appearance.toggle}>{children}</ApplicationHeader>:children}
+    {headerValid&&definition?.application?.header?<ApplicationHeader key={identity} header={definition.application.header} collapsed={collapsed} onCollapsedChange={session?.setHeaderCollapsed} pages={definition.application.pages.flatMap(name=>{const page=definitions.find(d=>d.ref.app===pageRef.app&&d.ref.kind==="page"&&d.ref.name===name)?.page;return page?[{name,title:page.title}]:[];})} currentPage={pageRef.name} onPage={onPage??(name=>workspace.open({view:preview?"page-preview":"page",params:{app:pageRef.app,kind:"page",name,...sessionParams(id,instance)}}))} onRefresh={refresh?()=>void refresh():undefined} onTheme={appearance.toggle}>{children}</ApplicationHeader>:children}
   </div></ApplicationContext.Provider></AuthoringPreview.Provider>;
 }
 

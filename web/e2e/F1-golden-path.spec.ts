@@ -1,12 +1,18 @@
 import { expect, signIn, test, unique } from "./kit";
-import type { ReleaseDraftRestore, ReleasePreview } from "../packages/kernel/src/gen/host";
+import type { ObjectView, PageInputSchema, ReleaseDraftRestore, ReleasePreview } from "../packages/kernel/src/gen/host";
+import { pageUIManifest } from "../packages/app/src/pageui/manifest";
+
+test.use({ actionTimeout: 15_000 });
 
 test("F1 builder goes from an empty project to an application a business user acts in", async ({ page, browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   const name = unique("orders");
   const objectName = `${name}order`;
   const label = `Orders ${name.slice(6)}`;
   const headers = { authorization: "Bearer builder" };
+  const viewName = `${name}view`;
+  let objectID = "", viewID = "";
+  const objectView: ObjectView = { application: { app: "build", kind: "app", name }, page: { app: "build", kind: "page", name: viewName } };
   const read = async <T,>(path: string): Promise<T> => {
     const response = await page.request.get(path, { headers });
     expect(response.ok(), await response.text()).toBeTruthy();
@@ -106,6 +112,32 @@ test("F1 builder goes from an empty project to an application a business user ac
     await expect(page.getByRole("region", { name: "Page settings" })).toBeVisible();
   });
 
+  await test.step("5b create and bind a Workshop object view before its object is published", async () => {
+    await page.getByRole("button", { name: "Object views", exact: true }).click();
+    await page.getByRole("button", { name: "New object view", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "New object view" });
+    await dialog.getByRole("combobox", { name: "Module", exact: true }).selectOption({ label: `${label} · ${name}` });
+    await dialog.getByRole("combobox", { name: "Object type", exact: true }).selectOption(`build.${objectName}`);
+    await dialog.getByRole("textbox", { name: "Page name", exact: true }).fill(viewName);
+    await dialog.getByRole("textbox", { name: "Page title", exact: true }).fill("Order object view");
+    await dialog.getByRole("button", { name: "Create object view", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    const objects = await read<{ records: { id: string; name: string; published?: string }[] }>("/v1/records/build.object?limit=500");
+    const object = objects.records.find(record => record.name === objectName)!;
+    expect(object.published ?? "").toBe("");
+    objectID = object.id;
+    const pages = await read<{ records: { id: string; name: string }[] }>("/v1/records/build.page?limit=500");
+    viewID = pages.records.find(record => record.name === viewName)!.id;
+    const modules = await read<{ records: { id: string; revision: number; name: string; pages: string[]; resources: { name: string }[] }[] }>("/v1/records/build.app?limit=500");
+    const module = modules.records.find(record => record.name === name)!;
+    expect(module).toMatchObject({ pages: expect.arrayContaining([`${name}list`, viewName]), resources: expect.arrayContaining([expect.objectContaining({ name: `build.${objectName}` })]) });
+    await submit("build.app", module.id, "edit", { uiProfile: pageUIManifest.uiProfile, header: { variant: "horizontal", title: label, items: [{ kind: "title" }, { kind: "tabs", pages: [`${name}list`, viewName] }] } }, module.revision);
+    await page.goto(`/#/object-type?id=${objectID}`);
+    await page.getByRole("navigation", { name: "Order", exact: true }).getByRole("button", { name: "Display", exact: true }).click();
+    await page.getByRole("combobox", { name: "Object view", exact: true }).selectOption({ label: `${label} / Order object view · ${name}/${viewName}` });
+    await expect.poll(async () => (await read<{ record: { objectView?: ObjectView } }>(`/v1/records/build.object/${objectID}`)).record.objectView).toEqual(objectView);
+  });
+
   await test.step("6 review and save once, leaving another builder's drafts out", async () => {
     const other = await (await browser.newContext()).newPage();
     await signIn(other, "admin", "/projects");
@@ -168,6 +200,61 @@ test("F1 builder goes from an empty project to an application a business user ac
     await form.getByRole("textbox", { name: /^Customer/ }).fill("Initech");
     await form.getByRole("button", { name: "Create", exact: true }).click();
     await expect(app.getByRole("cell", { name: "Initech" })).toBeVisible({ timeout: 30_000 });
+    const records = (await read<{ records: { id: string; revision: number; customer: string }[] }>(`/v1/records/build.${objectName}?limit=500`)).records;
+    const acme = records.find(record => record.customer === "Acme")!, globex = records.find(record => record.customer === "Globex")!;
+    await user.goto(`/#/explorer?type=build.${objectName}`);
+    await user.getByRole("main").getByRole("row").filter({ has: user.getByRole("cell", { name: "Acme", exact: true }) }).click();
+    const inspect = user.getByRole("complementary").filter({ has: user.getByRole("button", { name: "Open record", exact: true }) });
+    const inspectedView = inspect.getByRole("region", { name: "Order object view", exact: true });
+    await expect(inspectedView.getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
+    await expect(inspectedView.getByRole("heading", { name: "Globex", exact: true })).toHaveCount(0);
+    await inspect.getByRole("button", { name: "Open record", exact: true }).click();
+    await expect(user).toHaveURL(new RegExp(`/#/record\\?.*id=${acme.id}`));
+    const acmeView = user.getByRole("main").getByRole("region", { name: "Order object view", exact: true });
+    await expect(acmeView.getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
+    await expect(inspect).toHaveCount(0);
+    const recordURL = user.url();
+    const second = await user.context().newPage();
+    await signIn(second, "user", `/record?id=${globex.id}&type=build.${objectName}`);
+    const globexView = second.getByRole("main").getByRole("region", { name: "Order object view", exact: true });
+    await expect(globexView.getByRole("heading", { name: "Globex", exact: true })).toBeVisible();
+    await expect(globexView.getByRole("heading", { name: "Acme", exact: true })).toHaveCount(0);
+    const applicationPages = user.getByRole("main").getByRole("navigation", { name: "Application pages", exact: true });
+    await applicationPages.getByRole("button", { name: "Order object view", exact: true }).click();
+    await expect(acmeView.getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
+    await expect(user).toHaveURL(recordURL);
+    await applicationPages.getByRole("button", { name: "Orders", exact: true }).click();
+    const ordersPage = user.getByRole("main").getByRole("region", { name: "Orders", exact: true });
+    await expect(ordersPage.getByRole("cell", { name: "Acme", exact: true })).toBeVisible();
+    await expect(ordersPage.getByRole("cell", { name: "Globex", exact: true })).toBeVisible();
+    await expect(user).toHaveURL(recordURL);
+    await applicationPages.getByRole("button", { name: "Order object view", exact: true }).click();
+    await expect(acmeView.getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
+    await expect(user).toHaveURL(recordURL);
+    await expect(globexView.getByRole("heading", { name: "Globex", exact: true })).toBeVisible();
+    await expect(globexView.getByRole("heading", { name: "Acme", exact: true })).toHaveCount(0);
+    const edit = (await read<{ schema: string; title: string }[]>("/v1/actions")).find(action => action.schema === `build.${objectName}.edit`)!;
+    expect(edit).toBeDefined();
+    await acmeView.getByRole("button", { name: "Edit", exact: true }).click();
+    const editForm = user.getByRole("dialog", { name: `${edit.title} ${acme.id}`, exact: true });
+    await expect(editForm.getByRole("textbox", { name: /^Customer/ })).toHaveValue("Acme");
+    await editForm.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(editForm).toBeHidden();
+    await acmeView.getByRole("button", { name: "More", exact: true }).click();
+    await expect(user.getByRole("menuitem", { name: "Archive", exact: true })).toBeVisible();
+    await user.keyboard.press("Escape");
+    const acceptedResponse = user.waitForResponse(response => response.url().endsWith("/v1/submissions") && response.request().method() === "POST" && response.request().postDataJSON().target.type === `build.${objectName}`);
+    await acmeView.getByRole("button", { name: "Step 1", exact: true }).click();
+    const response = await acceptedResponse;
+    expect(response.request().postDataJSON()).toMatchObject({ target: { type: `build.${objectName}`, id: acme.id }, schema: { name: `build.${objectName}.action`, version: 1 }, expectedRevision: acme.revision });
+    const accepted = await response.json();
+    expect(response.ok(), JSON.stringify(accepted)).toBeTruthy();
+    expect(accepted.error).toBeUndefined();
+    expect(accepted.record?.changeId).toEqual(expect.any(String));
+    expect(accepted.record.changeId).not.toBe("");
+    await expect.poll(async () => (await read<{ record: { revision: number } }>(`/v1/records/build.${objectName}/${acme.id}`)).record.revision).toBe(acme.revision + 1);
+    expect((await read<{ record: { revision: number; customer: string } }>(`/v1/records/build.${objectName}/${globex.id}`)).record).toMatchObject({ revision: globex.revision, customer: "Globex" });
+    await expect(globexView.getByRole("heading", { name: "Globex", exact: true })).toBeVisible();
     await user.context().close();
   });
 
@@ -359,6 +446,99 @@ test("F1 builder goes from an empty project to an application a business user ac
         }
       }
       if (!failed && cleanupErrors.length) throw cleanupErrors[0];
+    }
+  });
+
+  await test.step("11 published object views isolate drafts and restore the generated view after saving", async () => {
+    const order = (await read<{ records: { id: string; customer: string }[] }>(`/v1/records/build.${objectName}?limit=500`)).records.find(record => record.customer === "Acme")!;
+    const user = await (await browser.newContext()).newPage();
+    const route = `/record?id=${order.id}&type=build.${objectName}`;
+    const activate = async () => {
+      await page.reload();
+      await expect(page.getByRole("button", { name: "Review and save", exact: true })).toBeEnabled();
+      const response = page.waitForResponse(answer => answer.url().endsWith("/v1/releases/preview") && answer.request().method() === "POST");
+      await page.getByRole("button", { name: "Review and save", exact: true }).click();
+      const previewResponse = await response;
+      expect(previewResponse.ok(), await previewResponse.text()).toBeTruthy();
+      const preview = await previewResponse.json() as ReleasePreview;
+      expect(preview.diagnostic).toBeUndefined();
+      for (const draft of preview.draftReviews!) {
+        expect(draft.checked).toBe(true);
+        expect(draft.issues).toEqual([]);
+      }
+      await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
+      await page.getByRole("button", { name: "Activate release", exact: true }).click();
+      await expect(page.getByText("Release active for operators.")).toBeVisible({ timeout: 60_000 });
+    };
+    try {
+      await signIn(user, "user", route);
+      await expect(user.getByRole("region", { name: "Order object view", exact: true }).getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
+      const view = (await read<{ record: { revision: number } }>(`/v1/records/build.page/${viewID}`)).record;
+      await submit("build.page", viewID, "edit", { title: "Revised order object view" }, view.revision);
+      await user.reload();
+      await expect(user.getByRole("region", { name: "Order object view", exact: true }).getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
+      await expect(user.getByRole("region", { name: "Revised order object view", exact: true })).toHaveCount(0);
+      await activate();
+      await user.reload();
+      await expect(user.getByRole("region", { name: "Revised order object view", exact: true }).getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
+      await expect(user.getByRole("region", { name: "Order object view", exact: true })).toHaveCount(0);
+      await page.goto(`/#/object-type?id=${objectID}`);
+      await page.getByRole("navigation", { name: "Order", exact: true }).getByRole("button", { name: "Display", exact: true }).click();
+      const clearing = page.waitForResponse(response => response.url().endsWith("/v1/submissions") && response.request().method() === "POST" && response.request().postDataJSON().target.type === "build.object" && response.request().postDataJSON().target.id === objectID);
+      await page.getByRole("combobox", { name: "Object view", exact: true }).selectOption({ label: "Default generated view" });
+      const cleared = await clearing;
+      expect(JSON.parse(Buffer.from(cleared.request().postDataJSON().payload, "base64").toString())).toMatchObject({ objectView: null });
+      const answer = await cleared.json();
+      expect(cleared.ok(), JSON.stringify(answer)).toBeTruthy();
+      expect(answer.error).toBeUndefined();
+      await expect.poll(async () => (await read<{ record: { objectView?: ObjectView } }>(`/v1/records/build.object/${objectID}`)).record.objectView).toBeUndefined();
+      const object = (await read<{ record: { published: string } }>(`/v1/records/build.object/${objectID}`)).record;
+      expect(JSON.parse(object.published).objectView).toEqual(objectView);
+      await user.reload();
+      await expect(user.getByRole("region", { name: "Revised order object view", exact: true }).getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
+      await activate();
+      await user.reload();
+      await expect(user.getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
+      await expect(user.getByRole("region", { name: "Revised order object view", exact: true })).toHaveCount(0);
+      await expect(user.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+      const restored = (await read<{ record: { published: string } }>(`/v1/records/build.object/${objectID}`)).record;
+      expect(JSON.parse(restored.published).objectView).toBeUndefined();
+    } finally {
+      await user.context().close();
+    }
+  });
+
+  await test.step("12 reject object view interfaces for the wrong object or extra required inputs", async () => {
+    const original = (await read<{ record: { revision: number; inputSchema: PageInputSchema } }>(`/v1/records/build.page/${viewID}`)).record;
+    const object = (await read<{ record: { revision: number } }>(`/v1/records/build.object/${objectID}`)).record;
+    await submit("build.object", objectID, "edit", { objectView }, object.revision);
+    try {
+      for (const variant of ["wrong object", "extra input"]) {
+        const inputSchema = structuredClone(original.inputSchema);
+        const inputs = inputSchema.interface!.inputs!;
+        if (variant === "wrong object") inputs.currentObject!.object = { app: "build", kind: "object", name: "build.app" };
+        else {
+          inputSchema.variables!.confirmation = { title: "Confirmation", scope: "page", type: "string", mode: "input" };
+          inputs.confirmation = { type: "string", variable: "confirmation", required: true };
+        }
+        const current = (await read<{ record: { revision: number } }>(`/v1/records/build.page/${viewID}`)).record;
+        await submit("build.page", viewID, "edit", { inputSchema }, current.revision);
+        await page.reload();
+        const response = page.waitForResponse(answer => answer.url().endsWith("/v1/releases/preview") && answer.request().method() === "POST");
+        await page.getByRole("button", { name: "Review and save", exact: true }).click();
+        const previewResponse = await response;
+        expect(previewResponse.ok(), await previewResponse.text()).toBeTruthy();
+        const preview = await previewResponse.json() as ReleasePreview;
+        expect(JSON.stringify(preview)).toContain(variant === "wrong object" ? "required currentObject record input for its bound object type" : "cannot require inputs other than currentObject");
+        expect(preview.diagnostic || preview.draftReviews?.some(draft => draft.issues.length > 0)).toBeTruthy();
+        await expect(page.getByRole("button", { name: "Save immutable candidate", exact: true })).toHaveCount(0);
+      }
+    } finally {
+      for (const draft of [{ kind: "page", type: "build.page", id: viewID }, { kind: "object", type: "build.object", id: objectID }]) {
+        const restore = await read<ReleaseDraftRestore>(`/v1/releases/drafts/restore?kind=${draft.kind}&id=${draft.id}`);
+        const current = await read<{ record: { revision: number } }>(`/v1/records/${draft.type}/${draft.id}`);
+        await submit(restore.type, draft.id, restore.action, restore.payload, current.record.revision);
+      }
     }
   });
 

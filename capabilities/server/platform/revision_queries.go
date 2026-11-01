@@ -236,6 +236,7 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		Extends         string                       `json:"extends"`
 		ExtensionSource *ExtensionSource             `json:"extensionSource"`
 		Entity          *EntityInfo                  `json:"entity"`
+		ObjectView      *ObjectView                  `json:"objectView,omitempty"`
 		Fields          []map[string]json.RawMessage `json:"fields"`
 		Lifecycle       *LifecycleInfo               `json:"lifecycle"`
 		States          []State                      `json:"states"`
@@ -359,7 +360,7 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		}
 		shape.Lifecycle = &l
 	}
-	return EntityInfo{App: owner, Type: shape.Type, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
+	return EntityInfo{App: owner, Type: shape.Type, ObjectView: shape.ObjectView, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
 }
 
 func releaseActionDescriptor(body json.RawMessage) (Action, error) {

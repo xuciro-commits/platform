@@ -2,10 +2,8 @@ import type * as PageUI from "../pageui/types";
 import {Panel,RecordPage,RecordStatus,RecordLinks,t,type EntityRecord,type RecordSource} from '@platform/ui';
 import type {Api} from '@platform/kernel';
 import {NewActions,RecordActions} from '../actions/actions';
-import {useOpenRecord} from '../index';
+import {RecordDetail,useOpenRecord} from '../index';
 import {pageVariableContract} from '../runtime/PageRuntime';
-import {RefusalHistory} from '../actions/RefusalHistory';
-import {RecordObservations} from '../observations/Observations';
 type RecordPorts={source?:RecordSource;object:string;record?:EntityRecord};
 export function DetailRenderer({source,object,record,fields,presentation,model,onOpen}:RecordPorts&{fields?:string[];presentation?:PageUI.PageDetailPresentation;model?:Api.ModelBinding;onOpen?:(type:string,record:EntityRecord)=>void}){
  if(!record)return <p className="text-sm text-muted">{t('Select a record to see it here.')}</p>;
@@ -28,7 +26,7 @@ export function RecordViewRenderer({source,object,record,fields,tabs,allowed,liv
  const open=useOpenRecord();
  if(!record)return <p className="text-sm text-muted">{t('Select a record to see it here.')}</p>;
  if(!source)return <Panel role="alert">{t('No source for records')}</Panel>;
- return <div className="grid min-w-0 gap-3"><RecordPage key={JSON.stringify([source.scope,object,record.id])} source={source} type={object} id={record.id} fields={fields} recordTabs={tabs??pageVariableContract.recordView.tabs} onOpen={live?onOpen??((type,record)=>open({type,id:record.id})):undefined} actions={record=>live?<><RecordActions type={object} record={record} allowed={allowed} steps/><RecordObservations type={object} id={record.id}/></>:<p className="text-xs text-muted">{t('Actions do not run while you compose.')}</p>}/>{live&&<RefusalHistory key={`${object}/${record.id}`} type={object} id={record.id}/>}</div>;
+ return live?<RecordDetail key={JSON.stringify([source.scope,object,record.id])} source={source} type={object} id={record.id} fields={fields} recordTabs={tabs??pageVariableContract.recordView.tabs} allowed={allowed} onOpen={onOpen??((type,record)=>open({type,id:record.id}))}/>:<RecordPage source={source} type={object} id={record.id} fields={fields} recordTabs={tabs??pageVariableContract.recordView.tabs} actions={()=><p className="text-xs text-muted">{t('Actions do not run while you compose.')}</p>}/>;
 }
 export function ActionsRenderer({object,record,allowed,live}:{object:string;record?:EntityRecord;allowed:string[];live:boolean}){
  if(!live)return <p className="text-sm text-muted">{t('Actions do not run while you compose.')}</p>;

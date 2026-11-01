@@ -2,6 +2,7 @@ import { ApplicationSampleAsset } from "./releases/samples";
 import "./i18n";
 import { defineApp, useHost, type AppUI, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
+import { ObjectViews } from "./workshop/ObjectViews";
 import { ObjectTypeEditor } from "./ontology/process";
 import { ActionTypeEditor, ActionTypes } from "./ontology/action-type";
 import { ModelWorkbench } from "./ontology/ModelWorkbench";
@@ -91,6 +92,7 @@ const automateViews: View[] = [
   view("alert", () => t("Alert rules"), p => p.id ? <AlertEditor key={p.id} id={p.id} /> : <Alerts />),
 ];
 const workshopViews: View[] = [
+  view("object-views", () => t("Object views"), () => <ObjectViews />),
   view("module", () => t("Workshop"), p => <ModuleWorkbench key={`${p.id ?? ""}:${p.page ?? ""}`} id={p.id} page={p.page} focus={p.focus} />),
   view("studio-templates", () => t("Templates"), p => <StudioTemplates key={p.template ?? "templates"} initial={p.template} />),
 ];
@@ -252,6 +254,7 @@ const workshop = defineApp({
   navigation,
   nav: (_host, route) => [section(t("Workshop"), route, [
     { label: t("Modules"), icon: <PanelsTopLeft />, view: "module" },
+    { label: t("Object views"), icon: <Shapes />, view: "object-views" },
     { label: t("Templates"), icon: <LayoutTemplate />, view: "studio-templates" },
   ])],
 });

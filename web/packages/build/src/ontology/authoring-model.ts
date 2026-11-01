@@ -6,7 +6,7 @@ import type { ObjectRecord } from "./object-model";
 import { actionDestinations, actionStateInput } from "./process-rules";
 
 type AuthoringObject = Pick<ObjectRecord, "name" | "title" | "fields"> & Partial<Pick<ObjectRecord,
-  "states" | "actions" | "implements" | "extends" | "constraints" | "sets" | "versioning" | "versionPins" | "datasources"
+  "states" | "actions" | "implements" | "extends" | "constraints" | "sets" | "versioning" | "versionPins" | "datasources" | "objectView"
 >> & { plural?: string; description?: string };
 export type AuthoringAction = { schema: string; title: string; target: string; draft?: boolean };
 
@@ -15,7 +15,7 @@ export function authoringObject(record: AuthoringObject, installed?: EntityInfo)
   return {
     ...installed, type, app: "build", title: record.title,
     plural: record.plural || installed?.plural || record.title,
-    description: record.description,
+    description: record.description, objectView: record.objectView,
     display: installed?.display || fields.find(field => field.type === "text")?.name || "id",
     standard: ["create", "edit", "archive"],
     implements: record.implements, extends: record.extends,

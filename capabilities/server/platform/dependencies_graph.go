@@ -15,10 +15,11 @@ type DependencyGraph struct {
 	navigation  map[[2]AssetRef]bool
 	selfData    map[AssetRef]bool
 	containment map[[2]AssetRef]bool
+	objectViews map[[2]AssetRef]bool
 }
 
 func NewDependencyGraph(descriptors []Dependencies) (*DependencyGraph, error) {
-	graph := &DependencyGraph{nodes: map[AssetRef]Dependencies{}, usedBy: map[AssetRef][]AssetRef{}, navigation: map[[2]AssetRef]bool{}, selfData: map[AssetRef]bool{}, containment: map[[2]AssetRef]bool{}}
+	graph := &DependencyGraph{nodes: map[AssetRef]Dependencies{}, usedBy: map[AssetRef][]AssetRef{}, navigation: map[[2]AssetRef]bool{}, selfData: map[AssetRef]bool{}, containment: map[[2]AssetRef]bool{}, objectViews: map[[2]AssetRef]bool{}}
 	for _, description := range descriptors {
 		if err := description.Ref.Check(); err != nil {
 			return nil, err
@@ -108,6 +109,10 @@ func NewReleaseDependencyGraph(assets []ReleaseAsset) (*DependencyGraph, error) 
 
 			info, err := queryObjectDescriptor(asset.Body)
 			if err == nil {
+				if view := info.ObjectView; view != nil && checkObjectView(asset.Ref, *view, lookup) == nil {
+					graph.objectViews[[2]AssetRef{asset.Ref, view.Application}] = true
+					graph.objectViews[[2]AssetRef{asset.Ref, view.Page}] = true
+				}
 				graph.selfData[asset.Ref] = slices.ContainsFunc(info.Fields, func(field FieldInfo) bool {
 					return field.Ref == asset.Ref.Name && (field.Type == "reference" || field.Type == "references")
 				})
@@ -129,9 +134,14 @@ func (g *DependencyGraph) Requires(ref AssetRef) []AssetRef {
 }
 
 func (g *DependencyGraph) Closure(roots []AssetRef) ([]AssetRef, error) {
-	refs, err := g.walk(roots, false)
-	slices.SortFunc(refs, compareRef)
-	return refs, err
+	refs, err := g.Reachable(roots)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := g.walk(refs, false); err != nil {
+		return nil, err
+	}
+	return refs, nil
 }
 
 func (g *DependencyGraph) InstallationOrder() ([]AssetRef, error) {
@@ -196,7 +206,7 @@ func (g *DependencyGraph) walk(roots []AssetRef, installedPrerequisites bool) ([
 		visiting[ref] = true
 		path = append(path, ref)
 		for _, dependency := range node.Requires {
-			if installedPrerequisites && ref.Kind == AssetObject && dependency.Kind == AssetFunction && g.containment[[2]AssetRef{ref, dependency}] {
+			if g.objectViews[[2]AssetRef{ref, dependency}] || installedPrerequisites && ref.Kind == AssetObject && dependency.Kind == AssetFunction && g.containment[[2]AssetRef{ref, dependency}] {
 				continue
 			}
 			if err := visit(dependency, ref); err != nil {

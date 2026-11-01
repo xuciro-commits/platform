@@ -10,7 +10,7 @@ import { ArrowDown, ArrowUp, FolderKanban, LayoutTemplate, Layers, PanelTop, Plu
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDraftSession } from "../session/DraftSession";
 import { useDraftRecord } from "../branches/draft-record";
-import { readDraftIdentity } from "../branches/identity";
+import { createdPageMembership } from "./created-page";
 import { useDraftInventory } from "../branches/records";
 import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import type { Project } from "../projects/project";
@@ -123,13 +123,12 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     if (!project || !canEdit || lock.current || invalid) return;
     lock.current = true; setSaving(true); setError(undefined);
     try {
-      const record = await readDraftIdentity(client, "build.page", target.id);
-      if (!record || record.id !== target.id || record.archived) { setError(t("The created page is unavailable. Its record was not replaced or recreated.")); return; }
-      const submitted = { ...structuredClone(latest.current), pages: [...new Set([...(latest.current.pages ?? []), record.name])] };
+      const { record, pages } = await createdPageMembership(client, target.id, latest.current.pages ?? []);
+      const submitted = { ...structuredClone(latest.current), pages };
       session.edit(submitted);
       if (!await persist(submitted)) return;
       setCreatedPage(undefined); openPage(record.id);
-    } catch { setError(t("The page was created but could not be added to this module. Retry adding the same page.")); }
+    } catch (failure) { setError(failure instanceof Error ? failure.message : t("The page was created but could not be added to this module. Retry adding the same page.")); }
     finally { lock.current = false; setSaving(false); }
   };
   const createPage = useNewRecord("build.page", target => { void attachCreatedPage(target); }, { essential: true });

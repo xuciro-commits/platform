@@ -114,8 +114,25 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 	if err != nil {
 		return empty, err
 	}
-	refs, err := graph.Closure(roots)
+	refs, err := graph.Reachable(roots)
 	if err != nil {
+		return empty, err
+	}
+	for _, ref := range refs {
+		if ref.Kind != AssetObject {
+			continue
+		}
+		info, err := queryObjectDescriptor(lookup[ref].Body)
+		if err != nil {
+			return empty, err
+		}
+		if info.ObjectView != nil {
+			if err := checkObjectView(ref, *info.ObjectView, lookup); err != nil {
+				return empty, fmt.Errorf("%s: %w", ref, err)
+			}
+		}
+	}
+	if _, err := graph.Closure(roots); err != nil {
 		return empty, err
 	}
 	var closed []ReleaseAsset
