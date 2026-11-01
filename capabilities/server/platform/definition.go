@@ -10,31 +10,32 @@ import (
 type AssetKind string
 
 const (
-	AssetObject       AssetKind = "object"
-	AssetLinkType     AssetKind = "link-type"
-	AssetPropertyType AssetKind = "property-type"
-	AssetValueType    AssetKind = "value-type"
-	AssetAction       AssetKind = "action"
-	AssetPage         AssetKind = "page"
-	AssetApp          AssetKind = "app"
-	AssetQuery        AssetKind = "query"
-	AssetFlow         AssetKind = "flow"
-	AssetFunction     AssetKind = "function"
-	AssetAgent        AssetKind = "agent"
-	AssetEvaluation   AssetKind = "evaluation-set"
-	AssetTestPlan     AssetKind = "test-plan"
-	AssetCompute      AssetKind = "compute"
-	AssetConnection   AssetKind = "connection"
-	AssetSource       AssetKind = "source"
-	AssetDataset      AssetKind = "dataset"
-	AssetPipeline     AssetKind = "pipeline"
-	AssetWriteback    AssetKind = "writeback"
-	AssetMatching     AssetKind = "matching"
-	AssetSampleSet    AssetKind = "sample-set"
-	AssetProtocol     AssetKind = "protocol"
-	AssetInterface    AssetKind = "interface"
-	AssetObservation  AssetKind = "observation"
-	AssetAlert        AssetKind = "alert"
+	AssetObject          AssetKind = "object"
+	AssetObjectTypeGroup AssetKind = "object-type-group"
+	AssetLinkType        AssetKind = "link-type"
+	AssetPropertyType    AssetKind = "property-type"
+	AssetValueType       AssetKind = "value-type"
+	AssetAction          AssetKind = "action"
+	AssetPage            AssetKind = "page"
+	AssetApp             AssetKind = "app"
+	AssetQuery           AssetKind = "query"
+	AssetFlow            AssetKind = "flow"
+	AssetFunction        AssetKind = "function"
+	AssetAgent           AssetKind = "agent"
+	AssetEvaluation      AssetKind = "evaluation-set"
+	AssetTestPlan        AssetKind = "test-plan"
+	AssetCompute         AssetKind = "compute"
+	AssetConnection      AssetKind = "connection"
+	AssetSource          AssetKind = "source"
+	AssetDataset         AssetKind = "dataset"
+	AssetPipeline        AssetKind = "pipeline"
+	AssetWriteback       AssetKind = "writeback"
+	AssetMatching        AssetKind = "matching"
+	AssetSampleSet       AssetKind = "sample-set"
+	AssetProtocol        AssetKind = "protocol"
+	AssetInterface       AssetKind = "interface"
+	AssetObservation     AssetKind = "observation"
+	AssetAlert           AssetKind = "alert"
 )
 
 type NamedQuery struct {
@@ -61,7 +62,7 @@ func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + 
 
 func (r AssetRef) Check() error {
 	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetValueType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
-		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetAgent, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation, AssetAlert}, r.Kind) {
+		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetAgent, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation, AssetAlert, AssetObjectTypeGroup}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -206,6 +207,7 @@ func IconName(s string) bool {
 }
 
 type Definition struct {
+	ObjectTypeGroup  *ObjectTypeGroup           `json:"objectTypeGroup,omitempty"`
 	Alert            *AlertRule                 `json:"alert,omitempty"`
 	Observation      *ObservationDefinition     `json:"observation,omitempty"`
 	SampleSet        *SampleSet                 `json:"sampleSet,omitempty"`

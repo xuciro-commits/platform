@@ -12,6 +12,7 @@ import { WorkflowRuns } from "./automate/workflow-runs";
 import { LinkTypeEditor, LinkTypes } from "./ontology/link-type";
 import { PropertyTypeEditor, PropertyTypes } from "./ontology/property-type";
 import { ValueTypeEditor, ValueTypes } from "./ontology/value-type";
+import { ObjectTypeGroupEditor, ObjectTypeGroups } from "./ontology/object-type-group";
 import { ObservationSourceEditor, ObservationSources } from "./ontology/observation";
 import { DataSourceEditor, DataSources } from "./ontology/data-source";
 import { ConnectionEditor, Connections } from "./ontology/connection";
@@ -58,6 +59,7 @@ const ontologyViews: View[] = [
   view("interfaces", () => t("Interfaces"), () => <Interfaces />),
   view("property-type", () => t("Shared properties"), p => p.id ? <PropertyTypeEditor key={p.id} id={p.id} /> : <PropertyTypes />),
   view("value-type", () => t("Value types"), p => p.id ? <ValueTypeEditor key={p.id} id={p.id} /> : <ValueTypes />),
+  view("object-type-group", () => t("Object type groups"), p => p.id ? <ObjectTypeGroupEditor key={p.id} id={p.id} /> : <ObjectTypeGroups />),
   view("action-type", () => t("Action types"), p => p.id ? <ActionTypeEditor key={p.id} id={p.id} action={p.action} /> : <ActionTypes />),
   view("changes", () => t("Branches and proposals"), () => <Branches />),
   { id: "proposal", documentKey: p => p.id ?? "", title: () => t("Proposal"), render: p => <ProposalScreen key={p.id} id={p.id ?? ""} /> },
@@ -147,7 +149,7 @@ const ontology = defineApp({
   for: builder,
   home: { view: "object-type" },
   views: contextualViews(ontologyViews),
-  opens: { "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.valuetype": "value-type" },
+  opens: { "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.valuetype": "value-type", "build.objecttypegroup": "object-type-group" },
   navigation,
   nav: (_host, route) => [
     section(t("Ontology"), route, [{ label: t("Overview"), icon: <Network />, view: "discover" }]),
@@ -157,6 +159,7 @@ const ontology = defineApp({
       { label: t("Interfaces"), icon: <Layers />, view: "interfaces" },
       { label: t("Shared properties"), icon: <Tags />, view: "property-type" },
       { label: t("Value types"), icon: <Ruler />, view: "value-type" },
+      { label: t("Object type groups"), icon: <Shapes />, view: "object-type-group" },
     ]),
     section(t("Kinetic"), route, [{ label: t("Action types"), icon: <Zap />, view: "action-type" }]),
     section(t("Changes"), route, [{ label: t("Branches and proposals"), icon: <GitBranch />, view: "changes" }]),

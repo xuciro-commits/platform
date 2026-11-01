@@ -86,6 +86,8 @@ func definitionFamilyOf(record any) definitionFamily {
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case ValueType:
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
+	case ObjectTypeGroup:
+		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case LinkType:
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case SampleSetRecord:
@@ -103,6 +105,8 @@ func setDefinitionFamily(record any, family definitionFamily) {
 	case *PropertyType:
 		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
 	case *ValueType:
+		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
+	case *ObjectTypeGroup:
 		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
 	case *LinkType:
 		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions

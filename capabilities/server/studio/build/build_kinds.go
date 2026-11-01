@@ -57,7 +57,7 @@ type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] s
 	candidate       func(platform.ReleaseAsset) error
 }
 
-var definitionKinds = []definitionKind{&queryKind, &propertyKind, &valueKind, &linkKind, &functionKind}
+var definitionKinds = []definitionKind{&queryKind, &propertyKind, &valueKind, &linkKind, &functionKind, &objectTypeGroupKind}
 
 func definitionKindOf(kind platform.AssetKind) definitionKind {
 	for _, k := range definitionKinds {

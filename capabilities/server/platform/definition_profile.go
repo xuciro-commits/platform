@@ -68,7 +68,7 @@ func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (Application
 		}
 		artifact.Roles = append(artifact.Roles, roles...)
 		switch asset.Ref.Kind {
-		case AssetObject, AssetLinkType, AssetPropertyType, AssetValueType, AssetQuery:
+		case AssetObject, AssetObjectTypeGroup, AssetLinkType, AssetPropertyType, AssetValueType, AssetQuery:
 			artifact.Model = append(artifact.Model, binding)
 		case AssetAction:
 			artifact.Rules = append(artifact.Rules, binding)

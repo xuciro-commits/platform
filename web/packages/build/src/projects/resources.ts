@@ -2,7 +2,7 @@ import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
-export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "value-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation" | "definition";
+export type ResourceKind = "object" | "object-type-group" | "action" | "link-type" | "property-type" | "value-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation" | "definition";
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
@@ -12,6 +12,7 @@ export type ResourceKindInfo = {
 export const resourceKinds: ResourceKindInfo[] = [
  {kind:"sample-set",type:"build.sample-set",view:"sample-set",label:"Sample set",plural:"Sample sets",ref:"sample-set"},
   { kind: "object", type: "build.object", view: "object-type", label: "Object type", plural: "Object types", ref: "object" },
+  { kind: "object-type-group", type: "build.objecttypegroup", view: "object-type-group", label: "Object type group", plural: "Object type groups", ref: "object-type-group" },
   { kind: "link-type", type: "build.linktype", view: "link-type", label: "Link type", plural: "Link types", ref: "link-type" },
   { kind: "property-type", type: "build.propertytype", view: "property-type", label: "Shared property", plural: "Shared properties", ref: "property-type" },
   { kind: "value-type", type: "build.valuetype", view: "value-type", label: "Value type", plural: "Value types", ref: "value-type" },

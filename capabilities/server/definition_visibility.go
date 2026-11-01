@@ -45,6 +45,10 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 			def.Action = &action
+		case platform.AssetObjectTypeGroup:
+			if def.ObjectTypeGroup == nil || !m.Active() || t.admits(m) != nil {
+				continue
+			}
 		case platform.AssetPropertyType:
 			if def.PropertyType == nil {
 				continue

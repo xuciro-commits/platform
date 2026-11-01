@@ -8,7 +8,7 @@ import (
 )
 
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaValueType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaValueType, SchemaObjectTypeGroup, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
 }
 
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
@@ -267,6 +267,10 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
+	case ObjectTypeGroup:
+		value.Published = ""
+		value.Versions = nil
+		definition = any(value).(T)
 	case LinkType:
 		value.Published = ""
 		value.Versions = nil
@@ -317,6 +321,9 @@ func (b *Build) Reinstall() error {
 		}
 	}
 	b.jointMode = beforeMode
+	if err := objectTypeGroupKind.restore(b); err != nil {
+		return err
+	}
 	if err := linkKind.restore(b); err != nil {
 		return err
 	}

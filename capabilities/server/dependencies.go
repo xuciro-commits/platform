@@ -60,6 +60,8 @@ func (t *Tenant) definitionAsset(def platform.Definition) (platform.ReleaseAsset
 		body = def.Agent
 	case def.PropertyType != nil:
 		body = def.PropertyType
+	case def.ObjectTypeGroup != nil:
+		body = def.ObjectTypeGroup
 	case def.ValueType != nil:
 		body = def.ValueType
 	case def.LinkType != nil:

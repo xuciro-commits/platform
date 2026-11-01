@@ -407,6 +407,15 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		}
 		add(link.Parent)
 		add(link.Child)
+	case AssetObjectTypeGroup:
+		var group ObjectTypeGroup
+		if err := json.Unmarshal(asset.Body, &group); err != nil {
+			return out, err
+		}
+		if err := group.Check(); err != nil {
+			return out, err
+		}
+		out.Requires = append(out.Requires, group.Members...)
 	case AssetPropertyType:
 		var property PropertyType
 		if err := json.Unmarshal(asset.Body, &property); err != nil {

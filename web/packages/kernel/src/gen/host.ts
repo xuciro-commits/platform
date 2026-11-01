@@ -1578,6 +1578,7 @@ export type DecisionTrace = {
 };
 
 export type Definition = {
+  objectTypeGroup?: ObjectTypeGroup;
   alert?: AlertRule;
   observation?: ObservationDefinition;
   sampleSet?: SampleSet;
@@ -2863,6 +2864,13 @@ export type ObjectSetRequest = {
   maxRows?: number;
   collection?: RecordSetRef;
   format?: boolean;
+};
+
+export type ObjectTypeGroup = {
+  name: string;
+  title: string;
+  description?: string;
+  members: AssetRef[];
 };
 
 export type ObjectView = {

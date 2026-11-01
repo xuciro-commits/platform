@@ -379,7 +379,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 		drafts, err := b.applicationDrafts(id, selected)
 		return slices.DeleteFunc(drafts, func(draft JointDraftRef) bool { return draft.Kind == kind && draft.ID == id }), err
 	}
-	if !recordKind(kind) {
+	if !recordKind(kind) && kind != platform.AssetObjectTypeGroup {
 		return nil, fmt.Errorf("%s drafts have no record dependencies to select", kind)
 	}
 	objects, pages, apps, err := b.releaseInventory()
@@ -427,6 +427,16 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 		queue = queue[1:]
 		dependencies := map[platform.AssetKind][]string{}
 		switch next.Kind {
+		case platform.AssetObjectTypeGroup:
+			group, ok := platform.Get[ObjectTypeGroup](b.host.Automation(platform.Caller{}, ID), next.ID)
+			if !ok || group.Archived {
+				return nil, fmt.Errorf("no saved object type group draft %s", next.ID)
+			}
+			for _, member := range group.Members {
+				if member.App == ID {
+					dependencies[platform.AssetObject] = append(dependencies[platform.AssetObject], member.Name)
+				}
+			}
 		case platform.AssetObject:
 			i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == next.ID })
 			if i < 0 {

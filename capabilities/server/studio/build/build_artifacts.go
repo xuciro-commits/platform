@@ -359,7 +359,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 
 func (*Build) AssetKinds() []platform.AssetKind {
 	return []platform.AssetKind{
-		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetValueType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
+		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetValueType, platform.AssetObjectTypeGroup, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
 		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetAgent, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert,
 	}
 }

@@ -98,7 +98,9 @@ function ObjectTypeDetail({ name, initialTab }: { name: string; initialTab?: str
   const [tab, setTab] = useState(initialTab ?? "overview");
   const [seed, setSeed] = useState<PageSeed>();
   const dependencies = useDependencies(resource?.ref, undefined, !!resource?.installed);
+  const groupInventory = useDraftInventory<{ id: string; title?: string; name?: string; members?: Api.AssetRef[]; archived?: boolean }>("build.objecttypegroup");
   if (!resource) return <PageHeader title={t("Object type")} crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }]} description={inventory.isLoading ? t("Loading…") : t("This object type is not visible to you.")} />;
+  const groups = (groupInventory.data?.records ?? []).filter(group => !group.archived && (group.members ?? []).some(member => member.name === resource.ref.name));
   const related = model.relations.filter((relation) => relation.ref.object.name === name || relation.target.name === name);
   const actions = host.definitions.filter((definition) => definition.ref.kind === "action" && definition.action?.target === name);
   const used = (dependencies.data?.usedBy ?? []).flatMap(ref => { const owner = host.definitions.find(definition => assetKey(definition.ref) === assetKey(ref)); return owner ? [owner] : []; });
@@ -116,7 +118,8 @@ function ObjectTypeDetail({ name, initialTab }: { name: string; initialTab?: str
       { id: "overview", title: t("Overview"), content: <div className="grid gap-3">
         {resource.source === "code" && <p className="text-xs text-muted">{t("Native definitions are maintained by their code owner. This workbench provides read-only inspection.")}</p>}
         {entity?.description && <p className="max-w-3xl text-sm text-muted">{entity.description}</p>}
-        <PropertyList items={[[t("Owner"), resource.ref.app], [t("Version"), resource.installed?.version ?? t("Draft")], [t("Title property"), entity?.display ?? "—"], [t("Implements"), entity?.implements?.join(", ") || "—"]]} />
+        <PropertyList items={[[t("Owner"), resource.ref.app], [t("Version"), resource.installed?.version ?? t("Draft")], [t("Title property"), entity?.display ?? "—"], [t("Implements"), entity?.implements?.join(", ") || "—"],
+          [t("Object type groups"), groups.length ? <span className="flex flex-wrap gap-1">{groups.map(group => <Button key={group.id} size="sm" variant="ghost" onClick={() => open({ view: "object-type-group", params: { id: group.id } })}>{group.title || group.name}</Button>)}</span> : "—"]]} />
       </div> },
       { id: "properties", title: t("Properties"), badge: resource.fields.length, content: <DataTable storageKey="ontology:published-properties" data={resource.fields} getRowId={(field) => field.name} searchable={false} height={420}
         columns={[{ accessorKey: "title", header: t("Property") }, { accessorKey: "name", header: t("API name"), cell: ({ row }) => <span className="font-mono text-xs">{row.original.name}</span> }, { accessorKey: "type", header: t("Type"), cell: ({ row }) => t(row.original.type) }, { id: "shared", header: t("Shared property"), accessorFn: f => f.property ? `${f.property.ref.name}@${f.property.sourceVersion}` : "—" }, { id: "reference", header: t("Reference object"), accessorFn: (field) => field.ref ?? "—" }, { id: "actions", header: "", meta: { width: 140 }, cell: ({ row }) => resource.installed ? <Button size="sm" variant="ghost" onClick={() => setSeed({ object: resource.ref, field: row.original.name })}>{t("Use in page")}</Button> : null }]} /> },

@@ -27,6 +27,7 @@ type BuildHost interface {
 	InstallLinkType(c Caller, l LinkType, version int) error
 	InstallOperation(c Caller, o Operation, version int) error
 	InstallPage(c Caller, p Page) error
+	InstallObjectTypeGroup(c Caller, g ObjectTypeGroup, version int) error
 	InstallPropertyType(c Caller, p PropertyType, version int) error
 	InstallValueType(c Caller, v ValueType, version int) error
 	InstallQuery(c Caller, q NamedQuery, version int) error
@@ -45,6 +46,7 @@ type BuildHost interface {
 	ValidateInstallLinkType(l LinkType) error
 	ValidateInstallOperation(c Caller, o Operation) error
 	ValidateInstallPage(p Page) error
+	ValidateInstallObjectTypeGroup(g ObjectTypeGroup) error
 	ValidateInstallPropertyType(p PropertyType) error
 	ValidateInstallValueType(v ValueType) error
 	ValidateObjectPresentation(info EntityInfo) error
