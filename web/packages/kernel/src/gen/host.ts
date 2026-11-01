@@ -3409,6 +3409,7 @@ export type PageQuery = {
   object: AssetRef;
   interface?: string;
   query?: AssetBinding;
+  filter?: Expr;
   conditions?: PageQueryCondition[];
   search?: PageValue;
   for?: PageValue;
@@ -3882,6 +3883,8 @@ export type Query = {
   traversal?: LinkTraversal;
   set?: QuerySet;
   domain?: unknown;
+  filter?: Expr;
+  parameters?: Record<string, Value>;
   search?: string;
   sort?: string[];
   offset?: number;
@@ -3951,6 +3954,8 @@ export type RecordSet = {
 
 export type RecordSetPredicate = {
   domain?: unknown;
+  filter?: Expr;
+  parameters?: Record<string, Value>;
   search?: string;
   set?: QuerySet;
 };

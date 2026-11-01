@@ -20,7 +20,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 ## 下一批
 
-P3.31 Workshop 查询条件与页面变量运算改为 Expr。
+P3.30 审阅中逐项问题数与破坏性变更的下游资源。
 
 ## P2 内核收敛
 
@@ -57,7 +57,6 @@ P3.31 Workshop 查询条件与页面变量运算改为 Expr。
 | P3.19 | 对象合并规则统一实现 | 6-domain §6.5 |
 | P3.28 | 每位构建者独立的工作状态：草稿在保存前对他人不可见，分支上按人分开 | 6-domain/change §6.19 |
 | P3.30 | 审阅中逐项问题数与破坏性变更的下游资源 | 4-interaction M18、6-domain §6.4 |
-| P3.31 | Workshop 查询条件（PageQueryCondition）与页面变量运算（PageExpression）经页面格式迁移改为 Expr，删除其专用编辑行；对象集构建器补 ids、搜索、参数、asOf；记录集复用关系选择 | 4-interaction/patterns M10、M11 |
 
 ## P4 行业应用
 

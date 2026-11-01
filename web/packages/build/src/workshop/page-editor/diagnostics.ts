@@ -40,7 +40,7 @@ export function pageDraftDiagnostics(draft: PageDraft, { object, entity: authori
   for (const issue of pageVariableDiagnostics(document.variables ?? {})) add(issue.code, { kind: "variables" }, issue.variable);
   const compatibility = pageCompatibility(draft);
   if (!compatibility.supported || compatibility.issues.length) add("This draft needs a newer workspace version. Its saved content has been preserved.", { kind: "compatibility" });
-  if (!compatibility.current.valid || Object.values(document.queries ?? {}).some(query => query.limit < 1 || query.limit > pageVariableContract.query.maxLimit || query.conditions?.some(condition => !condition.field))) add("Each query needs a field for every condition and a limit within the budget.", { kind: "queries" });
+  if (!compatibility.current.valid || Object.values(document.queries ?? {}).some(query => query.limit < 1 || query.limit > pageVariableContract.query.maxLimit || query.filter?.kind!=="boolean" || query.conditions?.some(condition => !condition.field))) add("Each query needs a field for every condition and a limit within the budget.", { kind: "queries" });
   const selectionNames = new Map<string, PageUI.SelectionVariable>();
   let invalidSelection = false;
   for (const selection of selections) {

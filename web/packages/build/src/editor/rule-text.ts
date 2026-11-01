@@ -8,11 +8,6 @@ export function formulaText(e:Api.Expr):string{
  if(["+","-","*","/"].includes(e.op)&&e.args?.length===2)return `(${formulaText(e.args[0]!)} ${e.op} ${formulaText(e.args[1]!)})`;
  return JSON.stringify(e);
 }
-export function pageSugar(e:Api.Expr):Api.PageExpression|undefined{
- const names:Record<string,string>={"=":"equal","not-empty":"present","+":"decimal-add","-":"decimal-subtract","<":"decimal-less","parse-decimal":"parse-decimal","parse-number":"parse-number",not:"not",and:"and",or:"or",concat:"concat"},op=names[e.op];
- if(!op||!e.args?.every(a=>a.ref||a.lit))return;
- return {op,args:e.args.map(a=>a.ref?{variable:a.ref}:{literal:["decimal","number"].includes(a.kind)?{kind:a.kind,value:a.lit!.value}:a.lit!.value})};
-}
 export function cellRuleText(e:Api.Expr):string{
  if(e.lit?.value===true)return "*";
  const args=e.args??[],text=(value:Api.Expr)=>String(value.lit?.value??"");

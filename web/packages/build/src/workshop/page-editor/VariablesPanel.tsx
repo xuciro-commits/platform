@@ -1,20 +1,17 @@
 import type {PageUI} from "@platform/app";
-import {pageSugar} from "../../editor/rule-text";
+import {pageRuleKind, ruleDependencies} from "@platform/app/rules";
+import {ExpressionEditor, literalExpression, type ExpressionChoice} from "../../editor/ExpressionEditor";
 import {originalRecordObject} from "./record-binding";
 import type { Api } from "@platform/kernel";
-import { parsePageDecimal,isPageDecimalDraft,SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
+import { parsePageDecimal,SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
 import { Button, Card, Checkbox, Input, PropertyList, Select, t, type EntityInfo } from "@platform/ui";
 import { useState } from "react";
 import { layoutID, loopOwner, overlayOwner, variableAccessible } from "../page-layout";
 
 type Variables = NonNullable<PageUI.PageDocument["variables"]>;
 const initial = (type: string) => type==="number"?{kind:"number",value:0}: type === "string-set"?{kind:"string-set",values:[]}:type === "decimal"?{kind:"decimal",value:"0"}:type === "boolean" ? false : "";
-const expression = (op: string): Api.PageExpression => {
-  const contract = pageVariableContract.operators.find((item) => item.id === op)!;
-  return { op, args: Array.from({ length: contract.minArgs }, () => ({ literal: initial(contract.input) })) };
-};
 
-export function VariablesPanel({ document, sections, values, onChange, object, application = false, entity }: { object?:Api.AssetRef; application?: boolean; entity?: (type: string) => EntityInfo | undefined; document: PageUI.PageDocument; sections: (Pick<PageUI.Section,"id"|"widget"|"title"|"graphExplorer"|"observation"|"collectionVariable">&{object?:string|Api.AssetRef})[]; values: Record<string, PageVariableValue>; onChange: (document: PageUI.PageDocument) => void }) {
+export function VariablesPanel({ document, sections, values, onChange, onUpgrade, object, application = false, entity }: { object?:Api.AssetRef; application?: boolean; entity?: (type: string) => EntityInfo | undefined; onUpgrade?:()=>void; document: PageUI.PageDocument; sections: (Pick<PageUI.Section,"id"|"widget"|"title"|"graphExplorer"|"observation"|"collectionVariable">&{object?:string|Api.AssetRef})[]; values: Record<string, PageVariableValue>; onChange: (document: PageUI.PageDocument) => void }) {
   const { definitions,source } = useHost();
   const fields = (object?: string) => (entity ?? source.entity)(object ?? "")?.fields ?? [];
   const shared = Object.fromEntries(definitions.flatMap((d) => Object.entries(d.application?.variables ?? {})));
@@ -28,10 +25,12 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
   const variables = document.variables ?? {}, [chosen, choose] = useState("");
   const id = variables[chosen] ? chosen : Object.keys(variables)[0] ?? "", variable = variables[id];
   const update = (next: Variables) => onChange({ ...document, uiProfile: pageUIProfile, variables: next });
-  const patch = (change: Partial<Api.PageVariable>) => {if(Object.hasOwn(change,"expression")||change.mode&&change.mode!=="derived")change={...change,rule:undefined};return update({ ...variables, [id]: { ...variable!, ...change } });};
+  const patch = (change: Partial<Api.PageVariable>) => {if(Object.hasOwn(change,"rule"))change={...change,expression:undefined};else if(change.mode&&change.mode!=="derived")change={...change,rule:undefined,expression:undefined};return update({ ...variables, [id]: { ...variable!, ...change } });};
   const bindShared=(key:string)=>{const source=shared[key];if(source)patch({type:source.type,writable:source.mode==="state"||["record","filter","record-set"].includes(source.type),source:{kind:"application",variable:key,...(["object-set","record","filter","record-set"].includes(source.type)?{object:sharedObjects[key]}:{})}});};
   const targets = Object.values(document.nodes).filter((node) => node.activeVariable === id).flatMap((node) => node.children ?? []);
-  const expr = variable?.expression ?? (variable?.rule?pageSugar(variable.rule):undefined);
+  const eligible=Object.entries(variables).filter(([key,value])=>key!==id&&(value.scope==="page"||value.scope==="application"||value.scope===variable?.scope&&value.owner===variable?.owner));
+  const choices:ExpressionChoice[]=eligible.map(([key,value])=>({value:key,label:value.title||key,type:value.rule?.kind??pageRuleKind(value.type),ref:value.type==="record"?recordObject(key)?.name:value.type==="object-set"?document.queries?.[value.source?.query??""]?.object.name:undefined}));
+  const collections=Object.fromEntries(eligible.filter(([,value])=>value.type==="object-set"&&document.queries?.[value.source?.query??""]).map(([key,value])=>[key,{object:document.queries![value.source!.query!]!.object.name,policy:"visible"}]));
   const result = values[id], current = result && (result.status === "value" || result.status === "empty") ? result.value : undefined;
   return <Card className="grid content-start gap-3 p-3">
     <h3 className="text-sm font-semibold">{t(application ? "Application variables" : "Page variables")}</h3>
@@ -67,7 +66,7 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
           patch({ mode, type: resource.type, initial: undefined, expression: undefined, source: { kind: resource.kind, section: sourceSections(variable.scope,variable.owner).find((section) => pageVariableContract.resources.some(r=>r.kind===resource.kind&&(r.widget===section.widget||"widgets" in r&&(r.widgets as readonly string[]).includes(section.widget))))?.id ?? "" } });
         } else {
           const type = ["string","decimal"].includes(variable.type)?variable.type:"boolean";
-          patch({ mode, scope: variable.mode === "shared" ? "page" : variable.scope, writable:undefined, type, source: undefined, initial: mode === "derived" ? undefined : initial(type), expression: mode === "derived" ? expression(type === "string" ? "concat" : type==="decimal"?"decimal-add":"equal") : undefined });
+          patch({ mode, scope: variable.mode === "shared" ? "page" : variable.scope, writable:undefined, type, source: undefined, initial: mode === "derived" ? undefined : initial(type), rule: mode === "derived" ? literalExpression(pageRuleKind(type)) : undefined, expression:undefined });
         }
       }}>{variable.mode === "input" && <option value="input">{t("Page input")}</option>}{!application && (Object.keys(shared).length > 0 || variable.mode === "shared") && <option value="shared">{t("Application binding")}</option>}<option value="state">{t("State")}</option><option value="constant">{t("Constant")}</option><option value="derived">{t("Derived")}</option><option value="property">{t("Record property")}</option><option value="aggregate">{t("Complete-set aggregate")}</option>{application || variable.scope === "page" || variable.scope === "overlay" || variable.source?.kind === "item" ? <option value="resource">{t("Resource output")}</option> : null}</Select></label>
       <label className="grid gap-1 text-xs">{t("Value type")}<Select value={variable.type} disabled={variable.mode === "derived" || variable.mode === "resource" || variable.mode === "input" || variable.mode === "shared" || variable.mode === "property" || variable.mode === "aggregate"} onChange={(event) => patch({ type: event.target.value, initial: initial(event.target.value) })}>
@@ -100,16 +99,8 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
         </Select></label>}
         <p className="text-xs text-muted">{t("Uses the widget's original binding and read permissions. A query window is not the full object set.")}</p>
       </>}
-      {expr && <>
-        <label className="grid gap-1 text-xs">{t("Operator")}<Select value={expr.op} onChange={(event) => patch({ expression: expression(event.target.value), type: pageVariableContract.operators.find((op) => op.id === event.target.value)!.output })}>
-          {pageVariableContract.operators.map((op) => <option key={op.id} value={op.id}>{t(op.id)}</option>)}</Select></label>
-        {expr.args.map((arg, at) => <fieldset key={at} className="grid min-w-0 gap-2 border-t border-border pt-2"><legend className="text-xs">{t("Argument {n}", { n: at + 1 })}</legend>
-          <Argument value={arg} variables={Object.fromEntries(Object.entries(variables).filter(([, value]) => value.scope === "page" || value.scope === "application" || value.scope === variable.scope && value.owner === variable.owner))} document={document} onChange={(value) => patch({ expression: { ...expr, args: expr.args.map((old, i) => i === at ? value : old) } })} />
-          {expr.args.length > (pageVariableContract.operators.find((op) => op.id === expr.op)?.minArgs ?? 0) && <Button onClick={() => patch({ expression: { ...expr, args: expr.args.filter((_, i) => i !== at) } })}>{t("Remove argument")}</Button>}
-        </fieldset>)}
-        <Button disabled={expr.args.length >= (pageVariableContract.operators.find((op) => op.id === expr.op)?.maxArgs ?? 0)} onClick={() => patch({ expression: { ...expr, args: [...expr.args, { literal: initial(variable.type) }] } })}>{t("Add argument")}</Button>
-        <p className="text-xs text-muted">{t("Dependencies")}: {expr.args.flatMap((arg) => arg.variable ? [variables[arg.variable]?.title || arg.variable] : []).join(", ") || "—"}</p>
-      </>}
+      {variable.mode==="derived"&&variable.expression&&!variable.rule&&<div className="grid gap-2 border-t border-border pt-2 text-xs"><p>{t("This variable uses an earlier expression format. Save the page to upgrade it before editing.")}</p><Button size="sm" onClick={()=>onUpgrade?onUpgrade():update({...variables})}>{t("Prepare variable upgrade")}</Button></div>}
+      {variable.mode==="derived"&&variable.rule&&<div className="grid gap-1"><span className="text-xs font-medium">{t("Rule expression editor")}</span><ExpressionEditor callerTenant={false} draftKey={`variable:${id}:rule`} value={variable.rule} kind={variable.rule.kind} choices={choices} collections={collections} lookup={entity??source.entity} onChange={rule=>patch({rule})}/><p className="text-xs text-muted">{t("Dependencies")}: {ruleDependencies(variable.rule).map(key=>variables[key]?.title||key).join(", ")||"—"}</p></div>}
       <div role="region" aria-label={t("Current variable value")} className="grid gap-2 border-t border-border pt-2 text-xs">
         <strong>{t("Current variable value")}</strong><span role="status">{t(result?.status === "pending" ? "Loading value" : result?.status === "value" ? "Value available" : result?.status === "error" ? "Value error" : "No value")}</span>
         {result?.status === "error" && <p role="alert">{t(result.code)}</p>}
@@ -122,23 +113,6 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
       <Button onClick={() => { const next = { ...variables }; delete next[id]; update(next); choose(""); }}>{t("Remove variable")}</Button>
     </>}
   </Card>;
-}
-
-function Argument({ value, variables, document, onChange }: { value: PageUI.PageValue; variables: Variables; document: PageUI.PageDocument; onChange: (value: PageUI.PageValue) => void }) {
-  const number=isPageDecimalDraft(value.literal),text = typeof value.literal !== "boolean";
-  const children = Object.values(document.nodes).filter((node) => node.kind === "tabs").flatMap((node) => node.children ?? []);
-  return <>
-    <Select aria-label={t("Argument source")} value={value.variable ?? ""} onChange={(event) => onChange(event.target.value ? { variable: event.target.value } : { literal: "" })}>
-      <option value="">{t("Literal")}</option>{Object.entries(variables).map(([id, variable]) => <option key={id} value={id}>{variable.title || id} · {t(variable.type)}</option>)}
-    </Select>
-    {!value.variable && <><Select aria-label={t("Literal type")} value={number?"decimal":text ? "string" : "boolean"} onChange={(event) => onChange({ literal: initial(event.target.value) })}>
-      <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="decimal">{t("Exact number")}</option></Select>
-      {number?<Input aria-label={t("Literal value")} inputMode="decimal" value={(value.literal as {value:string}).value} onChange={(event)=>onChange({literal:{kind:"decimal",value:event.target.value}})} onBlur={(event)=>{const value=parsePageDecimal(event.target.value);if(value)onChange({literal:value})}}/>:text ? <><Input aria-label={t("Literal value")} value={String(value.literal ?? "")} onChange={(event) => onChange({ literal: event.target.value })} />
-        {!!children.length && <Select aria-label={t("Use tab identity")} value={children.includes(String(value.literal)) ? String(value.literal) : ""} onChange={(event) => { if (event.target.value) onChange({ literal: event.target.value }); }}>
-          <option value="">{t("Use tab identity")}</option>{[...new Set(children)].map((id, i) => <option key={id} value={id}>{document.nodes[id]?.title || t("Tab {n}", { n: i + 1 })}</option>)}
-        </Select>}</> : <Checkbox checked={value.literal === true} onChange={(literal) => onChange({ literal })}>{t("Literal value")}</Checkbox>}
-    </>}
-  </>;
 }
 
 export function NodeBindings({ document, id, button, input, onChange }: { document: PageUI.PageDocument; id: string; button?: boolean; input?: boolean; onChange: (patch: Partial<PageUI.PageLayoutNode>) => void }) {

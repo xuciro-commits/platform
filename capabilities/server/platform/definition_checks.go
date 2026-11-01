@@ -195,7 +195,7 @@ func (a Application) CheckPageVariables(p Page) error {
 }
 
 func (a Application) QueryPage() Page {
-	return Page{Format: 3, InputSchema: PageInputSchema{profile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}}
+	return Page{Format: 4, InputSchema: PageInputSchema{profile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}}
 }
 
 func (a Application) hasResources() bool {

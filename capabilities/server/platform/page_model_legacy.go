@@ -30,7 +30,7 @@ func legacyPagePathValues(value any, path []string) []any {
 
 func (p Page) MarshalJSON() ([]byte, error) {
 	type legacyPage Page
-	if p.Format != 3 {
+	if p.Format != 3 && p.Format != 4 {
 		return json.Marshal(legacyPage(p))
 	}
 	type envelope struct {
@@ -56,10 +56,10 @@ func (p *Page) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	*p = Page(decoded)
-	if p.Format != 0 && p.Format != 3 {
+	if p.Format != 0 && p.Format != 3 && p.Format != 4 {
 		return fmt.Errorf("unsupported page format %d", p.Format)
 	}
-	if p.Format == 3 {
+	if p.Format == 3 || p.Format == 4 {
 		return p.checkEnvelope()
 	}
 	return nil

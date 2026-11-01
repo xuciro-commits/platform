@@ -1,5 +1,5 @@
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.111",
+  "uiProfile": "platform.page.v2.112",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -8343,7 +8343,8 @@ export const pageUIManifest = {
     "platform.page.v2.108",
     "platform.page.v2.109",
     "platform.page.v2.110",
-    "platform.page.v2.111"
+    "platform.page.v2.111",
+    "platform.page.v2.112"
   ],
   "runtime": {
     "telemetry": {

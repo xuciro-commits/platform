@@ -149,7 +149,7 @@ func (q NamedQuery) ObjectSet(of string) ObjectSet {
 func (q Query) ObjectSet(object string, around *SearchAround) ObjectSet {
 	var predicate func(RecordSetPredicate) ObjectSet
 	predicate = func(p RecordSetPredicate) ObjectSet {
-		set := ObjectSet{Domain: p.Domain, Search: p.Search}
+		set := ObjectSet{Domain: p.Domain, Filter: p.Filter, Parameters: p.Parameters, Search: p.Search}
 		if p.Set == nil {
 			set.Object = object
 			return set
@@ -171,7 +171,7 @@ func (q Query) ObjectSet(object string, around *SearchAround) ObjectSet {
 		}
 		return set
 	}
-	set := predicate(RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set})
+	set := predicate(RecordSetPredicate{Domain: q.Domain, Filter: q.Filter, Parameters: q.Parameters, Search: q.Search, Set: q.Set})
 	if around != nil {
 		if q.Set == nil {
 			set.Object, set.Around = "", around

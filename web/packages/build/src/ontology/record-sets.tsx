@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { useHost } from "@platform/app";
+import { LinkTypePicker, useHost } from "@platform/app";
 import { ContextHelp, Button, Checkbox, Input, InputDraftProvider, Panel, Select, t, type EntityInfo } from "@platform/ui";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 import { authoringObject, useAuthoringModel } from "./authoring-model";
@@ -18,17 +18,17 @@ export function RecordSetsEditor({process,parent,entities,onChange}:{process:Pro
   for(const entity of entities) for(const field of entity.fields) if(field.type==="reference"&&field.ref===parent&&field.inverse) sources.push({from:field.inverse,direction:"inverse",object:entity.type,title:`${entity.title} · ${field.inverse}`});
   for(const definition of definitions) {
     const binding={ref:definition.ref,sourceVersion:definition.version};
-    if(definition.linkType) {
-      const link=definition.linkType;
-      if(link.parent.name===parent) sources.push({from:link.name,direction:"forward",object:link.child.name,binding,title:`${link.title} → ${link.child.name}`});
-      if(link.child.name===parent) sources.push({from:link.name,direction:"reverse",object:link.parent.name,binding,title:`${link.title} ← ${link.parent.name}`});
-    }
     if(definition.query) {
       const query=definition.query;
       const target=entities.find(entity=>entity.type===query.object);
       if(!query.by||target?.fields.some(field=>field.name===query.by&&field.ref===parent)) sources.push({from:query.name,object:query.object,binding,title:query.title});
     }
   }
+  const links=definitions.filter(definition=>definition.linkType);
+  const linkSources:Source[]=links.flatMap(definition=>{
+    const link=definition.linkType!,binding={ref:definition.ref,sourceVersion:definition.version};
+    return [...(link.parent.name===parent?[{from:link.name,direction:"forward",object:link.child.name,binding,title:link.title}]:[]),...(link.child.name===parent?[{from:link.name,direction:"reverse",object:link.parent.name,binding,title:link.title}]:[])];
+  });
   const identity=(source:Source|Api.RecordSet)=>JSON.stringify([source.from,source.direction??"",source.object,source.binding??null]);
   const patch=(at:number,values:Partial<Api.RecordSet>)=>onChange({...process,sets:sets.map((set,index)=>index===at?{...set,...values}:set)});
   const model=useAuthoringModel();
@@ -37,16 +37,18 @@ export function RecordSetsEditor({process,parent,entities,onChange}:{process:Pro
   const choicesOf=(object:string):ExpressionChoice[]=>[{value:"id",label:t("Record ID"),type:"text"},...(lookup(object)?.fields??[]).map(field=>({value:field.name,label:field.title,type:kindOf(field.type),ref:field.ref}))];
   return <div className="grid max-w-4xl content-start gap-3 p-4">
     <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Record sets")}</h2>
-      <Button size="sm" disabled={!sources.length||sets.length>=64} onClick={()=>{const {title,...source}=sources[0]!;onChange({...process,sets:[...sets,{...source,name:nameOf("set",sets.map(set=>set.name)),order:[{expr:{op:"",kind:"text",ref:"id"}}],limit:1000}]});}}>{t("Add a record set")}</Button>
+      <Button size="sm" disabled={!sources.length&&!linkSources.length||sets.length>=64} onClick={()=>{const {title,...source}=(sources[0]??linkSources[0])!;onChange({...process,sets:[...sets,{...source,name:nameOf("set",sets.map(set=>set.name)),order:[{expr:{op:"",kind:"text",ref:"id"}}],limit:1000}]});}}>{t("Add a record set")}</Button>
     </div>
     <ContextHelp title={t("Record sets")}><p className="text-sm text-muted">{t("Declare a bounded, ordered collection once and use it in conditions, calculations, constraints and transaction iteration.")}</p></ContextHelp>
     {sets.map((set,at)=><InputDraftProvider key={at} scope={JSON.stringify({kind:"recordSet",at})}><Panel title={set.name}>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-xs">{t("Set name")}<Input value={set.name} onChange={event=>patch(at,{name:event.target.value})}/></label>
-        <label className="grid gap-1 text-xs">{t("Declared source")}<Select value={identity(set)} onChange={event=>{const source=sources.find(source=>identity(source)===event.target.value);if(source){const {title,...values}=source;patch(at,{...values,binding:values.binding,direction:values.direction,path:undefined,where:undefined});}}}>
-          {!sources.some(source=>identity(source)===identity(set))&&<option value={identity(set)}>{`${set.from} · ${set.binding?.sourceVersion??set.object}`}</option>}
+        <label className="grid gap-1 text-xs">{t("Declared source")}<Select value={set.binding?.ref.kind==="link-type"?"link-type":identity(set)} onChange={event=>{const source=event.target.value==="link-type"?linkSources[0]:sources.find(source=>identity(source)===event.target.value);if(source){const {title,...values}=source;patch(at,{...values,binding:values.binding,direction:values.direction,path:undefined,where:undefined});}}}>
+          {set.binding?.ref.kind!=="link-type"&&!sources.some(source=>identity(source)===identity(set))&&<option value={identity(set)}>{`${set.from} · ${set.binding?.sourceVersion??set.object}`}</option>}
           {sources.map(source=><option key={identity(source)} value={identity(source)}>{source.title}</option>)}
+          {(linkSources.length>0||set.binding?.ref.kind==="link-type")&&<option value="link-type">{t("Link type")}</option>}
         </Select></label>
+        {set.binding?.ref.kind==="link-type"&&<div className="sm:col-span-2"><LinkTypePicker links={links} entities={entities} from={parent} value={set.binding} direction={set.direction} onChange={choice=>patch(at,{from:choice.name,direction:choice.direction,object:choice.object,binding:choice.binding,path:undefined,where:undefined})}/></div>}
         <label className="grid gap-1 text-xs">{t("Record limit")}<Input type="number" step={1} min={1} max={10000} value={set.limit} onChange={event=>patch(at,{limit:Number(event.target.value)})}/></label>
         <label className="grid gap-1 text-xs">{t("Filter reference path")}<Input value={set.path?.join(".")??""} onChange={event=>patch(at,{path:event.target.value?event.target.value.split("."):undefined})}/></label>
         <fieldset className="grid gap-2 sm:col-span-2"><legend className="text-xs font-medium">{t("Element predicates")}</legend>

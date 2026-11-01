@@ -112,7 +112,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 		if err := p.CheckBoundQuery(id, named); err != nil {
 			return err
 		}
-		if err := p.CheckQuerySchema(q, object, named); err != nil {
+		if err := p.CheckQuerySchema(q, object, named, b.Rules); err != nil {
 			return fmt.Errorf("page query %s: %w", id, err)
 		}
 		if q.Query != nil && named != nil && named.Query != nil {

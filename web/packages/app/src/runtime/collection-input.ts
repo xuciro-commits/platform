@@ -14,8 +14,10 @@ export function validCollectionInput(value:unknown):value is CollectionInput {
  if(!object(value)||Object.keys(value).some(k=>!["kind","object","predicate","sort","sortLocked","traversal","bindings"].includes(k))||value.kind!=="object-set-input"||!ref(value.object,"object")||!Array.isArray(value.sort)||value.sort.length<1||value.sort.length>pageUIManifest.runtime.query.maxSort||value.sort.some(k=>typeof k!=="string"||!id.test(k.replace(/^-/,"")))||value.sortLocked!==undefined&&typeof value.sortLocked!=="boolean")return false;
  let nodes=0;
  const predicate=(p:unknown,depth:number):boolean=>{
-  if(!object(p)||++nodes>pageUIManifest.runtime.query.set.maxNodes||depth>pageUIManifest.runtime.query.set.maxDepth||Object.keys(p).some(k=>!["domain","search","set"].includes(k))||p.search!==undefined&&(typeof p.search!=="string"||bytes(p.search)>4096))return false;
+  if(!object(p)||++nodes>pageUIManifest.runtime.query.set.maxNodes||depth>pageUIManifest.runtime.query.set.maxDepth||Object.keys(p).some(k=>!["domain","filter","parameters","search","set"].includes(k))||p.search!==undefined&&(typeof p.search!=="string"||bytes(p.search)>4096))return false;
   if(p.domain!==undefined&&(!Array.isArray(p.domain)||p.domain.length>pageUIManifest.runtime.query.maxConditions||p.domain.some(t=>typeof t==="string"?!["&","|","!"].includes(t):!Array.isArray(t)||t.length!==3||typeof t[0]!=="string"||!id.test(t[0])||!(pageUIManifest.runtime.query.operators as readonly unknown[]).includes(t[1])||(Array.isArray(t[2])?t[2].length>64||t[2].some(v=>!scalar(v)):!scalar(t[2])))))return false;
+  if(p.filter!==undefined&&(!object(p.filter)||p.filter.kind!=="boolean"))return false;
+  if(p.parameters!==undefined&&(!object(p.parameters)||Object.keys(p.parameters).length>64||Object.entries(p.parameters).some(([name,value])=>!name.startsWith("root.")||bytes(name)>256||!object(value)||typeof value.kind!=="string"||!value.kind||!["value","null"].includes(String(value.status)))))return false;
   if(p.set!==undefined&&(!object(p.set)||Object.keys(p.set).some(k=>!["op","inputs"].includes(k))||!["union","intersect","subtract"].includes(String(p.set.op))||!Array.isArray(p.set.inputs)||p.set.inputs.length!==2||!p.set.inputs.every(child=>predicate(child,depth+1))))return false;
   return true;
  };
@@ -29,20 +31,23 @@ export function validCollectionInput(value:unknown):value is CollectionInput {
 export function collectionFieldsVisible(input:Api.PageCollectionInput,info:EntityInfo|undefined):boolean{
  if(!info||info.type!==input.object.name)return false;
  const field=(name:string)=>["id","created","changed"].includes(name)||info.fields.some(f=>f.name===name);
- const walk=(p:Api.RecordSetPredicate):boolean=>(!Array.isArray(p.domain)||p.domain.every(t=>!Array.isArray(t)||field(String(t[0]))))&&(!p.set||p.set.inputs.every(child=>!!child&&walk(child)));
+ const visible=(e:Api.Expr):boolean=>(!e.ref||e.ref.startsWith("root.")||field(e.ref.split("#")[0]!))&&(e.args??[]).every(visible)&&(!e.in||visible(e.in));
+ const walk=(p:Api.RecordSetPredicate):boolean=>(!Array.isArray(p.domain)||p.domain.every(t=>!Array.isArray(t)||field(String(t[0]))))&&(!p.filter||visible(p.filter))&&(!p.set||p.set.inputs.every(child=>!!child&&walk(child)));
  return input.sort.every(k=>field(k.replace(/^-/,"")))&&walk(input.predicate);
 }
 
 export function collectionInput(object:Api.AssetRef,query:RecordQuery,bindings:Api.AssetBinding[]=[],sortLocked=false):CollectionInput {
- return {kind:"object-set-input",object,predicate:{domain:query.domain??[],...query.search?{search:query.search}:{},...query.set?{set:query.set}:{}},sort:query.sort??["id"],sortLocked,...query.traversal?{traversal:query.traversal}:{},bindings};
+ return {kind:"object-set-input",object,predicate:{domain:query.domain??[],...query.filter?{filter:query.filter}:{},...query.parameters?{parameters:query.parameters}:{},...query.search?{search:query.search}:{},...query.set?{set:query.set}:{}},sort:query.sort??["id"],sortLocked,...query.traversal?{traversal:query.traversal}:{},bindings};
 }
 
 export function collectionQuery(input:Api.PageCollectionInput,local:RecordQuery,explicitSort?:string[]):RecordQuery|undefined{
  if(input.sortLocked&&explicitSort?.length&&JSON.stringify(explicitSort)!==JSON.stringify(input.sort))return;
+ const namespaceExpr=(e:Api.Expr):Api.Expr=>({...e,...e.ref?.startsWith("root.")?{ref:`root.$input.${e.ref.slice(5)}`}:{},...e.args?{args:e.args.map(namespaceExpr)}:{},...e.in?{in:namespaceExpr(e.in)}:{}});
+ const namespace=(p:Api.RecordSetPredicate):Api.RecordSetPredicate=>({...p,...p.filter?{filter:namespaceExpr(p.filter)}:{},...p.parameters?{parameters:Object.fromEntries(Object.entries(p.parameters).map(([name,value])=>[name.startsWith("root.")?`root.$input.${name.slice(5)}`:name,value]))}:{},...p.set?{set:{...p.set,inputs:p.set.inputs.map(child=>child?namespace(child):child)}}:{}});
+ const source=namespace(input.predicate);
  const query:RecordQuery={...local,...input.traversal?{traversal:input.traversal}:{},sort:explicitSort?.length?explicitSort:input.sort};
- const own={domain:local.domain??[],...local.search?{search:local.search}:{},...local.set?{set:local.set}:{}};
- if(local.search&&input.predicate.search){query.domain=[];delete query.search;query.set={op:"intersect",inputs:[input.predicate,own]};}
- else{query.domain=[...(Array.isArray(input.predicate.domain)?input.predicate.domain:[]),...(local.domain??[])];query.search=input.predicate.search||local.search;query.set=input.predicate.set??local.set;}
- if(input.predicate.set&&local.set){query.domain=[];delete query.search;query.set={op:"intersect",inputs:[input.predicate,own]};}
+ const own:Api.RecordSetPredicate={domain:local.domain??[],...local.filter?{filter:local.filter}:{},...local.parameters?{parameters:local.parameters}:{},...local.search?{search:local.search}:{},...local.set?{set:local.set}:{}};
+ if(local.search&&source.search||source.set&&local.set){query.domain=[];delete query.filter;delete query.parameters;delete query.search;query.set={op:"intersect",inputs:[source,own]};}
+ else{query.domain=[...(Array.isArray(source.domain)?source.domain:[]),...(local.domain??[])];query.filter=source.filter&&local.filter?{op:"and",kind:"boolean",args:[source.filter,local.filter]}:source.filter??local.filter;query.parameters={...source.parameters,...local.parameters};query.search=source.search||local.search;query.set=source.set??local.set;}
  return validCollectionInput(collectionInput(input.object,query,input.bindings,input.sortLocked))?query:undefined;
 }

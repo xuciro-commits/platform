@@ -145,26 +145,9 @@ func (b *Build) pageDraftEntity() platform.Entity {
 		if c.Replaying {
 			return nil
 		}
-		objects, err := readDefinitionInventory[Object](c)
+		lookup, err := b.draftObjectLookup(c)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		models := map[string]platform.EntityInfo{}
-		for _, object := range objects {
-			if object.Archived {
-				continue
-			}
-			info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
-			if err != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-			}
-			models[info.Type] = info
-		}
-		lookup := func(typ string) (platform.EntityInfo, bool) {
-			if info, saved := models[typ]; saved {
-				return info, true
-			}
-			return b.conditionLookup(typ)
 		}
 		if err := b.validatePageDocument(page, lookup, c.Rules()); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -172,6 +155,30 @@ func (b *Build) pageDraftEntity() platform.Entity {
 		return nil
 	}
 	return entity
+}
+
+func (b *Build) draftObjectLookup(c platform.Caller) (func(string) (platform.EntityInfo, bool), error) {
+	objects, err := readDefinitionInventory[Object](c)
+	if err != nil {
+		return nil, err
+	}
+	models := map[string]platform.EntityInfo{}
+	for _, object := range objects {
+		if object.Archived {
+			continue
+		}
+		info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+		if err != nil {
+			return nil, err
+		}
+		models[info.Type] = info
+	}
+	return func(typ string) (platform.EntityInfo, bool) {
+		if info, saved := models[typ]; saved {
+			return info, true
+		}
+		return b.conditionLookup(typ)
+	}, nil
 }
 
 func (b *Build) validatePageDocument(page *Page, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
@@ -186,7 +193,7 @@ func (b *Build) validatePageDocument(page *Page, lookup func(string) (platform.E
 		return err
 	}
 	page.InputSchema = d.InputSchema
-	return nil
+	return descriptor(*page).CheckSafety()
 }
 
 func (b *Build) release(c platform.Caller, p Page) *kernel.Error {
@@ -200,9 +207,9 @@ func (b *Build) release(c platform.Caller, p Page) *kernel.Error {
 }
 
 func descriptor(p Page) platform.Page {
-	if p.Format == 3 {
+	if p.Format == 3 || p.Format == 4 {
 		owner, _, _ := strings.Cut(p.Object, ".")
-		value := platform.Page{Format: 3, Name: p.Name, Title: p.Title, Description: p.Description, Object: platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: p.Object}, DataBindings: p.DataBindings, ActionTriggers: p.ActionTriggers, InputSchema: p.InputSchema, ScopeVisibility: p.ScopeVisibility, WidgetSpec: p.WidgetSpec}
+		value := platform.Page{Format: p.Format, Name: p.Name, Title: p.Title, Description: p.Description, Object: platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: p.Object}, DataBindings: p.DataBindings, ActionTriggers: p.ActionTriggers, InputSchema: p.InputSchema, ScopeVisibility: p.ScopeVisibility, WidgetSpec: p.WidgetSpec}
 		raw, _ := json.Marshal(value)
 		_ = json.Unmarshal(raw, &value)
 		return value
@@ -280,6 +287,10 @@ func (b *Build) normalizePageModel(p *Page, lookup func(string) (platform.Entity
 	if err := d.NormalizeModelBindings(lookup); err != nil {
 		return err
 	}
+	d, err := d.UpgradeQueryConditions(lookup)
+	if err != nil {
+		return err
+	}
 	for i, binding := range d.DataBindings {
 		if binding.Query != nil && binding.Query.SourceVersion == "" {
 			if owner, ok := b.host.(platform.ModelPageHost); ok {
@@ -299,7 +310,7 @@ func (b *Build) normalizePageModel(p *Page, lookup func(string) (platform.Entity
 		}
 		d.DataBindings[i] = binding
 	}
-	p.Format = 3
+	p.Format = 4
 	p.DataBindings = d.DataBindings
 	p.ActionTriggers = d.ActionTriggers
 	p.InputSchema = d.InputSchema

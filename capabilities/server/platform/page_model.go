@@ -311,7 +311,7 @@ func (s Section) ModelBindings() []*ModelBinding {
 }
 
 func (p Page) RecordResourceObject(variable string) AssetRef {
-	if p.Format != 3 {
+	if p.Format != 3 && p.Format != 4 {
 		safe, err := p.Safety()
 		if err != nil {
 			return AssetRef{}

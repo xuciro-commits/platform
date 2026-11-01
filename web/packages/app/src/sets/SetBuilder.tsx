@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { objectSetPath, type Api } from "@platform/kernel";
-import { Button, Checkbox, DataTable, Input, Select, columnsFor, entityFrom, humanizeKernelError, t, type EntityInfo, type EntityRecord } from "@platform/ui";
+import { Button, Checkbox, DataTable, Input, Select, Textarea, columnsFor, entityFrom, humanizeKernelError, t, useDraftInput, type EntityInfo, type EntityRecord } from "@platform/ui";
 import { useHost, useReadQuery } from "../index";
 
 type Term = [string, string, string | number | boolean];
 type FieldLike = { name: string; title: string; type: string };
 type Mode = "object" | "interface" | "around" | "union" | "intersect" | "subtract";
+type LinkDefinition = { ref: Api.AssetRef; version: string; linkType?: Api.LinkType };
+type LinkChoice = { binding: Api.AssetBinding; direction: string; object: string; name: string };
 
 export type SetFilterSlot = (props: {
   draftKey: string;
   object?: string;
   fields: Api.FieldInfo[];
+  parameters?: Record<string, Api.Value>;
   lookup: (type: string) => EntityInfo | undefined;
   value?: Api.Expr;
   onChange: (value?: Api.Expr) => void;
@@ -35,6 +38,7 @@ const maxTerms = 16;
 const maxOperands = 16;
 const maxDepth = 4;
 const combinators = ["union", "intersect", "subtract"] as const;
+const parameterKinds = ["text", "boolean", "integer", "decimal", "date", "datetime"];
 const operators = (type?: string) => type && ["boolean", "reference"].includes(type) ? ["=", "!="] : ["=", "!=", "<", "<=", ">", ">=", ...(type === "text" || type === "choice" ? ["like"] : [])];
 
 const modeOf = (set: Api.ObjectSet): Mode => set.around ? "around" : set.union ? "union" : set.intersect ? "intersect" : set.subtract ? "subtract" : set.interface !== undefined ? "interface" : "object";
@@ -65,6 +69,27 @@ function useSetContext(extra?: Api.Interface[]) {
   const interfaces = [...apps.flatMap(app => app.interfaces ?? []), ...(extra ?? [])].filter((item, at, all) => all.findIndex(other => other.name === item.name) === at);
   const links = definitions.filter(definition => definition.linkType);
   return { entities, interfaces, links, lookup: (type: string) => source.entity(type) };
+}
+
+export function LinkTypePicker({ links, entities, from, value, direction, onChange }: { links: LinkDefinition[]; entities: EntityInfo[]; from?: string; value?: Api.AssetBinding; direction?: string; onChange: (choice: LinkChoice) => void }) {
+  const titleOf = (name: string) => entities.find(item => item.type === name)?.title ?? name;
+  const options = links.flatMap(definition => {
+    const type = definition.linkType;
+    if (!type) return [];
+    return (["forward", "reverse"] as const).flatMap(direction => {
+      const source = direction === "forward" ? type.parent.name : type.child.name, object = direction === "forward" ? type.child.name : type.parent.name;
+      if (from && source !== from) return [];
+      const binding = { ref: definition.ref, sourceVersion: definition.version };
+      return [{ key: JSON.stringify([definition.ref.app, definition.ref.name, definition.version, direction]), binding, direction, object, name: type.name, label: `${direction === "forward" ? type.forward : type.reverse} · ${titleOf(source)} → ${titleOf(object)}` }];
+    });
+  });
+  const current = JSON.stringify([value?.ref.app, value?.ref.name, value?.sourceVersion, direction]);
+  return <label className="grid gap-1"><span className="font-medium">{t("Link type")}</span>
+    <Select aria-label={t("Link type")} value={options.some(option => option.key === current) ? current : ""} onChange={event => { const option = options.find(item => item.key === event.target.value); if (option) onChange(option); }}>
+      <option value="">{t("Choose a link type")}</option>
+      {options.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
+    </Select>
+  </label>;
 }
 
 export function SetBuilder({ value, onChange, filter, search = true, combine = true, around = true, locked = false, count = true, preview = count, interfaces, draftKey = "set" }: SetBuilderProps) {
@@ -99,11 +124,27 @@ function SetNode({ value, onChange, depth, path, context, filter, search, combin
     {(mode === "object" || mode === "interface") && <BaseSet value={value} onChange={onChange} path={path} context={context} filter={filter} search={search} locked={locked} />}
     {mode === "around" && <AroundSet value={value} onChange={onChange} depth={depth} path={path} context={context} filter={filter} search={search} combine={combine} around={around} locked={locked} />}
     {combinators.includes(mode as never) && <CombinedSet mode={mode as (typeof combinators)[number]} value={value} onChange={onChange} depth={depth} path={path} context={context} filter={filter} search={search} combine={combine} around={around} locked={locked} />}
+    {!locked && <label className="grid gap-1"><span className="font-medium">{t("Business time")}</span>
+      <Select aria-label={t("Business time")} value={!value.asOf ? "current" : value.asOf.all ? "all" : "at"} onChange={event => { const { asOf: _, ...rest } = value; onChange(event.target.value === "current" ? rest : { ...rest, asOf: event.target.value === "all" ? { all: true } : { at: value.asOf?.at ?? "" } }); }}>
+        <option value="current">{t("Current business version")}</option><option value="at">{t("At a business time")}</option><option value="all">{t("All business versions")}</option>
+      </Select>
+    </label>}
+    {!locked && value.asOf && !value.asOf.all && <label className="grid gap-1"><span className="font-medium">{t("Business date or timestamp")}</span><Input aria-label={t("Business date or timestamp")} maxLength={64} placeholder={t("YYYY-MM-DD or ISO 8601")} value={value.asOf.at ?? ""} onChange={event => onChange({ ...value, asOf: { at: event.target.value } })} /></label>}
   </div>;
+}
+
+const parameterValue = (kind: string): Api.Value => ({ kind, status: "value", value: kind === "boolean" ? false : kind === "json" ? {} : kind === "decimal" || kind === "integer" ? "0" : "" });
+
+function ParameterValue({ name, value, onChange }: { name: string; value: Api.Value; onChange: (value: Api.Value) => void }) {
+  if (value.status === "null") return null;
+  if (value.kind === "boolean") return <Checkbox checked={value.value === true} onChange={checked => onChange({ ...value, value: checked })}>{t("Parameter value")}</Checkbox>;
+  if (value.kind === "json" || !parameterKinds.includes(value.kind)) return <label className="grid gap-1"><span>{t("Parameter value")}</span><Textarea parse="json" draftKey={`parameter:${name}`} aria-label={t("Parameter value")} value={JSON.stringify(value.value ?? null, null, 2)} onChange={event => onChange({ ...value, value: JSON.parse(event.target.value || "null") })} rows={3} /></label>;
+  return <label className="grid gap-1"><span>{t("Parameter value")}</span><Input aria-label={t("Parameter value")} inputMode={value.kind === "decimal" || value.kind === "integer" ? "decimal" : undefined} value={String(value.value ?? "")} onChange={event => onChange({ ...value, value: event.target.value })} /></label>;
 }
 
 function BaseSet({ value, onChange, path, context, filter, search, locked }: Pick<NodeProps, "value" | "onChange" | "path" | "context" | "filter" | "search" | "locked">) {
   const isInterface = value.interface !== undefined;
+  const idsDraft = useDraftInput(`${path}:ids`, (value.ids ?? []).join("\n"), false, 2570000);
   const entity = isInterface ? undefined : context.entities.find(item => item.type === value.object);
   const shape = isInterface ? context.interfaces.find(item => item.name === value.interface) : undefined;
   const fields: FieldLike[] = isInterface ? shape?.fields ?? [] : entity?.fields.map(field => ({ name: field.name, title: field.title, type: field.type })) ?? [];
@@ -112,6 +153,17 @@ function BaseSet({ value, onChange, path, context, filter, search, locked }: Pic
   const chooseField = (index: number, name: string) => {
     const type = fields.find(field => field.name === name)?.type;
     setTerm(index, [name, "=", type === "boolean" ? false : type === "integer" || type === "decimal" ? 0 : ""]);
+  };
+  const parameters = Object.entries(value.parameters ?? {});
+  const writeParameter = (name: string, next?: Api.Value, rename?: string) => {
+    const entries = parameters.flatMap(([key, entry]) => key === name ? next ? [[rename ?? key, next] as const] : [] : [[key, entry] as const]);
+    const { parameters: _, ...rest } = value;
+    const updated: Api.ObjectSet = entries.length ? { ...rest, parameters: Object.fromEntries(entries) } : rest;
+    if (rename && rename !== name && updated.filter) {
+      const rewrite = (expression: Api.Expr): Api.Expr => ({ ...expression, ...(expression.ref === name ? { ref: rename } : {}), ...(expression.args ? { args: expression.args.map(rewrite) } : {}), ...(expression.in ? { in: rewrite(expression.in) } : {}) });
+      updated.filter = rewrite(updated.filter);
+    }
+    onChange(updated);
   };
   return <div className="grid min-w-0 gap-2">
     {!locked && (isInterface
@@ -126,6 +178,7 @@ function BaseSet({ value, onChange, path, context, filter, search, locked }: Pic
           {context.entities.map(item => <option key={item.type} value={item.type}>{item.title} · {item.type}</option>)}
         </Select></label>)}
     {(value.object || value.interface) && <>
+      {!locked && <label className="grid gap-1"><span className="font-medium">{t("Record IDs, one per line")}</span><Textarea aria-label={t("Record IDs, one per line")} data-draft-key={idsDraft.path} value={idsDraft.text} onChange={event => { const raw = event.target.value; idsDraft.write(raw); const { ids: _, ...rest } = value; const ids = raw.split(/\r?\n/).filter(id => id !== ""); onChange(ids.length ? { ...rest, ids } : rest); }} onBlur={idsDraft.clear} rows={3} /></label>}
       <div className="grid gap-1">
         <span className="font-medium">{t("Conditions")}</span>
         {list === undefined
@@ -154,7 +207,17 @@ function BaseSet({ value, onChange, path, context, filter, search, locked }: Pic
         <Input aria-label={t("Search text")} draftKey={`${path}:search`} value={value.search ?? ""} onChange={event => { const { search: _, ...rest } = value; onChange(event.target.value ? { ...rest, search: event.target.value } : rest); }} />
       </label>}
       {filter && !isInterface && value.object && <div className="grid gap-1"><span className="font-medium">{t("Filter expression")}</span>
-        {filter({ draftKey: `${path}:filter`, object: value.object, fields: entity?.fields ?? [], lookup: context.lookup, value: value.filter as Api.Expr | undefined, onChange: next => { const { filter: _, ...rest } = value; onChange(next ? { ...rest, filter: next } : rest); } })}
+        {filter({ draftKey: `${path}:filter`, object: value.object, fields: entity?.fields ?? [], parameters: value.parameters, lookup: context.lookup, value: value.filter as Api.Expr | undefined, onChange: next => { const { filter: _, ...rest } = value; onChange(next ? { ...rest, filter: next } : rest); } })}
+      </div>}
+      {!locked && <div className="grid gap-2"><span className="font-medium">{t("Root parameters")}</span>
+        {parameters.map(([name, entry], index) => <div key={index} className="grid gap-2 rounded-sm border border-border p-2">
+          <label className="grid gap-1"><span>{t("Parameter name")}</span><div className="flex items-center gap-1"><span className="font-mono text-muted">root.</span><Input aria-label={t("Parameter name")} value={name.startsWith("root.") ? name.slice(5) : name} onChange={event => { const next = `root.${event.target.value}`; if (event.target.value && next.length <= 256 && (!value.parameters?.[next] || next === name)) writeParameter(name, entry, next); }} /></div></label>
+          <label className="grid gap-1"><span>{t("Parameter type")}</span><Select aria-label={t("Parameter type")} value={entry.kind} onChange={event => writeParameter(name, parameterValue(event.target.value))}>{!parameterKinds.includes(entry.kind) && <option value={entry.kind}>{entry.kind}</option>}{parameterKinds.map(kind => <option key={kind} value={kind}>{t(kind)}</option>)}</Select></label>
+          <Checkbox checked={entry.status === "null"} onChange={checked => writeParameter(name, checked ? { kind: entry.kind, status: "null" } : parameterValue(entry.kind))}>{t("Null parameter")}</Checkbox>
+          <ParameterValue name={name} value={entry} onChange={next => writeParameter(name, next)} />
+          <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => writeParameter(name)}>{t("Remove parameter")}</Button>
+        </div>)}
+        <Button size="sm" className="justify-self-start" disabled={parameters.length >= 64} onClick={() => { let index = 1; while (value.parameters?.[`root.parameter${index}`]) index++; onChange({ ...value, parameters: { ...value.parameters, [`root.parameter${index}`]: parameterValue("text") } }); }}>{t("Add parameter")}</Button>
       </div>}
       {!locked && <Checkbox checked={!!value.archived} onChange={archived => { const { archived: _, ...rest } = value; onChange(archived ? { ...rest, archived: true } : rest); }}>{t("Include archived records")}</Checkbox>}
     </>}
@@ -169,29 +232,10 @@ function startObject(set: Api.ObjectSet): string | undefined {
 function AroundSet({ value, onChange, depth, path, context, filter, search, combine, around, locked }: NodeProps) {
   const link = value.around!;
   const start = startObject(link.from);
-  const titleOf = (name: string) => context.entities.find(item => item.type === name)?.title ?? name;
-  const options = context.links.flatMap(definition => {
-    const type = definition.linkType!;
-    return (["forward", "reverse"] as const).flatMap(direction => {
-      const from = direction === "forward" ? type.parent.name : type.child.name, to = direction === "forward" ? type.child.name : type.parent.name;
-      if (start && from !== start) return [];
-      return [{ key: JSON.stringify([definition.ref.app, definition.ref.name, direction]), definition, direction, label: `${direction === "forward" ? type.forward : type.reverse} · ${titleOf(from)} → ${titleOf(to)}` }];
-    });
-  });
-  const current = JSON.stringify([link.link.ref.app, link.link.ref.name, link.direction]);
-  const choose = (key: string) => {
-    const option = options.find(item => item.key === key);
-    if (option) onChange({ ...value, around: { ...link, link: { ref: option.definition.ref, sourceVersion: option.definition.version }, direction: option.direction } });
-  };
   return <div className="grid min-w-0 gap-2 border-l border-border pl-3">
     <span className="font-medium">{t("Start from")}</span>
     <SetNode value={link.from} onChange={from => onChange({ ...value, around: { ...link, from } })} depth={depth + 1} path={`${path}:from`} context={context} filter={filter} search={search} combine={combine} around={around} locked={locked} />
-    <label className="grid gap-1"><span className="font-medium">{t("Link type")}</span>
-      <Select aria-label={t("Link type")} value={options.some(item => item.key === current) ? current : ""} onChange={event => choose(event.target.value)}>
-        <option value="">{t("Choose a link type")}</option>
-        {options.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-      </Select>
-    </label>
+    <LinkTypePicker links={context.links} entities={context.entities} from={start} value={link.link} direction={link.direction} onChange={choice => onChange({ ...value, around: { ...link, link: choice.binding, direction: choice.direction } })} />
   </div>;
 }
 

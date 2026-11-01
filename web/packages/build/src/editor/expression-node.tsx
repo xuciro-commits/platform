@@ -19,7 +19,7 @@ export const literalExpression = (kind: string): Api.Expr => ({
   },
 });
 
-export function ExpressionNode({ value: expression, onChange, choices, lookup, windows, collections, kind, depth }: {
+export function ExpressionNode({ value: expression, onChange, choices, lookup, windows, collections, kind, depth, allowContext = true }: {
   value: Api.Expr;
   onChange: (expr: Api.Expr) => void;
   choices: ExpressionChoice[];
@@ -28,6 +28,7 @@ export function ExpressionNode({ value: expression, onChange, choices, lookup, w
   collections?:Collections;
   kind: string;
   depth: number;
+  allowContext?: boolean;
 }) {
   if (depth >= 16) return <p role="alert">{t("Expression editor depth exceeded.")}</p>;
   const selectedOp = expression.agg ? `aggregate:${expression.op}` : expression.ref ? "ref" : expression.lit ? "lit" : expression.op;
@@ -49,9 +50,9 @@ export function ExpressionNode({ value: expression, onChange, choices, lookup, w
       operations.push(...(kind === "integer" ? ["over-window"] : ["rate", "delta", "over-window"]));
     }
   }
-  if (kind === "date" || kind === "datetime") operations.push("add-days", "add-months", kind === "date" ? "$today" : "$now");
+  if (kind === "date" || kind === "datetime") operations.push("add-days", "add-months", ...(allowContext?[kind === "date" ? "$today" : "$now"]:[]));
   if (kind === "datetime") operations.push("add-hours", "start-of-day", "start-of-hour");
-  if (kind === "reference") operations.push("$me");
+  if (kind === "reference" && allowContext) operations.push("$me");
   if (kind !== "set") operations.push("coalesce", "if");
 
   if(Object.keys(collections??{}).length)operations.push(...(kind==="boolean"?["any","all","none"]:kind==="set"?["values"]:numericKinds.includes(kind)?["sum","min","max",...(kind==="integer"?["count"]:["avg"])]:[]).map(op=>`aggregate:${op}`));
@@ -182,7 +183,7 @@ export function ExpressionNode({ value: expression, onChange, choices, lookup, w
       return <div key={index} className="grid min-w-0 gap-1">
         {selectedOp === "if" && <span>{t(["Condition", "Value when true", "Value when false"][index]!)}</span>}
         {selectedOp === "round" && index === 1 && <span>{t("Decimal places")}</span>}
-        <ExpressionNode value={arg} kind={arg.kind} choices={choices} lookup={lookup} windows={windows} collections={collections} depth={depth + 1} onChange={next => changeArgument(index, next)} />
+        <ExpressionNode value={arg} kind={arg.kind} choices={choices} lookup={lookup} windows={windows} collections={collections} allowContext={allowContext} depth={depth + 1} onChange={next => changeArgument(index, next)} />
       </div>;
     })}
     {variadic && args.length < 32 && <Button size="sm" onClick={() => onChange({ ...expression, args: [...args, literalExpression(kind)] })}>{t("Add expression operand")}</Button>}

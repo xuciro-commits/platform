@@ -17,6 +17,7 @@ type PageQuery struct {
 	Object     AssetRef             `json:"object"`
 	Interface  string               `json:"interface,omitempty"`
 	Query      *AssetBinding        `json:"query,omitempty"`
+	Filter     *Expr                `json:"filter,omitempty"`
 	Conditions []PageQueryCondition `json:"conditions,omitempty"`
 
 	Search *PageValue `json:"search,omitempty"`
@@ -53,19 +54,6 @@ func (q PageQuery) Values() []PageValue {
 		values = append(values, *q.For)
 	}
 	return values
-}
-
-func (q PageQuery) Variables() []string {
-	ids := []string{}
-	if q.Input != "" {
-		ids = append(ids, q.Input)
-	}
-	for _, v := range q.Values() {
-		if v.Variable != "" {
-			ids = append(ids, v.Variable)
-		}
-	}
-	return ids
 }
 
 func (p Page) checkQueries(inputScope string) error {
@@ -113,6 +101,26 @@ func (p Page) checkQueries(inputScope string) error {
 				}
 			}
 		}
+		if v.Rule != nil {
+			var scan func(Expr) bool
+			scan = func(expr Expr) bool {
+				if expr.Agg != nil && dependsOnPlan(expr.Agg.Source, seen) {
+					return true
+				}
+				if expr.Ref != "" && dependsOnPlan(expr.Ref, seen) {
+					return true
+				}
+				for _, arg := range expr.Args {
+					if scan(arg) {
+						return true
+					}
+				}
+				return expr.In != nil && scan(*expr.In)
+			}
+			if scan(*v.Rule) {
+				return true
+			}
+		}
 		return false
 	}
 	if err := p.checkCollectionBuilderGraph(); err != nil {
@@ -133,10 +141,13 @@ func (p Page) checkQueries(inputScope string) error {
 		}
 		validSource := q.Object.Check() == nil && q.Object.Kind == AssetObject && q.Interface == ""
 		if q.Interface != "" {
-			validSource = PageUIProfileSupports(d.profileVersion(), c.InterfaceUIProfile) && pageNodeID.MatchString(q.Interface) && q.Object == (AssetRef{}) && q.Query != nil && q.Query.Ref.Kind == AssetQuery && q.Input == "" && q.For == nil && q.Set == nil && q.Direction == "" && q.ItemOwner == "" && len(q.Conditions) == 0 && inputScope != "application"
+			validSource = PageUIProfileSupports(d.profileVersion(), c.InterfaceUIProfile) && pageNodeID.MatchString(q.Interface) && q.Object == (AssetRef{}) && q.Query != nil && q.Query.Ref.Kind == AssetQuery && q.Input == "" && q.For == nil && q.Set == nil && q.Direction == "" && q.ItemOwner == "" && len(q.Conditions) == 0 && q.Filter == nil && inputScope != "application"
 		}
 		if !pageNodeID.MatchString(id) || len(q.Title) > 1024 || !validSource || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Conditions) > c.MaxConditions || len(q.Sort) > c.MaxSort {
 			return fmt.Errorf("page query %s has an invalid identity, object or budget", id)
+		}
+		if q.Filter != nil && (q.Filter.Kind != "boolean" || len(q.Conditions) > 0) {
+			return fmt.Errorf("page query %s needs one boolean Expr filter", id)
 		}
 		if q.Input != "" {
 			v, ok := d.Variables[q.Input]
@@ -241,6 +252,20 @@ func (p Page) checkQueries(inputScope string) error {
 				}
 			}
 		}
+		if q.Filter != nil {
+			for _, ref := range ConditionRefs(*q.Filter) {
+				name, ok := strings.CutPrefix(ref, "root.")
+				if !ok {
+					continue
+				}
+				name, _, _ = strings.Cut(name, "#")
+				variable, exists := d.Variables[name]
+				plannedInput := dependsOnPlan(name, map[string]bool{})
+				if !exists || !pageNodeID.MatchString(name) || inputScope == "application" && variable.Scope != "application" || variable.Scope != "page" && variable.Scope != "application" && !(variable.Scope == "overlay" && variable.Owner == q.Owner && q.Owner != "") && !(variable.Scope == "loop-item" && variable.Owner == q.ItemOwner && q.ItemOwner != "") || !slices.Contains([]string{"string", "boolean", "record", "decimal", "number", "string-set"}, variable.Type) || plannedInput {
+					return fmt.Errorf("page query %s filter parameter escapes its input scope", id)
+				}
+			}
+		}
 	}
 	if PageUIProfileSupports(d.profileVersion(), c.InventoryUIProfile) && p.ScopeVisibility.Root != "" && declaredTotal > c.MaxDeclaredTotalLimit {
 		return fmt.Errorf("declared inventory query budget exceeded")
@@ -297,7 +322,7 @@ func (p Page) QueryReferences() []AssetRef {
 }
 
 func (p Page) DocumentVariables() map[string]PageVariable {
-	if p.Format == 3 {
+	if p.Format == 3 || p.Format == 4 {
 		return p.InputSchema.Variables
 	}
 	if p.Document == nil {
@@ -307,7 +332,7 @@ func (p Page) DocumentVariables() map[string]PageVariable {
 }
 
 func (p Page) WindowVariableObject(id string) string {
-	if p.Format == 3 {
+	if p.Format == 3 || p.Format == 4 {
 		return p.CollectionInputObject(id).Name
 	}
 
@@ -331,12 +356,17 @@ func (p Page) WindowVariableObject(id string) string {
 	return ""
 }
 
-func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition) error {
+func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition, engines ...RuleEngine) error {
 	if q.Interface != "" {
 		return p.CheckInterfaceQuery(q, named)
 	}
 	if object.Type != q.Object.Name {
 		return fmt.Errorf("query object is unavailable")
+	}
+	if q.Filter != nil {
+		if err := p.checkQueryFilter(*q.Filter, object, engines...); err != nil {
+			return err
+		}
 	}
 	valueType := func(v PageValue) string {
 		if v.Variable != "" {
@@ -507,11 +537,8 @@ func (p Page) variableDependsOnQuery(variable, target string) bool {
 		}
 		seenQueries[id] = true
 		q := d.Queries[id]
-		if q.Input != "" && variableDepends(q.Input) {
-			return true
-		}
-		for _, value := range q.Values() {
-			if value.Variable != "" && variableDepends(value.Variable) {
+		for _, source := range q.Variables() {
+			if variableDepends(source) {
 				return true
 			}
 		}
@@ -533,6 +560,13 @@ func (p Page) variableDependsOnQuery(variable, target string) bool {
 		if v.Expression != nil {
 			for _, value := range v.Expression.Args {
 				if variableDepends(value.Variable) {
+					return true
+				}
+			}
+		}
+		if v.Rule != nil {
+			for _, ref := range ConditionRefs(*v.Rule) {
+				if variableDepends(ref) {
 					return true
 				}
 			}
@@ -604,7 +638,7 @@ func (p Page) CheckInterfaceQuery(q PageQuery, named *Definition) error {
 	if q.Query == nil || named == nil || named.Ref != q.Query.Ref || named.Version != q.Query.SourceVersion || named.Query == nil || named.Query.Interface != q.Interface || named.Query.InterfaceShape == nil || named.Query.Check() != nil {
 		return fmt.Errorf("interface page query needs its exact published query and frozen shape")
 	}
-	if q.Object != (AssetRef{}) || q.For != nil || q.Input != "" || q.Set != nil || q.Direction != "" || q.ItemOwner != "" || len(q.Conditions) != 0 {
+	if q.Object != (AssetRef{}) || q.For != nil || q.Input != "" || q.Set != nil || q.Direction != "" || q.ItemOwner != "" || len(q.Conditions) != 0 || q.Filter != nil {
 		return fmt.Errorf("interface page query cannot replace the published source or conditions")
 	}
 	for _, sort := range q.Sort {

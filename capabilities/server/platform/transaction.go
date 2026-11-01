@@ -45,9 +45,11 @@ type JournalLine struct {
 }
 
 type RecordSetPredicate struct {
-	Domain json.RawMessage `json:"domain,omitempty"`
-	Search string          `json:"search,omitempty"`
-	Set    *QuerySet       `json:"set,omitempty"`
+	Domain     json.RawMessage      `json:"domain,omitempty"`
+	Filter     *Expr                `json:"filter,omitempty"`
+	Parameters map[string]ExprValue `json:"parameters,omitempty"`
+	Search     string               `json:"search,omitempty"`
+	Set        *QuerySet            `json:"set,omitempty"`
 }
 
 type QuerySet struct {
@@ -64,6 +66,9 @@ const (
 )
 
 func (q Query) CheckSet() error {
+	if err := q.ObjectSet("query", nil).Check(); err != nil {
+		return err
+	}
 	if q.Set == nil {
 		return nil
 	}
@@ -98,7 +103,7 @@ func (q Query) CheckSet() error {
 		}
 		return nil
 	}
-	root := RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set}
+	root := RecordSetPredicate{Domain: q.Domain, Filter: q.Filter, Parameters: q.Parameters, Search: q.Search, Set: q.Set}
 	if err := check(root, 0); err != nil {
 		return err
 	}

@@ -421,15 +421,17 @@ var (
 )
 
 type Query struct {
-	BusinessTime *BusinessTime   `json:"businessTime,omitempty"`
-	Traversal    *LinkTraversal  `json:"traversal,omitempty"`
-	Set          *QuerySet       `json:"set,omitempty"`
-	Domain       json.RawMessage `json:"domain,omitempty"`
-	Search       string          `json:"search,omitempty"`
-	Sort         []string        `json:"sort,omitempty"`
-	Offset       int             `json:"offset,omitempty"`
-	Limit        int             `json:"limit,omitempty"`
-	Archived     bool            `json:"archived,omitempty"`
+	BusinessTime *BusinessTime        `json:"businessTime,omitempty"`
+	Traversal    *LinkTraversal       `json:"traversal,omitempty"`
+	Set          *QuerySet            `json:"set,omitempty"`
+	Domain       json.RawMessage      `json:"domain,omitempty"`
+	Filter       *Expr                `json:"filter,omitempty"`
+	Parameters   map[string]ExprValue `json:"parameters,omitempty"`
+	Search       string               `json:"search,omitempty"`
+	Sort         []string             `json:"sort,omitempty"`
+	Offset       int                  `json:"offset,omitempty"`
+	Limit        int                  `json:"limit,omitempty"`
+	Archived     bool                 `json:"archived,omitempty"`
 }
 
 func (c Caller) Put(r *pb.ChangeRecord, entity any) *kernel.Error {

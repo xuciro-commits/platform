@@ -28,7 +28,7 @@ function stripBindings(section:ObjectValue):void{
 }
 
 export function decodePage(page:Envelope|UI.Page):UI.Page{
- if(!("format"in page)||page.format!==3)return page as UI.Page;
+ if(!("format"in page)||page.format!==3&&page.format!==4)return page as UI.Page;
  const declaration=page as Envelope,bindings=declaration.dataBindings??[],triggers=declaration.actionTriggers??[],inputs=declaration.inputSchema??{},scopes=declaration.scopeVisibility??{root:"",scopes:[],owners:{}};
  const raw=declaration.widgetSpec?.body as {sections?:unknown;document?:UI.PageDocument;layout?:string}|null;
  if(declaration.widgetSpec?.format!=="platform.page.web.v1"||!raw||typeof raw!=="object"||!Array.isArray(raw.sections)||raw.sections.some(section=>!section||typeof section!=="object"||Array.isArray(section))||raw.document&&(!raw.document.nodes||typeof raw.document.nodes!=="object"))return {name:declaration.name,title:declaration.title,object:declaration.object,layout:"composed",listFields:[],detailFields:[],actions:[],sections:[],document:{formatVersion:0,uiProfile:declaration.widgetSpec?.format??"",root:"",nodes:{}}};
@@ -174,5 +174,6 @@ export function encodePage(page:UI.Page,definitions:readonly {ref:Api.AssetRef;v
   for(const node of Object.values(visualDocument.nodes))for(const path of [...pageSafetyContract.scope.bindingPaths,"section"])clearPath(node,path.split("."));
   for(const overlay of Object.values(visualDocument.overlays??{}))for(const path of pageSafetyContract.scope.overlayPaths)clearPath(overlay,path.split("."));
  }
- return {format:3,name:page.name,title:page.title,description:page.description,object:page.object,dataBindings,actionTriggers,inputSchema:{variables:document?.variables,queries:document?.queries,interface:document?.interface,selections:page.selections},scopeVisibility:{root:document?.root??"page",scopes,owners},widgetSpec:{format:"platform.page.web.v1",body:{sections:visualSections,document:visualDocument}}}as Envelope;
+ const legacy=Object.values(document?.queries??{}).some(query=>query.conditions!==undefined)||Object.values(document?.variables??{}).some(variable=>variable.expression!==undefined);
+ return {format:legacy?3:4,name:page.name,title:page.title,description:page.description,object:page.object,dataBindings,actionTriggers,inputSchema:{variables:document?.variables,queries:document?.queries,interface:document?.interface,selections:page.selections},scopeVisibility:{root:document?.root??"page",scopes,owners},widgetSpec:{format:"platform.page.web.v1",body:{sections:visualSections,document:visualDocument}}}as Envelope;
 }

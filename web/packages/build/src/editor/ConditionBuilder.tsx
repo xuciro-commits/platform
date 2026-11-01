@@ -7,7 +7,7 @@ import { ExpressionNode, LiteralValue, kindOf, literalExpression, numericKinds, 
 
 type Mode = "all" | "any" | "none";
 type Group = { mode: Mode; items: Api.Expr[] };
-type Context = { choices: ExpressionChoice[]; lookup?: (type: string) => EntityInfo | undefined; windows?: RuleSchema["windows"]; collections?: Collections };
+type Context = { choices: ExpressionChoice[]; lookup?: (type: string) => EntityInfo | undefined; windows?: RuleSchema["windows"]; collections?: Collections; allowContext?: boolean };
 
 const always: Api.Expr = { op: "", kind: "boolean", lit: { value: true } };
 const unary = ["is-null", "is-not-null", "empty", "not-empty"];
@@ -97,17 +97,17 @@ function JsonLiteral({ value, onChange }: { value: unknown; onChange: (value: un
 
 function Operand({ row, kind, op, context, onChange }: { row: Api.Expr; kind: string; op: string; context: Context; onChange: (right: Api.Expr) => void }) {
   const right = row.args![1]!;
-  const fields = context.choices.filter(choice => kindOf(choice.type) === kind && choice.value !== row.args![0]!.ref);
+  const fields = context.choices.filter(choice => (kindOf(choice.type) === (op === "in" ? "set" : kind) || op !== "in" && numericKinds.includes(kindOf(choice.type)) && numericKinds.includes(kind)) && choice.value !== row.args![0]!.ref);
   const source = right.ref ? "field" : constants.includes(right.op) ? right.op : "value";
-  const sources = ["value", ...(fields.length && op !== "in" ? ["field"] : []), ...(kind === "reference" ? ["$me"] : []), ...(kind === "date" ? ["$today"] : []), ...(kind === "datetime" ? ["$now"] : [])];
-  const sourceLabels: Record<string, string> = { value: "Value", field: "Field", $me: "Current user", $today: "Today", $now: "Now" };
+  const sources = ["value", ...(fields.length ? ["field"] : []), ...(context.allowContext===false?[]:[...(kind === "reference" ? ["$me"] : []), ...(kind === "date" ? ["$today"] : []), ...(kind === "datetime" ? ["$now"] : [])])];
+  const sourceLabels: Record<string, string> = { value: "Value", field: "Field or parameter", $me: "Current user", $today: "Today", $now: "Now" };
   const values = Array.isArray(right.lit?.value) ? right.lit.value as unknown[] : [];
   return <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
     {sources.length > 1 && <Select aria-label={t("Compare with")} className="w-28" value={source} onChange={event => {
       const next = event.target.value;
-      onChange(next === "field" ? { op: "", kind, ref: fields[0]!.value } : constants.includes(next) ? { op: next, kind } : literalFor(op, kind));
+      onChange(next === "field" ? { op: "", kind: kindOf(fields[0]!.type), ref: fields[0]!.value } : constants.includes(next) ? { op: next, kind } : literalFor(op, kind));
     }}>{sources.map(item => <option key={item} value={item}>{t(sourceLabels[item]!)}</option>)}</Select>}
-    {source === "field" && <Select aria-label={t("Compared field")} className="min-w-0 flex-1" value={right.ref} onChange={event => onChange({ op: "", kind, ref: event.target.value })}>
+    {source === "field" && <Select aria-label={t("Compared field")} className="min-w-0 flex-1" value={right.ref} onChange={event => onChange({ op: "", kind: kindOf(fields.find(field=>field.value===event.target.value)?.type??kind), ref: event.target.value })}>
       {!fields.some(choice => choice.value === right.ref) && <option value={right.ref}>{right.ref}</option>}
       {fields.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
     </Select>}
@@ -173,7 +173,7 @@ function GroupView({ group: derived, context, depth, onChange: write, onRemove }
         if (nested && depth < 4) return <li key={index}><GroupView group={nested} context={context} depth={depth + 1} onChange={next => set(index, fromGroup(next))} onRemove={() => remove(index)} /></li>;
         if (asRow(item)) return <Row key={index} value={item} context={context} onChange={next => set(index, next)} onRemove={() => remove(index)} />;
         return <li key={index} className="grid min-w-0 gap-1">
-          <ExpressionNode value={item} kind="boolean" depth={depth + 1} choices={context.choices} lookup={context.lookup} windows={context.windows} collections={context.collections} onChange={next => set(index, next)} />
+          <ExpressionNode value={item} kind="boolean" depth={depth + 1} choices={context.choices} lookup={context.lookup} windows={context.windows} collections={context.collections} allowContext={context.allowContext} onChange={next => set(index, next)} />
           <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => remove(index)}>{t("Remove condition")}</Button>
         </li>;
       })}
@@ -186,7 +186,7 @@ function GroupView({ group: derived, context, depth, onChange: write, onRemove }
   </div>;
 }
 
-export function ConditionBuilder({ value, onChange, choices, lookup, windows, collections }: { value: Api.Expr; onChange: (expr: Api.Expr) => void } & Context) {
+export function ConditionBuilder({ value, onChange, choices, lookup, windows, collections, allowContext }: { value: Api.Expr; onChange: (expr: Api.Expr) => void } & Context) {
   const group = asGroup(value, true) ?? { mode: "all" as const, items: [value] };
-  return <GroupView group={group} context={{ choices, lookup, windows, collections }} depth={0} onChange={next => onChange(fromGroup(next))} />;
+  return <GroupView group={group} context={{ choices, lookup, windows, collections, allowContext }} depth={0} onChange={next => onChange(fromGroup(next))} />;
 }

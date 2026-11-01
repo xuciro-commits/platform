@@ -214,7 +214,7 @@ func pageDraft(pageDescriptor platform.Page) (Page, error) {
 		return Page{}, err
 	}
 	original["object"] = platform.Raw(pageDescriptor.Object.Name)
-	if pageDescriptor.Format != 3 {
+	if pageDescriptor.Format != 3 && pageDescriptor.Format != 4 {
 		original["list"], original["detail"] = original["listFields"], original["detailFields"]
 		delete(original, "listFields")
 		delete(original, "detailFields")

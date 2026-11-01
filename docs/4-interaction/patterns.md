@@ -102,7 +102,7 @@ read-when: 使用或新建一个界面组件，或实现表格、表单、侧窗
 ## M11 对象集构建器（ObjectSet）
 
 - 用途：Workshop 变量、Object Explorer 探索、函数输入、AIP 上下文中选择一组对象。
-- 构造：起点对象类型 → 筛选（M10）→ 沿关系转到（Search Around）→ 集合运算（并、交、差）→ 结果预览（数量 + 前 20 行）。
+- 构造：起点对象类型或接口（可限定记录 ID）→ 筛选（M10，支持有类型的根参数）、搜索与业务时间 → 沿关系转到（Search Around）→ 集合运算（并、交、差）→ 结果预览（数量 + 前 20 行）。
 - 状态：无权访问的类型不出现在起点列表；结果因标记或行策略被过滤时显示“部分对象不可见”。
 - 行为：每一步即时计数；保存为探索或变量。
 - 键盘：同 M10。
@@ -191,6 +191,5 @@ read-when: 使用或新建一个界面组件，或实现表格、表单、侧窗
 ## 现存差距
 
 - 记录类组件（RecordKanban、RecordGantt、RecordMap 等 20 余个）未按 Workshop 组件目录统一（路线图 P3.14）。
-- M10 的唯一实现是 build `editor/ConditionBuilder`（经 `ExpressionEditor` 的布尔根节点进入，表达不了的条件就地保留为表达式节点）。仍有重复：Workshop `QueriesPanel` 的条件行（PageQueryCondition）与 `VariablesPanel` 的运算行（PageExpression），二者要求页面格式经版本化迁移改为 Expr（P3.31）；`SetBuilder` 内置的 `domain` 条件行由命名查询依赖，随 P3.11 删除。右值尚不能选函数结果；左值沿关系取字段只能在表达式节点中编辑。
-- M11 的 `SetBuilder` 缺 `ids`、搜索、参数、asOf 的界面；`RecordSetsEditor` 未复用其关系选择（P3.31）。
+- M10 的唯一实现是 build `editor/ConditionBuilder`（经 `ExpressionEditor` 的布尔根节点进入，表达不了的条件就地保留为表达式节点）。`SetBuilder` 内置的 `domain` 条件行由命名查询依赖，随 P3.11 删除。右值尚不能选函数结果；左值沿关系取字段只能在表达式节点中编辑。
 - 差异审阅 M18 的审阅并保存：破坏性变更（删除或改类型的具名成员）只给通用影响说明，未列出具体受影响的下游资源；左侧列表没有逐项问题数（P3.30）。

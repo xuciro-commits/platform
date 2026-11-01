@@ -137,7 +137,7 @@ func (p Page) CollectionInputObject(variable string) AssetRef {
 }
 
 func (p Page) collectionInputObject(variable string, seen map[string]bool) AssetRef {
-	if p.Format == 3 {
+	if p.Format == 3 || p.Format == 4 {
 		if seen[variable] {
 			return AssetRef{}
 		}

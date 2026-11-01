@@ -14,7 +14,7 @@ export const observationContextChoices = (): ExpressionChoice[] => [
 ];
 
 function schemaFor(expr: Api.Expr, choices: ExpressionChoice[], lookup?: (type: string) => EntityInfo | undefined, windows?: RuleSchema["windows"], collections?:Collections): RuleSchema {
-  const refs: RuleSchema["refs"] = Object.fromEntries(choices.map(choice => [choice.value, { kind: kindOf(choice.type), object: choice.ref }]));
+  const refs: RuleSchema["refs"] = Object.fromEntries(choices.map(choice => [choice.value, { kind: kindOf(choice.type), object: choice.ref, ...(kindOf(choice.type)==="set"?{element:{kind:"text"}}:{}) }]));
   const sets:NonNullable<RuleSchema["sets"]>=Object.fromEntries(Object.entries(collections??{}).map(([name,set])=>[name,{element:{kind:"reference",object:set.object,fields:Object.fromEntries((lookup?.(set.object)?.fields??[]).map(field=>[field.name,{kind:kindOf(field.type),object:field.ref}]))},policy:set.policy as "complete"|"visible"}]));
   const visit = (expression: Api.Expr, scope?:string) => {
     if(expression.agg)scope=expression.agg.source;
@@ -37,7 +37,7 @@ function schemaFor(expr: Api.Expr, choices: ExpressionChoice[], lookup?: (type: 
   return { refs, windows,sets };
 }
 
-export function ExpressionEditor({ value, onChange, choices: suppliedChoices = [], lookup, windows, collections, kind = "boolean", draftKey = "expression", callerTenant = true }: {
+export function ExpressionEditor({ value, onChange, choices: suppliedChoices = [], lookup, windows, collections, kind = "boolean", draftKey = "expression", callerTenant = true, allowContext = true }: {
   value: Api.Expr;
   onChange: (expr: Api.Expr) => void;
   choices?: ExpressionChoice[];
@@ -47,6 +47,7 @@ export function ExpressionEditor({ value, onChange, choices: suppliedChoices = [
   kind?: string;
   draftKey?: string;
   callerTenant?: boolean;
+  allowContext?: boolean;
 }) {
   const choices = !callerTenant || suppliedChoices.some(choice => choice.value === "caller.tenant") ? suppliedChoices : [...suppliedChoices, { value: "caller.tenant", label: t("Current tenant"), type: "text" }];
   const schema = schemaFor(value, choices, lookup, windows, collections), schemaKey = JSON.stringify(schema);
@@ -90,8 +91,8 @@ export function ExpressionEditor({ value, onChange, choices: suppliedChoices = [
   };
   return <div className="grid min-w-0 gap-2 text-xs" aria-label={t("Rule expression editor")}>
     <fieldset disabled={unapplied} className="min-w-0 border-0 p-0">{kind === "boolean"
-      ? <ConditionBuilder value={value} onChange={expression => { input.clear(); onChange(expression); }} choices={choices} lookup={lookup} windows={windows} collections={collections} />
-      : <ExpressionNode value={value} onChange={expression => { input.clear(); onChange(expression); }} choices={choices} lookup={lookup} windows={windows} collections={collections} kind={kind} depth={0} />}</fieldset>
+      ? <ConditionBuilder value={value} onChange={expression => { input.clear(); onChange(expression); }} choices={choices} lookup={lookup} windows={windows} collections={collections} allowContext={allowContext} />
+      : <ExpressionNode value={value} onChange={expression => { input.clear(); onChange(expression); }} choices={choices} lookup={lookup} windows={windows} collections={collections} kind={kind} allowContext={allowContext} depth={0} />}</fieldset>
     {input.problem && <p role="alert" className="break-words text-danger">{input.problem}</p>}
     <Button size="sm" onClick={() => setAdvanced(!advanced)}>{t("Expression source")}</Button>
     {(advanced || unapplied) && <>

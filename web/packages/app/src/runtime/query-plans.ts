@@ -11,6 +11,7 @@ import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
 import type { QueryView } from "./Session";
 import {interfaceWindowSignature} from "./ontology-interface";
+import {ruleDependencies} from "./rule-engine";
 
 export function boundQueryDefinition(definition: WorkspaceDefinition | undefined, binding: Api.AssetBinding | undefined): WorkspaceDefinition | undefined {
  if(!definition||!binding)return undefined;
@@ -34,7 +35,7 @@ type QueryGraph={id:string;plans:Record<string,Api.PageQuery>};
 function variableUsesPlan(id:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],seen=new Set<string>()):boolean {
   if(seen.has(id))return false;seen.add(id);
   const variable=variables[id];
-  return variable?.mode==="property"&&!!variable.source?.variable&&variableUsesPlan(variable.source.variable,variables,sections,seen)||variable?.source?.kind==="plan"||variable?.mode==="aggregate"||!!variable?.source?.section&&!!sections.find(s=>s.id===variable.source!.section)?.collectionVariable||!!variable?.expression?.args.some(arg=>!!arg.variable&&variableUsesPlan(arg.variable,variables,sections,seen));
+  return variable?.mode==="property"&&!!variable.source?.variable&&variableUsesPlan(variable.source.variable,variables,sections,seen)||variable?.source?.kind==="plan"||variable?.mode==="aggregate"||!!variable?.source?.section&&!!sections.find(s=>s.id===variable.source!.section)?.collectionVariable||!!variable?.expression?.args.some(arg=>!!arg.variable&&variableUsesPlan(arg.variable,variables,sections,seen))||!!variable?.rule&&ruleDependencies(variable.rule).some(ref=>variableUsesPlan(ref,variables,sections,seen));
 }
 
 function recordContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],graph:QueryGraph):boolean {
@@ -51,11 +52,11 @@ function variableDependsOnQuery(variable:string,target:string,variables:Record<s
  const queryDepends=(id:string):boolean=>{
   if(id===target)return true;if(seenQueries.has(id))return false;seenQueries.add(id);
   const plan=plans[id];if(!plan)return false;
-  return !!plan.input&&variableDepends(plan.input)||[...(plan.conditions??[]).map(condition=>condition.value),...(plan.search?[plan.search]:[]),...(plan.for?[plan.for]:[])].some(value=>!!value.variable&&variableDepends(value.variable))||!!plan.set?.inputs.some(queryDepends);
+  return !!plan.input&&variableDepends(plan.input)||[...(plan.conditions??[]).map(condition=>condition.value),...(plan.search?[plan.search]:[]),...(plan.for?[plan.for]:[])].some(value=>!!value.variable&&variableDepends(value.variable))||!!plan.filter&&ruleDependencies(plan.filter).some(ref=>ref.startsWith("root.")&&variableDepends(ref.slice(5).split("#")[0]!))||!!plan.set?.inputs.some(queryDepends);
  };
  const variableDepends=(id:string):boolean=>{
   if(!id||seenVariables.has(id))return false;seenVariables.add(id);const input=variables[id];if(!input)return false;
-  if(input.expression?.args.some(value=>!!value.variable&&variableDepends(value.variable)))return true;
+  if(input.expression?.args.some(value=>!!value.variable&&variableDepends(value.variable))||input.rule&&ruleDependencies(input.rule).some(variableDepends))return true;
   const source=input.source;if(!source)return false;
   if(source.kind==="property"&&!!source.variable&&variableDepends(source.variable))return true;
   if((source.kind==="plan"||input.mode==="aggregate")&&!!source.query&&queryDepends(source.query))return true;
@@ -122,7 +123,7 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
 export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: WorkspaceDefinition | undefined, contract: Contract, sections:PageUI.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
   if(plan.interface){
     const selected=boundQueryDefinition(named,plan.query),declared=selected?.query,ordering=declared?.sort?.length?declared.sort:["id"];
-    if(!plan.query||selected?.ref.app!==plan.query.ref.app||selected.ref.name!==plan.query.ref.name||declared?.interface!==plan.interface||!declared.interfaceShape||plan.object.name||plan.object.app||plan.object.kind||plan.input||plan.for||plan.direction||plan.itemOwner||plan.set||plan.conditions?.length||!Number.isInteger(plan.limit)||plan.limit<1||plan.limit>Math.min(contract.maxLimit,declared.limit||contract.maxLimit)||!Number.isInteger(plan.offset??0)||(plan.offset??0)<0||(plan.offset??0)>contract.maxOffset||plan.sort?.length&&JSON.stringify(plan.sort)!==JSON.stringify(ordering))return failed("Interface query window is unavailable or incompatible.");
+    if(!plan.query||selected?.ref.app!==plan.query.ref.app||selected.ref.name!==plan.query.ref.name||declared?.interface!==plan.interface||!declared.interfaceShape||plan.object.name||plan.object.app||plan.object.kind||plan.input||plan.for||plan.direction||plan.itemOwner||plan.set||plan.filter||plan.conditions?.length||!Number.isInteger(plan.limit)||plan.limit<1||plan.limit>Math.min(contract.maxLimit,declared.limit||contract.maxLimit)||!Number.isInteger(plan.offset??0)||(plan.offset??0)<0||(plan.offset??0)>contract.maxOffset||plan.sort?.length&&JSON.stringify(plan.sort)!==JSON.stringify(ordering))return failed("Interface query window is unavailable or incompatible.");
     let search:string|undefined;
     if(plan.search){
       const binding=plan.search,v=binding.variable?variables[binding.variable]:undefined;
@@ -205,10 +206,39 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
     if ((["in","not in"].includes(condition.op)!==isStringSet(value.value)) || !compatible(condition.field, value) || !(contract.operators as readonly string[]).includes(condition.op) || condition.op === "like" && !["text", "choice"].includes(f!.type) || ["boolean", "reference"].includes(f!.type) && !["=", "!="].includes(condition.op)) return failed("Query parameter type does not match its field.");
     domain.push([condition.field, condition.op, scalar(value)]);
   }
+  const parameters:Record<string,Api.Value>={};
+  if(plan.filter){
+    const refs=new Map<string,string>(),nullable=new Set<string>();
+    const scan=(expr:Api.Expr):boolean=>{
+      if(expr.op==="is-null"&&expr.args?.length===1&&expr.args[0]?.ref?.startsWith("root."))nullable.add(expr.args[0].ref);
+      if(expr.ref?.startsWith("root.")){if(refs.has(expr.ref)&&refs.get(expr.ref)!==expr.kind)return false;refs.set(expr.ref,expr.kind);}
+      return (expr.args??[]).every(scan)&&(!expr.in||scan(expr.in));
+    };
+    if(plan.filter.kind!=="boolean"||!scan(plan.filter))return failed("Query parameter type does not match its field.");
+    for(const [ref,kind] of refs){
+      const value=read({variable:ref.slice(5).split("#")[0]!});if(value.status!=="value")return value;
+      const raw=value.value;
+      if(raw===""&&nullable.has(ref)&&(ref.endsWith("#date")||["date","datetime","decimal","integer","number"].includes(kind))){parameters[ref]={kind,status:"null"};continue;}
+      let resolved:unknown=raw;
+      if(typeof raw==="object")resolved=isStringSet(raw)?raw.values:isDecimal(raw)?raw.value:raw.kind==="number"?raw.value:raw.kind==="record"?raw.reference.id:undefined;
+      if(ref.endsWith("#bool-number")&&typeof resolved==="boolean")resolved=resolved?"1":"0";
+      if(["decimal","integer","number"].includes(kind)&&typeof resolved==="string"){
+        const exact=parseDecimal(resolved);if(!exact||kind==="integer"&&exact.value.includes("."))return failed("Invalid numeric value.");resolved=exact.value;
+      }
+      if((kind==="date"||ref.endsWith("#date"))&&(typeof resolved!=="string"||!validCivilDate(resolved)))return failed("Invalid date value.");
+      if(kind==="datetime"){
+        if(typeof resolved!=="string")return failed("Invalid datetime value.");
+        if(!ref.endsWith("#timestamp")&&validCivilDate(resolved))resolved=`${resolved}T00:00:00Z`;
+        else if(!validTimestamp(resolved))return failed("Invalid datetime value.");
+      }
+      if(["text","choice","reference"].includes(kind)&&typeof resolved!=="string"||kind==="boolean"&&typeof resolved!=="boolean"||kind==="set"&&(!Array.isArray(resolved)||resolved.some(item=>typeof item!=="string"))||["decimal","integer","number"].includes(kind)&&typeof resolved!=="string"&&typeof resolved!=="number"||resolved===undefined)return failed("Query parameter type does not match its field.");
+      parameters[ref]={kind,status:"value",value:resolved};
+    }
+  }
   if (sort.some((name) => !field(name.replace(/^-/, "")))) return failed("Query sort field is unavailable.");
   let search: string | undefined;
   if (plan.search) { const value = read(plan.search); if (value.status !== "value") return value; if (typeof value.value !== "string" || new TextEncoder().encode(value.value).length > 4096) return failed("Query search requires text."); search = value.value; }
-  const query: RecordQuery = { ...(traversal?{traversal}:{}),domain, sort, offset: plan.offset ?? 0, limit, ...(search === undefined ? {} : { search }) };
+  const query: RecordQuery = { ...(traversal?{traversal}:{}),domain,...plan.filter?{filter:plan.filter,parameters}:{}, sort, offset: plan.offset ?? 0, limit, ...(search === undefined ? {} : { search }) };
   return { status: "value", object: info.type, query, signature: JSON.stringify([info.type, query]) };
 }
 
@@ -255,7 +285,7 @@ export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:R
    path.add(id);const inputs=plan.set.inputs.map(input=>visit(input,depth+1,path));path.delete(id);
    const error=inputs.find(input=>input.status==="error"),pending=inputs.find(input=>input.status==="pending"),empty=inputs.find(input=>input.status==="empty");
    if(error||pending||empty)return (error??pending??empty)!;
-   const predicates=inputs.map(input=>{const q=(input as Extract<QueryPlanResult,{status:"value"}>).query;return {domain:q.domain,search:q.search,set:q.set};});
+   const predicates=inputs.map(input=>{const q=(input as Extract<QueryPlanResult,{status:"value"}>).query;return {domain:q.domain,filter:q.filter,parameters:q.parameters,search:q.search,set:q.set};});
    const query={...own.query,set:{op:plan.set.op,inputs:predicates}};
    return sourceView({...own,query,signature:JSON.stringify([own.object,query])});
   };

@@ -1,9 +1,11 @@
-import type { BusinessTime, LinkTraversal, ObjectSet, ObjectSetRequest, Query, QuerySet, RecordSetPredicate } from "./gen/host";
+import type { BusinessTime, Expr, LinkTraversal, ObjectSet, ObjectSetRequest, Query, QuerySet, RecordSetPredicate, Value } from "./gen/host";
 
 export type ObjectSetOperation = "load" | "aggregate" | "count";
 export type RecordQueryInput = Omit<Query, "domain"> & { domain?: unknown[]; format?: boolean };
 export type AggregateQueryInput = Pick<ObjectSetRequest, "groups" | "measures" | "window" | "histogram" | "maxRows" | "collection"> & {
   domain?: unknown[];
+  filter?: Expr;
+  parameters?: Record<string, Value>;
   search?: string;
   archived?: boolean;
   set?: QuerySet;
@@ -11,11 +13,13 @@ export type AggregateQueryInput = Pick<ObjectSetRequest, "groups" | "measures" |
   businessTime?: BusinessTime;
 };
 
-type Selection = { domain?: unknown[]; search?: string; set?: QuerySet; traversal?: LinkTraversal; archived?: boolean; businessTime?: BusinessTime };
+type Selection = { domain?: unknown[]; filter?: Expr; parameters?: Record<string, Value>; search?: string; set?: QuerySet; traversal?: LinkTraversal; archived?: boolean; businessTime?: BusinessTime };
 
 function predicateSet(object: string, p: RecordSetPredicate): ObjectSet {
   const set: ObjectSet = {};
   if (Array.isArray(p.domain) && p.domain.length) set.domain = p.domain;
+  if (p.filter) set.filter = p.filter;
+  if (p.parameters) set.parameters = p.parameters;
   if (p.search) set.search = p.search;
   if (!p.set) return { object, ...set };
   const operands = p.set.inputs.map(input => predicateSet(object, input));
@@ -26,7 +30,7 @@ function predicateSet(object: string, p: RecordSetPredicate): ObjectSet {
 }
 
 export function objectSetOf(object: string, q: Selection): ObjectSet {
-  let set = predicateSet(object, { domain: q.domain, search: q.search, set: q.set });
+  let set = predicateSet(object, { domain: q.domain, filter: q.filter, parameters: q.parameters, search: q.search, set: q.set });
   if (q.traversal) {
     const around = { from: { ids: [q.traversal.id], archived: true }, link: q.traversal.binding, direction: q.traversal.direction };
     set = q.set ? { intersect: [{ around }, set] } : { ...set, object: undefined, around };
@@ -48,6 +52,8 @@ export function loadRequest(object: string, q: RecordQueryInput = {}): ObjectSet
 export function interfaceRequest(name: string, q: RecordQueryInput = {}): ObjectSetRequest {
   const set: ObjectSet = { interface: name };
   if (Array.isArray(q.domain) && q.domain.length) set.domain = q.domain;
+  if (q.filter) set.filter = q.filter;
+  if (q.parameters) set.parameters = q.parameters;
   if (q.search) set.search = q.search;
   const request: ObjectSetRequest = { set, limit: q.limit || 25 };
   if (q.sort?.length) request.sort = q.sort;

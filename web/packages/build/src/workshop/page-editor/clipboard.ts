@@ -1,6 +1,7 @@
 import type {PageUI} from "@platform/app";
 import {queryInventoryBudget} from "@platform/app/query-inventory";
 import type {Api} from "@platform/kernel";
+import {ruleDependencies} from "@platform/app/rules";
 
 type Section = {tablePresentation?:PageUI.PageTablePresentation;collectionBuilder?:PageUI.PageCollectionBuilder;collectionOutputVariable?:string;map?:PageUI.PageRecordMap;scene?:PageUI.PageSceneConfig;sceneSampleCollectionVariable?:string;sceneSampleVariable?:string;scenePartVariable?:string;ai?:PageUI.PageAI;externalFrame?:PageUI.PageExternalFrame;embedding?:PageUI.PageEmbedding;observation?:PageUI.PageObservation;observationHistoryVariable?:string;observationContextVariable?:string;observationSignalVariable?:string;observationThresholdVariable?:string;observationRowsVariable?:string;observationCountVariable?:string;observationMeanVariable?:string;notepadVariable?:string;analysisXVariable?:string;analysisYVariable?:string;analysisCountVariable?:string;analysisMeanVariable?:string;graphExplorer?:PageUI.PageGraphExplorer;avatar?:{contextVariable?:string;contextCollectionVariable?:string};commentDraftVariable?:string;fileVariable?:string;pdfPageVariable?:string;recordSetVariable?:string;sparklineDecimalVariable?:string;sparklineNumberVariable?:string;groupValueVariable?:string;groupSetVariable?:string;rowValueVariable?:string;rowSetVariable?:string;columnValueVariable?:string;columnSetVariable?:string;pickerValueVariable?:string;alertValueVariable?:string;dateVariable?:string;choiceSetVariable?:string;choiceVariable?:string;booleanVariable?:string;rangeMinVariable?:string;rangeMaxVariable?:string;statisticsVariable?:string;gaugeValueVariable?:string;progressValueVariable?:string;progressTotalVariable?:string;countVariable?:string;selectionSetVariable?:string;facets?:PageUI.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
 type Draft<S extends Section> = {document:PageUI.PageDocument;sections:S[];selections:PageUI.SelectionVariable[]};
@@ -56,9 +57,9 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const events=(original.events??[]).filter(e=>sectionIDs.has(e.source));
  const variables=new Set<string>(),queries=new Set<string>(),missing={value:false};
  const valueRefs=(value:PageUI.PageValue|undefined)=>value?.variable?[value.variable]:[];
- const queryRefs=(query:Api.PageQuery)=>[...query.input?[query.input]:[],...valueRefs(query.search),...valueRefs(query.for),...(query.conditions??[]).flatMap(c=>valueRefs(c.value))];
+ const queryRefs=(query:Api.PageQuery)=>[...query.input?[query.input]:[],...valueRefs(query.search),...valueRefs(query.for),...ruleDependencies(query.filter??{op:"",kind:"boolean",lit:{value:true}}).filter(ref=>ref.startsWith("root.")).map(ref=>ref.slice(5)),...(query.conditions??[]).flatMap(c=>valueRefs(c.value))];
  const addQuery=(id:string)=>{if(queries.has(id))return;const q=original.queries?.[id];if(!q){missing.value=true;return;}queries.add(id);queryRefs(q).forEach(addVariable);q.set?.inputs.forEach(addQuery);};
- const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.source?.compute)addVariable(v.source.compute.recordVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count","aggregate","statistics"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
+ const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);if(v.rule)ruleDependencies(v.rule).forEach(addVariable);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.source?.compute)addVariable(v.source.compute.recordVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count","aggregate","statistics"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
  for(const id of nodes)for(const key of nodeFields){const value=original.nodes[id]?.[key];if(value)addVariable(value);}
  for(const id of loops){const loop=original.nodes[id]!.loop!;addVariable(loop.collection);addVariable(loop.itemVariable);}
  const ownedScope=(v:Api.PageVariable)=>v.scope==="loop-item"&&loops.has(v.owner??"")||!!overlay&&v.scope==="overlay"&&v.owner===clip.overlay;
@@ -98,7 +99,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  let changed=true;
  while(changed){changed=false;
   for(const id of queries){const q=original.queries![id]!;if(!clonedQueries.has(id)&&(queryRefs(q).some(v=>clonedVariables.has(v))||q.set?.inputs.some(q=>clonedQueries.has(q)))){clonedQueries.add(id);changed=true;}}
-  for(const id of variables){const v=original.variables![id]!;if(!clonedVariables.has(id)&&(v.expression?.args.some(a=>a.variable&&clonedVariables.has(a.variable))||v.mode!=="shared"&&v.source?.variable&&clonedVariables.has(v.source.variable)||["plan","count","aggregate","statistics"].includes(v.source?.kind??"")&&clonedQueries.has(v.source?.query??""))){clonedVariables.add(id);changed=true;}}
+  for(const id of variables){const v=original.variables![id]!;if(!clonedVariables.has(id)&&(v.rule&&ruleDependencies(v.rule).some(ref=>clonedVariables.has(ref))||v.expression?.args.some(a=>a.variable&&clonedVariables.has(a.variable))||v.mode!=="shared"&&v.source?.variable&&clonedVariables.has(v.source.variable)||["plan","count","aggregate","statistics"].includes(v.source?.kind??"")&&clonedQueries.has(v.source?.query??""))){clonedVariables.add(id);changed=true;}}
  }
  for(const id of variables){const v=original.variables![id]!;if(!["page","application"].includes(v.scope)&&!ownedScope(v))return {issue:"scope"};}
  for(const id of queries){const q=original.queries![id]!;if(q.owner&&q.owner!==clip.overlay||q.itemOwner&&!loops.has(q.itemOwner))return {issue:"scope"};}
@@ -113,6 +114,12 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const overlayID=overlay?newID("overlay"):undefined;
  const remapValue=(value:PageUI.PageValue):PageUI.PageValue=>({...value,...(value.variable?{variable:variableMap.get(value.variable)??value.variable}:{})});
  const tabValue=(variable:string,value:unknown)=>typeof value==="string"&&tabSelectors.get(variable)?.has(value)?nodeMap.get(value)!:value;
+ const remapExpr=(expr:Api.Expr):Api.Expr=>{
+  const ref=expr.ref?.startsWith("root.")?`root.${variableMap.get(expr.ref.slice(5))??expr.ref.slice(5)}`:expr.ref?variableMap.get(expr.ref)??expr.ref:undefined;
+  const args=expr.args?.map(remapExpr),selector=expr.op==="="?expr.args?.find(arg=>arg.ref&&tabSelectors.has(arg.ref))?.ref:undefined;
+  if(selector&&args)for(let at=0;at<args.length;at++)if(expr.args?.[at]?.lit&&typeof expr.args[at]!.lit!.value==="string")args[at]={...args[at]!,lit:{...args[at]!.lit!,value:tabValue(selector,expr.args[at]!.lit!.value)}};
+  return {...expr,...ref?{ref}:{},...args?{args}:{},...expr.in?{in:remapExpr(expr.in)}:{},...expr.agg?{agg:{...expr.agg,source:variableMap.get(expr.agg.source)??expr.agg.source}}:{},...expr.window?{window:{...expr.window,source:variableMap.get(expr.window.source)??expr.window.source}}:{}};
+ };
  const selectionMap=new Map<string,string>(),addedSelections:PageUI.SelectionVariable[]=[];
  const slot=(type:string,name?:string)=>JSON.stringify([type,name??""]);
  for(const s of sections)if(limits.selectionWriters.includes(s.widget)&&!s.selectionVariable){const type=s.object||object,key=slot(type,s.selection);if(!selectionMap.has(key)){const name=newID("selection");selectionMap.set(key,name);addedSelections.push({name,object:{app:type.split(".")[0]!,kind:"object",name:type}});}}
@@ -147,6 +154,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
    const selector=v.expression.op==="equal"?v.expression.args.find(a=>a.variable&&tabSelectors.has(a.variable))?.variable:undefined;
    v.expression.args=v.expression.args.map(a=>({...remapValue(a),...(selector&&typeof a.literal==="string"?{literal:tabValue(selector,a.literal)}:{})}));
   }
+  if(v.rule)v.rule=remapExpr(v.rule);
   if(v.source){
    if(v.source.section)v.source.section=sectionMap.get(v.source.section)??v.source.section;
    if(v.source.node)v.source.node=nodeMap.get(v.source.node)??v.source.node;
@@ -156,7 +164,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
   }
   document.variables={...document.variables,[mapped]:v};
  }
- for(const [id,mapped] of queryMap){const q=structuredClone(original.queries![id]!);if(q.owner===clip.overlay&&overlayID)q.owner=overlayID;if(q.itemOwner)q.itemOwner=nodeMap.get(q.itemOwner)!;q.input=q.input?variableMap.get(q.input)??q.input:undefined;if(q.search)q.search=remapValue(q.search);if(q.for)q.for=remapValue(q.for);if(q.conditions)q.conditions=q.conditions.map(c=>({...c,value:remapValue(c.value)}));if(q.set)q.set.inputs=q.set.inputs.map(id=>queryMap.get(id)??id);document.queries={...document.queries,[mapped]:q};}
+ for(const [id,mapped] of queryMap){const q=structuredClone(original.queries![id]!);if(q.owner===clip.overlay&&overlayID)q.owner=overlayID;if(q.itemOwner)q.itemOwner=nodeMap.get(q.itemOwner)!;q.input=q.input?variableMap.get(q.input)??q.input:undefined;if(q.search)q.search=remapValue(q.search);if(q.for)q.for=remapValue(q.for);if(q.filter)q.filter=remapExpr(q.filter);if(q.conditions)q.conditions=q.conditions.map(c=>({...c,value:remapValue(c.value)}));if(q.set)q.set.inputs=q.set.inputs.map(id=>queryMap.get(id)??id);document.queries={...document.queries,[mapped]:q};}
  document.events=[...(document.events??[]),...events.map(source=>{const e=structuredClone(source);e.source=sectionMap.get(e.source)!;for(const f of e.effects??[]){if(f.target){if(f.value!==undefined)f.value=tabValue(f.target,f.value);f.target=variableMap.get(f.target)??f.target;}if(f.action?.recordVariable)f.action.recordVariable=variableMap.get(f.action.recordVariable)??f.action.recordVariable;if(f.navigate){if(f.navigate.inputs)f.navigate.inputs=Object.fromEntries(Object.entries(f.navigate.inputs).map(([key,value])=>[key,remapValue(value)]));if(f.navigate.results)f.navigate.results=Object.fromEntries(Object.entries(f.navigate.results).map(([key,value])=>[key,variableMap.get(value)??value]));}}return e;})];
  if(overlay&&entries[0])document.events.push({source:entries[0].id!,event:"click",effects:[{kind:"set",target:variableMap.get(overlay.openVariable)!,value:true}]});
  const next={...current,document,sections:[...current.sections,...rewritten,...entries],selections:[...current.selections,...addedSelections]};

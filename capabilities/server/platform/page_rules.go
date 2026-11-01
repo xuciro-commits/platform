@@ -376,7 +376,7 @@ func (d *PageDocument) inputSchema() PageInputSchema {
 }
 
 func (p Page) inputSchema() PageInputSchema {
-	if p.Format == 3 {
+	if p.Format == 3 || p.Format == 4 {
 		return p.InputSchema
 	}
 	return p.Document.inputSchema()

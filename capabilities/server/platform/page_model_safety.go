@@ -9,13 +9,25 @@ import (
 )
 
 func (p Page) Safety() (Page, error) {
-	if p.Format == 3 {
+	if p.Format == 3 || p.Format == 4 {
 		if p.retainedVersion == "" {
 			version, err := PageContentVersion(p)
 			if err != nil {
 				return Page{}, err
 			}
 			p.retainedVersion = version
+		}
+		if p.Format == 3 {
+			legacy := false
+			for _, query := range p.InputSchema.Queries {
+				legacy = legacy || len(query.Conditions) > 0
+			}
+			if !legacy {
+				if upgraded, err := p.upgradePageVariableRules(); err == nil {
+					p = upgraded
+					p.Format = 4
+				}
+			}
 		}
 		return p, nil
 	}
@@ -292,7 +304,7 @@ func (p Page) Safety() (Page, error) {
 	p.Sections, p.Document, p.Selections = nil, nil, nil
 	p.ListFields, p.DetailFields, p.Actions = nil, nil, nil
 	p.Layout = ""
-	return p, nil
+	return p.Safety()
 }
 
 func (p Page) WithSafetyProjection(projected Page) Page {
@@ -475,6 +487,18 @@ func (p Page) CheckSafety() error {
 	safe, err := p.Safety()
 	if err != nil {
 		return err
+	}
+	if safe.Format == 4 {
+		for _, query := range safe.InputSchema.Queries {
+			if len(query.Conditions) > 0 {
+				return fmt.Errorf("page format 4 requires Expr query filters")
+			}
+		}
+		for _, variable := range safe.InputSchema.Variables {
+			if variable.Expression != nil {
+				return fmt.Errorf("page format 4 requires Expr variable rules")
+			}
+		}
 	}
 	ids := map[string]bool{}
 	for _, binding := range safe.DataBindings {

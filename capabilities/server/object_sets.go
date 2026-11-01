@@ -405,7 +405,11 @@ func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *kernel.Error)
 					if value.Status == "null" {
 						raw = json.RawMessage("null")
 					}
-					*expr = rules.Expr{Kind: value.Kind, Lit: &rules.Literal{Value: raw}}
+					literal := &rules.Literal{Value: raw}
+					if value.Kind == "set" {
+						literal.Element = "text"
+					}
+					*expr = rules.Expr{Kind: value.Kind, Lit: literal}
 				} else if len(expr.Ref) >= len("root.") && expr.Ref[:len("root.")] == "root." {
 					return invalidSet("Object set root parameter is missing")
 				}

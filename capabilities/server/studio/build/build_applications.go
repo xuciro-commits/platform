@@ -57,6 +57,22 @@ func (b *Build) applicationEntity() platform.Entity {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			a.Variables = d.Variables
+			lookup := b.conditionLookup
+			for _, query := range a.Queries {
+				if len(query.Conditions) > 0 || query.Filter != nil {
+					draftLookup, lookupErr := b.draftObjectLookup(c)
+					if lookupErr != nil {
+						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, lookupErr.Error())
+					}
+					lookup = draftLookup
+					break
+				}
+			}
+			queries, err := applicationDescriptor(*a).QueryPage().UpgradeQueryConditions(lookup)
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			a.Queries = queries.InputSchema.Queries
 			if a.Profile != nil {
 				if err := a.Profile.Check(); err != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
