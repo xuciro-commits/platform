@@ -101,12 +101,12 @@ export function useHost(): Host {
 export function useReadQuery<T>(path: string, refetchInterval?: number, enabled = true): UseQueryResult<T> {
   const { client, source } = useHost();
   const visible = useViewVisible();
-  const diagnostic = path === "/v1/health" || path === "/v1/connectors";
+  const diagnostic = path === "/v1/health" || path === "/v1/connectors" || path.startsWith("/v1/monitoring/runs");
   const hostScope = path.startsWith("/v1/host/");
   const key = [client.connection.token, client.connection.tenant, path, source.scope];
   const query = useQuery({ queryKey: key, queryFn: () => client.get<T>(path, diagnostic), refetchInterval: diagnostic && visible ? refetchInterval : false, enabled: enabled && visible, placeholderData: (previous, query) => readPlaceholder(key, previous, query?.queryKey), ...(hostScope ? { retry: false } : {}) });
   const refetch = useRef(query.refetch); refetch.current = query.refetch;
-  useEffect(() => enabled && visible && !hostScope ? client.subscribeRead(path, () => { void refetch.current(); }) : undefined, [client, path, enabled, visible, hostScope]);
+  useEffect(() => enabled && visible && !hostScope && !diagnostic ? client.subscribeRead(path, () => { void refetch.current(); }) : undefined, [client, path, enabled, visible, hostScope, diagnostic]);
   return { ...query, data: query.isError ? undefined : query.data } as UseQueryResult<T>;
 }
 
