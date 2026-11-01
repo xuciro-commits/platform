@@ -369,3 +369,80 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 		}
 	})
 }
+
+func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
+	clearance := platform.Seat{Subjects: []string{"inspector"}, Member: platform.Member{ID: "inspector", Roles: map[string]string{build.ID: build.Builder, "platform": "restricted"}}}
+	live := newInvariantTenant(t, "invariant-k5", clearance)
+	inspector, ok := live.Member("inspector")
+	if !ok {
+		t.Fatal("the lineage inspector is not seated")
+	}
+	for _, dataset := range []struct{ id, name string }{{"INPUT", "input"}, {"OTHER", "other"}, {"OUTPUT", "output"}} {
+		live.accept(t, "build.dataset.create", build.DatasetType, dataset.id, map[string]any{"name": dataset.name, "title": dataset.name})
+		live.accept(t, build.SchemaDatasetLoad, build.DatasetType, dataset.id, map[string]any{
+			"rows": []map[string]any{{"id": "A1", "note": dataset.name}}, "marking": "internal",
+		})
+	}
+	live.accept(t, "build.connection.create", build.ConnectionType, "CONNECTION", map[string]any{
+		"name": "upstream", "title": "Upstream", "kind": "http", "address": "https://example.test", "marking": "confidential",
+	})
+	live.accept(t, "build.source.create", build.SourceType, "SOURCE", map[string]any{
+		"name": "feed", "title": "Feed", "connection": "CONNECTION", "dataset": "INPUT",
+	})
+	live.accept(t, "build.pipeline.create", build.PipelineType, "PIPELINE", map[string]any{
+		"name": "combine", "title": "Combine", "input": "INPUT", "outputDataset": "OUTPUT",
+		"steps": []platform.TransformStep{{Kind: "join", Dataset: "OTHER", Column: "id", Match: "id"}},
+	})
+	object := invariantObject("alpha", "Alpha")
+	object["datasources"] = []platform.DataSourceBinding{{Kind: "dataset", Source: "OUTPUT", Key: "id", Columns: []platform.DataSourceColumn{{Column: "note", Attribute: "note"}}}}
+	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", object)
+	for _, phase := range []struct{ other, downstream string }{{"internal", "confidential"}, {"restricted", "restricted"}} {
+		t.Run(phase.downstream, func(t *testing.T) {
+			if phase.other == "restricted" {
+				live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "OTHER", map[string]any{
+					"rows": []map[string]any{{"id": "A1", "note": "higher clearance"}}, "marking": phase.other,
+				})
+			}
+			graph, refusal := live.lineage(inspector)
+			if refusal != nil {
+				t.Fatalf("read lineage: %+v", refusal)
+			}
+			nodes := map[string]LineageNode{}
+			for _, node := range graph.Nodes {
+				nodes[node.ID] = node
+			}
+			for id, want := range map[string]string{
+				"connection:CONNECTION": "confidential", "source:SOURCE": "confidential", "dataset:INPUT": "confidential",
+				"dataset:OTHER": phase.other, "pipeline:PIPELINE": phase.downstream, "dataset:OUTPUT": phase.downstream, "object:build.alpha": phase.downstream,
+			} {
+				if node, ok := nodes[id]; !ok || node.Effective != want {
+					t.Fatalf("lineage node %s: %+v; want effective marking %s", id, node, want)
+				}
+			}
+			for _, id := range []string{"dataset:INPUT", "dataset:OUTPUT"} {
+				if nodes[id].Marking != "internal" {
+					t.Fatalf("%s has declared marking %q; want internal so propagation is required", id, nodes[id].Marking)
+				}
+			}
+			if nodes["object:build.alpha"].Marking != "" || nodes["pipeline:PIPELINE"].Marking != "" {
+				t.Fatal("the object and pipeline must inherit their effective markings without declaring one")
+			}
+			index := live.markingsIn(live.records, false)
+			if got := index.types["build.alpha"]; got != phase.downstream {
+				t.Fatalf("object marking index: %q; want %q", got, phase.downstream)
+			}
+			for id, want := range map[string]string{"INPUT": "confidential", "OTHER": phase.other, "OUTPUT": phase.downstream} {
+				if got := index.datasets[id]; got != want {
+					t.Fatalf("dataset %s marking index: %q; want %q", id, got, want)
+				}
+				row := live.records.Type(build.DatasetVersionType).Rows().Get(build.VersionID(id, 1))
+				if row == nil {
+					t.Fatalf("dataset %s has no first version", id)
+				}
+				if got := index.row(build.DatasetVersionType, row); got != want {
+					t.Fatalf("dataset version %s marking: %q; want %q", build.VersionID(id, 1), got, want)
+				}
+			}
+		})
+	}
+}
