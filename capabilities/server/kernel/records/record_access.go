@@ -134,7 +134,7 @@ func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.Entity
 		return combine("or", parts...), true
 	}
 	scope := info.Scope
-	level := scope.LevelFor(roles)
+	level := scope.LevelFor(roles, m.AuthorizationEngine())
 	textField := func(name string) (ruleexpr.Expr, bool) {
 		f, ok := info.Field(name)
 		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, f.Type) || f.AliasOf != "" || len(f.Index) == 0 {

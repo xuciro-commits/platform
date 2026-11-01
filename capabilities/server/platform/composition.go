@@ -3,7 +3,6 @@ package platform
 import (
 	"fmt"
 	"maps"
-	"platformserver/platform/authz"
 	"slices"
 	"strings"
 )
@@ -184,7 +183,7 @@ type RuntimeCapabilities struct {
 	BindOwner              func(App, OwnerBindings)
 	AIInference            *AIInferencePolicy
 	Rules                  RuleEngine
-	Authorization          authz.Engine
+	Authorization          AuthorizationEngine
 	Kernel                 KernelFactory
 	RuleModule             CapabilityModule
 	AuthModule             CapabilityModule
@@ -192,9 +191,9 @@ type RuntimeCapabilities struct {
 	StorageModule          CapabilityModule
 }
 
-func DefaultRuntimeCapabilities() RuntimeCapabilities {
+func DefaultRuntimeCapabilities(authorization AuthorizationEngine) RuntimeCapabilities {
 	return RuntimeCapabilities{
-		Rules: NativeRules{}, Authorization: authz.Standard{}, Kernel: NativeKernel{}, StorageModule: MemoryStorageModule(),
+		Rules: NativeRules{}, Authorization: authorization, Kernel: NativeKernel{}, StorageModule: MemoryStorageModule(),
 		KernelModule: CapabilityModule{ID: "platform.kernel.native", Version: "1", Title: "Kernel", Scope: "tenant", Replacement: "restart", StateFormat: "platform.kernel.v1", Provides: []CapabilityContract{{ID: "platform.kernel", Version: "1", Semantics: "1"}}},
 		RuleModule:   CapabilityModule{ID: "platform.rules.native", Version: "1", Title: "Business rules", Scope: "tenant", Replacement: "restart", Provides: []CapabilityContract{{ID: "platform.rules", Version: "1", Semantics: fmt.Sprint(ExprVersion)}}},
 		AuthModule:   CapabilityModule{ID: "platform.authorization.standard", Version: "1", Title: "Authorization", Scope: "tenant", Replacement: "restart", Provides: []CapabilityContract{{ID: "platform.authorization", Version: "1", Semantics: "1"}}},
@@ -227,7 +226,7 @@ type RuleProvider struct {
 }
 type AuthorizationProvider struct {
 	Module CapabilityModule
-	Engine authz.Engine
+	Engine AuthorizationEngine
 }
 type KernelProvider struct {
 	Module CapabilityModule
@@ -240,8 +239,8 @@ type RuntimeProviders struct {
 	Kernel        []KernelProvider
 }
 
-func DefaultRuntimeProviders() RuntimeProviders {
-	c := DefaultRuntimeCapabilities()
+func DefaultRuntimeProviders(authorization AuthorizationEngine) RuntimeProviders {
+	c := DefaultRuntimeCapabilities(authorization)
 	return RuntimeProviders{Rules: []RuleProvider{{c.RuleModule, c.Rules}}, Authorization: []AuthorizationProvider{{c.AuthModule, c.Authorization}}, Kernel: []KernelProvider{{c.KernelModule, c.Kernel}}}
 }
 

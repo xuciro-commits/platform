@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"platformserver/platform"
-	"platformserver/platform/authz"
 )
 
 type HostTenantView struct {
@@ -73,7 +72,7 @@ func (h *Host) hostAuthorization(subject string, authenticated bool, permission,
 		roles = []string{"host-admin"}
 	}
 	definition, _ := platform.CanonicalDigest([]any{permission, tenant, "host-admin"})
-	return h.AuthorizationEngine.Decide(authz.Request{Kind: "action", Subject: authz.Subject{ID: "host:" + subject, App: "host", Roles: roles}, Permission: permission, Allowed: []string{"host-admin"}, Context: &authz.Context{Tenant: pass, Principal: authz.Gate{Allowed: authenticated && subject != "", Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass, Definition: definition}})
+	return h.AuthorizationEngine.Decide(platform.AuthorizationInput{Kind: "action", Subject: platform.AuthorizationSubject{ID: "host:" + subject, App: "host", Roles: roles}, Permission: permission, Allowed: []string{"host-admin"}, Context: &platform.AuthorizationContext{Tenant: pass, Principal: platform.AuthorizationGate{Allowed: authenticated && subject != "", Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass, Definition: definition}})
 }
 
 func hostRequestAuthorization(r *http.Request, tenant string) []acceptedformat.AuthorizationEvidence {

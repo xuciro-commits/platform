@@ -11,11 +11,11 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/engine/authorization"
 	"platformserver/engine/business"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
+	"platformserver/services/security"
 	"platformserver/studio/authoring"
 	"platformserver/studio/build"
 	"platformserver/studio/packages"
@@ -59,7 +59,7 @@ func invariantBindOwner(app platform.App, roles platform.OwnerBindings) {
 
 func newInvariantTenant(tb testing.TB, id string, seats ...platform.Seat) *invariantTenant {
 	tb.Helper()
-	services := platform.DefaultRuntimeCapabilities()
+	services := platform.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = invariantBindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
 	services.NewTransactionExecutor = business.NewRuntime
@@ -67,7 +67,7 @@ func newInvariantTenant(tb testing.TB, id string, seats ...platform.Seat) *invar
 	console := controlowner.NewConsole(id, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
-		return controlowner.Owners{Policies: authorization.NewPolicies(), Packages: packages.New(id), Actions: actions}
+		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
 	}, append([]platform.Seat{seat}, seats...)...)
 	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id))
 	if err != nil {

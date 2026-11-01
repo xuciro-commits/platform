@@ -1,11 +1,10 @@
-package authorization
+package security
 
 import (
 	"encoding/json"
 	"maps"
 	"platformkernel/kernel"
 	"platformserver/platform"
-	"platformserver/platform/authz"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"slices"
@@ -181,18 +180,18 @@ func (d *Policies) TeamGrants(member string) []platform.Grant {
 	return out
 }
 
-func (d *Policies) activePolicies() []authz.Policy {
+func (d *Policies) activePolicies() []platform.AuthorizationPolicy {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	today := time.Now().UTC().Format(time.DateOnly)
-	var out []authz.Policy
+	var out []platform.AuthorizationPolicy
 	for _, id := range slices.Sorted(maps.Keys(d.policies)) {
 		p := d.policies[id]
 		if (p.From != "" && today < p.From) || (p.Until != "" && today >= p.Until) {
 			continue
 		}
 		where := maps.Clone(p.Where)
-		out = append(out, authz.Policy{ID: p.ID, Effect: p.Effect, Permission: p.Permission, When: func(r authz.Request) bool {
+		out = append(out, platform.AuthorizationPolicy{ID: p.ID, Effect: p.Effect, Permission: p.Permission, When: func(r platform.AuthorizationInput) bool {
 			for k, v := range where {
 				if r.Attributes[k] != v {
 					return false

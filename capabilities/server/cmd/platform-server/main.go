@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	controlowner "platformserver/kernel/control"
+	"platformserver/services/security"
 	_ "time/tzdata"
 
 	"platformserver"
@@ -34,7 +35,7 @@ func main() {
 		return composition.NewTenantWithSourceAndCapabilities(id, source, services, deployment.SeatsFor(id)...)
 	}
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
-		return deployment.RebuildWithCapabilities(id, platform.DefaultRuntimeCapabilities())
+		return deployment.RebuildWithCapabilities(id, platform.DefaultRuntimeCapabilities(security.Standard{}))
 	}
 	development := platform.TenantSpec{ID: *tenant}
 	if *admin != "" {

@@ -35,7 +35,7 @@ func (t *Tenant) entityView(m platform.Member) []platform.EntityInfo {
 	out := []platform.EntityInfo{}
 	for _, et := range t.records.Types() {
 		roles := m.RolesIn(et.Info().App)
-		if len(roles) > 0 && et.Info().Scope.LevelFor(roles) == platform.ScopeNone && et.Info().Scope.Participants == nil {
+		if len(roles) > 0 && et.Info().Scope.LevelFor(roles, t.services.Authorization) == platform.ScopeNone && et.Info().Scope.Participants == nil {
 			continue
 		}
 		if len(roles) > 0 || et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil {

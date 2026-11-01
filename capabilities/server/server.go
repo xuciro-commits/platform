@@ -10,6 +10,7 @@ import (
 	"os"
 	"platformserver/idp"
 	controlowner "platformserver/kernel/control"
+	"platformserver/services/security"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
-	"platformserver/platform/authz"
 )
 
 type (
@@ -47,7 +47,7 @@ type Host struct {
 	Mint                func(subject string) string
 	HostAdmins          map[string]bool
 	RuntimeProviders    platform.RuntimeProviders
-	AuthorizationEngine authz.Engine
+	AuthorizationEngine platform.AuthorizationEngine
 	stats               *transport.Stats
 	limiter             *transport.Limiter
 	web                 *transport.WebFiles
@@ -70,7 +70,7 @@ func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 }
 
 func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
-	h := &Host{tenants: tenants, authenticate: authenticate, Now: Now, RuntimeProviders: platform.DefaultRuntimeProviders(), AuthorizationEngine: authz.Standard{}}
+	h := &Host{tenants: tenants, authenticate: authenticate, Now: Now, RuntimeProviders: platform.DefaultRuntimeProviders(security.Standard{}), AuthorizationEngine: security.Standard{}}
 	h.bindSystemDefinitions(tenants)
 	return h
 }

@@ -490,7 +490,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 						return "Rule collection permission was revoked", nil
 					}
 					info, _ := t.entity(set.Object)
-					if set.Policy == "complete" && info.Scope.LevelFor(member.RolesIn(info.App)) != platform.ScopeTenant {
+					if set.Policy == "complete" && info.Scope.LevelFor(member.RolesIn(info.App), t.services.Authorization) != platform.ScopeTenant {
 						return "Complete collection permission was revoked", nil
 					}
 				}

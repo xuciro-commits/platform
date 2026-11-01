@@ -16,7 +16,7 @@ import (
 	runtimekernel "platformserver/kernel"
 	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
-	"platformserver/platform/authz"
+	"platformserver/services/security"
 	"platformserver/studio/packages"
 	"slices"
 	"strings"
@@ -48,7 +48,7 @@ type Deployment struct {
 	Rebuild                           func(id string) (*Tenant, error)
 	RebuildWithCapabilities           func(id string, services platform.RuntimeCapabilities) (*Tenant, error)
 	RuntimeProviders                  *platform.RuntimeProviders
-	HostAuthorization                 authz.Engine
+	HostAuthorization                 platform.AuthorizationEngine
 	Storage                           *JournalProvider
 	runtimeContext                    context.Context
 	background                        *sync.WaitGroup
@@ -695,5 +695,5 @@ func (d *Deployment) bindPackageIndex(tenant *Tenant) {
 }
 
 func (d *Deployment) rebuildTenant(id string) (*Tenant, error) {
-	return d.composeRuntime(id, platform.DefaultRuntimeCapabilities().Selection())
+	return d.composeRuntime(id, platform.DefaultRuntimeCapabilities(security.Standard{}).Selection())
 }

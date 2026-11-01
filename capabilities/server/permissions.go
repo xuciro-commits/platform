@@ -9,7 +9,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
-	"platformserver/platform/authz"
 )
 
 type RolePermissions struct {
@@ -64,12 +63,12 @@ func (t *Tenant) Permissions() []AppPermissions {
 }
 
 type Explanation struct {
-	Member     string        `json:"member"`
-	Permission string        `json:"permission"`
-	App        string        `json:"app"`
-	Roles      []string      `json:"roles"`
-	Allowed    []string      `json:"allowed"`
-	Verdict    authz.Verdict `json:"verdict"`
+	Member     string                 `json:"member"`
+	Permission string                 `json:"permission"`
+	App        string                 `json:"app"`
+	Roles      []string               `json:"roles"`
+	Allowed    []string               `json:"allowed"`
+	Verdict    platform.AuthzDecision `json:"verdict"`
 }
 
 func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (platform.AuthzDecision, *kernel.Error) {
@@ -100,7 +99,7 @@ func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error)
 		out.App, out.Roles = app, nonNil(m.RolesIn(app))
 		switch {
 		case slices.Contains(mf.Everyone, name):
-			out.Allowed = []string{authz.AnyMember}
+			out.Allowed = []string{platform.AnyMember}
 		case slices.Contains(mf.Reads, name):
 			out.Allowed = mf.AllRoles()
 		default:

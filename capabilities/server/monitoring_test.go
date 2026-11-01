@@ -17,11 +17,11 @@ import (
 	"platformkernel/kernel"
 	"platformserver/apps/work"
 	"platformserver/engine/agents"
-	"platformserver/engine/authorization"
 	"platformserver/engine/automation"
 	"platformserver/engine/business"
 	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
+	"platformserver/services/security"
 	"platformserver/studio/authoring"
 	"platformserver/studio/build"
 	"platformserver/studio/packages"
@@ -100,14 +100,14 @@ func (a *monitoringFixture) Compute(_ context.Context, _ string, input json.RawM
 func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	tb.Helper()
 	id := "monitoring-invariant"
-	services := platform.DefaultRuntimeCapabilities()
+	services := platform.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = invariantBindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
 	services.NewTransactionExecutor = business.NewRuntime
 	console := controlowner.NewConsole(id, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
-		return controlowner.Owners{Policies: authorization.NewPolicies(), Packages: packages.New(id), Actions: actions}
+		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
 	}, platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, build.ID: build.Builder, "probe": "runner", platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}}},
 		platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
 		platform.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},

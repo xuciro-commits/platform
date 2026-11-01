@@ -10,13 +10,13 @@ import (
 	"platformserver/apps/system"
 	"platformserver/apps/work"
 	agentowner "platformserver/engine/agents"
-	"platformserver/engine/authorization"
 	automation "platformserver/engine/automation"
 	"platformserver/engine/business"
 	enterprise "platformserver/engine/organization"
 	"platformserver/internal/systemscope"
 	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
+	"platformserver/services/security"
 	"platformserver/studio/authoring"
 	"platformserver/studio/build"
 	"platformserver/studio/packages"
@@ -27,7 +27,7 @@ func NewTenant(id string, seats ...platform.Seat) (*platformserver.Tenant, error
 }
 
 func NewTenantWithSource(id string, source *platform.SystemSource, seats ...platform.Seat) (*platformserver.Tenant, error) {
-	return NewTenantWithSourceAndCapabilities(id, source, platform.DefaultRuntimeCapabilities(), seats...)
+	return NewTenantWithSourceAndCapabilities(id, source, platform.DefaultRuntimeCapabilities(security.Standard{}), seats...)
 }
 
 func NewTenantWithSourceAndCapabilities(id string, source *platform.SystemSource, services platform.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
@@ -49,6 +49,6 @@ func NewConsole(tenant string, seats ...platform.Seat) *controlowner.Console {
 	return controlowner.NewConsole(tenant, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
-		return controlowner.Owners{Policies: authorization.NewPolicies(), Packages: packages.New(id), Actions: actions}
+		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
 	}, seats...)
 }

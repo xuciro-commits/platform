@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/platform/authz"
 	"slices"
 	"strings"
 	"sync"
@@ -16,7 +15,7 @@ type Catalog struct {
 	actions  []Action
 	disabled map[string]bool
 	custom   map[string][]string
-	policies func() []authz.Policy
+	policies func() []AuthorizationPolicy
 }
 
 func (c *Catalog) DefineRole(role string, schemas []string) {
@@ -32,13 +31,13 @@ func (c *Catalog) DefineRole(role string, schemas []string) {
 	c.custom[role] = slices.Clone(schemas)
 }
 
-func (c *Catalog) UsePolicies(policies func() []authz.Policy) {
+func (c *Catalog) UsePolicies(policies func() []AuthorizationPolicy) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.policies = policies
 }
 
-func (c *Catalog) AuthorizationPolicies() []authz.Policy {
+func (c *Catalog) AuthorizationPolicies() []AuthorizationPolicy {
 	c.mu.RLock()
 	lookup := c.policies
 	c.mu.RUnlock()
@@ -153,11 +152,11 @@ func (c *Catalog) PermitsAny(roles []string, schema string) bool {
 	return slices.ContainsFunc(c.ForRoles(roles), func(a Action) bool { return a.Schema == schema })
 }
 
-func (c *Catalog) Decide(caller Caller, schema string) authz.Verdict {
+func (c *Catalog) Decide(caller Caller, schema string) AuthzDecision {
 	return c.DecideOn(caller, schema, "")
 }
 
-func (c *Catalog) DecideOn(caller Caller, schema, target string) authz.Verdict {
+func (c *Catalog) DecideOn(caller Caller, schema, target string) AuthzDecision {
 	if _, ok := caller.rt.(AuthorizationRuntime); ok && !caller.Replaying {
 		typ, id, _ := strings.Cut(target, "/")
 		kind := "action"
@@ -168,12 +167,12 @@ func (c *Catalog) DecideOn(caller Caller, schema, target string) authz.Verdict {
 	}
 	request, policies, ok := c.AuthorizationRequest(caller, schema, target)
 	if !ok {
-		return authz.Verdict{Rule: "none", Reason: "no action " + schema, Layers: []authz.Layer{}}
+		return AuthzDecision{Rule: "none", Reason: "no action " + schema, Layers: []AuthzLayer{}}
 	}
-	return authz.Decide(request, policies...)
+	return caller.AuthorizationEngine().Decide(request, policies...)
 }
 
-func (c *Catalog) DecideSubmission(caller Caller, s *pb.Submission, at time.Time) authz.Verdict {
+func (c *Catalog) DecideSubmission(caller Caller, s *pb.Submission, at time.Time) AuthzDecision {
 	if _, hosted := caller.rt.(AuthorizationRuntime); !hosted || caller.Replaying {
 		return c.DecideOn(caller, s.GetSchema().GetName(), s.GetTarget().GetType()+"/"+s.GetTarget().GetId())
 	}
@@ -198,21 +197,16 @@ func (c *Catalog) DecideSubmission(caller Caller, s *pb.Submission, at time.Time
 	return caller.Authorize(AuthzRequest{Principal: caller.ID, Tenant: caller.Tenant, Kind: kind, Type: typ, Record: s.GetTarget().GetId(), Fields: fields, Action: schema}, at)
 }
 
-func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (authz.Request, []authz.Policy, bool) {
+func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (AuthorizationInput, []AuthorizationPolicy, bool) {
 	a, ok := c.Action(schema)
 	if !ok || !c.Enabled(schema) {
-		return authz.Request{}, nil, false
+		return AuthorizationInput{}, nil, false
 	}
 	_, id, _ := strings.Cut(target, "/")
 	if a.ConfirmationOnly && !caller.Replaying && !caller.ConfirmationCompletion(a.Target, id, schema) {
-		return authz.Request{}, nil, false
+		return AuthorizationInput{}, nil, false
 	}
 	allowed := slices.Clone(a.Roles)
-	for i, r := range allowed {
-		if r == AnyMember {
-			allowed[i] = authz.AnyMember
-		}
-	}
 	c.mu.RLock()
 	for role, schemas := range c.custom {
 		if slices.Contains(schemas, schema) {
@@ -225,14 +219,14 @@ func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (au
 	if caller.Agent {
 		attrs["agent"] = "true"
 	}
-	var rules []authz.Policy
+	var rules []AuthorizationPolicy
 	if policies != nil {
 		rules = policies()
 	}
 	if !caller.InScope(schema) {
-		rules = append([]authz.Policy{{ID: "token-scope", Effect: "deny", Permission: schema}}, rules...)
+		rules = append([]AuthorizationPolicy{{ID: "token-scope", Effect: "deny", Permission: schema}}, rules...)
 	}
-	return authz.Request{Subject: authz.Subject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent, Automation: caller.Automation},
+	return AuthorizationInput{Subject: AuthorizationSubject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent, Automation: caller.Automation},
 		Permission: schema, Resource: target, Allowed: allowed, Attributes: attrs}, rules, true
 }
 

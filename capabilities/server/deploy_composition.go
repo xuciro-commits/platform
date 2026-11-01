@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"platformserver/services/security"
 	"reflect"
 )
 
@@ -13,7 +14,7 @@ func (d *Deployment) providers() platform.RuntimeProviders {
 	if d.RuntimeProviders != nil {
 		return *d.RuntimeProviders
 	}
-	return platform.DefaultRuntimeProviders()
+	return platform.DefaultRuntimeProviders(security.Standard{})
 }
 
 func (d *Deployment) composeRuntime(id string, selection map[string]string) (*Tenant, error) {

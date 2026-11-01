@@ -193,7 +193,7 @@ func (t *Tenant) readRuleQueryFrom(store *records.Store, c platform.Caller, set 
 	if !known {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule collection object is unavailable")
 	}
-	if set.Policy == "complete" && (info.Scope.LevelFor(c.RolesIn(info.App)) != platform.ScopeTenant || info.Scope.Through != nil) {
+	if set.Policy == "complete" && (info.Scope.LevelFor(c.RolesIn(info.App), t.services.Authorization) != platform.ScopeTenant || info.Scope.Through != nil) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Complete collection requires permission to read its whole object / 完整集合需要整个对象的读取权限")
 	}
 	return t.readQueryVersionFrom(store, c, set.App, set.Query, set.Version, input, now)

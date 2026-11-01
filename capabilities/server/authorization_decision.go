@@ -13,7 +13,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
-	"platformserver/platform/authz"
 	"platformserver/studio/build"
 )
 
@@ -34,7 +33,9 @@ func (d *stagedDecision) savedAuthorizations() ([]acceptedformat.AuthorizationEv
 	return saved, nil
 }
 
-func authorizationPass(reason string) authz.Gate { return authz.Gate{Allowed: true, Reason: reason} }
+func authorizationPass(reason string) platform.AuthorizationGate {
+	return platform.AuthorizationGate{Allowed: true, Reason: reason}
+}
 
 func (r runtime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) platform.AuthzDecision {
 	if at.IsZero() {
@@ -77,7 +78,7 @@ type authorizationDetails struct {
 func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool, details ...authorizationDetails) platform.AuthzDecision {
 	c.Member = t.authorizationMember(c.Member)
 	pass := authorizationPass("not restricted by this owner")
-	context := &authz.Context{Tenant: authz.Gate{Allowed: c.Tenant == t.ID, Reason: "The operation belongs to another tenant"}, Principal: authz.Gate{Allowed: c.ID != "" && c.Active(), Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass}
+	context := &platform.AuthorizationContext{Tenant: platform.AuthorizationGate{Allowed: c.Tenant == t.ID, Reason: "The operation belongs to another tenant"}, Principal: platform.AuthorizationGate{Allowed: c.ID != "" && c.Active(), Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass}
 	if current, known := t.member(c.ID); known && !current.Active() {
 		context.Principal.Allowed = false
 	}
@@ -86,9 +87,9 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 	}
 	owner := t.app(c.App)
 	if owner == nil || !declared || !t.ownerActive(c.App) {
-		context.Verb = &authz.Gate{Reason: "The operation is unavailable in its owner declaration"}
+		context.Verb = &platform.AuthorizationGate{Reason: "The operation is unavailable in its owner declaration"}
 	}
-	var policies []authz.Policy
+	var policies []platform.AuthorizationPolicy
 	if owner != nil {
 		policies = owner.Manifest().Actions.AuthorizationPolicies()
 		context.Definition, _ = platform.CanonicalDigest([]any{c.App, owner.Manifest().Version, permission, allowed})
@@ -110,7 +111,7 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 		for _, source := range detail.Sources {
 			if name, named := strings.CutPrefix(source, "read:"); named {
 				if !t.mayCallRead(c.Member, name) {
-					context.Derived = authz.Gate{Reason: "The original source is outside the caller's permissions"}
+					context.Derived = platform.AuthorizationGate{Reason: "The original source is outside the caller's permissions"}
 					break
 				}
 				continue
@@ -123,12 +124,12 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 			}
 			decision := t.authorizeDepth(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: typ, Record: id, Fields: fields}, at, false, 0, walk)
 			if !valid || id == "" || !decision.Allow || len(decision.Withheld) > 0 {
-				context.Derived = authz.Gate{Reason: "The original source is outside the caller's permissions"}
+				context.Derived = platform.AuthorizationGate{Reason: "The original source is outside the caller's permissions"}
 				break
 			}
 		}
 	}
-	return t.services.Authorization.Decide(authz.Request{Kind: kind, Subject: authz.Subject{ID: c.ID, App: c.App, Roles: c.RolesHere(), Agent: c.Agent, Automation: c.Automation}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": c.ID, "app": c.App}, Context: context}, policies...)
+	return t.services.Authorization.Decide(platform.AuthorizationInput{Kind: kind, Subject: platform.AuthorizationSubject{ID: c.ID, App: c.App, Roles: c.RolesHere(), Agent: c.Agent, Automation: c.Automation}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": c.ID, "app": c.App}, Context: context}, policies...)
 }
 
 func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string, allowed []string, declared bool, detail authorizationDetails) platform.AuthzDecision {
@@ -161,16 +162,16 @@ func authorizationRefusal(decision platform.AuthzDecision) *kernel.Error {
 func (t *Tenant) authorizeEntry(m platform.Member, app, permission, kind string, at time.Time) platform.AuthzDecision {
 	m = t.authorizationMember(m)
 	pass := authorizationPass("not restricted by this owner")
-	context := &authz.Context{Tenant: authz.Gate{Allowed: m.Tenant == t.ID, Reason: "The operation belongs to another tenant"}, Principal: authz.Gate{Allowed: m.ID != "" && m.Active(), Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass}
+	context := &platform.AuthorizationContext{Tenant: platform.AuthorizationGate{Allowed: m.Tenant == t.ID, Reason: "The operation belongs to another tenant"}, Principal: platform.AuthorizationGate{Allowed: m.ID != "" && m.Active(), Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass}
 	if current, known := t.member(m.ID); known && !current.Active() {
 		context.Principal.Allowed = false
 	}
 	allowed := []string{}
-	var policies []authz.Policy
+	var policies []platform.AuthorizationPolicy
 	if owner := t.app(app); owner != nil {
 		allowed = owner.Manifest().AllRoles()
 		if kind == "read" && slices.Contains(owner.Manifest().Everyone, permission) {
-			allowed = []string{authz.AnyMember}
+			allowed = []string{platform.AnyMember}
 		}
 		policies = owner.Manifest().Actions.AuthorizationPolicies()
 		context.Definition, _ = platform.CanonicalDigest([]any{app, owner.Manifest().Version, permission, kind, allowed})
@@ -180,15 +181,16 @@ func (t *Tenant) authorizeEntry(m platform.Member, app, permission, kind string,
 			if connector != nil && connector.GetTenantId() == t.ID && (name == "heartbeat" || slices.ContainsFunc(connector.GetDataClasses(), func(class string) bool {
 				return strings.HasPrefix(class, app+".")
 			})) {
-				allowed = []string{authz.AnyMember}
+				allowed = []string{platform.AnyMember}
 			}
 			t.opsMu.Unlock()
 		}
 	}
-	return t.services.Authorization.Decide(authz.Request{Kind: kind, Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": m.ID, "app": app}, Context: context}, policies...)
+	return t.services.Authorization.Decide(platform.AuthorizationInput{Kind: kind, Subject: platform.AuthorizationSubject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": m.ID, "app": app}, Context: context}, policies...)
 }
 
 func (t *Tenant) authorizationMember(m platform.Member) platform.Member {
+	m = m.WithAuthorization(t.services.Authorization)
 	current, known := t.member(m.ID)
 	if !known {
 		declared := t.identity == nil || m.ID == "host:maintenance"
@@ -244,19 +246,19 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 		defer delete(walk.active, key)
 	}
 	pass := authorizationPass("not restricted by this owner")
-	context := &authz.Context{Tenant: pass, Principal: pass, Row: pass, Fields: pass, Derived: pass, Markings: pass}
-	context.Tenant = authz.Gate{Allowed: q.Tenant == t.ID && c.Tenant == t.ID, Reason: "The operation belongs to another tenant"}
-	context.Principal = authz.Gate{Allowed: c.ID != "" && q.Principal == c.ID && c.Active(), Reason: "The operation principal is invalid or inactive"}
+	context := &platform.AuthorizationContext{Tenant: pass, Principal: pass, Row: pass, Fields: pass, Derived: pass, Markings: pass}
+	context.Tenant = platform.AuthorizationGate{Allowed: q.Tenant == t.ID && c.Tenant == t.ID, Reason: "The operation belongs to another tenant"}
+	context.Principal = platform.AuthorizationGate{Allowed: c.ID != "" && q.Principal == c.ID && c.Active(), Reason: "The operation principal is invalid or inactive"}
 	if current, known := t.member(c.ID); known && !current.Active() {
 		context.Principal.Allowed = false
 	}
 	if depth >= 16 || cycle {
-		context.Derived = authz.Gate{Reason: "The declared source traversal exceeds 16 segments or contains a cycle"}
+		context.Derived = platform.AuthorizationGate{Reason: "The declared source traversal exceeds 16 segments or contains a cycle"}
 	}
-	request := authz.Request{Kind: q.Kind, Subject: authz.Subject{ID: c.ID, App: c.App, Roles: c.RolesHere(), Agent: c.Agent, Automation: c.Automation}, Permission: q.Action, Resource: q.Type + "/" + q.Record, Context: context}
-	var policies []authz.Policy
+	request := platform.AuthorizationInput{Kind: q.Kind, Subject: platform.AuthorizationSubject{ID: c.ID, App: c.App, Roles: c.RolesHere(), Agent: c.Agent, Automation: c.Automation}, Permission: q.Action, Resource: q.Type + "/" + q.Record, Context: context}
+	var policies []platform.AuthorizationPolicy
 	if q.Action != "" {
-		context.Verb = &authz.Gate{Reason: "The operation is unavailable in its owner declaration"}
+		context.Verb = &platform.AuthorizationGate{Reason: "The operation is unavailable in its owner declaration"}
 		owner := t.owner["action:"+q.Action]
 		if owner != nil {
 			facts, rules, ok := owner.Manifest().Actions.AuthorizationRequest(platform.RouteCaller(c, owner.Manifest().ID), q.Action, request.Resource)
@@ -292,10 +294,10 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 				policies = owner.Manifest().Actions.AuthorizationPolicies()
 			}
 			if et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil {
-				request.Allowed = []string{authz.AnyMember}
+				request.Allowed = []string{platform.AnyMember}
 			}
 			if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
-				request.Allowed = []string{authz.AnyMember}
+				request.Allowed = []string{platform.AnyMember}
 			}
 		} else {
 			request.Allowed = slices.Clone(c.RolesHere())
@@ -307,7 +309,7 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 			Fields                          []platform.FieldInfo
 			Derived                         []platform.DerivationInfo
 			Withheld                        []int
-			Policies                        []authz.Policy
+			Policies                        []platform.AuthorizationPolicy
 			Default, Owner, Unit, Structure string
 			Levels                          map[string]string
 		}{et.Info().Fields, et.Info().Derived, et.Info().Withheld, policies, et.Info().Scope.Default, et.Info().Scope.Owner, et.Info().Scope.Unit, et.Info().Scope.Structure, et.Info().Scope.Levels}); err == nil {
@@ -317,16 +319,16 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 			if c.Automation && c.App == et.Info().App {
 				context.Row = authorizationPass("the declared owner service boundary")
 			} else if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
-				context.Row = authz.Gate{Allowed: t.knowledgeSourceReadable(store, c.Member, q.Record, ""), Reason: "The document is outside the caller's source grants"}
+				context.Row = platform.AuthorizationGate{Allowed: t.knowledgeSourceReadable(store, c.Member, q.Record, ""), Reason: "The document is outside the caller's source grants"}
 			} else if et.Info().Scope.Through != nil && (current == nil || depth >= 16 || cycle) {
-				context.Row = authz.Gate{Reason: "The owning record is unavailable or exceeds 16 segments"}
+				context.Row = platform.AuthorizationGate{Reason: "The owning record is unavailable or exceeds 16 segments"}
 			} else {
 				policy, err := t.scopePolicy(store, c, et.Info(), at, depth, walk)
 				reason := "The record is outside the caller's row scope"
 				if et.Info().Scope.Through != nil {
 					reason = "The owning record is outside the caller's row scope"
 				}
-				context.Row = authz.Gate{Allowed: current != nil && err == nil && policy.Match(current.Value), Reason: reason}
+				context.Row = platform.AuthorizationGate{Allowed: current != nil && err == nil && policy.Match(current.Value), Reason: reason}
 			}
 		}
 		for _, name := range q.Fields {
@@ -355,7 +357,7 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 				if slices.Contains([]string{"read", "derive", "export"}, q.Kind) {
 					context.Withheld = append(context.Withheld, name)
 				} else {
-					context.Fields = authz.Gate{Reason: "An involved field is outside the caller's field permissions"}
+					context.Fields = platform.AuthorizationGate{Reason: "An involved field is outside the caller's field permissions"}
 				}
 			}
 		}
@@ -364,11 +366,11 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 		}
 	} else if q.Action == "" {
 		if q.Type == "enterprise.element" && t.directory != nil && q.Record != "" {
-			request.Allowed = []string{authz.AnyMember}
+			request.Allowed = []string{platform.AnyMember}
 			_, exists := t.directory.Element(q.Record, at.UTC().Format(time.DateOnly))
-			context.Row = authz.Gate{Allowed: exists, Reason: "The enterprise source is unavailable"}
+			context.Row = platform.AuthorizationGate{Allowed: exists, Reason: "The enterprise source is unavailable"}
 		} else {
-			context.Verb = &authz.Gate{Reason: "The record type is unavailable"}
+			context.Verb = &platform.AuthorizationGate{Reason: "The record type is unavailable"}
 		}
 	}
 	if q.From != "" {
@@ -389,14 +391,14 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 				readable = source.Allow && len(source.Withheld) == 0
 			}
 		}()
-		context.Derived = authz.Gate{Allowed: readable, Reason: "The original source is outside the caller's permissions"}
+		context.Derived = platform.AuthorizationGate{Allowed: readable, Reason: "The original source is outside the caller's permissions"}
 	}
 	if et != nil {
 		index := t.markingsIn(store, held)
 		if !(c.Automation && c.App == et.Info().App) && !platform.MarkingCleared(c.Member, index.row(et.Info().Type, current)) {
-			context.Markings = authz.Gate{Reason: "The data carries a marking the caller is not cleared for"}
+			context.Markings = platform.AuthorizationGate{Reason: "The data carries a marking the caller is not cleared for"}
 		} else if q.Kind == "export" && index.highest(et.Info().Type) == "restricted" {
-			context.Markings = authz.Gate{Reason: "Restricted data does not leave as CSV"}
+			context.Markings = platform.AuthorizationGate{Reason: "Restricted data does not leave as CSV"}
 		}
 	}
 	slices.Sort(context.Withheld)

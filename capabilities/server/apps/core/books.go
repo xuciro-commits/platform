@@ -304,7 +304,7 @@ type TrialBalanceLine struct {
 
 func trialBalance(c platform.Caller, period string) (TrialBalance, *kernel.Error) {
 	for _, entity := range bookEntities() {
-		if entity.Type == JournalType && !c.Automation && entity.Scope.LevelFor(c.RolesIn(ID)) != platform.ScopeTenant {
+		if entity.Type == JournalType && !c.Automation && entity.Scope.LevelFor(c.RolesIn(ID), c.AuthorizationEngine()) != platform.ScopeTenant {
 			return TrialBalance{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The trial balance requires access to all journals")
 		}
 	}

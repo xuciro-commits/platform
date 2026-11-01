@@ -7,7 +7,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	ruleexpr "platformserver/expr"
-	"platformserver/platform/authz"
 	"reflect"
 	"slices"
 	"strings"
@@ -249,14 +248,14 @@ func (s Scope) Level(role string) string {
 	return s.Default
 }
 
-func (s Scope) LevelFor(roles []string) string {
+func (s Scope) LevelFor(roles []string, authorization AuthorizationEngine) string {
 	levels := make([]string, 0, len(roles))
 	for _, r := range roles {
 		if r != "" {
 			levels = append(levels, s.Level(r))
 		}
 	}
-	return authz.Widest(levels)
+	return authorization.Widest(levels)
 }
 
 type FieldInfo struct {

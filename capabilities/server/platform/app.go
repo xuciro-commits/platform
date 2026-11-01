@@ -6,7 +6,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/platform/authz"
 	"reflect"
 	"regexp"
 	"slices"
@@ -15,7 +14,7 @@ import (
 )
 
 type Member struct {
-	authorization authz.Engine
+	authorization AuthorizationEngine
 	AIContext     bool              `json:"-"`
 	ID            string            `json:"id"`
 	Tenant        string            `json:"tenant"`
@@ -59,15 +58,13 @@ func (m Member) RolesIn(app string) []string {
 
 func (m Member) Holds(app, role string) bool { return slices.Contains(m.RolesIn(app), role) }
 
-func (m Member) May(app, permission string, roles []string) authz.Verdict {
-	engine := m.authorization
-	if engine == nil {
-		engine = authz.Standard{}
-	}
-	return engine.Decide(authz.Request{Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
+func (m Member) May(app, permission string, roles []string) AuthzDecision {
+	return m.authorization.Decide(AuthorizationInput{Subject: AuthorizationSubject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
 }
 
-func (m Member) WithAuthorization(engine authz.Engine) Member {
+func (m Member) AuthorizationEngine() AuthorizationEngine { return m.authorization }
+
+func (m Member) WithAuthorization(engine AuthorizationEngine) Member {
 	m.authorization = engine
 	return m
 }
@@ -189,7 +186,7 @@ type AcceptedFactApp interface {
 
 func As(app string, m Member) Caller { return Caller{Member: m, App: app} }
 
-type AuthorizationEngineRuntime interface{ AuthorizationEngine() authz.Engine }
+type AuthorizationEngineRuntime interface{ AuthorizationEngine() AuthorizationEngine }
 
 func NewCaller(rt Runtime, m Member, app string, replaying, automation bool) Caller {
 	if provider, ok := rt.(AuthorizationEngineRuntime); ok {
@@ -509,9 +506,9 @@ type AuthzRequest struct {
 	From      string   `json:"from,omitempty"`
 }
 
-type AuthzDecision = authz.Verdict
+type AuthzDecision = Verdict
 
-type AuthzLayer = authz.Layer
+type AuthzLayer = Layer
 
 type AuthzCollection struct {
 	Decision AuthzDecision  `json:"decision"`
