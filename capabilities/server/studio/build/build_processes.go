@@ -49,7 +49,7 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A process may retain at most 64 published versions")
 	}
 	p.Version++
-	if p.Every != "" || p.Continuous != nil && p.Continuous.Intake != nil {
+	if !p.Manual {
 		p.Scheduler = c.ID
 	} else {
 		p.Scheduler = ""

@@ -24,6 +24,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 		fl.Start.Enabled = execution.ContinuousEnabled
 	} else if !p.Manual {
 		fl.Start.Type = p.Object
+		fl.Start.OnBehalf = p.Scheduler
 		stateField := execution.StateField
 		fl.Start.When = func(_ platform.Caller, record any) bool {
 			raw, _ := json.Marshal(record)

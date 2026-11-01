@@ -53,7 +53,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 				if err != nil {
 					return err
 				}
-				if err := f.start(c, d, key, nil, s.GetPrincipalId(), &e, "", now); err != nil {
+				if err := f.start(c, d, key, nil, cmp.Or(d.Start.OnBehalf, s.GetPrincipalId()), &e, "", now); err != nil {
 					return err
 				}
 			}
