@@ -84,7 +84,7 @@ func (t *Tenant) readDeclaredQueryFrom(store *records.Store, c platform.Caller, 
 		sources = append(sources, ref)
 		if et != nil {
 			for _, field := range et.Info().Fields {
-				if field.ReadsAny(c.RolesIn(et.Info().App)) {
+				if field.ReadsAny(c.RolesIn(et.Info().App), c.Rules()) {
 					sources = append(sources, ref+"#"+field.Name)
 				}
 			}

@@ -230,7 +230,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 				source = model
 			}
 		}
-		if problem := b.checkFlow(record, source, models...); problem != nil {
+		if problem := b.checkFlow(record, source, models); problem != nil {
 			err = fmt.Errorf("%s", problem.Message)
 		} else if record.Version >= 64 {
 			err = fmt.Errorf("a process may retain at most 64 published versions")

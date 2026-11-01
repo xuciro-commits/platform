@@ -409,15 +409,15 @@ func (f FieldInfo) Reads(role string) bool { return f.ReadsAny([]string{role}) }
 
 func (f FieldInfo) Writes(role string) bool { return f.WritesAny([]string{role}) }
 
-func (f FieldInfo) ReadsAny(roles []string) bool {
-	return propertyPolicyOf("read", f).allows(roles)
+func (f FieldInfo) ReadsAny(roles []string, engines ...RuleEngine) bool {
+	return propertyPolicyOf("read", f, engines...).allows(roles)
 }
 
-func (f FieldInfo) WritesAny(roles []string) bool {
+func (f FieldInfo) WritesAny(roles []string, engines ...RuleEngine) bool {
 	if len(roles) == 0 {
 		roles = []string{""}
 	}
-	return propertyPolicyOf("write", f).allows(roles)
+	return propertyPolicyOf("write", f, engines...).allows(roles)
 }
 
 func describeDerived(info *EntityInfo, e Entity) error {

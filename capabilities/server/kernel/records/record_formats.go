@@ -23,7 +23,7 @@ type FormatSet struct {
 	fields []formattedField
 }
 
-func CompileFormats(info platform.EntityInfo) (*FormatSet, error) {
+func CompileFormats(info platform.EntityInfo, engines ...platform.RuleEngine) (*FormatSet, error) {
 	set := &FormatSet{}
 	for _, field := range info.Fields {
 		if len(field.Format) == 0 {
@@ -31,7 +31,7 @@ func CompileFormats(info platform.EntityInfo) (*FormatSet, error) {
 		}
 		formatted := formattedField{name: field.Name}
 		for i, rule := range field.Format {
-			filter, err := CompileRowFilter(info, rule.When)
+			filter, err := CompileRowFilter(info, rule.When, engines...)
 			if err != nil {
 				return nil, fmt.Errorf("field %s format rule %d does not compile against %s: %w", field.Name, i+1, info.Type, err)
 			}

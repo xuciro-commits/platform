@@ -86,7 +86,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 					return false, err
 				}
 			}
-			holds, problem := platform.TestCondition(*s.Condition, r, raw)
+			holds, problem := platform.TestCondition(*s.Condition, r, raw, c.Rules())
 			if problem != nil {
 				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, problem.Error())
 			}

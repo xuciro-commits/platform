@@ -126,23 +126,23 @@ func (p *SortedPage) Result() ([]reflect.Value, int) {
 	return out, p.total
 }
 
-func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate) (Plan, error) {
+func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate, engines ...platform.RuleEngine) (Plan, error) {
 	expr, err := DomainToExpr(info, p.Domain)
 	if err != nil {
 		return Plan{}, err
 	}
-	base, err := CompilePlan(info, expr, p.Search)
+	base, err := CompilePlan(info, expr, p.Search, engines...)
 	if err != nil {
 		return Plan{}, err
 	}
 	if p.Set == nil {
 		return base, nil
 	}
-	left, err := CompileSet(info, *p.Set.Inputs[0])
+	left, err := CompileSet(info, *p.Set.Inputs[0], engines...)
 	if err != nil {
 		return Plan{}, err
 	}
-	right, err := CompileSet(info, *p.Set.Inputs[1])
+	right, err := CompileSet(info, *p.Set.Inputs[1], engines...)
 	if err != nil {
 		return Plan{}, err
 	}

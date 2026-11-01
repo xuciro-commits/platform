@@ -259,7 +259,7 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 	}
 	for _, field := range info.Fields {
 		value := ExprValue{Kind: RuleFieldKind(field.Type), Status: "missing"}
-		if !field.ReadsAny(c.RolesIn(info.App)) {
+		if !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
 			value.Status = "withheld"
 		} else if raw, ok := values[field.Name]; ok {
 			value.Status = "value"
@@ -448,7 +448,7 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 					continue
 				}
 				v := ExprValue{Kind: RuleFieldKind(field.Type), Status: "missing"}
-				if !field.ReadsAny(c.RolesIn(object.App)) {
+				if !field.ReadsAny(c.RolesIn(object.App), c.Rules()) {
 					v.Status = "withheld"
 					collection.Withheld = true
 				} else if raw, ok := row[field.Name]; ok {

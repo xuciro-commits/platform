@@ -230,7 +230,7 @@ func (b *Build) validateObjectInstallation(c platform.Caller, record Object) err
 			if installed.Object != entity.Type && installed.Object != TypeOf(previous.Name) {
 				continue
 			}
-			if problem := b.checkFlowOn(installed, entity); problem != nil {
+			if problem := b.checkFlowOn(installed, entity, nil); problem != nil {
 				return fmt.Errorf("%s", problem.Message)
 			}
 		}

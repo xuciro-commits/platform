@@ -563,7 +563,7 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 		}
 		info, _ := Describe("", e, func(reflect.Type) string { return "?" })
 		for name := range given {
-			if f, ok := info.Field(name); !ok || f.ReadOnly || !c.Replaying && !c.Automation && !f.WritesAny(c.RolesHere()) {
+			if f, ok := info.Field(name); !ok || f.ReadOnly || !c.Replaying && !c.Automation && !f.WritesAny(c.RolesHere(), c.Rules()) {
 				return nil, invalid
 			}
 		}

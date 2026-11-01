@@ -133,7 +133,7 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		}
 		binding := info.VersionPins[bindingAt]
 		versionField, _ := source.Info().Field(versioning.Version)
-		if !field.ReadsAny(c.RolesIn(info.App)) || !versionField.ReadsAny(c.RolesIn(source.Info().App)) {
+		if !field.ReadsAny(c.RolesIn(info.App), c.Rules()) || !versionField.ReadsAny(c.RolesIn(source.Info().App), c.Rules()) {
 			return refuse("The selected business version is not readable")
 		}
 		if _, readErr := c.ReadRecord(source.Info().Type, id, at); readErr != nil {

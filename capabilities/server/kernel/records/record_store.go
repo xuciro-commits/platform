@@ -312,7 +312,7 @@ func (s *Store) Install(info platform.EntityInfo) error {
 	if other := s.byGo[info.Go]; other != nil && other.info.Type != info.Type {
 		return fmt.Errorf("%s: another type is already this Go type", info.Type)
 	}
-	formats, err := CompileFormats(info)
+	formats, err := CompileFormats(info, s.rules)
 	if err != nil {
 		return fmt.Errorf("%s: %w", info.Type, err)
 	}
@@ -405,7 +405,7 @@ func (s *Store) ReplaceReadType(info platform.EntityInfo, rows Rows, retained bo
 		knowledge = old.knowledge
 		delete(s.byGo, old.info.Go)
 	}
-	formats, _ := CompileFormats(info)
+	formats, _ := CompileFormats(info, s.rules)
 	et := &Type{store: s, info: info, rows: rows, knowledge: knowledge, retainedProjection: retained, formats: formats}
 	s.types[info.Type], s.byGo[info.Go] = et, et
 	return et

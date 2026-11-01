@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objects ...platform.Entity) *kernel.Error {
+func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objects []platform.Entity, engines ...platform.RuleEngine) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -145,7 +145,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 			}
 		}
 		if step.Condition != nil {
-			if err := platform.CheckCondition(*step.Condition); err != nil {
+			if err := platform.CheckCondition(*step.Condition, engines...); err != nil {
 				return problem(err.Error())
 			}
 		}

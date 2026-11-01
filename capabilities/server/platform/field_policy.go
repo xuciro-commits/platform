@@ -10,7 +10,7 @@ import (
 
 type propertyPolicy struct {
 	always, never bool
-	program       *ruleexpr.RowProgram
+	program       RowProgram
 }
 
 type roleSource []string
@@ -24,17 +24,17 @@ func (r roleSource) Ref(name string) (ruleexpr.Value, bool) {
 
 var propertyPolicies sync.Map
 
-func propertyPolicyOf(kind string, f FieldInfo) *propertyPolicy {
+func propertyPolicyOf(kind string, f FieldInfo, engines ...RuleEngine) *propertyPolicy {
 	key := kind + "\x00" + strconv.Itoa(len(f.Read)) + "\x00" + strings.Join(f.Read, "\x01") + "\x00" + strconv.Itoa(len(f.Write)) + "\x00" + strings.Join(f.Write, "\x01")
 	if cached, ok := propertyPolicies.Load(key); ok {
 		return cached.(*propertyPolicy)
 	}
-	policy := lowerPropertyPolicy(kind, f)
+	policy := lowerPropertyPolicy(kind, f, engines...)
 	propertyPolicies.Store(key, policy)
 	return policy
 }
 
-func lowerPropertyPolicy(kind string, f FieldInfo) *propertyPolicy {
+func lowerPropertyPolicy(kind string, f FieldInfo, engines ...RuleEngine) *propertyPolicy {
 	if slices.Contains(f.Read, "-") {
 		return &propertyPolicy{never: true}
 	}
@@ -66,7 +66,7 @@ func lowerPropertyPolicy(kind string, f FieldInfo) *propertyPolicy {
 		ruleexpr.RefOf("set", "roles"),
 		{Kind: "set", Lit: &ruleexpr.Literal{Value: ruleexpr.Raw(items), Element: "text"}},
 	}}
-	program, err := ruleexpr.CompileRow(expr, ruleexpr.Schema{Refs: map[string]ruleexpr.Type{"roles": {Kind: "set", Element: &text}}})
+	program, err := ruleEngineOf(engines).CompileRow(expr, ruleexpr.Schema{Refs: map[string]ruleexpr.Type{"roles": {Kind: "set", Element: &text}}})
 	if err != nil {
 		return &propertyPolicy{never: true}
 	}

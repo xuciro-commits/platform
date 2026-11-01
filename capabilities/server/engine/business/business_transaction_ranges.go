@@ -25,7 +25,7 @@ func (b *Runtime) txnIntervals(c platform.Caller, receipt *pb.ChangeRecord, subj
 	}
 	for name := range platform.IntervalFields(p.Fields) {
 		field, found := info.Field(name)
-		if !found || !field.ReadsAny(c.RolesIn(info.App)) {
+		if !found || !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Interval projection contains withheld fields / 区间集合含不可见字段")
 		}
 	}
@@ -220,7 +220,7 @@ func txnRowInputs(c platform.Caller, info platform.EntityInfo, raw json.RawMessa
 	values["row.object"] = info.Type
 	for _, field := range platform.ConstraintEntity(info).Fields {
 		fact := platform.ExprValue{Kind: platform.RuleFieldKind(field.Type), Status: "missing"}
-		if !field.ReadsAny(c.RolesIn(info.App)) {
+		if !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
 			fact.Status = "withheld"
 		} else if value, ok := fields[field.Name]; ok {
 			fact.Status, fact.Data = "value", value

@@ -16,11 +16,11 @@ type Plan struct {
 	Candidates func(IndexImage, ImageLookup) ([]string, bool)
 }
 
-func CompilePlan(info platform.EntityInfo, filter ruleexpr.Expr, search string) (Plan, error) {
+func CompilePlan(info platform.EntityInfo, filter ruleexpr.Expr, search string, engines ...platform.RuleEngine) (Plan, error) {
 	if filter.Op == "" && filter.Lit == nil && filter.Ref == "" {
 		filter = boolLit(true)
 	}
-	row, err := CompileRowFilter(info, filter)
+	row, err := CompileRowFilter(info, filter, engines...)
 	if err != nil {
 		return Plan{}, err
 	}

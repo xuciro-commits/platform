@@ -212,7 +212,7 @@ func (r *setRead) prepare(s platform.ObjectSet, archived bool, asOf *platform.Bu
 			return nil, err
 		}
 		if s.Domain != nil {
-			if _, err := records.CompileDomain(read.info, s.Domain); err != nil {
+			if _, err := records.CompileDomain(read.info, s.Domain, r.c.Rules()); err != nil {
 				return nil, invalidSet(err.Error())
 			}
 		}
@@ -432,7 +432,7 @@ func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *kernel.Error)
 		}
 		parts = append(parts, filter)
 	}
-	plan, err := records.CompilePlan(info, records.AllOf(parts...), n.set.Search)
+	plan, err := records.CompilePlan(info, records.AllOf(parts...), n.set.Search, r.c.Rules())
 	if err != nil {
 		return records.Plan{}, invalid
 	}

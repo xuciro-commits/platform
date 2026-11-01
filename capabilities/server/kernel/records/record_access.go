@@ -72,18 +72,18 @@ func FieldView(m platform.Member, source platform.EntityInfo) (view platform.Ent
 	return info, hidden
 }
 
-func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDirectory, now time.Time, through func(reflect.Value) bool) (*RowFilter, *kernel.Error) {
+func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDirectory, now time.Time, through func(reflect.Value) bool, engines ...platform.RuleEngine) (*RowFilter, *kernel.Error) {
 	roles, scope := m.RolesIn(info.App), info.Scope
 	text := ruleexpr.Type{Kind: "text"}
 	deny := func() (*RowFilter, *kernel.Error) {
-		filter, err := CompilePolicy(info, boolLit(false))
+		filter, err := CompilePolicy(info, boolLit(false), nil, engines...)
 		if err != nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return filter, nil
 	}
 	compiled := func(expr ruleexpr.Expr, attributes ...RowAttribute) (*RowFilter, *kernel.Error) {
-		filter, err := CompilePolicy(info, expr, attributes...)
+		filter, err := CompilePolicy(info, expr, attributes, engines...)
 		if err != nil {
 			return deny()
 		}

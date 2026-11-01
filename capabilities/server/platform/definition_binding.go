@@ -151,7 +151,7 @@ func ConditionBindings(e Expr) ([]Binding, error) {
 	return out, nil
 }
 
-func compileCondition(e Expr) (*ruleexpr.Program, error) {
+func compileCondition(e Expr, engines ...RuleEngine) (PredicateProgram, error) {
 	if e.Kind != "boolean" {
 		return nil, fmt.Errorf("condition must be a boolean expression")
 	}
@@ -172,11 +172,11 @@ func compileCondition(e Expr) (*ruleexpr.Program, error) {
 		}
 		schema.Refs[ref] = ruleexpr.Type{Kind: "json"}
 	}
-	return ruleexpr.CompilePredicate(e, schema)
+	return ruleEngineOf(engines).CompilePredicate(e, schema)
 }
 
-func CheckCondition(e Expr) error {
-	_, err := compileCondition(e)
+func CheckCondition(e Expr, engines ...RuleEngine) error {
+	_, err := compileCondition(e, engines...)
 	return err
 }
 
@@ -197,8 +197,8 @@ func (v conditionValues) Ref(name string) (ruleexpr.Value, bool) {
 	return ruleexpr.PresentRaw("json", raw), true
 }
 
-func TestCondition(e Expr, r *Run, subject json.RawMessage) (bool, error) {
-	program, err := compileCondition(e)
+func TestCondition(e Expr, r *Run, subject json.RawMessage, engines ...RuleEngine) (bool, error) {
+	program, err := compileCondition(e, engines...)
 	if err != nil {
 		return false, err
 	}

@@ -338,7 +338,7 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 			if !known && q.Action != "" {
 				continue
 			}
-			allowed := known && field.ReadsAny(c.RolesIn(et.Info().App)) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
+			allowed := known && field.ReadsAny(c.RolesIn(et.Info().App), c.Rules()) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
 			if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
 				allowed = t.knowledgeSourceReadable(store, c.Member, q.Record, name)
 			}
@@ -346,7 +346,7 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 				if field.ReadOnly {
 					continue
 				}
-				allowed = known && field.WritesAny(c.RolesIn(et.Info().App))
+				allowed = known && field.WritesAny(c.RolesIn(et.Info().App), c.Rules())
 				if c.Automation && c.App == et.Info().App {
 					allowed = true
 				}
@@ -489,7 +489,7 @@ func (t *Tenant) scopePolicy(store *records.Store, c platform.Caller, info platf
 		typ, id, _ := strings.Cut(info.Scope.Through(v.Interface()), "/")
 		return t.authorizeDepth(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at, true, depth+1, walk).Allow
 	}
-	return records.ScopePolicy(info, c.Member, t.directory, at, through)
+	return records.ScopePolicy(info, c.Member, t.directory, at, through, c.Rules())
 }
 
 func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {

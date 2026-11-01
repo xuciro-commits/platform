@@ -211,7 +211,7 @@ func requiredEmpty(value reflect.Value) bool {
 	}
 }
 
-func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool)) ([]platform.FieldIssue, *kernel.Error) {
+func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool), engines ...platform.RuleEngine) ([]platform.FieldIssue, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	stringOf := func(name string) string {
 		i := slices.IndexFunc(info.Fields, func(x platform.FieldInfo) bool { return x.Name == name })
@@ -241,7 +241,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 		}
 		fields := []platform.Field{}
 		for _, f := range info.Fields {
-			if f.When != nil && !f.Active(stringOf) {
+			if f.When != nil && !f.Active(stringOf, engines...) {
 				continue
 			}
 			if _, present := values[f.Name]; !present {
@@ -273,7 +273,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 		fv := v.FieldByIndex(f.Index)
 		if f.When != nil {
 			on, _ := info.Field(f.When.Field)
-			switch active := f.Active(stringOf); {
+			switch active := f.Active(stringOf, engines...); {
 			case active && f.Required && f.Constraints == nil && requiredEmpty(fv):
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is required when {condition} is {values}", f.Title, on.Title, strings.Join(f.When.In, ", "))
 			case !active && !fv.IsZero():

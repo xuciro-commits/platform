@@ -316,20 +316,20 @@ func (v conditionValue) Ref(string) (ruleexpr.Value, bool) {
 
 var conditionPrograms sync.Map
 
-func (c *FieldCondition) Holds(value string) bool {
+func (c *FieldCondition) Holds(value string, engines ...RuleEngine) bool {
 	if c == nil {
 		return true
 	}
 	key := c.Field + "=" + strings.Join(c.In, "\x00")
 	cached, ok := conditionPrograms.Load(key)
 	if !ok {
-		program, err := ruleexpr.CompileRow(c.Expr(), ruleexpr.Schema{Refs: map[string]ruleexpr.Type{c.Field: {Kind: "text"}}})
+		program, err := ruleEngineOf(engines).CompileRow(c.Expr(), ruleexpr.Schema{Refs: map[string]ruleexpr.Type{c.Field: {Kind: "text"}}})
 		if err != nil {
 			return false
 		}
 		cached, _ = conditionPrograms.LoadOrStore(key, program)
 	}
-	return cached.(*ruleexpr.RowProgram).Match(conditionValue(value))
+	return cached.(RowProgram).Match(conditionValue(value))
 }
 
 func ParseWhen(tag string) (*FieldCondition, error) {
@@ -371,8 +371,8 @@ func checkConditions(entity string, fields []FieldInfo) error {
 	return nil
 }
 
-func (f FieldInfo) Active(valueOf func(field string) string) bool {
-	return f.When == nil || f.When.Holds(valueOf(f.When.Field))
+func (f FieldInfo) Active(valueOf func(field string) string, engines ...RuleEngine) bool {
+	return f.When == nil || f.When.Holds(valueOf(f.When.Field), engines...)
 }
 
 type EntityInfo struct {

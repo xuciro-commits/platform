@@ -191,6 +191,8 @@ type ExprValue = ruleexpr.Value
 
 type ExprContext = ruleexpr.Context
 
+type ExprSource = ruleexpr.RefSource
+
 type ExprItem = ruleexpr.Item
 
 type ExprCollection = ruleexpr.Collection
@@ -204,6 +206,15 @@ type ExprProgram interface {
 	EvalFrozenFormula(ExprContext) (ExprResult, error)
 }
 
+type RowProgram interface {
+	Match(ExprSource) bool
+}
+
+type PredicateProgram interface {
+	ExprProgram
+	EvalSource(ExprSource) (ExprResult, error)
+}
+
 type ExprNumericAggregate interface {
 	Add(ExprValue) error
 	Result() (ExprValue, error)
@@ -212,6 +223,8 @@ type ExprNumericAggregate interface {
 type RuleEngine interface {
 	CompileExpr(Expr, ExprSchema) (ExprProgram, error)
 	CompileFrozenFormula(Expr, ExprSchema) (ExprProgram, error)
+	CompileRow(Expr, ExprSchema) (RowProgram, error)
+	CompilePredicate(Expr, ExprSchema) (PredicateProgram, error)
 	CompareExprValues(ExprValue, ExprValue) (int, error)
 	NewExprNumericAggregate(string, string, string) (ExprNumericAggregate, error)
 }
@@ -233,6 +246,14 @@ func (NativeRules) CompileExpr(expr Expr, schema ExprSchema) (ExprProgram, error
 
 func (NativeRules) CompileFrozenFormula(expr Expr, schema ExprSchema) (ExprProgram, error) {
 	return ruleexpr.CompileFrozenFormula(expr, schema)
+}
+
+func (NativeRules) CompileRow(expr Expr, schema ExprSchema) (RowProgram, error) {
+	return ruleexpr.CompileRow(expr, schema)
+}
+
+func (NativeRules) CompilePredicate(expr Expr, schema ExprSchema) (PredicateProgram, error) {
+	return ruleexpr.CompilePredicate(expr, schema)
 }
 
 func (NativeRules) CompareExprValues(a, b ExprValue) (int, error) {

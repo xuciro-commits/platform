@@ -29,7 +29,6 @@ P3.17 监听器、监控视图。
 | P2.2 | 资源内核 | 所有资源有 RID、项目、文件夹、版本、状态；路由以 RID 为键；项目覆盖不再从页面列表推导 | 6-domain §6.3、3-information §3.6 |
 | P2.3 | 动作类型独立资源 | 动作类型有自己的记录、版本与资源页；对象类型只引用 | 6-domain §6.7 |
 | P2.4 | 工作项、通知、评论内置 | 工作项是内置对象类型，由动作创建与关闭；内置评论动作；`apps/work` 删除 | 6-domain §6.10 |
-| P2.5 | Expr 包与注入 | `internal/rules` 成为 `expr` 包；`platform/field_policy.go`、`entity.go`、`definition.go`、`kernel/records/record_domain.go` 改为经可注入的规则引擎调用 | 6-domain §6.12 |
 | P2.6 | 授权包边界 | 上下文构造（`Tenant.authorizeDepth`）与决定函数（`platform/authz`）一并移入 `services/security`；`platform` 只留接口 | 7-system §7.4 |
 | P2.7 | AI 代码归并 | `aigateway`、`internal/aistate`、`internal/agents`、`engine/agents`、`apps/ai`、`platform/ai.go` 归入 ai 包 | 7-system §7.2 |
 | P2.8 | 删除流程残留 | 以 Flow 命名的宿主文件与 `flow.instance` 视图删除；逻辑流只作为函数引擎 | 2-product R7 |

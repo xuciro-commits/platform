@@ -14,7 +14,7 @@ import (
 )
 
 type RowFilter struct {
-	program *ruleexpr.RowProgram
+	program platform.RowProgram
 	readers map[string]func(reflect.Value) ruleexpr.Value
 	sql     []journal.StateFilter
 }
@@ -38,12 +38,12 @@ func (f *RowFilter) Match(v reflect.Value) bool {
 
 func (f *RowFilter) Pushdown() []journal.StateFilter { return f.sql }
 
-func CompileDomain(info platform.EntityInfo, raw json.RawMessage) (*RowFilter, error) {
+func CompileDomain(info platform.EntityInfo, raw json.RawMessage, engines ...platform.RuleEngine) (*RowFilter, error) {
 	expr, err := DomainToExpr(info, raw)
 	if err != nil {
 		return nil, err
 	}
-	return CompileRowFilter(info, expr)
+	return CompileRowFilter(info, expr, engines...)
 }
 
 type RowAttribute struct {
@@ -52,15 +52,15 @@ type RowAttribute struct {
 	Read func(reflect.Value) ruleexpr.Value
 }
 
-func CompileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr) (*RowFilter, error) {
-	return compileRowFilter(info, expr, pushdown(info, expr), nil)
+func CompileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr, engines ...platform.RuleEngine) (*RowFilter, error) {
+	return compileRowFilter(info, expr, pushdown(info, expr), nil, engines...)
 }
 
-func CompilePolicy(info platform.EntityInfo, expr ruleexpr.Expr, attributes ...RowAttribute) (*RowFilter, error) {
-	return compileRowFilter(info, expr, nil, attributes)
+func CompilePolicy(info platform.EntityInfo, expr ruleexpr.Expr, attributes []RowAttribute, engines ...platform.RuleEngine) (*RowFilter, error) {
+	return compileRowFilter(info, expr, nil, attributes, engines...)
 }
 
-func compileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr, sql []journal.StateFilter, attributes []RowAttribute) (*RowFilter, error) {
+func compileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr, sql []journal.StateFilter, attributes []RowAttribute, engines ...platform.RuleEngine) (*RowFilter, error) {
 	filter := &RowFilter{readers: map[string]func(reflect.Value) ruleexpr.Value{}, sql: sql}
 	if expr.Lit != nil && string(expr.Lit.Value) == "true" {
 		return filter, nil
@@ -96,7 +96,11 @@ func compileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr, sql []journa
 	if err := visit(expr); err != nil {
 		return nil, err
 	}
-	program, err := ruleexpr.CompileRow(expr, schema)
+	var engine platform.RuleEngine = platform.NativeRules{}
+	if len(engines) > 0 {
+		engine = engines[0]
+	}
+	program, err := engine.CompileRow(expr, schema)
 	if err != nil {
 		return nil, err
 	}

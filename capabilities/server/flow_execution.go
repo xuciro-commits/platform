@@ -381,7 +381,7 @@ func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at 
 			if declared && field.AliasOf != "" {
 				field, declared = current.Info().Field(field.AliasOf)
 			}
-			if declared && !field.ReadsAny(c.RolesIn(current.Info().App)) {
+			if declared && !field.ReadsAny(c.RolesIn(current.Info().App), c.Rules()) {
 				delete(fields, name)
 			}
 		}

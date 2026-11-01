@@ -32,7 +32,7 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This tenant runs no processes")
 	}
 	if !c.Replaying {
-		if err := b.checkFlow(*p, b.installed[p.Object]); err != nil {
+		if err := b.checkFlow(*p, b.installed[p.Object], nil, c.Rules()); err != nil {
 			return err
 		}
 		if p.Continuous != nil && p.Continuous.Intake != nil {
@@ -107,7 +107,7 @@ func (b *Build) runProcess(c platform.Caller, record any, raw json.RawMessage, n
 	return start.StartManual(c, ID, installed.Name, installed.Version, request.Key, input, now)
 }
 
-func (b *Build) checkFlow(p Process, entity platform.Entity, objects ...platform.Entity) *kernel.Error {
+func (b *Build) checkFlow(p Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *kernel.Error {
 	plans, err := b.processInventory()
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process inventory cannot be checked")
@@ -118,7 +118,7 @@ func (b *Build) checkFlow(p Process, entity platform.Entity, objects ...platform
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process name {name} is already used", p.Name)
 		}
 	}
-	return b.checkFlowOn(p, entity, objects...)
+	return b.checkFlowOn(p, entity, objects, engines...)
 }
 
 func (b *Build) CheckProcess(c platform.Caller, p Process) *kernel.Error {
@@ -138,10 +138,10 @@ func (b *Build) CheckProcess(c platform.Caller, p Process) *kernel.Error {
 			source = model
 		}
 	}
-	return b.checkFlow(p, source, models...)
+	return b.checkFlow(p, source, models, c.Rules())
 }
 
-func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platform.Entity) *kernel.Error {
+func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *kernel.Error {
 	lookup := ProcessLookup{Entity: b.lookupEntity, Query: b.QueryDefinition}
 	if b.host != nil {
 		lookup.Action, lookup.Function = b.host.Action, b.host.Function
@@ -155,7 +155,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 			}
 		}
 	}
-	return CheckProcess(p, entity, lookup, objects...)
+	return CheckProcess(p, entity, lookup, objects, engines...)
 }
 
 func (b *Build) installProcesses() error {
