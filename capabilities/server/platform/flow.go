@@ -99,6 +99,7 @@ type FlowStateArtifact struct {
 type Start struct {
 	Manual     bool
 	Continuous bool
+	Paused     func(Caller) bool
 	Enabled    func(Caller) bool
 	On         []string
 	Begin      func(c Caller, e Event) (key string, data any, ok bool)

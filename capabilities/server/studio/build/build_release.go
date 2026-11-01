@@ -470,7 +470,7 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 	if err := json.Unmarshal(definition, &fields); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	for _, key := range []string{"id", "revision", "created", "changed", "archived", "state", "version", "layout"} {
+	for _, key := range []string{"id", "revision", "created", "changed", "archived", "state", "version", "layout", "paused"} {
 		delete(fields, key)
 	}
 	definition, err := json.Marshal(fields)

@@ -288,6 +288,7 @@ func published[T any](definition T) string {
 		value.Versions = nil
 		definition = any(value).(T)
 	case Process:
+		value.Paused = false
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)

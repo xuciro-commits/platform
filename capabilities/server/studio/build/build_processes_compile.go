@@ -15,7 +15,7 @@ import (
 )
 
 func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
-	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual}, Continuous: p.Continuous}
+	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual, Paused: execution.Paused}, Continuous: p.Continuous}
 	if p.Every != "" {
 		fl.Start.Every, _ = time.ParseDuration(p.Every)
 		fl.Start.OnBehalf = p.Scheduler

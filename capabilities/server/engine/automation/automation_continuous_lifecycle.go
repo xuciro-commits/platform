@@ -101,6 +101,9 @@ func (f *Flows) PlanBatch(x FlowInstance, c platform.Caller) (platform.FlowBatch
 	if d == nil || d.Continuous == nil || ended(x.State) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The continuous instance is unavailable")
 	}
+	if d.Start.Paused != nil && d.Start.Paused(f.host.Automation(c, d.app)) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The process is paused")
+	}
 	if err := f.checkBinding(x); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}

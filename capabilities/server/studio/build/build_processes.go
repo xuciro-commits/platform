@@ -19,7 +19,15 @@ func (b *Build) processEntity() platform.Entity {
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "processes"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: b.publishProcess},
-				{Name: "run", Title: "Run", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "key", Type: "string", Description: "Stable run key"}, {Name: "input", Type: "string", Description: "Typed JSON input"}}, Do: b.runProcess}}}}
+				{Name: "run", Title: "Run", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "key", Type: "string", Description: "Stable run key"}, {Name: "input", Type: "string", Description: "Typed JSON input"}}, Do: b.runProcess},
+				{Name: "pause", Title: "Pause", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: func(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+					record.(*Process).Paused = true
+					return nil
+				}},
+				{Name: "resume", Title: "Resume", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: func(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+					record.(*Process).Paused = false
+					return nil
+				}}}}}
 }
 
 func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
@@ -195,6 +203,10 @@ func (b *Build) processInventory() ([]Process, error) {
 func (b *Build) flowOf(p Process) platform.Flow {
 	execution := ProcessExecution{
 		StateField: "state",
+		Paused: func(c platform.Caller) bool {
+			current, ok := platform.Get[Process](b.host.Automation(c, ID), p.ID)
+			return ok && current.Paused
+		},
 		ContinuousEnabled: func(c platform.Caller) bool {
 			if b.host == nil || p.ID == "" || p.Version < 1 {
 				return false
@@ -245,9 +257,11 @@ func (b *Build) flowOf(p Process) platform.Flow {
 }
 
 const (
-	ProcessType      = "build.process"
-	SchemaProcess    = ProcessType + ".publish"
-	SchemaProcessRun = ProcessType + ".run"
+	ProcessType         = "build.process"
+	SchemaProcess       = ProcessType + ".publish"
+	SchemaProcessRun    = ProcessType + ".run"
+	SchemaProcessPause  = ProcessType + ".pause"
+	SchemaProcessResume = ProcessType + ".resume"
 )
 
 type Process struct {
@@ -266,6 +280,7 @@ type Process struct {
 	Steps       []ProcessStep           `json:"steps" field:"aside"`
 	Lanes       []ProcessLane           `json:"lanes,omitempty" field:"aside" title:"Lanes"`
 	Layout      map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
+	Paused      bool                    `json:"paused,omitempty" field:"readonly"`
 	State       string                  `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int                     `json:"version,omitempty" field:"readonly"`
 	Published   string                  `json:"published,omitempty" field:"readonly" type:"longtext"`
@@ -361,6 +376,7 @@ func ReadProcessImage(image []byte) (Process, error) {
 
 type ProcessExecution struct {
 	StateField        string
+	Paused            func(platform.Caller) bool
 	ContinuousEnabled func(platform.Caller) bool
 	Subject           func(platform.Caller, *platform.Run) (json.RawMessage, *kernel.Error)
 	SubjectPath       func(platform.Caller, *platform.Run, []string) (json.RawMessage, []string, *kernel.Error)

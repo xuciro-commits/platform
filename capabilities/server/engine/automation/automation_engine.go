@@ -255,6 +255,12 @@ func (f *Flows) update(c platform.Caller, id string, now time.Time, change func(
 }
 
 func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBehalf string, e *platform.Event, parent string, now time.Time, deferAdvance ...bool) *kernel.Error {
+	if d.Start.Paused != nil && d.Start.Paused(f.host.Automation(c, d.app)) {
+		if d.Start.Manual {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The process is paused")
+		}
+		return nil
+	}
 	flow := d.app + "." + d.Name
 	id := flow + ":" + key
 	for n := 2; ; n++ {

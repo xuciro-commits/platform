@@ -4,12 +4,12 @@ import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useHost, useReadQuery } from "@platform/app";
 import { ActionMenu, Button, Input, PageHeader, ProblemList, Select, Tag, Workbench, cn, t, type WorkbenchProblem } from "@platform/ui";
-import { ArrowDown, ArrowUp, Brain, Clock, Plus, Trash2, Workflow, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, Brain, Clock, Pause, Play, Plus, Trash2, Workflow, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { DraftInputs } from "../session/DraftSession";
-import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage, type EditorOperation } from "../editor/workbench";
 import { WorkflowInspector } from "./workflow-inspector";
 import { PERIODS, capabilityKey, initialStep, nextStepName, periodLabel, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { WorkflowRuns } from "./workflow-runs";
@@ -54,7 +54,7 @@ export function Automations() {
     <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{visible.map((row) => <li key={row.id}>
       <Button variant="row" onClick={() => open({ view: "automation", params: { id: row.id } })} className={cn("grid w-full gap-2 border-border bg-surface p-3 text-left hover:border-primary")}>
         <span className="flex items-center gap-2"><Zap className="size-4 text-primary" /><span className="min-w-0 flex-1 truncate text-sm font-medium">{row.title || row.name}</span>
-          <Tag label={row.version ? t("Active · v{n}", { n: row.version }) : t("Draft")} tone={row.version ? "success" : "warning"} /></span>
+          {row.paused ? <Tag label={t("Paused")} tone="neutral" /> : <Tag label={row.version ? t("Active · v{n}", { n: row.version }) : t("Draft")} tone={row.version ? "success" : "warning"} />}</span>
         <span className="text-xs text-muted"><span className="font-medium text-foreground">{t("When")}</span> {sentence(titleOf, stateOf, row)}</span>
         <span className="text-xs text-muted"><span className="font-medium text-foreground">{t("Then")}</span> {effectKinds(row.steps) || t("nothing yet")}</span>
       </Button>
@@ -74,7 +74,11 @@ export function AutomationEditor({ id }: { id: string }) {
   const declarationFields = authoringHost.source.entity("build.process")?.fields ?? [];
   const [sourceApplied, setSourceApplied] = useState(false);
   const process = useProcessDraft({ id, view: "automation", empty, failure: t("The automation request could not be completed.") });
-  const { session, draft, dirty, createID, query, busy, error, edit, save, perform, discardChanges, revision } = process;
+  const { session, draft, dirty, createID, query, busy, error, edit, save, perform, reload, discardChanges, revision } = process;
+  const published = !!draft.version;
+  const pauseResume: EditorOperation[] = published && draft.id && !process.branch ? [draft.paused
+    ? { id: "resume", label: t("Resume"), icon: <Play />, disabled: busy, run: () => void perform(async () => { if (await authoringHost.decide("build.process.resume", { type: "build.process", id: draft.id! }, {}, { expectedRevision: revision, quiet: true, onRefused: process.setError })) await reload(); }) }
+    : { id: "pause", label: t("Pause"), icon: <Pause />, disabled: busy, run: () => void perform(async () => { if (await authoringHost.decide("build.process.pause", { type: "build.process", id: draft.id! }, {}, { expectedRevision: revision, quiet: true, onRefused: process.setError })) await reload(); }) }] : [];
   const [chosen, setChosen] = useState<Chosen>("trigger");
   const objects = useMemo(() => model.entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states, fields: entity.fields })), [model.entities]);
   const object = objects.find((item) => item.type === draft.object);
@@ -114,10 +118,10 @@ export function AutomationEditor({ id }: { id: string }) {
     open({ view: "flow", params: { id: draft.id || createID } });
   });
   return <Workbench storageKey="automation" crumbs={[{ label: t("Automate"), onClick: () => open({ view: "automation" }) }, { label: t("Automations"), onClick: () => open({ view: "automation" }) }]} title={draft.title || t("New automation")}
-    status={<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.length} />} busy={busy}
+    status={<>{draft.paused && <Tag label={t("Paused")} tone="neutral" />}<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.length} /></>} busy={busy}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: session.undo, redo: session.redo }}
     actions={<>
-      <ResourceControls autosave={!sourceApplied && editable && !process.branch} type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} extra={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
+      <ResourceControls autosave={!sourceApplied && editable && !process.branch} type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} operations={pauseResume} extra={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
     </>}
     right={editable ? { label: t("Automation inspector"), heading: chosenStep?.title || chosenStep?.name || t(chosen === "condition" ? "If" : "When"), scope:String(chosen),selection:String(chosen),locate:()=>setChosen(chosen), content: <DraftInputs.Provider value={{ ...session.inputs, scope: chosenStep ? `step:${chosenStep.name}` : chosen, reveal: () => setChosen(chosen) }}><div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">
