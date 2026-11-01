@@ -6,11 +6,20 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/monitoring"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 )
 
 func (h *Host) routesMonitoring(rt *routes) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/views", Summary: "The caller's saved monitoring run filters", Answer: []platform.MonitoringView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		out, err := t.readFromApp(m, monitoring.ID, monitoring.ReadViews)
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/runs", Summary: "Current and retained runs visible through their original owners, with unfiltered overview counts and recovery actions", Answer: MonitoringRunPage{}, Query: []transport.Param{
 		{Name: "type", Description: "sync, build, automation, function or delivery; empty selects all"},
 		{Name: "status", Description: "ok, failed, pending, running, warning, paused, cancelled or unknown; empty selects all"},

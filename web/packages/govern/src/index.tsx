@@ -3,7 +3,7 @@ import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/ap
 import { Button, Card, ContentTabs, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
 import type { ReactNode } from "react";
 import { Markings } from "./markings";
-import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Network, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bookmark, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Network, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
@@ -14,7 +14,7 @@ import { PackageHelp } from "./package-sources";
 import { PackagePreparation } from "./package-preparation";
 import { Words } from "./words";
 import { SystemHealth, Integrations, Endpoints, AppSettingsView, Audit } from "./operations";
-import { MonitoringOverviewView, MonitoringRunsView } from "./monitoring";
+import { MonitoringOverviewView, MonitoringRunsView, MonitoringViewsView } from "./monitoring";
 import { AIConfiguration } from "./ai-configuration";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
 import { Credentials } from "./credentials";
@@ -144,27 +144,34 @@ export const marketplace = defineApp({
   ] }],
 });
 
+const monitoringBuilder = (host: Host) => host.holds("build", "builder");
+const monitoringRuns = (host: Host) => admin(host) || !!host.role("flow") || monitoringBuilder(host);
+
 export function createMonitoring(host: Host, integration?: Pick<AppUI, "for" | "views" | "nav">): AppUI {
-  const operating = admin(host) || !!host.role("flow");
+  const runs = monitoringRuns(host);
   const integrating = !!integration && (!integration.for || integration.for(host));
   return defineApp({
     id: "monitoring", serves: ["platform", "flow", "build"], category: "govern", title: "Monitoring", icon: <Activity />,
     description: "Overview, every run the host knows about, and its own health.",
     for: host => admin(host) || !!host.role("flow") || !!integration && (!integration.for || integration.for(host)),
-    home: { view: operating ? "monitoring-overview" : "integration-health" },
+    home: { view: runs ? "monitoring-overview" : "integration-health" },
     views: [
       ...(integrating ? integration.views : []),
-      ...(operating ? [
+      ...(runs ? [
         { id: "monitoring-overview", title: () => t("Overview"), render: () => <MonitoringOverviewView /> },
         { id: "monitoring-runs", title: () => t("Runs"), render: (p: Record<string, string>) => <MonitoringRunsView type={p.type} status={p.status} /> },
+        { id: "monitoring-views", title: () => t("Monitoring views"), render: () => <MonitoringViewsView /> },
+      ] : []),
+      ...(admin(host) ? [
         { id: "system-health", title: () => t("Health"), render: () => <SystemHealth /> },
       ] : []),
     ],
     nav: (host) => {
       return [{ label: t("Monitoring"), items: [
-        ...(admin(host) || host.role("flow") ? [
+        ...(monitoringRuns(host) ? [
           { label: t("Overview"), icon: <LayoutDashboard />, route: { view: "monitoring-overview" } },
           { label: t("Runs"), icon: <Route />, route: { view: "monitoring-runs" } },
+          { label: t("Monitoring views"), icon: <Bookmark />, route: { view: "monitoring-views" } },
         ] : []),
         ...(admin(host) ? [{ label: t("Health"), icon: <BarChart3 />, route: { view: "system-health" } }] : []),
         ...(integrating ? integration.nav(host).flatMap(section => section.items) : []),

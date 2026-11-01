@@ -1,193 +1,15 @@
 package build
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
-	"strconv"
 	"strings"
 
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
-
-func integrationType(kind platform.AssetKind) string {
-	switch kind {
-	case platform.AssetConnection:
-		return ConnectionType
-	case platform.AssetSource:
-		return SourceType
-	case platform.AssetDataset:
-		return DatasetType
-	case platform.AssetPipeline:
-		return PipelineType
-	case platform.AssetWriteback:
-		return WritebackType
-	case platform.AssetObservation:
-		return ObservationType
-	case platform.AssetMatching:
-		return MatchType
-	}
-	return ""
-}
-
-func integrationKindOf(typ string) platform.AssetKind {
-	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
-		if integrationType(kind) == typ {
-			return kind
-		}
-	}
-	return ""
-}
-
-func integrationVersion(version int, kind platform.AssetKind) string {
-	return ValueDefinitionVersion + "." + string(kind) + "-" + strconv.Itoa(version)
-}
-
-func integrationMetadata(record any) (name string, version int, published string, versions []string) {
-	switch r := record.(type) {
-	case Connection:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Source:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Dataset:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Pipeline:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Writeback:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Observation:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Match:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	}
-	return
-}
-
-func retainIntegration(record any, asset platform.ReleaseAsset) (any, error) {
-	raw, err := json.Marshal(asset)
-	if err != nil {
-		return nil, err
-	}
-	name, version, prior, versions := integrationMetadata(record)
-	ordinal, err := ValueIntegrationOrdinal(asset)
-	if err != nil {
-		return nil, err
-	}
-	if name != asset.Ref.Name {
-		return nil, fmt.Errorf("integration rename requires a migration")
-	}
-	if prior == string(raw) {
-		return record, nil
-	}
-	for _, old := range versions {
-		var accepted platform.ReleaseAsset
-		if ValueDecodeIntegration([]byte(old), &accepted) != nil {
-			return nil, fmt.Errorf("invalid retained integration version")
-		}
-		if accepted.SourceVersion == asset.SourceVersion {
-			if !equalIntegrationAsset(accepted, asset) {
-				return nil, fmt.Errorf("integration version already denotes another descriptor")
-			}
-			raw = []byte(old)
-		}
-		if bytes.Equal([]byte(old), raw) {
-			versions = slices.Clone(versions)
-			goto saved
-		}
-	}
-	if len(versions) >= 64 {
-		return nil, fmt.Errorf("integration version family is full")
-	}
-	versions = append(slices.Clone(versions), string(raw))
-saved:
-	version = max(version, ordinal)
-	switch r := record.(type) {
-	case Connection:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Source:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Dataset:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Pipeline:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Writeback:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Observation:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Match:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	}
-	return nil, fmt.Errorf("unknown integration owner")
-}
-
-func (b *Build) integrationInventory(kind platform.AssetKind) ([]any, error) {
-	typ := integrationRecordType(kind)
-	if typ == nil {
-		return nil, nil
-	}
-	c := b.host.Automation(platform.Caller{}, ID)
-	rows, err := readDefinitionInventoryOf(c, typ)
-	if err != nil {
-		return nil, err
-	}
-	var out []any
-	for _, record := range rows {
-		if !integrationRecord(record).Archived {
-			out = append(out, record)
-		}
-	}
-	return out, nil
-}
-
-func integrationRecordType(kind platform.AssetKind) reflect.Type {
-	switch kind {
-	case platform.AssetConnection:
-		return reflect.TypeFor[Connection]()
-	case platform.AssetSource:
-		return reflect.TypeFor[Source]()
-	case platform.AssetDataset:
-		return reflect.TypeFor[Dataset]()
-	case platform.AssetPipeline:
-		return reflect.TypeFor[Pipeline]()
-	case platform.AssetWriteback:
-		return reflect.TypeFor[Writeback]()
-	case platform.AssetObservation:
-		return reflect.TypeFor[Observation]()
-	case platform.AssetMatching:
-		return reflect.TypeFor[Match]()
-	}
-	return nil
-}
-
-func integrationRecord(record any) platform.Record {
-	switch r := record.(type) {
-	case Connection:
-		return r.Record
-	case Source:
-		return r.Record
-	case Dataset:
-		return r.Record
-	case Pipeline:
-		return r.Record
-	case Writeback:
-		return r.Record
-	case Observation:
-		return r.Record
-	case Match:
-		return r.Record
-	}
-	return platform.Record{}
-}
 
 func (b *Build) integrationName(kind platform.AssetKind, id string) (string, error) {
 	if id == "" {
@@ -269,6 +91,8 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 	switch r := record.(type) {
 	case Connection:
 		body = ConnectionDefinition{Name: r.Name, Title: r.Title, Kind: r.Kind, Marking: r.Marking, Credential: r.Secret != ""}
+	case Listener:
+		body = ListenerDefinition{Name: r.Name, Title: r.Title, Connector: r.Connector, Path: r.Path, Secret: r.Secret}
 	case Source:
 		if r.Connection == "" || r.Header != "" || strings.Contains(r.URL, "://") || r.AllowPrivate {
 			return asset, fmt.Errorf("portable source %s needs a connection and relative address without inline headers", r.Name)
@@ -459,7 +283,7 @@ func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAss
 
 func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
 	var out []platform.ReleaseAsset
-	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
+	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
 		rows, err := b.integrationInventory(kind)
 		if err != nil {
 			return nil, err
@@ -485,6 +309,8 @@ func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
 			switch r := record.(type) {
 			case Connection:
 				installed = r.State == "ready"
+			case Listener:
+				installed = r.State == "published"
 			case Source:
 				installed = r.State == "published"
 			case Dataset:
@@ -596,6 +422,15 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 			return nil, fmt.Errorf("invalid connection definition")
 		}
 		record = Connection{Name: d.Name, Title: d.Title, Kind: d.Kind, Marking: d.Marking}
+	case platform.AssetListener:
+		var d ListenerDefinition
+		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
+			return nil, err
+		}
+		if err := ValueValidateIntegrationDescriptor(asset); err != nil {
+			return nil, err
+		}
+		record = Listener{Name: d.Name, Title: d.Title, Connector: d.Connector, Path: d.Path, Secret: d.Secret}
 	case platform.AssetSource:
 		var d SourceDefinition
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {

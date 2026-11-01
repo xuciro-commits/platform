@@ -27,6 +27,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 - 新建源：Sheet 中先选连接器类型（数据库、REST、文件、消息），再填连接参数与凭据引用；“测试连接”在 Sheet 内给出结果。
 - 源页面：Connection（参数、凭据引用、标记）→ Syncs → Exports → Explorer。Explorer 为左树（库、模式、表）+ 右预览表 + “创建同步”主按钮。
 - 同步页面：Source table、Target dataset（选取或新建）、Schedule；History 为运行表，失败行可重试。
+- 监听器页面：入站路径、投递到的连接器输入、共享密钥（凭据引用）、启用开关；页面展示外部系统要 POST 的 Inbound URL；Publish/Pause 控制是否接受投递。入站投递经已有连接器输入写入，不另设写入路径。
 
 ## Pipeline Builder
 
@@ -129,7 +130,8 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 - 侧栏：Overview、Runs、Monitoring views、Health。
 - Overview：原型 E，统计块为失败运行、延迟同步、失败投递。
-- Runs：所有运行（同步、构建、自动化、函数、投递）一个表，按类型筛选；失败行可重试并链接到资源。
+- Runs：所有运行（同步、构建、自动化、函数、投递）一个表，按类型筛选；失败行可重试并链接到资源；“Save as monitoring view”把当前类型与状态筛选存为监控视图。
+- Monitoring views：当前用户保存的运行筛选列表；打开一个即以其类型与状态进入 Runs。
 
 ## Notifications
 
@@ -157,7 +159,6 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 ## 现存差距
 
 - Logic 拥有逻辑流与查询两类旧资源，查询应并入函数或对象集（路线图 P3.11）。
-- Monitoring 的 Runs 已是按类型筛选的统一运行表（同步、构建、自动化、函数、投递，含 Flow 实例与 Agent 运行），并有 Overview；Monitoring views 未实现（P3.17）。
-- Data Connection 的 Streams 仍分 Observation sources 与 Observations 两项；没有 Listeners（P3.17）。
+- Data Connection 的 Streams 仍分 Observation sources 与 Observations 两项（P3.9 收敛）。
 - Knowledge、Master data、Organisation directory 是独立业务应用（P2.10）。
 - Marketplace 无安装审阅与升级审阅（P5.3、P5.4）。

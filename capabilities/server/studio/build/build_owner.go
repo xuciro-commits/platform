@@ -68,6 +68,7 @@ func New(tenant string) *Build {
 	actions = append(actions, evaluationActions()...)
 	actions = append(actions, platform.EntityActions(b.codeEntity())...)
 	actions = append(actions, platform.EntityActions(b.sourceEntity())...)
+	actions = append(actions, platform.EntityActions(b.listenerEntity())...)
 	actions = append(actions, platform.EntityActions(b.connectionEntity())...)
 	actions = append(actions, platform.EntityActions(b.datasetEntity())...)
 	actions = append(actions, platform.EntityActions(b.datasetVersionEntity())...)
@@ -89,7 +90,7 @@ func New(tenant string) *Build {
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, SampleSetType, ObservationType, BranchType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ListenerType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, SampleSetType, ObservationType, BranchType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType)
 	return b
 }
 
@@ -117,7 +118,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -164,7 +165,7 @@ const (
 var directInstallSchemas = []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess,
 	SchemaPropertyType, SchemaValueType, SchemaObjectTypeGroup, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
 	SchemaTablePublish, SchemaAlertPublish, SchemaAgentPublish,
-	SourceType + ".publish", PipelineType + ".publish", WritebackType + ".publish", MatchType + ".publish"}
+	SourceType + ".publish", ListenerType + ".publish", PipelineType + ".publish", WritebackType + ".publish", MatchType + ".publish"}
 
 func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Error {
 	if c.Tenant == systemscope.Tenant && slices.Contains(directInstallSchemas, schema) {
@@ -379,7 +380,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agentDraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -528,100 +529,6 @@ func ValueChoices(s string) []string {
 	return out
 }
 
-func CheckManifest(m platform.Manifest, runsJobs bool) error {
-	if m.ID == "" || m.Actions == nil {
-		return fmt.Errorf("manifest without ID or action catalog")
-	}
-	for _, action := range m.Actions.All() {
-		if action.Title == "" || action.Description == "" || action.Target == "" || action.Payload == nil || len(action.Roles) == 0 && !action.Automation {
-			return fmt.Errorf("action %s lacks a title, description, target, payload fields or roles", action.Schema)
-		}
-	}
-	if len(m.Jobs) > 0 && !runsJobs {
-		return fmt.Errorf("declares jobs but has no Run")
-	}
-	for _, j := range m.Jobs {
-		if j.Name == "" || j.Every <= 0 {
-			return fmt.Errorf("job %q needs a name and a positive interval", j.Name)
-		}
-	}
-	for i, s := range m.Settings {
-		if s.Name == "" || !s.Accepts(s.Default) || slices.ContainsFunc(m.Settings[:i], func(x platform.Setting) bool { return x.Name == s.Name }) {
-			return fmt.Errorf("setting %q: unnamed, repeated, or its default is not a %s", s.Name, s.Type)
-		}
-	}
-	for i, s := range m.Sequences {
-		if err := s.Check(); err != nil || slices.ContainsFunc(m.Sequences[:i], func(x platform.Sequence) bool { return x.Name == s.Name }) {
-			return fmt.Errorf("sequence %q: badly declared or repeated", s.Name)
-		}
-	}
-	for i, e := range m.Emits {
-		if e.Name == "" || strings.Contains(e.Name, "/") || slices.ContainsFunc(m.Emits[:i], func(x platform.EffectKind) bool { return x.Name == e.Name }) {
-			return fmt.Errorf("effect kind %q: unnamed, repeated or containing '/'", e.Name)
-		}
-	}
-	for _, action := range m.Actions.All() {
-		for _, used := range action.Uses {
-			protocol, _, ok := strings.Cut(used, "#")
-			if !ok || !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
-				return fmt.Errorf("action %s uses %s, not an action of a protocol it consumes", action.Schema, used)
-			}
-		}
-	}
-	for _, r := range m.Everyone {
-		if !slices.Contains(m.Reads, r) {
-			return fmt.Errorf("read %q is opened to everyone but not declared", r)
-		}
-	}
-	for name, fields := range m.ReadInputs {
-		if !slices.Contains(m.Reads, name) {
-			return fmt.Errorf("read %q declares inputs but is not declared", name)
-		}
-		if err := platform.CheckInputs(fields); err != nil {
-			return fmt.Errorf("read %q: %w", name, err)
-		}
-	}
-	for name, source := range m.ReadSources {
-		if !slices.Contains(m.Reads, name) || !slices.Contains([]string{"record", "user-input", "external-input"}, source) {
-			return fmt.Errorf("read %q has an undeclared name or invalid original source type %q", name, source)
-		}
-	}
-	return nil
-}
-
-func CheckSubscriptions(m platform.Manifest, subscriber bool) error {
-	for _, action := range m.Subscribes {
-		if protocol, _, ok := strings.Cut(action, "#"); ok {
-			if !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
-				return fmt.Errorf("%s subscribes to %s of a protocol it does not consume", m.ID, action)
-			}
-			continue
-		}
-		if _, own := m.Actions.Action(action); !own {
-			return fmt.Errorf("%s subscribes to %s, neither its own action nor a protocol event", m.ID, action)
-		}
-		if !subscriber {
-			return fmt.Errorf("%s subscribes but has no Handle", m.ID)
-		}
-	}
-	return nil
-}
-
-func CallbackFreeTransition(m platform.Manifest, schema string) bool {
-	for _, entity := range m.Entities {
-		verb, match := strings.CutPrefix(schema, entity.Type+".")
-		if !match || entity.Lifecycle == nil {
-			continue
-		}
-		for _, transition := range entity.Lifecycle.Transitions {
-			if transition.Name == verb && transition.Do == nil && transition.After == nil && transition.Approval == nil {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 type ConstructionDrafts interface {
 	platform.App
 	CompleteBlueprintAssets([]platform.ReleaseAsset) ([]platform.ReleaseAsset, error)
@@ -645,6 +552,7 @@ type ConstructionDraftReader interface {
 type IntegrationDefinitions interface {
 	ConnectionConfiguration(Connection) (Connection, error)
 	ExecutionSource(Source) (Source, error)
+	ExecutionListener(Listener) (Listener, error)
 	ExecutionConnection(Connection) (Connection, error)
 	ExecutionDataset(Dataset) (Dataset, error)
 	ExecutionPipeline(Pipeline) (Pipeline, error)

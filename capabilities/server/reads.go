@@ -26,6 +26,10 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 	if refusal := t.recordReadRefusal(); refusal != nil {
 		return nil, refusal
 	}
+	return t.input(m, name, body, now)
+}
+
+func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
 	a := t.owner["input:"+name]
 	if a == nil {
 		return nil, unknown()

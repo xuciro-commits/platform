@@ -99,7 +99,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	return transport.OpenAPI(h.routes, []reflect.Type{
 		reflect.TypeFor[platform.PageCollectionInput](), reflect.TypeFor[platform.InputOptions](),
 		reflect.TypeFor[platform.ImageRegionsRequest](), reflect.TypeFor[build.Table](),
-		reflect.TypeFor[build.Source](), reflect.TypeFor[build.Connection](),
+		reflect.TypeFor[build.Source](), reflect.TypeFor[build.Connection](), reflect.TypeFor[build.Listener](),
 		reflect.TypeFor[platform.BusinessTxn](), reflect.TypeFor[platform.ConfirmationRun](),
 		reflect.TypeFor[platform.DispatchRun](), reflect.TypeFor[InterfaceRecordPage](),
 	}, reflect.TypeFor[SubmissionAnswer](), entities, actions)

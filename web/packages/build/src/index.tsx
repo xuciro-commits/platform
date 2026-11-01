@@ -15,6 +15,7 @@ import { ValueTypeEditor, ValueTypes } from "./ontology/value-type";
 import { ObjectTypeGroupEditor, ObjectTypeGroups } from "./ontology/object-type-group";
 import { ObservationSourceEditor, ObservationSources } from "./ontology/observation";
 import { DataSourceEditor, DataSources } from "./ontology/data-source";
+import { ListenerEditor, Listeners } from "./ontology/listener";
 import { ConnectionEditor, Connections } from "./ontology/connection";
 import { DatasetEditor, Datasets } from "./ontology/dataset";
 import { PipelineEditor, Pipelines } from "./ontology/pipeline";
@@ -68,6 +69,7 @@ const connectionViews: View[] = [
   view("connection", () => t("Connections"), p => p.id ? <ConnectionEditor key={p.id} id={p.id} /> : <Connections />),
   view("data-source", () => t("Data sources"), p => p.id ? <DataSourceEditor key={p.id} id={p.id} /> : <DataSources />),
   view("observation-source", () => t("Observation sources"), p => p.id ? <ObservationSourceEditor key={p.id} id={p.id} /> : <ObservationSources />),
+  view("listener", () => t("Listeners"), p => p.id ? <ListenerEditor key={p.id} id={p.id} /> : <Listeners />),
   view("writeback", () => t("Writebacks"), p => p.id ? <WritebackEditor key={p.id} id={p.id} /> : <Writebacks />),
 ];
 const pipelineViews: View[] = [
@@ -174,7 +176,7 @@ export function createDataConnection(host: Host, operations: { views: View[]; st
     for: host => builder(host) || integrator(host) || host.holds("platform", "admin"),
     home: { view: authoring ? "connection" : "endpoints" },
     views: [...(authoring ? contextualViews(connectionViews) : []), ...operations.views],
-    opens: authoring ? { "build.connection": "connection", "build.source": "data-source", "build.observation": "observation-source", "build.writeback": "writeback" } : {},
+    opens: authoring ? { "build.connection": "connection", "build.source": "data-source", "build.observation": "observation-source", "build.listener": "listener", "build.writeback": "writeback" } : {},
     navigation: authoring ? navigation : undefined,
     nav: (host, route) => [
       ...(authoring ? [section(t("Sources"), route, [
@@ -183,6 +185,7 @@ export function createDataConnection(host: Host, operations: { views: View[]; st
       ])] : []),
       { label: t("Streams"), items: [...(authoring ? links(route, [{ label: t("Observation sources"), icon: <Radio />, view: "observation-source" }]) : []), ...operations.streamLinks()] },
       ...(authoring ? [section(t("Exports"), route, [{ label: t("Writebacks"), icon: <Link2 />, view: "writeback" }])] : []),
+      ...(authoring ? [section(t("Listeners"), route, [{ label: t("Listeners"), icon: <Radio />, view: "listener" }])] : []),
       { label: t("Webhooks"), items: operations.webhookLinks(host) },
     ].filter(section => section.items.length > 0),
   });

@@ -2571,6 +2571,25 @@ export type LinkType = {
   deletePolicy: string;
 };
 
+export type Listener = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  name: string;
+  title: string;
+  connector: string;
+  path: string;
+  secret: string;
+  enabled: boolean;
+  state: string;
+  definitionVersion?: number;
+  published?: string;
+  definitionVersions?: string[];
+};
+
 export type Literal = {
   value: unknown;
   element?: string;
@@ -2833,6 +2852,19 @@ export type MonitoringRunPage = {
   limit: number;
   overview: MonitoringOverview;
   coverage: MonitoringCoverage[];
+};
+
+export type MonitoringView = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  title: string;
+  type?: "sync" | "build" | "automation" | "function" | "delivery";
+  status?: "ok" | "failed" | "pending" | "running" | "warning" | "paused" | "cancelled" | "unknown";
+  owner: string;
 };
 
 export type NamedQuery = {

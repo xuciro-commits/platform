@@ -1,8 +1,10 @@
 import type { Api } from "@platform/kernel";
 import { useHost, useOpenRecord, useReadQuery as useRead } from "@platform/app";
-import { Button, Card, DataTable, Notice, PageHeader, StatusTag, defineStatuses, t, formatStamp, useWorkspace, type ColumnDef } from "@platform/ui";
+import { Button, Card, DataTable, EmptyState, Input, Notice, PageHeader, Sheet, StatusTag, defineStatuses, t, formatStamp, useWorkspace, type ColumnDef } from "@platform/ui";
 import { useState } from "react";
 import { ReadResult } from "./operations";
+
+type MonitoringView = Api.MonitoringView;
 
 type MonitoringRun = Api.MonitoringRun;
 type MonitoringRunType = MonitoringRun["type"];
@@ -84,6 +86,8 @@ export function MonitoringRunsView({ type: initialType, status: initialStatus }:
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const { decide } = useHost();
+  const [saving, setSaving] = useState(false);
+  const [title, setTitle] = useState("");
   const query = useRead<MonitoringRunPage>(runsQuery(type, status), 5000);
   const openResource = (ref: Api.AssetRef) => open({ view: "lineage", params: { ref: `${ref.app}/${ref.kind}/${ref.name}` } }, { window: "beside" });
   const columns: ColumnDef<MonitoringRun, any>[] = [
@@ -103,7 +107,8 @@ export function MonitoringRunsView({ type: initialType, status: initialStatus }:
           {run.retryKind === "rerun" ? t("Run again") : t("Retry")}</Button> },
   ];
   return <>
-    <PageHeader title={t("Runs")} help={t("Every run the host knows about — syncs, builds, automations, functions and deliveries — newest first. Retry a failed run, or open the resource it ran for.")} />
+    <PageHeader title={t("Runs")} help={t("Every run the host knows about — syncs, builds, automations, functions and deliveries — newest first. Retry a failed run, or open the resource it ran for.")}
+      actions={<Button onClick={() => { setTitle(""); setSaving(true); }}>{t("Save as monitoring view")}</Button>} />
     <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
       <span className="text-2xs font-semibold uppercase tracking-wider text-muted">{t("Type")}</span>
       {runTypeFilters.map((filter) => <Button key={filter.value || "all"} size="sm" variant={type === filter.value ? "primary" : "ghost"} onClick={() => setType(filter.value)}>{t(filter.label)}</Button>)}
@@ -112,5 +117,36 @@ export function MonitoringRunsView({ type: initialType, status: initialStatus }:
       <CoverageNotices coverage={page.coverage} />
       <DataTable storageKey="monitoring:runs" data={page.runs} columns={columns} getRowId={(run) => `${run.type}:${run.id}`} height="calc(100dvh - 280px)" empty={t("No runs yet")} />
     </>}</ReadResult>
+    <Sheet isolated open={saving} onOpenChange={setSaving} title={t("Save as monitoring view")}>
+      <div className="grid gap-3 text-sm">
+        <p className="text-muted">{t("Save the current type and status filter under a name. It appears in your Monitoring views.")}</p>
+        <label className="grid gap-1 text-xs">{t("View name")}<Input aria-label={t("View name")} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+        <span className="flex justify-end gap-2">
+          <Button onClick={() => setSaving(false)}>{t("Cancel")}</Button>
+          <Button variant="primary" disabled={!title.trim()} onClick={async () => {
+            if (await decide("monitoring.view.save", { type: "monitoring.view", id: crypto.randomUUID() }, { title: title.trim(), type, status })) setSaving(false);
+          }}>{t("Save")}</Button>
+        </span>
+      </div>
+    </Sheet>
+  </>;
+}
+
+export function MonitoringViewsView() {
+  const { open } = useWorkspace();
+  const { decide } = useHost();
+  const query = useRead<MonitoringView[]>("/v1/monitoring/views", 5000);
+  return <>
+    <PageHeader title={t("Monitoring views")} help={t("Your saved run filters. Open one to see its runs; remove the ones you no longer need. Create a view from the Runs screen.")} />
+    <ReadResult query={query}>{(views) => views.length === 0
+      ? <EmptyState title={t("No monitoring views yet")} hint={t("Filter the Runs screen by type and status, then save it as a monitoring view.")}
+          action={<Button size="sm" onClick={() => open({ view: "monitoring-runs" })}>{t("Open Runs")}</Button>} />
+      : <div className="grid max-w-3xl gap-2">
+          {views.map((view) => <Card key={view.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
+            <Button variant="link" className="h-auto p-0 text-left font-medium" onClick={() => open({ view: "monitoring-runs", params: { ...(view.type ? { type: view.type } : {}), ...(view.status ? { status: view.status } : {}) } })}>{view.title}</Button>
+            <span className="text-xs text-muted">{t(view.type ? runTypeLabels[view.type] : "All")} · {view.status ? <StatusTag status={view.status} registry={runStatuses} /> : t("All")}</span>
+            <Button size="sm" variant="danger" className="ml-auto" onClick={async () => { if (await decide("monitoring.view.remove", { type: "monitoring.view", id: view.id }, {})) void query.refetch(); }}>{t("Remove")}</Button>
+          </Card>)}
+        </div>}</ReadResult>
   </>;
 }

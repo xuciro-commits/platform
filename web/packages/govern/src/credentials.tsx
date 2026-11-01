@@ -53,7 +53,7 @@ export function CredentialEditor({ open, onClose, initial, onSaved }: { open: bo
       <fieldset disabled={busy || pending} className="grid gap-2"><legend>{t("Allowed uses")}</legend>{draft.bindings.map((binding, index) => {
         const [kind, ...id] = binding.consumer.split("/");
         return <div key={index} className="grid gap-2 rounded border p-2">
-          <label className="grid gap-1">{t("Consumer type")}<Select aria-label={t("Consumer type")} value={kind} onChange={event => changeBinding(index, { consumer: `${event.target.value}/${id.join("/")}` })}><option value="ai">{t("AI provider")}</option><option value="connection">{t("Connection")}</option><option value="endpoint">{t("Endpoint")}</option></Select></label>
+          <label className="grid gap-1">{t("Consumer type")}<Select aria-label={t("Consumer type")} value={kind} onChange={event => changeBinding(index, { consumer: `${event.target.value}/${id.join("/")}` })}><option value="ai">{t("AI provider")}</option><option value="connection">{t("Connection")}</option><option value="endpoint">{t("Endpoint")}</option><option value="listener">{t("Listener")}</option></Select></label>
           <label className="grid gap-1">{t("Consumer ID")}{kind === "ai" && providers ? <Select aria-label={t("Consumer ID")} value={id.join("/")} onChange={event => {
             const provider = providers.find(provider => provider.id === event.target.value);
             changeBinding(index, { consumer: `ai/${event.target.value}`, origin: provider ? new URL(provider.baseUrl).origin : "" });

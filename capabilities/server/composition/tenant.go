@@ -6,6 +6,7 @@ import (
 	"platformserver/apps/core"
 	"platformserver/apps/files"
 	"platformserver/apps/knowledge"
+	"platformserver/apps/monitoring"
 	"platformserver/apps/relations"
 	"platformserver/apps/system"
 	"platformserver/apps/work"
@@ -36,7 +37,7 @@ func NewTenantWithSourceAndCapabilities(id string, source *platform.SystemSource
 	services.NewTransactionExecutor = business.NewRuntime
 	apps := []platform.App{
 		NewConsole(id, seats...),
-		enterprise.New(id, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id), ai.New(id), work.New(id), automation.New(id), knowledge.New(id),
+		enterprise.New(id, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id), ai.New(id), work.New(id), monitoring.New(id), automation.New(id), knowledge.New(id),
 		agentowner.New(id), files.New(id), core.New(id), build.New(id),
 	}
 	if id == systemscope.Tenant {

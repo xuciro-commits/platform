@@ -15,6 +15,20 @@ import (
 
 func (h *Host) routesIntegration(rt *routes) {
 	h.routesObservations(rt)
+	rt.handle(transport.Route{Pattern: "POST /v1/listeners/{path}", Summary: "Deliver an inbound webhook as the connector member with X-Listener-Secret verification", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		scheme := "http"
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		out, refusal := t.listenerInput(r.Context(), m, r.PathValue("path"), r.Header.Get("X-Listener-Secret"), scheme+"://"+r.Host, body, h.Now())
+		record, _ := out.(*pb.ChangeRecord)
+		Reply(w, record, refusal)
+	})
 	rt.handle(transport.Route{Pattern: "POST /v1/protocols/{protocol}/{version}/{action}/{target}", Summary: "Call a protocol action with a record target and stable Idempotency-Key", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || !json.Valid(body) || r.Header.Get("Idempotency-Key") == "" {

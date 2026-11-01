@@ -2,7 +2,7 @@ import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
-export type ResourceKind = "object" | "object-type-group" | "action" | "link-type" | "property-type" | "value-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation" | "definition";
+export type ResourceKind = "object" | "object-type-group" | "action" | "link-type" | "property-type" | "value-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "listener" | "dataset" | "pipeline" | "writeback" | "matching" | "observation" | "definition";
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
@@ -30,6 +30,7 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "connection", type: "build.connection", view: "connection", label: "Connection", plural: "Connections" },
   { kind: "observation", type: "build.observation", view: "observation-source", label: "Observation source", plural: "Observation sources" },
   { kind: "source", type: "build.source", view: "data-source", label: "Data source", plural: "Data sources" },
+  { kind: "listener", type: "build.listener", view: "listener", label: "Listener", plural: "Listeners" },
   { kind: "dataset", type: "build.dataset", view: "dataset", label: "Dataset", plural: "Datasets" },
   { kind: "pipeline", type: "build.pipeline", view: "pipeline", label: "Pipeline", plural: "Pipelines" },
   { kind: "writeback", type: "build.writeback", view: "writeback", label: "Writeback", plural: "Writebacks" },

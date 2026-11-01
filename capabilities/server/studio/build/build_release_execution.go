@@ -298,6 +298,14 @@ type ConnectionDefinition struct {
 	Credential bool   `json:"credential,omitempty"`
 }
 
+type ListenerDefinition struct {
+	Name      string `json:"name"`
+	Title     string `json:"title"`
+	Connector string `json:"connector"`
+	Path      string `json:"path"`
+	Secret    string `json:"secret"`
+}
+
 type SourceDefinition struct {
 	ObjectBindings map[string]platform.AssetRef `json:"objectBindings,omitempty"`
 	Name           string                       `json:"name"`
@@ -364,7 +372,7 @@ type MatchingDefinition struct {
 
 func ValueIntegrationKind(kind platform.AssetKind) bool {
 	switch kind {
-	case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation:
+	case platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation:
 		return true
 	}
 	return false
@@ -496,6 +504,8 @@ func ValueValidateIntegrationDescriptor(asset platform.ReleaseAsset) error {
 	switch asset.Ref.Kind {
 	case platform.AssetConnection:
 		record = new(ConnectionDefinition)
+	case platform.AssetListener:
+		record = new(ListenerDefinition)
 	case platform.AssetSource:
 		record = new(SourceDefinition)
 	case platform.AssetDataset:
@@ -520,6 +530,10 @@ func ValueValidateIntegrationDescriptor(asset platform.ReleaseAsset) error {
 	case *ConnectionDefinition:
 		if !slices.Contains(ConnectionKinds, d.Kind) || !slices.Contains([]string{"", "internal", "confidential", "restricted"}, d.Marking) {
 			return fmt.Errorf("unknown connection kind")
+		}
+	case *ListenerDefinition:
+		if !Named(d.Name) || !listenerSegment.MatchString(d.Path) || !listenerSegment.MatchString(d.Secret) || strings.TrimSpace(d.Connector) == "" {
+			return fmt.Errorf("invalid portable listener")
 		}
 	case *SourceDefinition:
 		if d.Connection == "" || strings.Contains(d.URL, "://") || !slices.Contains([]string{"", "json", "csv", "odata", "table"}, d.Profile) {

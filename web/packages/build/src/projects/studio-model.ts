@@ -23,7 +23,7 @@ const domains = [
     { id: "pages", title: "Pages", kinds: ["page"], links: [{ title: "Templates", view: "studio-templates" }] },
   ] },
   { id: "integration", title: "Connections", description: "Connections, sources, observations and data delivery", groups: [
-    { id: "data", title: "Connections and data", kinds: ["connection", "source", "dataset", "pipeline", "matching", "writeback"] },
+    { id: "data", title: "Connections and data", kinds: ["connection", "source", "listener", "dataset", "pipeline", "matching", "writeback"] },
     { id: "observations", title: "Observations and protocols", kinds: ["observation", "protocol"], links: [{ title: "Integration health", view: "integration-health" }] },
   ] },
   { id: "release", title: "Release", description: "Samples, evaluation, candidates and delivery", groups: [

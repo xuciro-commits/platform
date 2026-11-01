@@ -78,6 +78,7 @@ const (
 	WorkTaskType              = "work.task"
 	WorkApprovalType          = "work.approval"
 	WorkViewType              = "work.view"
+	MonitoringViewType        = "monitoring.view"
 	WorkApprovalRequestSchema = "work.approval.request"
 )
 

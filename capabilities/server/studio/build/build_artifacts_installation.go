@@ -95,6 +95,8 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 		_, err = b.ConnectionConfiguration(r)
 	case Dataset:
 		_, err = b.ExecutionDataset(r)
+	case Listener:
+		_, err = b.ExecutionListener(r)
 	case Source:
 		fixed, e := b.ExecutionSource(r)
 		if e != nil {
