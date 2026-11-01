@@ -4,7 +4,7 @@ package main
 
 import (
 	"encoding/json"
-	"platformserver/internal/rules"
+	ruleexpr "platformserver/expr"
 	"syscall/js"
 )
 
@@ -16,9 +16,9 @@ func main() {
 			}
 			result, err := run([]byte(args[0].String()))
 			if err != nil {
-				issue, ok := err.(*rules.Issue)
+				issue, ok := err.(*ruleexpr.Issue)
 				if !ok {
-					issue = &rules.Issue{Code: "request", At: "$", Message: err.Error()}
+					issue = &ruleexpr.Issue{Code: "request", At: "$", Message: err.Error()}
 				}
 				raw, _ := json.Marshal(map[string]any{"error": issue})
 				return string(raw)
@@ -27,9 +27,9 @@ func main() {
 		})
 		js.Global().Set(name, call)
 	}
-	bind("platformRuleEval", rules.EvalJSON)
-	bind("platformRuleCompile", rules.CompileJSON)
-	bind("platformRulePage", rules.LowerPageJSON)
-	js.Global().Set("platformRuleVersion", rules.Version)
+	bind("platformRuleEval", ruleexpr.EvalJSON)
+	bind("platformRuleCompile", ruleexpr.CompileJSON)
+	bind("platformRulePage", ruleexpr.LowerPageJSON)
+	js.Global().Set("platformRuleVersion", ruleexpr.Version)
 	select {}
 }

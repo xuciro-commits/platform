@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"platformserver/internal/rules"
+	ruleexpr "platformserver/expr"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/studio/build"
@@ -45,7 +45,7 @@ type objectWindow struct {
 }
 
 const (
-	objectSetStartLimit    = rules.MaxSet
+	objectSetStartLimit    = ruleexpr.MaxSet
 	objectSetInterfaceRows = 200
 	objectSetObjectRows    = 500
 )
@@ -377,7 +377,7 @@ func (r *setRead) startRows(node *setNode) ([]reflect.Value, *typeRead, *kernel.
 func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	info := read.view.Info()
-	var parts []rules.Expr
+	var parts []ruleexpr.Expr
 	for _, term := range n.terms {
 		expr, err := records.ConditionExpr(info, term.field, term.op, term.value)
 		if err != nil {
@@ -394,8 +394,8 @@ func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *kernel.Error)
 	}
 	if n.set.Filter != nil {
 		filter := *n.set.Filter
-		var bind func(*rules.Expr) *kernel.Error
-		bind = func(expr *rules.Expr) *kernel.Error {
+		var bind func(*ruleexpr.Expr) *kernel.Error
+		bind = func(expr *ruleexpr.Expr) *kernel.Error {
 			if expr.Ref != "" {
 				if value, ok := n.set.Parameters[expr.Ref]; ok {
 					if value.Kind != expr.Kind {
@@ -405,11 +405,11 @@ func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *kernel.Error)
 					if value.Status == "null" {
 						raw = json.RawMessage("null")
 					}
-					literal := &rules.Literal{Value: raw}
+					literal := &ruleexpr.Literal{Value: raw}
 					if value.Kind == "set" {
 						literal.Element = "text"
 					}
-					*expr = rules.Expr{Kind: value.Kind, Lit: literal}
+					*expr = ruleexpr.Expr{Kind: value.Kind, Lit: literal}
 				} else if len(expr.Ref) >= len("root.") && expr.Ref[:len("root.")] == "root." {
 					return invalidSet("Object set root parameter is missing")
 				}

@@ -8,7 +8,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/rules"
+	ruleexpr "platformserver/expr"
 	"platformserver/journal"
 	"platformserver/platform"
 	"reflect"
@@ -74,7 +74,7 @@ func FieldView(m platform.Member, source platform.EntityInfo) (view platform.Ent
 
 func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDirectory, now time.Time, through func(reflect.Value) bool) (*RowFilter, *kernel.Error) {
 	roles, scope := m.RolesIn(info.App), info.Scope
-	text := rules.Type{Kind: "text"}
+	text := ruleexpr.Type{Kind: "text"}
 	deny := func() (*RowFilter, *kernel.Error) {
 		filter, err := CompilePolicy(info, boolLit(false))
 		if err != nil {
@@ -82,7 +82,7 @@ func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDir
 		}
 		return filter, nil
 	}
-	compiled := func(expr rules.Expr, attributes ...RowAttribute) (*RowFilter, *kernel.Error) {
+	compiled := func(expr ruleexpr.Expr, attributes ...RowAttribute) (*RowFilter, *kernel.Error) {
 		filter, err := CompilePolicy(info, expr, attributes...)
 		if err != nil {
 			return deny()
@@ -90,15 +90,15 @@ func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDir
 		return filter, nil
 	}
 	if scope.Through != nil {
-		return compiled(rules.RefOf("boolean", "$through"), RowAttribute{Ref: "$through", Type: rules.Type{Kind: "boolean"}, Read: func(v reflect.Value) rules.Value { return rules.BoolValue(through(v)) }})
+		return compiled(ruleexpr.RefOf("boolean", "$through"), RowAttribute{Ref: "$through", Type: ruleexpr.Type{Kind: "boolean"}, Read: func(v reflect.Value) ruleexpr.Value { return ruleexpr.BoolValue(through(v)) }})
 	}
 	var participant []RowAttribute
-	var participantExpr rules.Expr
+	var participantExpr ruleexpr.Expr
 	if scope.Participants != nil {
-		participant = []RowAttribute{{Ref: "$participants", Type: rules.Type{Kind: "set", Element: &text}, Read: func(v reflect.Value) rules.Value {
-			return rules.SetValue(scope.Participants(v.Interface()))
+		participant = []RowAttribute{{Ref: "$participants", Type: ruleexpr.Type{Kind: "set", Element: &text}, Read: func(v reflect.Value) ruleexpr.Value {
+			return ruleexpr.SetValue(scope.Participants(v.Interface()))
 		}}}
-		participantExpr = rules.Expr{Op: "in", Kind: "boolean", Args: []rules.Expr{textLit(m.ID), setRef("$participants")}}
+		participantExpr = ruleexpr.Expr{Op: "in", Kind: "boolean", Args: []ruleexpr.Expr{textLit(m.ID), setRef("$participants")}}
 	}
 	if len(roles) == 0 {
 		if scope.Participants == nil {
@@ -117,17 +117,17 @@ func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDir
 	return compiled(base, attributes...)
 }
 
-var createdBy = RowAttribute{Ref: "$created.by", Type: rules.Type{Kind: "text"}, Read: func(v reflect.Value) rules.Value {
-	return rules.TextValue("text", Header(v).Created.By)
+var createdBy = RowAttribute{Ref: "$created.by", Type: ruleexpr.Type{Kind: "text"}, Read: func(v reflect.Value) ruleexpr.Value {
+	return ruleexpr.TextValue("text", Header(v).Created.By)
 }}
 
-func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.EntityInfo, roles []string, now time.Time) (rules.Expr, bool) {
+func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.EntityInfo, roles []string, now time.Time) (ruleexpr.Expr, bool) {
 	if len(roles) > 1 {
-		var parts []rules.Expr
+		var parts []ruleexpr.Expr
 		for _, role := range roles {
 			part, restricted := scopeExpr(directory, m, info, []string{role}, now)
 			if !restricted {
-				return rules.Expr{}, false
+				return ruleexpr.Expr{}, false
 			}
 			parts = append(parts, part)
 		}
@@ -135,19 +135,19 @@ func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.Entity
 	}
 	scope := info.Scope
 	level := scope.LevelFor(roles)
-	textField := func(name string) (rules.Expr, bool) {
+	textField := func(name string) (ruleexpr.Expr, bool) {
 		f, ok := info.Field(name)
 		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, f.Type) || f.AliasOf != "" || len(f.Index) == 0 {
-			return rules.Expr{}, false
+			return ruleexpr.Expr{}, false
 		}
-		return rules.RefOf("text", name+"#text"), true
+		return ruleexpr.RefOf("text", name+"#text"), true
 	}
 	switch level {
 	case platform.ScopeNone:
 		return boolLit(false), true
 	case platform.ScopeOwn:
 		if scope.Owner == platform.OwnerCreated {
-			return compare("=", rules.RefOf("text", createdBy.Ref), textLit(m.ID)), true
+			return compare("=", ruleexpr.RefOf("text", createdBy.Ref), textLit(m.ID)), true
 		}
 		owner, ok := textField(scope.Owner)
 		if !ok {
@@ -188,13 +188,13 @@ func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.Entity
 		for i, u := range units {
 			items[i] = u
 		}
-		var options []rules.Expr
-		for chunk := range slices.Chunk(items, rules.MaxSet) {
-			options = append(options, rules.Expr{Op: "in", Kind: "boolean", Args: []rules.Expr{unit, setLit("text", chunk)}})
+		var options []ruleexpr.Expr
+		for chunk := range slices.Chunk(items, ruleexpr.MaxSet) {
+			options = append(options, ruleexpr.Expr{Op: "in", Kind: "boolean", Args: []ruleexpr.Expr{unit, setLit("text", chunk)}})
 		}
 		return combine("or", options...), true
 	}
-	return rules.Expr{}, false
+	return ruleexpr.Expr{}, false
 }
 
 func Write(info platform.EntityInfo, receipt *pb.ChangeRecord, prev *Row, v reflect.Value) (*Row, *kernel.Error) {

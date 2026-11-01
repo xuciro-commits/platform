@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"platformserver/internal/rules"
+	ruleexpr "platformserver/expr"
 	"platformserver/journal"
 	"platformserver/platform"
 	"reflect"
@@ -14,20 +14,20 @@ import (
 )
 
 type RowFilter struct {
-	program *rules.RowProgram
-	readers map[string]func(reflect.Value) rules.Value
+	program *ruleexpr.RowProgram
+	readers map[string]func(reflect.Value) ruleexpr.Value
 	sql     []journal.StateFilter
 }
 
 type rowRefs struct {
 	value   reflect.Value
-	readers map[string]func(reflect.Value) rules.Value
+	readers map[string]func(reflect.Value) ruleexpr.Value
 }
 
-func (r *rowRefs) Ref(name string) (rules.Value, bool) {
+func (r *rowRefs) Ref(name string) (ruleexpr.Value, bool) {
 	read, ok := r.readers[name]
 	if !ok {
-		return rules.Value{}, false
+		return ruleexpr.Value{}, false
 	}
 	return read(r.value), true
 }
@@ -48,26 +48,26 @@ func CompileDomain(info platform.EntityInfo, raw json.RawMessage) (*RowFilter, e
 
 type RowAttribute struct {
 	Ref  string
-	Type rules.Type
-	Read func(reflect.Value) rules.Value
+	Type ruleexpr.Type
+	Read func(reflect.Value) ruleexpr.Value
 }
 
-func CompileRowFilter(info platform.EntityInfo, expr rules.Expr) (*RowFilter, error) {
+func CompileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr) (*RowFilter, error) {
 	return compileRowFilter(info, expr, pushdown(info, expr), nil)
 }
 
-func CompilePolicy(info platform.EntityInfo, expr rules.Expr, attributes ...RowAttribute) (*RowFilter, error) {
+func CompilePolicy(info platform.EntityInfo, expr ruleexpr.Expr, attributes ...RowAttribute) (*RowFilter, error) {
 	return compileRowFilter(info, expr, nil, attributes)
 }
 
-func compileRowFilter(info platform.EntityInfo, expr rules.Expr, sql []journal.StateFilter, attributes []RowAttribute) (*RowFilter, error) {
-	filter := &RowFilter{readers: map[string]func(reflect.Value) rules.Value{}, sql: sql}
+func compileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr, sql []journal.StateFilter, attributes []RowAttribute) (*RowFilter, error) {
+	filter := &RowFilter{readers: map[string]func(reflect.Value) ruleexpr.Value{}, sql: sql}
 	if expr.Lit != nil && string(expr.Lit.Value) == "true" {
 		return filter, nil
 	}
-	schema := rules.Schema{Refs: map[string]rules.Type{}}
-	var visit func(rules.Expr) error
-	visit = func(e rules.Expr) error {
+	schema := ruleexpr.Schema{Refs: map[string]ruleexpr.Type{}}
+	var visit func(ruleexpr.Expr) error
+	visit = func(e ruleexpr.Expr) error {
 		if e.Ref != "" {
 			if _, done := schema.Refs[e.Ref]; !done {
 				if i := slices.IndexFunc(attributes, func(a RowAttribute) bool { return a.Ref == e.Ref }); i >= 0 {
@@ -96,7 +96,7 @@ func compileRowFilter(info platform.EntityInfo, expr rules.Expr, sql []journal.S
 	if err := visit(expr); err != nil {
 		return nil, err
 	}
-	program, err := rules.CompileRow(expr, schema)
+	program, err := ruleexpr.CompileRow(expr, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -150,86 +150,86 @@ func resolveDomainField(info platform.EntityInfo, name string) (domainField, err
 	return domainField{name: name, typ: f.Type, class: class, info: f, read: read}, nil
 }
 
-func (d domainField) reader(view string) (rules.Type, func(reflect.Value) rules.Value, error) {
-	text := rules.Type{Kind: "text"}
-	decimal := func(v reflect.Value) rules.Value {
+func (d domainField) reader(view string) (ruleexpr.Type, func(reflect.Value) ruleexpr.Value, error) {
+	text := ruleexpr.Type{Kind: "text"}
+	decimal := func(v reflect.Value) ruleexpr.Value {
 		x, ok := Comparable(d.read(v)).(float64)
 		if !ok || math.IsNaN(x) || math.IsInf(x, 0) {
-			return rules.Null("decimal")
+			return ruleexpr.Null("decimal")
 		}
-		return rules.FloatValue(x)
+		return ruleexpr.FloatValue(x)
 	}
 	switch view {
 	case "search":
-		return text, func(v reflect.Value) rules.Value { return rules.TextValue("text", Searchable(d.read(v))) }, nil
+		return text, func(v reflect.Value) ruleexpr.Value { return ruleexpr.TextValue("text", Searchable(d.read(v))) }, nil
 	case "text":
-		return text, func(v reflect.Value) rules.Value { return comparableText(Comparable(d.read(v))) }, nil
+		return text, func(v reflect.Value) ruleexpr.Value { return comparableText(Comparable(d.read(v))) }, nil
 	case "number":
-		return rules.Type{Kind: "decimal"}, decimal, nil
+		return ruleexpr.Type{Kind: "decimal"}, decimal, nil
 	case "decimal":
 		if d.typ != "integer" && d.typ != "decimal" {
-			return rules.Type{Kind: "decimal"}, decimal, nil
+			return ruleexpr.Type{Kind: "decimal"}, decimal, nil
 		}
-		return rules.Type{Kind: "decimal"}, func(v reflect.Value) rules.Value {
+		return ruleexpr.Type{Kind: "decimal"}, func(v reflect.Value) ruleexpr.Value {
 			raw, err := json.Marshal(d.read(v))
 			if err != nil || string(raw) == "null" {
-				return rules.Null("decimal")
+				return ruleexpr.Null("decimal")
 			}
-			return rules.Value{Kind: "decimal", Status: "value", Data: raw}
+			return ruleexpr.Value{Kind: "decimal", Status: "value", Data: raw}
 		}, nil
 	case "":
 		switch d.typ {
 		case "boolean":
-			return rules.Type{Kind: "boolean"}, func(v reflect.Value) rules.Value {
+			return ruleexpr.Type{Kind: "boolean"}, func(v reflect.Value) ruleexpr.Value {
 				value := d.read(v)
 				if value == nil {
-					return rules.Null("boolean")
+					return ruleexpr.Null("boolean")
 				}
 				b := reflect.ValueOf(value)
 				for b.Kind() == reflect.Pointer {
 					if b.IsNil() {
-						return rules.Null("boolean")
+						return ruleexpr.Null("boolean")
 					}
 					b = b.Elem()
 				}
-				return rules.BoolValue(b.Bool())
+				return ruleexpr.BoolValue(b.Bool())
 			}, nil
 		case "money":
-			return rules.Type{Kind: "money"}, func(v reflect.Value) rules.Value {
+			return ruleexpr.Type{Kind: "money"}, func(v reflect.Value) ruleexpr.Value {
 				value := d.read(v)
 				if value == nil {
-					return rules.Null("money")
+					return ruleexpr.Null("money")
 				}
 				raw, err := json.Marshal(value)
 				if err != nil || string(raw) == "null" {
-					return rules.Null("money")
+					return ruleexpr.Null("money")
 				}
-				return rules.Value{Kind: "money", Status: "value", Data: raw}
+				return ruleexpr.Value{Kind: "money", Status: "value", Data: raw}
 			}, nil
 		case "date":
-			return rules.Type{Kind: "date"}, func(v reflect.Value) rules.Value {
+			return ruleexpr.Type{Kind: "date"}, func(v reflect.Value) ruleexpr.Value {
 				value := d.read(v)
 				if value == nil || Comparable(value) == "" {
-					return rules.Null("date")
+					return ruleexpr.Null("date")
 				}
-				return rules.Present("date", value)
+				return ruleexpr.Present("date", value)
 			}, nil
 		}
 		switch d.class {
 		case classNumber:
-			return rules.Type{Kind: "decimal"}, decimal, nil
+			return ruleexpr.Type{Kind: "decimal"}, decimal, nil
 		case classTime:
-			return rules.Type{Kind: "datetime"}, func(v reflect.Value) rules.Value {
+			return ruleexpr.Type{Kind: "datetime"}, func(v reflect.Value) ruleexpr.Value {
 				x, ok := Comparable(d.read(v)).(time.Time)
 				if !ok || x.Year() < 1 || x.Year() > 9999 {
-					return rules.Null("datetime")
+					return ruleexpr.Null("datetime")
 				}
-				return rules.TimeValue(x)
+				return ruleexpr.TimeValue(x)
 			}, nil
 		case classText:
-			return text, func(v reflect.Value) rules.Value { return comparableText(Comparable(d.read(v))) }, nil
+			return text, func(v reflect.Value) ruleexpr.Value { return comparableText(Comparable(d.read(v))) }, nil
 		case classList:
-			return rules.Type{Kind: "set", Element: &text}, func(v reflect.Value) rules.Value {
+			return ruleexpr.Type{Kind: "set", Element: &text}, func(v reflect.Value) ruleexpr.Value {
 				fv := v.FieldByIndex(d.info.Index)
 				for fv.Kind() == reflect.Pointer && !fv.IsNil() {
 					fv = fv.Elem()
@@ -240,32 +240,32 @@ func (d domainField) reader(view string) (rules.Type, func(reflect.Value) rules.
 						items = append(items, fv.Index(i).String())
 					}
 				}
-				return rules.SetValue(items)
+				return ruleexpr.SetValue(items)
 			}, nil
 		}
 	}
-	return rules.Type{}, nil, fmt.Errorf("field %s has no %q view", d.name, view)
+	return ruleexpr.Type{}, nil, fmt.Errorf("field %s has no %q view", d.name, view)
 }
 
-func comparableText(x any) rules.Value {
+func comparableText(x any) ruleexpr.Value {
 	switch s := x.(type) {
 	case nil:
-		return rules.Null("text")
+		return ruleexpr.Null("text")
 	case string:
-		return rules.TextValue("text", s)
+		return ruleexpr.TextValue("text", s)
 	}
-	return rules.TextValue("text", fmt.Sprint(x))
+	return ruleexpr.TextValue("text", fmt.Sprint(x))
 }
 
-func DomainToExpr(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, error) {
+func DomainToExpr(info platform.EntityInfo, raw json.RawMessage) (ruleexpr.Expr, error) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return boolLit(true), nil
 	}
 	var terms []json.RawMessage
 	if err := json.Unmarshal(raw, &terms); err != nil {
-		return rules.Expr{}, err
+		return ruleexpr.Expr{}, err
 	}
-	var stack []rules.Expr
+	var stack []ruleexpr.Expr
 	for i := len(terms) - 1; i >= 0; i-- {
 		var op string
 		if json.Unmarshal(terms[i], &op) == nil {
@@ -277,55 +277,55 @@ func DomainToExpr(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, er
 				stack = stack[:len(stack)-2]
 				stack = append(stack, combine(map[string]string{"&": "and", "|": "or"}[op], a, b))
 			default:
-				return rules.Expr{}, fmt.Errorf("operator %q without its terms", op)
+				return ruleexpr.Expr{}, fmt.Errorf("operator %q without its terms", op)
 			}
 			continue
 		}
 		e, err := lowerCondition(info, terms[i])
 		if err != nil {
-			return rules.Expr{}, err
+			return ruleexpr.Expr{}, err
 		}
 		stack = append(stack, e)
 	}
 	return combine("and", stack...), nil
 }
 
-func ConditionExpr(info platform.EntityInfo, field, op string, value any) (rules.Expr, error) {
+func ConditionExpr(info platform.EntityInfo, field, op string, value any) (ruleexpr.Expr, error) {
 	raw, err := json.Marshal([]any{field, op, value})
 	if err != nil {
-		return rules.Expr{}, err
+		return ruleexpr.Expr{}, err
 	}
 	return lowerCondition(info, raw)
 }
 
-func AllOf(parts ...rules.Expr) rules.Expr { return combine("and", parts...) }
+func AllOf(parts ...ruleexpr.Expr) ruleexpr.Expr { return combine("and", parts...) }
 
-func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, error) {
+func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (ruleexpr.Expr, error) {
 	var term []json.RawMessage
 	var name, op string
 	if json.Unmarshal(raw, &term) != nil || len(term) != 3 || json.Unmarshal(term[0], &name) != nil || json.Unmarshal(term[1], &op) != nil {
-		return rules.Expr{}, fmt.Errorf("a condition is [field, operator, value]")
+		return ruleexpr.Expr{}, fmt.Errorf("a condition is [field, operator, value]")
 	}
 	d, err := resolveDomainField(info, name)
 	if err != nil {
-		return rules.Expr{}, err
+		return ruleexpr.Expr{}, err
 	}
 	if number, ok := platform.DecimalLiteral(term[2]); ok {
 		if d.typ != "integer" && d.typ != "decimal" {
-			return rules.Expr{}, fmt.Errorf("decimal condition needs a numeric field")
+			return ruleexpr.Expr{}, fmt.Errorf("decimal condition needs a numeric field")
 		}
 		if !slices.Contains([]string{"=", "!=", "<", "<=", ">", ">="}, op) {
-			return rules.Expr{}, fmt.Errorf("unsupported decimal condition")
+			return ruleexpr.Expr{}, fmt.Errorf("unsupported decimal condition")
 		}
-		return compare(op, rules.RefOf("decimal", name+"#decimal"), literal("decimal", number.Value)), nil
+		return compare(op, ruleexpr.RefOf("decimal", name+"#decimal"), literal("decimal", number.Value)), nil
 	}
 	var tagged map[string]json.RawMessage
 	if json.Unmarshal(term[2], &tagged) == nil && tagged != nil {
-		return rules.Expr{}, fmt.Errorf("invalid typed condition value")
+		return ruleexpr.Expr{}, fmt.Errorf("invalid typed condition value")
 	}
 	var value any
 	if json.Unmarshal(term[2], &value) != nil {
-		return rules.Expr{}, fmt.Errorf("bad value")
+		return ruleexpr.Expr{}, fmt.Errorf("bad value")
 	}
 	if b, ok := value.(bool); ok {
 		value = map[bool]float64{true: 1, false: 0}[b]
@@ -335,32 +335,32 @@ func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, 
 			t, err := time.Parse(time.RFC3339, s)
 			if err != nil {
 				if t, err = time.Parse(time.DateOnly, s); err != nil {
-					return rules.Expr{}, err
+					return ruleexpr.Expr{}, err
 				}
 			}
 			value = t
 		}
 	}
 	list := d.class == classList
-	var scalar rules.Expr
+	var scalar ruleexpr.Expr
 	var kind string
 	switch d.class {
 	case classNumber:
-		scalar, kind = rules.RefOf("decimal", name+"#number"), "decimal"
+		scalar, kind = ruleexpr.RefOf("decimal", name+"#number"), "decimal"
 	case classTime:
-		scalar, kind = rules.RefOf("datetime", name), "datetime"
+		scalar, kind = ruleexpr.RefOf("datetime", name), "datetime"
 	case classText:
-		scalar, kind = rules.RefOf("text", name+"#text"), "text"
+		scalar, kind = ruleexpr.RefOf("text", name+"#text"), "text"
 	default:
-		scalar, kind = rules.RefOf("text", name+"#text"), "text"
+		scalar, kind = ruleexpr.RefOf("text", name+"#text"), "text"
 	}
 	switch op {
 	case "=", "!=":
-		var eq rules.Expr
+		var eq ruleexpr.Expr
 		if list {
-			eq = rules.Expr{Op: "in", Kind: "boolean", Args: []rules.Expr{textLit(fmt.Sprint(value)), setRef(name)}}
+			eq = ruleexpr.Expr{Op: "in", Kind: "boolean", Args: []ruleexpr.Expr{textLit(fmt.Sprint(value)), setRef(name)}}
 		} else if lit, null := operand(kind, value); null {
-			eq = rules.Expr{Op: "is-null", Kind: "boolean", Args: []rules.Expr{scalar}}
+			eq = ruleexpr.Expr{Op: "is-null", Kind: "boolean", Args: []ruleexpr.Expr{scalar}}
 		} else {
 			eq = compare("=", scalar, literal(kind, lit))
 		}
@@ -369,7 +369,7 @@ func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, 
 		}
 		return eq, nil
 	case "<", "<=", ">", ">=":
-		var guard []rules.Expr
+		var guard []ruleexpr.Expr
 		if kind != "decimal" {
 			guard = append(guard, negate(compare("=", scalar, literal(kind, zeroOperand(kind)))))
 		}
@@ -378,15 +378,15 @@ func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, 
 			if op == "<" || op == "<=" {
 				return boolLit(false), nil
 			}
-			return combine("and", append([]rules.Expr{{Op: "is-not-null", Kind: "boolean", Args: []rules.Expr{scalar}}}, guard...)...), nil
+			return combine("and", append([]ruleexpr.Expr{{Op: "is-not-null", Kind: "boolean", Args: []ruleexpr.Expr{scalar}}}, guard...)...), nil
 		}
-		return combine("and", append([]rules.Expr{compare(op, scalar, literal(kind, lit))}, guard...)...), nil
+		return combine("and", append([]ruleexpr.Expr{compare(op, scalar, literal(kind, lit))}, guard...)...), nil
 	case "in", "not in":
 		values, _ := value.([]any)
 		if values == nil {
-			return rules.Expr{}, fmt.Errorf("%s needs a list", op)
+			return ruleexpr.Expr{}, fmt.Errorf("%s needs a list", op)
 		}
-		var has rules.Expr
+		var has ruleexpr.Expr
 		if list {
 			var items []any
 			for _, item := range values {
@@ -394,9 +394,9 @@ func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, 
 					items = append(items, fmt.Sprint(item))
 				}
 			}
-			var options []rules.Expr
-			for chunk := range slices.Chunk(items, rules.MaxSet) {
-				options = append(options, rules.Expr{Op: "overlaps", Kind: "boolean", Args: []rules.Expr{setRef(name), setLit("text", chunk)}})
+			var options []ruleexpr.Expr
+			for chunk := range slices.Chunk(items, ruleexpr.MaxSet) {
+				options = append(options, ruleexpr.Expr{Op: "overlaps", Kind: "boolean", Args: []ruleexpr.Expr{setRef(name), setLit("text", chunk)}})
 			}
 			has = combine("or", options...)
 		} else {
@@ -410,12 +410,12 @@ func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, 
 				}
 				items = append(items, lit)
 			}
-			var options []rules.Expr
-			for chunk := range slices.Chunk(items, rules.MaxSet) {
-				options = append(options, rules.Expr{Op: "in", Kind: "boolean", Args: []rules.Expr{scalar, setLit(kind, chunk)}})
+			var options []ruleexpr.Expr
+			for chunk := range slices.Chunk(items, ruleexpr.MaxSet) {
+				options = append(options, ruleexpr.Expr{Op: "in", Kind: "boolean", Args: []ruleexpr.Expr{scalar, setLit(kind, chunk)}})
 			}
 			if nullItem {
-				options = append(options, rules.Expr{Op: "is-null", Kind: "boolean", Args: []rules.Expr{scalar}})
+				options = append(options, ruleexpr.Expr{Op: "is-null", Kind: "boolean", Args: []ruleexpr.Expr{scalar}})
 			}
 			has = combine("or", options...)
 		}
@@ -424,9 +424,9 @@ func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, 
 		}
 		return has, nil
 	case "like":
-		return rules.Expr{Op: "icontains", Kind: "boolean", Args: []rules.Expr{rules.RefOf("text", name+"#search"), textLit(strings.ToLower(fmt.Sprint(value)))}}, nil
+		return ruleexpr.Expr{Op: "icontains", Kind: "boolean", Args: []ruleexpr.Expr{ruleexpr.RefOf("text", name+"#search"), textLit(strings.ToLower(fmt.Sprint(value)))}}, nil
 	}
-	return rules.Expr{}, fmt.Errorf("unknown operator %s", op)
+	return ruleexpr.Expr{}, fmt.Errorf("unknown operator %s", op)
 }
 
 func operand(kind string, b any) (any, bool) {
@@ -451,30 +451,30 @@ func zeroOperand(kind string) any {
 	return ""
 }
 
-func literal(kind string, value any) rules.Expr {
-	return rules.Expr{Kind: kind, Lit: &rules.Literal{Value: rules.Raw(value)}}
+func literal(kind string, value any) ruleexpr.Expr {
+	return ruleexpr.Expr{Kind: kind, Lit: &ruleexpr.Literal{Value: ruleexpr.Raw(value)}}
 }
 
-func textLit(s string) rules.Expr { return literal("text", s) }
+func textLit(s string) ruleexpr.Expr { return literal("text", s) }
 
-func boolLit(b bool) rules.Expr { return literal("boolean", b) }
+func boolLit(b bool) ruleexpr.Expr { return literal("boolean", b) }
 
-func setRef(name string) rules.Expr { return rules.RefOf("set", name) }
+func setRef(name string) ruleexpr.Expr { return ruleexpr.RefOf("set", name) }
 
-func setLit(element string, items []any) rules.Expr {
-	return rules.Expr{Kind: "set", Lit: &rules.Literal{Value: rules.Raw(items), Element: element}}
+func setLit(element string, items []any) ruleexpr.Expr {
+	return ruleexpr.Expr{Kind: "set", Lit: &ruleexpr.Literal{Value: ruleexpr.Raw(items), Element: element}}
 }
 
-func compare(op string, left, right rules.Expr) rules.Expr {
-	return rules.Expr{Op: op, Kind: "boolean", Args: []rules.Expr{left, right}}
+func compare(op string, left, right ruleexpr.Expr) ruleexpr.Expr {
+	return ruleexpr.Expr{Op: op, Kind: "boolean", Args: []ruleexpr.Expr{left, right}}
 }
 
-func negate(e rules.Expr) rules.Expr {
-	return rules.Expr{Op: "not", Kind: "boolean", Args: []rules.Expr{e}}
+func negate(e ruleexpr.Expr) ruleexpr.Expr {
+	return ruleexpr.Expr{Op: "not", Kind: "boolean", Args: []ruleexpr.Expr{e}}
 }
 
-func combine(op string, parts ...rules.Expr) rules.Expr {
-	var flat []rules.Expr
+func combine(op string, parts ...ruleexpr.Expr) ruleexpr.Expr {
+	var flat []ruleexpr.Expr
 	for _, part := range parts {
 		if part.Op == op {
 			flat = append(flat, part.Args...)
@@ -489,23 +489,23 @@ func combine(op string, parts ...rules.Expr) rules.Expr {
 		return flat[0]
 	}
 	for len(flat) > 32 {
-		var next []rules.Expr
+		var next []ruleexpr.Expr
 		for group := range slices.Chunk(flat, 32) {
 			if len(group) == 1 {
 				next = append(next, group[0])
 			} else {
-				next = append(next, rules.Expr{Op: op, Kind: "boolean", Args: slices.Clone(group)})
+				next = append(next, ruleexpr.Expr{Op: op, Kind: "boolean", Args: slices.Clone(group)})
 			}
 		}
 		flat = next
 	}
-	return rules.Expr{Op: op, Kind: "boolean", Args: flat}
+	return ruleexpr.Expr{Op: op, Kind: "boolean", Args: flat}
 }
 
-func pushdown(info platform.EntityInfo, expr rules.Expr) []journal.StateFilter {
+func pushdown(info platform.EntityInfo, expr ruleexpr.Expr) []journal.StateFilter {
 	var out []journal.StateFilter
-	var walk func(rules.Expr)
-	walk = func(e rules.Expr) {
+	var walk func(ruleexpr.Expr)
+	walk = func(e ruleexpr.Expr) {
 		if e.Op == "and" {
 			for _, arg := range e.Args {
 				walk(arg)
@@ -520,7 +520,7 @@ func pushdown(info platform.EntityInfo, expr rules.Expr) []journal.StateFilter {
 	return out
 }
 
-func stateFilter(info platform.EntityInfo, e rules.Expr) (journal.StateFilter, bool) {
+func stateFilter(info platform.EntityInfo, e ruleexpr.Expr) (journal.StateFilter, bool) {
 	if len(e.Args) != 2 {
 		return journal.StateFilter{}, false
 	}

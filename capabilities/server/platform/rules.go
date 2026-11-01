@@ -5,7 +5,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/rules"
+	ruleexpr "platformserver/expr"
 	"slices"
 	"strings"
 	"time"
@@ -169,35 +169,35 @@ func (plan RuleTablePlan) DecideSchemas(facts ExprContext, schemas []ExprSchema,
 	return nil, fmt.Errorf("no decision table row matches the captured input")
 }
 
-type Expr = rules.Expr
+type Expr = ruleexpr.Expr
 
-type ExprLiteral = rules.Literal
+type ExprLiteral = ruleexpr.Literal
 
-type ExprAggregate = rules.Aggregate
+type ExprAggregate = ruleexpr.Aggregate
 
-type ExprWindowReference = rules.WindowReference
+type ExprWindowReference = ruleexpr.WindowReference
 
-type ExprWindowType = rules.WindowType
+type ExprWindowType = ruleexpr.WindowType
 
-type ExprWindowSummary = rules.WindowSummary
+type ExprWindowSummary = ruleexpr.WindowSummary
 
-type ExprType = rules.Type
+type ExprType = ruleexpr.Type
 
-type ExprSetType = rules.SetType
+type ExprSetType = ruleexpr.SetType
 
-type ExprSchema = rules.Schema
+type ExprSchema = ruleexpr.Schema
 
-type ExprValue = rules.Value
+type ExprValue = ruleexpr.Value
 
-type ExprContext = rules.Context
+type ExprContext = ruleexpr.Context
 
-type ExprItem = rules.Item
+type ExprItem = ruleexpr.Item
 
-type ExprCollection = rules.Collection
+type ExprCollection = ruleexpr.Collection
 
-type ExprResult = rules.Result
+type ExprResult = ruleexpr.Result
 
-type ExprIssue = rules.Issue
+type ExprIssue = ruleexpr.Issue
 
 type ExprProgram interface {
 	Eval(ExprContext) (ExprResult, error)
@@ -228,31 +228,31 @@ func (c Caller) Rules() RuleEngine {
 }
 
 func (NativeRules) CompileExpr(expr Expr, schema ExprSchema) (ExprProgram, error) {
-	return rules.Compile(expr, schema)
+	return ruleexpr.Compile(expr, schema)
 }
 
 func (NativeRules) CompileFrozenFormula(expr Expr, schema ExprSchema) (ExprProgram, error) {
-	return rules.CompileFrozenFormula(expr, schema)
+	return ruleexpr.CompileFrozenFormula(expr, schema)
 }
 
 func (NativeRules) CompareExprValues(a, b ExprValue) (int, error) {
-	return rules.CompareValues(a, b)
+	return ruleexpr.CompareValues(a, b)
 }
 
 func (NativeRules) NewExprNumericAggregate(op, kind, currency string) (ExprNumericAggregate, error) {
-	return rules.NewNumericAggregate(op, kind, currency)
+	return ruleexpr.NewNumericAggregate(op, kind, currency)
 }
 
-const ExprVersion = rules.Version
+const ExprVersion = ruleexpr.Version
 
-const ExprMaxDepth = rules.MaxDepth
+const ExprMaxDepth = ruleexpr.MaxDepth
 
-const ExprMaxSet = rules.MaxSet
+const ExprMaxSet = ruleexpr.MaxSet
 
-const ExprMaxContextBytes = rules.MaxContextBytes
+const ExprMaxContextBytes = ruleexpr.MaxContextBytes
 
 func CompileExpr(expr Expr, schema ExprSchema) (ExprProgram, error) {
-	return rules.Compile(expr, schema)
+	return ruleexpr.Compile(expr, schema)
 }
 
 func LowerFormula(text string, fields map[string]string) (Expr, error) {
@@ -260,21 +260,21 @@ func LowerFormula(text string, fields map[string]string) (Expr, error) {
 	for name, kind := range fields {
 		kinds[name] = RuleFieldKind(kind)
 	}
-	return rules.LowerFormula(text, kinds)
+	return ruleexpr.LowerFormula(text, kinds)
 }
 
-func FormulaFields(text string) (map[string]bool, error) { return rules.FormulaFields(text) }
+func FormulaFields(text string) (map[string]bool, error) { return ruleexpr.FormulaFields(text) }
 
-func ExprLiteralValue(kind string, value any) Expr { return rules.LiteralOf(kind, value) }
+func ExprLiteralValue(kind string, value any) Expr { return ruleexpr.LiteralOf(kind, value) }
 
-func ExprReference(kind, name string) Expr { return rules.RefOf(kind, name) }
+func ExprReference(kind, name string) Expr { return ruleexpr.RefOf(kind, name) }
 
-func ExprPresent(kind string, value any) ExprValue { return rules.Present(kind, value) }
+func ExprPresent(kind string, value any) ExprValue { return ruleexpr.Present(kind, value) }
 
-func CheckObservationDecimal(value string) error { return rules.CheckWindowDecimal(value) }
+func CheckObservationDecimal(value string) error { return ruleexpr.CheckWindowDecimal(value) }
 
 func LowerPageExpr(raw json.RawMessage, kind string, schema ExprSchema) (Expr, error) {
-	return rules.LowerPage(raw, kind, schema)
+	return ruleexpr.LowerPage(raw, kind, schema)
 }
 
 func ruleEngineOf(engines []RuleEngine) RuleEngine {

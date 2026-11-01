@@ -1,7 +1,7 @@
 package platform
 
 import (
-	"platformserver/internal/rules"
+	ruleexpr "platformserver/expr"
 	"slices"
 	"strconv"
 	"strings"
@@ -10,16 +10,16 @@ import (
 
 type propertyPolicy struct {
 	always, never bool
-	program       *rules.RowProgram
+	program       *ruleexpr.RowProgram
 }
 
 type roleSource []string
 
-func (r roleSource) Ref(name string) (rules.Value, bool) {
+func (r roleSource) Ref(name string) (ruleexpr.Value, bool) {
 	if name != "roles" {
-		return rules.Value{}, false
+		return ruleexpr.Value{}, false
 	}
-	return rules.SetValue(r), true
+	return ruleexpr.SetValue(r), true
 }
 
 var propertyPolicies sync.Map
@@ -61,12 +61,12 @@ func lowerPropertyPolicy(kind string, f FieldInfo) *propertyPolicy {
 	for i, role := range allowed {
 		items[i] = role
 	}
-	text := rules.Type{Kind: "text"}
-	expr := rules.Expr{Op: "overlaps", Kind: "boolean", Args: []rules.Expr{
-		rules.RefOf("set", "roles"),
-		{Kind: "set", Lit: &rules.Literal{Value: rules.Raw(items), Element: "text"}},
+	text := ruleexpr.Type{Kind: "text"}
+	expr := ruleexpr.Expr{Op: "overlaps", Kind: "boolean", Args: []ruleexpr.Expr{
+		ruleexpr.RefOf("set", "roles"),
+		{Kind: "set", Lit: &ruleexpr.Literal{Value: ruleexpr.Raw(items), Element: "text"}},
 	}}
-	program, err := rules.CompileRow(expr, rules.Schema{Refs: map[string]rules.Type{"roles": {Kind: "set", Element: &text}}})
+	program, err := ruleexpr.CompileRow(expr, ruleexpr.Schema{Refs: map[string]ruleexpr.Type{"roles": {Kind: "set", Element: &text}}})
 	if err != nil {
 		return &propertyPolicy{never: true}
 	}

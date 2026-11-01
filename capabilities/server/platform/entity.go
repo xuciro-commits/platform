@@ -6,7 +6,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/rules"
+	ruleexpr "platformserver/expr"
 	"platformserver/platform/authz"
 	"reflect"
 	"slices"
@@ -303,15 +303,15 @@ func (c FieldCondition) Expr() Expr {
 	items := make([]string, len(c.In))
 	copy(items, c.In)
 	return Expr{Op: "in", Kind: "boolean", Args: []Expr{
-		rules.RefOf("text", c.Field),
-		{Kind: "set", Lit: &rules.Literal{Value: Raw(items), Element: "text"}},
+		ruleexpr.RefOf("text", c.Field),
+		{Kind: "set", Lit: &ruleexpr.Literal{Value: Raw(items), Element: "text"}},
 	}}
 }
 
 type conditionValue string
 
-func (v conditionValue) Ref(string) (rules.Value, bool) {
-	return rules.Present("text", string(v)), true
+func (v conditionValue) Ref(string) (ruleexpr.Value, bool) {
+	return ruleexpr.Present("text", string(v)), true
 }
 
 var conditionPrograms sync.Map
@@ -323,13 +323,13 @@ func (c *FieldCondition) Holds(value string) bool {
 	key := c.Field + "=" + strings.Join(c.In, "\x00")
 	cached, ok := conditionPrograms.Load(key)
 	if !ok {
-		program, err := rules.CompileRow(c.Expr(), rules.Schema{Refs: map[string]rules.Type{c.Field: {Kind: "text"}}})
+		program, err := ruleexpr.CompileRow(c.Expr(), ruleexpr.Schema{Refs: map[string]ruleexpr.Type{c.Field: {Kind: "text"}}})
 		if err != nil {
 			return false
 		}
 		cached, _ = conditionPrograms.LoadOrStore(key, program)
 	}
-	return cached.(*rules.RowProgram).Match(conditionValue(value))
+	return cached.(*ruleexpr.RowProgram).Match(conditionValue(value))
 }
 
 func ParseWhen(tag string) (*FieldCondition, error) {

@@ -1,4 +1,4 @@
-package rules
+package expr
 
 func CompareValues(a, b Value) (int, error) {
 	left, err := validateValue(a, "order")

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/rules"
+	ruleexpr "platformserver/expr"
 	"slices"
 	"strings"
 )
@@ -25,7 +25,7 @@ func (b Binding) Check() error {
 		if err != nil {
 			return fmt.Errorf("literal binding: %w", err)
 		}
-		if err := rules.BoundedPredicateValue(v); err != nil {
+		if err := ruleexpr.BoundedPredicateValue(v); err != nil {
 			return err
 		}
 	}
@@ -151,7 +151,7 @@ func ConditionBindings(e Expr) ([]Binding, error) {
 	return out, nil
 }
 
-func compileCondition(e Expr) (*rules.Program, error) {
+func compileCondition(e Expr) (*ruleexpr.Program, error) {
 	if e.Kind != "boolean" {
 		return nil, fmt.Errorf("condition must be a boolean expression")
 	}
@@ -165,14 +165,14 @@ func compileCondition(e Expr) (*rules.Program, error) {
 	if !plain(e) {
 		return nil, fmt.Errorf("a workflow condition compares workflow values only; it cannot read the clock, the caller or collections")
 	}
-	schema := rules.Schema{Refs: map[string]rules.Type{}}
+	schema := ruleexpr.Schema{Refs: map[string]ruleexpr.Type{}}
 	for _, ref := range ConditionRefs(e) {
 		if _, err := ConditionBinding(ref); err != nil {
 			return nil, err
 		}
-		schema.Refs[ref] = rules.Type{Kind: "json"}
+		schema.Refs[ref] = ruleexpr.Type{Kind: "json"}
 	}
-	return rules.CompilePredicate(e, schema)
+	return ruleexpr.CompilePredicate(e, schema)
 }
 
 func CheckCondition(e Expr) error {
@@ -185,16 +185,16 @@ type conditionValues struct {
 	subject json.RawMessage
 }
 
-func (v conditionValues) Ref(name string) (rules.Value, bool) {
+func (v conditionValues) Ref(name string) (ruleexpr.Value, bool) {
 	b, err := ConditionBinding(name)
 	if err != nil {
-		return rules.Value{}, false
+		return ruleexpr.Value{}, false
 	}
 	raw, err := b.Resolve(v.run, v.subject)
 	if err != nil {
 		raw = json.RawMessage("null")
 	}
-	return rules.PresentRaw("json", raw), true
+	return ruleexpr.PresentRaw("json", raw), true
 }
 
 func TestCondition(e Expr, r *Run, subject json.RawMessage) (bool, error) {
@@ -203,7 +203,7 @@ func TestCondition(e Expr, r *Run, subject json.RawMessage) (bool, error) {
 		return false, err
 	}
 	answer, err := program.EvalSource(conditionValues{run: r, subject: subject})
-	if issue, ok := err.(*rules.Issue); ok {
+	if issue, ok := err.(*ruleexpr.Issue); ok {
 		if issue.Message == "malformed typed value" {
 			return false, fmt.Errorf("condition operands are invalid JSON")
 		}
@@ -224,12 +224,12 @@ func (p conditionV1) operand(b *Binding) (Expr, error) {
 		return Expr{}, err
 	}
 	if b.Source == "literal" {
-		return Expr{Kind: "json", Lit: &rules.Literal{Value: b.Value}}, nil
+		return Expr{Kind: "json", Lit: &ruleexpr.Literal{Value: b.Value}}, nil
 	}
 	if slices.ContainsFunc(b.Path, func(part string) bool { return strings.Contains(part, ".") }) {
 		return Expr{}, fmt.Errorf("condition path %s cannot name a field containing a dot", strings.Join(b.Path, "/"))
 	}
-	return rules.RefOf("json", ConditionRef(*b)), nil
+	return ruleexpr.RefOf("json", ConditionRef(*b)), nil
 }
 
 func (p conditionV1) expr(depth int) (Expr, error) {

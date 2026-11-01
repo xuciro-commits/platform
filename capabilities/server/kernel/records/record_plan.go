@@ -2,7 +2,7 @@ package records
 
 import (
 	"encoding/json"
-	"platformserver/internal/rules"
+	ruleexpr "platformserver/expr"
 	"platformserver/journal"
 	"platformserver/platform"
 	"reflect"
@@ -16,7 +16,7 @@ type Plan struct {
 	Candidates func(IndexImage, ImageLookup) ([]string, bool)
 }
 
-func CompilePlan(info platform.EntityInfo, filter rules.Expr, search string) (Plan, error) {
+func CompilePlan(info platform.EntityInfo, filter ruleexpr.Expr, search string) (Plan, error) {
 	if filter.Op == "" && filter.Lit == nil && filter.Ref == "" {
 		filter = boolLit(true)
 	}
@@ -137,10 +137,10 @@ type candidateSource struct {
 	ids  []string
 }
 
-func exprCandidates(image IndexImage, lookup ImageLookup, expr rules.Expr) ([]string, bool) {
+func exprCandidates(image IndexImage, lookup ImageLookup, expr ruleexpr.Expr) ([]string, bool) {
 	var best *candidateSource
-	var visit func(rules.Expr)
-	visit = func(e rules.Expr) {
+	var visit func(ruleexpr.Expr)
+	visit = func(e ruleexpr.Expr) {
 		if e.Op == "and" {
 			for _, arg := range e.Args {
 				visit(arg)
@@ -162,7 +162,7 @@ func exprCandidates(image IndexImage, lookup ImageLookup, expr rules.Expr) ([]st
 	return best.ids, true
 }
 
-func membership(e rules.Expr) (string, []string, bool) {
+func membership(e ruleexpr.Expr) (string, []string, bool) {
 	switch e.Op {
 	case "=", "in":
 		if len(e.Args) != 2 || e.Args[0].Ref == "" || strings.Contains(e.Args[0].Ref, "#") || e.Args[1].Lit == nil {
