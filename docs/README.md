@@ -107,4 +107,6 @@ read-when: 新建或修改页面、面板、表单、表格、弹窗
 
 委派原则：定位与机械活交给免费 `scout`（省 60-90% 主模型 token）；需要取舍的设计留在主代理；独立审查用全新上下文、不同家族的 `reviewer`；每批收尾用 `entropy-reducer` 收敛膨胀。并行多个施工手时按目录划界，先在 main 上冻结契约与共享类型，再分发互不重叠的文件清单。
 
+主代理 token 纪律：主代理贵，只花 token 在决策、切片、写简报、看结论做 go/no-go。不自己 `rg`/`sed`/`cat` 读代码、不逐行复核子代理 diff、不自己跑 `make verify`——定位与核实派 `scout`（免费，可并发），实现派 worker，验证让 worker 跑完报结果；主代理只读结论摘要与关键断言。`reviewer` 只在大后端批次用，验收与文案批次跳过；`entropy-reducer` 只在里程碑收尾用。
+
 角色与模型写在两处且内容一致：Codex 读 `~/.codex/config.toml` 的 `[agents]`（全局，`spawn_agent` 据此调度），各工具读 `.claude/agents/*.md` 的 frontmatter。换工具时调度配置需在新工具重建，角色提示词可复用；Magpie 负责把模型 slug 路由到对应渠道。
