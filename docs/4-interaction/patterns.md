@@ -194,5 +194,4 @@ read-when: 使用或新建一个界面组件，或实现表格、表单、侧窗
 
 ## 现存差距
 
-- 记录类组件（RecordKanban、RecordGantt、RecordMap 等 20 余个）未按 Workshop 组件目录统一（路线图 P3.14）。
 - M10 的唯一实现是 build `editor/ConditionBuilder`（经 `ExpressionEditor` 的布尔根节点进入，表达不了的条件就地保留为表达式节点）。`SetBuilder` 内置的 `domain` 条件行由命名查询依赖，随 P3.11 删除。右值尚不能选函数结果；左值沿关系取字段只能在表达式节点中编辑。

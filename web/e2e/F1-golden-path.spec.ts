@@ -108,6 +108,15 @@ test("F1 builder goes from an empty project to an application a business user ac
     await expect(page.getByText("Publish the object type and page together to preview business data. You can continue editing this widget.").first()).toBeVisible();
     await expect(page.getByText(/HTTP 404/)).toHaveCount(0);
     await expect(page.getByRole("alert").filter({ hasText: "module membership is unconfirmed" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Toggle structure panel" }).click();
+    await page.getByRole("tab", { name: "Widgets", exact: true }).click();
+    const widgetSearch = page.getByRole("searchbox", { name: "Search widgets" });
+    for (const title of ["Record timeline", "Kanban board", "Record chart", "Record leaderboard", "Record scatter plot", "Sparkline KPI", "Record map"]) {
+      await widgetSearch.fill(title);
+      await expect(page.getByRole("button", { name: "Records · 1", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: title, exact: true })).toBeVisible();
+    }
+    await widgetSearch.fill("");
     await page.getByRole("button", { name: "Toggle inspector panel" }).click();
     await expect(page.getByRole("region", { name: "Page settings" })).toBeVisible();
   });

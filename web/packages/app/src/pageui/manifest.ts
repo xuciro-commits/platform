@@ -1469,7 +1469,7 @@ export const pageUIManifest = {
       "configVersion": 1,
       "requiredUIProfile": "platform.page.v2.25",
       "title": "Record timeline",
-      "category": "Scheduling",
+      "category": "Records",
       "fieldPreset": "none",
       "defaults": {
         "width": "full",
@@ -1574,7 +1574,7 @@ export const pageUIManifest = {
       "configVersion": 1,
       "requiredUIProfile": "platform.page.v2.26",
       "title": "Kanban board",
-      "category": "Work",
+      "category": "Records",
       "fieldPreset": "none",
       "defaults": {
         "width": "full",
@@ -2406,7 +2406,7 @@ export const pageUIManifest = {
       "configVersion": 1,
       "requiredUIProfile": "platform.page.v2.43",
       "title": "Record chart",
-      "category": "Analysis",
+      "category": "Records",
       "fieldPreset": "none",
       "defaults": {
         "width": "full",
@@ -3304,7 +3304,7 @@ export const pageUIManifest = {
       "configVersion": 1,
       "requiredUIProfile": "platform.page.v2.51",
       "title": "Record leaderboard",
-      "category": "Analysis",
+      "category": "Records",
       "fieldPreset": "none",
       "defaults": {
         "width": "full",
@@ -4582,7 +4582,7 @@ export const pageUIManifest = {
       "configVersion": 1,
       "requiredUIProfile": "platform.page.v2.69",
       "title": "Record scatter plot",
-      "category": "Analysis",
+      "category": "Records",
       "fieldPreset": "none",
       "defaults": {
         "width": "full",
@@ -5088,7 +5088,7 @@ export const pageUIManifest = {
       "configVersion": 1,
       "requiredUIProfile": "platform.page.v2.72",
       "title": "Sparkline KPI",
-      "category": "Analysis",
+      "category": "Records",
       "fieldPreset": "none",
       "defaults": {
         "width": "full",
@@ -7383,7 +7383,7 @@ export const pageUIManifest = {
       "configVersion": 1,
       "requiredUIProfile": "platform.page.v2.87",
       "title": "Record map",
-      "category": "Analysis",
+      "category": "Records",
       "fieldPreset": "none",
       "defaults": {
         "width": "full",
