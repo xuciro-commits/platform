@@ -18,7 +18,7 @@ import { DataSourceEditor, DataSources } from "./ontology/data-source";
 import { ListenerEditor, Listeners } from "./ontology/listener";
 import { ConnectionEditor, Connections } from "./ontology/connection";
 import { DatasetEditor, Datasets } from "./ontology/dataset";
-import { PipelineEditor, Pipelines } from "./ontology/pipeline";
+import { PipelineEditor, Pipelines, Schedules } from "./ontology/pipeline";
 import { WritebackEditor, Writebacks } from "./ontology/writeback";
 import { MatchEditor, Matches } from "./ontology/match";
 import { IntegrationHealth } from "./ontology/integration-health";
@@ -42,7 +42,7 @@ import { ToolContext } from "./projects/tool-context";
 import { studioApplicationID, studioAreaForRoute } from "./projects/studio-model";
 import { FunctionCatalog } from "./functions/catalog";
 import { Interfaces } from "./ontology/ModelWorkbench";
-import { Activity, BellRing, Bot, Boxes, Braces, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
+import { Activity, BellRing, Bot, Boxes, Braces, CalendarClock, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.holds("build", "builder");
 const integrator = (host: Host) => host.holds("build", "integrator");
@@ -74,6 +74,7 @@ const connectionViews: View[] = [
 ];
 const pipelineViews: View[] = [
   view("pipeline", () => t("Pipelines"), p => p.id ? <PipelineEditor key={p.id} id={p.id} /> : <Pipelines />),
+  view("schedules", () => t("Schedules"), () => <Schedules />),
   view("match", () => t("Matching rules"), p => p.id ? <MatchEditor key={p.id} id={p.id} /> : <Matches />),
 ];
 const datasetViews: View[] = [
@@ -183,7 +184,7 @@ export function createDataConnection(host: Host, operations: { views: View[]; st
         { label: t("Connections"), icon: <Plug />, view: "connection" },
         { label: t("Syncs"), icon: <Database />, view: "data-source" },
       ])] : []),
-      { label: t("Streams"), items: [...(authoring ? links(route, [{ label: t("Observation sources"), icon: <Radio />, view: "observation-source" }]) : []), ...operations.streamLinks()] },
+      { label: t("Streams"), items: authoring ? links(route, [{ label: t("Streams"), icon: <Radio />, view: "observation-source" }]) : operations.streamLinks() },
       ...(authoring ? [section(t("Exports"), route, [{ label: t("Writebacks"), icon: <Link2 />, view: "writeback" }])] : []),
       ...(authoring ? [section(t("Listeners"), route, [{ label: t("Listeners"), icon: <Radio />, view: "listener" }])] : []),
       { label: t("Webhooks"), items: operations.webhookLinks(host) },
@@ -201,6 +202,7 @@ const pipelineBuilder = defineApp({
   navigation,
   nav: (_host, route) => [section(t("Transform"), route, [
     { label: t("Pipelines"), icon: <Workflow />, view: "pipeline" },
+    { label: t("Schedules"), icon: <CalendarClock />, view: "schedules" },
     { label: t("Matching rules"), icon: <GitMerge />, view: "match" },
   ])],
 });

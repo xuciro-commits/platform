@@ -15,6 +15,7 @@ import (
 
 func (h *Host) routesIntegration(rt *routes) {
 	h.routesObservations(rt)
+	h.routesSchedules(rt)
 	rt.handle(transport.Route{Pattern: "POST /v1/listeners/{path}", Summary: "Deliver an inbound webhook as the connector member with X-Listener-Secret verification", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {

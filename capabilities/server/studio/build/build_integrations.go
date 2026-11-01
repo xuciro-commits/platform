@@ -127,8 +127,8 @@ func (b *Build) datasetVersionEntity() platform.Entity {
 }
 
 func datasetActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaDatasetLoad, Target: DatasetType, Capability: "integrations", Title: "Load a version", Description: "Append the rows one pull or run produced as the dataset's next version.", Roles: []string{Builder, Integrator},
-		Payload: []platform.Field{{Name: "rows", Type: "json", Description: "The rows, an array of objects"}, {Name: "csv", Type: "longtext", Description: "Or the rows as CSV under a header line"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "string", Description: "The marking the rows carry; raises the dataset's"}}},
+	return []platform.Action{{Schema: SchemaDatasetLoad, Target: DatasetType, Capability: "integrations", Title: "Load a version", Description: "Load rows as the dataset's next transaction and version.", Roles: []string{Builder, Integrator},
+		Payload: []platform.Field{{Name: "type", Type: "choice", Choices: []string{string(DatasetTransactionSnapshot), string(DatasetTransactionAppend), string(DatasetTransactionUpdate), string(DatasetTransactionDelete)}, Default: json.RawMessage(`"snapshot"`), Description: "The transaction type; defaults to snapshot"}, {Name: "rows", Type: "json", Description: "The rows, an array of objects"}, {Name: "csv", Type: "longtext", Description: "Or the rows as CSV under a header line"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "string", Description: "The marking the rows carry; raises the dataset's"}}},
 		{Schema: SchemaDatasetProjected, Target: DatasetType, Capability: "integrations", Title: "Keep projection result", Description: "Retain what projecting one version into an object type did.", Roles: []string{Builder},
 			Payload: []platform.Field{{Name: "projection", Type: "json", Required: true, Description: "The object type, version, counts and why the projection paused"}}}}
 }
@@ -196,10 +196,11 @@ func DatasetSchema(rows []map[string]any, order []string) []DatasetField {
 func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
-			Rows     []map[string]any `json:"rows"`
-			CSV      string           `json:"csv"`
-			Producer string           `json:"producer"`
-			Marking  string           `json:"marking"`
+			Type     DatasetTransactionType `json:"type"`
+			Rows     []map[string]any       `json:"rows"`
+			CSV      string                 `json:"csv"`
+			Producer string                 `json:"producer"`
+			Marking  string                 `json:"marking"`
 		}
 		ds, ok := platform.Get[Dataset](c, s.GetTarget().GetId())
 		if !ok {
@@ -212,6 +213,14 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 		if json.Unmarshal(s.GetPayload(), &payload) != nil || (payload.Rows == nil) == (payload.CSV == "") {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A load carries an array of rows or a CSV body")
 		}
+		if payload.Type == "" {
+			payload.Type = DatasetTransactionSnapshot
+		}
+		switch payload.Type {
+		case DatasetTransactionSnapshot, DatasetTransactionAppend, DatasetTransactionUpdate, DatasetTransactionDelete:
+		default:
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
 		var order []string
 		for _, f := range ds.Schema {
 			order = append(order, f.Name)
@@ -222,6 +231,28 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The file is not CSV with a header line and at least one row")
 			}
 			payload.Rows, order = rows, append(order, columns...)
+		}
+		if payload.Type != DatasetTransactionSnapshot {
+			prior, _, err := DatasetRows(c, ds.ID, ds.Version)
+			if err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+			}
+			if payload.Type == DatasetTransactionDelete {
+				removed := map[string]bool{}
+				for _, row := range payload.Rows {
+					key, _ := json.Marshal(row)
+					removed[string(key)] = true
+				}
+				payload.Rows = slices.DeleteFunc(prior, func(row map[string]any) bool {
+					key, _ := json.Marshal(row)
+					return removed[string(key)]
+				})
+			} else {
+				payload.Rows = append(prior, payload.Rows...)
+			}
+			if payload.Rows == nil {
+				payload.Rows = []map[string]any{}
+			}
 		}
 		if len(payload.Rows) > ValueSourceRows {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A version holds at most {n} rows", ValueSourceRows)
@@ -255,7 +286,7 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 			}
 			ds.Marking = platform.HigherMarking(ds.Marking, payload.Marking)
 			c.Put(r, ds)
-			version := DatasetVersion{Record: platform.Record{ID: VersionID(ds.ID, ds.Version)}, Dataset: ds.ID, Version: ds.Version, At: now, Rows: len(payload.Rows), Data: data}
+			version := DatasetVersion{Record: platform.Record{ID: VersionID(ds.ID, ds.Version)}, Dataset: ds.ID, Version: ds.Version, Type: payload.Type, At: now, Rows: len(payload.Rows), Data: data}
 			if !c.Replaying {
 				version.Request = s.GetIdempotencyKey()
 			}
@@ -346,6 +377,15 @@ const (
 	DatasetKeepDefault     = 3
 )
 
+type DatasetTransactionType string
+
+const (
+	DatasetTransactionSnapshot DatasetTransactionType = "snapshot"
+	DatasetTransactionAppend   DatasetTransactionType = "append"
+	DatasetTransactionUpdate   DatasetTransactionType = "update"
+	DatasetTransactionDelete   DatasetTransactionType = "delete"
+)
+
 type Dataset struct {
 	platform.Record
 	Name              string              `json:"name" field:"required,search"`
@@ -397,12 +437,13 @@ type DatasetLoad struct {
 
 type DatasetVersion struct {
 	platform.Record
-	Dataset string          `json:"dataset" field:"required" ref:"build.dataset"`
-	Version int             `json:"version" field:"required"`
-	At      time.Time       `json:"at"`
-	Rows    int             `json:"rows"`
-	Data    json.RawMessage `json:"data" type:"json"`
-	Request string          `json:"requestKey,omitempty" field:"readonly" title:"Request key"`
+	Dataset string                 `json:"dataset" field:"required" ref:"build.dataset"`
+	Version int                    `json:"version" field:"required"`
+	Type    DatasetTransactionType `json:"type" choices:"snapshot,append,update,delete"`
+	At      time.Time              `json:"at"`
+	Rows    int                    `json:"rows"`
+	Data    json.RawMessage        `json:"data" type:"json"`
+	Request string                 `json:"requestKey,omitempty" field:"readonly" title:"Request key"`
 }
 
 func VersionID(dataset string, version int) string { return fmt.Sprintf("%s@%d", dataset, version) }

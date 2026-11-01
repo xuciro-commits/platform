@@ -350,12 +350,22 @@ func (p Pipeline) Due(now time.Time, inputVersion int) bool {
 	if inputVersion > p.Last.Input {
 		return true
 	}
-	if p.Every != "" {
-		if every, err := time.ParseDuration(p.Every); err == nil && !now.Before(p.Last.At.Add(every)) {
-			return true
-		}
+	if next := p.NextDue(); next != nil && !now.Before(*next) {
+		return true
 	}
 	return false
+}
+
+func (p Pipeline) NextDue() *time.Time {
+	if p.Last == nil || p.Every == "" {
+		return nil
+	}
+	every, err := time.ParseDuration(p.Every)
+	if err != nil {
+		return nil
+	}
+	next := p.Last.At.Add(every)
+	return &next
 }
 
 func (p Pipeline) ObjectRows(rows []map[string]any) []SourceRow {

@@ -73,7 +73,8 @@ def bloat_problems(root, present):
 
     dirs = sorted({os.path.dirname(f) for f in files})
     code, out = run(["npx", "--yes", "jscpd", "--silent", "--min-lines", "30",
-                     "--reporters", "consoleFull", "--threshold", "0", *dirs], root, timeout=180)
+                     "--reporters", "consoleFull", "--threshold", "0",
+                     "--ignore", "**/*.json", *dirs], root, timeout=180)
     m = re.search(r"Found (\d+) (?:exact )?clones", out)
     if "npm error" in out.lower() or "command not found" in out.lower():
         problems.append("jscpd 不可用（网络或 npx 失败），本次跳过重复检查：\n" + out[-500:])

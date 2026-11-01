@@ -159,6 +159,6 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 ## 现存差距
 
 - Logic 拥有逻辑流与查询两类旧资源，查询应并入函数或对象集（路线图 P3.11）。
-- Data Connection 的 Streams 仍分 Observation sources 与 Observations 两项（P3.9 收敛）。
+- Dataset Preview 的 Media sets 侧栏项未实现（P3.9b）。
 - Knowledge、Master data、Organisation directory 是独立业务应用（P2.10）。
 - Marketplace 无安装审阅与升级审阅（P5.3、P5.4）。

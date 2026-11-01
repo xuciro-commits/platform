@@ -3720,6 +3720,16 @@ export type PipelineRun = {
   outputVersion?: number;
 };
 
+export type PipelineSchedule = {
+  pipeline: string;
+  name: string;
+  title: string;
+  every: string;
+  lastBuild?: string;
+  nextDue?: string;
+  state: string;
+};
+
 export type PolicyRecord = {
   id: string;
   title: string;

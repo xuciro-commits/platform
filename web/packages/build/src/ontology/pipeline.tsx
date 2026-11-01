@@ -226,6 +226,32 @@ export function PipelineEditor({ id }: { id: string }) {
   </div>;
 }
 
+const scheduleStates: Record<string, string> = { published: "Published", paused: "Paused", draft: "Draft", retired: "Retired" };
+const scheduleStateName = (state: string) => t(scheduleStates[state] ?? state);
+
+export function Schedules() {
+  const { holds } = useHost(), { open } = useApplicationWorkspace();
+  const query = useReadQuery<Api.PipelineSchedule[]>("/v1/schedules", 15000);
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Schedules")} description={t("Only a builder or integrator can view schedules.")} />;
+  const schedules = query.data ?? [];
+  const stamp = (value?: string) => value ? new Date(value).toLocaleString() : "—";
+  return <div className="grid min-w-0 gap-3">
+    <PageHeader title={t("Schedules")} help={t("Published pipelines that build on a period. Scheduling is set as Run every on each pipeline.")} />
+    {query.isError ? <p role="alert" className="text-sm text-danger">{t("Schedules are unavailable to you.")}</p> :
+    <DataTable data={schedules} getRowId={(row) => row.pipeline} searchable={false} height={Math.min(560, 80 + schedules.length * 36)}
+      empty={query.isPending ? t("Loading…") : t("No pipeline builds on a period yet. Set Run every on a published pipeline.")}
+      onRowClick={(row) => open({ view: "pipeline", params: { id: row.pipeline } })}
+      columns={[
+        { id: "title", header: t("Pipeline"), accessorFn: (row) => row.title || row.name, cell: (context) => <span>{String(context.getValue())}</span> },
+        { id: "name", header: t("Name"), accessorFn: (row) => row.name, cell: (context) => <span className="font-mono text-xs">{String(context.getValue())}</span> },
+        { id: "every", header: t("Every"), accessorFn: (row) => row.every, cell: (context) => periodLabel(String(context.getValue())) },
+        { id: "lastBuild", header: t("Last build"), accessorFn: (row) => row.lastBuild, cell: (context) => stamp(context.getValue() as string | undefined) },
+        { id: "nextDue", header: t("Next due"), accessorFn: (row) => row.nextDue, cell: (context) => stamp(context.getValue() as string | undefined) },
+        { id: "state", header: t("State"), accessorFn: (row) => row.state, cell: (context) => <Tag label={scheduleStateName(String(context.getValue()))} /> },
+      ] as ColumnDef<Api.PipelineSchedule, unknown>[]} />}
+  </div>;
+}
+
 function PipelineRows({ rows }: { rows: Record<string, unknown>[] }) {
   const columns = [...new Set(rows.flatMap(row => Object.keys(row)))];
   return <DataTable data={rows} getRowId={row => String(rows.indexOf(row))} searchable={false} height={Math.min(420, 40 + rows.length * 28)} columns={columns.map((name): ColumnDef<Record<string, unknown>, unknown> => ({ id: name, header: name, accessorFn: row => row[name], cell: context => cell(context.getValue()) }))} />;

@@ -22,7 +22,9 @@ func (t *Tenant) RunPipelines(now time.Time) {
 	}
 	t.mu.Lock()
 	c := t.automation(build.ID, false)
-	pipelines, _, _ := platform.Find[build.Pipeline](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	query := publishedPipelineQuery()
+	query.Limit = 200
+	pipelines, _, _ := platform.Find[build.Pipeline](c, query)
 	versions := map[string]int{}
 	changed := map[string]bool{}
 	owner := t.app(build.ID).(build.IntegrationDefinitions)
