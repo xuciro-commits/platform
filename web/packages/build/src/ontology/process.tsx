@@ -109,7 +109,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     presentation: <PresentationPanel title={object.title} process={process} onChange={change} />,
     properties: <div className="grid content-start gap-3 p-4">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Properties")}</h2><Button size="sm" onClick={addField}><Plus />{t("Add a property")}</Button></div>
-      <DataTable data={process.fields.map((field, at) => ({ field, at }))} getRowId={({ at }) => String(at)}
+      <DataTable storageKey="ontology:properties" data={process.fields.map((field, at) => ({ field, at }))} getRowId={({ at }) => String(at)}
         searchable={false} height={Math.max(96, Math.min(480, 30 + process.fields.length * 36))} rowHeight={36}
         selectedId={chosen?.kind === "field" ? String(chosen.at) : undefined} onRowClick={({ at }) => choose({ kind: "field", at })}
         empty={t("No properties yet. Add one to describe the record.")} columns={[
@@ -151,7 +151,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     sets: <RecordSetsEditor process={process} parent={parent} entities={entities} onChange={change} />,
     permissions: <div className="grid content-start gap-3 p-4">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Who may do what")}</h2><Button size="sm" onClick={addAccess}><Plus />{t("Add a role")}</Button></div>
-      <DataTable data={process.access.map((access, at) => ({ access, at }))} getRowId={({ at }) => String(at)}
+      <DataTable storageKey="ontology:object-access" data={process.access.map((access, at) => ({ access, at }))} getRowId={({ at }) => String(at)}
         searchable={false} height={Math.max(96, Math.min(480, 30 + process.access.length * 40))} rowHeight={40}
         selectedId={chosen?.kind === "access" ? String(chosen.at) : undefined}
         empty={t("No roles yet. Without roles only builders see these records.")} columns={[
@@ -169,7 +169,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     status={<DraftStatus state={object.state} problems={issues.length} />} busy={busy}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setChosen(undefined); }, redo: () => { session.redo(); setChosen(undefined); } }}
     actions={<ResourceControls type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} operations={call?.returnValue ? [{ id: "return", label: returnLabel, run: () => call.returnValue?.(undefined) }] : []} onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "object-type", params: { id } }} />}
-    right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
+    right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),selection:chosen?JSON.stringify(chosen):undefined,locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
     <ResourceNavigation back={{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }} title={object.title || t("New object type")} icon={<Boxes />} meta={object.name}

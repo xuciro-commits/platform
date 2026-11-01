@@ -67,7 +67,7 @@ export function ProjectsList() {
     {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
     {projects.isError && <Notice tone="warning" role="alert" message={t("Projects could not be loaded.")} />}
     <div className="min-h-[24rem] flex-1">
-      <DataTable data={rows} columns={columns} getRowId={item => refKey(item.ref)} height="100%" searchable={false} loading={projects.isLoading}
+      <DataTable storageKey="files:projects" data={rows} columns={columns} getRowId={item => refKey(item.ref)} height="100%" searchable={false} loading={projects.isLoading}
         onRowClick={item => open({ view: "project", params: { id: item.id } })} empty={search ? t("No project matches.") : t("No projects yet. Create one to start building.")} />
     </div>
     {create.dialog}
@@ -137,6 +137,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const [settings, setSettings] = useState<Partial<Api.Application> & { title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile; entry: string; replacements: NonNullable<Api.Application["replacements"]> }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [createdResource, setCreatedResource] = useState<{ kind: ResourceKindInfo; target: { type: string; id: string } }>();
+  const [addingResource, setAddingResource] = useState(false);
   const [pendingPatch, setPendingPatch] = useState<{ changes: Partial<Api.Application>; revision?: number; settings: boolean }>();
   const pendingRef = useRef(pendingPatch); pendingRef.current = pendingPatch;
   const latestProject = useRef(project); latestProject.current = project;
@@ -163,7 +164,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     pendingRef.current = undefined; setPendingPatch(undefined); setCreatedResource(undefined);
     rememberRetirement(undefined);
     baseline.current = undefined; setEdited(false); if (project) setSettings(fromRecord(project)); setError(undefined);
-  }, saving || retireBusy || !!retireIntent?.attempted && !retireIntent.refusal);
+  }, saving || addingResource || retireBusy || !!retireIntent?.attempted && !retireIntent.refusal);
   const patch = async (changes: Partial<Api.Application>, revision = latestProject.current?.revision, settingsSave = false) => {
     if ((!latestProject.current && !pendingRef.current) || lock.current || pendingRetirement.current) return false;
     if (dirty && !settingsSave) { setError(t("Save or discard project settings before changing resource membership.")); return false; }
@@ -209,6 +210,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     setCreatedResource({ kind, target });
     if (target.type !== kind.type || lock.current || pendingRef.current) return;
+    setAddingResource(true); setError(undefined);
     try {
       const record = await readDraftIdentity(client, target.type, target.id);
       const current = latestProject.current;
@@ -218,6 +220,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
       if (!await patch(changesForResource(current, kind, record), current.revision)) return;
       setCreatedResource(undefined); open(resourceRoute(kind, target.id, id), { ifCurrent: { view: "project", params: { id } } });
     } catch { setError(t("The resource exists, but its project membership could not be read. Retry the same resource.")); }
+    finally { setAddingResource(false); }
   };
   const retryPatch = async () => {
     const original = pendingRef.current;
@@ -308,9 +311,9 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         {error && tab !== "settings" && <p role="alert" className="p-3 text-sm text-danger">{error}</p>}
         {pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("An application update may already have been accepted. Retry its original payload; leaving does not undo accepted changes.")} />
           <div><Button disabled={saving} onClick={() => void retryPatch()}>{t("Retry original application update")}</Button></div></div>}
-        {createdResource && !pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.")} />
+        {createdResource && !pendingPatch && (addingResource ? <Notice tone="info" message={t("Adding the resource to this project…")} /> : <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.")} />
           <div className="flex gap-2"><Button disabled={saving || dirty} onClick={() => void addCreated(createdResource.kind, createdResource.target)}>{t("Retry adding created resource")}</Button>
-            <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedResource(undefined))}>{t("Keep resource without project membership")}</Button></div></div>}
+            <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedResource(undefined))}>{t("Keep resource without project membership")}</Button></div></div>)}
         <ResourceNavigation back={{ label: t("Files"), onClick: () => open({ view: "projects" }) }} title={project.title || project.name} icon={<FolderKanban />} meta={project.name} value={tab} onChange={id => setTab(id as Section)} sections={[
           { id: "overview", label: t("Overview") },
           { id: "resources", label: t("Resources"), group: t("Contents"), badge: owned.length || undefined },

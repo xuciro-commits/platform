@@ -49,7 +49,7 @@ export function ApplicationRuns({ owner, name, project }: { owner: string; name:
    <label className="text-xs">{t("Started before")}<Input type="datetime-local" value={until} onChange={event=>{setUntil(event.target.value);setOffset(0);setChosen(undefined);}}/></label>
   </div>
   {query.isError?<Panel role="alert">{t("Application runs are unavailable to you.")} <Button size="sm" onClick={()=>void query.refetch()}>{t("Retry")}</Button></Panel>:<>
-   <DataTable data={query.data?.runs??[]} columns={columns} getRowId={run=>`${run.kind}/${run.id}`} selectedId={chosen} onRowClick={run=>setChosen(`${run.kind}/${run.id}`)} searchable={false} loading={query.isPending} empty={t("No related runs you can read.")} height={320}/>
+   <DataTable storageKey="application:runs" totalRows={query.data?.total} manualSorting data={query.data?.runs??[]} columns={columns} getRowId={run=>`${run.kind}/${run.id}`} selectedId={chosen} onRowClick={run=>setChosen(`${run.kind}/${run.id}`)} searchable={false} loading={query.isPending} empty={t("No related runs you can read.")} height={320}/>
    <div className="flex items-center gap-2 text-xs"><Button size="sm" disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-50))}>{t("Previous page")}</Button>
     <span>{query.data?.runs.length?offset+1:0}–{offset+(query.data?.runs.length??0)} / {query.data?.total??0}</span>
     <Button size="sm" disabled={offset+50>=(query.data?.total??0)} onClick={()=>setOffset(offset+50)}>{t("Next page")}</Button></div>
@@ -70,7 +70,7 @@ export function ApplicationRuns({ owner, name, project }: { owner: string; name:
      <ContextHelp title={t("Run details")}>{t("The editor opens the current saved source. The startup binding below belongs to this run.")}</ContextHelp>
      <RunBinding run={selected}/>
      {selected.subject&&<PropertyList items={[[t("Related record"),<code className="select-all break-all">{selected.subject}</code>]]}/>}
-     {!!selected.applications?.length&&<DataTable data={selected.applications} columns={[
+     {!!selected.applications?.length&&<DataTable storageKey="application:run-applications" data={selected.applications} columns={[
       {id:"app",header:t("Application"),cell:cell=>cell.row.original.ref.app+":"+cell.row.original.ref.name},
       {accessorKey:"sourceVersion",header:t("Startup version"),cell:cell=><code className="select-all break-all">{cell.row.original.sourceVersion}</code>},
      ]} getRowId={binding=>binding.ref.app+":"+binding.ref.name} height={160} searchable={false}/>}
@@ -136,7 +136,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
       [t("Refusal rate"),(monitoring.refusalRate*100).toFixed(1)+"%"],
       [t("Constraint failures"),monitoring.constraintFailures],
      ]}/>
-     <DataTable data={monitoring.refusalCodes??[]} columns={refusalColumns} getRowId={entry=>entry.category+"/"+entry.type+"/"+entry.code} height={180} searchable={false} empty={t("No recorded refusals in this application.")}/>
+     <DataTable storageKey="application:refusal-codes" data={monitoring.refusalCodes??[]} columns={refusalColumns} getRowId={entry=>entry.category+"/"+entry.type+"/"+entry.code} height={180} searchable={false} empty={t("No recorded refusals in this application.")}/>
     </div>
    </Disclosure>
    <Disclosure summary={t("AI usage and budgets")}>
@@ -155,7 +155,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
      </div>}
      {!!monitoring.agentBudgets?.length&&<div className="grid gap-2">
       <h3 className="text-sm font-medium">{t("Agent budgets per run")}</h3>
-      <DataTable data={monitoring.agentBudgets} columns={[
+      <DataTable storageKey="application:agent-budgets" data={monitoring.agentBudgets} columns={[
        {id:"resource",header:t("Resource"),cell:cell=><code className="break-all">{cell.row.original.resource.ref.name}</code>},
        {id:"steps",header:t("Steps"),cell:cell=>cell.row.original.budget.Steps||t("Owner default")},
        {id:"tokens",header:t("Tokens"),cell:cell=>cell.row.original.budget.Tokens||t("Owner default")},
@@ -166,7 +166,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
     </div>
    </Disclosure>
    <Disclosure summary={t("Application data")}>
-    <div className="py-3"><DataTable data={runtime.data} columns={[
+    <div className="py-3"><DataTable storageKey="application:runtime-data" data={runtime.data} columns={[
      {id:"resource",header:t("Object type"),cell:cell=><code className="break-all">{cell.row.original.ref.name}</code>},
      {accessorKey:"records",header:t("Records"),meta:{align:"right"}},
      {accessorKey:"expected",header:t("Declared records"),cell:cell=>cell.row.original.expected||"—",meta:{align:"right"}},
@@ -190,7 +190,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
       ...(item.checkpoints?.length?[[t("Approval checkpoints"),item.checkpoints.join(", ")] as [string,ReactNode]]:[]),
       ...(item.handoffRole?[[t("Handover role"),item.handoffRole] as [string,ReactNode]]:[]),
      ]}/>}
-     {!!item.evaluations?.length&&<DataTable data={item.evaluations} columns={[
+     {!!item.evaluations?.length&&<DataTable storageKey="application:evaluations" data={item.evaluations} columns={[
       {accessorKey:"id",header:t("Evaluation"),cell:cell=><code className="select-all break-all">{cell.row.original.id}</code>},
       {accessorKey:"state",header:t("State"),cell:cell=>t(cell.row.original.state)},
       {accessorKey:"model",header:t("Model")},
@@ -199,7 +199,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
     </Panel>)}</div>
    </Disclosure>}
    <Disclosure summary={t("Artifact contents and dependencies")}>
-    <div className="py-3"><DataTable data={bindings} columns={[
+    <div className="py-3"><DataTable storageKey="application:bindings" data={bindings} columns={[
      {id:"app",header:t("Application"),cell:cell=>cell.row.original.ref.app},
      {id:"kind",header:t("Kind"),cell:cell=>cell.row.original.ref.kind},
      {id:"name",header:t("Resource"),cell:cell=><code className="break-all">{cell.row.original.ref.name}</code>},
@@ -207,7 +207,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
     ]} getRowId={binding=>binding.ref.app+":"+binding.ref.kind+":"+binding.ref.name} height={240} searchable={false}/></div>
    </Disclosure>
    {!!runtime.artifact.environment.length&&<Disclosure summary={t("Required environment bindings")}>
-    <div className="py-3"><DataTable data={runtime.artifact.environment} columns={[
+    <div className="py-3"><DataTable storageKey="application:environment" data={runtime.artifact.environment} columns={[
      {id:"resource",header:t("Resource"),cell:cell=>cell.row.original.ref.name},
      {accessorKey:"kind",header:t("Kind")},
      {accessorKey:"name",header:t("Name")},
@@ -215,7 +215,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
     ]} getRowId={binding=>binding.ref.app+":"+binding.ref.name} height={180} searchable={false}/></div>
    </Disclosure>}
    {!!runtime.artifact.roles.length&&<Disclosure summary={t("Declared roles and scopes")}>
-    <div className="py-3"><DataTable data={runtime.artifact.roles.map((role,index)=>({...role,rowId:String(index)}))} columns={[
+    <div className="py-3"><DataTable storageKey="application:roles" data={runtime.artifact.roles.map((role,index)=>({...role,rowId:String(index)}))} columns={[
      {id:"resource",header:t("Resource"),cell:cell=>cell.row.original.resource.ref.name},
      {accessorKey:"role",header:t("Role")},
      {accessorKey:"scope",header:t("Scope"),cell:cell=>cell.row.original.scope||t("Declared action role")},
@@ -232,7 +232,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
    </Disclosure>}
    {runtime.maintenance&&<Disclosure summary={t("Application maintenance")}>
     <div className="grid gap-4 py-3">
-     <DataTable data={runtime.versions} columns={[
+     <DataTable storageKey="application:versions" data={runtime.versions} columns={[
       {accessorKey:"version",header:t("Version"),cell:cell=><code className="select-all break-all">{cell.row.original.version}</code>},
       {id:"active",header:t("State"),cell:cell=>cell.row.original.active?t("Current content version"):t("Previous content version")},
       {accessorKey:"at",header:t("Time")},

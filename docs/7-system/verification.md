@@ -53,7 +53,7 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 
 ## 7.11 黄金路径验收
 
-- 位置：`web/e2e/F<n>-<名称>.spec.ts`，Playwright；配置每次在 18496 启动一个全新宿主并加载工作区构建，不复用已有宿主（复用会带入别的运行留下的草稿）。
+- 位置：`web/e2e/F<n>-<名称>.spec.ts`，Playwright；配置每次默认在 18496 启动一个全新宿主并加载工作区构建，`PLATFORM_E2E_PORT` 可指定独立端口；不复用已有宿主（复用会带入别的运行留下的草稿）。
 - 登录：`kit.ts` 的 `signIn(page, 主体)` 以开发令牌进入；席位为 admin、builder、user。
 - 每个用例对应 5-experience 的一条任务路径，步骤与成功标准逐条断言。
 - 用例在空项目中创建自己的资源，结束时归档；不依赖其他用例的数据。

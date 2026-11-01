@@ -38,7 +38,7 @@ export function Enterprise({ element }: { element?: string; section?: string }) 
   <PageHeader title={t("Organisation")} description={t("Units, posts, people and assignments. Historical enterprise content is read-only.")} actions={host.can("enterprise.element.add")&&<Button onClick={()=>setDraft({id:crypto.randomUUID(),stereotype:ORGANIZATION,name:"",kind:"",shortName:""})}>{t("Add element")}</Button>} />
   <div className="flex flex-wrap gap-3 mb-3"><label className="grid gap-1 text-sm">{t("Effective date")}<Input type="date" value={day} onChange={e=>setDay(e.target.value)}/></label><label className="grid gap-1 text-sm">{t("Structure")}<Select value={kind} onChange={e=>setStructure(e.target.value)}>{model.kinds.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</Select></label></div>
   <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(280px,2fr)]">
-   <Panel title={t("Directory")}><DataTable data={directory} columns={columns} getRowId={row=>row.id} height={440}/></Panel>
+   <Panel title={t("Directory")}><DataTable storageKey="enterprise:directory" data={directory} columns={columns} getRowId={row=>row.id} height={440}/></Panel>
    <Panel title={chosen?.name??t("Choose an element")}>
     {chosen&&<div className="grid gap-3">
      <PropertyList items={[[t("ID"),chosen.id],[t("Type"),t(labels[chosen.stereotype]??chosen.stereotype)],[t("Kind"),chosen.kind??""],[t("Status"),t(elementStatus(chosen,day))]]}/>
@@ -54,7 +54,7 @@ export function Enterprise({ element }: { element?: string; section?: string }) 
   </div>
   <Panel className="mt-4" title={t("Assignments")} actions={host.can("enterprise.relationship.add")&&<Button disabled={!meta.data} onClick={()=>setRelationship({id:crypto.randomUUID(),stereotype:MEMBERSHIP,source:"",target:"",role:"employee"})}>{t("Add assignment")}</Button>}>
    {meta.isError&&<><Notice tone="warning" message={t("Assignment rules could not be loaded.")}/><Button onClick={()=>void meta.refetch()}>{t("Try again")}</Button></>}
-   <DataTable data={model.relationships.filter(row=>[MEMBERSHIP,FILLS_POST,RESPONSIBLE_FOR].includes(row.stereotype))} getRowId={row=>row.id} height={240} columns={[
+   <DataTable storageKey="enterprise:assignments" data={model.relationships.filter(row=>[MEMBERSHIP,FILLS_POST,RESPONSIBLE_FOR].includes(row.stereotype))} getRowId={row=>row.id} height={240} columns={[
     {accessorKey:"source",header:t("Source"),cell:({row:{original:row}})=>names.get(row.source)??row.source},
     {accessorKey:"target",header:t("Target"),cell:({row:{original:row}})=>names.get(row.target)??row.target},
     {accessorKey:"role",header:t("Role")},
@@ -63,7 +63,7 @@ export function Enterprise({ element }: { element?: string; section?: string }) 
    ]}/>
   </Panel>
   {host.can("enterprise.kind.add")&&<Panel className="mt-4" title={t("Structures")}><Form className="flex gap-2" onSubmit={async()=>{if(await host.decide("enterprise.kind.add",{type:"enterprise.model",id:crypto.randomUUID()},{name:newStructure,kind:"custom"}))setNewStructure("");}}><Input aria-label={t("Name")} value={newStructure} onChange={e=>setNewStructure(e.target.value)} required/><Button type="submit">{t("Add structure")}</Button></Form></Panel>}
-  {(historical.length>0||model.views.length>0)&&<Panel className="mt-4" title={t("Historical enterprise content")}><DataTable data={historical} columns={columns} getRowId={row=>row.id} height={200}/>{model.views.map(view=><Disclosure key={view.id} summary={view.name}><pre className="whitespace-pre-wrap text-xs">{JSON.stringify(view,null,2)}</pre></Disclosure>)}</Panel>}
+  {(historical.length>0||model.views.length>0)&&<Panel className="mt-4" title={t("Historical enterprise content")}><DataTable storageKey="enterprise:historical" data={historical} columns={columns} getRowId={row=>row.id} height={200}/>{model.views.map(view=><Disclosure key={view.id} summary={view.name}><pre className="whitespace-pre-wrap text-xs">{JSON.stringify(view,null,2)}</pre></Disclosure>)}</Panel>}
   {draft&&<Sheet isolated open title={t(model.elements.some(row=>row.id===draft.id)?"Edit element":"Add element")} onOpenChange={open=>!open&&setDraft(undefined)}><Form className="grid gap-3" onSubmit={async()=>{const editing=model.elements.some(row=>row.id===draft.id);if(await host.decide(editing?"enterprise.element.edit":"enterprise.element.add",{type:ELEMENT,id:draft.id},{name:draft.name,kind:draft.kind,shortName:draft.shortName,...(!editing?{stereotype:draft.stereotype,from:day}:{})}))setDraft(undefined);}}>
    <label className="grid gap-1">{t("Type")}<Select value={draft.stereotype} disabled={model.elements.some(row=>row.id===draft.id)} onChange={e=>setDraft({...draft,stereotype:e.target.value})}>{types.map(type=><option key={type} value={type}>{t(labels[type]??type)}</option>)}</Select></label>
    <label className="grid gap-1">{t("Name")}<Input value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})} required/></label>

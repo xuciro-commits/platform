@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig } from "@playwright/test";
 
-const port = 18496;
+const port = Number(process.env.PLATFORM_E2E_PORT ?? 18496);
 const tenants = join(mkdtempSync(join(tmpdir(), "platform-acceptance-")), "tenants.json");
 copyFileSync(new URL("./tenants.json", import.meta.url), tenants);
 

@@ -1,38 +1,6 @@
 import { withApp, type ApplicationUIInfo, type AppUI, type Definition, type Host } from "@platform/app";
 import type { NavSection, Route } from "@platform/ui";
 
-export type ComposedApplication = AppUI & { homeFor: (host: Host) => Route };
-export function composeApplications(contributions: readonly AppUI[]): ComposedApplication[] {
-  const groups = new Map<string, AppUI[]>();
-  for (const app of contributions) groups.set(app.id, [...groups.get(app.id) ?? [], app]);
-  return [...groups.values()].map<ComposedApplication>(sources => {
-    const primary = sources[0]!;
-    return withApp(primary as ComposedApplication, {
-      navigation: sources.find(app => app.navigation)?.navigation,
-      referenceContext: sources.find(app => app.referenceContext)?.referenceContext,
-      serves: [...new Set(sources.flatMap(app => app.serves ?? [app.id]))],
-      views: sources.flatMap(app => app.views),
-      opens: Object.assign({}, ...sources.map(app => app.opens)),
-      homeFor: member => {
-        const source = sources.find(app => !app.for || app.for(member)) ?? primary;
-        return typeof source.home === "function" ? source.home(member) : source.home;
-      },
-      for: member => sources.some(app => !app.for || app.for(member)),
-      nav: (member, route) => {
-        const sections = new Map<string, NavSection>();
-        for (const app of sources) {
-          if (app.for && !app.for(member)) continue;
-          for (const section of app.nav(member, route)) {
-            const previous = sections.get(section.label);
-            sections.set(section.label, { ...section, items: [...previous?.items ?? [], ...section.items] });
-          }
-        }
-        return [...sections.values()].filter(section => section.items.length > 0);
-      },
-    });
-  });
-}
-
 type ApplicationDefinition = Definition & { application: NonNullable<Definition["application"]> };
 type ApplicationEntry = Pick<AppUI, "id" | "serves">;
 const applicationID = (definition: ApplicationDefinition) => `${definition.ref.app}:${definition.application.name}`;
@@ -129,8 +97,8 @@ export function extendApplications(entries: readonly AppUI[], definitions: reado
 }
 
 export function applicationUIInfo(contributions: readonly AppUI[], host: Host): ApplicationUIInfo[] {
-  return composeApplications(contributions.filter(app => !app.for || app.for(host))).map(app => ({
-    id: app.id, title: app.title, serves: app.serves ?? [app.id], home: app.homeFor(host), sections: app.nav(host),
+  return contributions.filter(app => !app.for || app.for(host)).map(app => ({
+    id: app.id, title: app.title, serves: app.serves ?? [app.id], home: typeof app.home === "function" ? app.home(host) : app.home, sections: app.nav(host),
     views: app.views.map(view => ({ id: view.id, title: view.title({}) })), opens: { ...app.opens },
   }));
 }

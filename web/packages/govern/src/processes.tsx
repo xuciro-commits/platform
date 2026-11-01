@@ -17,7 +17,7 @@ export function Flows() {
   return (
     <>
       <PageHeader title={t("Workflow runs")} help={t("Long-running processes the apps declare. Each instance is a record: open one to see where it stands and why it moved.")} />
-      <DataTable data={flows} columns={columns} getRowId={(f) => `${f.id}@${f.version}`} height={180} empty={t("No app declares a flow")}
+      <DataTable storageKey="automate:flows" data={flows} columns={columns} getRowId={(f) => `${f.id}@${f.version}`} height={180} empty={t("No app declares a flow")}
         selectedId={shown} onRowClick={(f) => setShown(shown === `${f.id}@${f.version}` ? undefined : `${f.id}@${f.version}`)} />
       {definition
         ? <div className="mt-3 grid gap-1"><h2 className="text-sm font-semibold">{definition.title} <span className="font-mono text-xs text-muted">{definition.id} v{definition.version}</span></h2><FlowGraph definition={definition} /></div>
@@ -41,7 +41,7 @@ export function Agents() {
   return (
     <>
       <PageHeader title={t("Agents")} help={t("Agents the apps declare. Each is a principal of its own: it does what its tools allow and, for a person, only what they may do; people confirm its drafts. The model is an app setting of Agents.")} />
-      <DataTable data={agents} columns={columns} getRowId={(a) => a.id} height={180} empty={t("No app declares an agent")} />
+      <DataTable storageKey="automate:agents" data={agents} columns={columns} getRowId={(a) => a.id} height={180} empty={t("No app declares an agent")} />
       <AgentsOverview />
     </>
   );
@@ -116,7 +116,7 @@ function AgentsOverview() {
         <Chart spec={{ title: t("Runs by agent"), data: { values: overview.map((o) => ({ agent: o.member, runs: o.runs })) }, mark: { type: "bar", orient: "horizontal" }, encoding: { x: { field: "runs", type: "quantitative" }, y: { field: "agent", type: "nominal" } } }} height={Math.max(120, 40 + overview.length * 28)} />
         <Chart spec={{ title: t("What people made of the work"), data: { values: judgedSides(overview) }, mark: { type: "arc", donut: true }, encoding: { theta: { field: "count", type: "quantitative" }, color: { field: "side", type: "nominal" } } }} height={Math.max(120, 40 + overview.length * 28)} />
       </div>}
-      <DataTable data={overview} columns={columns} getRowId={(o) => o.member} height={220} empty={t("No agent yet")} />
+      <DataTable storageKey="automate:agent-overview" data={overview} columns={columns} getRowId={(o) => o.member} height={220} empty={t("No agent yet")} />
     </>
   );
 }

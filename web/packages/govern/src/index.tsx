@@ -3,7 +3,7 @@ import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/ap
 import { Button, Card, ContentTabs, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
 import type { ReactNode } from "react";
 import { Markings } from "./markings";
-import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, Settings, ShieldCheck, Database, FlaskConical, History, KeyRound, Network, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Building2, Cable, Settings, ShieldCheck, FlaskConical, History, KeyRound, Network, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
@@ -131,6 +131,7 @@ export const controlPanel = defineApp({
   category: "govern",
   description: "Members, roles, AI models, settings and the audit trail.",
   for: () => true,
+  portal: host => controlPanelNavigation(host).some(section => navigationLinks(section.items).some(item => item.route.view !== "control-panel")),
   title: "Control Panel",
   icon: <SlidersHorizontal />,
   home: { view: "control-panel" },
@@ -159,49 +160,44 @@ function RunsHome() {
   return host.role("flow") ? <Flows /> : <Automation />;
 }
 
-export const monitoring = defineApp({
-  id: "monitoring", serves: ["platform", "flow"], category: "govern", title: "Monitoring", icon: <Activity />,
-  description: "Health, runs, queued and failed work, and every delivery the host attempted.",
-  for: (host) => admin(host) || !!host.role("flow"),
-  home: { view: "runs-home" },
-  views: [
-    { id: "runs-home", title: () => t("Runs"), render: () => <RunsHome /> },
-    { id: "flows", title: () => t("Workflow runs"), render: () => <RunsTabs current="flows"><Flows /></RunsTabs> },
-    { id: "automation-operations", title: () => t("Work queue"), render: () => <RunsTabs current="automation-operations"><Automation /></RunsTabs> },
-    { id: "delivery-attempts", title: () => t("Delivery attempts"), render: () => <RunsTabs current="delivery-attempts"><Deliveries /></RunsTabs> },
-    { id: "effects", title: () => t("Outbound effects"), render: () => <RunsTabs current="effects"><OutboundEffects /></RunsTabs> },
-    { id: "system-health", title: () => t("Health"), render: () => <SystemHealth /> },
-  ],
-  nav: (host) => {
-    const runs = monitoringRuns(host);
-    return [{ label: t("Monitoring"), items: [
-      ...(runs.length ? [{ label: t("Runs"), icon: <Route />, route: { view: runs[0]!.view }, covers: ["runs-home", ...runs.map(run => run.view)] }] : []),
-      ...(admin(host) ? [{ label: t("Health"), icon: <BarChart3 />, route: { view: "system-health" } }] : []),
-    ] }];
-  },
-});
+export function createMonitoring(host: Host, integration?: Pick<AppUI, "for" | "views" | "nav">): AppUI {
+  const operating = admin(host) || !!host.role("flow");
+  const integrating = !!integration && (!integration.for || integration.for(host));
+  return defineApp({
+    id: "monitoring", serves: ["platform", "flow", "build"], category: "govern", title: "Monitoring", icon: <Activity />,
+    description: "Health, runs, queued and failed work, and every delivery the host attempted.",
+    for: host => admin(host) || !!host.role("flow") || !!integration && (!integration.for || integration.for(host)),
+    home: { view: operating ? "runs-home" : "integration-health" },
+    views: [
+      ...(integrating ? integration.views : []),
+      ...(operating ? [
+        { id: "runs-home", title: () => t("Runs"), render: () => <RunsHome /> },
+        { id: "flows", title: () => t("Workflow runs"), render: () => <RunsTabs current="flows"><Flows /></RunsTabs> },
+        { id: "automation-operations", title: () => t("Work queue"), render: () => <RunsTabs current="automation-operations"><Automation /></RunsTabs> },
+        { id: "delivery-attempts", title: () => t("Delivery attempts"), render: () => <RunsTabs current="delivery-attempts"><Deliveries /></RunsTabs> },
+        { id: "effects", title: () => t("Outbound effects"), render: () => <RunsTabs current="effects"><OutboundEffects /></RunsTabs> },
+        { id: "system-health", title: () => t("Health"), render: () => <SystemHealth /> },
+      ] : []),
+    ],
+    nav: (host) => {
+      const runs = monitoringRuns(host);
+      return [{ label: t("Monitoring"), items: [
+        ...(runs.length ? [{ label: t("Runs"), icon: <Route />, route: { view: runs[0]!.view }, covers: ["runs-home", ...runs.map(run => run.view)] }] : []),
+        ...(admin(host) ? [{ label: t("Health"), icon: <BarChart3 />, route: { view: "system-health" } }] : []),
+        ...(integrating ? integration.nav(host).flatMap(section => section.items) : []),
+      ] }];
+    },
+  });
+}
 
-export const dataConnection = defineApp({
-  id: "data-connection", serves: ["platform"], category: "build", title: "Data Connection", icon: <Database />,
-  description: "Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out.",
-  for: (host) => admin(host) || host.holds("build", "builder", "integrator"),
-  home: (host) => host.holds("build", "builder", "integrator") ? { view: "connection" } : { view: "endpoints" },
-  views: [
-    { id: "endpoints", title: () => t("Webhooks"), render: () => <Endpoints /> },
-  ],
-  nav: (host) => [
-    { label: t("Sources"), items: [] },
-    { label: t("Streams"), items: [{ label: t("Observations"), icon: <BarChart3 />, route: { view: "observations" } }] },
-    { label: t("Exports"), items: [] },
-    { label: t("Webhooks"), items: admin(host) ? [{ label: t("Webhooks"), icon: <Cable />, route: { view: "endpoints" } }] : [] },
-  ],
-});
+export const dataConnectionOperations = {
+  views: [{ id: "endpoints", title: () => t("Webhooks"), render: () => <Endpoints /> }],
+  streamLinks: () => [{ label: t("Observations"), icon: <BarChart3 />, route: { view: "observations" } }],
+  webhookLinks: (host: Host) => admin(host) ? [{ label: t("Webhooks"), icon: <Cable />, route: { view: "endpoints" } }] : [],
+};
 
-export const agents = defineApp({
-  id: "agents", serves: ["agent"], category: "build", title: "Agent Studio", icon: <BrainCircuit />,
-  description: "AI agents, what they are allowed to do, their runs and evaluations.",
+export const agentOperations: Pick<AppUI, "for" | "views" | "nav"> = {
   for: (host) => !!host.role("agent"),
-  home: { view: "agents" },
   views: [
     { id: "agents", title: () => t("Agents"), render: () => <Agents /> },
     { id: "agent-runs", title: () => t("Agent runs"), render: () => <AgentRuns /> },
@@ -214,7 +210,7 @@ export const agents = defineApp({
     { label: t("Agent memories"), icon: <BookA />, route: { view: "agent-memories" } },
     { label: t("Evaluations"), icon: <FlaskConical />, route: { view: "evaluations" } },
   ] }],
-});
+};
 
 export const knowledge = defineApp({
   id: "knowledge", serves: ["knowledge"], surface: "work", category: "business", title: "Knowledge", icon: <BookOpen />,
@@ -281,5 +277,5 @@ export const enterprise = defineApp({
   nav: () => [{label:t("Organisation directory"),items:[{ label: t("Organisation directory"), icon: <Building2 />, route: {view:"enterprise"} }]}],
 });
 
-export const contributions: AppUI[] = [marketplace, monitoring, dataConnection, agents, knowledge, hostConsole, masterData, enterprise];
+export const contributions: AppUI[] = [marketplace, knowledge, hostConsole, masterData, enterprise];
 export default controlPanel;

@@ -54,7 +54,7 @@ export function FunctionCatalog() {
     <SegmentedChoice label={t("Engine")} value={engine} onChange={setEngine} options={[{ value: "all", label: t("All engines") }, ...engines.map(item => ({ value: item.id, label: t(item.title) }))]} />
     {inventories.some(inventory => inventory.isError) && <p role="alert" className="text-xs text-danger">{t("Some functions could not be loaded.")}</p>}
     <div className="min-h-[24rem] flex-1">
-      <DataTable data={visible} columns={columns} getRowId={row => row.key} height="100%" searchable={false} loading={inventories.some(inventory => inventory.isLoading)}
+      <DataTable storageKey="functions:catalog" data={visible} columns={columns} getRowId={row => row.key} height="100%" searchable={false} loading={inventories.some(inventory => inventory.isLoading)}
         onRowClick={row => open(resourceRoute(row.engine.kind, row.record.id, application))} empty={text ? t("No function matches.") : t("No functions yet. Choose New function and an engine.")} />
     </div>
   </div>;

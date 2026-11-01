@@ -37,7 +37,7 @@ export function ProjectAccess({ project, title }: { project: string; title: stri
       </ContextHelp>
     </div>
     {query.isError && <Notice tone="danger" role="alert" message={t("Project access could not be loaded.")} />}
-    <DataTable data={members} getRowId={item => item.member} searchable={false} loading={query.isPending} height={Math.max(150, Math.min(360, 34 + members.length * 36))} rowHeight={36}
+    <DataTable storageKey="files:project-members" data={members} getRowId={item => item.member} searchable={false} loading={query.isPending} height={Math.max(150, Math.min(360, 34 + members.length * 36))} rowHeight={36}
       empty={t("No members yet. Builders and administrators reach every project.")} columns={[
         { id: "person", header: t("Member"), accessorFn: item => name(item.member), cell: ({ row: { original } }) => <span className="truncate">{name(original.member)}{original.member === me.profile.id ? ` · ${t("you")}` : ""}</span> },
         { id: "role", header: t("Role"), meta: { width: 180 }, accessorFn: item => item.role ?? "", cell: ({ row: { original } }) => view?.manage

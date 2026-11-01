@@ -4,6 +4,8 @@ import { useViewVisible } from "../shell/ViewVisibility";
 import { toOption, formatter, type Theme } from "./echarts";
 import { aggregateQuery, aggregateValues, columnOf, markOf, type AggregateColumn, type AggregateData, type AggregateQuery, type ChartSpec } from "./spec";
 import { t } from "../i18n";
+import { Notice } from "../components/Notice";
+import { Button } from "../primitives/button";
 
 export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData>; revision?: number; scope?:string; watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void };
 
@@ -25,8 +27,9 @@ function theme(): Theme {
   };
 }
 
-export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: AggregateData; error?: string } {
+export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: AggregateData; error?: string; retry: () => void } {
   const [state, setState] = useState<{ key?:string; data?: AggregateData; error?: string }>({});
+  const [attempt, setAttempt] = useState(0);
   const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding) + JSON.stringify(source?.scope);
   const visible = useViewVisible();
   const from = useRef(source);
@@ -47,17 +50,17 @@ export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: Ag
     let live = true;
     setState(previous => previous.key === key ? { key, data: previous.data } : { key });
     const type = spec.data.entity;
-    const load = () => source.aggregate(type, query).then((data) => live && setState({ key, data }), (e) => live && setState({ key, error: String(e) }));
+    const load = () => source.aggregate(type, query).then((data) => live && setState({ key, data }), () => live && setState({ key, error: "Chart data could not be loaded. Retry, or check the source and your access." }));
     const stop = source.watchAggregate?.(type, query, load); void load();
     return () => { live = false; stop?.(); };
-  }, [key, source?.revision, visible]);
-  return state.key===key?state:{};
+  }, [key, source?.revision, visible, attempt]);
+  return {...(state.key===key?state:{}),retry:()=>setAttempt(value=>value+1)};
 }
 
 export function Chart({ spec, source, height = 260, frame = true }: { spec: ChartSpec; source?: ChartSource; height?: number; frame?: boolean }) {
-  const { data, error } = useChartData(spec, source);
+  const { data, error, retry } = useChartData(spec, source);
   const mark = markOf(spec);
-  const body = error ? <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>
+  const body = error ? <div className="grid gap-2"><Notice tone="danger" message={t(error)} /><Button className="justify-self-start" size="sm" onClick={retry}>{t("Retry")}</Button></div>
     : !data ? <p className="text-sm text-muted">{t("Loading…")}</p>
     : mark.type === "kpi" ? <Kpi spec={spec} data={data} />
     : data.rows.length === 0 ? <p className="text-sm text-muted">{t("No data")}</p>

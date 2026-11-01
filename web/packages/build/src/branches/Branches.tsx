@@ -24,7 +24,7 @@ export function Branches() {
     <PageHeader title={t("Branches and proposals")} help={t("A branch collects definition changes. Review them, propose the branch, and merge it once its checks and approvals pass. Merging seals a release candidate; activating it publishes.")}
       actions={<Button variant="primary" onClick={() => setCreating(true)}>{t("New branch")}</Button>} />
     {list.isError ? <p role="alert" className="text-sm text-danger">{list.error.message}</p>
-      : <DataTable data={rows} columns={columns} getRowId={row => row.id} loading={list.isPending} height={360} searchable={false} rowHeight={28}
+      : <DataTable storageKey="branches:list" data={rows} columns={columns} getRowId={row => row.id} loading={list.isPending} height={360} searchable={false} rowHeight={28}
         empty={t("No branches yet. Create one to collect changes for review.")} onRowClick={row => open({ view: "proposal", params: { id: row.id } })} />}
     <NewBranchDialog open={creating} onOpenChange={setCreating} onCreated={branch => select(branch.id)} />
   </div>;

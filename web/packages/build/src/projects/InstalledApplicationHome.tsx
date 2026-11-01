@@ -74,7 +74,7 @@ export function InstalledApplicationHome({ id, area, selected }: { id: string; a
       {pendingPage && <div><Button disabled={joining} onClick={() => void joinPage(pendingPage)}>{t("Retry adding saved page")}</Button></div>}
       <PanelSection title={t(studioAreas.find(item => item.id === activeArea)!.title)}>
         <Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} value={filter} onChange={event => setFilter(event.target.value)} />
-        <DataTable data={visible} columns={columns} getRowId={item => refKey(item.ref)} selectedId={current && refKey(current.ref)} onRowClick={item => setChosen(refKey(item.ref))} searchable={false} height={280} />
+        <DataTable storageKey="files:installed-application-resources" data={visible} columns={columns} getRowId={item => refKey(item.ref)} selectedId={current && refKey(current.ref)} onRowClick={item => setChosen(refKey(item.ref))} searchable={false} height={280} />
         {current && <div className="grid min-w-0 gap-3 py-3">
           <h2 className="text-base font-semibold">{current.title}</h2>
           <PropertyList columns={2} items={[[t("Identity"), <code>{refKey(current.ref)}</code>], [t("Version"), currentDefinition?.version ?? "—"]]} />

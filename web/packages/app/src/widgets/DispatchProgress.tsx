@@ -59,9 +59,9 @@ function DispatchCard({ run, onChanged }: { run: Api.DispatchRun; onChanged: () 
       ...(reading.reason&&reading.reason!==run.reason?[[t("Reason"),reading.reason] as [string,string]]:[]),
     ]}/>}
     <div className="flex min-w-0 flex-wrap gap-2"><Button size="sm" variant="ghost" onClick={() => openRecord(run.subject)}>{t("Open business record")}</Button><Tag className="h-auto max-w-full whitespace-normal py-1 leading-tight" label={t(safe ? run.command.idempotent ? "Idempotent command" : "Target deduplicates by business key" : "Unsafe to resend automatically")} tone={safe ? "info" : "warning"} /></div>
-    {!!run.attempts?.length && <Disclosure summary={t("Dispatch attempts")}><DataTable data={run.attempts} columns={attemptColumns} getRowId={attempt => attempt.intent} searchable={false} height={200} /></Disclosure>}
+    {!!run.attempts?.length && <Disclosure summary={t("Dispatch attempts")}><DataTable storageKey="dispatch:attempts" data={run.attempts} columns={attemptColumns} getRowId={attempt => attempt.intent} searchable={false} height={200} /></Disclosure>}
     {!!run.readback?.length&&<Disclosure summary={t("Status read history")}>
-      <div className="py-2"><DataTable data={[...run.readback].reverse().map((entry,index)=>({...entry,rowId:String(index)}))} columns={[
+      <div className="py-2"><DataTable storageKey="dispatch:readback" data={[...run.readback].reverse().map((entry,index)=>({...entry,rowId:String(index)}))} columns={[
         {accessorKey:"at",header:t("Time"),cell:cell=>formatStamp(cell.row.original.at)},
         {accessorKey:"state",header:t("State"),cell:cell=>stateName(cell.row.original.state)},
         {accessorKey:"value",header:t("Value")},

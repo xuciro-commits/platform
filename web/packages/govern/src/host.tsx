@@ -64,7 +64,7 @@ export function HostOverview() {
       [t("Host administrators"), overview.data?.admins ?? 0],
     ]} /></div>
     {overview.isError ? <p role="alert" className="text-sm text-danger">{t("Only host administrators can open the Host Console.")}</p>
-      : <DataTable data={tenants} columns={columns} getRowId={(r) => r.id} height="calc(100dvh - 330px)" empty={t("This host runs no tenants.")}
+      : <DataTable storageKey="host:tenants" data={tenants} columns={columns} getRowId={(r) => r.id} height="calc(100dvh - 330px)" empty={t("This host runs no tenants.")}
         onRowClick={(r) => open({ view: "host-tenant", params: { tenant: r.id } })} />}
   </>;
 }
@@ -131,13 +131,13 @@ export function HostTenant({ tenant }: { tenant: string }) {
       <RuntimeComposition tenant={tenant} changed={() => view.refetch()} />
       <PanelGroup>
         <Panel title={t("Trusted artifacts")} className="grid gap-2">
-          <DataTable data={artifacts.data ?? []} columns={artifactColumns} getRowId={(a) => a.candidate} height={220} empty={t("No releases or candidates saved for this tenant.")} />
+          <DataTable storageKey="host:tenant-artifacts" data={artifacts.data ?? []} columns={artifactColumns} getRowId={(a) => a.candidate} height={220} empty={t("No releases or candidates saved for this tenant.")} />
         </Panel>
         <Panel title={t("Support sessions")} className="grid gap-2">
-          <DataTable data={grants.data ?? []} columns={grantColumns} getRowId={(g) => g.id} height={200} empty={t("No support session has been opened.")} />
+          <DataTable storageKey="host:tenant-support-sessions" data={grants.data ?? []} columns={grantColumns} getRowId={(g) => g.id} height={200} empty={t("No support session has been opened.")} />
         </Panel>
         <Panel title={t("Migrations")} className="grid gap-2">
-          <DataTable data={migrations.data ?? []} columns={migrationColumns} getRowId={(m) => `${m.at}:${m.key}`} height={200} empty={t("Nothing has been moved in or out of this tenant.")} />
+          <DataTable storageKey="host:tenant-migrations" data={migrations.data ?? []} columns={migrationColumns} getRowId={(m) => `${m.at}:${m.key}`} height={200} empty={t("Nothing has been moved in or out of this tenant.")} />
         </Panel>
       </PanelGroup>
     </div>

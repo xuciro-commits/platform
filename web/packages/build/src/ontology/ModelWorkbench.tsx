@@ -84,7 +84,7 @@ function ObjectTypes() {
       </>} />
     {inventory.isError && <Panel role="alert">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
     <div className="min-h-[24rem] flex-1">
-      <DataTable data={visible} columns={columns} getRowId={(item) => item.ref.name} height="100%" loading={inventory.isLoading} searchable={false}
+      <DataTable storageKey="ontology:object-types" data={visible} columns={columns} getRowId={(item) => item.ref.name} height="100%" loading={inventory.isLoading} searchable={false}
         onRowClick={openResource} empty={search ? t("No matching objects.") : t("No object types yet.")} />
     </div>
   </div>;
@@ -118,7 +118,7 @@ function ObjectTypeDetail({ name, initialTab }: { name: string; initialTab?: str
         {entity?.description && <p className="max-w-3xl text-sm text-muted">{entity.description}</p>}
         <PropertyList items={[[t("Owner"), resource.ref.app], [t("Version"), resource.installed?.version ?? t("Draft")], [t("Title property"), entity?.display ?? "—"], [t("Implements"), entity?.implements?.join(", ") || "—"]]} />
       </div> },
-      { id: "properties", title: t("Properties"), badge: resource.fields.length, content: <DataTable data={resource.fields} getRowId={(field) => field.name} searchable={false} height={420}
+      { id: "properties", title: t("Properties"), badge: resource.fields.length, content: <DataTable storageKey="ontology:published-properties" data={resource.fields} getRowId={(field) => field.name} searchable={false} height={420}
         columns={[{ accessorKey: "title", header: t("Property") }, { accessorKey: "name", header: t("API name"), cell: ({ row }) => <span className="font-mono text-xs">{row.original.name}</span> }, { accessorKey: "type", header: t("Type"), cell: ({ row }) => t(row.original.type) }, { id: "shared", header: t("Shared property"), accessorFn: f => f.property ? `${f.property.ref.name}@${f.property.sourceVersion}` : "—" }, { id: "reference", header: t("Reference object"), accessorFn: (field) => field.ref ?? "—" }, { id: "actions", header: "", meta: { width: 140 }, cell: ({ row }) => resource.installed ? <Button size="sm" variant="ghost" onClick={() => setSeed({ object: resource.ref, field: row.original.name })}>{t("Use in page")}</Button> : null }]} /> },
       { id: "links", title: t("Links"), badge: related.length, content: <div className="grid gap-1">{related.map((relation) => {
         const inbound = relation.target.name === name;

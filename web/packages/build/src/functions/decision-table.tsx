@@ -75,7 +75,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Description")}<Textarea rows={1} value={draft.description ?? ""} onChange={(e) => patch({ description: e.target.value })} /></label>
       </Panel>
       <Panel title={t("Rules")} className="grid min-w-0 gap-2 overflow-auto">
-        <DataTable data={[...(draft.rows ?? []).map((_, i) => i), -1]} columns={columns} getRowId={r => r < 0 ? "default" : String(r)} height={Math.min(480, 124 + ((draft.rows ?? []).length + 1) * 40)} rowHeight={40} searchable={false} resizable={false} />
+        <DataTable data={[...(draft.rows ?? []).map((_, i) => i), -1]} columns={columns} getRowId={r => r < 0 ? "default" : String(r)} height={Math.min(480, 124 + ((draft.rows ?? []).length + 1) * 40)} rowHeight={40} searchable={false} resizable={false} columnChooser={false} />
         <div><Button size="sm" onClick={() => patch({ rows: [...(draft.rows ?? []), { when: (draft.inputs ?? []).map(() => ""), then: (draft.outputs ?? []).map(() => "") }] })}>{t("Add row")}</Button></div>
         <p className="text-xs text-muted">{t("Leave the default empty to refuse a call no row matches; fill it to answer anyway.")}</p>
       </Panel>

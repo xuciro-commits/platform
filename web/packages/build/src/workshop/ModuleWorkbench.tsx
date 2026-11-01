@@ -5,7 +5,7 @@ import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { pageUIProfile, pageVariableValues, useHost, useNewRecord } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import {ApplicationHeader, InputDraftProvider, Button, Dialog, Checkbox, IconPicker, Input, PanelSection, ProblemList, StructureRow, Textarea, Workbench, t, useUnsavedChanges, useWorkspace, type WorkbenchProblem} from "@platform/ui";
+import {ApplicationHeader, InputDraftProvider, Button, Dialog, EmptyState, Checkbox, IconPicker, Input, PanelSection, ProblemList, StructureRow, Textarea, Workbench, t, useUnsavedChanges, useWorkspace, type WorkbenchProblem} from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, LayoutTemplate, Layers, PanelTop, Plus, Settings2, Trash2, Variable } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDraftSession } from "../session/DraftSession";
@@ -63,7 +63,7 @@ function ModulesList() {
       </Button></li>)}
     </ul>
     {projects.isError && <p role="alert" className="text-sm text-danger">{t("Modules are unavailable. This does not mean no applications exist.")}</p>}
-    {!projects.isError && !projects.isLoading && !rows.length && <p className="text-sm text-muted">{t("No projects yet. Create one in Projects.")}</p>}
+    {!projects.isError && !projects.isLoading && !rows.length && <EmptyState className="py-8" icon={<LayoutTemplate aria-hidden className="size-5 opacity-60" />} title={t("No projects yet")} hint={t("Create a project in Files to start building its module.")} action={<Button onClick={() => open({ view: "projects" })}>{t("Go to Files")}</Button>} />}
   </div>;
 }
 
@@ -138,13 +138,13 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     if (project) { session.load(hydrate(project,declarationFields)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
     setError(undefined); void query.refetch();
   });
-  const pendingPage = createdPage && <div role="alert" className="grid gap-2 border border-warning/30 p-3 text-sm">
+  const pendingPage = createdPage && (saving ? <p role="status" className="p-3 text-sm text-muted">{t("Adding the page to this module…")}</p> : <div role="alert" className="grid gap-2 border border-warning/30 p-3 text-sm">
     <p>{t("A page was created but its module membership is unconfirmed. Retry the same page; creating another page would duplicate the work.")}</p>
     <code className="break-all text-xs">{createdPage.id}</code>
     {error && <p className="text-danger">{error}</p>}
     <div className="flex gap-2"><Button disabled={saving || invalid} onClick={() => void attachCreatedPage(createdPage)}>{t("Retry adding created page")}</Button>
       <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedPage(undefined))}>{t("Keep page without module membership")}</Button></div>
-  </div>;
+  </div>);
   const context: ModuleContext | undefined = project ? { project, pages, currentPage: page, canEdit, busy: saving || !!createdPage, openPage, addPage,
     openModule: (next) => { if (next) setFocus(next); if (page) open({ view: "module", params: { id: project.id, application: project.id } }); } } : undefined;
   if (!project || !context) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{query.isError ? t("The project could not be loaded.") : t("Loading…")}{pendingPage}</WorkbenchMessage></Workbench>;
@@ -204,7 +204,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
         operations={canEdit ? [{ id: "new-page", label: t("New page"), icon: <Plus />, disabled: !createPage.available, run: addPage }] : []}
         onSave={canEdit ? () => save() : undefined} onReload={reload} route={{ view: "module", params: { id: project.id } }} />}
       left={{ label: t("Module structure"), content: <ModuleTree context={context} focus={focus} onFocus={setFocus} /> }}
-      right={{ label: t("Module inspector"),scope:focus, tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: <fieldset disabled={!canEdit || saving || !!createdPage} className="contents">{inspector[tab.id]}</fieldset> })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
+      right={{ label: t("Module inspector"),scope:focus,selection:focus, tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: <fieldset disabled={!canEdit || saving || !!createdPage} className="contents">{inspector[tab.id]}</fieldset> })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
       dock={{ label: t("Module dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <StructuredEditor expectedRevision={branch ? mainRevision : baseRevision.current} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${source.scope}`} readOnly={!canEdit} disabled={saving || !!createdPage} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...next, title: next.title as string, pages: next.pages as string[] ?? [], groups: next.groups as Api.AppGroup[] ?? [] })); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, declarationValue(project, declarationFields)), branch ? mainRevision : baseRevision.current)}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-canvas p-4">

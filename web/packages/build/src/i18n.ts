@@ -4360,4 +4360,9 @@ register("zh-CN", {
   "True or false": "真或假",
   "No value (null)": "无值（null）",
   "Add expression": "添加表达式",
+  "No projects yet": "还没有项目",
+  "Create a project in Files to start building its module.": "在文件中创建项目，即可开始构建其模块。",
+  "Go to Files": "前往文件",
+  "Adding the resource to this project…": "正在将资源加入此项目…",
+  "Adding the page to this module…": "正在将页面加入此模块…",
 });

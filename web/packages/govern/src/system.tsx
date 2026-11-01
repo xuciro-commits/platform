@@ -68,7 +68,7 @@ function PendingRequests({receipts}:{receipts:Receipts}){
 function Changes({rows,releases,activations,loading,error,reload}:{rows:ChangeRow[];releases:ReleaseRow[];activations:ActivationRow[];loading:boolean;error?:string;reload:()=>void}){
  const t=useText(),[open,setOpen]=useState<string>(),selected=rows.find(row=>row.id===open);
  return <Panel title={t("System changes")} actions={<Button onClick={reload}>{t("Refresh")}</Button>}>
-  {loading&&!rows.length?<Loading what={t("System changes")}/>:error?<Problem>{error}</Problem>:!rows.length?<Empty>{t("No system change is recorded.")}</Empty>:<DataTable data={rows} getRowId={row=>row.id} columns={[
+  {loading&&!rows.length?<Loading what={t("System changes")}/>:error?<Problem>{error}</Problem>:!rows.length?<Empty>{t("No system change is recorded.")}</Empty>:<DataTable storageKey="system:changes" data={rows} getRowId={row=>row.id} columns={[
    {id:"title",header:t("Title"),cell:({row:{original:row}})=><>{row.title}<div className="text-muted text-xs">{row.rationale}</div></>},
    {id:"source",header:t("Source"),accessorFn:row=>row.origin??"ui"},
    {id:"state",header:t("State"),accessorFn:row=>releases.find(item=>item.version===row.release)?.state??row.state},
@@ -112,7 +112,7 @@ function Files(){
  return <>
   <Panel title={t("System files")}>
    <Form className="search row" onSubmit={()=>{setQuery(search);setOffset(0);}}><Input aria-label={t("Find files")} value={search} onChange={event=>setSearch(event.target.value)}/><Button type="submit">{t("Search")}</Button></Form>
-   {files.loading&&!files.data?<Loading what={t("System files")}/>:files.error?<><Problem>{files.error}</Problem><Button onClick={files.reload}>{t("Refresh")}</Button></>:!files.data?.length?<Empty>{t("No source file matches this page.")}</Empty>:<DataTable data={files.data} getRowId={file=>file.path} columns={[
+   {files.loading&&!files.data?<Loading what={t("System files")}/>:files.error?<><Problem>{files.error}</Problem><Button onClick={files.reload}>{t("Refresh")}</Button></>:!files.data?.length?<Empty>{t("No source file matches this page.")}</Empty>:<DataTable storageKey="system:files" data={files.data} getRowId={file=>file.path} columns={[
     {accessorKey:"path",header:t("Path")},{accessorKey:"revision",header:t("Revision")},
     {id:"open",header:"",cell:({row:{original:file}})=><Button onClick={()=>setOpened(file.path)}>{t("Open")}</Button>}
    ]}/>}

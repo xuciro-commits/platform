@@ -31,6 +31,9 @@ test("F1 builder goes from an empty project to an application a business user ac
 
   await test.step("1 create a project", async () => {
     await signIn(page, "builder", "/projects");
+    const projects = page.getByRole("table");
+    await expect(projects).toBeVisible();
+    expect(await projects.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.keyboard.press("?");
     await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
     await page.keyboard.press("Escape");
@@ -74,6 +77,9 @@ test("F1 builder goes from an empty project to an application a business user ac
     await page.getByRole("button", { name: "Add an action", exact: true }).click();
     await expect(page.getByRole("button", { name: "Open action type", exact: true })).toBeVisible();
     await expect(page.getByRole("status").filter({ hasText: "Unsaved changes" })).toBeVisible();
+    await page.getByRole("button", { name: "Open action type", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "What people call it", exact: true })).toBeVisible();
+    await expect(page.getByText("Select a row to edit it here.", { exact: true })).not.toBeVisible();
   });
 
   await test.step("5 build a page in Workshop from a template bound to the draft object type", async () => {
@@ -93,6 +99,10 @@ test("F1 builder goes from an empty project to an application a business user ac
     await dialog.getByRole("textbox", { name: "Page name" }).fill(`${name}list`);
     await dialog.getByRole("textbox", { name: "Page title" }).fill("Orders");
     await dialog.getByRole("button", { name: "Create draft in Studio", exact: true }).click();
+    await expect(page.getByText("Publish the object type and page together to preview business data. You can continue editing this widget.").first()).toBeVisible();
+    await expect(page.getByText(/HTTP 404/)).toHaveCount(0);
+    await expect(page.getByRole("alert").filter({ hasText: "module membership is unconfirmed" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Toggle inspector panel" }).click();
     await expect(page.getByRole("region", { name: "Page settings" })).toBeVisible();
   });
 
@@ -139,10 +149,18 @@ test("F1 builder goes from an empty project to an application a business user ac
     const user = await (await browser.newContext()).newPage();
     await signIn(user, "user");
     await user.getByRole("button", { name: "Applications", exact: true }).first().click();
+    const portal = user.getByRole("region", { name: "Applications", exact: true });
+    await expect(portal.getByRole("button", { name: /^Control Panel/ })).toHaveCount(0);
+    await expect(portal.getByRole("button", { name: /^Asset Library/ })).toHaveCount(0);
     await user.getByRole("region", { name: "Business applications" }).getByRole("button", { name: label, exact: true }).click();
     const app = user.getByRole("region", { name: "Orders" });
     await expect(app.getByRole("heading", { name: "Orders", level: 1 })).toBeVisible();
     await expect(app.getByRole("cell", { name: "Globex" })).toBeVisible({ timeout: 30_000 });
+    const resizer = app.getByRole("separator", { name: "Resize column Customer", exact: true });
+    await resizer.press("ArrowRight");
+    const width = await resizer.getAttribute("aria-valuenow");
+    await user.reload();
+    await expect(resizer).toHaveAttribute("aria-valuenow", width!);
     await app.getByRole("button", { name: "Create order", exact: true }).click();
     const form = user.getByRole("dialog", { name: "Create order" });
     await expect(form.getByRole("button", { name: "Source editor" })).toHaveCount(0);

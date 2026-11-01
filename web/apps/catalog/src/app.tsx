@@ -15,6 +15,7 @@ export default defineApp({
   id: "catalog",
   surface: "developer",
   category: "developer",
+  portal: false,
   for: (host) => host.role("build") === "builder" || host.role("platform") === "admin",
   description: "Reusable UI, App API and patterns, with live examples and a sandbox.",
   title: "Asset Library",

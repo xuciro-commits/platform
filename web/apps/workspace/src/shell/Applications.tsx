@@ -27,7 +27,7 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
   const lead = projections.find((p) => p.id === projection)?.categories;
   const apps = useMemo(() => {
     const text = query.trim().toLowerCase();
-    return (applications?.apps ?? []).filter(a => !text || `${a.title} ${a.description ?? ""} ${a.id}`.toLowerCase().includes(text));
+    return (applications?.apps ?? []).filter(a => !text || `${a.title} ${a.description ?? ""} ${a.id}`.toLowerCase().includes(text)).sort((a, b) => a.title.localeCompare(b.title));
   }, [applications?.apps, query]);
   const ordered = [...categories].sort((a, b) => Number(!!lead && !lead.includes(a.id)) - Number(!!lead && !lead.includes(b.id)));
   const role = (id: string) => me.apps.find((e) => e.id === id)?.role;
@@ -43,6 +43,6 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
         <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">{inCategory.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</div>
       </section>;
     })}
-    {!apps.length && <EmptyState title={t("No application matches.")} />}
+    {!apps.length && <EmptyState title={t("No application matches.")} action={query.trim() ? <Button onClick={() => setQuery("")}>{t("Clear search")}</Button> : undefined} />}
   </div>;
 }

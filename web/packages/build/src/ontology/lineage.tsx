@@ -57,7 +57,7 @@ export function ObjectLineage({ object, fields }: { object: string; fields: { na
       <Button size="sm" variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(ref), node: `object:${object}` } })}>{t("Open in Data Lineage")}</Button>
     </Panel>
     <Panel title={t("Field by field")} help={t("Current source mappings for the published dependencies. Open the original integration to inspect its configuration and recorded outcome.")}>
-      <DataTable data={fields} getRowId={field => field.name} searchable={false} height={Math.min(360, 40 + fields.length * 28)} columns={[
+      <DataTable storageKey="ontology:field-lineage" data={fields} getRowId={field => field.name} searchable={false} height={Math.min(360, 40 + fields.length * 28)} columns={[
         { id: "title", header: t("Field"), accessorFn: field => field.title },
         { id: "name", header: t("Name"), accessorFn: field => field.name },
         { id: "origin", header: t("Comes from"), accessorFn: field => feeders(field.name).join(" · ") || t("entered here") },

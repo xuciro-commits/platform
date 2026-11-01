@@ -291,7 +291,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         {builder && <Button variant="primary" disabled={locked || composing} onClick={() => setComposing(true)}><Plus />{t("New candidate")}</Button>}
       </>} />}
     {scopeUnresolved && !builder && <Panel role="status" className="p-3 text-sm text-muted">{t("This handoff points at a builder draft, which a publisher does not read. Reopen release review from a saved candidate or a named application.")}</Panel>}
-    {inventory.isError ? <Notice tone="danger" role="alert" message={t("Saved releases could not be loaded.")} /> : <DataTable data={candidates} columns={candidateColumns(activeID)} getRowId={candidate => candidate.id} searchable={false} loading={inventory.isLoading}
+    {inventory.isError ? <Notice tone="danger" role="alert" message={t("Saved releases could not be loaded.")} /> : <DataTable storageKey="releases:candidates" totalRows={inventory.data?.total} manualSorting data={candidates} columns={candidateColumns(activeID)} getRowId={candidate => candidate.id} searchable={false} loading={inventory.isLoading}
       height={Math.max(120, Math.min(360, 34 + candidates.length * 36))} rowHeight={36} selectedId={savedReview ? savedID : undefined} onRowClick={candidate => { if (!locked) void loadSaved(candidate.id); }}
       empty={t("No saved candidates yet.")} />}
     {!inventory.isError && inventory.data && inventory.data.total > 20 && <div className="flex flex-wrap items-center gap-2 text-xs text-muted">

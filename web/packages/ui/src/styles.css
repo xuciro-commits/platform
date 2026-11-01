@@ -19,13 +19,13 @@
 
 .platform-canvas-node-icon { display: flex; align-items: center; justify-content: center; width: 31px; height: 31px; flex-shrink: 0; border: 1px solid color-mix(in oklch, var(--block-color), transparent 80%); border-radius: var(--r-lg); color: var(--block-color); background: color-mix(in oklch, var(--block-color), transparent 94%); }
 .platform-canvas-node-icon svg { width: 17px; height: 17px; }
-.platform-canvas-node-caption { display: flex; justify-content: space-between; gap: 6px; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.platform-canvas-node-caption { display: flex; justify-content: space-between; gap: 6px; font-size: var(--type-2xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
 .platform-canvas-node-caption span { max-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }
 .platform-canvas-node-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; line-height: 20px; }
 .platform-canvas-node-detail { color: var(--muted); font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 18px; }
 
 .platform-canvas-toolbar { position: absolute; z-index: 10; left: 12px; top: 12px; display: flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); padding: 4px; box-shadow: var(--shadow-sm); }
-.platform-canvas-tool { display: inline-flex; flex-shrink: 0; white-space: nowrap; align-items: center; justify-content: center; gap: 5px; height: 28px; min-width: 28px; padding: 0 6px; border-radius: 5px; color: var(--muted); font-size: 11px; }
+.platform-canvas-tool { display: inline-flex; flex-shrink: 0; white-space: nowrap; align-items: center; justify-content: center; gap: 5px; height: 28px; min-width: 28px; padding: 0 6px; border-radius: var(--r-lg); color: var(--muted); font-size: 11px; }
 .platform-canvas-tool svg { width: 14px; height: 14px; }
 .platform-canvas-tool:hover { background: var(--row-hover); color: var(--foreground); }
 .platform-canvas-tool:disabled { opacity: 0.35; pointer-events: none; }
@@ -34,8 +34,8 @@
 .platform-canvas-actions { position: absolute; z-index: 20; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; width: max-content; max-width: calc(100% - 24px); align-items: center; gap: 4px; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); padding: 4px; box-shadow: var(--shadow-sm); }
 .platform-canvas-edge-label { position: absolute; padding: 2px 5px; border-radius: 4px; background: var(--surface); color: var(--muted); font-size: 10px; pointer-events: none; }
 
-.platform-flow .react-flow__node { border-radius: 12px; }
-.platform-flow-lane { display: flex; width: 100%; height: 100%; border: 1px solid var(--border); border-radius: 12px;
+.platform-flow .react-flow__node { border-radius: var(--r-lg); }
+.platform-flow-lane { display: flex; width: 100%; height: 100%; border: 1px solid var(--border); border-radius: var(--r-lg);
   background: color-mix(in oklch, var(--lane-color, var(--muted)), transparent 96%); }
 .platform-flow-lane-title { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 26px; padding: 6px 2px;
   border-right: 1px solid var(--border); writing-mode: vertical-rl; text-orientation: mixed; overflow: hidden;
@@ -43,7 +43,7 @@
 .platform-flow-lane-vertical { flex-direction: column; }
 .platform-flow-lane-vertical .platform-flow-lane-title { width: auto; height: 26px; padding: 2px 6px; border-right: 0; border-bottom: 1px solid var(--border); writing-mode: horizontal-tb; }
 .platform-flow-node {
-  position: relative; border: 1px solid var(--border); border-radius: 12px;
+  position: relative; border: 1px solid var(--border); border-radius: var(--r-lg);
   background: var(--surface); text-align: left; color: var(--foreground);
   box-shadow: var(--shadow-sm);
   transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
@@ -67,8 +67,8 @@
 .platform-flow-port-label-input { left: 0; }
 .platform-flow-port-label-output { right: 0; text-align: right; }
 .platform-flow-port-label span, .platform-flow-port-label code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.platform-flow-port-label code { font-family: var(--stack-mono); font-size: 8px; opacity: 0.7; }
-.platform-flow-status { position: absolute; inset: auto 10px 4px 13px; display: flex; align-items: center; font-size: 9px; }
+.platform-flow-port-label code { font-family: var(--stack-mono); font-size: var(--type-2xs); opacity: 0.7; }
+.platform-flow-status { position: absolute; inset: auto 10px 4px 13px; display: flex; align-items: center; font-size: var(--type-2xs); }
 .platform-flow-status span { display: inline-flex; align-items: center; gap: 4px; }
 .platform-flow-status svg { width: 10px; height: 10px; }
 .platform-flow-node-compact { border-radius: var(--r-lg); border: 2px solid var(--block-color); }
@@ -86,19 +86,19 @@
 .platform-flow-shape-event .platform-flow-shape-label { max-width: 84px; }
 .platform-flow-shape-selected .platform-flow-outline polygon, .platform-flow-shape-selected .platform-flow-outline circle { stroke: var(--primary); }
 .platform-flow-shape.platform-flow-current .platform-flow-outline polygon, .platform-flow-shape.platform-flow-current .platform-flow-outline circle { stroke: var(--tone-info); }
-.platform-flow-palette { display: flex; flex-direction: column; position: absolute; left: 12px; top: 58px; bottom: 12px; width: 280px; max-width: calc(100% - 24px); z-index: 30; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-lg); }
+.platform-flow-palette { display: flex; flex-direction: column; position: absolute; left: 12px; top: 58px; bottom: 12px; width: 280px; max-width: calc(100% - 24px); z-index: 30; border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-lg); }
 .platform-flow-palette-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 12px; font-size: 12px; }
 .platform-flow-palette-item:hover, .platform-flow-palette-item:focus-visible, .platform-flow-palette-item[aria-selected="true"] { background: var(--row-selected); outline: none; }
-.platform-flow-palette-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border); color: var(--primary); }
+.platform-flow-palette-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: var(--r-lg); border: 1px solid var(--border); color: var(--primary); }
 .platform-flow-palette-icon svg { width: 15px; height: 15px; }
 .platform-flow-palette-notation { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 20px; height: 28px; color: var(--muted); }
 .platform-flow-palette-notation svg { width: 13px; height: 13px; }
 .platform-flow-edge-add { position: absolute; display: flex; align-items: center; justify-content: center; pointer-events: all; width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); opacity: 0.7; transition: opacity var(--dur-fast), border-color var(--dur-fast); }
 .platform-flow-edge-add:hover { opacity: 1; color: var(--primary); border-color: var(--primary); }
 
-.platform-relation .react-flow__node { border-radius: 10px; }
+.platform-relation .react-flow__node { border-radius: var(--r-lg); }
 .platform-relation .react-flow__edge.selected .react-flow__edgeupdater { fill: var(--surface); stroke: var(--primary); stroke-width: 1.5px; cursor: grab; }
-.platform-relation-node { position: relative; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--foreground); text-align: left; box-shadow: var(--shadow-sm); transition: border-color var(--dur-fast), box-shadow var(--dur-fast); }
+.platform-relation-node { position: relative; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); color: var(--foreground); text-align: left; box-shadow: var(--shadow-sm); transition: border-color var(--dur-fast), box-shadow var(--dur-fast); }
 .platform-relation-node:hover { border-color: color-mix(in oklch, var(--block-color), var(--border) 60%); }
 .platform-relation-node-selected { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 78%); }
 .platform-relation-node-linking { cursor: crosshair; }

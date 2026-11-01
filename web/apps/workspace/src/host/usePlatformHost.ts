@@ -24,7 +24,7 @@ export type PlatformHost = {
   hostAdmin: boolean;
 };
 
-export function usePlatformHost({ client, token, tenant, me, ready, apps }: { client: EdgeClient; token: string; tenant: string; me?: Me; ready: boolean; apps?: (AppUI & { serves?: string[] })[] }): PlatformHost {
+export function usePlatformHost({ client, token, tenant, me, ready, apps }: { client: EdgeClient; token: string; tenant: string; me?: Me; ready: boolean; apps?: (host: Host) => AppUI[] }): PlatformHost {
   const queries = useQueryClient();
   const read = <T,>(path: string, refetchInterval: number | false = false, options: { retry?: false } = {}) => {
     const query = useQuery({ queryKey: [token, tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled: ready, ...options });
@@ -190,14 +190,15 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
         finally { setOutbox([...client.authorities.outbox]); }
       },
     };
-    for (const app of apps ?? []) {
+    const applications = apps?.(host) ?? [];
+    for (const app of applications) {
       if (app.for && !app.for(host)) continue;
       for (const [type, view] of Object.entries(app.opens ?? {})) {
         const own = (app.serves ?? [app.id]).some((id) => type.startsWith(`${id}.`));
         if (own || protocols.some((p) => p.id.startsWith(`${type}/`) && p.bound === app.id)) opens.set(type, view);
       }
     }
-    host.applications = applicationUIInfo((apps ?? []).filter(app => app.id !== "host-console" || hostMe.isSuccess), host);
+    host.applications = applicationUIInfo(applications.filter(app => app.id !== "host-console" || hostMe.isSuccess), host);
     return host;
   }, [actions, apps, client, decide, definitions, entities, hostMe.isSuccess, me, outbox, protocols, refresh, source]);
 

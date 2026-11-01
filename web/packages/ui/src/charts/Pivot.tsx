@@ -5,6 +5,8 @@ import type { AggregateData, AggregateQuery } from "./spec";
 import type { ChartSource } from "./Chart";
 import { useViewVisible } from "../shell/ViewVisibility";
 import { t } from "../i18n";
+import { Notice } from "../components/Notice";
+import { Button } from "../primitives/button";
 
 const text = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : String(v));
 
@@ -28,6 +30,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill,hea
   rows: string; columns?: string; measure: string; onDrill?: (domain: unknown[]) => void;
 }) {
   const [state, setState] = useState<{key?:string;data?:AggregateData;error?:string}>({});
+  const [attempt, setAttempt] = useState(0);
   const key = JSON.stringify([type, query, rows, columns, measure, source.scope]);
   const visible = useViewVisible();
   const from = useRef(source);
@@ -38,12 +41,12 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill,hea
     setState(previous => previous.key === key ? {key,data:previous.data} : {key});
     const aggregateQuery = { ...query, maxRows: query.maxRows ?? 4096, groups: columns ? [rows, columns] : [rows], measures: [measure] };
     const load = () => from.current.aggregate(type, aggregateQuery)
-      .then((data) => live && setState({key,data}), (e) => live && setState({key,error:String(e)}));
+      .then((data) => live && setState({key,data}), () => live && setState({key,error:"Pivot data could not be loaded. Retry, or check the source and your access."}));
     const stop = from.current.watchAggregate?.(type, aggregateQuery, load); void load();
     return () => { live = false; stop?.(); };
-  }, [key, source.revision, visible]);
+  }, [key, source.revision, visible, attempt]);
   const {data,error}=state.key===key?state:{};
-  if (error) return <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>;
+  if (error) return <div className="grid gap-2"><Notice tone="danger" message={t(error)} /><Button className="justify-self-start" size="sm" onClick={()=>setAttempt(value=>value+1)}>{t("Retry")}</Button></div>;
   if (!data) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   if(measure==="count"&&columns)return <CountMatrix data={data} rows={rows} columns={columns} heatmap={heatmap} filterAxes={filterAxes} enabled={enabled} onClear={onClearFilters} onSelect={heatmap?onCellFilter?(row,column)=>{if((typeof row==="string"||!filterAxes?.row)&&(typeof column==="string"||!filterAxes?.column))onCellFilter(typeof row==="string"?row:undefined,typeof column==="string"?column:undefined);}:undefined:onDrill?(row,column)=>onDrill([...groupDomain(rows,row),...groupDomain(columns,column)]):undefined}/>;
   const fmt = formatter({ type: "quantitative", aggregate: measure === "count" ? "count" : measure.split(":")[0] as never, field: measure.split(":")[1] }, data.columns);

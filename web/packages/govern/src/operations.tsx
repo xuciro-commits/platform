@@ -21,15 +21,15 @@ export function Automation() {
   const work = useRead<Task[]>("/v1/work");
   const tone = (state: string) => (({ failed: "danger", retrying: "warning", queued: "info" }) as const)[state as "failed"] ?? "neutral";
   const taskColumns: ColumnDef<Task, any>[] = [
-    { accessorKey: "kind", header: t("Kind"), meta: { width: 90 } },
+    { accessorKey: "kind", header: t("Kind"), meta: { width: 110 }, cell: c => t(c.getValue()) },
     { accessorKey: "app", header: t("App"), meta: { width: 100 } },
     { accessorKey: "title", header: t("Work"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "state", header: t("State"), meta: { width: 100 }, cell: (c) => <Tag label={c.getValue()} tone={tone(c.getValue())} /> },
+    { accessorKey: "state", header: t("State"), meta: { width: 100 }, cell: (c) => <Tag label={t(c.getValue())} tone={tone(c.getValue())} /> },
     { accessorKey: "attempts", header: t("Runs"), meta: { width: 70, align: "right" } },
     { accessorKey: "last", header: t("Last"), meta: { width: 170 }, cell: (c) => when(c.getValue()) },
     { accessorKey: "due", header: t("Next"), meta: { width: 170 }, cell: ({ row: { original: t } }) => (t.state === "failed" ? "—" : when(t.due)) },
     { accessorKey: "error", header: t("Last error"), meta: { width: 170 }, cell: (c) => c.getValue() ? <Tag label={c.getValue()} tone="danger" /> : "" },
-    { id: "retry", header: "", meta: { width: 90 }, cell: ({ row: { original: w } }) => (w.state === "failed" || w.kind === "job") &&
+    { id: "retry", header: t("Actions"), meta: { width: 112 }, minSize: 112, cell: ({ row: { original: w } }) => (w.state === "failed" || w.kind === "job") &&
       <Button size="sm" onClick={() => void decide("platform.work.retry", { type: "platform.work", id: w.id }, {})}>{w.kind === "job" ? t("Run now") : t("Retry")}</Button> },
   ];
   return <>
@@ -38,9 +38,9 @@ export function Automation() {
       const subscriptions = apps.flatMap(app => app.subscribes.map(action => ({ app: app.id, action })));
       return <div className="mb-3 flex flex-wrap gap-2 text-sm">{subscriptions.length
         ? subscriptions.map(s => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)
-        : <span className="text-muted">{t("No subscriptions.")}</span>}</div>;
+        : <span className="text-muted">{t("No apps subscribe to events. Scheduled jobs can still run.")}</span>}</div>;
     }}</ReadResult>
-    <ReadResult query={work}>{(rows) => <DataTable data={rows} columns={taskColumns} getRowId={(task) => task.id} height="calc(100dvh - 260px)" searchable={false} empty={t("Nothing queued, no jobs")} />}</ReadResult>
+    <ReadResult query={work}>{(rows) => <DataTable storageKey="monitoring:work-queue" data={rows} columns={taskColumns} getRowId={(task) => task.id} height="calc(100dvh - 260px)" searchable={false} empty={t("Nothing queued, no jobs")} />}</ReadResult>
   </>;
 }
 
@@ -56,7 +56,7 @@ export function Deliveries() {
   ];
   return <>
     <PageHeader title={t("Delivery attempts")} help={t("Every outbound delivery the host has retried, oldest first. Attempts appear as endpoints receive effects; nothing here is authored by hand.")} />
-    <ReadResult query={deliveries}>{(rows) => <DataTable data={[...rows].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}${d.attempt}`} height="calc(100dvh - 220px)" empty={t("No deliveries yet")} />}</ReadResult>
+    <ReadResult query={deliveries}>{(rows) => <DataTable storageKey="monitoring:deliveries" data={[...rows].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}${d.attempt}`} height="calc(100dvh - 220px)" empty={t("No deliveries yet")} />}</ReadResult>
   </>;
 }
 
@@ -114,7 +114,7 @@ export function Integrations() {
     <>
       <PageHeader title={t("Connectors")} help={t("Connectors bring facts in, with health, cursors and the last refused input. A connector registers itself with the host when its runtime starts; an application's connections are declared in the builder.")} />
       <ReadResult query={connectors}>{(rows) => (
-        <DataTable data={rows} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 300px)" searchable={false}
+        <DataTable storageKey="monitoring:connections" data={rows} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 300px)" searchable={false}
           empty={<EmptyState title={t("No connectors in this tenant")} hint={t("A connector appears here when its runtime registers with the host. Declare the application's connections in the builder.")}
             action={role("build") ? <Button size="sm" onClick={() => open({ view: "connection" })}>{t("Open connection setup")}</Button> : undefined} />} />
       )}</ReadResult>
@@ -222,7 +222,7 @@ export function OutboundEffects() {
     { accessorKey: "due", header: t("Next"), meta: { width: 160 }, cell: ({ row: { original: x } }) => (x.state === "retrying" ? when(x.due) : "—") },
     { accessorKey: "error", header: t("Last answer"), meta: { width: 200 }, cell: (c) => <span className="text-xs">{c.getValue() ?? ""}</span> },
     { accessorKey: "callbackError", header: t("Receipt refusal"), meta: { width: 240 }, cell: (c) => <span className="text-xs text-danger">{c.getValue() ?? ""}</span> },
-    { id: "act", header: "", meta: { width: 150 }, cell: ({ row: { original: x } }) => <span className="flex gap-1">
+    { id: "act", header: t("Actions"), meta: { width: 240 }, minSize: 220, cell: ({ row: { original: x } }) => <span className="flex gap-1">
       {x.state==="unknown"&&<Button size="sm" onClick={()=>setResolving(x.id)}>{t("Resolve unknown delivery")}</Button>}
       {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decide("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>{t("Retry")}</Button>}
       {x.state === "held" && <Button size="sm" onClick={() => void decide("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>{t("Approve")}</Button>}
@@ -233,7 +233,7 @@ export function OutboundEffects() {
   return <>
     <PageHeader title={t("Outbound effects")} help={t("Every delivery an application's emitted event produces, and what the receiver made of it. Effects appear once an app declares and emits events; endpoints decide where they go.")} />
       {resolving&&host.action("platform.effect.resolve")&&<Panel title={t("Resolve unknown delivery")}><DeclaredActionForm declared={host.action("platform.effect.resolve")!} target={{type:"platform.effect",id:resolving}} revision={0} initial={{outcome:"delivered"}} onCancel={()=>setResolving(undefined)} onCompleted={()=>{setResolving(undefined);void effects.refetch();}} enabled/></Panel>}
-    <ReadResult query={effects}>{(rows) => <DataTable data={rows} columns={effectColumns} getRowId={(effect) => effect.id} height="calc(100dvh - 220px)" empty={t("Nothing sent yet")} />}</ReadResult>
+    <ReadResult query={effects}>{(rows) => <DataTable storageKey="monitoring:effects" data={rows} columns={effectColumns} getRowId={(effect) => effect.id} height="calc(100dvh - 220px)" empty={t("Nothing sent yet")} />}</ReadResult>
   </>;
 }
 
@@ -308,9 +308,9 @@ export function Audit() {
   return (
     <>
       <PageHeader title={t("Audit")} help={t("Accepted inputs of this tenant, newest first, rebuilt from the journal.")} />
-      <ReadResult query={audit}>{(rows) => <DataTable data={[...rows].reverse()} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 460px)" />}</ReadResult>
+      <ReadResult query={audit}>{(rows) => <DataTable storageKey="monitoring:audit" data={[...rows].reverse()} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 460px)" />}</ReadResult>
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Reads of personal data")}</h2>
-      <ReadResult query={personalQuery}>{(rows) => <DataTable data={rows} columns={personalColumns} getRowId={(r) => `${r.at}${r.member}${r.type}${r.ids.join()}`} height={240} empty={t("Nobody read personal data yet")} />}</ReadResult>
+      <ReadResult query={personalQuery}>{(rows) => <DataTable storageKey="monitoring:personal-data-reads" data={rows} columns={personalColumns} getRowId={(r) => `${r.at}${r.member}${r.type}${r.ids.join()}`} height={240} empty={t("Nobody read personal data yet")} />}</ReadResult>
     </>
   );
 }

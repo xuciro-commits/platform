@@ -91,7 +91,7 @@ export function AIProviders() {
             <Button size="sm" onClick={() => void load(open, true)}>{t("Refresh")}</Button>
             <span className="text-xs text-muted">{catalog.models ? `${shown.length} of ${catalog.models.length}` : catalog.error ?? "loading…"}</span>
           </div>
-          <DataTable data={shown} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 380px)" empty={catalog.error ?? t("No models")} />
+          <DataTable storageKey="ai:models" data={shown} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 380px)" empty={catalog.error ?? t("No models")} />
         </div>
       )}
       <Sheet isolated open={adding} onOpenChange={setAdding} title={t(editing ? "Edit AI provider" : "Add AI provider")}>
@@ -257,13 +257,13 @@ export function AIUsage() {
         <Chart spec={{ title: t("Cost by day"), data: { values: day(totals2) }, mark: "bar", encoding: { x: { field: "day", type: "nominal" }, y: { field: "cost", type: "quantitative" } } }} height={180} />
         <Chart spec={{ title: t("Cost by model"), data: { values: byModel(totals2) }, mark: { type: "arc", donut: true }, encoding: { theta: { field: "cost", type: "quantitative" }, color: { field: "model", type: "nominal" } } }} height={180} />
       </div>}
-      <DataTable data={totals2} columns={totals} getRowId={(t) => `${t.day}${t.member}${t.model}`} height={220} searchable={false} empty={t("No calls yet")} />
+      <DataTable storageKey="ai:usage-totals" data={totals2} columns={totals} getRowId={(t) => `${t.day}${t.member}${t.model}`} height={220} searchable={false} empty={t("No calls yet")} />
       {(usage?.reservations?.length ?? 0) > 0 && <Panel className="mt-4" title={t("Unsettled model calls")} aria-label={t("Unsettled model calls")} description={t("These calls retain their token reservation until usage is confirmed. Waiting or restarting does not prove that a provider charged nothing.")}>
-        <DataTable data={usage?.reservations ?? []} columns={reservations} getRowId={(r) => r.call} height={200} searchable={false} />
+        <DataTable storageKey="ai:reservations" data={usage?.reservations ?? []} columns={reservations} getRowId={(r) => r.call} height={200} searchable={false} />
       </Panel>}
       <AILimits />
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Recent calls")}</h2>
-      <DataTable data={usage?.calls ?? []} columns={calls} getRowId={(u) => `${u.at}${u.member}${u.model}${u.millis}`} height="calc(100dvh - 470px)" empty={t("No calls yet")} />
+      <DataTable storageKey="ai:recent-calls" data={usage?.calls ?? []} columns={calls} getRowId={(u) => `${u.at}${u.member}${u.model}${u.millis}`} height="calc(100dvh - 470px)" empty={t("No calls yet")} />
     </>
   );
 }
@@ -293,7 +293,7 @@ function AILimits() {
         <Input aria-label={t("Calls a minute")} type="number" min={0} placeholder={t("Calls a minute")} value={minute} onChange={(e) => setMinute(e.target.value)} className="w-36" />
         <Button type="submit" disabled={!who.trim()}>{t("Set limit")}</Button>
       </Form>
-      <DataTable data={limits.data ?? []} columns={columns} getRowId={(l) => l.member} height={160} searchable={false} empty={t("Everyone takes the defaults")} />
+      <DataTable storageKey="ai:limits" data={limits.data ?? []} columns={columns} getRowId={(l) => l.member} height={160} searchable={false} empty={t("Everyone takes the defaults")} />
     </>
   );
 }

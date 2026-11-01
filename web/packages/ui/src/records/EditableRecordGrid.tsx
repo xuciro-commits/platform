@@ -1,8 +1,9 @@
 import { Pencil } from "lucide-react";
 import {useEffect,useRef,useState} from "react";
 import type {ColumnDef} from "@tanstack/react-table";
-import {DataTable} from "../components/DataTable";
+import {DataTable,type DataTableProps} from "../components/DataTable";
 import {Dialog} from "../primitives/dialog";
+import {Notice} from "../components/Notice";
 import {useUnsavedChanges} from "../shell/Workspace";
 import {Checkbox} from "../primitives/controls";
 import {Button} from "../primitives/button";
@@ -14,7 +15,7 @@ export type RecordSelectionPort={selectedIDs:string[];records:EntityRecord[];sta
 export type RecordEditPort={access?:Record<string,Record<string,{allow:boolean;reason:string}>>;schema:string;fields:string[];scope:string;maxRows:number;preview?:boolean;alwaysEditing?:boolean;confirmation?:{title:string;description:string};enabled?:boolean;submit:(baseline:EntityRecord,patch:Record<string,unknown>)=>Promise<{accepted:boolean;error?:string}>};
 const emptyRows=()=>Object.create(null) as Record<string,PendingRow>;
 type PendingRow={baseline:EntityRecord;patch:Record<string,unknown>;error?:string};
-export function EditableRecordGrid({data,columns,entity,height,rowHeight,showToolbar=true,onOpen,loading,empty,port,selectedId,selectionSet}:{rowHeight?:number;showToolbar?:boolean;selectedId?:string;selectionSet?:RecordSelectionPort;data?:EntityRecord[];columns:ColumnDef<EntityRecord,unknown>[];entity:Entity<EntityRecord>;height:number|string;onOpen?:(record:EntityRecord)=>void;loading:boolean;empty:React.ReactNode;port?:RecordEditPort}){
+export function EditableRecordGrid({data,columns,entity,height,rowHeight,showToolbar=true,onOpen,loading,empty,port,selectedId,selectionSet,storageKey,totalRows,readError}:{readError?:string;storageKey?:string;totalRows?:number;rowHeight?:number;showToolbar?:boolean;selectedId?:string;selectionSet?:RecordSelectionPort;data?:EntityRecord[];columns:ColumnDef<EntityRecord,unknown>[];entity:Entity<EntityRecord>;height:number|string;onOpen?:(record:EntityRecord)=>void;loading:boolean;empty:DataTableProps<EntityRecord>["empty"];port?:RecordEditPort}){
  const [editing,setEditing]=useState(!!port?.alwaysEditing),[rows,setRows]=useState<Record<string,PendingRow>>(emptyRows),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
  const [review,setReview]=useState(false),reviewedRows=useRef<Record<string,PendingRow>|undefined>(undefined);
  const alive=useRef(true),lock=useRef(false),currentPort=useRef(port);currentPort.current=port;
@@ -50,10 +51,11 @@ export function EditableRecordGrid({data,columns,entity,height,rowHeight,showToo
  const visibleIDs=(data??[]).filter(r=>!r.archived).map(r=>r.id),all=visibleIDs.length>0&&visibleIDs.every(id=>selectionSet?.selectedIDs.includes(id));
  const tableColumns=selectionSet?[{id:"selection",header:()=> <Checkbox checked={all} disabled={!all&&visibleIDs.length>selectionSet.maxRecords||editing} onChange={checked=>selectionSet.onChange(checked?visibleIDs:[])}>{t("Select this window")}</Checkbox>,cell:({row}:{row:{original:EntityRecord}})=><span onClick={e=>e.stopPropagation()}><Checkbox checked={selectionSet.selectedIDs.includes(row.original.id)} disabled={row.original.archived||editing||!selectionSet.selectedIDs.includes(row.original.id)&&selectionSet.selectedIDs.length>=selectionSet.maxRecords} onChange={()=>choose(row.original,{shift:false,toggle:true})}><span className="sr-only">{t("Select {record}",{record:row.original.id})}</span></Checkbox></span>,meta:{width:160}},...editableColumns]:editableColumns;
  return <div className="grid min-w-0 gap-2">
+ {readError&&<Notice tone="danger" message={readError}/>}
  {notice&&<p role="status" className="text-xs text-muted">{notice}</p>}{Object.entries(rows).filter(([,row])=>row.error).map(([id,row])=><p key={id} role="alert" className="text-xs text-danger">{id}: {row.error}</p>)}
  {port?.confirmation&&<Dialog open={review} onOpenChange={open=>{setReview(open);if(!open)reviewedRows.current=undefined;}} title={port.confirmation.title}><div className="grid gap-3"><p className="text-sm">{port.confirmation.description}</p><ul className="grid gap-1 text-xs">{Object.entries(reviewedRows.current??{}).map(([id,row])=><li key={id} className="break-all">{id} · {t("Revision {revision}",{revision:row.baseline.revision})} · {Object.keys(row.patch).map(name=>entity.fields[name]?.label??name).join(", ")}</li>)}</ul><p className="text-xs text-muted">{t("Each row uses its original action and opened revision. Accepted requests may await approval; failed rows remain staged.")}</p><div className="flex justify-end gap-2"><Button onClick={()=>{reviewedRows.current=undefined;setReview(false);}}>{t("Cancel")}</Button><Button variant="primary" disabled={port.preview||port.enabled===false} onClick={()=>{setReview(false);void submit();}}>{t("Confirm row actions")}</Button></div></div></Dialog>}
- <DataTable key={JSON.stringify([editing,busy])} virtualColumns={tableColumns.length>=10} data={shown} columns={tableColumns as never} selectedId={selectedId} selectedIds={selectionSet?.selectedIDs} getRowId={r=>r.id} height={height} rowHeight={rowHeight} searchable={false}
-   onRowClick={editing?undefined:selectionSet||onOpen?choose:undefined} cellAccess={(record,name)=>port?.access?.[record.id]?.[name]} onCellEdit={editing&&!busy&&!review&&port?.enabled!==false?stage:undefined} loading={loading} empty={empty}
+ <DataTable storageKey={storageKey} totalRows={totalRows} manualSorting key={JSON.stringify([editing,busy])} virtualColumns={tableColumns.length>=10} data={shown} columns={tableColumns as never} selectedId={selectedId} selectedIds={selectionSet?.selectedIDs} getRowId={r=>r.id} height={height} rowHeight={rowHeight} searchable={false}
+   onRowClick={editing?undefined:selectionSet||onOpen?choose:undefined} cellAccess={(record,name)=>port?.access?.[record.id]?.[name]} onCellEdit={editing&&!busy&&!review&&port?.enabled!==false?stage:undefined} loading={loading} empty={readError?t("Records could not be loaded."):empty}
    toolbar={port&&(showToolbar||editing)?(editing?<>
      <Button size="sm" variant={editing?"ghost":undefined} aria-pressed={editing} onClick={()=>{confirmDiscard(()=>{if(!port.alwaysEditing)setEditing(false);setRows(emptyRows());setNotice("");});}}>{t("Finish editing")}</Button>
      <Button size="sm" variant="primary" loading={busy} disabled={port.preview||port.enabled===false||Object.keys(rows).length===0} onClick={()=>{if(port.confirmation){reviewedRows.current=structuredClone(rows);setReview(true);}else void submit();}}>{t("Submit cell edits")}</Button>

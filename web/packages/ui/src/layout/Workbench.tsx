@@ -1,6 +1,6 @@
 import { InputDraftProvider, InputProblems, useInputDrafts } from "../fields/draft";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronRight, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Redo2, Undo2, X } from "lucide-react";
+import { ArrowLeft, ChevronRight, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Redo2, Undo2, X } from "lucide-react";
 import { t } from "../i18n";
 import { cn } from "../lib/cn";
 import { Button, DefaultButtonSize } from "../primitives/button";
@@ -11,7 +11,7 @@ import { PlainPanels } from "../primitives/card";
 
 export type WorkbenchCrumb = { label: ReactNode; onClick?: () => void };
 export type WorkbenchTab = { id: string; title: ReactNode; badge?: number | string; content: ReactNode };
-export type WorkbenchPanel = { label: string; heading?: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void; scope?: string; locate?: (path?: string) => void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };
+export type WorkbenchPanel = { label: string; heading?: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void; scope?: string; selection?: string; locate?: (path?: string) => void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };
 export type WorkbenchHistory = { canUndo: boolean; canRedo: boolean; undo: () => void; redo: () => void };
 
 type Side = "left" | "right" | "dock";
@@ -69,8 +69,8 @@ export function Workbench({ storageKey, crumbs = [], title, status, busy = false
   useEffect(() => { if (dock?.open) setFocusedPane(undefined); }, [dock?.open]);
   useEffect(() => { try { localStorage.setItem(`workbench:${storageKey}`, JSON.stringify(layout)); } catch {   } }, [layout, storageKey]);
   const patch = (next: Partial<Layout>) => setLayout(old => ({ ...old, ...next }));
-  const showLeft = !!left && (compact ? focusedPane === "left" : left.open ?? layout.leftOpen);
-  const showRight = !!right && (compact ? focusedPane === "right" : right.open ?? layout.rightOpen);
+  const showLeft = !!left && (compact ? focusedPane === "left" && left.open !== false : left.open ?? layout.leftOpen);
+  const showRight = !!right && (compact ? focusedPane === "right" && right.open !== false : right.open ?? layout.rightOpen);
   const showMain = !compact || !showLeft && !showRight;
   const showDock = !!dock && (dock.open ?? layout.dockOpen);
   const reveal = (side: "left" | "right") => {
@@ -81,9 +81,10 @@ export function Workbench({ storageKey, crumbs = [], title, status, busy = false
   const togglePane = (side: "left" | "right") => {
     const showing = side === "left" ? showLeft : showRight;
     (side === "left" ? left : right)?.onOpenChange?.(!showing);
+    patch(side === "left" ? { leftOpen: !showing } : { rightOpen: !showing });
     if (compact) { if (!showing) setDockOpen(false); setFocusedPane(showing ? undefined : side); }
-    else patch(side === "left" ? { leftOpen: !showing } : { rightOpen: !showing });
-    if (showing) document.getElementById(`${prefix}-toggle-${side}`)?.focus();
+    if (showing && compact) requestAnimationFrame(() => main.current?.focus());
+    else if (showing) document.getElementById(`${prefix}-toggle-${side}`)?.focus();
     else requestAnimationFrame(() => { if (root.current) document.getElementById(`${prefix}-${side}`)?.focus(); });
   };
   const setDockOpen = (open: boolean) => {
@@ -93,36 +94,41 @@ export function Workbench({ storageKey, crumbs = [], title, status, busy = false
     else if (document.getElementById(`${prefix}-dock`)?.contains(document.activeElement)) document.getElementById(`${prefix}-toggle-dock`)?.focus();
   };
   const chooseDock = (id: string) => { dock?.onChange?.(id); patch({ dockTab: id }); setDockOpen(true); };
-  const previousInspector = useRef({ scope: right?.scope, value: right?.value, open: right?.open });
+  const previousInspector = useRef({ present: !!right, selection: right?.selection, open: right?.open });
   useEffect(() => {
     const old = previousInspector.current;
-    previousInspector.current = { scope: right?.scope, value: right?.value, open: right?.open };
-    if (!right) return;
-    if (right.open === false) { setFocusedPane(pane => pane === "right" ? undefined : pane); return; }
-    if (right.open === true && old.open !== right.open || old.scope !== right.scope || old.value !== right.value) {
+    previousInspector.current = { present: !!right, selection: right?.selection, open: right?.open };
+    if (!right || right.open === false) { setFocusedPane(pane => pane === "right" ? undefined : pane); return; }
+    if (old.present && (right.open === true && old.open !== true || right.selection !== undefined && old.selection !== right.selection)) {
       setLayout(layout => ({ ...layout, rightOpen: true }));
-      if (compact) { dock?.onOpenChange?.(false); setLayout(layout => ({ ...layout, dockOpen: false })); setFocusedPane("right"); }
+      if (compact) {
+        dock?.onOpenChange?.(false);
+        setLayout(layout => ({ ...layout, dockOpen: false }));
+        setFocusedPane("right");
+        const frame = requestAnimationFrame(() => document.getElementById(`${prefix}-right`)?.focus());
+        return () => cancelAnimationFrame(frame);
+      }
     }
-  }, [right?.scope, right?.value, right?.open, compact]);
-  const previousStructureOpen = useRef(left?.open);
+  }, [!!right, right?.selection, right?.open, compact]);
+  const previousStructureOpen = useRef({ present: !!left, open: left?.open });
   useEffect(() => {
-    const wasOpen = previousStructureOpen.current;
-    previousStructureOpen.current = left?.open;
-    if (left?.open === false) {
+    const old = previousStructureOpen.current;
+    previousStructureOpen.current = { present: !!left, open: left?.open };
+    if (!left || left.open === false) {
       setFocusedPane(pane => pane === "left" ? undefined : pane);
       if (document.getElementById(`${prefix}-left`)?.contains(document.activeElement)) document.getElementById(`${prefix}-toggle-left`)?.focus();
-    } else if (left?.open === true && (wasOpen !== true || compact)) {
+    } else if (old.present && left.open === true && old.open !== true) {
       setLayout(layout => ({ ...layout, leftOpen: true }));
       if (compact) { setDockOpen(false); setFocusedPane("left"); }
       const frame = requestAnimationFrame(() => document.getElementById(`${prefix}-left`)?.focus());
       return () => cancelAnimationFrame(frame);
     }
-  }, [left?.open, compact]);
+  }, [!!left, left?.open, compact]);
   const previousFocusedPane = useRef(focusedPane);
   useEffect(() => {
     const previous = previousFocusedPane.current;
     previousFocusedPane.current = focusedPane;
-    if (compact && previous === "left" && focusedPane !== "left") left?.onOpenChange?.(false);
+    if (compact && previous && focusedPane !== previous) (previous === "left" ? left : right)?.onOpenChange?.(false);
   }, [compact, focusedPane]);
   const panel = (side: Side) => side === "left" ? left : side === "right" ? right : dock;
   const limits = (side: Side) => ({ min: panel(side)?.min ?? (side === "dock" ? 120 : 200), max: panel(side)?.max ?? (side === "dock" ? 520 : 560) });
@@ -166,8 +172,9 @@ export function Workbench({ storageKey, crumbs = [], title, status, busy = false
     }} />;
   const columns = compact ? "minmax(0,1fr)" : `${showLeft ? `${sizes.left}px 6px ` : ""}minmax(0,1fr)${showRight ? ` 6px ${sizes.right}px` : ""}`;
   const paneHeading = (side: "left" | "right", panel: WorkbenchPanel) => (compact || panel.heading) && <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-1">
+    {compact && <Button variant="ghost" size="sm" onClick={() => togglePane(side)}><ArrowLeft aria-hidden />{t("Back to editor")}</Button>}
     <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{panel.heading ?? panel.label}</h2>
-    <Button variant="ghost" size="sm" aria-label={t(side === "left" ? "Close structure panel" : "Close inspector panel")} onClick={() => togglePane(side)}><X /></Button>
+    {!compact && <Button variant="ghost" size="sm" aria-label={t(side === "left" ? "Close structure panel" : "Close inspector panel")} onClick={() => togglePane(side)}><X /></Button>}
   </div>;
   return <div ref={root} className={cn("flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-surface", className)} tabIndex={-1}
     onKeyDown={event => {
@@ -206,7 +213,7 @@ export function Workbench({ storageKey, crumbs = [], title, status, busy = false
         </aside>
         {!compact && showLeft && splitter("left")}
       </>}
-      <div ref={main} role="region" aria-label={mainLabel ?? t("Editor")} hidden={!showMain} style={{ display: showMain ? undefined : "none" }} className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+      <div ref={main} role="region" aria-label={mainLabel ?? t("Editor")} tabIndex={-1} hidden={!showMain} style={{ display: showMain ? undefined : "none" }} className="flex min-h-0 min-w-0 flex-col overflow-hidden">
         <ViewVisibilityContext.Provider value={visible && showMain}>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
           {dock && <div id={`${prefix}-dock`} className="flex shrink-0 flex-col border-t border-border" style={{ height: showDock ? sizes.dock + 36 : undefined }}>

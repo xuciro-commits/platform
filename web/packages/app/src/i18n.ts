@@ -1354,4 +1354,5 @@ register("zh-CN", {
   "Some records are hidden by markings or row policies.": "部分记录因标记或行策略不可见。",
   "No records match this set.": "没有记录符合此集合。",
   "Showing the first {shown} of {total} records.": "显示 {total} 条记录中的前 {shown} 条。",
+  "Publish the object type and page together to preview business data. You can continue editing this widget.": "将对象类型与页面一起发布后，即可预览业务数据。你可以继续编辑此组件。",
 });

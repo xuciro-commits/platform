@@ -140,7 +140,7 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
     const relInfo=source.entity(rel.type),relEntity=relInfo&&entityFrom(relInfo,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined);if(!relEntity)return [];
     return [<section key={`${rel.type}.${rel.field}`}>
       <h2 className="mb-1 text-sm font-semibold">{title||relInfo.plural} <span className="font-normal text-muted">({rel.total}{rel.field === "link" ? t(", linked") : rel.relation ? <>{" · "}{rel.relation}</> : <>{t(", by")} {rel.field}</>})</span></h2>
-      <DataTable data={rel.records} columns={[{id:"id",header:"ID",accessorKey:"id",meta:{width:130}},...columnsFor(relEntity,listed(relEntity))] as never} getRowId={(x:EntityRecord)=>x.id} height={Math.min(40+rel.records.length*28,260)} searchable={false} onRowClick={onOpen&&((x:EntityRecord)=>onOpen(rel.type,x))} empty={t("None")}/>
+      <DataTable storageKey={`related:${type}:${rel.type}:${rel.field}`} totalRows={rel.total} manualSorting data={rel.records} columns={[{id:"id",header:"ID",accessorKey:"id",meta:{width:130}},...columnsFor(relEntity,listed(relEntity))] as never} getRowId={(x:EntityRecord)=>x.id} height={Math.min(40+rel.records.length*28,260)} searchable={false} onRowClick={onOpen&&((x:EntityRecord)=>onOpen(rel.type,x))} empty={t("None")}/>
     </section>];
   });
   if(linksOnly)return currentRecord(<div className="grid min-w-0 gap-3">{related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>}</div>);

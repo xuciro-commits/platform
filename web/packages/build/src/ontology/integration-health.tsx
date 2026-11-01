@@ -38,7 +38,7 @@ export function IntegrationHealth() {
       actions={<div className="flex gap-2"><Tag label={t("{n} failing", { n: bad })} tone={bad ? "danger" : undefined} /><Tag label={t("{n} partial", { n: warn })} tone={warn ? "warning" : undefined} /></div>} />
     <Panel>
       {rows.length === 0 ? <p className="text-xs text-muted">{t("No integrations yet. Start with a connection.")}</p> :
-        <DataTable data={rows} columns={columns} getRowId={(r) => `${r.view}:${r.id}`} searchable={false} height={Math.min(480, 40 + rows.length * 28)} />}
+        <DataTable storageKey="ontology:integration-health" data={rows} columns={columns} getRowId={(r) => `${r.view}:${r.id}`} searchable={false} height={Math.min(480, 40 + rows.length * 28)} />}
     </Panel>
   </div>;
 }

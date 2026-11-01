@@ -1,6 +1,6 @@
 import { ApplicationSampleAsset } from "./releases/samples";
 import "./i18n";
-import { defineApp, useHost, type Host } from "@platform/app";
+import { defineApp, useHost, type AppUI, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
 import { ObjectTypeEditor } from "./ontology/process";
 import { ActionTypeEditor, ActionTypes } from "./ontology/action-type";
@@ -161,23 +161,27 @@ const ontology = defineApp({
   ],
 });
 
-const connection = defineApp({
-  id: "data-connection", category: "build", title: "Data Connection", icon: <Database />,
-  description: "Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out.",
-  for: host => builder(host) || integrator(host),
-  home: { view: "connection" },
-  views: contextualViews(connectionViews),
-  opens: { "build.connection": "connection", "build.source": "data-source", "build.observation": "observation-source", "build.writeback": "writeback" },
-  navigation,
-  nav: (_host, route) => [
-    section(t("Sources"), route, [
-      { label: t("Connections"), icon: <Plug />, view: "connection" },
-      { label: t("Syncs"), icon: <Database />, view: "data-source" },
-    ]),
-    section(t("Streams"), route, [{ label: t("Observation sources"), icon: <Radio />, view: "observation-source" }]),
-    section(t("Exports"), route, [{ label: t("Writebacks"), icon: <Link2 />, view: "writeback" }]),
-  ],
-});
+export function createDataConnection(host: Host, operations: { views: View[]; streamLinks: () => NavItem[]; webhookLinks: (host: Host) => NavItem[] }): AppUI {
+  const authoring = builder(host) || integrator(host);
+  return defineApp({
+    id: "data-connection", serves: ["build", "platform"], category: "build", title: "Data Connection", icon: <Database />,
+    description: "Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out.",
+    for: host => builder(host) || integrator(host) || host.holds("platform", "admin"),
+    home: { view: authoring ? "connection" : "endpoints" },
+    views: [...(authoring ? contextualViews(connectionViews) : []), ...operations.views],
+    opens: authoring ? { "build.connection": "connection", "build.source": "data-source", "build.observation": "observation-source", "build.writeback": "writeback" } : {},
+    navigation: authoring ? navigation : undefined,
+    nav: (host, route) => [
+      ...(authoring ? [section(t("Sources"), route, [
+        { label: t("Connections"), icon: <Plug />, view: "connection" },
+        { label: t("Syncs"), icon: <Database />, view: "data-source" },
+      ])] : []),
+      { label: t("Streams"), items: [...(authoring ? links(route, [{ label: t("Observation sources"), icon: <Radio />, view: "observation-source" }]) : []), ...operations.streamLinks()] },
+      ...(authoring ? [section(t("Exports"), route, [{ label: t("Writebacks"), icon: <Link2 />, view: "writeback" }])] : []),
+      { label: t("Webhooks"), items: operations.webhookLinks(host) },
+    ].filter(section => section.items.length > 0),
+  });
+}
 
 const pipelineBuilder = defineApp({
   id: "pipeline-builder", category: "build", title: "Pipeline Builder", icon: <Workflow />,
@@ -204,14 +208,11 @@ const datasetPreview = defineApp({
   nav: (_host, route) => [section(t("Datasets"), route, [{ label: t("Datasets"), icon: <TableProperties />, view: "dataset" }])],
 });
 
-const monitoring = defineApp({
-  id: "monitoring", category: "govern", title: "Monitoring", icon: <Activity />,
-  description: "Health, runs, queued and failed work, and every delivery the host attempted.",
+export const integrationMonitoring: Pick<AppUI, "for" | "views" | "nav"> = {
   for: host => builder(host) || integrator(host),
-  home: { view: "integration-health" },
   views: contextualViews(monitoringViews),
   nav: (_host, route) => [section(t("Monitoring"), route, [{ label: t("Integration health"), icon: <Activity />, view: "integration-health" }])],
-});
+};
 
 const logic = defineApp({
   id: "logic", category: "build", title: "Logic", icon: <Braces />,
@@ -270,15 +271,22 @@ const devops = defineApp({
   ],
 });
 
-const agentDefinitions = defineApp({
-  id: "agents", category: "build", title: "Agent Studio", icon: <Bot />,
-  description: "AI agents, what they are allowed to do, their runs and evaluations.",
-  for: builder,
-  home: { view: "agent" },
-  views: contextualViews(agentViews),
-  opens: { "build.agent": "agent" },
-  navigation,
-  nav: (_host, route) => [section(t("Build"), route, [{ label: t("Agent definitions"), icon: <Shapes />, view: "agent" }])],
-});
+export function createAgentStudio(host: Host, operations: Pick<AppUI, "for" | "views" | "nav">): AppUI {
+  const authoring = builder(host);
+  const operating = !operations.for || operations.for(host);
+  return defineApp({
+    id: "agents", serves: ["build", "agent"], category: "build", title: "Agent Studio", icon: <Bot />,
+    description: "AI agents, what they are allowed to do, their runs and evaluations.",
+    for: host => builder(host) || !operations.for || operations.for(host),
+    home: { view: operating ? "agents" : "agent" },
+    views: [...(authoring ? contextualViews(agentViews) : []), ...(operating ? operations.views : [])],
+    opens: authoring ? { "build.agent": "agent" } : {},
+    navigation: authoring ? navigation : undefined,
+    nav: (host, route) => [
+      ...(operating ? operations.nav(host, route) : []),
+      ...(authoring ? [section(t("Build"), route, [{ label: t("Agent definitions"), icon: <Shapes />, view: "agent" }])] : []),
+    ],
+  });
+}
 
-export const contributions = [ontology, connection, pipelineBuilder, datasetPreview, logic, automate, workshop, agentDefinitions, devops, monitoring];
+export const contributions = [ontology, pipelineBuilder, datasetPreview, logic, automate, workshop, devops];

@@ -36,6 +36,7 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 ## 应用注册
 
+- 每个应用 ID 只有一个定义。跨包页面由 workspace 按成员显式装配到拥有者，禁止按重复 ID 隐式合并；应用可供路由使用而不进入门户，个人账户与开发目录沿此边界开放。
 - `category` 决定门户分组与密度（4-interaction §4.10）。
 - `nav` 返回带标题段落的导航项，≤ 8 项；资源页用 `ResourceNavigation` 接管侧栏。
 - `opens` 把资源类型映射到视图；任何地方打开一个资源都经 `opens` 解析。
@@ -63,3 +64,4 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 - 路由仍为 `{view, params}`，无 RID（路线图 P2.2）。
 - `web/packages/platform` 是空目录；`@platform/kernel` 未改名（路线图“已知漂移”）。
+- Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；尚未测量实际首屏耗时（路线图“已知漂移”）。

@@ -82,3 +82,4 @@ P3.13 Workshop 对象视图模块替换默认对象视图。
 - “kernel”一词指三处：`capabilities/server/kernel`、`contract/go/kernel`、`web/packages/kernel`。
 - `journal/` 是持久化而非会计；改名为 `store` 或并入持久化包时一并处理（P2.11）。
 - 界面中“动作”与“操作”混用，统一为“动作”（术语表）。
+- Workspace 构建仍有大于 500 kB 的分块与三处无效动态导入告警；先测量实际加载成本，再决定拆包。

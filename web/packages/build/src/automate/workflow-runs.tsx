@@ -50,7 +50,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
   return <div className="grid gap-3">
     <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-semibold">{t("Execution history")}</h3><Button onClick={() => { void inventory.refetch(); void definitions.refetch(); }}>{t("Refresh runs")}</Button></div>
     {inventory.isError && <p role="alert" className="text-xs text-danger">{t("Run history could not be loaded for this member.")}</p>}
-    <DataTable data={runs} columns={columns} getRowId={(run) => run.id} height={160} searchable={false} selectedId={shown?.id} onRowClick={(run) => { setSelected(run.id); setStep(""); }} loading={inventory.isLoading} empty={t("No runs of this workflow yet.")} />
+    <DataTable storageKey="automate:workflow-runs" data={runs} columns={columns} getRowId={(run) => run.id} height={160} searchable={false} selectedId={shown?.id} onRowClick={(run) => { setSelected(run.id); setStep(""); }} loading={inventory.isLoading} empty={t("No runs of this workflow yet.")} />
     {shown && <>
       <div className="flex flex-wrap items-center gap-2 text-xs"><StatusTag status={shown.state} registry={flowStates} /><code>{shown.id}</code><span className="text-muted">v{shown.version}</span>
         <Button onClick={() => open({ view: "flow-instance", params: { id: shown.id, ...(project ? { project } : {}) } }, { window: "beside" })}>{t("Open run")}</Button>
@@ -63,7 +63,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
           {token && <><h4 className="text-xs font-medium">{t("Current token")}</h4><pre className="max-h-40 overflow-auto rounded bg-background p-2 text-2xs">{JSON.stringify(token, null, 2)}</pre></>}
         </div>
       </div>}
-      <Disclosure summary={<span className="text-xs font-medium">{t("Decision trace")}</span>}><DataTable data={(shown.trace ?? []).map((line, index) => ({ ...line, id: String(index) }))} columns={traceColumns} getRowId={(line) => line.id} height={200} searchable={false} /></Disclosure>
+      <Disclosure summary={<span className="text-xs font-medium">{t("Decision trace")}</span>}><DataTable storageKey="automate:workflow-decision-trace" data={(shown.trace ?? []).map((line, index) => ({ ...line, id: String(index) }))} columns={traceColumns} getRowId={(line) => line.id} height={200} searchable={false} /></Disclosure>
     </>}
   </div>;
 }

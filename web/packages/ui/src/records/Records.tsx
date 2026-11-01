@@ -104,7 +104,25 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
   const cardLayout=cardChoice?.identity===cardIdentity?cardChoice.layout:cards?.layout??"grid";
   const info = source.entity(type);
   const [localSearch, setSearch] = useState(initial.search ?? initial.baseQuery?.search ?? "");
-  const [localSort, setSort] = useState(initial.sort ? [initial.sort] : initial.baseQuery?.sort ?? ["-changed"]);
+  const sortStorageKey = `records:${type}:query`;
+  const readSort = () => {
+    if (initial.sort) return [initial.sort];
+    if (initial.baseQuery?.sort) return initial.baseQuery.sort;
+    if (!window && !initial.sortLocked) {
+      try {
+        const saved: unknown = JSON.parse(localStorage.getItem(sortStorageKey) ?? "null");
+        if (Array.isArray(saved) && saved.length > 0 && saved.every(value => typeof value === "string")) return saved as string[];
+      } catch {   }
+    }
+    return ["-changed"];
+  };
+  const [sortChoice, setSortChoice] = useState(() => ({ key: sortStorageKey, value: readSort() }));
+  if (sortChoice.key !== sortStorageKey) setSortChoice({ key: sortStorageKey, value: readSort() });
+  const localSort = sortChoice.value, setSort = (value: string[]) => setSortChoice({ key: sortStorageKey, value });
+  useEffect(() => {
+    if (window || initial.sortLocked) return;
+    try { localStorage.setItem(sortStorageKey, JSON.stringify(localSort)); } catch {   }
+  }, [sortStorageKey, localSort, !!window, initial.sortLocked]);
   const [localOffset, setOffset] = useState(0);
   const [archived, setArchived] = useState(initial.archived ?? initial.baseQuery?.archived ?? false);
   const [loadedPage, setLoadedPage] = useState<{ source:string|RecordSource;key: string; page: RecordPageData }>();
@@ -158,6 +176,7 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
     for (const f of fields.slice(4)) if ((facetSelection[f.name] ?? []).length > 0 && !shown.includes(f)) shown.push(f);
     return shown;
   }, [info, facetSelection]);
+  const canClearFilters = !searchLocked && !!search || !filtersLocked && Object.values(facetSelection).some(values=>values.length>0);
   const facetTerms = useMemo(() => Object.entries(facetSelection).flatMap(([field, values]) => values.length ? [[field, "in", values]] : []), [facetSelection]);
   const baseDomainKey=JSON.stringify(baseQuery.domain??[]);
   const domain = useMemo(() => [...JSON.parse(baseDomainKey),...JSON.parse(fixedKey), ...(drilled ?? []), ...facetTerms], [baseDomainKey,fixedKey, drilled, facetTerms]);
@@ -343,7 +362,7 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
       </div>}
       {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate} source={source} onOpenReference={onOpenReference}/>)}
       {view === "list" && !cards && (
-        <EditableRecordGrid key={JSON.stringify([editTask.current.generation,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.preview])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} showToolbar={showToolbar} port={inlineEdit} selectedId={selectedId} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
+        <EditableRecordGrid readError={error?humanizeKernelError(error):undefined} storageKey={`records:${type}`} totalRows={page?.total} key={JSON.stringify([editTask.current.generation,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.preview])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} showToolbar={showToolbar} port={inlineEdit} selectedId={selectedId} selectionSet={selectionSet} onOpen={onOpen} loading={!page&&!error} empty={{title:t("No {things}", { things: info.plural.toLowerCase() }),hint:canClearFilters?t("No records match these filters."):t("Records appear here after they are created or imported."),action:canClearFilters?<Button size="sm" onClick={()=>{if(window)window.onChange({...!searchLocked?{search:""}:{},...!filtersLocked?{filters:{}}:{},offset:0});else{if(!searchLocked)setSearch("");setOffset(0);if(!filtersLocked)applyFilters({});}}}>{t("Clear filters")}</Button>:undefined}}/>
       )}
       {view === "kanban" && kanbanLanes.length > 0 && kanbanStateField && (
         error ? <p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>

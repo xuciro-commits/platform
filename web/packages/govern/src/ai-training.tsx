@@ -19,7 +19,7 @@ export function AITraining() {
  return <div className="grid gap-4">
   <Panel title={t("Training candidates")} description={t("Accepted business decisions provide candidate evidence. A valid schema or simulation is not proof of quality. No transcripts or private reasoning are copied.")}>
    <p className="mb-3 text-sm text-muted">{t("The candidate collection retains the newest 1,024 entries within 256 KiB of the original accepted-result budget. Oversized content is reduced to metadata or omitted; original evidence and revocations remain in the accepted history.")}</p>
-   {query.isError?<p role="alert">{t("Training data could not be loaded.")}</p>:<DataTable data={candidates} columns={columns} getRowId={c=>c.id} height={240} empty={t("No training candidates yet")}/>}
+   {query.isError?<p role="alert">{t("Training data could not be loaded.")}</p>:<DataTable storageKey="ai:training-candidates" data={candidates} columns={columns} getRowId={c=>c.id} height={240} empty={t("No training candidates yet")}/>}
   </Panel>
   {candidate&&<Panel title={t("Independent quality review")}>
    <div className="mb-4 grid gap-3">

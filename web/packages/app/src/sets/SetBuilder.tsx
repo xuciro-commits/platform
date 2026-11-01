@@ -286,7 +286,7 @@ function SetResult({ set, preview }: { set: Api.ObjectSet; preview: boolean }) {
   return <div className="grid min-w-0 gap-1" role="region" aria-label={t("Set result")}>
     <p role="status" className="tabular-nums text-muted">{current.partial ? t("At least {count} records", { count: current.count!.toLocaleString() }) : t("{count} records", { count: current.count!.toLocaleString() })}</p>
     {current.partial && <p className="text-warning">{t("Some records are hidden by markings or row policies.")}</p>}
-    {preview && <DataTable data={rows} columns={columns as never} getRowId={(row: EntityRecord) => row.id} height={Math.min(320, 40 + rows.length * 28)} searchable={false} empty={t("No records match this set.")} />}
+    {preview && <DataTable storageKey={type ? `set-preview:${type}` : undefined} totalRows={current.page?.total ?? (current.partial ? undefined : current.count)} manualSorting data={rows} columns={columns as never} getRowId={(row: EntityRecord) => row.id} height={Math.min(320, 40 + rows.length * 28)} searchable={false} empty={t("No records match this set.")} />}
     {preview && !current.partial && current.count! > rows.length && <p className="text-muted">{t("Showing the first {shown} of {total} records.", { shown: rows.length, total: current.count!.toLocaleString() })}</p>}
   </div>;
 }
