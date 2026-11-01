@@ -266,3 +266,106 @@ func TestInvariantK3StaleRevisionIsRefusedAndSealed(t *testing.T) {
 		t.Fatalf("the current expected revision: record=%v refusal=%v; want revision 3", accepted, refusal)
 	}
 }
+
+func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
+	tn := newInvariantTenant(t, "invariant-k4",
+		platform.Seat{Subjects: []string{"cleared-builder"}, Member: platform.Member{ID: "cleared-builder", Roles: map[string]string{build.ID: build.Builder, "platform": "confidential"}}},
+		platform.Seat{Subjects: []string{"unprivileged"}, Member: platform.Member{ID: "unprivileged"}},
+	)
+	uncleared := tn.member(t)
+	cleared, ok := tn.Member("cleared-builder")
+	if !ok {
+		t.Fatal("the cleared builder is not seated")
+	}
+	unprivileged, ok := tn.Member("unprivileged")
+	if !ok {
+		t.Fatal("the unprivileged member is not seated")
+	}
+	if !uncleared.Holds(build.ID, build.Builder) || !cleared.Holds(build.ID, build.Builder) || platform.MarkingCleared(uncleared, "confidential") || !platform.MarkingCleared(cleared, "confidential") {
+		t.Fatal("the builders must have the same build role and different confidential clearances")
+	}
+
+	t.Run("write refusal is explained and sealed", func(t *testing.T) {
+		sealedBefore := len(tn.entries)
+		imageBefore := tn.recordImage(t)
+		request := tn.submission("build.object.create", build.ObjectType, "DENIED", invariantObject("denied", "Denied"))
+		request.PrincipalId = unprivileged.ID
+		record, refusal := tn.Submit(unprivileged, request, invariantClock)
+		want := "Authorization denied at verb: No role or policy grants this operation"
+		if record != nil || refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Message != want {
+			t.Fatalf("unauthorized write: record=%v refusal=%+v; want POLICY_DENIED with %q", record, refusal, want)
+		}
+		if len(tn.entries) != sealedBefore+1 {
+			t.Fatalf("the write refusal sealed %d journal entries; want 1", len(tn.entries)-sealedBefore)
+		}
+		saved, sealed := tn.sealedRefusal(t, sealedBefore)
+		if !reflect.DeepEqual(saved.Error, *refusal) || !proto.Equal(sealed, request) {
+			t.Fatalf("the sealed refusal changed its reason or submission: error=%+v submission=%v", saved.Error, sealed)
+		}
+		if differing := differingTypes(imageBefore, tn.recordImage(t)); len(differing) != 0 {
+			t.Fatalf("the refused write changed the record store in %v", differing)
+		}
+	})
+
+	for _, dataset := range []struct{ id, name, marking string }{
+		{"OPEN", "open", "internal"}, {"GUARDED", "guarded", "confidential"},
+	} {
+		tn.accept(t, "build.dataset.create", build.DatasetType, dataset.id, map[string]any{"name": dataset.name, "title": dataset.name})
+		tn.accept(t, build.SchemaDatasetLoad, build.DatasetType, dataset.id, map[string]any{
+			"rows": []map[string]any{{"note": dataset.name}}, "marking": dataset.marking,
+		})
+	}
+	openID, guardedID := build.VersionID("OPEN", 1), build.VersionID("GUARDED", 1)
+
+	t.Run("read refusal carries its reason", func(t *testing.T) {
+		want := "Authorization denied at verb: No role or policy grants this operation"
+		page, refusal := tn.Records(unprivileged, build.DatasetVersionType, platform.Query{}, invariantClock)
+		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Message != want || len(page.Records) != 0 {
+			t.Fatalf("unauthorized collection read: page=%+v refusal=%+v; want POLICY_DENIED with %q", page, refusal, want)
+		}
+		view, refusal := tn.RecordOf(unprivileged, build.DatasetVersionType, openID, invariantClock)
+		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Message != want || view.Record != nil {
+			t.Fatalf("unauthorized single read: view=%+v refusal=%+v; want POLICY_DENIED with %q", view, refusal, want)
+		}
+	})
+
+	t.Run("collections filter uncleared markings", func(t *testing.T) {
+		for _, check := range []struct {
+			member platform.Member
+			want   []string
+		}{{cleared, []string{guardedID, openID}}, {uncleared, []string{openID}}} {
+			page, refusal := tn.Records(check.member, build.DatasetVersionType, platform.Query{Sort: []string{"id"}}, invariantClock)
+			if refusal != nil {
+				t.Fatalf("%s collection read: %+v", check.member.ID, refusal)
+			}
+			var ids []string
+			for _, record := range page.Records {
+				version, ok := record.(build.DatasetVersion)
+				if !ok {
+					t.Fatalf("dataset version read returned %T", record)
+				}
+				ids = append(ids, version.ID)
+			}
+			if !slices.Equal(ids, check.want) || page.Total != len(check.want) {
+				t.Fatalf("%s sees ids=%v total=%d; want ids=%v total=%d", check.member.ID, ids, page.Total, check.want, len(check.want))
+			}
+		}
+	})
+
+	t.Run("single reads hide uncleared markings", func(t *testing.T) {
+		for _, check := range []struct {
+			member platform.Member
+			id     string
+		}{{cleared, guardedID}, {uncleared, openID}} {
+			view, refusal := tn.RecordOf(check.member, build.DatasetVersionType, check.id, invariantClock)
+			if refusal != nil || view.Record == nil {
+				t.Fatalf("%s cannot read visible version %s: view=%+v refusal=%+v", check.member.ID, check.id, view, refusal)
+			}
+		}
+		hidden, refusal := tn.RecordOf(uncleared, build.DatasetVersionType, guardedID, invariantClock)
+		missing, absent := tn.RecordOf(uncleared, build.DatasetVersionType, "MISSING@1", invariantClock)
+		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND || hidden.Record != nil || !reflect.DeepEqual(refusal, absent) || !reflect.DeepEqual(hidden, missing) {
+			t.Fatalf("uncleared read differs from a missing version: hidden=%+v refusal=%+v missing=%+v refusal=%+v", hidden, refusal, missing, absent)
+		}
+	})
+}

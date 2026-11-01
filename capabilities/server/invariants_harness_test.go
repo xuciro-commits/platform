@@ -57,7 +57,7 @@ func invariantBindOwner(app platform.App, roles platform.OwnerBindings) {
 	}
 }
 
-func newInvariantTenant(tb testing.TB, id string) *invariantTenant {
+func newInvariantTenant(tb testing.TB, id string, seats ...platform.Seat) *invariantTenant {
 	tb.Helper()
 	services := platform.DefaultRuntimeCapabilities()
 	services.BindOwner = invariantBindOwner
@@ -68,7 +68,7 @@ func newInvariantTenant(tb testing.TB, id string) *invariantTenant {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: authorization.NewPolicies(), Packages: packages.New(id), Actions: actions}
-	}, seat)
+	}, append([]platform.Seat{seat}, seats...)...)
 	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id))
 	if err != nil {
 		tb.Fatal(err)
