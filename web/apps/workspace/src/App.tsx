@@ -1,10 +1,10 @@
 import "./i18n";
-import { ApplicationSessionsProvider, HostContext, withApp, type AppUI, type Host, type Me } from "@platform/app";
+import { ApplicationSessionsProvider, HostContext, withApp, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, OfflineReadError, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
+import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bookmark, Layers } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chromeViews, explorerApplication, lineageApplication, personalWork } from "./chrome";
 import { availablePackages, loadPackages, packages } from "./host/packages";
 import { usePlatformHost } from "./host/usePlatformHost";
@@ -17,6 +17,15 @@ import { pageApplication, tenantApps } from "./tenantApps";
 import { routeApplication, sharedViewApplication } from "./shell/navigation";
 import { extendApplications, resolveApplicationRoute } from "./host/applications";
 import { OfflinePreparation } from "./offline/Preparation";
+
+function explorerSavedSections(saved: SavedView[]): NavSection[] {
+  if (!saved.length) return [];
+  const kindOf = (view: SavedView) => { try { return (JSON.parse(view.state) as { kind?: string }).kind === "exploration" ? "exploration" : "list"; } catch { return "list"; } };
+  const explorations = saved.filter((v) => kindOf(v) === "exploration"), lists = saved.filter((v) => kindOf(v) === "list");
+  const section = (label: string, views: SavedView[], icon: ReactNode): NavSection[] => views.length
+    ? [{ label, items: views.map((v) => ({ label: v.title, icon, route: { view: "explorer", params: { saved: v.id } } })) }] : [];
+  return [...section(t("Saved explorations"), explorations, <Bookmark />), ...section(t("Lists"), lists, <Layers />)];
+}
 
 export type { Identity } from "./session/identity";
 
@@ -272,7 +281,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         navigation={app?.navigation?.(activeRoute)}
         nav={[
           ...(app?.nav(host, activeRoute) ?? []),
-          ...(app?.id === sharedViewApplication({ view: "saved" }) && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
+          ...explorerSavedSections(app?.id === sharedViewApplication({ view: "saved" }) ? saved : []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
           {id:"offline",label:t("Offline applications"),run:()=>setOfflineOpen(true)},

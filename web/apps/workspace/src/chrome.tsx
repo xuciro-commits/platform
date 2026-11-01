@@ -259,8 +259,8 @@ export const explorerApplication = defineApp({
   description: "Search, filter and open objects of every type you may read.",
   for: host => host.entities.length > 0,
   home: { view: "explorer" },
-  views: [{ id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} /> }],
-  nav: () => [],
+  views: [{ id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} saved={p.saved} /> }],
+  nav: () => [{ label: t("Explore"), items: [{ label: t("Explore"), icon: <Compass />, route: { view: "explorer" } }] }],
 });
 
 export const lineageApplication = defineApp({

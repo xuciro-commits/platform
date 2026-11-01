@@ -161,4 +161,3 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 - Data Connection 的 Streams 仍分 Observation sources 与 Observations 两项；没有 Listeners（P3.17）。
 - Knowledge、Master data、Organisation directory 是独立业务应用（P2.10）。
 - Marketplace 无安装审阅与升级审阅（P5.3、P5.4）。
-- Object Explorer 无分面、Search around、保存（P3.15）。

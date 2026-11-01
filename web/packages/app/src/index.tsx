@@ -426,6 +426,7 @@ export { NewActions, PayloadFields, DeclaredActionForm, DeclaredActionDialog, In
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages/pages";
 export { ComposedPage, SectionView, isComposed } from "./pages/sections";
 export { ObjectRecordView } from "./pages/ObjectRecordView";
+export { ExplorationRenderer } from "./widgets/Exploration";
 export { createWidgetDefinitions, createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetImplementation, type WidgetContract, type WidgetID } from "./widgets/registry";
 export { pageVariableContract, pageVariableValues, pageVariableDiagnostics } from "./runtime/PageRuntime";
 export type { VariableResult as PageVariableValue } from "./runtime/variables";
