@@ -81,6 +81,30 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot replace resource {resource} in another project", resource.Ref.String())
 		}
 	}
+	removed := map[platform.AssetRef]bool{}
+	for _, resource := range resources {
+		if resource.ManagedBy == descriptor.ID && resource.Draft != projectID && !resource.Archived && !refs[resource.Ref] {
+			removed[resource.Ref] = true
+		}
+	}
+	views := h.t.app("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
+	for _, view := range views {
+		if view.Descriptor.ID != descriptor.ID || view.Installed == nil || view.Descriptor.Version != view.Installed.Version || view.Descriptor.Blueprint == nil {
+			continue
+		}
+		previous, err := owner.CompleteBlueprintAssets(view.Descriptor.Blueprint.Assets)
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+		}
+		for _, asset := range previous {
+			if !refs[asset.Ref] && !native[asset.Ref] {
+				removed[asset.Ref] = true
+			}
+		}
+	}
+	if impacts := h.t.packageRemovalImpacts(removed, refs); len(impacts) > 0 {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before upgrading the product", impacts[0].Resource.String(), impacts[0].Consumer.String())
+	}
 	context := platform.AssetReleaseContext{Member: c.Member, At: d.at, ManagedBy: descriptor.ID, ManagedAssets: refs, Upgrade: true}
 	_, _, err = h.t.bootstrapOwnerDraftsLocked(candidate, context, false, nil, d)
 	if err != nil {

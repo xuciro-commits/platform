@@ -3345,6 +3345,11 @@ export type PackageRemoval = {
   blockers: string[];
 };
 
+export type PackageRemovalImpact = {
+  resource: AssetRef;
+  consumer: AssetRef;
+};
+
 export type PackageResourceChange = {
   ref: AssetRef;
   change: string;
@@ -3357,6 +3362,7 @@ export type PackageReview = {
   version: string;
   changes: PackageResourceChange[];
   extensions: ReleaseExtensionReview[];
+  removals: PackageRemovalImpact[];
   problems?: string[];
 };
 

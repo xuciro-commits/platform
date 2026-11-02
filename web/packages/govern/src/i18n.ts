@@ -1,6 +1,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "References affected by removal": "受移除影响的引用",
+ "These resources will keep their data and references, but the removed resources will be unavailable.": "这些资源的数据和引用会保留，但移除的资源将不可用。",
+ "Update these references before upgrading this product.": "请先修改这些引用，再升级此产品。",
+ "The product removes this extension's base": "产品将移除此扩展依赖的基础类型",
+
  "The product review could not be loaded.": "无法加载产品审阅。",
  "Compatible with this version": "与此版本兼容",
  "Customer extensions": "客户扩展",
