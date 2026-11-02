@@ -89,7 +89,8 @@ func New(tenant string) *Build {
 	actions = append(actions, pipelineActions()...)
 	actions = append(actions, platform.EntityActions(b.tableEntity())...)
 	actions = append(actions, platform.EntityActions(b.agentEntity())...)
-	actions = append(actions, platform.EntityActions(b.alertEntity())...)
+	actions = append(actions, platform.Action{Schema: schemaAlertDraftMigrate, Target: ProcessType, Title: "Migrate alert draft", Description: "Retain an unpublished alert as an editable automation draft.", Automation: true, Payload: []platform.Field{{Name: "alert", Type: "string", Required: true}}})
+	actions = append(actions, platform.Action{Schema: schemaAlertMigrate, Target: ProcessType, Title: "Migrate alert to automation", Description: "Retain an existing alert as a normal automation with a notification effect.", Automation: true, Payload: []platform.Field{{Name: "alert", Type: "string", Required: true}}})
 	actions = append(actions, sourceActions()...)
 	actions = append(actions, platform.EntityActions(b.sampleSetEntity())...)
 	actions = append(actions, platform.EntityActions(b.observationEntity())...)
@@ -283,6 +284,12 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		if err := b.checkSystemDefinitionWrite(s); err != nil {
 			return nil, err
 		}
+	}
+	if s.GetSchema().GetName() == schemaAlertMigrate || s.GetSchema().GetName() == schemaAlertDraftMigrate {
+		return b.migrateAlert(c, s, now)
+	}
+	if s.GetTarget().GetType() == AlertType && !c.Replaying {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Create an automation with a notification effect instead of an alert rule")
 	}
 	if s.GetSchema().GetName() == LinkTypeType+".migrate" {
 		return b.migrateLinkType(c, s, now)
@@ -587,9 +594,6 @@ type ConstructionSandbox interface {
 	InstallOperationAsset(platform.ReleaseAsset) error
 }
 
-type AlertDefinitions interface {
-	AlertRules(string) ([]Alert, error)
-}
 type ObservationDefinitions interface {
 	ExecutionObservation(Observation) (platform.ObservationDefinition, error)
 }

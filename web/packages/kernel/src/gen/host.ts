@@ -2953,6 +2953,12 @@ export type Notification = {
   withheld?: boolean;
 };
 
+export type NotificationEffect = {
+  title: string;
+  body: string;
+  role: string;
+};
+
 export type ObjectSet = {
   object?: string;
   interface?: string;
@@ -3818,6 +3824,8 @@ export type Process = {
   title: string;
   kind?: "flow" | "automation";
   object?: string;
+  trigger?: Expr;
+  repeat?: boolean;
   when?: string;
   manual?: boolean;
   every?: string;
@@ -3828,6 +3836,8 @@ export type Process = {
   steps: ProcessStep[];
   lanes?: ProcessLane[];
   layout?: Record<string, NodePosition>;
+  legacyAlert?: string;
+  pauseReason?: string;
   paused?: boolean;
   state: "draft" | "published";
   version?: number;
@@ -3854,7 +3864,8 @@ export type ProcessLane = {
 export type ProcessStep = {
   name: string;
   title?: string;
-  kind: "payload" | "query" | "action" | "transform" | "branch" | "switch" | "foreach" | "while" | "fork" | "join" | "ask" | "wait" | "subflow" | "ai" | "compute" | "end" | "fail" | "break" | "continue";
+  notify?: NotificationEffect;
+  kind: "payload" | "query" | "notify" | "action" | "transform" | "branch" | "switch" | "foreach" | "while" | "fork" | "join" | "ask" | "wait" | "subflow" | "ai" | "compute" | "end" | "fail" | "break" | "continue";
   lane?: string;
   inputs?: Record<string, Binding>;
   value?: Binding;

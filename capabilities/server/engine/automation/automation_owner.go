@@ -259,12 +259,15 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 	return out, nil
 }
 
-func (f *Flows) StartManual(c platform.Caller, app, name string, version int, key string, input json.RawMessage, now time.Time) *kernel.Error {
+func (f *Flows) StartManual(c platform.Caller, app, name string, version int, key, subject string, input json.RawMessage, now time.Time) *kernel.Error {
 	d := f.def(app+"."+name, version)
-	if d == nil || !d.Start.Manual || key == "" || len(key) > 256 || len(input) > 64<<10 || !json.Valid(input) {
+	if d == nil || (!d.Start.Manual && d.Start.OnBehalf == "" || d.Start.Continuous) || key == "" || len(key) > 256 || len(input) > 64<<10 || !json.Valid(input) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an installed manual flow, bounded key and JSON input")
 	}
-	return f.start(f.host.Automation(c, ID), d, key, input, c.ID, nil, "", now, true)
+	if !d.Start.Manual {
+		key = "manual:" + key
+	}
+	return f.start(f.host.Automation(c, ID), d, key, input, c.ID, nil, "", subject, now, true)
 }
 
 func (f *Flows) HasDefinition(app, name string, version int) bool {

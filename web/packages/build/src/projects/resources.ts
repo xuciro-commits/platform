@@ -26,7 +26,6 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "agent", type: "build.agent", view: "agent", label: "Agent", plural: "Agents", ref: "agent" },
   { kind: "compute", type: "build.code", view: "code", label: "Code function", plural: "Code functions", ref: "compute" },
   { kind: "table", type: "build.table", view: "decision-table", label: "Decision table", plural: "Decision tables", ref: "compute" },
-  { kind: "alert", type: "build.alertrule", view: "alert", label: "Alert rule", plural: "Alert rules", ref: "alert" },
   { kind: "connection", type: "build.connection", view: "connection", label: "Connection", plural: "Connections" },
   { kind: "observation", type: "build.observation", view: "observation-source", label: "Observation source", plural: "Observation sources" },
   { kind: "source", type: "build.source", view: "data-source", label: "Data source", plural: "Data sources" },

@@ -29,7 +29,6 @@ import { QueryEditor, Queries } from "./ontology/query";
 import { FunctionEditor } from "./functions/function";
 import { CodeEditor } from "./functions/code";
 import { AgentEditor, Agents } from "./functions/agent";
-import { AlertEditor, Alerts } from "./functions/alert";
 import { ReleaseReview, releaseDraftsSelection, releaseKinds, type ReleaseKind } from "./releases/release";
 import { Branches } from "./branches/Branches";
 import { ProposalScreen } from "./branches/Proposal";
@@ -44,7 +43,7 @@ import { ToolContext } from "./projects/tool-context";
 import { studioApplicationID, studioAreaForRoute } from "./projects/studio-model";
 import { FunctionCatalog } from "./functions/catalog";
 import { Interfaces } from "./ontology/ModelWorkbench";
-import { Activity, BellRing, Bot, Boxes, Braces, CalendarClock, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
+import { Activity, Bot, Boxes, Braces, CalendarClock, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.holds("build", "builder");
 const integrator = (host: Host) => host.holds("build", "integrator");
@@ -100,7 +99,7 @@ const logicViews: View[] = [
 ];
 const automateViews: View[] = [
   view("automation", () => t("Automations"), p => p.id ? <AutomationEditor key={p.id} id={p.id} /> : <Automations />),
-  view("alert", () => t("Alert rules"), p => p.id ? <AlertEditor key={p.id} id={p.id} /> : <Alerts />),
+  view("alert", () => t("Automations"), p => p.id ? <AutomationEditor key={p.id} id={`alert-${p.id}`} /> : <Automations />),
 ];
 const workshopViews: View[] = [
   view("object-views", () => t("Object views"), () => <ObjectViews />),
@@ -254,7 +253,6 @@ const automate = defineApp({
   navigation,
   nav: (_host, route) => [section(t("Automate"), route, [
     { label: t("Automations"), icon: <Zap />, view: "automation" },
-    { label: t("Alert rules"), icon: <BellRing />, view: "alert" },
   ])],
 });
 

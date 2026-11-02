@@ -8,7 +8,7 @@ import (
 )
 
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaValueType, SchemaObjectTypeGroup, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
+	return []string{schemaAlertMigrate, SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaValueType, SchemaObjectTypeGroup, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
 }
 
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
@@ -78,6 +78,9 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == schemaAlertMigrate {
+		schema = SchemaProcess
+	}
 	if schema == SchemaAlertPublish {
 		_, asset, err := alertImage(image)
 		if err != nil {
@@ -156,6 +159,9 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 }
 
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == schemaAlertMigrate {
+		schema = SchemaProcess
+	}
 	if schema == SchemaAlertPublish {
 		_, _, err := alertImage(image)
 		return err
@@ -289,6 +295,7 @@ func published[T any](definition T) string {
 		definition = any(value).(T)
 	case Process:
 		value.Paused = false
+		value.PauseReason = ""
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)

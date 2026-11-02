@@ -1,8 +1,8 @@
 import type {WorkflowDraft} from "./workflow-model";
 
 export function workflowInputs(draft:WorkflowDraft){
- const {name,title,kind,object,when,manual,every,input,inputSchema,continuous,steps,lanes,layout}=draft;
- return {name,title,...(kind?{kind}:{}),object:object??"",when:when??"",manual:!!manual,every:every??"",input:input??{},inputSchema,continuous:continuous??null,steps,lanes:lanes??[],layout:layout??{}};
+ const {name,title,kind,object,when,trigger,repeat,manual,every,input,inputSchema,continuous,steps,lanes,layout}=draft;
+ return {name,title,...(kind?{kind}:{}),object:object??"",when:when??"",trigger:trigger??null,repeat:!!repeat,manual:!!manual,every:every??"",input:input??{},inputSchema,continuous:continuous??null,steps,lanes:lanes??[],layout:layout??{}};
 }
 
 function canonical(value:unknown):unknown{

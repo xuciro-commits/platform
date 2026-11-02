@@ -3,47 +3,18 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const SchemaAlertPublish = AlertType + ".publish"
 
 func (b *Build) alertEntity() platform.Entity {
-	return platform.Entity{Type: AlertType, Title: "Alert rule", Plural: "Alert rules", Model: Alert{}, Display: "title",
-		Description: "Tells a role when a record of an object comes to match a condition.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}},
-		Validate: func(c platform.Caller, record any) *kernel.Error {
-			a := record.(*Alert)
-			if c.Replaying {
-				return nil
-			}
-			if previous, ok := platform.Get[Alert](c, a.ID); ok {
-				if legacyAlert(previous) {
-					if err := freezeLegacyAlert(&previous); err != nil {
-						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-					}
-					a.State, a.Version, a.DefinitionVersion, a.Versions, a.Published = previous.State, previous.Version, previous.DefinitionVersion, previous.Versions, previous.Published
-				}
-				if previous.Published != "" && previous.Name != a.Name {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A published alert keeps its name")
-				}
-			}
-			if err := b.checkAlert(*a); err != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
-			}
-			return nil
-		},
-		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Payload: []platform.Field{}, Do: b.publishAlert}}}}
+	return platform.Entity{Type: AlertType, Title: "Legacy alert", Plural: "Legacy alerts", Model: Alert{}, Display: "title", Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}}}
 }
 
 func (b *Build) checkAlert(a Alert) error {
@@ -79,24 +50,6 @@ func (b *Build) checkAlert(a Alert) error {
 	}
 	if strings.TrimSpace(a.Message) == "" {
 		return fmt.Errorf("The alert needs a message")
-	}
-	return nil
-}
-
-func (b *Build) publishAlert(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	a := record.(*Alert)
-	if err := b.checkAlert(*a); err != nil {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	if err := freezeLegacyAlert(a); err != nil {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	asset, err := alertReleaseAsset(*a, a.Version+1)
-	if err == nil {
-		err = retainAlertAsset(a, asset)
-	}
-	if err != nil {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	return nil
 }
@@ -189,38 +142,6 @@ func (b *Build) alertAssets() ([]platform.ReleaseAsset, error) {
 		assets = append(assets, asset)
 	}
 	return assets, nil
-}
-
-func (b *Build) AlertRules(object string) ([]Alert, error) {
-	rows, err := readDefinitionInventory[Alert](b.host.Automation(platform.Caller{}, ID))
-	if err != nil {
-		return nil, err
-	}
-	var rules []Alert
-	for _, record := range rows {
-		if record.Archived {
-			continue
-		}
-		if err := freezeLegacyAlert(&record); err != nil {
-			return nil, err
-		}
-		if record.Published == "" {
-			continue
-		}
-		_, asset, err := alertImage(platform.Raw(record))
-		if err != nil {
-			return nil, err
-		}
-		a, _, err := alertFromAsset(asset)
-		if err != nil {
-			return nil, err
-		}
-		if a.Active && a.Object == object {
-			a.Record = record.Record
-			rules = append(rules, a)
-		}
-	}
-	return rules, nil
 }
 
 func (b *Build) alertPinned(ref platform.AssetRef, version string) (platform.ReleaseAsset, error) {
@@ -340,6 +261,8 @@ const AlertType = "build.alertrule"
 
 type Alert struct {
 	platform.Record
+	Migrated          string   `json:"migrated,omitempty" field:"readonly"`
+	MigratedVersion   int      `json:"migratedVersion,omitempty" field:"readonly"`
 	Name              string   `json:"name" field:"required,search"`
 	Title             string   `json:"title" field:"required,search"`
 	Object            string   `json:"object" field:"required" title:"Object" help:"A published object, build.<name>"`

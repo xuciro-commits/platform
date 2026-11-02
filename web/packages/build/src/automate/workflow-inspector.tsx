@@ -120,7 +120,12 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
           <NamedInputs inputs={step.inputs} steps={others} editableNames onChange={(inputs) => onChange({ inputs, value: undefined })} />
           {binding("Whole output value", "value", undefined, true)}
         </>}
-        {step.kind === "branch" && condition}
+        {step.kind === "notify" && <>
+ {field("Notification title", <Input value={step.notify?.title ?? ""} onChange={event => onChange({notify:{title:event.target.value,body:step.notify?.body??"",role:step.notify?.role??"builder"}})} />)}
+ {field("Message", <Textarea value={step.notify?.body ?? ""} onChange={event => onChange({notify:{title:step.notify?.title??"",body:event.target.value,role:step.notify?.role??"builder"}})} />)}
+ {field("Recipient role", <RoleSelect app="build" value={step.notify?.role ?? "builder"} onChange={role=>onChange({notify:{title:step.notify?.title??"",body:step.notify?.body??"",role}})} />)}
+ </>}
+ {step.kind === "branch" && condition}
         {step.kind === "switch" && <>{binding("Switch value", "value")}{paths}</>}
         {(step.kind === "foreach" || step.kind === "while") && <>
           {step.kind === "foreach" ? binding("Collection", "collection", { type: "array" }) : <>{binding("Initial loop state", "value")}{condition}</>}

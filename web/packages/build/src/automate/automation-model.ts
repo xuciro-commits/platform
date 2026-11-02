@@ -11,7 +11,7 @@ export function automationParts(draft: WorkflowDraft) {
     && new Set(draft.steps.map((step) => step.name)).size === draft.steps.length
     && (!condition || condition.cases?.true === (effects[0]?.name ?? "")
       && (!condition.cases?.false || ends.some((step) => step.name === condition.cases?.false)))
-    && effects.every((step, index) => ["action", "ai", "compute"].includes(step.kind)
+    && effects.every((step, index) => ["action", "notify", "ai", "compute"].includes(step.kind)
       && (step.next ?? "") === (effects[index + 1]?.name ?? "")
       && !Object.keys(step.cases ?? {}).length && !step.branches?.length && !step.body);
   return { condition, effects, ends, editable };

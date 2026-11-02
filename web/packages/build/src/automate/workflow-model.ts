@@ -23,10 +23,10 @@ export function commonSchemaProperties(schema?: ValueSchema): Record<string, Val
   return branches.length ? Object.fromEntries(Object.entries(branches[0]!.properties ?? {}).filter(([name, property]) =>
     branches.every((branch) => branch.required?.includes(name) && branch.properties?.[name]?.type === property.type && !!branch.properties?.[name]?.nullable === !!property.nullable))) : {};
 }
-export const workflowKindTitle = (kind: string) => t(({ payload: "Input", query: "Query", action: "Action", act: "Action", transform: "Transform", branch: "Branch", switch: "Switch", foreach: "For each", while: "While", fork: "Parallel paths", all: "Parallel paths", any: "Parallel paths", join: "Join", ask: "Human task", wait: "Wait", subflow: "Run workflow", call: "Run workflow", ai: "AI function", compute: "Code function", end: "Return", break: "Break", continue: "Continue iteration", fail: "Fail" } as Record<string, string>)[kind] ?? kind);
+export const workflowKindTitle = (kind: string) => t(({ notify: "Send notification", payload: "Input", query: "Query", action: "Action", act: "Action", transform: "Transform", branch: "Branch", switch: "Switch", foreach: "For each", while: "While", fork: "Parallel paths", all: "Parallel paths", any: "Parallel paths", join: "Join", ask: "Human task", wait: "Wait", subflow: "Run workflow", call: "Run workflow", ai: "AI function", compute: "Code function", end: "Return", break: "Break", continue: "Continue iteration", fail: "Fail" } as Record<string, string>)[kind] ?? kind);
 
 export const workflowStepClass = (kind: string): FlowNodeClass => (({
-  payload: "trigger", query: "query", action: "action", act: "action", transform: "transform",
+  notify: "action", payload: "trigger", query: "query", action: "action", act: "action", transform: "transform",
   branch: "control", switch: "control", foreach: "control", while: "control", fork: "control",
   all: "control", any: "control", join: "control", ask: "human", wait: "trigger",
   subflow: "flow", call: "flow", ai: "ai", compute: "code", end: "end", break: "control", continue: "control", fail: "end",
@@ -102,6 +102,7 @@ export function initialStep(capability: Capability, steps: WorkflowStep[]): Work
   if (step.kind === "ai") Object.assign(step, { function: { app: capability.ref.app, name: capability.ref.name, version: capability.revision ?? 0 }, target: { source: "literal", value: "" } });
   if (step.kind === "compute") Object.assign(step, { operation: { app: capability.ref.app, name: capability.ref.name, version: capability.revision ?? 0 },
     ...(capability.input && (capability.input.type !== "object" || capability.input.nullable) ? { value: { source: "input" } } : {}) });
+  if (step.kind === "notify") Object.assign(step, {notify:{title:"Notification",body:"",role:"builder"}});
   if (step.kind === "ask") Object.assign(step, { ask: "user", answers: ["approve", "reject"], cases: { approve: "", reject: "" } });
   if (step.kind === "branch") Object.assign(step, { condition: alwaysCondition(), cases: { true: "", false: "" } });
   if (step.kind === "switch") Object.assign(step, { value: { source: "input" }, cases: { value: "" } });

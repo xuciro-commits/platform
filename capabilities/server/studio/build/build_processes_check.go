@@ -61,8 +61,16 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 				states = append(states, platform.State{Name: state.Name})
 			}
 		}
-		if !slices.ContainsFunc(states, func(s platform.State) bool { return s.Name == p.When }) {
+		if p.Trigger == nil && !slices.ContainsFunc(states, func(s platform.State) bool { return s.Name == p.When }) {
 			return refuse("The object has no process start state {state}", p.When)
+		}
+	}
+	if p.Trigger != nil {
+		if p.Kind != "automation" || p.Object == "" || p.Every != "" || p.Manual {
+			return refuse("A record condition belongs to an object automation")
+		}
+		if err := platform.CheckCondition(*p.Trigger, engines...); err != nil {
+			return refuse(err.Error())
 		}
 	}
 	if p.InputSchema != nil {
@@ -103,7 +111,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 	parents := map[string]string{}
 	for _, step := range p.Steps {
 		problem := func(message string) *kernel.Error { return refuse("Node " + step.Name + ": " + message) }
-		if !slices.Contains([]string{"payload", "query", "action", "transform", "branch", "switch", "foreach", "while", "fork", "join", "ask", "wait", "subflow", "ai", "compute", "end", "fail", "break", "continue"}, step.Kind) {
+		if !slices.Contains([]string{"payload", "query", "notify", "action", "transform", "branch", "switch", "foreach", "while", "fork", "join", "ask", "wait", "subflow", "ai", "compute", "end", "fail", "break", "continue"}, step.Kind) {
 			return problem("choose one typed block kind")
 		}
 		if step.Lane != "" && !lanes[step.Lane] {
@@ -112,7 +120,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 		if len(step.Inputs) > 64 {
 			return problem("a block accepts at most 64 input bindings")
 		}
-		if step.Ask != "" && step.Kind != "ask" || step.Act != "" && step.Kind != "action" || step.Function != nil && step.Kind != "ai" || step.Operation != nil && step.Kind != "compute" || (step.Query != "" || step.QueryVersion != 0) && step.Kind != "query" || len(step.Answers) > 0 && step.Kind != "ask" || len(step.Cases) > 0 && step.Kind != "ask" && step.Kind != "branch" && step.Kind != "switch" || len(step.Branches) > 0 && step.Kind != "fork" || step.Body != "" && step.Kind != "foreach" && step.Kind != "while" {
+		if step.Notify != nil && step.Kind != "notify" || step.Ask != "" && step.Kind != "ask" || step.Act != "" && step.Kind != "action" || step.Function != nil && step.Kind != "ai" || step.Operation != nil && step.Kind != "compute" || (step.Query != "" || step.QueryVersion != 0) && step.Kind != "query" || len(step.Answers) > 0 && step.Kind != "ask" || len(step.Cases) > 0 && step.Kind != "ask" && step.Kind != "branch" && step.Kind != "switch" || len(step.Branches) > 0 && step.Kind != "fork" || step.Body != "" && step.Kind != "foreach" && step.Kind != "while" {
 			return problem("configuration must match this block kind")
 		}
 		if step.TimeoutSeconds < 0 || step.TimeoutSeconds > 30*86400 || step.UntilSeconds < 0 || step.UntilSeconds > 30*86400 {
@@ -150,6 +158,13 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 			}
 		}
 		switch step.Kind {
+		case "notify":
+			if step.Notify == nil {
+				return problem("a notification needs its message and recipient")
+			}
+			if err := step.Notify.Check(); err != nil {
+				return problem(err.Error())
+			}
 		case "ask":
 			if step.Ask == "" {
 				return problem("choose a recipient role")
@@ -393,8 +408,8 @@ func CheckAutomation(p Process) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
-	if p.Manual || p.Every == "" && (p.Object == "" || p.When == "") {
-		return refuse("An automation starts when a record of an object reaches a state, or on a schedule")
+	if p.Manual || p.Every == "" && (p.Object == "" || p.When == "" && p.Trigger == nil) {
+		return refuse("An automation starts from an object condition or a schedule")
 	}
 	if len(p.Steps) == 0 {
 		return refuse("An automation needs at least one effect")
@@ -420,12 +435,12 @@ func CheckAutomation(p Process) *kernel.Error {
 			if s.Cases["true"] != next || (s.Cases["false"] != "" && !ends[s.Cases["false"]]) {
 				return refuse("An automation's condition leads to its first effect when true and ends the run when false")
 			}
-		case "action", "ai", "compute":
+		case "action", "notify", "ai", "compute":
 			if s.Next != next || len(s.Cases) > 0 || len(s.Branches) > 0 || s.Body != "" {
 				return refuse("An automation's effects run one after another; step {name} leaves that line", s.Name)
 			}
 		default:
-			return refuse("An automation's effects are actions, AI functions and compute operations; {name} is a {kind} step, which belongs on a flow map", s.Name, s.Kind)
+			return refuse("An automation's effects are actions, notifications, AI functions and compute operations; {name} is a {kind} step, which belongs on a flow map", s.Name, s.Kind)
 		}
 	}
 	if len(chain) == 0 || chain[len(chain)-1].Kind == "branch" {

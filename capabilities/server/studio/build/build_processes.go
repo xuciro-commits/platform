@@ -11,6 +11,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	automateowner "platformserver/services/automate"
 )
 
 func (b *Build) processEntity() platform.Entity {
@@ -19,12 +20,23 @@ func (b *Build) processEntity() platform.Entity {
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "processes"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: b.publishProcess},
-				{Name: "run", Title: "Run", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "key", Type: "string", Description: "Stable run key"}, {Name: "input", Type: "string", Description: "Typed JSON input"}}, Do: b.runProcess},
-				{Name: "pause", Title: "Pause", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: func(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+				{Name: "run", Title: "Run", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "subject", Type: "string", Description: "Record to run the automation on"}, {Name: "key", Type: "string", Description: "Stable run key"}, {Name: "input", Type: "string", Description: "Typed JSON input"}}, Do: b.runProcess},
+				{Name: "pause", Title: "Pause", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "reason", Type: "string"}}, Do: func(_ platform.Caller, record any, raw json.RawMessage, _ time.Time) *kernel.Error {
+					var input struct {
+						Reason string `json:"reason"`
+					}
+					_ = json.Unmarshal(raw, &input)
+					record.(*Process).PauseReason = input.Reason
 					record.(*Process).Paused = true
 					return nil
 				}},
-				{Name: "resume", Title: "Resume", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: func(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+				{Name: "resume", Title: "Resume", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *kernel.Error {
+					current := record.(*Process)
+					installed, _ := ReadPublication[Process](current.Published)
+					if reason := b.automationOwnerRefusal(c, current.ID, installed, now); reason != nil {
+						return reason
+					}
+					record.(*Process).PauseReason = ""
 					record.(*Process).Paused = false
 					return nil
 				}}}}}
@@ -80,13 +92,17 @@ func (b *Build) runProcess(c platform.Caller, record any, raw json.RawMessage, n
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
+	if p.Paused {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The process is paused")
+	}
 	installed, ok := ReadPublication[Process](p.Published)
-	if !ok || !installed.Manual {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Publish a manual workflow before running it")
+	if !ok || !installed.Manual && installed.Kind != "automation" || installed.Continuous != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Publish an automation or manual workflow before running it")
 	}
 	var request struct {
-		Key   string `json:"key"`
-		Input string `json:"input"`
+		Subject string `json:"subject"`
+		Key     string `json:"key"`
+		Input   string `json:"input"`
 	}
 	if json.Unmarshal(raw, &request) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a stable key and JSON input")
@@ -94,25 +110,46 @@ func (b *Build) runProcess(c platform.Caller, record any, raw json.RawMessage, n
 	if request.Key == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A manual run needs a stable key")
 	}
+	if installed.Kind == "automation" {
+		if refusal := b.automationOwnerRefusal(c, p.ID, installed, now); refusal != nil {
+			return refusal
+		}
+		member, _ := b.host.Member(installed.Scheduler)
+		c = b.host.Caller(c, member, ID)
+	}
+	if installed.Object != "" {
+		if request.Subject == "" {
+			if installed.Kind == "automation" {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a subject record to run this automation")
+			}
+			request.Subject = request.Key
+		}
+		if _, refusal := c.ReadRecord(installed.Object, request.Subject, now); refusal != nil {
+			return refusal
+		}
+	}
 	input := installed.Input
+	if installed.Every != "" && request.Input == "" {
+		input = platform.Raw(map[string]string{"period": "manual:" + request.Key})
+	}
 	if request.Input != "" {
 		input = json.RawMessage(request.Input)
 	}
 	if len(input) == 0 {
 		input = json.RawMessage("{}")
 	}
-	if installed.InputSchema != nil {
+	if installed.InputSchema != nil && request.Input != "" {
 		if err := installed.InputSchema.Validate(input, 64<<10); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 	}
 	start, ok := b.host.BuildProcesses().(interface {
-		StartManual(platform.Caller, string, string, int, string, json.RawMessage, time.Time) *kernel.Error
+		StartManual(platform.Caller, string, string, int, string, string, json.RawMessage, time.Time) *kernel.Error
 	})
 	if !ok {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This tenant runs no manual processes")
 	}
-	return start.StartManual(c, ID, installed.Name, installed.Version, request.Key, input, now)
+	return start.StartManual(c, ID, installed.Name, installed.Version, request.Key, request.Subject, input, now)
 }
 
 func (b *Build) checkFlow(p Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *kernel.Error {
@@ -203,6 +240,19 @@ func (b *Build) processInventory() ([]Process, error) {
 func (b *Build) flowOf(p Process) platform.Flow {
 	execution := ProcessExecution{
 		StateField: "state",
+		Refused: func(c platform.Caller, refusal *kernel.Error, now time.Time) {
+			if p.Kind == "automation" || !p.Manual {
+				b.pauseAutomation(c, p.ID, "The automation owner is no longer authorized", now)
+			}
+		},
+		Notify: func(c platform.Caller, r *platform.Run, step string, n automateowner.NotificationEffect, subject json.RawMessage) (json.RawMessage, *kernel.Error) {
+			member, ok := b.host.Member(r.OnBehalf)
+			if !ok {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
+			}
+			info, _ := b.lookupEntity(p.Object)
+			return automateowner.Notify(b.host.Caller(c, member, ID), r, step, n, p.Object, info.Display, p.LegacyAlert, subject, r.Now), nil
+		},
 		Paused: func(c platform.Caller) bool {
 			current, ok := platform.Get[Process](b.host.Automation(c, ID), p.ID)
 			return ok && current.Paused
@@ -219,14 +269,14 @@ func (b *Build) flowOf(p Process) platform.Flow {
 			if !ok {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
 			}
-			raw, err := b.host.Caller(c, member, ID).ReadRecord(p.Object, r.Key, r.Now)
+			raw, err := b.host.Caller(c, member, ID).ReadRecord(p.Object, processSubject(p.Object, r), r.Now)
 			if err == nil {
 				var fields map[string]json.RawMessage
 				info, known := b.lookupEntity(p.Object)
 				if known && json.Unmarshal(raw, &fields) == nil {
 					for name := range fields {
 						if _, declared := info.Field(name); declared {
-							r.Sources = append(r.Sources, p.Object+"/"+r.Key+"#"+name)
+							r.Sources = append(r.Sources, p.Object+"/"+processSubject(p.Object, r)+"#"+name)
 						}
 					}
 				}
@@ -238,7 +288,7 @@ func (b *Build) flowOf(p Process) platform.Flow {
 			if !known {
 				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
 			}
-			return b.host.Caller(c, member, ID).ReadRecordPath(p.Object, r.Key, path, r.Now)
+			return b.host.Caller(c, member, ID).ReadRecordPath(p.Object, processSubject(p.Object, r), path, r.Now)
 		},
 		Query: func(c platform.Caller, r *platform.Run, app, name string, version int, input json.RawMessage) (json.RawMessage, *kernel.Error) {
 			member, ok := b.host.Member(r.OnBehalf)
@@ -270,6 +320,8 @@ type Process struct {
 	Title       string                  `json:"title" field:"required,search"`
 	Kind        string                  `json:"kind,omitempty" enum:"flow,automation" title:"Authoring shape"`
 	Object      string                  `json:"object,omitempty" title:"Source object"`
+	Trigger     *platform.Expr          `json:"trigger,omitempty" type:"json"`
+	Repeat      bool                    `json:"repeat,omitempty"`
 	When        string                  `json:"when,omitempty" title:"Record start state"`
 	Manual      bool                    `json:"manual,omitempty" title:"Manual start"`
 	Every       string                  `json:"every,omitempty" title:"Repeat every" help:"A period such as 15m, 1h or 24h; empty: not scheduled"`
@@ -280,6 +332,8 @@ type Process struct {
 	Steps       []ProcessStep           `json:"steps" field:"aside"`
 	Lanes       []ProcessLane           `json:"lanes,omitempty" field:"aside" title:"Lanes"`
 	Layout      map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
+	LegacyAlert string                  `json:"legacyAlert,omitempty" field:"readonly"`
+	PauseReason string                  `json:"pauseReason,omitempty" field:"readonly"`
 	Paused      bool                    `json:"paused,omitempty" field:"readonly"`
 	State       string                  `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int                     `json:"version,omitempty" field:"readonly"`
@@ -304,39 +358,40 @@ type OperationRef struct {
 }
 
 type ProcessStep struct {
-	Name           string                      `json:"name"`
-	Title          string                      `json:"title,omitempty"`
-	Kind           string                      `json:"kind" enum:"payload,query,action,transform,branch,switch,foreach,while,fork,join,ask,wait,subflow,ai,compute,end,fail,break,continue"`
-	Lane           string                      `json:"lane,omitempty" title:"Lane" help:"The lane responsible for this step"`
-	Inputs         map[string]platform.Binding `json:"inputs,omitempty" type:"json"`
-	Value          *platform.Binding           `json:"value,omitempty" type:"json"`
-	Target         *platform.Binding           `json:"target,omitempty" type:"json"`
-	Condition      *platform.Expr              `json:"condition,omitempty" type:"json"`
-	Collection     *platform.Binding           `json:"collection,omitempty" type:"json"`
-	WaitUntil      *platform.Binding           `json:"waitUntil,omitempty" type:"json" title:"Wait until timestamp"`
-	Cases          map[string]string           `json:"cases,omitempty" type:"json"`
-	Branches       []string                    `json:"branches,omitempty"`
-	Next           string                      `json:"next,omitempty"`
-	Error          string                      `json:"error,omitempty"`
-	Ask            string                      `json:"ask,omitempty"`
-	Answers        []string                    `json:"answers,omitempty"`
-	Act            string                      `json:"act,omitempty"`
-	Protocol       string                      `json:"protocol,omitempty"`
-	App            string                      `json:"app,omitempty"`
-	Query          string                      `json:"query,omitempty"`
-	QueryVersion   int                         `json:"queryVersion,omitempty" title:"Retained query version"`
-	Function       *platform.FunctionRef       `json:"function,omitempty" type:"json"`
-	Operation      *OperationRef               `json:"operation,omitempty" type:"json"`
-	Body           string                      `json:"body,omitempty"`
-	MaxIterations  int                         `json:"maxIterations,omitempty"`
-	Concurrency    int                         `json:"concurrency,omitempty"`
-	Mode           string                      `json:"mode,omitempty" enum:"all,any"`
-	TimeoutSeconds int                         `json:"timeoutSeconds,omitempty"`
-	UntilSeconds   int                         `json:"untilSeconds,omitempty"`
-	RetryAttempts  int                         `json:"retryAttempts,omitempty"`
-	RetryBackoffMs int                         `json:"retryBackoffMs,omitempty"`
-	Flow           string                      `json:"flow,omitempty"`
-	FlowVersion    int                         `json:"flowVersion,omitempty"`
+	Name           string                            `json:"name"`
+	Title          string                            `json:"title,omitempty"`
+	Notify         *automateowner.NotificationEffect `json:"notify,omitempty" type:"json"`
+	Kind           string                            `json:"kind" enum:"payload,query,notify,action,transform,branch,switch,foreach,while,fork,join,ask,wait,subflow,ai,compute,end,fail,break,continue"`
+	Lane           string                            `json:"lane,omitempty" title:"Lane" help:"The lane responsible for this step"`
+	Inputs         map[string]platform.Binding       `json:"inputs,omitempty" type:"json"`
+	Value          *platform.Binding                 `json:"value,omitempty" type:"json"`
+	Target         *platform.Binding                 `json:"target,omitempty" type:"json"`
+	Condition      *platform.Expr                    `json:"condition,omitempty" type:"json"`
+	Collection     *platform.Binding                 `json:"collection,omitempty" type:"json"`
+	WaitUntil      *platform.Binding                 `json:"waitUntil,omitempty" type:"json" title:"Wait until timestamp"`
+	Cases          map[string]string                 `json:"cases,omitempty" type:"json"`
+	Branches       []string                          `json:"branches,omitempty"`
+	Next           string                            `json:"next,omitempty"`
+	Error          string                            `json:"error,omitempty"`
+	Ask            string                            `json:"ask,omitempty"`
+	Answers        []string                          `json:"answers,omitempty"`
+	Act            string                            `json:"act,omitempty"`
+	Protocol       string                            `json:"protocol,omitempty"`
+	App            string                            `json:"app,omitempty"`
+	Query          string                            `json:"query,omitempty"`
+	QueryVersion   int                               `json:"queryVersion,omitempty" title:"Retained query version"`
+	Function       *platform.FunctionRef             `json:"function,omitempty" type:"json"`
+	Operation      *OperationRef                     `json:"operation,omitempty" type:"json"`
+	Body           string                            `json:"body,omitempty"`
+	MaxIterations  int                               `json:"maxIterations,omitempty"`
+	Concurrency    int                               `json:"concurrency,omitempty"`
+	Mode           string                            `json:"mode,omitempty" enum:"all,any"`
+	TimeoutSeconds int                               `json:"timeoutSeconds,omitempty"`
+	UntilSeconds   int                               `json:"untilSeconds,omitempty"`
+	RetryAttempts  int                               `json:"retryAttempts,omitempty"`
+	RetryBackoffMs int                               `json:"retryBackoffMs,omitempty"`
+	Flow           string                            `json:"flow,omitempty"`
+	FlowVersion    int                               `json:"flowVersion,omitempty"`
 }
 
 type ProcessLookup struct {
@@ -376,6 +431,8 @@ func ReadProcessImage(image []byte) (Process, error) {
 
 type ProcessExecution struct {
 	StateField        string
+	Refused           func(platform.Caller, *kernel.Error, time.Time)
+	Notify            func(platform.Caller, *platform.Run, string, automateowner.NotificationEffect, json.RawMessage) (json.RawMessage, *kernel.Error)
 	Paused            func(platform.Caller) bool
 	ContinuousEnabled func(platform.Caller) bool
 	Subject           func(platform.Caller, *platform.Run) (json.RawMessage, *kernel.Error)

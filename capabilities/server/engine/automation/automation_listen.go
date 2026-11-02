@@ -42,7 +42,11 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 				if !ok {
 					continue
 				}
-				if _, started := platform.Get[FlowInstance](c, id+":"+key); started {
+				runKey := key
+				if latest.Start.Repeat {
+					runKey += ":" + e.Record.GetChangeId()
+				}
+				if _, started := platform.Get[FlowInstance](c, id+":"+runKey); started {
 					continue
 				}
 				record, held := f.host.Record(ref)
@@ -53,7 +57,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 				if err != nil {
 					return err
 				}
-				if err := f.start(c, d, key, nil, cmp.Or(d.Start.OnBehalf, s.GetPrincipalId()), &e, "", now); err != nil {
+				if err := f.start(c, d, runKey, nil, cmp.Or(d.Start.OnBehalf, s.GetPrincipalId()), &e, "", key, now); err != nil {
 					return err
 				}
 			}
@@ -73,7 +77,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 		if err != nil {
 			return err
 		}
-		if err := f.start(c, d, key, data, s.GetPrincipalId(), &e, "", now); err != nil {
+		if err := f.start(c, d, key, data, s.GetPrincipalId(), &e, "", "", now); err != nil {
 			return err
 		}
 	}
@@ -203,7 +207,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 }
 
 func (f *Flows) run(x *FlowInstance) *platform.Run {
-	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, OnBehalf: x.OnBehalf, Release: x.Release, Sequence: x.Seq, Sources: slices.Clone(x.Sources), Outputs: maps.Clone(x.Outputs), Data: json.RawMessage(cmp.Or(x.Data, "null")), Answer: x.Answer}
+	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, Subject: x.Subject, OnBehalf: x.OnBehalf, Release: x.Release, Sequence: x.Seq, Sources: slices.Clone(x.Sources), Outputs: maps.Clone(x.Outputs), Data: json.RawMessage(cmp.Or(x.Data, "null")), Answer: x.Answer}
 }
 
 func (f *Flows) OperationEnded(c platform.Caller, call string, now time.Time) *kernel.Error {

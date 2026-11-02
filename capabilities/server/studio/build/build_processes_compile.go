@@ -15,7 +15,7 @@ import (
 )
 
 func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
-	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual, Paused: execution.Paused}, Continuous: p.Continuous}
+	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual, Repeat: p.Repeat, Refused: execution.Refused, Paused: execution.Paused}, Continuous: p.Continuous}
 	if p.Every != "" {
 		fl.Start.Every, _ = time.ParseDuration(p.Every)
 		fl.Start.OnBehalf = p.Scheduler
@@ -26,10 +26,14 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 		fl.Start.Type = p.Object
 		fl.Start.OnBehalf = p.Scheduler
 		stateField := execution.StateField
-		fl.Start.When = func(_ platform.Caller, record any) bool {
+		fl.Start.When = func(c platform.Caller, record any) bool {
 			raw, _ := json.Marshal(record)
 			var value map[string]json.RawMessage
 			json.Unmarshal(raw, &value)
+			if p.Trigger != nil {
+				holds, err := platform.TestCondition(*p.Trigger, &platform.Run{}, raw, c.Rules())
+				return err == nil && holds
+			}
 			var state string
 			json.Unmarshal(value[stateField], &state)
 			return state == p.When
@@ -115,6 +119,14 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 					return r.Data, nil
 				}
 				return inputs(c, r)
+			}}
+		case "notify":
+			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+				raw, err := subject(c, r)
+				if err != nil {
+					return nil, err
+				}
+				return execution.Notify(c, r, s.Name, *s.Notify, raw)
 			}}
 		case "query":
 			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {

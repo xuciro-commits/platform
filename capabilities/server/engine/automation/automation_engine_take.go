@@ -37,7 +37,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if step.Output != nil {
 			raw, err := step.Output(app, run)
 			if err != nil {
-				ss.failed(x, token, step, err.Error())
+				ss.failed(x, token, step, err.Error(), err)
 				return
 			}
 			if !ss.output(x, token, raw) {
@@ -50,7 +50,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 	case step.Evaluate != nil:
 		output, err := step.Evaluate.Run(app, run)
 		if err != nil {
-			ss.failed(x, token, step, err.Error())
+			ss.failed(x, token, step, err.Error(), err)
 			return
 		}
 		if !ss.output(x, token, output) {
@@ -63,7 +63,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 	case step.Branch != nil:
 		to, reason, err := step.Branch.Choose(app, run)
 		if err != nil {
-			ss.failed(x, token, step, err.Error())
+			ss.failed(x, token, step, err.Error(), err)
 			return
 		}
 		x.Data = string(run.Data)
@@ -83,7 +83,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 			var err *kernel.Error
 			request, err = step.Operation.Request(app, run)
 			if err != nil {
-				ss.failed(x, token, step, err.Error())
+				ss.failed(x, token, step, err.Error(), err)
 				return
 			}
 		}
@@ -100,7 +100,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		a := step.Invoke.Act
 		ref, err := ss.act(x, d.app, a.Protocol, a.Action, a.Target(app, run), payloadOf(a.Payload, app, run), fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq))
 		if err != nil {
-			ss.failed(x, token, step, err.Error())
+			ss.failed(x, token, step, err.Error(), err)
 			return
 		}
 		x.Seq++
@@ -116,7 +116,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if step.Act.TargetValue != nil {
 			value, err := step.Act.TargetValue(app, run)
 			if err != nil {
-				ss.failed(x, token, step, err.Error())
+				ss.failed(x, token, step, err.Error(), err)
 				return
 			}
 			target = value
@@ -124,7 +124,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if step.Act.Inputs != nil {
 			value, err := step.Act.Inputs(app, run)
 			if err != nil {
-				ss.failed(x, token, step, err.Error())
+				ss.failed(x, token, step, err.Error(), err)
 				return
 			}
 			payload = value
@@ -137,7 +137,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		ref, err := ss.act(x, d.app, step.Act.Protocol, step.Act.Action, target, payload, fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq), member)
 		if err != nil {
 			ss.deadLetterAct(x, tok, step, target, payload, err.Error())
-			ss.failed(x, token, step, err.Error())
+			ss.failed(x, token, step, err.Error(), err)
 			return
 		}
 		x.Seq++
@@ -174,7 +174,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if w.At != nil {
 			at, err := w.At(app, run)
 			if err != nil {
-				ss.failed(x, token, step, err.Error())
+				ss.failed(x, token, step, err.Error(), err)
 				return
 			}
 			ss.sources(x, run.Sources)

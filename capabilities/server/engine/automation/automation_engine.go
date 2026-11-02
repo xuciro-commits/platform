@@ -254,7 +254,7 @@ func (f *Flows) update(c platform.Caller, id string, now time.Time, change func(
 	return err
 }
 
-func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBehalf string, e *platform.Event, parent string, now time.Time, deferAdvance ...bool) *kernel.Error {
+func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBehalf string, e *platform.Event, parent, subject string, now time.Time, deferAdvance ...bool) *kernel.Error {
 	if d.Start.Paused != nil && d.Start.Paused(f.host.Automation(c, d.app)) {
 		if d.Start.Manual {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The process is paused")
@@ -280,6 +280,10 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 	_, err := f.decide(c, SchemaFlowStart, id, "start:"+id, now, func(ss *session) *kernel.Error {
 		ss.event = e
 		x := ss.create(d, id, key, data, onBehalf, parent)
+		if subject != "" && d.Subject != "" {
+			x.Subject = d.Subject + "/" + subject
+			x.Sources = []string{x.Subject}
+		}
 		x.Dependencies, x.Release, x.Applications = bound.Dependencies, bound.Release, bound.Applications
 		if len(deferAdvance) > 0 && deferAdvance[0] {
 			if d.Continuous != nil {
@@ -322,7 +326,7 @@ func (ss *session) next(x *FlowInstance, token int, to string) {
 			if step.Output != nil {
 				output, err := step.Output(ss.app(x), ss.run(x, token))
 				if err != nil {
-					ss.failed(x, token, step, err.Error())
+					ss.failed(x, token, step, err.Error(), err)
 					return
 				}
 				if !ss.output(x, token, output) {

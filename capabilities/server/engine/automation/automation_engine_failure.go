@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
-func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why string) {
+func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why string, refusals ...*kernel.Error) {
+	if len(refusals) > 0 && refusals[0].Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED && ss.def(x).Start.Refused != nil {
+		ss.def(x).Start.Refused(ss.c, refusals[0], ss.now)
+	}
 	tok := ss.token(x, token)
 	limit := stepAttempts
 	var delay time.Duration
@@ -270,7 +273,7 @@ func (f *Flows) tick(c platform.Caller, now time.Time) *kernel.Error {
 			if _, known := platform.Get[FlowInstance](c, id+":"+key); known {
 				continue
 			}
-			if err := f.start(f.host.Automation(c, ID), d, key, nil, d.Start.OnBehalf, nil, "", now, true); err != nil {
+			if err := f.start(f.host.Automation(c, ID), d, key, nil, d.Start.OnBehalf, nil, "", "", now, true); err != nil {
 				return err
 			}
 			active[id] = true
@@ -283,7 +286,7 @@ func (f *Flows) tick(c platform.Caller, now time.Time) *kernel.Error {
 		if _, known := platform.Get[FlowInstance](c, id+":"+key); known {
 			continue
 		}
-		if err := f.start(f.host.Automation(c, ID), d, key, map[string]any{"period": key}, d.Start.OnBehalf, nil, "", now); err != nil {
+		if err := f.start(f.host.Automation(c, ID), d, key, map[string]any{"period": key}, d.Start.OnBehalf, nil, "", "", now); err != nil {
 			return err
 		}
 	}

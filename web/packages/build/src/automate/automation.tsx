@@ -3,7 +3,7 @@ import { ContextHelp, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useHost, useReadQuery } from "@platform/app";
-import { ActionMenu, Button, Input, PageHeader, ProblemList, Select, Tag, Workbench, cn, t, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, Checkbox, Dialog, Notice, RecordLookup, Input, PageHeader, ProblemList, Select, Tag, Workbench, cn, t, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, Brain, Clock, Pause, Play, Plus, Trash2, Workflow, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -11,7 +11,7 @@ import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { DraftInputs } from "../session/DraftSession";
 import { DraftStatus, ResourceControls, WorkbenchMessage, type EditorOperation } from "../editor/workbench";
 import { WorkflowInspector } from "./workflow-inspector";
-import { PERIODS, capabilityKey, initialStep, nextStepName, periodLabel, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
+import { PERIODS, capabilityKey, initialStep, nextStepName, periodLabel, workflowKindTitle, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { WorkflowRuns } from "./workflow-runs";
 import { useAuthoringCapabilities, useAuthoringModel } from "../ontology/authoring-model";
 import { WorkflowCondition, alwaysCondition } from "./workflow-condition";
@@ -23,10 +23,10 @@ type Row = WorkflowDraft & { version?: number; published?: string };
 const effectKinds = (steps: WorkflowStep[]) => {
   const counts: Record<string, number> = {};
   for (const step of automationParts({ steps: steps ?? [] } as WorkflowDraft).effects) counts[step.kind] = (counts[step.kind] ?? 0) + 1;
-  return Object.entries(counts).map(([kind, n]) => `${n} × ${t(kind)}`).join(" · ");
+  return Object.entries(counts).map(([kind, n]) => `${n} × ${workflowKindTitle(kind)}`).join(" · ");
 };
 const sentence = (titleOf: (type: string) => string, stateOf: (type: string, name: string) => string, row: WorkflowDraft) =>
-  row.every ? periodLabel(row.every) : t("a {object} reaches {state}", { object: titleOf(row.object), state: stateOf(row.object, row.when) });
+  row.every ? periodLabel(row.every) : row.trigger ? t("a record matches the condition") : t("a {object} reaches {state}", { object: titleOf(row.object), state: stateOf(row.object, row.when) });
 
 export function Automations() {
   const { entities , holds} = useHost(), { open } = useApplicationWorkspace();
@@ -38,7 +38,7 @@ export function Automations() {
   const titleOf = (type: string) => entities.find((entity) => entity.type === type)?.title ?? type;
   const stateOf = (type: string, name: string) => entities.find((entity) => entity.type === type)?.lifecycle?.states.find((state) => state.name === name)?.title ?? name;
   return <div className="grid content-start gap-3 p-4">
-    <PageHeader title={t("Automations")} help={t("When a record reaches a state, run effects. Each automation is one sentence; open it to shape the effects on the map.")}
+    <PageHeader title={t("Automations")} help={t("Run ordered effects when an object matches a condition or a schedule is due.")}
       actions={holds("build", "builder") && <Button variant="primary" onClick={() => open({ view: "automation", params: { id: "new" } })}><Plus />{t("New automation")}</Button>} />
     <div className="flex flex-wrap items-center gap-2">
       <Input type="search" aria-label={t("Filter automations")} placeholder={t("Filter automations")} value={search} onChange={(event) => setSearch(event.target.value)} className="max-w-xs" />
@@ -80,10 +80,11 @@ export function AutomationEditor({ id }: { id: string }) {
     ? { id: "resume", label: t("Resume"), icon: <Play />, disabled: busy, run: () => void perform(async () => { if (await authoringHost.decide("build.process.resume", { type: "build.process", id: draft.id! }, {}, { expectedRevision: revision, quiet: true, onRefused: process.setError })) await reload(); }) }
     : { id: "pause", label: t("Pause"), icon: <Pause />, disabled: busy, run: () => void perform(async () => { if (await authoringHost.decide("build.process.pause", { type: "build.process", id: draft.id! }, {}, { expectedRevision: revision, quiet: true, onRefused: process.setError })) await reload(); }) }] : [];
   const [chosen, setChosen] = useState<Chosen>("trigger");
-  const objects = useMemo(() => model.entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states, fields: entity.fields })), [model.entities]);
+ const [runOpen, setRunOpen] = useState(false), [runSubject, setRunSubject] = useState<string>();
+  const objects = useMemo(() => model.entities.filter((entity) => !draft.trigger ? !!entity.lifecycle : entity.type.startsWith("build.")).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle?.states ?? [], fields: entity.fields })), [model.entities, !!draft.trigger]);
   const object = objects.find((item) => item.type === draft.object);
   const capabilities = catalogQuery.data;
-  const offered = capabilities.filter((capability) => (["action", "ai", "compute"].includes(capability.kind)) && (!draft.object || capability.ref.name.startsWith(draft.object + ".") || capability.kind === "ai" || capability.kind === "compute"));
+  const offered = capabilities.filter((capability) => (["action", "notify", "ai", "compute"].includes(capability.kind)) && (!draft.object || capability.ref.name.startsWith(draft.object + ".") || capability.kind === "ai" || capability.kind === "compute" || capability.kind === "notify"));
   const { condition, effects, editable } = automationParts(draft);
   const change = (patch: Partial<WorkflowDraft>) => { if (!busy) { setSourceApplied(false); edit(patch); } };
   const setSteps = (nextCondition: WorkflowStep | undefined, nextEffects: WorkflowStep[], steps = draft.steps) => change({ steps: relinkAutomation(steps, nextCondition, nextEffects) });
@@ -93,14 +94,15 @@ export function AutomationEditor({ id }: { id: string }) {
     if (chosen === `step:${name}` || name === condition?.name && chosen === "condition") setChosen("trigger");
   };
   const addEffect = (capability: Capability) => {
-    const step = { ...initialStep(capability, draft.steps), ...(capability.kind !== "compute" && !draft.every ? { target: { source: "subject" as const } } : {}) };
+    const step = { ...initialStep(capability, draft.steps), ...(["action","ai"].includes(capability.kind) && !draft.every ? { target: { source: "subject" as const } } : {}) };
     setSteps(condition, [...effects, step]); setChosen(`step:${step.name}`);
   };
   const problems: WorkbenchProblem[] = [
     ...Object.entries(session.inputProblems).filter(([, problem]) => problem).map(([key, problem]) => ({ id: `form:${key}`, text: problem, locate: session.inputs.values[key]?.reveal })),
     ...(!draft.title ? [{ id: "title", text: t("Give the automation a title."), locate: () => setChosen("trigger") }] : []),
-    ...(!draft.every && (!draft.object || !draft.when) ? [{ id: "trigger", text: t("Choose the object type and the state that start it, or a schedule."), locate: () => setChosen("trigger") }] : []),
+    ...(!draft.every && (!draft.object || !draft.when && !draft.trigger) ? [{ id: "trigger", text: t("Choose an object and trigger condition, or a schedule."), locate: () => setChosen("trigger") }] : []),
     ...(!effects.length ? [{ id: "effects", text: t("Add at least one effect.") }] : []),
+ ...effects.filter(step=>step.kind==="notify" && (!step.notify?.title.trim() || !step.notify.body.trim() || !step.notify.role)).map(step=>({id:`notify:${step.name}`,text:t("A notification needs a title, message and recipient role"),locate:()=>setChosen(`step:${step.name}`)})),
     ...(catalogQuery.isError ? [{ id: "catalog", text: t("The capability library could not be loaded."), locate: () => void catalogQuery.refetch() }] : []),
     ...(error ? [{ id: "host", text: error }] : []),
   ];
@@ -117,20 +119,25 @@ export function AutomationEditor({ id }: { id: string }) {
     if ((dirty || !draft.id) && !await save()) return;
     open({ view: "flow", params: { id: draft.id || createID } });
   });
-  return <Workbench storageKey="automation" crumbs={[{ label: t("Automate"), onClick: () => open({ view: "automation" }) }, { label: t("Automations"), onClick: () => open({ view: "automation" }) }]} title={draft.title || t("New automation")}
+  const runAutomation = () => perform(async () => {
+ if (await authoringHost.decide("build.process.run", {type:"build.process",id:draft.id!}, {key:crypto.randomUUID(),subject:runSubject??""}, {expectedRevision:revision,quiet:true,onRefused:process.setError})) { setRunOpen(false); await reload(); }
+ });
+ return <><Workbench storageKey="automation" crumbs={[{ label: t("Automate"), onClick: () => open({ view: "automation" }) }, { label: t("Automations"), onClick: () => open({ view: "automation" }) }]} title={draft.title || t("New automation")}
     status={<>{draft.paused && <Tag label={t("Paused")} tone="neutral" />}<DraftStatus state={draft.version ? "published" : "draft"} problems={problems.length} /></>} busy={busy}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: session.undo, redo: session.redo }}
     actions={<>
-      <ResourceControls autosave={!sourceApplied && editable && !process.branch} type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} operations={pauseResume} extra={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
+      <ResourceControls autosave={!sourceApplied && editable && !process.branch} type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} operations={[...pauseResume, ...(published && draft.id && !process.branch ? [{id:"run-now",label:t("Run now"),icon:<Play />,disabled:busy||dirty||!!draft.paused,run:()=>{if(draft.object)setRunOpen(true);else void runAutomation();}}] : [])]} extra={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: busy || Object.values(session.inputProblems).some(Boolean), run: () => void openMap() }]} onSave={() => perform(save)} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
     </>}
     right={editable ? { label: t("Automation inspector"), heading: chosenStep?.title || chosenStep?.name || t(chosen === "condition" ? "If" : "When"), scope:String(chosen),selection:String(chosen),locate:()=>setChosen(chosen), content: <DraftInputs.Provider value={{ ...session.inputs, scope: chosenStep ? `step:${chosenStep.name}` : chosen, reveal: () => setChosen(chosen) }}><div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">
         <label className="grid gap-1 text-xs">{t("Title")}<Input value={draft.title} onChange={(event) => change({ title: event.target.value })} /></label>
-        <label className="grid gap-1 text-xs">{t("Start kind")}<Select value={draft.every ? draft.every : ""} disabled={!!draft.published} onChange={(event) => change(event.target.value ? { every: event.target.value, object: "", when: "" } : { every: undefined })}><option value="">{t("When a record reaches a state")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
+        <label className="grid gap-1 text-xs">{t("Start kind")}<Select value={draft.trigger ? "condition" : draft.every ?? ""} disabled={!!draft.published} onChange={(event) => change(event.target.value === "condition" ? {every:undefined,when:"",trigger:alwaysCondition()} : event.target.value ? {every:event.target.value,object:"",when:"",trigger:undefined} : {every:undefined,trigger:undefined})}><option value="">{t("When a record reaches a state")}</option><option value="condition">{t("When a record matches a condition")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
         {draft.every && <ContextHelp title={t("Schedule")}><p className="text-xs text-muted">{t("A scheduled automation has no subject record; each period starts one run, acting as the member who published it.")}</p></ContextHelp>}
         {!draft.every && <label className="grid gap-1 text-xs">{t("Object type")}<Select value={draft.object} disabled={!!draft.published} onChange={(event) => change({ object: event.target.value, when: objects.find((item) => item.type === event.target.value)?.states[0]?.name ?? "" })}><option value="">{t("Choose an object type")}</option>{objects.map((item) => <option key={item.type} value={item.type}>{item.title}</option>)}</Select></label>}
-        {!draft.every && <label className="grid gap-1 text-xs">{t("When it reaches")}<Select value={draft.when} onChange={(event) => change({ when: event.target.value })}><option value="">{t("Choose a state")}</option>{object?.states.map((state) => <option key={state.name} value={state.name}>{state.title}</option>)}</Select></label>}
-        {!draft.every && <ContextHelp title={t("Trigger")}><p className="text-xs text-muted">{t("The record that reached the state is the subject of every effect: actions run on it, functions read it.")}</p></ContextHelp>}
+        {!draft.every && !draft.trigger && <label className="grid gap-1 text-xs">{t("When it reaches")}<Select value={draft.when} onChange={(event) => change({ when: event.target.value })}><option value="">{t("Choose a state")}</option>{object?.states.map((state) => <option key={state.name} value={state.name}>{state.title}</option>)}</Select></label>}
+        {draft.trigger && <WorkflowCondition value={draft.trigger} all={draft.steps} capabilities={capabilities} subject={draft.object || undefined} inputSchema={draft.inputSchema} steps={[]} onChange={trigger=>change({trigger})} />}
+ {!draft.every && <Checkbox checked={!!draft.repeat} onChange={repeat=>change({repeat})}>{t("Run on every matching change")}</Checkbox>}
+ {!draft.every && <ContextHelp title={t("Trigger")}><p className="text-xs text-muted">{t("The record that reached the state is the subject of every effect: actions run on it, functions read it.")}</p></ContextHelp>}
       </div>}
       {chosen === "condition" && condition && <div className="grid gap-3">
         <WorkflowCondition value={condition.condition ?? alwaysCondition()} all={draft.steps} capabilities={capabilities} subject={draft.object || undefined} inputSchema={draft.inputSchema} steps={draft.steps.filter((step) => step !== condition)} onChange={(expr) => setSteps({ ...condition, condition: expr }, effects)} />
@@ -149,7 +156,8 @@ export function AutomationEditor({ id }: { id: string }) {
       { id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} empty={t("No problems. The automation can be published.")} /> },
       { id: "runs", title: t("Runs"), content: <div className="p-3">{draft.id ? <WorkflowRuns name={draft.name} versions={draft.versions} onStepSelect={(name) => setChosen(`step:${name}`)} /> : <p className="text-xs text-muted">{t("Runs appear once the automation is saved and published.")}</p>}</div> },
     ] }}>
-    <StructuredEditor expectedRevision={draft.id ? revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.process:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...empty(), ...replaceDeclaration(draft, next, declarationFields) })); setChosen("trigger"); }} onTrial={next => trial(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: draft.id || createID }, next, draft.id ? revision : 0)}>
+    {draft.pauseReason && <Notice tone="warning" message={t(draft.pauseReason)} />}
+ <StructuredEditor expectedRevision={draft.id ? revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.process:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...empty(), ...replaceDeclaration(draft, next, declarationFields) })); setChosen("trigger"); }} onTrial={next => trial(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: draft.id || createID }, next, draft.id ? revision : 0)}>
     {!editable ? <div className="grid content-start justify-items-start gap-3 p-4">
       <p className="text-sm">{t("This automation uses settings that need the flow map. Open it there to keep every step and result.")}</p>
       <Button disabled={busy || Object.values(session.inputProblems).some(Boolean)} onClick={() => void openMap()}><Workflow />{t("Open on the flow map")}</Button>
@@ -167,5 +175,9 @@ export function AutomationEditor({ id }: { id: string }) {
       {(draft.object || draft.every) && !offered.length && !catalogQuery.isLoading && !catalogQuery.isError && <p className="text-xs text-muted">{t("No actions yet.")}</p>}
     </div>}
     </StructuredEditor>
-  </Workbench>;
+  </Workbench><Dialog open={runOpen} onOpenChange={setRunOpen} title={t("Run now")}>
+ <div className="grid gap-3"><label className="grid gap-1 text-xs">{t("Subject record")}<RecordLookup source={authoringHost.source} type={draft.object} value={runSubject} onChange={setRunSubject} ariaLabel={t("Subject record")} /></label>
+ {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+ <Button variant="primary" disabled={!runSubject||busy} onClick={()=>void runAutomation()}>{t("Run now")}</Button></div>
+ </Dialog></>;
 }

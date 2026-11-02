@@ -17,7 +17,7 @@ const domains = [
   { id: "logic", title: "Behavior", description: "States, actions, flows, computation and intelligence", groups: [
     { id: "actions", title: "Object behavior", kinds: ["action"], contextKinds: ["object"], links: [{ title: "Object behavior", view: "action-type" }] },
     { id: "automation", title: "Flows and automation", kinds: ["flow"] },
-    { id: "computation", title: "Functions and decisions", kinds: ["compute", "function", "agent", "alert"] },
+    { id: "computation", title: "Functions and decisions", kinds: ["compute", "function", "agent"] },
   ] },
   { id: "interface", title: "Interface", description: "Pages, templates, application header and navigation", groups: [
     { id: "pages", title: "Pages", kinds: ["page"], links: [{ title: "Templates", view: "studio-templates" }] },

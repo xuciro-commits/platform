@@ -3,14 +3,10 @@ package platformserver
 import releaseowner "platformserver/studio/releases"
 
 import (
-	"encoding/json"
 	"fmt"
 	automation "platformserver/engine/automation"
 	"platformserver/platform"
-	"platformserver/studio/build"
 	"slices"
-	"strings"
-	"time"
 )
 
 func (h hostView) flowBindings() automation.FlowBindingContext {
@@ -44,40 +40,4 @@ func (t *Tenant) flowReleaseAsset(app, name string, version int) (platform.Relea
 		return provider.FlowReleaseAsset(name, version)
 	}
 	return t.nativeFlowAsset(owner, name, version)
-}
-
-func (t *Tenant) raiseAlerts(e platform.Event, now time.Time) {
-	s := e.Record.GetSubmission()
-	typ := s.GetTarget().GetType()
-	if e.App != build.ID || !strings.HasPrefix(typ, build.ID+".") || typ == build.AlertType {
-		return
-	}
-	c := t.automation(build.ID, false)
-	owner, ok := t.app(build.ID).(build.AlertDefinitions)
-	if !ok {
-		return
-	}
-	rules, err := owner.AlertRules(typ)
-	if err != nil {
-		return
-	}
-	if len(rules) == 0 {
-		return
-	}
-	info, ok := t.entity(typ)
-	if !ok {
-		return
-	}
-	held, ok := t.held(typ + "/" + s.GetTarget().GetId())
-	if !ok {
-		return
-	}
-	record := map[string]any{}
-	raw, _ := json.Marshal(held)
-	json.Unmarshal(raw, &record)
-	compiled := make([]automation.AlertDefinition, 0, len(rules))
-	for _, rule := range rules {
-		compiled = append(compiled, automation.AlertDefinition{ID: rule.ID, Rule: rule.Definition()})
-	}
-	automation.RaiseAlerts(c, compiled, info, record, e, now)
 }

@@ -1,0 +1,55 @@
+import { acceptedClient, expect, signIn, test, unique } from "./kit";
+import type * as Api from "../packages/kernel/src/gen/host";
+
+test.use({ actionTimeout: 15_000, viewport:{width:1680,height:1050} });
+
+test("F1 a builder creates a notification automation, runs it on an object and pauses and resumes it", async ({ page }) => {
+  test.setTimeout(180_000);
+  await signIn(page, "admin", "/automation");
+  const api = acceptedClient(page);
+  const name = unique("autodata"), objectID = unique("AUTOOBJ"), itemID = unique("AUTOITEM");
+  await api.submit("build.object", objectID, "create", { name, title: "Automation item", plural: "Automation items", fields: [{ name: "note", title: "Note", type: "text" }] });
+  await api.publish([{ kind: "object", id: objectID }]);
+  await page.reload();
+  await page.getByRole("button", { name: "New automation", exact: true }).click();
+  await page.getByLabel("Title", { exact: true }).fill("Notify an automation item");
+  await page.getByRole("combobox", { name:"Start kind",exact: true }).selectOption("condition");
+  await page.getByRole("combobox", {name:"Object type", exact: true }).selectOption(`build.${name}`);
+  await page.getByRole("button", { name: "Add an effect", exact: true }).click();
+  await page.getByRole("menuitem", { name: /Send notification/ }).click();
+  await page.getByLabel("Notification title", { exact: true }).fill("Item requires attention");
+  await page.getByLabel("Message", { exact: true }).fill("Review this item");
+  await page.getByRole("button", {name:"Create",exact:true}).click();
+  let processID = "";
+  await expect.poll(async () => {
+    const records = await api.read<{ records: Api.Process[] }>("/v1/records/build.process?limit=200");
+    const process = records.records.find(record => record.title === "Notify an automation item" && record.steps[0]?.notify?.body === "Review this item");
+    processID = process?.id ?? "";
+    return !!processID;
+  }).toBe(true);
+  await api.publish([{ kind: "flow", id: processID }]);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Run now", exact: true })).toBeEnabled();
+  await api.submit(`build.${name}`, itemID, "create", { note: "Needs attention" });
+  const runs = async () => (await api.read<{ records: {subject?:string;state:string;onBehalf?:string}[] }>("/v1/records/flow.instance?limit=200")).records.filter(run => run.subject === `build.${name}/${itemID}` && run.state === "done");
+  await expect.poll(async () => (await runs()).length).toBe(1);
+  await page.getByRole("button", { name: "Run now", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Run now", exact: true });
+  await dialog.getByRole("combobox", { name: "Subject record", exact: true }).fill(itemID);
+  await dialog.getByRole("option").first().click();
+  await dialog.getByRole("button", { name: "Run now", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(async () => (await runs()).length).toBe(2);
+  const executed = await runs();
+  expect(executed.every(run => run.onBehalf === executed[0]?.onBehalf)).toBe(true);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run now", exact: true })).toBeDisabled();
+  await api.submit(`build.${name}`, unique("PAUSED"), "create", { note: "Paused record" });
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+  const process = await api.read<{ record: Api.Process }>(`/v1/records/build.process/${processID}`);
+  expect(process.record.paused).toBeFalsy();
+  expect(process.record.version).toBe(1);
+  await api.submit("build.process", processID, "pause", {});
+});

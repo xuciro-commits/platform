@@ -62,7 +62,7 @@ func (ss *session) beginLoop(x *FlowInstance, token int, step *platform.Step, ap
 	if frame.While && step.Loop.Initial != nil {
 		state, err := step.Loop.Initial(app, run)
 		if err != nil {
-			ss.failed(x, token, step, err.Error())
+			ss.failed(x, token, step, err.Error(), err)
 			return
 		}
 		frame.State = state
@@ -70,7 +70,7 @@ func (ss *session) beginLoop(x *FlowInstance, token int, step *platform.Step, ap
 	if step.Loop.Items != nil {
 		items, err := step.Loop.Items(app, run)
 		if err != nil {
-			ss.failed(x, token, step, err.Error())
+			ss.failed(x, token, step, err.Error(), err)
 			return
 		}
 		if len(items) > step.Loop.MaxIterations {
@@ -108,7 +108,7 @@ func (ss *session) fillLoop(x *FlowInstance, token int) {
 			run.Frames = append(run.Frames, platform.Frame{Node: step.Name, Index: frame.Next, Item: frame.State})
 			holds, err := loop.While(ss.app(x), run)
 			if err != nil {
-				ss.failed(x, token, step, err.Error())
+				ss.failed(x, token, step, err.Error(), err)
 				return
 			}
 			if !holds {
@@ -172,7 +172,7 @@ func (ss *session) controlLoop(x *FlowInstance, token int, step *platform.Step) 
 	if step.Output != nil {
 		raw, err := step.Output(ss.app(x), ss.run(x, token))
 		if err != nil {
-			ss.failed(x, token, step, err.Error())
+			ss.failed(x, token, step, err.Error(), err)
 			return
 		}
 		if !ss.output(x, token, raw) {
