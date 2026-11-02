@@ -47,7 +47,7 @@ type PropertyType struct {
 	Name        string   `json:"name" field:"required,search"`
 	Title       string   `json:"title" field:"required,search"`
 	Description string   `json:"description" field:"required" type:"longtext"`
-	Type        string   `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean"`
+	Type        string   `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean,attachment"`
 	State       string   `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int      `json:"version,omitempty" field:"readonly"`
 	Published   string   `json:"published,omitempty" field:"readonly" type:"longtext"`

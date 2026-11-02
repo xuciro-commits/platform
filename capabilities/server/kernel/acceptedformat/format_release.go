@@ -23,6 +23,7 @@ type Release struct {
 	Active        bool                           `json:"active,omitempty"`
 	UpgradeID     string                         `json:"upgradeId,omitempty"`
 	From          string                         `json:"from,omitempty"`
+	MediaVersions []platform.MediaSetVersion     `json:"mediaVersions,omitempty"`
 	Installations []platform.ReleaseInstallation `json:"installations,omitempty"`
 	Bootstrap     json.RawMessage                `json:"bootstrap,omitempty"`
 	RequestHash   string                         `json:"requestHash"`
@@ -69,7 +70,7 @@ func DecodeRelease(raw []byte) (Release, error) {
 		return saved, err
 	}
 	hash, err := ReleaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, saved.Active, saved.UpgradeID)
-	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3 && saved.Version != 4) || saved.Kind != "release-result" || saved.App != "build" ||
+	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3 && saved.Version != 4 && saved.Version != 5) || saved.Kind != "release-result" || saved.App != "build" ||
 		saved.Tenant == "" || saved.Member == "" || saved.Key == "" || saved.At.IsZero() ||
 		saved.RequestHash != hash {
 		return saved, fmt.Errorf("invalid release result identity")
@@ -81,7 +82,7 @@ func DecodeRelease(raw []byte) (Release, error) {
 		return saved, fmt.Errorf("definition installation needs an active format-2 release result")
 	}
 	if len(saved.Bootstrap) > 0 {
-		if saved.Version != 4 || !saved.Active || len(saved.Installations) == 0 {
+		if saved.Version < 4 || !saved.Active || len(saved.Installations) == 0 {
 			return saved, fmt.Errorf("draft bootstrap needs a complete format-4 activation")
 		}
 		batch, receipt, err := DecodeBatch(saved.Bootstrap)
@@ -99,7 +100,7 @@ func DecodeRelease(raw []byte) (Release, error) {
 			}
 		}
 	}
-	if saved.Version == 4 {
+	if saved.Version >= 4 {
 		candidate, err := platform.ReadCandidate(saved.CandidateID, saved.Bytes)
 		if err != nil {
 			return saved, err
@@ -136,6 +137,25 @@ func DecodeRelease(raw []byte) (Release, error) {
 			if len(batch.DirectRows) > 0 || batch.Control != nil {
 				return saved, fmt.Errorf("release bootstrap has an unrelated callback or control mutation")
 			}
+		}
+	}
+	if len(saved.MediaVersions) > 0 {
+		if saved.Version != 5 || !saved.Active {
+			return saved, fmt.Errorf("media version images need a format-5 activation")
+		}
+		sets := map[string]bool{}
+		for _, installation := range saved.Installations {
+			if installation.Ref != nil && installation.Ref.Kind == platform.AssetMediaSet {
+				_, id, _ := strings.Cut(installation.Record, "/")
+				sets[id] = true
+			}
+		}
+		seen := map[string]bool{}
+		for _, snapshot := range saved.MediaVersions {
+			if !sets[snapshot.MediaSet] || snapshot.Version < 1 || snapshot.ID != platform.MediaSetVersionID(snapshot.MediaSet, snapshot.Version) || seen[snapshot.ID] {
+				return saved, fmt.Errorf("media version image differs from its installation")
+			}
+			seen[snapshot.ID] = true
 		}
 	}
 	digest, err := DigestRelease(saved)

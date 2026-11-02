@@ -269,7 +269,7 @@ type FieldInfo struct {
 	Format       []FormatRule      `json:"format,omitempty"`
 	Name         string            `json:"name"`
 	Title        string            `json:"title"`
-	Type         string            `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines,json"`
+	Type         string            `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines,json,attachment"`
 	Required     bool              `json:"required,omitempty"`
 	Search       bool              `json:"search,omitempty"`
 	ReadOnly     bool              `json:"readOnly,omitempty"`

@@ -170,7 +170,7 @@ func payloadColumns(columns []FieldInfo) []Field {
 			continue
 		}
 		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
-			"references": "string[]", "tags": "string[]", "money": "money", "json": "json", "lines": "lines"}[column.Type]
+			"references": "string[]", "tags": "string[]", "money": "money", "attachment": "attachment", "json": "json", "lines": "lines"}[column.Type]
 		if typ == "" {
 			typ = "string"
 		}
@@ -195,7 +195,7 @@ func EntityActions(e Entity) []Action {
 			continue
 		}
 		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
-			"references": "string[]", "tags": "string[]", "money": "money", "json": "json", "lines": "lines"}[f.Type]
+			"references": "string[]", "tags": "string[]", "money": "money", "attachment": "attachment", "json": "json", "lines": "lines"}[f.Type]
 		if typ == "" {
 			typ = "string"
 		}
@@ -357,6 +357,8 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			f.Ref = typeOf(reflect.Zero(ft.Elem()).Interface().(reference).refType())
 		case ft == timeType:
 			f.Type = "datetime"
+		case ft == reflect.TypeFor[Attachment]():
+			f.Type = "attachment"
 		case ft == moneyType:
 			f.Type = "money"
 		case ft.Kind() == reflect.String && sf.Tag.Get("ref") != "":

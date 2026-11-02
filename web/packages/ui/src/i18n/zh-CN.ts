@@ -1,4 +1,5 @@
 export default {
+ "Media set could not be loaded.": "无法加载媒体集。", "File could not be downloaded.": "无法下载文件。", "Media set": "媒体集", "Media item": "媒体项", "Choose a file": "选择文件",
  "Refreshing record…":"正在刷新记录…",
  "Authorized delivery results":"受权交付结果",
  "Show public delivery outcomes separately from accepted business actions, with independently authorized receipt links.":"分别呈现业务接受与公开交付结果，并按独立权限打开原收据。",

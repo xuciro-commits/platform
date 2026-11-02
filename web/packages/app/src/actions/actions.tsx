@@ -2,7 +2,7 @@ import type * as PageUI from "../pageui/types";
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
 import {OfflineReadError,type Api} from "@platform/kernel";
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, ContextHelp, Reasoned, useActionAvailability, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate, formatStamp} from "@platform/ui";
+import { Button, ContextHelp, Reasoned, useActionAvailability, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, MediaAttachment, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate, formatStamp} from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
@@ -20,7 +20,7 @@ export function payloadSchema(fields: Field[]) {
     const type: FieldType = f.choices?.length ? field.singleSelect({ ...common, options: f.choices.map(value => ({ value, label: value })) })
       : f.type === "integer" || f.type === "number" ? field.number(common)
       : f.type === "boolean" ? field.checkbox(common) : f.type === "date" ? field.date(common)
-      : f.type === "datetime" ? field.datetime(common) : f.type === "json" ? { ...field.json(common), readOnly: false } : field.text(common);
+      : f.type === "datetime" ? field.datetime(common) : (f.type === "json" || f.type === "attachment") ? { ...field.json(common), readOnly: false } : field.text(common);
     if(f.type==="date"&&f.constraints?.dateTime) type.schema=field.text(common).schema.refine(value=>validCivilDate(value)||/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/.test(value)&&validCivilDate(value.slice(0,10)),t("Enter a valid value."));
     if (f.type === "integer") type.schema = type.schema.refine(value => typeof value === "number" && Number.isSafeInteger(value), t("Enter a whole number."));
     return [f.name, type];
@@ -28,6 +28,7 @@ export function payloadSchema(fields: Field[]) {
 }
 
 export function PayloadFields({ fields, values, onChange, app, preview = false, submitted = false, issues = [] }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; app?:string; preview?: boolean; submitted?: boolean; issues?:Api.FieldIssue[] }) {
+  const { source } = useHost();
   const prefix = useId(), [touched, setTouched] = useState<Record<string, boolean>>({}),[units,setUnits]=useState<Record<string,string>>({});
   const knownUnit=Object.values(units).find(Boolean),hourly=knownUnit?knownUnit==="hour":fields.some(f=>f.constraints?.dateTime&&String(values[f.name]??"").includes("T"));
   const parsed = payloadSchema(fields).safeParse(values);
@@ -52,6 +53,7 @@ export function PayloadFields({ fields, values, onChange, app, preview = false, 
             : <RecordPicker id={id} type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
           : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : <ReadPicker id={id} field={f} app={app} value={String(value ?? "")} onChange={(v) => set(v || undefined)} onUnit={unit=>setUnits(old=>({...old,[f.name]:unit}))} />
+          : f.type === "attachment" ? <MediaAttachment id={id} source={source} value={value as { mediaSet: string; item: string } | undefined} onChange={set} />
           : f.type === "datetime" ? <DateTimeInput title={f.description||f.name} value={String(value??"")} offset="Z" onChange={set}/>
           : f.type === "json" ? field.json({label:f.description||f.name,required:f.required}).editor!({id,value,onChange:set,invalid:!!error,describedBy:error?`${id}-error`:undefined})
           : f.type === "string" && String(value ?? "").length > 60 ? <Textarea id={id} rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />

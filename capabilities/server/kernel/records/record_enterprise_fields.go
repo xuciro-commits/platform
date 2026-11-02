@@ -255,7 +255,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 				}
 				values[f.Name] = value
 			}
-			typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime"}[f.Type]
+			typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime", "attachment": "attachment"}[f.Type]
 			if typ == "" {
 				typ = "string"
 			}
@@ -316,6 +316,15 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 		case "text", "longtext":
 			if f.Required && strings.TrimSpace(fv.String()) == "" {
 				return nil, invalid
+			}
+		case "attachment":
+			attachment, ok := fv.Interface().(platform.Attachment)
+			if !ok {
+				return nil, invalid
+			}
+			media, ok := lookup.(interface{ HasMediaItem(string, string) bool })
+			if !ok || !media.HasMediaItem(attachment.MediaSet, attachment.Item) {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
 			}
 		case "money":
 			if m := fv.Interface().(platform.Money); m.Amount != 0 && len(m.Currency) != 3 {

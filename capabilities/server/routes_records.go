@@ -107,8 +107,17 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, up)
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/files/{id}", Summary: "Download a file attached to a record the caller may read"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		t.Download(w, m, r.PathValue("id"), h.Now())
+	rt.recordRead(transport.Route{Pattern: "GET /v1/files/{id}", Summary: "Download a file attached to a record the caller may read"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		view, refusal := t.recordOf(m, platform.FileType, r.PathValue("id"), h.Now())
+		if refusal != nil {
+			Reply(w, nil, refusal)
+			return
+		}
+		file := view.Record.(platform.File)
+		t.downloadBytes(w, file.Hash, file.Name, file.ContentType)
+	})
+	rt.recordRead(transport.Route{Pattern: "GET /v1/media-sets/{id}/items/{hash}", Summary: "Download an item from a readable media set or retained version", Query: []transport.Param{{Name: "version", Description: "A retained version; latest when omitted"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		t.downloadMediaItem(w, r, m, h.Now())
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/chain/{type}/{id}", Summary: "The chain an agent run or a flow instance belongs to: its record, flows, runs and the effects they caused", Answer: Chain{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		chain, err := t.chainRead(m, r.PathValue("type")+"/"+r.PathValue("id"), h.Now())

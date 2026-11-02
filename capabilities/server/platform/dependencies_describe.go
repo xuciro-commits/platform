@@ -585,7 +585,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		}
 		out.Requires = append(out.Requires, dependencies.Requires...)
 		out.Provides = append(out.Provides, dependencies.Provides...)
-	case AssetListener, AssetConnection, AssetDataset, AssetSource, AssetPipeline, AssetWriteback, AssetMatching:
+	case AssetMediaSet, AssetSchedule, AssetListener, AssetConnection, AssetDataset, AssetSource, AssetPipeline, AssetWriteback, AssetMatching:
 		dependencies, err := describeIntegrationDependencies(asset, historical, object)
 		if err != nil {
 			return out, err

@@ -14,11 +14,13 @@ import { PropertyTypeEditor, PropertyTypes } from "./ontology/property-type";
 import { ValueTypeEditor, ValueTypes } from "./ontology/value-type";
 import { ObjectTypeGroupEditor, ObjectTypeGroups } from "./ontology/object-type-group";
 import { ObservationSourceEditor, ObservationSources } from "./ontology/observation";
-import { DataSourceEditor, DataSources } from "./ontology/data-source";
+import { DataSourceEditor, DataSources, Streams } from "./ontology/data-source";
 import { ListenerEditor, Listeners } from "./ontology/listener";
 import { ConnectionEditor, Connections } from "./ontology/connection";
 import { DatasetEditor, Datasets } from "./ontology/dataset";
-import { PipelineEditor, Pipelines, Schedules } from "./ontology/pipeline";
+import { PipelineEditor, Pipelines } from "./ontology/pipeline";
+import { ScheduleEditor, Schedules } from "./ontology/schedule";
+import { MediaSetEditor, MediaSets } from "./ontology/media-set";
 import { WritebackEditor, Writebacks } from "./ontology/writeback";
 import { MatchEditor, Matches } from "./ontology/match";
 import { IntegrationHealth } from "./ontology/integration-health";
@@ -66,6 +68,8 @@ const ontologyViews: View[] = [
   { id: "proposal", documentKey: p => p.id ?? "", title: () => t("Proposal"), render: p => <ProposalScreen key={p.id} id={p.id ?? ""} /> },
 ];
 const connectionViews: View[] = [
+  view("streams", () => t("Streams"), () => <Streams />),
+  view("stream", () => t("Stream"), p => <DataSourceEditor key={p.id} id={p.id ?? "new"} initialStream />),
   view("connection", () => t("Connections"), p => p.id ? <ConnectionEditor key={p.id} id={p.id} /> : <Connections />),
   view("data-source", () => t("Data sources"), p => p.id ? <DataSourceEditor key={p.id} id={p.id} /> : <DataSources />),
   view("observation-source", () => t("Observation sources"), p => p.id ? <ObservationSourceEditor key={p.id} id={p.id} /> : <ObservationSources />),
@@ -74,10 +78,12 @@ const connectionViews: View[] = [
 ];
 const pipelineViews: View[] = [
   view("pipeline", () => t("Pipelines"), p => p.id ? <PipelineEditor key={p.id} id={p.id} /> : <Pipelines />),
-  view("schedules", () => t("Schedules"), () => <Schedules />),
+  view("schedules", () => t("Schedules"), p => <Schedules pipeline={p.pipeline} />),
+  view("schedule", () => t("Schedule"), p => <ScheduleEditor key={p.id} id={p.id ?? "new"} />),
   view("match", () => t("Matching rules"), p => p.id ? <MatchEditor key={p.id} id={p.id} /> : <Matches />),
 ];
 const datasetViews: View[] = [
+  view("media-set", () => t("Media sets"), p => p.id ? <MediaSetEditor key={p.id} id={p.id} /> : <MediaSets />),
   view("dataset", () => t("Datasets"), p => p.id ? <DatasetEditor key={p.id} id={p.id} /> : <Datasets />),
 ];
 const monitoringViews: View[] = [
@@ -184,7 +190,7 @@ export function createDataConnection(host: Host, operations: { views: View[]; st
         { label: t("Connections"), icon: <Plug />, view: "connection" },
         { label: t("Syncs"), icon: <Database />, view: "data-source" },
       ])] : []),
-      { label: t("Streams"), items: authoring ? links(route, [{ label: t("Streams"), icon: <Radio />, view: "observation-source" }]) : operations.streamLinks() },
+      { label: t("Streams"), items: authoring ? links(route, [{ label: t("Streams"), icon: <Radio />, view: "streams" }, { label: t("Observation sources"), icon: <Radio />, view: "observation-source" }]) : operations.streamLinks() },
       ...(authoring ? [section(t("Exports"), route, [{ label: t("Writebacks"), icon: <Link2 />, view: "writeback" }])] : []),
       ...(authoring ? [section(t("Listeners"), route, [{ label: t("Listeners"), icon: <Radio />, view: "listener" }])] : []),
       { label: t("Webhooks"), items: operations.webhookLinks(host) },
@@ -198,7 +204,7 @@ const pipelineBuilder = defineApp({
   for: builder,
   home: { view: "pipeline" },
   views: contextualViews(pipelineViews),
-  opens: { "build.pipeline": "pipeline", "build.match": "match" },
+  opens: { "build.pipeline": "pipeline", "build.schedule": "schedule", "build.match": "match" },
   navigation,
   nav: (_host, route) => [section(t("Transform"), route, [
     { label: t("Pipelines"), icon: <Workflow />, view: "pipeline" },
@@ -213,9 +219,9 @@ const datasetPreview = defineApp({
   for: builder,
   home: { view: "dataset" },
   views: contextualViews(datasetViews),
-  opens: { "build.dataset": "dataset" },
+  opens: { "build.dataset": "dataset", "build.mediaset": "media-set" },
   navigation,
-  nav: (_host, route) => [section(t("Datasets"), route, [{ label: t("Datasets"), icon: <TableProperties />, view: "dataset" }])],
+  nav: (_host, route) => [section(t("Datasets"), route, [{ label: t("Datasets"), icon: <TableProperties />, view: "dataset" }, { label: t("Media sets"), icon: <Layers />, view: "media-set" }])],
 });
 
 export const integrationMonitoring: Pick<AppUI, "for" | "views" | "nav"> = {

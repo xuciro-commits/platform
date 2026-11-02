@@ -453,7 +453,7 @@ type Input struct {
 	MinLength   *int                       `json:"minLength,omitempty" title:"Minimum length"`
 	Name        string                     `json:"name" field:"required" example:"to"`
 	Title       string                     `json:"title" field:"required" title:"Label" example:"Handed to"`
-	Type        string                     `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean,choice,reference"`
+	Type        string                     `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean,choice,reference,attachment"`
 	Choices     string                     `json:"choices,omitempty" help:"For a choice: the values, comma-separated"`
 	Required    bool                       `json:"required,omitempty"`
 }
@@ -481,7 +481,7 @@ type Condition struct {
 	Message    string         `json:"message" field:"required" help:"What a person reads when it does not hold"`
 }
 
-var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string"}
+var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string", "attachment": "attachment"}
 
 type Access struct {
 	Role    string `json:"role" field:"required" help:"A role of the builder app, lower-case letters and digits" example:"desk"`

@@ -10,7 +10,7 @@ import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { MarkingTag } from "./marking";
 import { Button, Checkbox, DataTable, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
-import { PERIODS, periodLabel } from "../automate/workflow-model";
+
 import { cell } from "./dataset";
 import { useAuthoringModel } from "./authoring-model";
 import { DeclaredByObject, declaringObject } from "./object-datasources";
@@ -24,7 +24,7 @@ type EnterpriseTarget = { source: string; stereotype: string; id: string; name: 
 const STEREOTYPES = ["ActualOrganization", "ActualPost", "ActualPerson", "ActualLocation", "ActualResource", "ActualProject"];
 const AT_KINDS = ["ResponsibleFor", "FillsPost", "ActualOrganizationRole", "IsCapableToPerform"];
 const EMPTY_ENTERPRISE: EnterpriseTarget = { source: "", stereotype: "ActualOrganization", id: "", name: "" };
-type Draft = { id: string; revision: number; name: string; title: string; input: string; steps: Step[]; expectations: Expectation[]; outputDataset?: string; outputObject?: string; outputEnterprise?: EnterpriseTarget; key?: string; every?: string; marking?: string; state: string; requested?: boolean; last?: Run };
+type Draft = { id: string; revision: number; name: string; title: string; input: string; steps: Step[]; expectations: Expectation[]; outputDataset?: string; outputObject?: string; outputEnterprise?: EnterpriseTarget; key?: string; marking?: string; state: string; requested?: boolean; last?: Run };
 type DatasetRow = { id: string; name: string; title: string; schema?: { name: string; type: string }[] };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", input: "", steps: [], expectations: [], state: "draft" });
 const KINDS = ["select", "rename", "cast", "filter", "compute", "lookup", "join", "dedupe", "aggregate", "sort"];
@@ -79,8 +79,8 @@ export function PipelineEditor({ id }: { id: string }) {
     id, type: "build.pipeline", view: "pipeline", empty, normalize: record => ({ ...record, steps: record.steps ?? [], expectations: record.expectations ?? [] }),
     failure: t("The pipeline could not be saved or loaded. Your draft is still here."),
     payload: draft => {
-      const { name, title, input, steps, expectations, outputDataset, outputObject, outputEnterprise, key, every } = draft;
-      return { name, title, input, steps, expectations, outputDataset: outputDataset ?? "", outputObject: outputObject ?? "", outputEnterprise: outputEnterprise ?? null, key: declaringObject(entities, "pipeline", draft.id) ? "" : key ?? "", every: every ?? "" };
+      const { name, title, input, steps, expectations, outputDataset, outputObject, outputEnterprise, key } = draft;
+      return { name, title, input, steps, expectations, outputDataset: outputDataset ?? "", outputObject: outputObject ?? "", outputEnterprise: outputEnterprise ?? null, key: declaringObject(entities, "pipeline", draft.id) ? "" : key ?? "" };
     },
   });
   const [picked, setPicked] = useState<string>();
@@ -142,11 +142,11 @@ export function PipelineEditor({ id }: { id: string }) {
     </Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="min-w-0 border-0 p-0"><PanelGroup className="grid-cols-1 lg:grid-cols-2">
       <Panel title={t("Input")} className="grid min-w-0 content-start gap-3">
+        {draft.id && <Button size="sm" variant="ghost" onClick={() => open({ view: "schedules", params: { pipeline: draft.id } })}>{t("Schedules")}</Button>}
         <label className={fieldClass}>{t("Pipeline name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="cleanmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Pipeline title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("Input dataset")}<Select value={draft.input} onChange={(e) => patch({ input: e.target.value })}><option value="">{t("Choose a dataset")}</option>{datasets.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select>
           {columns.length > 0 && <span className="text-xs text-muted">{t("Columns")}: <span className="font-mono">{columns.join(", ")}</span></span>}</label>
-        <label className={fieldClass}>{t("Run every")}<Select value={draft.every ?? ""} onChange={(e) => patch({ every: e.target.value })}><option value="">{t("When the input gains a version, or when asked")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
       </Panel>
       <Panel title={t("Output")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Write to")}<Select value={out} onChange={(e) => e.target.value === "object" ? patch({ outputDataset: "", outputObject: entities[0]?.type ?? "", outputEnterprise: undefined }) : e.target.value === "enterprise" ? patch({ outputDataset: "", outputObject: "", key: "", outputEnterprise: EMPTY_ENTERPRISE }) : patch({ outputObject: "", key: "", outputEnterprise: undefined })}>
@@ -223,32 +223,6 @@ export function PipelineEditor({ id }: { id: string }) {
         </>}
       </Panel>
     </PanelGroup></fieldset></StructuredEditor>
-  </div>;
-}
-
-const scheduleStates: Record<string, string> = { published: "Published", paused: "Paused", draft: "Draft", retired: "Retired" };
-const scheduleStateName = (state: string) => t(scheduleStates[state] ?? state);
-
-export function Schedules() {
-  const { holds } = useHost(), { open } = useApplicationWorkspace();
-  const query = useReadQuery<Api.PipelineSchedule[]>("/v1/schedules", 15000);
-  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Schedules")} description={t("Only a builder or integrator can view schedules.")} />;
-  const schedules = query.data ?? [];
-  const stamp = (value?: string) => value ? new Date(value).toLocaleString() : "—";
-  return <div className="grid min-w-0 gap-3">
-    <PageHeader title={t("Schedules")} help={t("Published pipelines that build on a period. Scheduling is set as Run every on each pipeline.")} />
-    {query.isError ? <p role="alert" className="text-sm text-danger">{t("Schedules are unavailable to you.")}</p> :
-    <DataTable data={schedules} getRowId={(row) => row.pipeline} searchable={false} height={Math.min(560, 80 + schedules.length * 36)}
-      empty={query.isPending ? t("Loading…") : t("No pipeline builds on a period yet. Set Run every on a published pipeline.")}
-      onRowClick={(row) => open({ view: "pipeline", params: { id: row.pipeline } })}
-      columns={[
-        { id: "title", header: t("Pipeline"), accessorFn: (row) => row.title || row.name, cell: (context) => <span>{String(context.getValue())}</span> },
-        { id: "name", header: t("Name"), accessorFn: (row) => row.name, cell: (context) => <span className="font-mono text-xs">{String(context.getValue())}</span> },
-        { id: "every", header: t("Every"), accessorFn: (row) => row.every, cell: (context) => periodLabel(String(context.getValue())) },
-        { id: "lastBuild", header: t("Last build"), accessorFn: (row) => row.lastBuild, cell: (context) => stamp(context.getValue() as string | undefined) },
-        { id: "nextDue", header: t("Next due"), accessorFn: (row) => row.nextDue, cell: (context) => stamp(context.getValue() as string | undefined) },
-        { id: "state", header: t("State"), accessorFn: (row) => row.state, cell: (context) => <Tag label={scheduleStateName(String(context.getValue()))} /> },
-      ] as ColumnDef<Api.PipelineSchedule, unknown>[]} />}
   </div>;
 }
 

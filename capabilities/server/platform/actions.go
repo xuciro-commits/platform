@@ -61,6 +61,8 @@ func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[stri
 		schema["type"] = "boolean"
 	case "string[]", "tags", "references":
 		schema["type"], schema["items"] = "array", map[string]any{"type": "string"}
+	case "attachment":
+		schema = map[string]any{"type": "object", "properties": map[string]any{"mediaSet": map[string]any{"type": "string", "minLength": 1}, "item": map[string]any{"type": "string", "pattern": "^[0-9a-f]{64}$"}}, "required": []string{"mediaSet", "item"}, "additionalProperties": false}
 	case "money":
 		schema = map[string]any{"type": "object", "properties": map[string]any{"amount": map[string]any{"type": "integer"}, "currency": map[string]any{"type": "string"}}, "required": []string{"amount", "currency"}, "additionalProperties": false}
 	case "lines":
@@ -263,7 +265,7 @@ func StaticControlAction(action Action) bool {
 	}
 	switch action.Target {
 	case "agent.run", "agent.switch", "agent.evaluation", "agent.memory", "work.task", "platform.work", "platform.effect", "platform.operation", "platform.job",
-		"build.object", "build.page", "build.app", "build.flow", "build.agent", "build.function", "build.code", "build.query", "build.process", "build.connection", "build.pipeline", "build.dataset", "build.datasetversion", "build.evaluation", "build.release", "build.packagesource", "build.alertrule":
+		"build.object", "build.page", "build.app", "build.flow", "build.agent", "build.function", "build.code", "build.query", "build.process", "build.connection", "build.pipeline", "build.dataset", "build.datasetversion", MediaSetType, MediaSetVersionType, ScheduleType, "build.evaluation", "build.release", "build.packagesource", "build.alertrule":
 		return true
 	}
 	return false

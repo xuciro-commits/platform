@@ -57,16 +57,17 @@ func (t *Tenant) PullSources(now time.Time) {
 }
 
 type integrationPreparation struct {
-	Type       string                      `json:"type"`
-	ID         string                      `json:"id"`
-	Rows       []build.SourceRow           `json:"rows,omitempty"`
-	Data       []map[string]any            `json:"data"`
-	Object     string                      `json:"object,omitempty"`
-	Binding    *platform.DataSourceBinding `json:"binding,omitempty"`
-	Dataset    string                      `json:"dataset,omitempty"`
-	Enterprise *build.EnterpriseTarget     `json:"enterprise,omitempty"`
-	Producer   string                      `json:"producer"`
-	Marking    string                      `json:"marking,omitempty"`
+	Transaction string                      `json:"transaction,omitempty"`
+	Type        string                      `json:"type"`
+	ID          string                      `json:"id"`
+	Rows        []build.SourceRow           `json:"rows,omitempty"`
+	Data        []map[string]any            `json:"data"`
+	Object      string                      `json:"object,omitempty"`
+	Binding     *platform.DataSourceBinding `json:"binding,omitempty"`
+	Dataset     string                      `json:"dataset,omitempty"`
+	Enterprise  *build.EnterpriseTarget     `json:"enterprise,omitempty"`
+	Producer    string                      `json:"producer"`
+	Marking     string                      `json:"marking,omitempty"`
 }
 
 func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now time.Time, plan integrationPreparation) (*build.IntegrationExecution, error) {
@@ -176,6 +177,9 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
 		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: marking}
 		plan.Type, plan.ID = build.SourceType, s.ID
+		if s.Stream {
+			plan.Transaction = "append"
+		}
 		if s.Dataset != "" {
 			if len(raw) > 0 || s.Cursor == "" {
 				plan.Data = raw
@@ -229,7 +233,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		} else if plan.Dataset != "" {
 			if plan.Data != nil {
 				key := "source:" + pull.Execution.ID + ":dataset"
-				if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, plan.Marking, plan.Data, key, pull.At); err != nil {
+				if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, plan.Marking, plan.Data, key, pull.At, plan.Transaction); err != nil {
 					if !t.integrationRefused(build.ID, key) {
 						return
 					}
@@ -434,11 +438,11 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 	return build.NewResolver(rules[i], producer, records)
 }
 
-func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer, marking string, rows []map[string]any, key string, now time.Time) *kernel.Error {
+func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer, marking string, rows []map[string]any, key string, now time.Time, transaction string) *kernel.Error {
 	if rows == nil {
 		rows = []map[string]any{}
 	}
-	payload, _ := json.Marshal(map[string]any{"rows": rows, "producer": producer, "marking": marking})
+	payload, _ := json.Marshal(map[string]any{"type": transaction, "rows": rows, "producer": producer, "marking": marking})
 	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: build.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: build.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
 	return err

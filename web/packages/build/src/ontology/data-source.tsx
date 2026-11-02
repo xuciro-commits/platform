@@ -1,5 +1,6 @@
 import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { PropertyList, StructuredEditor , PanelGroup , Notice } from "@platform/ui";
+import { useDraftInventory } from "../branches/records";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
@@ -8,12 +9,12 @@ import { DeclaredByObject, declaringObject } from "./object-datasources";
 
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
+import { Button, Checkbox, DataTable, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 
 type Draft = Omit<Api.Source, "mapping" | "object" | "key"> & { dataset?: string; object: string; key: string; mapping: Api.SourceField[] };
 type ConnectionRow = Api.Connection;
-type DatasetRow = { id: string; title: string };
+type DatasetRow = { id: string; title: string; stream?: boolean };
 const PROFILES = [["json", "JSON"], ["csv", "CSV"], ["odata", "OData entity set"], ["table", "Database table"]] as const;
 const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", url: "", object: "", key: "id", mapping: [], state: "draft" });
 const conversions = ["", "string", "number", "boolean", "date"];
@@ -29,7 +30,15 @@ export function DataSources() {
   </div>;
 }
 
-export function DataSourceEditor({ id }: { id: string }) {
+export function Streams() {
+  const { open } = useApplicationWorkspace();
+  const sources = useDraftInventory<Draft>("build.source");
+  const datasets = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200");
+  const rows = (sources.data?.records ?? []).filter(source => source.stream && !source.archived);
+  return <div className="grid gap-3"><PageHeader title={t("Streams")} actions={<Button variant="primary" onClick={() => open({ view: "stream", params: { id: "new" } })}>{t("New stream")}</Button>} />{sources.isError ? <Notice tone="danger" message={t("The data source could not be loaded.")} /> : <DataTable data={rows} getRowId={row => row.id} onRowClick={row => open({ view: "data-source", params: { id: row.id } })} columns={[{ id: "title", header: t("Title"), accessorFn: row => row.title }, { id: "name", header: t("Name"), accessorFn: row => row.name }, { id: "dataset", header: t("Target dataset"), accessorFn: row => datasets.data?.records.find(dataset => dataset.id === row.dataset)?.title ?? row.dataset ?? t("Flow observation only") }, { id: "state", header: t("State"), accessorFn: row => row.state }]} />}</div>;
+}
+
+export function DataSourceEditor({ id, initialStream = false }: { id: string; initialStream?: boolean }) {
   const host = useHost(), { holds} = host, { open, transfer } = useApplicationWorkspace();
   const application = useApplicationScope();
   const model = useAuthoringModel();
@@ -39,11 +48,11 @@ export function DataSourceEditor({ id }: { id: string }) {
   const datasetQuery = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200");
   const datasets = datasetQuery.data?.records ?? [];
   const { draft, structured, query, dirty, busy, error, patch, perform, save, discardChanges, transition } = useDefinitionDraft<Draft>({
-    id, type: "build.source", view: "data-source", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [] }),
+    id, type: "build.source", view: initialStream ? "stream" : "data-source", empty: () => ({ ...empty(), stream: initialStream }), normalize: record => ({ ...record, mapping: record.mapping ?? [] }),
     failure: t("The data source could not be saved or loaded. Your draft is still here."),
     payload: draft => {
       const { name, title, url, object, key, mapping, every, allowPrivate, header, path, connection, profile, entity, filter, since, dataset, stream } = draft;
-      return { name, title, url: url ?? "", allowPrivate: !!allowPrivate, header: header ?? "", path: path ?? "", stream: !!stream, object: dataset || stream ? "" : object, key: dataset || stream || declaringObject(entities, "source", draft.id) ? "" : key, mapping: dataset || stream || declaringObject(entities, "source", draft.id) ? [] : mapping, every: stream ? "" : every ?? "", dataset: stream ? "" : dataset ?? "",
+      return { name, title, url: url ?? "", allowPrivate: !!allowPrivate, header: header ?? "", path: path ?? "", stream: !!stream, object: dataset || stream ? "" : object, key: dataset || stream || declaringObject(entities, "source", draft.id) ? "" : key, mapping: dataset || stream || declaringObject(entities, "source", draft.id) ? [] : mapping, every: stream ? "" : every ?? "", dataset: dataset ?? "",
         connection: connection ?? "", profile: profile ?? "json", entity: entity ?? "", filter: filter ?? "", since: since ?? "" };
     },
   });
@@ -62,7 +71,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Data sources"), onClick: () => open({ view: "data-source" }) }]} title={draft.title || t("New data source")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Declare the source, row mapping and schedule. Publishing saves the declaration; Pull now checks the current environment and requests a pull.")}
-      actions={<ResourceControls type="build.source" record={draft} dirty={dirty} busy={busy} route={{ view: "data-source", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
+      actions={<ResourceControls type="build.source" record={draft} dirty={dirty} busy={busy} route={{ view: initialStream ? "stream" : "data-source", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
         operations={[
           ...(draft.state === "published" && !draft.stream ? [{ id: "pull", label: draft.requested ? t("Pull requested…") : t("Pull now"), disabled: dirty || !!draft.requested, run: () => void perform(() => transition("pull")) }] : []),
           ...(draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []),
@@ -94,7 +103,7 @@ export function DataSourceEditor({ id }: { id: string }) {
       <Panel title={t("Target and mapping")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Rows go to")}<Select value={draft.stream ? "stream" : draft.dataset ? "dataset" : "object"} onChange={(e) => e.target.value === "stream" ? patch({ stream: true, dataset: "", object: "", key: "", mapping: [], every: "" }) : e.target.value === "dataset" ? patch({ stream: false, dataset: datasets[0]?.id ?? "", object: "", mapping: [] }) : patch({ stream: false, dataset: "" })}>
           <option value="object">{t("An object, mapped here")}</option><option value="dataset" disabled={!datasets.length}>{t("A dataset, as they came")}</option><option value="stream" disabled={profile !== "table"}>{t("A continuous Flow")}</option></Select></label>
-        {draft.stream ? <p className="text-xs text-muted">{t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.")}</p> : draft.dataset ? <label className={fieldClass}>{t("Target dataset")}<Select value={draft.dataset} onChange={(e) => patch({ dataset: e.target.value })}>{datasets.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select>
+        {draft.stream ? <label className={fieldClass}>{t("Target dataset")}<Select value={draft.dataset ?? ""} onChange={event => patch({ dataset: event.target.value })}><option value="">{t("Flow observation only")}</option>{datasets.filter(dataset => dataset.stream).map(dataset => <option key={dataset.id} value={dataset.id}>{dataset.title}</option>)}</Select></label> : draft.dataset ? <label className={fieldClass}>{t("Target dataset")}<Select value={draft.dataset} onChange={(e) => patch({ dataset: e.target.value })}>{datasets.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select>
           <span className="text-xs text-muted">{t("Each pull becomes a new version; a pipeline maps the rows to an object later.")}</span></label> : <>
         <label className={fieldClass}>{t("Target object")}<Select value={draft.object} onChange={(e) => patch({ object: e.target.value, mapping: [] })}><option value="">{t("Choose an object type")}</option>{draft.object && !target && <option value={draft.object}>{draft.object} · {t("Unavailable object type")}</option>}{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select></label>
         {target && <p className="text-xs text-muted">{targetDraft ? t("Saved model draft") : t("Published model")}</p>}

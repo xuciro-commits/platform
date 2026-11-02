@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -75,8 +76,9 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	}
 	defer endBootstrap()
 	decision.attachPrivateHosts()
+	var receipt *pb.ChangeRecord
 	declare := func(asset platform.ReleaseAsset) error {
-		if context.DraftsOnly {
+		if context.DraftsOnly && asset.Ref.Kind != platform.AssetMediaSet {
 			return nil
 		}
 		plans, err := registry.PrepareReleaseAssets([]platform.ReleaseAsset{asset}, context)
@@ -84,8 +86,36 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 			return err
 		}
 		for _, plan := range plans {
+			if context.DraftsOnly && plan.Ref.Kind == platform.AssetMediaSet {
+				var set platform.MediaSet
+				if err := json.Unmarshal(plan.Image, &set); err != nil {
+					return err
+				}
+				caller := platform.NewCaller(decision, context.Member, plan.Ref.App, false, false)
+				if refusal := decision.Put(caller, receipt, set); refusal != nil {
+					return refusal
+				}
+				ref := plan.Ref
+				images, err := view.prepareMediaVersionImages([]platform.ReleaseInstallation{{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Ref: &ref, Record: plan.Record}})
+				if err != nil {
+					return err
+				}
+				for _, snapshot := range images {
+					if refusal := decision.Put(caller, receipt, snapshot); refusal != nil {
+						return refusal
+					}
+				}
+				for i, event := range decision.events {
+					if event.Record == receipt {
+						decision.events[i].Changed = slices.Clone(decision.changed[event.App+"/"+receipt.GetChangeId()])
+					}
+				}
+			}
 			if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{Private: true}); err != nil {
 				return err
+			}
+			if context.DraftsOnly {
+				continue
 			}
 			if err := view.registerInstalledAsset(plan); err != nil {
 				return err
@@ -100,13 +130,12 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	}
 	for _, asset := range candidate.Assets {
 		assets[asset.Ref] = asset
-		if !hasDraft[asset.Ref] {
+		if !hasDraft[asset.Ref] && !context.DraftsOnly {
 			if err := declare(asset); err != nil {
 				return nil, nil, err
 			}
 		}
 	}
-	var receipt *pb.ChangeRecord
 	for ordinal, draft := range drafts {
 		et := decision.records.Type(draft.Type)
 		if et == nil {

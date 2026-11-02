@@ -10,7 +10,7 @@ export type Input_ = { name: string; title: string; type: string; choices?: stri
 export function actionInputFields(inputs: Input_[]): Api.Field[] {
   return inputs.map(input => ({
     name: input.name,
-    type: input.type === "integer" ? "integer" : input.type === "decimal" ? "number" : input.type === "date" || input.type === "datetime" ? input.type : input.type === "boolean" ? "boolean" : "string",
+    type: input.type === "integer" ? "integer" : input.type === "decimal" ? "number" : input.type === "date" || input.type === "datetime" ? input.type : input.type === "boolean" ? "boolean" : input.type === "attachment" ? "attachment" : "string",
     ref: input.ref, stereotype:input.stereotype, stereotypes:input.stereotypes, constraints: {...input.constraints, minLength: input.minLength ?? input.constraints?.minLength},
     range: input.range, group: input.group, required: input.required, description: input.title,
     choices: input.type === "choice" ? (input.choices ?? "").split(",").map(value => value.trim()).filter(Boolean) : undefined,
@@ -45,8 +45,8 @@ export const missingInterfaceFields = (fields: Field[], shape: { fields: { name:
 export type Chosen = { kind: "field" | "state" | "action" | "access"; at: number } | undefined;
 
 export const tones = ["info", "success", "warning", "danger", "neutral"];
-export const inputTypes = ["text", "longtext", "integer", "decimal", "date", "datetime", "boolean", "choice", "reference"];
-export const fieldTypes = ["text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference"];
+export const inputTypes = ["text", "longtext", "integer", "decimal", "date", "datetime", "boolean", "choice", "reference", "attachment"];
+export const fieldTypes = ["text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "attachment"];
 export const operators = ["=", "!=", "<", "<=", ">", ">=", "empty", "not empty"];
 export function conditionSubjects(process: Process, action: Action, parent: string, entities: EntityInfo[]) {
   const current = entities.find((entity) => entity.type === parent);

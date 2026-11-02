@@ -14,6 +14,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 )
 
 func (b *Build) connectionEntity() platform.Entity {
@@ -114,6 +115,19 @@ func (b *Build) submitConnectionChecked(c platform.Caller, s *pb.Submission, now
 
 func (b *Build) datasetEntity() platform.Entity {
 	return platform.Entity{Type: DatasetType, Title: "Dataset", Plural: "Datasets", Model: Dataset{}, Display: "title",
+		Validate: func(c platform.Caller, value any) *kernel.Error {
+			next := value.(*Dataset)
+			if current, ok := platform.Get[Dataset](c, next.ID); ok && current.Key != next.Key && next.Key != "" {
+				rows, _, err := DatasetRows(c, next.ID, 0)
+				if err == nil {
+					_, err = dataowner.DatasetTransaction(next.Key, "snapshot", nil, rows)
+				}
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				}
+			}
+			return nil
+		},
 		Description: "Rows as they came from a source or a pipeline: versioned, schema inferred, read only by builders.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"}}
@@ -232,28 +246,21 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 			}
 			payload.Rows, order = rows, append(order, columns...)
 		}
+		var prior []map[string]any
 		if payload.Type != DatasetTransactionSnapshot {
-			prior, _, err := DatasetRows(c, ds.ID, ds.Version)
+			prior, _, err = DatasetRows(c, ds.ID, ds.Version)
 			if err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 			}
-			if payload.Type == DatasetTransactionDelete {
-				removed := map[string]bool{}
-				for _, row := range payload.Rows {
-					key, _ := json.Marshal(row)
-					removed[string(key)] = true
-				}
-				payload.Rows = slices.DeleteFunc(prior, func(row map[string]any) bool {
-					key, _ := json.Marshal(row)
-					return removed[string(key)]
-				})
-			} else {
-				payload.Rows = append(prior, payload.Rows...)
-			}
-			if payload.Rows == nil {
-				payload.Rows = []map[string]any{}
-			}
 		}
+		payload.Rows, err = dataowner.DatasetTransaction(fixed.Key, string(payload.Type), prior, payload.Rows)
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		if payload.Rows == nil {
+			payload.Rows = []map[string]any{}
+		}
+
 		if len(payload.Rows) > ValueSourceRows {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A version holds at most {n} rows", ValueSourceRows)
 		}
@@ -388,6 +395,8 @@ const (
 
 type Dataset struct {
 	platform.Record
+	Key               string              `json:"key,omitempty" title:"Key column"`
+	Stream            bool                `json:"stream,omitempty" title:"Streaming dataset"`
 	Name              string              `json:"name" field:"required,search"`
 	Title             string              `json:"title" field:"required,search"`
 	Keep              int                 `json:"keep,omitempty" title:"Versions kept" help:"How many versions stay readable; default 3"`

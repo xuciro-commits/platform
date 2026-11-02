@@ -228,6 +228,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		if asset.Ref.App != ID || !ValueIntegrationKind(asset.Ref.Kind) {
 			continue
 		}
+
 		rows, err := b.integrationInventory(asset.Ref.Kind)
 		if err != nil {
 			return nil, err
@@ -253,7 +254,27 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 			record = r
 		case Source:
 			r.State, r.Publisher, r.PublisherScopes = "published", ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
+			if r.Stream && r.Dataset != "" && r.Puller == "" {
+				r.Puller, r.PullerScopes = ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
+			}
 			record = r
+		case platform.MediaSet:
+			configuration, err := b.integrationConfiguration(asset)
+			if err != nil {
+				return nil, err
+			}
+			fixed := configuration.(platform.MediaSet)
+			fixed.Record, fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.Record, r.DefinitionVersion, r.Published, r.Versions
+			record = fixed
+		case platform.Schedule:
+			configuration, err := b.integrationConfiguration(asset)
+			if err != nil {
+				return nil, err
+			}
+			fixed := configuration.(platform.Schedule)
+			fixed.Record, fixed.LastRun, fixed.Runner, fixed.RunnerScopes = r.Record, r.LastRun, ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
+			fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
+			record = fixed
 		case Pipeline:
 			r.State = "published"
 			record = r

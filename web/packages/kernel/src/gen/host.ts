@@ -695,6 +695,11 @@ export type AssetRef = {
   name: string;
 };
 
+export type Attachment = {
+  mediaSet: string;
+  item: string;
+};
+
 export type AuditEntry = {
   at: string;
   member: string;
@@ -2090,7 +2095,7 @@ export type FieldInfo = {
   format?: FormatRule[];
   name: string;
   title: string;
-  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines" | "json";
+  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines" | "json" | "attachment";
   required?: boolean;
   search?: boolean;
   readOnly?: boolean;
@@ -2627,6 +2632,47 @@ export type MeView = {
   currency: string;
   account: Account;
   tenant: TenantRecord;
+};
+
+export type MediaItem = {
+  hash: string;
+  name: string;
+  contentType: string;
+  size: number;
+  by: string;
+  at: string;
+};
+
+export type MediaSet = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  name: string;
+  title: string;
+  definitionVersion?: number;
+  published?: string;
+  definitionVersions?: string[];
+  description?: string;
+  version: number;
+  items: MediaItem[];
+};
+
+export type MediaSetVersion = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  mediaSet: string;
+  version: number;
+  items: MediaItem[];
+  by: string;
+  at: string;
+  requestKey?: string;
 };
 
 export type Member = {
@@ -3721,13 +3767,25 @@ export type PipelineRun = {
 };
 
 export type PipelineSchedule = {
-  pipeline: string;
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
   name: string;
   title: string;
+  pipeline: string;
   every: string;
+  enabled: boolean;
+  lastRun?: string;
+  runner?: string;
+  runnerScopes?: string;
+  definitionVersion?: number;
+  published?: string;
+  definitionVersions?: string[];
   lastBuild?: string;
   nextDue?: string;
-  state: string;
 };
 
 export type PolicyRecord = {
@@ -4417,6 +4475,26 @@ export type SavedView = {
   entity: string;
   state: string;
   owner: string;
+};
+
+export type Schedule = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  name: string;
+  title: string;
+  pipeline: string;
+  every: string;
+  enabled: boolean;
+  lastRun?: string;
+  runner?: string;
+  runnerScopes?: string;
+  definitionVersion?: number;
+  published?: string;
+  definitionVersions?: string[];
 };
 
 export type SchemaVersion = {

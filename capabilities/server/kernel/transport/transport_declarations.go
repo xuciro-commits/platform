@@ -246,6 +246,8 @@ func entitySchema(e platform.EntityInfo) map[string]any {
 			p["type"], p["items"] = "array", map[string]any{"type": "string"}
 		case "lines":
 			p["type"] = "array"
+		case "attachment":
+			p = attachmentSchema(p)
 		case "money":
 			p["type"], p["properties"] = "object", map[string]any{"amount": map[string]any{"type": "integer"}, "currency": map[string]any{"type": "string"}}
 		case "date":
@@ -293,6 +295,8 @@ func payloadSchema(a platform.Action) map[string]any {
 			p["type"] = "boolean"
 		case "string[]":
 			p["type"], p["items"] = "array", map[string]any{"type": "string"}
+		case "attachment":
+			p = attachmentSchema(p)
 		case "money":
 			p["type"] = "object"
 		case "date":
@@ -328,4 +332,12 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(digits[i:])
+}
+
+func attachmentSchema(schema map[string]any) map[string]any {
+	schema["type"] = "object"
+	schema["properties"] = map[string]any{"mediaSet": map[string]any{"type": "string", "minLength": 1}, "item": map[string]any{"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+	schema["required"] = []string{"mediaSet", "item"}
+	schema["additionalProperties"] = false
+	return schema
 }

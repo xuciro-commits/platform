@@ -64,6 +64,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []platform.Release
 		installed.RetainOriginal(plan.Image)
 		et.SetRow(id, &installed)
 		draft.records.TrackWrite(plan.Record)
+
 		if err := draft.registerInstalledAsset(plan); err != nil {
 			return nil, err
 		}

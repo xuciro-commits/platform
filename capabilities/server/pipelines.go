@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	transform "platformserver/engine/integrations"
@@ -48,6 +49,18 @@ func (t *Tenant) RunPipelines(now time.Time) {
 		}
 	}
 	t.mu.Unlock()
+	t.runSchedules(fixed, now)
+	for i, p := range fixed {
+		if current, refusal := coordinatedRecordRead(t, context.Background(), func() (build.Pipeline, *kernel.Error) {
+			row, _ := platform.Get[build.Pipeline](t.automation(build.ID, false), p.ID)
+			return row, nil
+		}); refusal == nil {
+			fixed[i].Record = current.Record
+			fixed[i].Requested = current.Requested
+			fixed[i].Runner = current.Runner
+			fixed[i].RunnerScopes = current.RunnerScopes
+		}
+	}
 	for _, p := range fixed {
 		if p.Due(now, versions[p.ID]) || p.State == "published" && changed[p.ID] {
 			t.runPipeline(p, now)
@@ -185,7 +198,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 			run.Error = "Enterprise slice targets are retired; import organization directory records explicitly"
 		} else if plan.Dataset != "" {
 			key := "pipeline:" + run.Execution.ID + ":dataset"
-			if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, plan.Marking, plan.Data, key, run.At); err != nil {
+			if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, plan.Marking, plan.Data, key, run.At, "snapshot"); err != nil {
 				if !t.integrationRefused(build.ID, key) {
 					return
 				}

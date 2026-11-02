@@ -1,3 +1,4 @@
+import { MediaAttachment } from "./MediaAttachment";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { z } from "zod";
 import { defineEntity, type Entity } from "../fields/entity";
@@ -53,6 +54,7 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
     const common = { input:{name:f.name,type:f.type==="integer"?"integer":f.type==="decimal"?"number":f.type==="date"||f.type==="datetime"||f.type==="boolean"||f.type==="json"||f.type==="lines"?f.type:["tags","references"].includes(f.type)?"string[]":"string",required:f.required,description:f.title,constraints:f.constraints,range:f.range,group:f.group}, label: f.title, help: f.help, required: f.required, readOnly: f.readOnly, when: f.when };
     fields[f.name] = (() => {
       switch (f.type) {
+        case "attachment": return { ...json(common), type: "attachment", schema: z.object({ mediaSet: z.string().min(1), item: z.string().min(1) }), display: value => source ? <MediaAttachment source={source} value={value} /> : <span>{value?.item ?? "—"}</span>, editor: ({ id, value, onChange }) => source ? <MediaAttachment id={id} source={source} value={value} onChange={onChange} /> : null };
         case "json": return json(common);
         case "longtext":
           return info.type === "knowledge.document" && f.name === "text"

@@ -93,6 +93,16 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 	switch r := record.(type) {
 	case Connection:
 		_, err = b.ConnectionConfiguration(r)
+	case platform.MediaSet:
+		_, err = b.acceptedIntegration(r, platform.AssetMediaSet)
+	case platform.Schedule:
+		fixed, e := b.ExecutionSchedule(r)
+		if e != nil {
+			return e
+		}
+		if e := b.scheduleEntity().Validate(c, &fixed); e != nil {
+			return e
+		}
 	case Dataset:
 		_, err = b.ExecutionDataset(r)
 	case Listener:
@@ -163,6 +173,29 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 	if ctx.Validate {
 		if ctx.Upgrade {
 			if err := b.validateIntegrationUpgrade(plan); err != nil {
+				return err
+			}
+		}
+	}
+	if plan.Ref.Kind == platform.AssetMediaSet {
+		var set platform.MediaSet
+		var asset platform.ReleaseAsset
+		var definition MediaSetDefinition
+		if err := json.Unmarshal(plan.Image, &set); err != nil {
+			return err
+		}
+		if err := ValueDecodeIntegration([]byte(set.Published), &asset); err != nil {
+			return err
+		}
+		if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
+			return err
+		}
+		files, ok := b.files.(platform.MediaFiles)
+		if !ok {
+			return fmt.Errorf("Media content storage is unavailable")
+		}
+		for hash, raw := range definition.Blobs {
+			if err := files.StoreMedia(hash, "application/octet-stream", raw); err != nil {
 				return err
 			}
 		}

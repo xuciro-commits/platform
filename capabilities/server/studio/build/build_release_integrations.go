@@ -106,8 +106,20 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 			return asset, err
 		}
 		body = SourceDefinition{ObjectBindings: objectBindings(r.Object), Name: r.Name, Title: r.Title, Connection: conn, Profile: r.Profile, URL: r.URL, Entity: r.Entity, Filter: r.Filter, Since: r.Since, Path: r.Path, Dataset: dataset, Object: r.Object, Key: r.Key, Mapping: r.Mapping, Stream: r.Stream, Every: r.Every}
+	case platform.MediaSet:
+		definition, err := b.mediaSetDefinition(r)
+		if err != nil {
+			return asset, err
+		}
+		body = definition
+	case platform.Schedule:
+		pipeline, err := b.integrationName(platform.AssetPipeline, r.Pipeline)
+		if err != nil {
+			return asset, err
+		}
+		body = ScheduleDefinition{Name: r.Name, Title: r.Title, Pipeline: pipeline, Every: r.Every, Enabled: r.Enabled}
 	case Dataset:
-		body = DatasetDefinition{Name: r.Name, Title: r.Title, Keep: r.Keep, Marking: r.Marking}
+		body = DatasetDefinition{Key: r.Key, Stream: r.Stream, Name: r.Name, Title: r.Title, Keep: r.Keep, Marking: r.Marking}
 	case Pipeline:
 		input, err := b.integrationName(platform.AssetDataset, r.Input)
 		if err != nil {
@@ -283,7 +295,7 @@ func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAss
 
 func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
 	var out []platform.ReleaseAsset
-	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
+	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetMediaSet, platform.AssetSchedule, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
 		rows, err := b.integrationInventory(kind)
 		if err != nil {
 			return nil, err
@@ -313,6 +325,8 @@ func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
 				installed = r.State == "published"
 			case Source:
 				installed = r.State == "published"
+			case platform.MediaSet, platform.Schedule:
+				installed = true
 			case Dataset:
 				installed = true
 			case Pipeline:
@@ -448,6 +462,22 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 			return nil, err
 		}
 		record = Source{Name: d.Name, Title: d.Title, Connection: conn, Profile: d.Profile, URL: d.URL, Entity: d.Entity, Filter: d.Filter, Since: d.Since, Path: d.Path, Dataset: dataset, Object: d.Object, Key: d.Key, Mapping: d.Mapping, Stream: d.Stream, Every: d.Every}
+	case platform.AssetMediaSet:
+		var d MediaSetDefinition
+		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
+			return nil, err
+		}
+		record = platform.MediaSet{Name: d.Name, Title: d.Title, Description: d.Description, Version: d.Version, Items: d.Items}
+	case platform.AssetSchedule:
+		var d ScheduleDefinition
+		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
+			return nil, err
+		}
+		pipeline, err := b.integrationID(platform.AssetPipeline, d.Pipeline)
+		if err != nil {
+			return nil, err
+		}
+		record = platform.Schedule{Name: d.Name, Title: d.Title, Pipeline: pipeline, Every: d.Every, Enabled: d.Enabled}
 	case platform.AssetDataset:
 		var d DatasetDefinition
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -456,7 +486,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		if d.Name != asset.Ref.Name || d.Keep < 0 {
 			return nil, fmt.Errorf("invalid dataset definition")
 		}
-		record = Dataset{Name: d.Name, Title: d.Title, Keep: d.Keep, Marking: d.Marking}
+		record = Dataset{Key: d.Key, Stream: d.Stream, Name: d.Name, Title: d.Title, Keep: d.Keep, Marking: d.Marking}
 	case platform.AssetPipeline:
 		var d PipelineDefinition
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {

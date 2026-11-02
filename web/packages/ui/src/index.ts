@@ -83,6 +83,7 @@ export { aggregateQuery, aggregateValues, columnOf, type ChartSpec, type ChartDa
 export { Inbox, RecordList, groupable, measurable, type ListState, RecordPage, useRecordView, RecordLinks, RecordStatus, RecordHistory, Tasks, StatusBar, entityFrom, setCurrency, type Options, type InboxTask, type Lifecycle, type State, type EntityInfo, type FieldInfo, type EntityRecord, type RecordQuery, type RecordPageData, type InterfaceRecordIdentity, type InterfaceRecordData, type InterfaceRecordPageData, type RecordView, type RecordChange, type RecordSource, type Money } from "./records/Records";
 export {useActionAvailability,actionAvailability,Reasoned,type ActionAvailability,type ActionTarget} from "./records/ActionAvailability";
 export { RecordWorkspace } from "./records/RecordWorkspace";
+export { MediaAttachment } from "./records/MediaAttachment";
 export { RecordLookup, InterfaceRecordLookup } from "./records/RecordLookup";
 export {RecordTimeline,type TimelineFields} from "./records/RecordTimeline";
 export {RecordKanban,type KanbanLane,type KanbanMove} from "./records/RecordKanban";

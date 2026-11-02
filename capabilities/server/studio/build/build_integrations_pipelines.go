@@ -303,7 +303,7 @@ type Pipeline struct {
 	Key               string                          `json:"key,omitempty" title:"Record id column"`
 	Marking           string                          `json:"marking,omitempty" field:"readonly" title:"Marking"`
 	OutputEnterprise  *EnterpriseTarget               `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
-	Every             string                          `json:"every,omitempty" title:"Run every"`
+	Every             string                          `json:"every,omitempty" field:"readonly" title:"Run every"`
 	State             string                          `json:"state" field:"readonly"`
 	Runner            string                          `json:"runner,omitempty" field:"readonly" title:"Runs as"`
 	RunnerScopes      string                          `json:"runnerScopes,omitempty" field:"readonly" type:"json"`
@@ -350,22 +350,8 @@ func (p Pipeline) Due(now time.Time, inputVersion int) bool {
 	if inputVersion > p.Last.Input {
 		return true
 	}
-	if next := p.NextDue(); next != nil && !now.Before(*next) {
-		return true
-	}
-	return false
-}
 
-func (p Pipeline) NextDue() *time.Time {
-	if p.Last == nil || p.Every == "" {
-		return nil
-	}
-	every, err := time.ParseDuration(p.Every)
-	if err != nil {
-		return nil
-	}
-	next := p.Last.At.Add(every)
-	return &next
+	return false
 }
 
 func (p Pipeline) ObjectRows(rows []map[string]any) []SourceRow {

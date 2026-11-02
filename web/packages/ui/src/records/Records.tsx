@@ -58,6 +58,7 @@ export type RecordSource = {
   ruleIdentity?: {me:string;timezone:string};
   entity: (type: string) => EntityInfo | undefined;
   list: (type: string, query: RecordQuery) => Promise<RecordPageData>;
+  downloadMedia?: (id: string, hash: string) => Promise<{ blob: Blob; name: string }>;
   exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;
   importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;
   get: (type: string, id: string) => Promise<RecordView>;

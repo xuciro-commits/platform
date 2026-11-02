@@ -21,7 +21,7 @@ type Record = { id: string; title: string; name: string; state: string; evaluati
 type EvaluationPlan = { id: string; name?: string; title: string; function?: string; evaluation?: unknown[] };
 type EvaluationReport = { id: string; candidate: string; function: string; state: string; quality: number; costUsd: number; costComplete: boolean; peakLatencyMillis: number; attempts: unknown[] };
 const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
-  ...resourceKinds.filter((item) => item.kind !== "action" && item.kind !== "automation").map((item) => ({ kind: item.kind as ReleaseKind, type: item.type, label: item.plural })),
+  ...resourceKinds.filter((item) => item.kind !== "action" && item.kind !== "automation").map((item) => ({ kind: (item.kind === "table" ? item.kind : item.ref ?? item.kind) as ReleaseKind, type: item.type, label: item.plural })),
   { kind: "app", type: "build.app", label: "Applications" },
 ];
 export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
@@ -116,7 +116,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
   const plans = useRecordInventory<EvaluationPlan>("build.testplan", 1000, builder);
   const reports = useRecordInventory<EvaluationReport>("build.evaluation", 1000, mayRelease);
-  const resourceKind = resourceKinds.find(item => item.kind === kind);
+  const resourceKind = resourceKinds.find(item => (item.kind === "table" ? item.kind : item.ref ?? item.kind) === kind);
   const records = (query.isError ? [] : query.data?.records ?? []).filter(record => {
     if (resourceKind && kind !== "flow" && !matchesResourceKind(resourceKind, record)) return false;
     if (!scope) return true;

@@ -50,7 +50,10 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 		if err != nil {
 			return saved, err
 		}
-		if saved.Version == 4 {
+		if err := draft.applyMediaVersionImages(saved.MediaVersions); err != nil {
+			return saved, err
+		}
+		if saved.Version >= 4 {
 			candidate, err := platform.ReadCandidate(saved.CandidateID, saved.Bytes)
 			if err != nil {
 				return saved, err
@@ -347,6 +350,16 @@ func (t *Tenant) ActiveRelease() string {
 
 func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedformat.Release) (string, error) {
 	candidateID := saved.CandidateID
+	if saved.Active {
+		snapshots, err := t.prepareMediaVersionImages(saved.Installations)
+		if err != nil {
+			return "", err
+		}
+		if len(snapshots) > 0 {
+			saved.Version = 5
+			saved.MediaVersions = snapshots
+		}
+	}
 	raw, err := acceptedformat.EncodeRelease(saved)
 	if err != nil {
 		return "", err

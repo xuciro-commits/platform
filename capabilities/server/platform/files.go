@@ -84,3 +84,8 @@ type FileInventoryPage struct {
 }
 
 const MaxFileInventoryPage = 1024
+
+type MediaFiles interface {
+	MediaBytes(hash string) ([]byte, error)
+	StoreMedia(hash, contentType string, raw []byte) error
+}

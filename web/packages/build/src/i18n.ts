@@ -1,6 +1,18 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Configure a dataset key before updating or deleting rows": "更新或删除行之前，请先配置数据集的键。",
+  "Every dataset row needs a nonempty key": "数据集的每一行都需要非空键。",
+  "A dataset key is text or a number": "数据集的键必须是文本或数字。",
+  "Dataset keys must be unique": "数据集的键必须唯一。",
+  "A continuous source writes to a streaming dataset": "连续数据源须写入流式数据集。",
+  "A schedule runs every period between 1m and a year": "调度周期须在一分钟至一年之间。",
+  "The schedule run needs a retained build time": "调度运行需要保留的构建时间。",
+  "The scheduled pipeline does not exist": "调度的管道不存在。",
+  "Media set version already denotes different items": "该媒体集版本已指向不同的媒体项。",
+  "Media content differs from its retained item": "媒体内容与保留的媒体项不一致。",
+  "Media content storage is unavailable": "媒体内容存储不可用。",
+
   "Object type group": "对象类型组",
   "Object type groups": "对象类型组",
   "New object type group": "新建对象类型组",
@@ -3059,6 +3071,15 @@ register("zh-CN", {
 });
 
 register("zh-CN", {
+  "New stream": "新建流",
+  "Media sets": "媒体集", "Media set": "媒体集", "New media set": "新建媒体集",
+  "The media set could not be loaded.": "无法加载媒体集。",
+  "The media set could not be saved or loaded. Your draft is still here.": "无法保存或加载媒体集，草稿仍在。",
+  "Current version": "当前版本", "New schedule": "新建调度",
+  "The schedule could not be loaded.": "无法加载调度。",
+  "The schedule could not be saved or loaded. Your draft is still here.": "无法保存或加载调度，草稿仍在。",
+  "Choose a pipeline": "选择管道", "Choose a period": "选择周期", "No key": "无键", "Streaming dataset": "流式数据集", "Flow observation only": "仅用于 Flow 观测", "attachment": "附件",
+
  "Card accent tone": "卡片强调色调",
  "Use an original confirmed record resource and at most four formatted properties. Private titles hide the card; private properties are removed.": "使用原已确认记录资源及最多四个格式化属性；私有标题使整张卡片隐藏，私有属性会被移除。",
  "Bind an original record resource, title and at most four card properties before saving.": "保存前绑定原记录资源、标题及最多四个卡片属性。",

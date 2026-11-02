@@ -63,6 +63,14 @@ func (h hostView) PrepareSystemDefinitions(c platform.Caller, raw json.RawMessag
 		return nil, systemDefinitionRefusal(err)
 	}
 	saved := acceptedformat.Release{Version: 4, Kind: "release-result", Tenant: h.t.ID, App: build.ID, Member: c.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: candidate.Bytes, Active: true, Installations: installations, Bootstrap: bootstrap}
+	snapshots, err := h.t.prepareMediaVersionImages(installations)
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	if len(snapshots) > 0 {
+		saved.Version = 5
+		saved.MediaVersions = snapshots
+	}
 	saved.RequestHash, err = acceptedformat.ReleaseRequestHash(h.t.ID, c.ID, saved.Key, candidate.ID, true)
 	if err != nil {
 		return nil, systemDefinitionRefusal(err)

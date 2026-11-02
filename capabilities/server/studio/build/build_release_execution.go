@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
+	"time"
 )
 
 func (b *Build) ExecutionSource(live Source) (Source, error) {
@@ -326,6 +328,8 @@ type SourceDefinition struct {
 }
 
 type DatasetDefinition struct {
+	Key     string `json:"key,omitempty"`
+	Stream  bool   `json:"stream,omitempty"`
 	Name    string `json:"name"`
 	Title   string `json:"title"`
 	Keep    int    `json:"keep,omitempty"`
@@ -372,7 +376,7 @@ type MatchingDefinition struct {
 
 func ValueIntegrationKind(kind platform.AssetKind) bool {
 	switch kind {
-	case platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation:
+	case platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetMediaSet, platform.AssetSchedule, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation:
 		return true
 	}
 	return false
@@ -436,6 +440,12 @@ func ValueValidateIntegrationDependencies(asset platform.ReleaseAsset) error {
 		expected = append(expected, platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: name})
 	}
 	switch asset.Ref.Kind {
+	case platform.AssetSchedule:
+		var d ScheduleDefinition
+		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
+			return err
+		}
+		add(platform.AssetPipeline, d.Pipeline)
 	case platform.AssetSource:
 		var d SourceDefinition
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -508,6 +518,10 @@ func ValueValidateIntegrationDescriptor(asset platform.ReleaseAsset) error {
 		record = new(ListenerDefinition)
 	case platform.AssetSource:
 		record = new(SourceDefinition)
+	case platform.AssetMediaSet:
+		record = new(MediaSetDefinition)
+	case platform.AssetSchedule:
+		record = new(ScheduleDefinition)
 	case platform.AssetDataset:
 		record = new(DatasetDefinition)
 	case platform.AssetPipeline:
@@ -538,6 +552,15 @@ func ValueValidateIntegrationDescriptor(asset platform.ReleaseAsset) error {
 	case *SourceDefinition:
 		if d.Connection == "" || strings.Contains(d.URL, "://") || !slices.Contains([]string{"", "json", "csv", "odata", "table"}, d.Profile) {
 			return fmt.Errorf("invalid portable source")
+		}
+	case *ScheduleDefinition:
+		every, err := time.ParseDuration(d.Every)
+		if d.Pipeline == "" || err != nil || every < time.Minute || every > 366*24*time.Hour {
+			return fmt.Errorf("invalid schedule definition")
+		}
+	case *MediaSetDefinition:
+		if err := dataowner.CheckMediaDefinition(d.Items, d.History, d.Blobs); err != nil {
+			return err
 		}
 	case *DatasetDefinition:
 		if d.Keep < 0 || !slices.Contains([]string{"", "internal", "confidential", "restricted"}, d.Marking) {

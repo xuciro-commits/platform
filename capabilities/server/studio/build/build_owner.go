@@ -9,6 +9,7 @@ import (
 
 	"platformserver/internal/systemscope"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"slices"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ type Build struct {
 	installationCatalog *platform.Catalog
 	releaseDraftIDs     map[platform.AssetRef]string
 	host                platform.BuildHost
+	files               platform.FileHost
 	ledger              *platform.Ledger
 	installed           map[string]platform.Entity
 	jointEntities       map[string]platform.EntityInfo
@@ -50,6 +52,7 @@ type Build struct {
 }
 
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
+func (b *Build) AttachFiles(h platform.FileHost)  { b.files = h }
 
 func New(tenant string) *Build {
 	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, valueTypes: map[string]ValueType{}, objectTypeGroups: map[string]ObjectTypeGroup{}, queries: map[string]Query{}, functions: map[string]Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
@@ -70,6 +73,7 @@ func New(tenant string) *Build {
 	actions = append(actions, platform.EntityActions(b.sourceEntity())...)
 	actions = append(actions, platform.EntityActions(b.listenerEntity())...)
 	actions = append(actions, platform.EntityActions(b.connectionEntity())...)
+	actions = append(actions, platform.EntityActions(b.scheduleEntity())...)
 	actions = append(actions, platform.EntityActions(b.datasetEntity())...)
 	actions = append(actions, platform.EntityActions(b.datasetVersionEntity())...)
 	actions = append(actions, platform.EntityActions(b.pipelineEntity())...)
@@ -80,6 +84,8 @@ func New(tenant string) *Build {
 	actions = append(actions, confirmationActions()...)
 	actions = append(actions, dispatchActions()...)
 	actions = append(actions, datasetActions()...)
+	actions = append(actions, dataowner.MediaSetActions()...)
+	actions = append(actions, dataowner.ScheduleActions()...)
 	actions = append(actions, pipelineActions()...)
 	actions = append(actions, platform.EntityActions(b.tableEntity())...)
 	actions = append(actions, platform.EntityActions(b.agentEntity())...)
@@ -90,7 +96,7 @@ func New(tenant string) *Build {
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ListenerType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, SampleSetType, ObservationType, BranchType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ListenerType, ConnectionType, DatasetType, DatasetVersionType, platform.ScheduleType, platform.MediaSetType, platform.MediaSetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, SampleSetType, ObservationType, BranchType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType)
 	return b
 }
 
@@ -118,7 +124,8 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.scheduleEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities = append(entities, dataowner.MediaSetEntities()...)
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -300,6 +307,12 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaConnectionChecked {
 		return b.submitConnectionChecked(c, s, now)
 	}
+	if name := s.GetSchema().GetName(); name == platform.SchemaMediaSetAdd || name == platform.SchemaMediaSetRemove {
+		return dataowner.SubmitMediaSet(b.ledger, b.files, c, s, now)
+	}
+	if s.GetSchema().GetName() == platform.SchemaScheduleRan {
+		return dataowner.SubmitScheduleRan(b.ledger, c, s, now)
+	}
 	if s.GetSchema().GetName() == SchemaDatasetLoad {
 		return b.submitDatasetLoad(c, s, now)
 	}
@@ -380,7 +393,8 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agentDraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.scheduleEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities = append(entities, dataowner.MediaSetEntities()...)
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -411,7 +425,7 @@ func (b *Build) ForkDecision() (platform.App, error) {
 	if catalog != nil {
 		catalog = platform.NewCatalog(catalog.All()...)
 	}
-	return &Build{host: b.host, ledger: b.ledger,
+	return &Build{host: b.host, files: b.files, ledger: b.ledger,
 		installationCatalog: catalog,
 		releaseDraftIDs:     maps.Clone(b.releaseDraftIDs), installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointAssets: maps.Clone(b.jointAssets), jointDeclarations: maps.Clone(b.jointDeclarations), jointMode: b.jointMode,
 		linkTypes: maps.Clone(b.linkTypes), propertyTypes: maps.Clone(b.propertyTypes), valueTypes: maps.Clone(b.valueTypes), objectTypeGroups: maps.Clone(b.objectTypeGroups),
@@ -500,7 +514,7 @@ type Field struct {
 	Format      []platform.FormatRule  `json:"format,omitempty" type:"json" field:"aside"`
 	Name        string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
 	Title       string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
-	Type        string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
+	Type        string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,attachment" example:"date"`
 	Choices     string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
 	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"core.partner"`
 	Stereotype  string                 `json:"stereotype,omitempty" title:"Enterprise element type"`
@@ -556,6 +570,7 @@ type IntegrationDefinitions interface {
 	ExecutionConnection(Connection) (Connection, error)
 	ExecutionDataset(Dataset) (Dataset, error)
 	ExecutionPipeline(Pipeline) (Pipeline, error)
+	ExecutionSchedule(platform.Schedule) (platform.Schedule, error)
 	ExecutionWriteback(Writeback) (Writeback, error)
 	ExecutionMatching(Match) (Match, error)
 }

@@ -182,6 +182,7 @@ export class PageSessionStore {
         get aggregate(){return session.source.aggregate;},
         get checkAction(){return session.source.checkAction;},
         get provenance(){return session.source.provenance;},
+        get downloadMedia() { return session.source.downloadMedia; },
         get exportCSV() { return session.source.exportCSV; },
         get scope() { return session.source.scope; }, get revision() { return session.version; },
       };
@@ -404,6 +405,7 @@ export class PageSessionStore {
         get aggregate() { return session.source.aggregate; },
         get checkAction() { return session.source.checkAction; },
         get provenance() { return session.source.provenance; },
+        get downloadMedia() { return session.source.downloadMedia; },
         get exportCSV() { return session.source.exportCSV; },
         get revision() { return session.version; },
         get scope() { return session.source.scope; },

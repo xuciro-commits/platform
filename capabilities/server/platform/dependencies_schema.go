@@ -37,6 +37,10 @@ func CapabilityFieldSchema(kind, description string, choices []string) ValueSche
 		value.Type = "array"
 		value.Items = &item
 		value.MaxItems = 1000
+	case "attachment":
+		value.Type = "object"
+		value.Properties = map[string]ValueSchema{"mediaSet": {Type: "string"}, "item": {Type: "string"}}
+		value.Required = []string{"mediaSet", "item"}
 	case "money":
 		value.Type = "object"
 		value.Properties = map[string]ValueSchema{"amount": {Type: "integer"}, "currency": {Type: "string"}}

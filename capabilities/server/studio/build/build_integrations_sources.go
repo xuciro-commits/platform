@@ -50,7 +50,7 @@ func (b *Build) requestPull(c platform.Caller, record any, _ json.RawMessage, _ 
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if s.Stream {
+	if s.Stream && s.Dataset == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source is consumed through its Flow instance")
 	}
 	if problem := b.prepareSourcePull(c, s); problem != nil {
@@ -68,7 +68,7 @@ func (b *Build) resetCursor(c platform.Caller, record any, _ json.RawMessage, _ 
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if s.Stream {
+	if s.Stream && s.Dataset == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source cursor belongs to its Flow instance")
 	}
 	if problem := b.prepareSourcePull(c, s); problem != nil {
@@ -130,8 +130,8 @@ func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 		}
 		*s = fixed.(Source)
 	}
-	if s.Stream {
-		s.Cursor, s.Last = "", nil
+	if s.Stream && s.Dataset != "" && !c.Replaying {
+		s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
 	}
 	return nil
 }
@@ -153,8 +153,18 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 		return refuse("The incremental column is a plain identifier")
 	}
 	if s.Stream {
-		if s.Profile != "table" || s.Since == "" || s.Object != "" || s.Dataset != "" || s.Key != "" || len(s.Mapping) != 0 || s.Every != "" {
+		if s.Profile != "table" || s.Since == "" || s.Object != "" || s.Key != "" || len(s.Mapping) != 0 || s.Every != "" {
 			return refuse("A continuous source uses an incremental PostgreSQL table, without a materialization target or import schedule")
+		}
+		if s.Dataset != "" {
+			ds, ok := platform.Get[Dataset](c, s.Dataset)
+			if !ok {
+				return refuse("The target dataset does not exist")
+			}
+			fixed, err := b.ExecutionDataset(ds)
+			if err != nil || !fixed.Stream {
+				return refuse("A continuous source writes to a streaming dataset")
+			}
 		}
 		return nil
 	}
@@ -359,7 +369,7 @@ type SourceFailure struct {
 }
 
 func (s Source) Due(now time.Time) bool {
-	if s.State != "published" || s.Stream {
+	if s.State != "published" || s.Stream && s.Dataset == "" {
 		return false
 	}
 	if s.Last != nil && s.Last.Execution != nil && s.Last.Execution.Pending {
@@ -368,7 +378,7 @@ func (s Source) Due(now time.Time) bool {
 	if s.Last != nil && s.Last.DefinitionVersion != s.ExecutionVersion() {
 		return true
 	}
-	if s.Requested {
+	if s.Requested || s.Stream {
 		return true
 	}
 	every, err := time.ParseDuration(s.Every)

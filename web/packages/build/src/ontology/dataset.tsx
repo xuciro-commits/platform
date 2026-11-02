@@ -7,12 +7,12 @@ import { ResourceList } from "../editor/ResourceList";
 import { useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
 import { MarkingField } from "./marking";
-import { Button, ContentTabs, DataTable, FilePicker, Input, PageHeader, Panel, Tag, t, type ColumnDef } from "@platform/ui";
+import { Button, Checkbox, ContentTabs, DataTable, FilePicker, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
 type Field = { name: string; type: string };
 type Load = { at: string; version: number; rows: number; bytes: number; drift?: string[] };
-type Draft = { id: string; revision: number; name: string; title: string; keep?: number; marking?: string; producer?: string; schema?: Field[]; version?: number; last?: Load };
+type Draft = { id: string; revision: number; name: string; title: string; keep?: number; key?: string; stream?: boolean; marking?: string; producer?: string; schema?: Field[]; version?: number; last?: Load };
 type Version = { id: string; version: number; at: string; rows: number; archived?: boolean; data?: Record<string, unknown>[] };
 type VersionRow = { id: string; dataset: string; version: number; type?: string; at: string; rows: number; archived?: boolean };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "" });
@@ -37,9 +37,10 @@ export function DatasetEditor({ id }: { id: string }) {
     id, type: "build.dataset", view: "dataset", empty,
     failure: t("The dataset could not be saved or loaded. Your draft is still here."),
     payload: draft => {
-      return { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0, marking: draft.marking ?? "" };
+      return { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0, marking: draft.marking ?? "", key: draft.key ?? "", stream: !!draft.stream };
     },
   });
+  const [loadType, setLoadType] = useState("snapshot");
   const [creating, setCreating] = useState(false);
   const [shown, setShown] = useState(0);
   const [tab, setTab] = useState("overview");
@@ -55,10 +56,10 @@ export function DatasetEditor({ id }: { id: string }) {
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Datasets"), onClick: () => open({ view: "dataset" }) }]} title={draft.title || t("New dataset")} meta={draft.name ? <span className="font-mono">{draft.name}{draft.version ? ` · v${draft.version}` : ""}</span> : undefined} help={t("Name it, then upload a CSV or point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
       actions={<>
-        {query.data?.record && !dirty && <FilePicker accept=".csv,text/csv" disabled={busy} onFile={file => void perform(async () => {
+        {query.data?.record && !dirty && <><Select aria-label={t("Transaction type")} value={loadType} onChange={event => setLoadType(event.target.value)}>{["snapshot", "append", "update", "delete"].map(type => <option key={type} value={type}>{transactionLabel(type)}</option>)}</Select><FilePicker accept=".csv,text/csv" disabled={busy} onFile={file => void perform(async () => {
           const record = query.data!.record!;
-          if (await decide("build.dataset.load", { type: "build.dataset", id: record.id }, { csv: await file.text(), producer: `upload:${file.name}` }, { expectedRevision: record.revision, onRefused: setError })) await query.refetch();
-        })}>{t("Upload CSV")}</FilePicker>}
+          if (await decide("build.dataset.load", { type: "build.dataset", id: record.id }, { type: loadType, csv: await file.text(), producer: `upload:${file.name}` }, { expectedRevision: record.revision, onRefused: setError })) { await query.refetch(); setShown(0); setTab("preview"); }
+        })}>{t("Upload CSV")}</FilePicker></>}
         <ResourceControls type="build.dataset" record={draft} dirty={dirty} busy={busy} route={{ view: "dataset", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
           operations={holds("build", "builder") && !!draft.schema?.length ? [{ id: "object", label: t("Create object type"), disabled: dirty || !!inputs?.invalid || !latest, run: () => setCreating(true) }] : []} />
       </>} />
@@ -73,6 +74,8 @@ export function DatasetEditor({ id }: { id: string }) {
             <label className={fieldClass}>{t("Dataset title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
             <label className={fieldClass}>{t("Versions kept")}<Input draftKey="versions-kept" type="number" min={1} max={50} value={draft.keep ?? ""} placeholder="3" onChange={(e) => patch({ keep: Number(e.target.value) })} />
               <span className="text-xs text-muted">{t("Older versions keep their row count but lose their rows.")}</span></label>
+            <label className={fieldClass}>{t("Key column")}<Select value={draft.key ?? ""} onChange={event => patch({ key: event.target.value })}><option value="">{t("No key")}</option>{draft.schema?.map(field => <option key={field.name} value={field.name}>{field.name}</option>)}</Select></label>
+            <Checkbox checked={!!draft.stream} onChange={stream => patch({ stream })}>{t("Streaming dataset")}</Checkbox>
             <MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking })} help={t("Raised by what loads it - the connection, the pipeline's input; lowered only here. Confidential and restricted data only reaches object fields that name their readers; restricted never leaves as CSV.")} />
             {draft.producer && <p className="text-xs text-muted">{t("Loaded by")}: <span className="font-mono">{draft.producer}</span></p>}
           </Panel>

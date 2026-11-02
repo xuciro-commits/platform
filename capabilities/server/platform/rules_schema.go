@@ -45,6 +45,8 @@ func RuleCollectionSubjectField(object, of string, lookup func(string) (EntityIn
 
 func RuleFieldKind(kind string) string {
 	switch kind {
+	case "attachment":
+		return "json"
 	case "longtext", "text", "string":
 		return "text"
 	case "number":

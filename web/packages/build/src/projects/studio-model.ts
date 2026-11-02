@@ -23,7 +23,7 @@ const domains = [
     { id: "pages", title: "Pages", kinds: ["page"], links: [{ title: "Templates", view: "studio-templates" }] },
   ] },
   { id: "integration", title: "Connections", description: "Connections, sources, observations and data delivery", groups: [
-    { id: "data", title: "Connections and data", kinds: ["connection", "source", "listener", "dataset", "pipeline", "matching", "writeback"] },
+    { id: "data", title: "Connections and data", kinds: ["connection", "source", "listener", "dataset", "mediaset", "schedule", "pipeline", "matching", "writeback"] },
     { id: "observations", title: "Observations and protocols", kinds: ["observation", "protocol"], links: [{ title: "Integration health", view: "integration-health" }] },
   ] },
   { id: "release", title: "Release", description: "Samples, evaluation, candidates and delivery", groups: [
@@ -51,6 +51,7 @@ export function studioAreaForRoute(route?: Route): StudioArea {
     if (area.groups.some(group => group.links?.some(link => link.view === route?.view))) return area.id;
     if (resourceKinds.some(kind => kind.view === route?.view && area.kinds.includes(kind.ref ?? kind.kind))) return area.id;
   }
+  if (["streams", "stream", "schedules"].includes(route?.view ?? "")) return "integration";
   if (route?.view === "runs") return "logic";
   if (route?.view === "page-preview" || params?.kind === "page") return "interface";
   if (["definition", "observations"].includes(route?.view ?? "")) return areaForKind(route?.view === "observations" ? "observation" : params?.kind);

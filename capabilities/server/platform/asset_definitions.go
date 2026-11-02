@@ -171,7 +171,7 @@ type PropertyType struct {
 }
 
 func (p PropertyType) Check() error {
-	if !pageNodeID.MatchString(p.Name) || p.Title == "" || len(p.Title) > 1024 || strings.ContainsAny(p.Title, "\"\\") || p.Description == "" || len(p.Description) > 16384 || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "date", "datetime", "boolean"}, p.Type) {
+	if !pageNodeID.MatchString(p.Name) || p.Title == "" || len(p.Title) > 1024 || strings.ContainsAny(p.Title, "\"\\") || p.Description == "" || len(p.Description) > 16384 || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "date", "datetime", "boolean", "attachment"}, p.Type) {
 		return fmt.Errorf("property type needs an identity, scalar type and bounded meaning")
 	}
 	return nil

@@ -29,6 +29,8 @@ const (
 	AssetSource          AssetKind = "source"
 	AssetListener        AssetKind = "listener"
 	AssetDataset         AssetKind = "dataset"
+	AssetMediaSet        AssetKind = "mediaset"
+	AssetSchedule        AssetKind = "schedule"
 	AssetPipeline        AssetKind = "pipeline"
 	AssetWriteback       AssetKind = "writeback"
 	AssetMatching        AssetKind = "matching"
@@ -63,7 +65,7 @@ func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + 
 
 func (r AssetRef) Check() error {
 	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetValueType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
-		AssetConnection, AssetSource, AssetListener, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetAgent, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation, AssetAlert, AssetObjectTypeGroup}, r.Kind) {
+		AssetConnection, AssetSource, AssetListener, AssetDataset, AssetMediaSet, AssetSchedule, AssetPipeline, AssetWriteback, AssetMatching, AssetAgent, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation, AssetAlert, AssetObjectTypeGroup}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil

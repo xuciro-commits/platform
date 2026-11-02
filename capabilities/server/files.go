@@ -9,10 +9,12 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -52,37 +54,114 @@ func (t *Tenant) SweepUploads(now time.Time) {
 	if len(old) == 0 {
 		return
 	}
-	c := t.automation(platform.FileApp, false)
-	attached, _, _ := platform.Find[platform.File](c, platform.Query{Limit: 100000, Archived: true})
-	for _, hash := range old {
-		if !slices.ContainsFunc(attached, func(f platform.File) bool { return f.Hash == hash }) {
-			t.files().Delete(context.Background(), t.ID+"/"+hash)
+	_, _ = coordinatedRecordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
+		retained := map[string]bool{}
+		if t.app(platform.FileApp) != nil {
+			if !retainUploadHashes[platform.File](t.automation(platform.FileApp, false), func(file platform.File) { retained[file.Hash] = true }) {
+				return struct{}{}, nil
+			}
 		}
-		t.uploads.Forget(hash)
-	}
+		if t.app("build") != nil {
+			keep := func(items []platform.MediaItem) {
+				for _, item := range items {
+					retained[item.Hash] = true
+				}
+			}
+			caller := t.automation("build", false)
+			if !retainUploadHashes[platform.MediaSet](caller, func(set platform.MediaSet) { keep(set.Items) }) ||
+				!retainUploadHashes[platform.MediaSetVersion](caller, func(version platform.MediaSetVersion) { keep(version.Items) }) {
+				return struct{}{}, nil
+			}
+		}
+		for _, hash := range old {
+			if !retained[hash] {
+				if err := t.files().Delete(context.Background(), t.ID+"/"+hash); err != nil {
+					continue
+				}
+			}
+			t.uploads.Forget(hash)
+		}
+		return struct{}{}, nil
+	})
 }
 
-func (t *Tenant) Download(w http.ResponseWriter, m platform.Member, id string, now time.Time) {
-	v, err := t.RecordOf(m, platform.FileType, id, now)
-	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	f := v.Record.(platform.File)
-	body, size, gerr := t.files().Get(context.Background(), t.ID+"/"+f.Hash)
+func (t *Tenant) downloadBytes(w http.ResponseWriter, hash, name, contentType string) {
+	body, size, gerr := t.files().Get(context.Background(), t.ID+"/"+hash)
 	if gerr != nil {
 		http.Error(w, "the file's bytes are not in the store", http.StatusServiceUnavailable)
 		return
 	}
 	defer body.Close()
-	kind := f.ContentType
+	kind := contentType
 	if _, _, perr := mime.ParseMediaType(kind); perr != nil || kind == "" {
 		kind = "application/octet-stream"
 	}
 	w.Header().Set("Content-Type", kind)
 	w.Header().Set("Content-Length", fmt.Sprint(size))
-	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.PathEscape(strings.ReplaceAll(f.Name, "\"", "")))
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.PathEscape(strings.ReplaceAll(name, "\"", "")))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "sandbox")
 	io.Copy(w, body)
+}
+
+func retainUploadHashes[T any](caller platform.Caller, keep func(T)) bool {
+	for offset := 0; ; {
+		values, total, err := platform.Find[T](caller, platform.Query{Offset: offset, Limit: 1000, Archived: true, Sort: []string{"id"}})
+		if err != nil {
+			return false
+		}
+		for _, value := range values {
+			keep(value)
+		}
+		offset += len(values)
+		if offset >= total {
+			return true
+		}
+		if len(values) == 0 {
+			return false
+		}
+	}
+}
+
+func (t *Tenant) downloadMediaItem(w http.ResponseWriter, r *http.Request, member platform.Member, now time.Time) {
+	id := r.PathValue("id")
+	view, refusal := t.recordOf(member, platform.MediaSetType, id, now)
+	if refusal != nil {
+		Reply(w, nil, refusal)
+		return
+	}
+	set := view.Record.(platform.MediaSet)
+	items := set.Items
+	versions, _, refusal := platform.Find[platform.MediaSetVersion](t.automation("build", false), platform.Query{Domain: platform.Raw([][]any{{"mediaSet", "=", id}}), Sort: []string{"version"}, Limit: 1000})
+	if refusal != nil {
+		Reply(w, nil, refusal)
+		return
+	}
+
+	if value := r.URL.Query().Get("version"); value != "" {
+		version, err := strconv.Atoi(value)
+		if err != nil || version < 1 {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		if version != set.Version {
+			items = nil
+		}
+		for _, snapshot := range versions {
+			if snapshot.Version == version {
+				items = snapshot.Items
+			}
+		}
+	} else {
+		for _, snapshot := range versions {
+			items = append(items, snapshot.Items...)
+		}
+	}
+	for _, item := range items {
+		if item.Hash == r.PathValue("hash") {
+			t.downloadBytes(w, item.Hash, item.Name, item.ContentType)
+			return
+		}
+	}
+	Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND})
 }

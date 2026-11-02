@@ -124,7 +124,7 @@ func CheckConditions(fields []Field) error {
 	return nil
 }
 
-var fieldTypes = []string{"text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference"}
+var fieldTypes = []string{"text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "attachment"}
 
 func Named(s string) bool {
 	if s == "" || !unicode.IsLetter(rune(s[0])) {
@@ -293,6 +293,8 @@ func goType(kind string) reflect.Type {
 		return reflect.TypeFor[int]()
 	case "decimal":
 		return reflect.TypeFor[float64]()
+	case "attachment":
+		return reflect.TypeFor[*platform.Attachment]()
 	case "money":
 		return reflect.TypeFor[platform.Money]()
 	case "datetime":

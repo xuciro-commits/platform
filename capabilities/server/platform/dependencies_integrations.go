@@ -61,6 +61,7 @@ func describeIntegrationDependencies(asset ReleaseAsset, historical bool, object
 		return out, nil
 	}
 	var integration struct {
+		Pipeline      string `json:"pipeline"`
 		Connection    string `json:"connection"`
 		Dataset       string `json:"dataset"`
 		Object        string `json:"object"`
@@ -80,7 +81,7 @@ func describeIntegrationDependencies(asset ReleaseAsset, historical bool, object
 	if err := json.Unmarshal(asset.Body, &integration); err != nil {
 		return out, err
 	}
-	for kind, names := range map[AssetKind][]string{AssetConnection: {integration.Connection}, AssetDataset: {integration.Dataset, integration.Input, integration.OutputDataset}} {
+	for kind, names := range map[AssetKind][]string{AssetPipeline: {integration.Pipeline}, AssetConnection: {integration.Connection}, AssetDataset: {integration.Dataset, integration.Input, integration.OutputDataset}} {
 		for _, name := range names {
 			if name != "" {
 				add(AssetRef{App: asset.Ref.App, Kind: kind, Name: name})

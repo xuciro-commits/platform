@@ -42,7 +42,7 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 
 ## 7.10 内核不变量
 
-位于 `capabilities/server/invariants_test.go`（夹具在 `invariants_harness_test.go`），只测这些性质：
+位于 `capabilities/server/invariants_test.go` 及同目录的 `*_invariants_test.go`（夹具在 `invariants_harness_test.go`），只测这些性质：
 
 | 编号 | 不变量 |
 |---|---|

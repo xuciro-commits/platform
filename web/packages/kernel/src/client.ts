@@ -278,6 +278,14 @@ export class EdgeClient {
   }
 
 
+  async downloadMedia(id: string, hash: string, version?: number): Promise<{ blob: Blob; name: string }> {
+    const path = `/v1/media-sets/${encodeURIComponent(id)}/items/${encodeURIComponent(hash)}${version ? `?version=${version}` : ""}`;
+    const response = await fetch(this.connection.server + path, { headers: this.headers() });
+    if (!response.ok) throw new Error(`download failed: ${response.status}`);
+    const name = response.headers.get("Content-Disposition")?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    return { blob: await response.blob(), name: name ? decodeURIComponent(name) : "" };
+  }
+
   async download(id: string, options:{signal?:AbortSignal;maxBytes?:number}={}): Promise<Blob> {
     const limit=options.maxBytes;
     if(limit!==undefined&&(!Number.isSafeInteger(limit)||limit<0))throw new Error("Invalid download byte budget");

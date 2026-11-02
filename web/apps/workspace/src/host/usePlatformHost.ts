@@ -157,6 +157,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       watchEnterprise: changed => client.subscribeRead("/v1/enterprise-query?limit=1", changed),
       entity: (type) => entities.find((e) => e.type === type),
       list: (type, q) => client.records<RecordPageData>(type, q),
+      downloadMedia: (id, hash) => client.downloadMedia(id, hash),
       exportCSV: (type, q) => client.exportCSV(type, q),
       importCSV: (type, csv, preview) => client.importCSV(type, new Blob([csv], { type: "text/csv" }), preview),
       interfaceList: (name,q) => client.get<InterfaceRecordPageData>(client.interfaceRecordsPath(name,q)),

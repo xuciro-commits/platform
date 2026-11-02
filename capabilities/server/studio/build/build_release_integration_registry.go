@@ -18,6 +18,10 @@ func integrationType(kind platform.AssetKind) string {
 		return ListenerType
 	case platform.AssetSource:
 		return SourceType
+	case platform.AssetMediaSet:
+		return platform.MediaSetType
+	case platform.AssetSchedule:
+		return platform.ScheduleType
 	case platform.AssetDataset:
 		return DatasetType
 	case platform.AssetPipeline:
@@ -33,7 +37,7 @@ func integrationType(kind platform.AssetKind) string {
 }
 
 func integrationKindOf(typ string) platform.AssetKind {
-	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
+	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetMediaSet, platform.AssetSchedule, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
 		if integrationType(kind) == typ {
 			return kind
 		}
@@ -52,6 +56,10 @@ func integrationMetadata(record any) (name string, version int, published string
 	case Listener:
 		return r.Name, r.DefinitionVersion, r.Published, r.Versions
 	case Source:
+		return r.Name, r.DefinitionVersion, r.Published, r.Versions
+	case platform.MediaSet:
+		return r.Name, r.DefinitionVersion, r.Published, r.Versions
+	case platform.Schedule:
 		return r.Name, r.DefinitionVersion, r.Published, r.Versions
 	case Dataset:
 		return r.Name, r.DefinitionVersion, r.Published, r.Versions
@@ -115,6 +123,12 @@ saved:
 	case Source:
 		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
 		return r, nil
+	case platform.MediaSet:
+		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
+		return r, nil
+	case platform.Schedule:
+		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
+		return r, nil
 	case Dataset:
 		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
 		return r, nil
@@ -161,6 +175,10 @@ func integrationRecordType(kind platform.AssetKind) reflect.Type {
 		return reflect.TypeFor[Listener]()
 	case platform.AssetSource:
 		return reflect.TypeFor[Source]()
+	case platform.AssetMediaSet:
+		return reflect.TypeFor[platform.MediaSet]()
+	case platform.AssetSchedule:
+		return reflect.TypeFor[platform.Schedule]()
 	case platform.AssetDataset:
 		return reflect.TypeFor[Dataset]()
 	case platform.AssetPipeline:
@@ -182,6 +200,10 @@ func integrationRecord(record any) platform.Record {
 	case Listener:
 		return r.Record
 	case Source:
+		return r.Record
+	case platform.MediaSet:
+		return r.Record
+	case platform.Schedule:
 		return r.Record
 	case Dataset:
 		return r.Record
