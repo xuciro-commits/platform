@@ -9,7 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	ruleexpr "platformserver/expr"
-	"platformserver/journal"
+	"platformserver/kernel/journal"
 	"platformserver/platform"
 	"reflect"
 	"slices"

@@ -15,16 +15,6 @@ function ProjectionStatus({ projection }: { projection?: Projection }) {
     {projection.problems?.map(problem => <p key={problem} className="break-words font-mono text-2xs text-danger">{problem}</p>)}
   </div>;
 }
-const strategies = [
-  ["edits-win", "Edits win (default)"],
-  ["latest-source-time", "Latest source time wins"],
-  ["edit-only", "Edits only"],
-] as const;
-const strategyHelp: Record<string, string> = {
-  "edits-win": "A person's edit is kept; the source fills a value only while no edit exists.",
-  "latest-source-time": "The newer of the person's edit and the source time wins.",
-  "edit-only": "The attribute changes only by edits; pulled values are recorded but never applied.",
-};
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function ObjectDataSourcesEditor({ process, parent, refused, onChange }: { process: Process; parent: string; refused?: string; onChange: (next: Process) => void }) {
@@ -68,7 +58,7 @@ export function ObjectDataSourcesEditor({ process, parent, refused, onChange }: 
           {binding.columns.map((column, row) => {
             const attribute = writable.find(field => field.name === column.attribute);
             const update = (values: Partial<Api.DataSourceColumn>) => patch(at, { columns: binding.columns.map((entry, index) => index === row ? { ...entry, ...values } : entry) });
-            const strategy = column.strategy || "edits-win";
+
             return <div key={row} role="group" aria-label={t("Column mapping {number}", { number: row + 1 })} className="grid gap-1">
               <div className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2">
                 <Input aria-label={t("Column")} value={column.column} placeholder="sku" onChange={event => update({ column: event.target.value })} />
@@ -76,11 +66,10 @@ export function ObjectDataSourcesEditor({ process, parent, refused, onChange }: 
                   <option value="">{t("Choose a field")}</option>
                   {column.attribute && !attribute && <option value={column.attribute}>{column.attribute} · {t("Unavailable field")}</option>}
                   {writable.map(field => <option key={field.name} value={field.name}>{field.title || field.name}</option>)}</Select>
-                <Select aria-label={t("When both have a value")} value={strategy} onChange={event => update({ strategy: event.target.value === "edits-win" ? undefined : event.target.value })}>
-                  {strategies.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</Select>
+                <span className="text-xs text-muted">{t("Edits win")}</span>
                 <Button size="sm" variant="ghost" aria-label={t("Remove column")} onClick={() => patch(at, { columns: binding.columns.filter((_, index) => index !== row) })}><Trash2 /></Button>
               </div>
-              <p className="pl-1 text-xs text-muted">{t(strategyHelp[strategy] ?? strategyHelp["edits-win"]!)}</p>
+              <p className="pl-1 text-xs text-muted">{t("Action edits override source values. Source deletion removes objects created by that source.")}</p>
             </div>;
           })}
           <div><Button size="sm" onClick={() => patch(at, { columns: [...binding.columns, { column: "", attribute: writable.find(field => !bindings.some(entry => entry.columns.some(column => column.attribute === field.name)))?.name ?? "" }] })}><Plus />{t("Add a column")}</Button></div>

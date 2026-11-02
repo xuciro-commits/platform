@@ -1,0 +1,528 @@
+package host
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/kernel/acceptedformat"
+	"platformserver/platform"
+	controlowner "platformserver/services/security/control"
+	"slices"
+	"strings"
+	"time"
+)
+
+func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
+	defer func() {
+		if p := recover(); p != nil {
+			t.quarantine(fmt.Errorf("agent answer cannot stage: %v", p))
+		}
+	}()
+	draft := t.newStagedDecision()
+	draft.at = at
+	agent := draft.stateApp(t.agents).(platform.AgentRuntime)
+	run, _ := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), b.Run)
+	if b.Evaluation != nil {
+		run.Agent = b.Evaluation.Agent
+	}
+	member := agent.AgentPrincipal(run.Agent)
+	if b.Evaluation != nil && b.Evaluation.Candidate != "" {
+		member = platform.Member{ID: "app:" + platform.AgentApp, Tenant: t.ID}
+	}
+	c := platform.NewCaller(draft, member, platform.AgentApp, false, true)
+	r := acceptedformat.RuntimeAgent{Version: 1, Kind: "agent-result", Tenant: t.ID, App: platform.AgentApp, Member: member.ID, At: at.UTC(), Step: b}
+	var err error
+	if b.Evaluation == nil && b.Usage.Model != "" {
+		r.UsageBefore, err = t.usagePredecessor()
+		if err != nil {
+			t.quarantine(err)
+			return
+		}
+	}
+	refusal := agent.ApplyAgentStepCaller(c, b, at)
+	if refusal == nil {
+		refusal = draft.failure
+	}
+	if refusal == nil {
+		refusal = draft.answerRequests(at)
+	}
+	if refusal == nil {
+		refusal = draft.stageObservers()
+	}
+	if refusal != nil || len(draft.events) == 0 {
+		t.quarantine(fmt.Errorf("agent answer has no complete decision: %v", refusal))
+		return
+	}
+	last := draft.events[len(draft.events)-1]
+	r.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
+	if err != nil {
+		t.quarantine(err)
+		return
+	}
+	r.Key = "agent:" + last.Record.GetSubmission().GetIdempotencyKey()
+	r.RequestHash, err = acceptedformat.AgentRequestHash(r)
+	if err == nil {
+		r.Digest, err = acceptedformat.DigestAgent(r)
+	}
+	var raw []byte
+	if err == nil {
+		raw, err = json.Marshal(r)
+	}
+	if err == nil {
+		_, err = acceptedformat.DecodeAgent(raw)
+	}
+	if err != nil {
+		t.quarantine(err)
+		return
+	}
+	principal, _ := json.Marshal(member)
+	committed, err := t.acceptResult(Entry{App: platform.AgentApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, r.Key, r.RequestHash)
+	if err != nil {
+		return
+	}
+	saved, err := acceptedformat.DecodeAgent(committed)
+	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
+		t.quarantine(fmt.Errorf("committed agent answer differs: %v", err))
+		return
+	}
+	if _, err = t.applyAcceptedAgent(committed); err != nil {
+		t.quarantine(err)
+		return
+	}
+	t.acceptedResultApplied()
+	t.enqueue(saved.At)
+	t.changedOwner(platform.AgentApp)
+}
+
+func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedformat.RuntimeAgent, error) {
+	r, err := acceptedformat.DecodeAgent(raw)
+	if err != nil {
+		return r, err
+	}
+	if r.Tenant != t.ID || t.agents == nil {
+		return r, fmt.Errorf("agent result belongs to another tenant")
+	}
+	if r.UsageBefore != "" {
+		before, err := t.usagePredecessor()
+		if err != nil || before != r.UsageBefore {
+			return r, fmt.Errorf("agent usage predecessor differs: %v", err)
+		}
+	}
+	batch, _, _ := acceptedformat.DecodeBatch(r.Changes)
+	if applied, err := t.applyAcceptedBatch(t.agents.AcceptedLedger(), r.Changes); err != nil || !applied {
+		return r, fmt.Errorf("agent result application: %v (applied=%t)", err, applied)
+	}
+	if r.UsageBefore != "" {
+		t.ai.Meter(r.Step.Usage)
+	}
+	t.publishAcceptedBatch(batch)
+	return r, nil
+}
+
+func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, error) {
+	result, err := acceptedformat.DecodeEffect(raw)
+	if err != nil {
+		return result, false, err
+	}
+	if result.Tenant != t.ID {
+		return result, false, fmt.Errorf("effect result belongs to another tenant")
+	}
+	t.opsMu.Lock()
+	var current *effect
+	for _, x := range t.outbound {
+		if x.ID == result.Before.ID {
+			current = x
+			break
+		}
+	}
+	var before acceptedformat.EffectState
+	if current != nil {
+		before = acceptedformat.EffectState{Effect: current.Effect, Since: current.since}
+	}
+	t.opsMu.Unlock()
+	beforeHash, err := platform.CanonicalDigest(before)
+	savedHash, savedErr := platform.CanonicalDigest(result.Before)
+	if current == nil || err != nil || savedErr != nil || beforeHash != savedHash {
+		return result, false, fmt.Errorf("effect result predecessor differs")
+	}
+	works, priorWork, savedWork, err := t.prepareOperationFinish(result.Before.Effect, result.Outcome)
+	if err != nil {
+		return result, false, err
+	}
+	if works != nil {
+		priorHash, _ := platform.CanonicalDigest(priorWork)
+		expectedPrior, _ := platform.CanonicalDigest(result.WorkBefore)
+		workHash, _ := platform.CanonicalDigest(savedWork)
+		expectedWork, _ := platform.CanonicalDigest(result.Work)
+		if priorHash != expectedPrior || workHash != expectedWork {
+			return result, false, fmt.Errorf("operation result ownership differs")
+		}
+	}
+	if result.Usage != nil {
+		if t.ai == nil {
+			return result, false, fmt.Errorf("effect result needs the AI meter")
+		}
+		state, err := t.ai.Snapshot()
+		currentHash, hashErr := platform.CanonicalDigest(state)
+		if err != nil || hashErr != nil || currentHash != result.UsageBefore {
+			return result, false, fmt.Errorf("effect result model usage predecessor differs")
+		}
+	}
+	prepared, err := t.prepareAcceptedChanges(result.ChangePlan())
+	if err != nil {
+		return result, false, err
+	}
+	if err := prepared.apply(t); err != nil {
+		return result, false, err
+	}
+	t.opsMu.Lock()
+	current.Effect, current.since, current.sending = result.After.Effect, result.After.Since, false
+	t.opsMu.Unlock()
+	if works != nil {
+		finished, _ := works.Get(result.Before.ID)
+		t.installAcceptedWork(finished)
+	}
+	if result.Usage != nil {
+		t.ai.Meter(*result.Usage)
+	}
+	prepared.publish(t)
+	return result, true, nil
+}
+
+func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform.AIUsage, at time.Time) {
+	t.opsMu.Lock()
+	var pending *effect
+	for _, x := range t.outbound {
+		if x.ID == id {
+			pending = x
+			break
+		}
+	}
+	var before acceptedformat.EffectState
+	if pending != nil {
+		before = acceptedformat.EffectState{Effect: pending.Effect, Since: pending.since}
+	}
+	t.opsMu.Unlock()
+	if pending == nil || out.Effect != id {
+		t.quarantine(fmt.Errorf("external answer for an unknown or different effect %s", id))
+		return
+	}
+	if platform.EffectSettled(before.State) && before.State != "discarded" {
+		return
+	}
+	if usage != nil {
+		copy := *usage
+		copy.Applications = slices.Clone(before.Effect.Applications)
+		copy.Run = before.Effect.ID
+		if before.Effect.Endpoint == acceptedformat.ModelEndpoint {
+			var ask modelAsk
+			if json.Unmarshal([]byte(before.Effect.Body), &ask) == nil && ask.Function != nil {
+				owner := ask.Function.Owner
+				if owner == "" {
+					owner = before.Effect.App
+				}
+				ref := platform.AssetRef{App: owner, Kind: platform.AssetFunction, Name: ask.Function.Definition.Name}
+				copy.Resource = &ref
+			}
+		}
+		usage = &copy
+	}
+	if before.Endpoint == acceptedformat.ModelEndpoint && (out.Result == "rejected" || out.Result == "unknown") && (t.tasks == nil || len((hostView{t: t}).Holding(controlowner.PlatformApp, controlowner.Admin)) == 0) {
+		out.PublicMessage = "The model call stopped; no eligible reviewer is configured"
+	}
+	if out.Detail != "" && out.PublicMessage == "" {
+		out.PublicMessage = "The last delivery attempt failed"
+	}
+	after := &effect{Effect: before.Effect, since: before.Since}
+	markEffect(after, out, at)
+	result := acceptedformat.Effect{Version: 5, Kind: "effect-result", Tenant: t.ID, App: controlowner.PlatformApp,
+		Key: acceptedformat.EffectResultKey(before), At: at.UTC(), Before: before,
+		After: acceptedformat.EffectState{Effect: after.Effect, Since: after.since}, Outcome: out, Usage: usage}
+	var err error
+	_, result.WorkBefore, result.Work, err = t.prepareOperationFinish(before.Effect, out)
+	if err != nil {
+		return
+	}
+	if usage != nil {
+		if t.ai == nil {
+			t.quarantine(fmt.Errorf("effect %s has usage without an AI meter", id))
+			return
+		}
+		state, snapshotErr := t.ai.Snapshot()
+		if snapshotErr == nil {
+			result.UsageBefore, snapshotErr = platform.CanonicalDigest(state)
+		}
+		if snapshotErr != nil {
+			t.quarantine(fmt.Errorf("effect %s usage checkpoint: %w", id, snapshotErr))
+			return
+		}
+	}
+	result.RequestHash, err = acceptedformat.EffectResultHash(before, out, result.At)
+	if err != nil {
+		t.quarantine(err)
+		return
+	}
+	draft := t.newStagedDecision()
+	draft.at = at
+	if after.State == "failed" && t.app(controlowner.PlatformApp) != nil {
+		admin := platform.NewCaller(draft, platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, controlowner.PlatformApp, false, true)
+		admin.Notify(platform.Notification{Title: "Effect to " + after.Endpoint + " failed: " + after.Event,
+			Body: after.Error + ". Retry it in Settings → Automation once the cause is fixed.",
+			Key:  "failed:" + after.ID}, at, platform.Recipient{AppRole: controlowner.Admin})
+	}
+	if (platform.EffectSettled(after.State) || after.State == "unknown") && before.State != "discarded" {
+		if err := t.stageEffectAnswer(draft, after.Effect, out, usage, at); err != nil {
+			if t.quarantined() {
+				return
+			}
+			result.CallbackError = err.Error()
+			result.Authorizations = slices.Clone(draft.authorizations)
+			draft = t.newStagedDecision()
+			draft.at = at
+		}
+	}
+	if before.Endpoint == acceptedformat.ModelEndpoint && (after.State == "rejected" || after.State == "failed" || after.State == "unknown") {
+		recipients := (hostView{t: t, app: t.app(before.App)}).Holding(controlowner.PlatformApp, controlowner.Admin)
+		if len(recipients) > 0 && t.tasks != nil {
+			change, _, _ := strings.Cut(before.Key, "#")
+			var receipt *pb.ChangeRecord
+			for _, saved := range t.app(before.App).AcceptedLedger().RecordsFor(t.ID) {
+				if saved.GetChangeId() == change {
+					receipt = saved
+					break
+				}
+			}
+			if receipt != nil {
+				caller := platform.NewCaller(draft, platform.Member{ID: "app:" + before.App, Tenant: t.ID}, before.App, false, true)
+				to := make([]platform.Recipient, 0, len(recipients))
+				for _, member := range recipients {
+					to = append(to, platform.Recipient{Member: member})
+				}
+				if failure := caller.Assign(receipt, platform.Assignment{Title: "Review the stopped model call", Body: out.Detail, Ref: "platform.effect/" + before.ID, Key: "ai-handoff:" + before.ID, To: to}); failure != nil {
+					draft.failure = failure
+				}
+			}
+		}
+	}
+	result.Authorizations = append(result.Authorizations, draft.authorizations...)
+	result.After.CallbackError = result.CallbackError
+	if draft.failure != nil {
+		t.quarantine(fmt.Errorf("stage effect %s: %v", id, draft.failure))
+		return
+	}
+	if len(draft.events) == 0 && (len(draft.deliveries) > 0 || len(draft.observations) > 0 || len(draft.allocated) > 0 ||
+		len(draft.logs) > 0 || len(draft.requests) > 0) {
+		err = fmt.Errorf("effect answer has unrepresented changes")
+	} else {
+		eventRows := map[string]bool{}
+		for _, event := range draft.events {
+			for _, ref := range event.Changed {
+				eventRows[ref] = true
+			}
+		}
+		result.Rows, err = captureDirectRows(draft, before.App, nil, eventRows, "effect answer")
+		if len(result.Rows) > 0 {
+			result.Member = "app:" + before.App
+		}
+		if err == nil && len(draft.events) > 0 {
+			writes := draft.records.WriteSnapshot()
+			draft.records.UseWrites(eventRows)
+			last := draft.events[len(draft.events)-1]
+			result.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
+			draft.records.UseWrites(writes)
+		} else if err == nil {
+			var plan acceptedformat.ChangePlan
+			plan, err = draft.savedChangePlan()
+			result.Notices, result.Intents = plan.Notices, plan.Intents
+			result.States, result.Control = plan.States, plan.Control
+		}
+	}
+	if err != nil {
+		t.quarantine(fmt.Errorf("stage effect %s: %w", id, err))
+		return
+	}
+	result.Unique = draft.savedUniqueChanges()
+	if _, err := t.prepareAcceptedChanges(result.ChangePlan()); err != nil {
+		t.quarantine(fmt.Errorf("stage effect %s changes: %w", id, err))
+		return
+	}
+	result.Digest, err = acceptedformat.DigestEffect(result)
+	if err != nil {
+		t.quarantine(err)
+		return
+	}
+	raw, err := json.Marshal(result)
+	if err == nil {
+		_, err = acceptedformat.DecodeEffect(raw)
+	}
+	if err != nil {
+		t.quarantine(fmt.Errorf("encode effect %s: %w", id, err))
+		return
+	}
+	principal, _ := json.Marshal(t.automation(controlowner.PlatformApp, false).Member)
+	committed, err := t.acceptResult(Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, result.Key, result.RequestHash)
+	if err != nil {
+		if errors.Is(err, errAcceptedConflict) {
+			t.quarantine(fmt.Errorf("effect %s conflicts with a previously committed outcome", id))
+			return
+		}
+		t.opsMu.Lock()
+		pending.sending = false
+		t.opsMu.Unlock()
+		return
+	}
+	saved, applied, err := t.applyAcceptedEffect(committed)
+	if err != nil || saved.Key != result.Key || saved.RequestHash != result.RequestHash || !applied {
+		t.quarantine(fmt.Errorf("apply committed effect %s: %v (applied=%t)", id, err, applied))
+		return
+	}
+	t.acceptedResultApplied()
+	t.enqueue(saved.At)
+	if len(saved.Changes) == 0 && len(saved.Rows) == 0 && len(saved.States) == 0 && saved.Notices == nil {
+		t.operationsChanged(saved.App)
+	} else {
+		t.changedOwner(saved.App)
+	}
+}
+
+func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			t.quarantine(fmt.Errorf("effect callback cannot stage: %v", p))
+			err = fmt.Errorf("unsupported effect callback")
+		}
+	}()
+	if x.App != "" {
+		c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
+		if refusal := draft.authorizeNative(c, "effect:"+x.Endpoint, "action", nil, t.app(x.App) != nil); refusal != nil {
+			return refusal
+		}
+	}
+	if x.Endpoint == acceptedformat.ModelEndpoint {
+		app, reply := t.modelAnswerSubmission(x, out, usage)
+		if app == nil || reply == nil {
+			return nil
+		}
+		c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
+		_, refusal := draft.Decide(c, app, reply, at)
+		if refusal != nil {
+			return refusal
+		}
+		return nil
+	}
+	if x.App == "" {
+		return nil
+	}
+	if x.Endpoint == acceptedformat.OperationEndpoint {
+		draft.operationAnswers = map[string]platform.OperationResult{x.ID: operationResultOf(x)}
+		processesOwner := t.procs
+		if app, ok := t.procs.(platform.App); ok {
+			processesOwner = draft.stateApp(app).(platform.Processes)
+		}
+		if processes, ok := processesOwner.(platform.OperationCompletion); ok {
+			c := platform.NewCaller(draft, platform.Member{ID: "app:" + "flow", Tenant: t.ID}, "flow", false, true)
+			if err := processes.OperationEnded(c, x.ID, at); err != nil {
+				return err
+			}
+		}
+	}
+	c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
+	if app, ok := draft.stateApp(t.app(x.App)).(platform.Answerer); ok {
+		var source platform.Effect
+		t.opsMu.Lock()
+		for _, effect := range t.outbound {
+			if effect.ID == x.ID {
+				source = effect.Effect
+				break
+			}
+		}
+		t.opsMu.Unlock()
+		if source.ID == "" || source.App != x.App {
+			return fmt.Errorf("effect callback has no accepted source")
+		}
+		previous := draft.callbackOrigin
+		refusal := func() *kernel.Error {
+			draft.callbackOrigin = &source
+			defer func() { draft.callbackOrigin = previous }()
+			return app.Answer(c, x, out, at)
+		}()
+		if refusal != nil {
+			return refusal
+		}
+	}
+	if t.agents != nil {
+		draft.stateApp(t.agents).(platform.AgentRuntime).AgentEffectEnded(t.automated(c, platform.AgentApp), nil, x, out, at)
+	}
+	if draft.failure != nil {
+		return draft.failure
+	}
+	if err := draft.answerRequests(at); err != nil {
+		return err
+	}
+	if err := draft.stageObservers(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *stagedDecision) answerRequests(now time.Time) *kernel.Error {
+	for count := 0; len(d.requests) > 0; count++ {
+		if count >= acceptedformat.MaxHops {
+			unsupportedStagedEffect()
+		}
+		q := d.requests[0]
+		d.requests = d.requests[1:]
+		if err := d.answerRequest(q, now); err != nil {
+			return err
+		}
+	}
+	return d.failure
+}
+
+func (d *stagedDecision) answerRequest(q request, now time.Time) (refusal *kernel.Error) {
+	end := d.tenant.begin("request "+q.Protocol+"#"+q.Action, trace.SpanContext{}, attribute.String("platform.app", q.caller.App), attribute.String("platform.target", q.Target))
+	outcome := "ok"
+	defer func() {
+		if refusal != nil {
+			outcome = refusal.Code.String()
+		}
+		end(outcome)
+	}()
+	s := q.record.GetSubmission()
+	key := fmt.Sprintf("%s:%s#%d", q.caller.App, s.GetIdempotencyKey(), q.n)
+	providerKey := key
+	if q.Key != "" {
+		providerKey = q.Key
+	}
+	answer := platform.Answer{Tag: q.Tag, Call: q.Target, Action: q.Action, Outcome: "accepted"}
+	var ref *pb.EntityRef
+	_, err := d.Attempt(func() (*pb.ChangeRecord, *kernel.Error) {
+		var record *pb.ChangeRecord
+		var refusal *kernel.Error
+		ref, record, refusal = d.routingTenant().invoke(q.caller, q.Protocol, q.Action, q.Target,
+			platform.Raw(q.Payload), providerKey, s.GetIdempotencyKey(), now, q.Provider)
+		return record, refusal
+	})
+	if err != nil {
+		answer.Outcome, answer.Code, answer.Reason = "refused", err.Code.String(), err.Message
+		outcome = answer.Code
+	} else {
+		answer.Ref = ref.GetType() + "/" + ref.GetId()
+	}
+	payload, errJSON := json.Marshal(answer)
+	if errJSON != nil {
+		unsupportedStagedEffect()
+	}
+	c := d.tenant.automated(q.caller, q.caller.App)
+	reply := &pb.Submission{TenantId: d.tenant.ID, PrincipalId: c.ID, Authority: s.GetAuthority(), Target: s.GetTarget(),
+		Schema: &pb.SchemaRef{Name: q.Reply, Version: 1}, IdempotencyKey: "answer:" + key,
+		CorrelationId: s.GetIdempotencyKey(), Payload: payload}
+	if _, err := platform.Decide(c, d.tenant.app(c.App), reply, now); err != nil {
+		return err
+	}
+	return d.failure
+}

@@ -1,5 +1,7 @@
 import { ApplicationSampleAsset } from "./releases/samples";
 import "./i18n";
+import { Glossary, Knowledge } from "./agents/knowledge";
+import { Files, ResourceIdentity } from "./projects/Files";
 import { defineApp, useHost, type AppUI, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
 import { ObjectViews } from "./workshop/ObjectViews";
@@ -33,7 +35,7 @@ import { ReleaseReview, releaseDraftsSelection, releaseKinds, type ReleaseKind }
 import { Branches } from "./branches/Branches";
 import { ProposalScreen } from "./branches/Proposal";
 import { CandidateTest } from "./releases/simulate";
-import { ProjectHome, ProjectsList } from "./projects/project";
+import { ProjectHome } from "./projects/project";
 import { Discover } from "./projects/discover";
 import { StudioTemplates } from "./workshop/template-ui";
 import { PageHeader, t, type NavItem, type NavSection, type Route, type View } from "@platform/ui";
@@ -51,7 +53,8 @@ const publisher = (host: Host) => host.holds("build", "publisher");
 
 const view = (id: string, title: () => string, render: View["render"], documentKey?: View["documentKey"]): View => ({ id, title: () => title(), render, ...(documentKey ? { documentKey } : {}) });
 const projectViews: View[] = [
-  { id: "projects", title: () => t("Files"), render: () => <ProjectsList /> },
+  { id: "projects", title: () => t("Files"), render: () => <Files /> },
+ { id:"files",title:()=>t("Files"),render:p=><Files project={p.id} folder={p.folder}/> },
   { id: "project", documentKey: p => p.id ?? "", title: () => t("Project"), render: p => <ProjectHome key={p.id} id={p.id ?? ""} area={p.area} initialSelected={p.asset} initialSection={p.section} initialPlan={p.plan} initialTemplate={p.template} /> },
 ];
 const ontologyViews: View[] = [
@@ -127,12 +130,12 @@ function referenceContext(route: Route, children: ReactNode) {
 const publishing = new Set(["release-review"]);
 function AuthoringView({ route, children }: { route: Route; children: ReactNode }) {
   const host = useHost();
-  const allowed = builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || publisher(host) && publishing.has(route.view);
+  const allowed = ["files","projects"].includes(route.view) || host.holds("build","viewer") || builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || publisher(host) && publishing.has(route.view);
   return allowed ? <>{children}</> : <PageHeader title={t("Projects")} description={t("This authoring view is not available with your current access.")} />;
 }
 const contextualViews = (views: View[]) => views.map(view => ({ ...view, render: (params: Record<string, string>) => {
   const route = { view: view.id, params };
-  return <AuthoringView route={route}>{referenceContext(route, view.render(params))}</AuthoringView>;
+  return <AuthoringView route={route}>{referenceContext(route, <ResourceIdentity view={view} params={params}/>)}</AuthoringView>;
 } }));
 
 type Link = { label: string; icon: ReactNode; view: string; params?: Record<string, string> };
@@ -143,8 +146,8 @@ const navigation = (route?: Route) => <ToolContext route={route} />;
 export default defineApp({
   id: "build", category: "build", portal: false, title: "Files", icon: <FolderTree />,
   description: "Projects and the resources they own: object types, logic, pages and releases.",
-  for: builder,
-  home: { view: "projects" },
+  for: host => builder(host) || host.holds("build","viewer") || host.holds("build","discoverer"),
+  home: { view: "files" },
   views: contextualViews(projectViews),
   opens: { "build.app": "project" },
   navigation: route => route?.view === "project" ? navigation(route) : undefined,
@@ -290,15 +293,16 @@ export function createAgentStudio(host: Host, operations: Pick<AppUI, "for" | "v
   const authoring = builder(host);
   const operating = !operations.for || operations.for(host);
   return defineApp({
-    id: "agents", serves: ["build", "agent"], category: "build", title: "Agent Studio", icon: <Bot />,
+    id: "agents", serves: ["build", "agent", "knowledge"], category: "build", title: "Agent Studio", icon: <Bot />,
     description: "AI agents, what they are allowed to do, their runs and evaluations.",
-    for: host => builder(host) || !operations.for || operations.for(host),
-    home: { view: operating ? "agents" : "agent" },
-    views: [...(authoring ? contextualViews(agentViews) : []), ...(operating ? operations.views : [])],
+    for: host => builder(host) || !!host.role("knowledge") || !operations.for || operations.for(host),
+    home: { view: operating ? "agents" : authoring ? "agent" : "knowledge" },
+    views: [...(authoring ? contextualViews(agentViews) : []), ...(operating ? operations.views : []), view("knowledge",()=>t("Retrieval sources"),()=><Knowledge/>),view("glossary",()=>t("Glossary"),()=><Glossary/>)],
     opens: authoring ? { "build.agent": "agent" } : {},
     navigation: authoring ? navigation : undefined,
     nav: (host, route) => [
       ...(operating ? operations.nav(host, route) : []),
+ ...(host.role("knowledge") ? [section(t("Retrieval"),route,[{label:t("Retrieval sources"),icon:<Database/>,view:"knowledge"},{label:t("Glossary"),icon:<Tags/>,view:"glossary"}])]:[]),
       ...(authoring ? [section(t("Build"), route, [{ label: t("Agent definitions"), icon: <Shapes />, view: "agent" }])] : []),
     ],
   });

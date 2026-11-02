@@ -151,11 +151,9 @@ test("F8 a publisher reviews a product version, releases it, and the version is 
     const created: { type: string; id: string }[] = [];
     try {
       await submit({ type: "build.page", id: badPageID }, "create", {
-        name: `${name}goodpage`, title: "Release gate page", object: type, list: ["subject"], detail: ["subject"],
+        name: badPageName, title: "Release gate page", object: type, list: ["subject"], detail: ["subject"],
       }, 0);
       created.push({ type: "build.page", id: badPageID });
-      const current = await read<{ record: { revision: number } }>(`/v1/records/build.page/${badPageID}`);
-      await submit({ type: "build.page", id: badPageID }, "edit", { name: badPageName }, current.record.revision);
 
       await page.goto(`/#/release-review?kind=page&id=${badPageID}`);
       await expect(page.getByRole("button", { name: "Check draft and dependencies", exact: true })).toBeEnabled();

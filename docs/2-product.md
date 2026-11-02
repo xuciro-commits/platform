@@ -144,10 +144,10 @@ read-when: 新增能力或应用、判断能力归属、新增资源类型、处
 
 ## 现存差距
 
-- `capabilities/server/apps/` 下的早期内置应用未按 §2.4 归位：总账逻辑在 `apps/core/books.go`（路线图 P2.9）；工作项不是内置对象类型（P2.4）；Knowledge、Master data、Organisation directory 是独立应用（P2.10）。
+- 总账与 Master data 仍在 `apps/core`（P2.9、P2.10）；工作项及评论已为内置对象与动作，检索源归 Agent Studio，组织目录归 Control Panel Organization。
 - 以 Flow 命名的流程实现仍在宿主中，违反 R7（P2.8）。
 - 行业包用旧蓝图格式，不经 DevOps 产品版本（P4.1、P4.2）。
-- 受管项目与客户扩展未实现（P5.2）。
+- 产品依赖的自动安装与逐项升级审阅尚未接通（P5.1、P5.3）。
 
 ## 相关
 

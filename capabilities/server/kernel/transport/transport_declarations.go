@@ -163,7 +163,7 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 			}[name]; public != "" {
 				name = public
 			}
-		case "platformserver/engine/organization":
+		case "platformserver/services/security/organization":
 			if name == "Model" {
 				name = "EnterpriseModel"
 			}

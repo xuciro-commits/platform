@@ -451,3 +451,5 @@ export type {PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor} 
 export {pageUIManifest} from "./pageui/manifest";
 
 export {validApplicationHeader} from "./pageui/application-header";
+
+export { EditProposalReview } from "./automation/EditProposal";

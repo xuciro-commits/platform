@@ -1,3 +1,4 @@
+import { useWorkingState } from "../session/WorkingState";
 import { useHost } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
 import { t, useUnsavedChanges } from "@platform/ui";
@@ -35,11 +36,13 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard }: {
     loadedScope.current = scope; loaded.current = ""; confirmed.current = empty();
     session.load(confirmed.current); setError("");
   }, [scope]);
+  const working=useWorkingState();
   const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
+    void working?.clear();
     const record = query.data?.record;
     load(record && record.revision >= confirmed.current.revision ? record : structuredClone(confirmed.current));
     setError(""); onDiscard?.();
-  }, busy);
+  }, busy,working?.saved);
   useEffect(() => {
     const record = query.data?.record;
     if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record);

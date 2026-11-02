@@ -1,3 +1,4 @@
+import { useWorkingState } from "../session/WorkingState";
 import { useRecordArchive } from "@platform/app";
 import { ActionMenu, Button, StatusTag, cn, defineStatuses, t, useInputDrafts, useLeaveFlush, useViewVisible, useWorkspace, type ContextCommand, type Route } from "@platform/ui";
 import { Check, MoreHorizontal } from "lucide-react";
@@ -8,11 +9,11 @@ import { useConflictSettle } from "../branches/conflict";
 
 const draftStates = defineStatuses({ draft: { label: "Draft", tone: "warning" }, published: { label: "Published", tone: "success" }, archived: { label: "Archived", tone: "neutral" } });
 
-export function useAutoSave({ enabled = true, dirty, invalid = false, busy = false, save, delay = 900, generation }: {
-  enabled?: boolean; dirty: boolean; invalid?: boolean; busy?: boolean; save: () => Promise<unknown>; delay?: number; generation?:unknown;
+export function useAutoSave({ enabled = true, dirty, invalid = false, busy = false, save, delay = 900, generation, privateState=false }: {
+  enabled?: boolean; dirty: boolean; invalid?: boolean; busy?: boolean; save: () => Promise<unknown>; delay?: number; generation?:unknown;privateState?:boolean;
 }) {
   const inputs=useInputDrafts(),attempt=useRef<unknown>(undefined),latest = useRef(save),pending = useRef<() => Promise<unknown>>(undefined); latest.current = save;
-  invalid ||= !!inputs?.invalid;busy ||=!!inputs?.busy;
+  invalid ||= !privateState && !!inputs?.invalid;busy ||=!!inputs?.busy;
   useLeaveFlush(() => pending.current?.() ?? Promise.resolve());
   useEffect(() => {
     if (!enabled || !dirty || invalid || busy || attempt.current===generation&&generation!==undefined) return;
@@ -24,10 +25,11 @@ export function useAutoSave({ enabled = true, dirty, invalid = false, busy = fal
 }
 
 export function SaveStatus({ dirty, busy = false, invalid = false, failed = false }: { dirty: boolean; busy?: boolean; invalid?: boolean; failed?: boolean }) {
+  const working=useWorkingState();
   const inputs = useInputDrafts(), onBranch = !!useCurrentBranch().id;
   dirty ||= !!inputs?.dirty; busy ||= !!inputs?.busy; invalid ||= !!inputs?.invalid;
   const lost = dirty && failed;
-  const status = busy ? t("Saving…") : dirty ? (lost ? t("Not saved") : invalid ? t("Fix the problems to save") : t("Unsaved changes")) : onBranch ? t("Saved to branch") : t("Saved as draft");
+  const status = working?.saved ? t("Working state saved") : busy ? t("Saving…") : dirty ? (lost ? t("Not saved") : invalid ? t("Fix the problems to save") : t("Unsaved changes")) : onBranch ? t("Saved to branch") : t("Saved as draft");
   return <span role="status" className={cn("flex items-center gap-1 px-1 text-xs [&_svg]:size-3.5", lost && !busy ? "text-danger" : "text-muted")}>{!dirty && !busy && <Check />}{status}</span>;
 }
 
@@ -45,6 +47,9 @@ export function ResourceControls({ type, record, dirty = false, busy = false, in
   autosave?: boolean; onSave?: () => unknown; onCancel?: () => void; onReload?: () => void; route?: Route;
   operations?: EditorOperation[]; extra?: ContextCommand[];
 }) {
+  const working=useWorkingState();
+  const originalSave=onSave;
+  if (working && originalSave && record?.id) onSave=()=>working.review(originalSave);
   const inputs=useInputDrafts();invalid ||=!!inputs?.invalid;busy ||=!!inputs?.busy;
   const { open, close } = useWorkspace();
   const application = useApplicationScope();
@@ -63,7 +68,7 @@ export function ResourceControls({ type, record, dirty = false, busy = false, in
     wasBusy.current = busy;
   }, [busy, dirty, record?.revision]);
   useConflictSettle(type, record?.id, busy, onCancel || onReload ? () => { onCancel?.(); onReload?.(); } : undefined);
-  useAutoSave({ enabled: autosave && saved && !!onSave && !record?.archived && !stalled, dirty, invalid, busy, save: async () => { attempt.current = record?.revision; await onSave?.(); } });
+  useAutoSave({ enabled: (autosave || !!working) && (saved || !!working) && !!onSave && !record?.archived && !stalled, dirty, invalid:working?false:invalid, busy, privateState:!!working, generation:working?.signature, save: async () => { attempt.current = record?.revision; if(working)await working.persist();else await onSave?.(); } });
   const visible = useViewVisible();
   const current = useRef({ saved, dirty, busy, invalid, onSave });
   current.current = { saved, dirty, busy, invalid, onSave };
@@ -86,11 +91,11 @@ export function ResourceControls({ type, record, dirty = false, busy = false, in
     ...(onReload && saved ? [{ id: "reload", label: t("Reload saved version"), disabled: busy, separatorBefore: more.length + extra.length > 0 && !(dirty && onCancel), run: onReload }] : []),
     ...(saved && !record?.archived && archive.available ? [{ id: "archive", label: onBranch ? t("Archive on this branch…") : t("Archive…"), danger: true, disabled: dirty || busy, separatorBefore: true, run: () => archive.take({ id: record!.id!, revision: record!.revision ?? 0 }, leave) }] : []),
   ];
-  const manual = !autosave || stalled || invalid;
+  const manual = !!working || !autosave || stalled || invalid;
   return <>
     {inline.map(operation => <Button key={operation.id} disabled={busy || operation.disabled} loading={operation.busy} title={operation.disabled ? operation.reason : undefined} onClick={operation.run}>{operation.icon}{operation.label}</Button>)}
     {saved ? <>
-      {onSave && <SaveStatus dirty={dirty} busy={busy} invalid={invalid} failed={stalled} />}
+      {onSave && <SaveStatus dirty={dirty} busy={busy} invalid={invalid} failed={stalled || !!working?.error} />}
       {onSave && dirty && manual && <Button disabled={busy || invalid} title={invalid ? t("Fix the problems first.") : undefined} onClick={() => void onSave()}>{t("Save")}</Button>}
     </> : <>
       {onCancel && <Button variant="ghost" disabled={busy} onClick={leave}>{t("Cancel")}</Button>}

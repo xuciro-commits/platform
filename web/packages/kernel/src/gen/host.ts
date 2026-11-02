@@ -648,6 +648,10 @@ export type ApplicationWarning = {
   expected: number;
 };
 
+export type ApplyEditsRequest = {
+  key: string;
+};
+
 export type ApprovalRequest = {
   id: string;
   revision: number;
@@ -847,6 +851,8 @@ export type BranchMergeResult = {
 };
 
 export type BranchProposal = {
+  requiredApprovals: number;
+  projects?: string[];
   by: string;
   at: string;
   note?: string;
@@ -928,6 +934,11 @@ export type BranchReview = {
 export type BranchReviewRequest = {
   decision: "approve" | "changes";
   note?: string;
+};
+
+export type BranchReviewers = {
+  people: ProjectPerson[];
+  required: number;
 };
 
 export type BranchSaveRequest = {
@@ -1211,6 +1222,7 @@ export type CompositeAnswer = {
 };
 
 export type CompositeEdit = {
+  expectedRevision?: number;
   schema: string;
   target: EntityRef;
   payload?: unknown;
@@ -1817,6 +1829,11 @@ export type Edge = {
   until?: string;
 };
 
+export type EditProposal = {
+  kind: string;
+  edits: ProposedAction[];
+};
+
 export type Effect = {
   compensates?: string;
   applications?: AssetBinding[];
@@ -2160,6 +2177,18 @@ export type FlowSummary = {
   flow: string;
   state: string;
   trace: TraceLine[];
+};
+
+export type Folder = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  name: string;
+  project: string;
+  parent?: string;
 };
 
 export type FormatRule = {
@@ -3350,6 +3379,7 @@ export type PackageSetupStep = {
 };
 
 export type PackageView = {
+  update?: boolean;
   origin?: string;
   sourceDigest?: string;
   removal?: PackageRemoval;
@@ -3932,6 +3962,7 @@ export type ProfileEntry = {
 };
 
 export type ProjectAccessView = {
+  approvals: number;
   members: ProjectMember[];
   manage: boolean;
   people?: ProjectPerson[];
@@ -3987,6 +4018,14 @@ export type ProposalPolicy = {
   confidenceField?: string;
   minimumConfidence?: number;
   expiresAfterSeconds: number;
+};
+
+export type ProposedAction = {
+  schema: string;
+  type: string;
+  id: string;
+  payload: string;
+  revision: number;
 };
 
 export type Protocol = {
@@ -4378,6 +4417,32 @@ export type ReleaseWorkingDraft = {
 
 export type ReleaseWorkingState = {
   drafts: ReleaseWorkingDraft[];
+};
+
+export type ResourceDirectory = {
+  resources: ResourceEntry[];
+  folders: Folder[];
+};
+
+export type ResourceEntry = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  ref: AssetRef;
+  type?: string;
+  draft?: string;
+  variant?: string;
+  title: string;
+  project: string;
+  folder?: string;
+  version: number;
+  state: string;
+  managedBy?: string;
+  canOpen: boolean;
+  canEdit: boolean;
 };
 
 export type Result = {
@@ -5361,4 +5426,27 @@ export type WorkTask = {
   answer?: string;
 };
 
+export type WorkingState = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  member: string;
+  branch: string;
+  type: string;
+  draft: string;
+  base?: unknown;
+  spec: unknown;
+  inputs?: unknown;
+};
+
+export type WorkingStateView = {
+  record?: WorkingState;
+  id: string;
+};
+
 export const imageRegionLimits = {"maxIDBytes":128,"maxLabelBytes":256,"maxRegions":64} as const;
+
+export const editProposalSchema = {"type":"object","properties":{"edits":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"payload":{"type":"string","description":"The proposed action's JSON inputs"},"revision":{"type":"integer"},"schema":{"type":"string"},"type":{"type":"string"}},"required":["schema","type","id","payload","revision"]},"minItems":1,"maxItems":64},"kind":{"type":"string","enum":["edit-proposal/v1"]}},"required":["kind","edits"]} as const;

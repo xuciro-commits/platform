@@ -233,16 +233,17 @@ func (d *Policies) Access() platform.AccessConfig {
 	return out
 }
 
-var projectRoles = []string{platform.ProjectOwnerRole, platform.ProjectEditorRole, platform.ProjectViewerRole}
+var projectRoles = []string{platform.ProjectOwnerRole, platform.ProjectEditorRole, platform.ProjectViewerRole, platform.ProjectDiscovererRole}
 
 func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
 	var p struct {
-		Title   string                   `json:"title"`
-		Members []platform.ProjectMember `json:"members"`
+		Title     string                   `json:"title"`
+		Approvals int                      `json:"approvals"`
+		Members   []platform.ProjectMember `json:"members"`
 	}
-	if id == "" || json.Unmarshal(s.GetPayload(), &p) != nil || p.Title == "" || d.host == nil {
+	if id == "" || json.Unmarshal(s.GetPayload(), &p) != nil || p.Title == "" || d.host == nil || p.Approvals < 0 || p.Approvals > 16 {
 		return nil, invalid
 	}
 	seen := map[string]bool{}
@@ -263,7 +264,7 @@ func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A project keeps at least one owner")
 	}
 	return func(*pb.ChangeRecord) {
-		next := &platform.BuildProject{Title: p.Title, Members: p.Members}
+		next := &platform.BuildProject{Title: p.Title, Members: p.Members, Approvals: max(1, p.Approvals)}
 		next.ID, next.Changed = id, platform.Stamp{At: time.Now().UTC()}
 		if prior := d.projects[id]; prior != nil {
 			next.Created, next.Revision = prior.Created, prior.Revision+1
@@ -315,7 +316,11 @@ func (d *Policies) ProjectGrants(member string, agent bool) []platform.Grant {
 		}
 		for _, e := range p.Members {
 			if e.Member == member && slices.Contains(projectRoles, e.Role) {
-				out = append(out, platform.Grant{App: "build", Role: "builder", By: "project:" + id, Reason: p.Title})
+				role := e.Role
+				if role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
+					role = "builder"
+				}
+				out = append(out, platform.Grant{App: "build", Role: role, By: "project:" + id, Reason: p.Title})
 				break
 			}
 		}

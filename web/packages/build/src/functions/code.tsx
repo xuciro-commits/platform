@@ -1,4 +1,4 @@
-import { sourceFieldInput } from "@platform/app";
+import { EditProposalReview, sourceFieldInput } from "@platform/app";
 import { ContextHelp, ResourceSections, StructuredEditor } from "@platform/ui";
 import { Braces } from "lucide-react";
 import { useActionTrial } from "@platform/app";
@@ -6,8 +6,9 @@ import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
+import { usePrivateDraft,useWorkingState } from "../session/WorkingState";
 import { useDraftRecord } from "../branches/draft-record";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, editProposalSchema, type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Disclosure, Input, Panel, Select, Textarea, Workbench, DraftInputs, useInputBuffers, InputDraftProvider, useInputDrafts, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { JSONEditor, SchemaEditor, schemaDefault } from "../automate/workflow-binding";
@@ -39,12 +40,14 @@ export function CodeEditor({ id }: { id: string }) {
   const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0), confirmedDraft = useRef<CodeDraft>(empty());
   const { query, scope, branch, mainRevision } = useDraftRecord<CodeDraft>("build.code", id);
   const loadedScope = useRef(scope);
+  const working=useWorkingState();
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
+    void working?.clear();
     const saved = query.data?.record;
     if (saved && saved.revision >= baseRevision.current) { baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; confirmedDraft.current = structuredClone(saved); setDraft(saved); }
     else setDraft(structuredClone(confirmedDraft.current));
     setDirty(false); setError(""); setSDK("");
-  }, busy);
+  }, busy,working?.saved);
   const result = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && tab === "test");
   useEffect(() => {
     if (loadedScope.current === scope) return;
@@ -58,6 +61,7 @@ export function CodeEditor({ id }: { id: string }) {
   }, [query.data, dirty, busy]);
   const testSchemaKey = JSON.stringify((() => { try { return JSON.parse(draft.published ?? "").input; } catch { return draft.input; } })());
   useEffect(() => { setInput(schemaDefault(JSON.parse(testSchemaKey))); setCall(""); setExecutedInput(undefined); }, [testSchemaKey]);
+  usePrivateDraft(draft,dirty,value=>{setDraft(value);setDirty(true);},id==="new" || !!loaded.current,confirmedDraft.current);
   const change = (patch: Partial<CodeDraft>) => { if (lock.current) return; setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); setSDK(""); };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : t("The code function could not be saved or loaded.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<number | undefined> => {
@@ -130,7 +134,7 @@ export function CodeEditor({ id }: { id: string }) {
           </> },
           { id: "contract", title: t("Input and output"), content: <div className="grid min-w-0 gap-4 xl:grid-cols-2">
           <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Input schema")}</legend><InputDraftProvider scope="input-schema"><SchemaEditor schema={draft.input} onChange={(input) => change({ input })} /></InputDraftProvider></fieldset>
-          <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Output schema")}</legend><InputDraftProvider scope="output-schema"><SchemaEditor schema={draft.output} onChange={(output) => change({ output })} /></InputDraftProvider></fieldset>
+          <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Output schema")}</legend><Button disabled={busy} onClick={()=>change({output:structuredClone(editProposalSchema) as unknown as ValueSchema})}>{t("Return edit proposals")}</Button><InputDraftProvider scope="output-schema"><SchemaEditor schema={draft.output} onChange={(output) => change({ output })} /></InputDraftProvider></fieldset>
           </div> },
           { id: "sdk", title: t("Generated SDK"), content: <>
             <Button disabled={busy || invalid} onClick={() => void perform(previewSDK)}>{t("Generate SDK")}</Button>
@@ -146,6 +150,7 @@ export function CodeEditor({ id }: { id: string }) {
             {!call ? <p className="text-muted">{t(busy ? "Running function…" : "Run the function to see its output here.")}</p> : <>
               <p>{t("State")}: {t(({ pending: "Pending", running: "Running", completed: "Completed", failed: "Failed", cancelled: "Cancelled" } as Record<string, string>)[result.data?.state ?? "pending"] ?? result.data?.state ?? "Pending")}</p>
               {result.isError ? <p role="alert" className="text-danger">{t("The function result could not be loaded.")}</p> : <>
+                {result.data?.output !== undefined && <EditProposalReview key={call} call={call} output={result.data.output}/>}
                 {result.data?.output !== undefined && <pre aria-label={t("Function output")} className="overflow-auto rounded bg-background p-3 font-mono text-sm">{JSON.stringify(result.data.output, null, 2)}</pre>}
                 {result.data?.error && <p role="alert" className="text-danger">{result.data.error}</p>}
               </>}

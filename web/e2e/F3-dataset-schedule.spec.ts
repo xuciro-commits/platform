@@ -57,6 +57,10 @@ test("F3 an integrator updates keyed rows without changing old versions and sche
     expect(built.record.last?.written).toBe(2);
     await page.goto(`/#/schedule?id=${schedule}`);
     await page.getByRole("checkbox", { name: "Enabled", exact: true }).uncheck();
+    await page.getByRole("button", { name: "Save", exact: true }).first().click();
+    const review = page.getByRole("dialog", { name: "Review changes", exact: true });
+    await review.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(review).toBeHidden();
     await expect.poll(async () => (await read<{ record: { enabled: boolean } }>(`/v1/records/build.schedule/${schedule}`)).record.enabled).toBe(false);
     await publish([{ kind: "schedule", id: schedule }]);
     await expect(page.getByRole("combobox", { name: "Pipeline", exact: true })).toHaveValue(pipeline);

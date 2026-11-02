@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	computeowner "platformserver/engine/compute"
+	computeowner "platformserver/services/functions/runtime"
 	"syscall"
 )
 

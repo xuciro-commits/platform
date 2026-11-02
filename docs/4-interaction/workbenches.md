@@ -165,5 +165,5 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 ## 现存差距
 
 - Logic 拥有逻辑流与查询两类旧资源，查询应并入函数或对象集（路线图 P3.11）。
-- Knowledge、Master data、Organisation directory 是独立业务应用（P2.10）。
-- Marketplace 无安装审阅与升级审阅（P5.3、P5.4）。
+- 检索源与术语归 Agent Studio，组织目录归 Control Panel Organization；Master data 仍需迁入产品包（P2.10）。
+- Marketplace 已有目录、已安装与更新导航及安装、升级、卸载确认；升级审阅仍需列出逐项差异和受影响的客户扩展（P5.3）。

@@ -67,7 +67,7 @@ build:
 
 verify:
 	cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"
-	cd capabilities/server && $(GO) test -count=1 -run 'TestInvariant' .
+	cd capabilities/server && $(GO) test -count=1 -run 'TestInvariant' ./host
 	cd web && $(PNPM) typecheck && $(PNPM) build
 	git diff --check
 	cd web/e2e && $(PNPM) exec playwright test

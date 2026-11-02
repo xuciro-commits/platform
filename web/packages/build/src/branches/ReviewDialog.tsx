@@ -1,4 +1,4 @@
-import { memberRoles, useHost, useReadQuery } from "@platform/app";
+import { useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Checkbox, Dialog, EmptyState, Notice, Rejection, Tag, Textarea, t, useWorkspace } from "@platform/ui";
 import { useEffect, useState } from "react";
@@ -50,14 +50,13 @@ export function RebaseBar({ branch, resolutions }: { branch: Api.BranchDetail; r
 }
 
 export function ReviewDialog({ branch, open, onOpenChange, onProposed }: { branch: Api.BranchDetail; open: boolean; onOpenChange: (open: boolean) => void; onProposed: (id: string) => void }) {
-  const { me } = useHost();
   const actions = useBranchActions();
   const resolutions = useResolutions();
   const diff = useBranchRead<Api.BranchDiff>(branchPath(branch.id, "/diff"), open);
-  const members = useReadQuery<Api.MemberView[]>("/v1/members", undefined, open);
+  const members = useReadQuery<Api.BranchReviewers>(branchPath(branch.id,"/reviewers"), undefined, open);
   const [reviewers, setReviewers] = useState<string[]>([]), [note, setNote] = useState("");
   const [busy, setBusy] = useState(false), [refused, setRefused] = useState("");
-  const candidates = (members.data ?? []).filter(member => member.status !== "left" && !member.agent && member.id !== branch.created.by && member.id !== me.principalId && memberRoles(member, "build").includes("builder"));
+  const candidates=members.data?.people??[], required=members.data?.required??1;
   const unresolved = diff.data ? resolutions.unresolved(diff.data.resources) : 0;
   const changes0 = useBranchChanges(branch.id);
   const titles = branchTitles(changes0.data);
@@ -88,14 +87,14 @@ export function ReviewDialog({ branch, open, onOpenChange, onProposed }: { branc
       </section>}
       {branch.state === "open" && <fieldset className="grid gap-2 border-t border-border pt-3" disabled={busy}>
         <legend className="mb-1 text-xs font-semibold">{t("Proposal")}</legend>
-        <p className="text-xs text-muted">{t("Name reviewers to require their approval before merging. Without reviewers the proposal can be merged once its checks pass.")}</p>
-        {candidates.length > 0 ? <div className="grid max-h-32 gap-1 overflow-auto sm:grid-cols-2">{candidates.map(member => <Checkbox key={member.id} checked={reviewers.includes(member.id)} onChange={checked => setReviewers(current => checked ? [...current, member.id] : current.filter(id => id !== member.id))}><span className="min-w-0 truncate text-xs">{member.profile.displayName || member.id}</span></Checkbox>)}</div> : <p className="text-xs text-muted">{members.isError ? t("Members could not be loaded.") : t("No other builders to review.")}</p>}
+        <p className="text-xs text-muted">{t("Choose non-author editors or owners. Their approvals are required before merging.")}</p>
+        {candidates.length > 0 ? <div className="grid max-h-32 gap-1 overflow-auto sm:grid-cols-2">{candidates.map(member => <Checkbox key={member.id} checked={reviewers.includes(member.id)} onChange={checked => setReviewers(current => checked ? [...current, member.id] : current.filter(id => id !== member.id))}><span className="min-w-0 truncate text-xs">{member.name || member.id}</span></Checkbox>)}</div> : <p className="text-xs text-muted">{members.isError ? t("Members could not be loaded.") : t("No other builders to review.")}</p>}
         <label className="grid gap-1 text-xs">{t("Note for reviewers")}<Textarea rows={2} value={note} onChange={event => setNote(event.target.value)} /></label>
       </fieldset>}
       {refused && <Rejection message={refused} />}
       <div className="flex justify-end gap-2 border-t border-border pt-3">
         <Button variant="ghost" onClick={() => onOpenChange(false)}>{t("Close")}</Button>
-        {branch.state === "open" ? <Button variant="primary" disabled={busy || checking || !changes || unresolved > 0 || !check?.passed} title={unresolved > 0 ? t("Pick one value for every conflict first.") : !changes ? t("This branch has no changes.") : check && !check.passed ? checkFailure(check, titles) : !check ? t("Run the checks first.") : undefined} onClick={() => void propose()}>{t("Create proposal")}</Button>
+        {branch.state === "open" ? <Button variant="primary" disabled={busy || reviewers.length<required || checking || !changes || unresolved > 0 || !check?.passed} title={unresolved > 0 ? t("Pick one value for every conflict first.") : !changes ? t("This branch has no changes.") : check && !check.passed ? checkFailure(check, titles) : !check ? t("Run the checks first.") : undefined} onClick={() => void propose()}>{t("Create proposal")}</Button>
           : <Button variant="primary" onClick={() => { onProposed(branch.id); onOpenChange(false); }}>{t("Open proposal")}</Button>}
       </div>
     </div>

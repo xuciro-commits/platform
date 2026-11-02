@@ -1,3 +1,4 @@
+import { useWorkingState } from "../session/WorkingState";
 import { decodePage, encodePage, pageAuthoringIssues } from "@platform/app/page-contract";
 import { pageEditingProfile } from "./page-editor/compatibility";
 import { sourceFieldInput } from "@platform/app";
@@ -107,7 +108,9 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const [saving, setSaving] = useState(false);
   const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0);
   const busy = saving;
+  const working=useWorkingState();
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
+    void working?.clear();
     if (page) { session.load(loadDraft(savedPage!,authoringEntity,declarationFields)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`; }
     select({ kind: "page" }); setRefused(undefined);
   }, busy);

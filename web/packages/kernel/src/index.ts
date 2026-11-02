@@ -7,5 +7,5 @@ export type { AuthorityDeclarationJson, SubmissionStateJson } from "./gen/platfo
 export type { ErrorCodeJson } from "./gen/platform/kernel/v1alpha1/error_pb";
 export { codeChallenge, currentSession, keepFresh, signIn, signOut, type OidcConfig, type OidcSession } from "./oidc";
 export type * as Api from "./gen/host";
-export { imageRegionLimits } from "./gen/host";
+export { imageRegionLimits, editProposalSchema } from "./gen/host";
 export * from "./gen/enterprise-sdk";

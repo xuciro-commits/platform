@@ -1,3 +1,4 @@
+import { useWorkingState } from "../session/WorkingState";
 import { useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { t, type EntityRecord } from "@platform/ui";
@@ -17,7 +18,7 @@ export type DraftQuery<T> = {
 };
 
 export function useDraftRecord<T extends { id: string; revision: number }>(type: string, id: string, enabled = true) {
-  const host = useHost();
+  const host = useHost(), working=useWorkingState();
   const builder = host.holds("build", "builder");
   const { id: currentId } = useCurrentBranch();
   const list = useBranches(builder && !!currentId);
@@ -31,7 +32,9 @@ export function useDraftRecord<T extends { id: string; revision: number }>(type:
   const deleted = view.data?.op === "delete";
   const record = useMemo(() => !branch || !(spec || base) ? base : ({ ...(base ?? { id, state: "draft" }), ...(spec ? withBuild(spec) : {}), id, archived: deleted || base?.archived, revision: (base?.revision ?? 0) + lastSeq }) as T & EntityRecord,
     [branch?.id, base, spec, deleted, lastSeq, id]);
-  const data = useMemo(() => branch ? ({ ...main.data, record } as Data<T>) : main.data, [branch?.id, main.data, record]);
+  working?.baseline(record);
+  const visibleRecord = (working?.baseRecord ?? record) as T & EntityRecord | undefined;
+  const data = useMemo(() => working?.baseRecord ? ({...main.data,record:visibleRecord} as Data<T>) : branch ? ({ ...main.data, record } as Data<T>) : main.data, [branch?.id, main.data, record,working?.baseRecord]);
   const query: DraftQuery<T> = {
     data, isError: main.isError && !spec || !!branch && view.isError && id !== "new", isFetching: main.isFetching || view.isFetching,
     isLoading: main.isLoading || !!branch && view.isLoading, isPlaceholderData: main.isPlaceholderData,
@@ -47,6 +50,7 @@ export function useDraftRecord<T extends { id: string; revision: number }>(type:
     for (const [name, value] of Object.entries(payload)) { if (value === null || value === undefined) delete next[name]; else next[name] = value; }
     const exists = target === id ? !!(base || spec) : false;
     await actions.save(branch!.id, type, target, { op: exists ? "update" : "create", spec: next });
+    await working?.clear();
   };
-  return { query, scope: branch?.id ?? "", branch, save, mainRevision: base?.revision ?? 0, publishRefusal: branch ? t("A branch is published by merging it. Use Save in the branch bar to review, propose and merge.") : undefined };
+  return { query, scope: branch?.id ?? "", branch, save, mainRevision: (working?.baseRecord as {revision?:number}|undefined)?.revision ?? base?.revision ?? 0, publishRefusal: branch ? t("A branch is published by merging it. Use Save in the branch bar to review, propose and merge.") : undefined };
 }

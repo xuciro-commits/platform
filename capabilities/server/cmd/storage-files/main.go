@@ -6,8 +6,8 @@ import (
 	"flag"
 	"log"
 	"os"
-	"platformserver/engine/resources"
 	"platformserver/platform"
+	"platformserver/services/data/blobs"
 	"strings"
 )
 

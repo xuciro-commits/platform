@@ -10,6 +10,7 @@ import { CompositeRefusalError, type Api } from "@platform/kernel";
 import { ActionMenu, Button, Checkbox, DataTable, Dialog, Disclosure, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ColumnDef, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, ExternalLink, FolderKanban, GitBranch, MoreHorizontal, Plus, Rocket, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePrivateDraft } from "../session/WorkingState";
 import { DraftStatus, SaveStatus, useAutoSave } from "../editor/workbench";
 import { publishedResourceKind, refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
 import { projectResourceChange } from "./membership";
@@ -160,11 +161,13 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     return out;
   }, [project, settings, edited]);
   const dirty = Object.keys(changedSettings).length > 0;
+  const working=usePrivateDraft(settings,dirty,value=>{setSettings(value);setEdited(true);},!!baseline.current,baseline.current?.values);
   const { markSaved, confirmDiscard } = useUnsavedChanges(dirty || !!pendingPatch || !!createdResource || !!retireIntent, () => {
     pendingRef.current = undefined; setPendingPatch(undefined); setCreatedResource(undefined);
     rememberRetirement(undefined);
+    void working?.clear();
     baseline.current = undefined; setEdited(false); if (project) setSettings(fromRecord(project)); setError(undefined);
-  }, saving || addingResource || retireBusy || !!retireIntent?.attempted && !retireIntent.refusal);
+  }, saving || addingResource || retireBusy || !!retireIntent?.attempted && !retireIntent.refusal,working?.saved);
   const patch = async (changes: Partial<Api.Application>, revision = latestProject.current?.revision, settingsSave = false) => {
     if ((!latestProject.current && !pendingRef.current) || lock.current || pendingRetirement.current) return false;
     if (dirty && !settingsSave) { setError(t("Save or discard project settings before changing resource membership.")); return false; }
@@ -205,7 +208,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     if (confirmed) { baseline.current = undefined; setEdited(false); markSaved(); }
     return confirmed;
   };
-  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !sourceApplied && !pendingPatch && !createdResource && !currentBranch, busy: saving, save: saveSettings });
+  useAutoSave({ generation:working?.signature??JSON.stringify(changedSettings), dirty, enabled: !sourceApplied && !pendingPatch && !createdResource && (!currentBranch || !!working), busy: saving, save: working?.persist??saveSettings });
   const changesForResource = (current: Project, kind: ResourceKindInfo, record: ResourceRecord) => projectResourceChange(current, resourceRef(kind, record.name));
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     setCreatedResource({ kind, target });
@@ -458,7 +461,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           {error && <p role="alert" className="text-xs text-danger">{error}</p>}
           <p className="text-xs text-muted">{t("Visual changes save automatically. After applying source, save the settings.")}</p>
           <div className="flex gap-2">
-            <Button size="sm" disabled={!dirty || saving} onClick={() => void saveSettings()}>{t("Save")}</Button>
+            <Button size="sm" disabled={!dirty || saving} onClick={() => working?working.review(saveSettings):void saveSettings()}>{t("Save")}</Button>
             <Button size="sm" variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => { baseline.current = undefined; setEdited(false); if (project) setSettings(fromRecord(project)); void query.refetch(); })}>{t("Reload current project settings")}</Button>
           </div>
         </fieldset></div>}

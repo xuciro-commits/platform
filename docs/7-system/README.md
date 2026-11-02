@@ -1,6 +1,6 @@
 ---
 level: 7 系统架构
-covers: [capabilities/server/*.go, capabilities/server/kernel/**, capabilities/server/journal/**, capabilities/server/composition/**, capabilities/server/cmd/**, contract/**]
+covers: [capabilities/server/host/**, capabilities/server/kernel/**, capabilities/server/kernel/journal/**, capabilities/server/host/composition/**, capabilities/server/cmd/**, contract/**]
 read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果格式、重放与快照、租户装配、后台任务、协议与 API 类型
 ---
 
@@ -104,7 +104,7 @@ POST /v1/submissions
 
 ## 现存差距
 
-- 宿主根包 `platformserver` 平铺约 190 个文件，`engine/`、`studio/`、`apps/`、`internal/` 与目标包不对应（路线图 P2.11）。
+- 旧主数据与总账仍在 `apps/core`，需迁移为产品包并保留历史读取（P2.9、P2.10）。
 - 授权上下文构造在 `Tenant.authorizeDepth`（根包），决定函数在 `platform/authz`，应一并移入 `services/security`，`platform` 只留接口（P2.6）。
 - Expr 求值器在 `internal/rules`，应成为 `expr` 包；`platform/field_policy.go`、`platform/entity.go`、`platform/definition.go`、`kernel/records/record_domain.go` 绕过可注入的规则引擎（P2.5）。
 - AI 分散在 `aigateway`、`apps/ai`、`internal/aistate`、`internal/agents`、`engine/agents`、`platform/ai.go`；两个包都叫 `agents`，`aigateway` 反向依赖 `engine/agents`（P2.7）。

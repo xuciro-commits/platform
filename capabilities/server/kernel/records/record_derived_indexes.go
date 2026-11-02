@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"iter"
 	"maps"
-	"platformserver/journal"
+	"platformserver/kernel/journal"
 	"platformserver/platform"
 	"reflect"
 	"strings"

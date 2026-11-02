@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/journal"
+	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"slices"

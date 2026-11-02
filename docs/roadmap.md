@@ -20,7 +20,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 ## 下一批
 
-P3.11 函数闭环：编辑提议、查询归并与对象集读取。
+整体收尾 P2–P5：贯通资源与权限、构建与行业产品包、客户交付运营；全部完成后结束本轮。
 
 ## P2 内核收敛
 
@@ -28,9 +28,6 @@ P3.11 函数闭环：编辑提议、查询归并与对象集读取。
 |---|---|---|---|
 | P2.2 | 资源内核 | 所有资源有 RID、项目、文件夹、版本、状态；路由以 RID 为键；项目覆盖不再从页面列表推导 | 6-domain §6.3、3-information §3.6 |
 | P2.3 | 动作类型独立资源 | 动作类型有自己的记录、版本与资源页；对象类型只引用 | 6-domain §6.7 |
-| P2.4 | 工作项、通知、评论内置 | 工作项是内置对象类型，由动作创建与关闭；内置评论动作；`apps/work` 删除 | 6-domain §6.10 |
-| P2.6 | 授权包边界 | 上下文构造（`Tenant.authorizeDepth`）与决定函数（`platform/authz`）一并移入 `services/security`；`platform` 只留接口 | 7-system §7.4 |
-| P2.7 | AI 代码归并 | `aigateway`、`internal/aistate`、`internal/agents`、`engine/agents`、`apps/ai`、`platform/ai.go` 归入 ai 包 | 7-system §7.2 |
 | P2.8 | 删除流程残留 | 以 Flow 命名的宿主文件与 `flow.instance` 视图删除；逻辑流只作为函数引擎 | 2-product R7 |
 | P2.9 | 行业代码出宿主 | `apps/core/books.go`、根目录 `books.go` 的总账逻辑移出平台 | 2-product R4 |
 | P2.10 | 内置业务应用归位 | Knowledge → Agent Studio 检索源；Master data → 产品包；Organisation directory → Control Panel Organization | 4-interaction/workbenches |
@@ -42,11 +39,8 @@ P3.11 函数闭环：编辑提议、查询归并与对象集读取。
 
 | 编号 | 事项 | 规范 |
 |---|---|---|
-| P3.6 | 文件夹后端模型与 Files 文件夹树 | 3-information §3.7 |
-| P3.7 | Discoverer 与项目级读取 | 6-domain/security §6.14 |
 | P3.8 | 专项标记、标记资源、解除标记步骤 | 6-domain/security §6.15 |
 | P3.11 | 函数编辑提议；查询并入函数或对象集 | 6-domain §6.8 |
-| P3.12 | 分支从 main 更新、合并批准规则 | 6-domain/change §6.20 |
 | P3.19 | 对象合并规则统一实现 | 6-domain §6.5 |
 | P3.28 | 每位构建者独立的工作状态：草稿在保存前对他人不可见，分支上按人分开 | 6-domain/change §6.19 |
 

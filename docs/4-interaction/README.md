@@ -119,7 +119,7 @@ read-when: 新建或改动任何页面、面板、编辑器、对话框、侧窗
 ## 4.5 编辑与保存模型
 
 - 工作状态：每位构建者在当前分支上有一个工作状态。编辑先进入工作状态，不直接生效。
-- 自动保存：输入停止 900ms 后把编辑写入工作状态（main 上是草稿，分支上是分支规格）；保存控件显示状态：`Saving…`、`Saved as draft`、`Saved to branch`、`Unsaved changes`、`Not saved`、`Fix the problems to save`。
+- 自动保存：输入停止 900ms 后把编辑与原始输入写入当前成员在该分支的私有工作状态；保存控件显示状态：`Saving…`、`Working state saved`、`Saved as draft`、`Saved to branch`、`Unsaved changes`、`Not saved`、`Fix the problems to save`。
 - 被拒绝的保存停止自动保存，显示原因与手动“保存”按钮；修正后恢复自动保存。
 - 校验：字段级问题就地显示；资源级问题进入 Problems 列表（画布编辑器在 dock）；有错误时仍可保存草稿，但不能进入审阅。
 - 审阅并保存：分支控件显示“Changes (N)”与主按钮“Review and save”。审阅界面列出全部变更资源与字段级差异，可逐项放弃；main 上保存即生效（先经保存审阅中的自动检查），分支上保存生成或更新提案。

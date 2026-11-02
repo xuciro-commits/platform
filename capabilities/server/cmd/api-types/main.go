@@ -1,14 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"platformserver/kernel/transport"
+	"platformserver/platform"
 
-	"platformserver"
-	enterprise "platformserver/engine/organization"
+	platformserver "platformserver/host"
+	enterprise "platformserver/services/security/organization"
 )
 
 func main() {
@@ -18,6 +20,8 @@ func main() {
 	h := platformserver.NewHost(nil)
 	h.Handler()
 	ts := transport.TypeScript(h.OpenAPI(nil, nil), transport.KernelModules(filepath.Dir(*out)))
+	edits, _ := json.Marshal(platform.EditProposalSchema())
+	ts += "\nexport const editProposalSchema = " + string(edits) + " as const;\n"
 	if err := os.WriteFile(*out, []byte(ts), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

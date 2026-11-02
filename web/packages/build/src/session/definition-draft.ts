@@ -7,6 +7,7 @@ import { useApplicationScope, useApplicationWorkspace } from "../projects/applic
 import { joinProjectResource } from "../projects/membership";
 import { kindOfType, resourceRef } from "../projects/resources";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
+import { usePrivateDraft } from "./WorkingState";
 import { useDraftRecord } from "../branches/draft-record";
 
 type DefinitionDraft = { id: string; revision: number; name: string };
@@ -45,6 +46,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, 
     onTrial: (value: Record<string, unknown>) => trial(type + "." + (draft.id ? "edit" : "create"), { type, id: draft.id || createID }, ownerPayload(replaceDeclaration(draft, value, fields)), draft.id ? branch ? mainRevision : draft.revision : 0) };
   const inputs = useInputDrafts(), changed = edited || !!inputs?.dirty, dirty = changed || joining;
   const loaded = useRef(""), confirmed = useRef(draft), lock = useRef(false), loadedScope = useRef(scope);
+  const working = usePrivateDraft(draft, dirty, value => {setDraft(value);setDirty(true);}, id==="new" || !!loaded.current, confirmed.current);
   useEffect(() => {
     if (loadedScope.current === scope) return;
     loadedScope.current = scope; loaded.current = ""; confirmed.current = empty();
@@ -56,10 +58,11 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, 
     setDraft(confirmed.current); loaded.current = record.id + ":" + record.revision;
   };
   const { markSaved, discardChanges, confirmDiscard } = useUnsavedChanges(dirty, () => {
+    void working?.clear();
     if (query.data?.record && query.data.record.revision >= confirmed.current.revision) load(query.data.record);
     else setDraft(structuredClone(confirmed.current));
     setDirty(false); setJoining(false); setError(""); onDiscard?.();
-  }, busy);
+  }, busy,working?.saved);
   useEffect(() => {
     const record = query.data?.record;
     if (record && !dirty && !busy && loaded.current !== record.id + ":" + record.revision) load(record);

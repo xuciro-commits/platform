@@ -1,6 +1,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Catalog": "目录", "Updates": "更新",
+ "Your installed products are up to date.": "已安装产品均为最新版本。",
+ "No products are installed.": "尚未安装产品。",
+ "No products are available.": "暂无可用产品。",
+ "Review uninstall": "审阅卸载", "Review upgrade": "审阅升级", "Review installation": "审阅安装",
+ "Installed version": "已安装版本", "Required products": "依赖产品",
+ "Uninstall archives managed resources and preserves customer data and extensions.": "卸载会归档受管资源，并保留客户数据与扩展。",
+ "Review the product resources before confirming this exact version.": "确认安装此版本前，请审阅产品资源。",
   "Cloud models are available for authorized design tasks. Production inference and knowledge embeddings require a deployment-approved local or edge service; marking a provider as local does not grant approval.": "云端模型可用于获权的设计任务。生产推断和知识嵌入必须使用部署认可的本地或边缘服务；将提供方标为本地不会获得许可。",
   "System history": "系统历史",
   "Release history": "发布历史",

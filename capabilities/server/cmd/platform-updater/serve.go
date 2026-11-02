@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"platformserver/internal/systembuild"
-	"platformserver/internal/systemscope"
+	"platformserver/kernel/systemscope"
+	"platformserver/services/apps/system/build"
 	"sync"
 	"time"
 )

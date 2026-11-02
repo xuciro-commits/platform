@@ -74,7 +74,7 @@ test("F8 a released media set supports object attachments and retains their byte
     expect((await read<{ record: { document: unknown } }>(`/v1/records/${type}/${record}`)).record.document).toEqual({ mediaSet, item: hash });
     await page.goto(`/#/record?type=${encodeURIComponent(type)}&id=${record}`);
     const attachmentDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: hash, exact: true }).click();
+    await page.getByRole("button", { name: filename, exact: true }).click();
     expect(await readFile((await (await attachmentDownload).path())!)).toEqual(bytes);
   });
 

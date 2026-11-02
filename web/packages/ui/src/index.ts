@@ -161,3 +161,5 @@ export {CanvasEditor,CanvasRegion,useCanvasGesture,type CanvasModel,type CanvasP
 export type {CanvasCommand} from "./layout/CanvasSelectionToolbar";
 
 export type {ActionParameterOptions, AnalysisStepOptions, ButtonOptions, DetailPresentationOptions, EventToneOptions, LayoutSizeOptions, LeaderboardOptions, MetricAnnotationOptions, MetricPresentationOptions, RecordCardOptions, RecordEventsOptions, RecordGanttOptions, RecordLinkOptions, RecordScatterOptions, RegionPresentationOptions, SceneConfigOptions, SceneLayerOptions, SceneMappingOptions, StatusTrackerOptions, TableColumnOptions, TablePresentationOptions} from "./presentation";
+
+export { flushSync } from "react-dom";

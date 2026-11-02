@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/journal"
+	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"time"

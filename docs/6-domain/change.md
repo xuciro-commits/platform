@@ -1,6 +1,6 @@
 ---
 level: 6 领域架构
-covers: [capabilities/server/studio/branches/**, capabilities/server/studio/releases/**, capabilities/server/studio/packages/**, capabilities/server/studio/trials/**, web/packages/build/src/branches/**, web/packages/build/src/releases/**, web/packages/govern/src/package*.tsx]
+covers: [capabilities/server/services/resources/merge/**, capabilities/server/services/devops/releases/**, capabilities/server/services/devops/packages/**, capabilities/server/services/devops/trials/**, web/packages/build/src/branches/**, web/packages/build/src/releases/**, web/packages/govern/src/package*.tsx, web/packages/govern/src/apps.tsx, capabilities/server/host/package*.go]
 read-when: 改动工作状态、分支、提案、发布审阅、产品与版本、安装、升级、恢复与迁移
 ---
 
@@ -20,7 +20,7 @@ read-when: 改动工作状态、分支、提案、发布审阅、产品与版本
 
 ## 6.19 工作状态
 
-- 每位构建者在每个分支上一个工作状态，包含其未保存到该分支的全部资源编辑。
+- 每位构建者在每个分支上一个工作状态，包含其未保存到该分支的全部资源编辑；资源草稿与原始输入自动保存到该成员的私有记录，其他构建者与管理员均不能读取。
 - 自动保存把编辑写入工作状态；“审阅并保存”把工作状态写入分支（main 上即生效）。
 - 工作状态对其他人不可见；保存后才可见。
 
@@ -55,8 +55,7 @@ read-when: 改动工作状态、分支、提案、发布审阅、产品与版本
 
 ## 现存差距
 
-- 工作状态以共享的草稿记录实现：main 上按草稿最后一位编辑者归属（自动化写入不改变归属），草稿对他人可见、可被他人编辑；分支上的工作状态由分支内所有人共享（路线图 P3.28）。
-- 分支从 main 更新与合并批准规则未实现（P3.12）。
-- 产品依赖闭包、语义版本、依赖范围未实现；“产品版本”目前是发布候选（P5.1）。
-- 受管项目、客户扩展、扩展属性未实现（P5.2）；安装审阅、升级审阅与卸载未实现（P5.3）。
+- 私有编辑已按成员与分支隔离；全局工作状态仍需汇总本人各资源的未保存编辑并统一审阅（P3.28）。
+- 产品版本支持语义版本排序与依赖范围校验；缺失依赖的自动安装闭包尚未接通（P5.1）。
+- 安装与升级经同一接受结果写入受管项目，受管内容禁止直接编辑；升级复用接口扩展与存储兼容性检查，卸载归档受管内容并保留客户资源。升级审阅仍需列出逐项差异与受影响的客户扩展（P5.3）。
 - 旧蓝图格式的行业包需迁移为产品版本（P4.1、P4.2）。

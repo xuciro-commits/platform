@@ -1,0 +1,260 @@
+package host
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+
+	"slices"
+	"strings"
+	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/platform"
+	"platformserver/services/resources/authoring"
+)
+
+type IntegrationEffect struct {
+	ID       string    `json:"id"`
+	Endpoint string    `json:"endpoint"`
+	Event    string    `json:"event"`
+	State    string    `json:"state"`
+	Due      time.Time `json:"due"`
+	Last     time.Time `json:"last,omitzero"`
+	Error    string    `json:"error,omitempty"`
+}
+
+func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]IntegrationEffect, *kernel.Error) {
+	if err := t.admits(m); err != nil {
+		return nil, err
+	}
+	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	out := []IntegrationEffect{}
+	for _, effect := range t.Effects(now) {
+		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		books := (strings.HasPrefix(effect.Event, "journal/") || effect.Event == build.ID+"/journal") && effect.Endpoint == build.BooksEndpoint
+		confirmation := effect.Event == build.ID+"/confirmation" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		dispatch := effect.Event == build.ID+"/dispatch" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		transaction := effect.Event == build.ID+"/transaction" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		if effect.App != build.ID || !writeback && !books && !confirmation && !dispatch && !transaction {
+			continue
+		}
+		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
+		if effect.Error != "" {
+			item.Error = "The last delivery attempt failed"
+			if effect.PublicMessage != "" {
+				item.Error = effect.PublicMessage
+			} else if books {
+				if owner, ok := t.app(platform.BooksApp).(platform.BooksChecks); ok {
+					if message := owner.HistoricalPostingMessage(effect.Error); message != "" {
+						item.Error = message
+					}
+				}
+			}
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.Effect, *kernel.Error) {
+	if t.app(build.ID) == nil {
+		return nil, nil
+	}
+	s := e.Record.GetSubmission()
+	schema := s.GetSchema().GetName()
+	if e.App != build.ID {
+		return nil, nil
+	}
+	c := t.automation(build.ID, false)
+	writebacks, _, refusal := platform.Find[build.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	if preparing && refusal != nil {
+		return nil, refusal
+	}
+	var planned []platform.Effect
+	owner := t.app(build.ID).(build.IntegrationDefinitions)
+	for _, w := range writebacks {
+		eventSchema, on := w.Schema(), w.On
+		if w.Published != "" {
+			var asset platform.ReleaseAsset
+			var definition build.WritebackDefinition
+			if build.ValueDecodeIntegration([]byte(w.Published), &asset) != nil || build.ValueDecodeIntegration(asset.Body, &definition) != nil {
+				if preparing {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The writeback publication is unavailable")
+				}
+				continue
+			}
+			eventSchema, on = definition.Object+"."+definition.On, definition.On
+		}
+		if on == "confirmation" || on == "dispatch" || on == "transaction" || eventSchema != schema {
+			continue
+		}
+		w, err := owner.ExecutionWriteback(w)
+		if err != nil {
+			if preparing {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+			}
+			continue
+		}
+		if w.On == "confirmation" || w.On == "dispatch" || w.On == "transaction" || w.Schema() != schema {
+			continue
+		}
+		conn, ok := platform.Get[build.Connection](c, w.Connection)
+		if !ok {
+			if preparing {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The writeback connection is not configured")
+			}
+			continue
+		}
+		if preparing {
+			conn, err = owner.ExecutionConnection(conn)
+		} else {
+			conn, err = owner.ConnectionConfiguration(conn)
+		}
+		if err != nil {
+			if preparing {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+			}
+			continue
+		}
+		req, err := w.Request(conn, s.GetTarget().GetId(), s.GetPayload())
+		if err != nil {
+			if preparing {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+			}
+			continue
+		}
+		if preparing {
+			if refusal := t.checkWritebackCredential(req); refusal != nil {
+				return nil, refusal
+			}
+		}
+		body, _ := json.Marshal(req)
+		at := e.Record.GetRecordedTime().AsTime()
+		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, build.ID, e.Record.GetChangeId(), w.ID),
+			Endpoint: build.WritebackEndpoint + conn.ID, Event: "writeback/" + w.Name, App: build.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at,
+			State: "pending", Due: at, Body: string(body)})
+	}
+	return planned, nil
+}
+
+func (t *Tenant) checkWritebackCredential(request build.WritebackRequest) *kernel.Error {
+	if request.Secret != "" {
+		if value, ok := t.credentialValue(request.Secret, "connection/"+request.Connection, request.URL); !ok || strings.TrimSpace(string(value)) == "" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The connection credential is not configured or permitted for this target")
+		}
+	}
+	return nil
+}
+
+func (t *Tenant) connectionEndpoints() []*Endpoint {
+	var out []*Endpoint
+	for _, x := range t.outbound {
+		if !strings.HasPrefix(x.Endpoint, build.WritebackEndpoint) || platform.EffectSettled(x.State) {
+			continue
+		}
+		if !slices.ContainsFunc(out, func(ep *Endpoint) bool { return ep.ID == x.Endpoint }) {
+			out = append(out, &Endpoint{ID: x.Endpoint, Kind: "connection"})
+		}
+	}
+	return out
+}
+
+func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
+	sum := sha256.Sum256([]byte(x.Body))
+	out = platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
+	var req build.WritebackRequest
+	if json.Unmarshal([]byte(x.Body), &req) != nil {
+		out.Result, out.Detail = "rejected", "the request is unreadable"
+		return out
+	}
+	if err := build.CheckWritebackTransport(req.Transport, req.Method); err != nil {
+		out.Result, out.Detail = "rejected", err.Error()
+		return out
+	}
+	defer func() {
+		if req.Dispatch != "" && !req.SafeRetry && out.Result == "retry" {
+			out.Result, out.Detail = "unknown", "This command cannot be resent automatically: "+out.Detail
+		}
+	}()
+	u, err := url.Parse(req.URL)
+	if err != nil || u.Scheme != "https" && !(u.Scheme == "http" && req.AllowPrivate) {
+		out.Result, out.Detail = "rejected", "only https addresses (http when private addresses are allowed)"
+		return out
+	}
+	if req.Transport == "a2a" {
+		message := x
+		message.Body = string(platform.Raw(map[string]any{"data": req.Body}))
+		answer := t.sendA2A(Endpoint{ID: "connection/" + req.Connection, URL: req.URL, Secret: req.Secret, AllowPrivate: req.AllowPrivate}, message, true)
+		answer.Digest = out.Digest
+		return answer
+	}
+	var requestBody any = req.Body
+	body, _ := json.Marshal(requestBody)
+	r, err := http.NewRequest(req.Method, req.URL, strings.NewReader(string(body)))
+	if err != nil {
+		out.Result, out.Detail = "rejected", "the request method or address is invalid"
+		return out
+	}
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Accept", "application/json")
+	r.Header.Set("Idempotency-Key", x.ID)
+	if req.Dispatch != "" {
+		r.Header.Set("Idempotency-Key", req.DispatchKey)
+	}
+	if req.Secret != "" {
+		v, ok := t.credentialHeader(req.Secret, "connection/"+req.Connection, req.URL)
+		if !ok {
+			out.Result, out.Detail = "retry", "secret "+req.Secret+" missing"
+			return out
+		}
+		r.Header.Set("Authorization", strings.TrimSpace(string(v)))
+	}
+	send := t.Outbound
+	if send == nil {
+		send = guarded
+	}
+	resp, err := send(r, req.AllowPrivate)
+	switch {
+	case err != nil && strings.Contains(err.Error(), errPrivate.Error()):
+		out.Result, out.Detail = "rejected", errPrivate.Error()
+	case err != nil:
+		out.Result, out.Detail = "unknown", "No delivery answer; reconcile or record a human decision: "+err.Error()
+	default:
+		answer, readErr := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
+		resp.Body.Close()
+		if readErr != nil || len(answer) > 64<<10 {
+			out.Result, out.Detail = "unknown", "The delivery answer is incomplete or exceeds its retained evidence budget"
+			return out
+		}
+		if len(answer) > 0 && !json.Valid(answer) {
+			answer = platform.Raw(clipDetail(answer))
+		}
+		out.Answer = answer
+		code := resp.StatusCode
+		switch {
+		case code >= 200 && code < 300:
+			out.Result = "delivered"
+		case code >= 400 && code < 500 && code != 408 && code != 429:
+			out.Result, out.Detail = "rejected", resp.Status+": "+clipDetail(answer)
+		default:
+			out.Result, out.Detail = "retry", resp.Status
+		}
+	}
+	return out
+}
+
+func clipDetail(raw []byte) string {
+	s := strings.TrimSpace(string(raw))
+	if len(s) > 200 {
+		s = s[:200] + "…"
+	}
+	return s
+}

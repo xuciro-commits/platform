@@ -1,0 +1,633 @@
+package host
+
+import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/platform"
+	"platformserver/services/data/transform"
+	"platformserver/services/resources/authoring"
+	controlowner "platformserver/services/security/control"
+	"slices"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+)
+
+type Endpoint struct {
+	ID            string   `json:"id"`
+	Kind          string   `json:"kind"`
+	URL           string   `json:"url"`
+	Secret        string   `json:"secret,omitempty"`
+	Events        []string `json:"events,omitempty"`
+	Effects       []string `json:"effects,omitempty"`
+	From          string   `json:"from,omitempty"`
+	Notifications []string `json:"notifications,omitempty"`
+	AllowPrivate  bool     `json:"allowPrivate,omitempty"`
+	Irreversible  bool     `json:"irreversible,omitempty"`
+}
+
+type effect struct {
+	platform.Effect
+	since   int
+	sending bool
+	span    trace.SpanContext
+}
+
+const (
+	effectsKept   = 1000
+	bodyKept      = 30 * 24 * time.Hour
+	effectTimeout = 10 * time.Second
+)
+
+func (t *Tenant) emit(e platform.Event, names []string) {
+	planned, _ := t.eventEffects(e, names, false)
+	planned = append(planned, t.legacyJournalEffects(e)...)
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	for _, x := range planned {
+		t.outbound = append(t.outbound, &effect{span: t.current(), Effect: x})
+	}
+	t.trimEffects()
+}
+
+func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) ([]platform.Effect, *kernel.Error) {
+	s := e.Record.GetSubmission()
+	planned, refusal := t.writebackEffects(e, preparing)
+	if refusal != nil {
+		return nil, refusal
+	}
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	for _, ep := range t.endpoints {
+		i := slices.IndexFunc(names, func(n string) bool { return slices.Contains(ep.Events, n) })
+		if i < 0 {
+			continue
+		}
+		var payload any = string(s.GetPayload())
+		if json.Valid(s.GetPayload()) {
+			payload = json.RawMessage(s.GetPayload())
+		}
+		at := e.Record.GetRecordedTime().AsTime()
+		body, _ := json.Marshal(map[string]any{"type": names[i], "timestamp": at, "data": map[string]any{
+			"app": e.App, "action": s.GetSchema().GetName(), "schemaVersion": s.GetSchema().GetVersion(), "entity": target(s), "changeId": e.Record.GetChangeId(),
+			"principal": s.GetPrincipalId(), "revision": e.Record.GetRevision(), "payload": payload}})
+		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
+			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)})
+	}
+	return planned, nil
+}
+
+func (t *Tenant) trimEffects() {
+	for len(t.outbound) > effectsKept {
+		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return platform.EffectSettled(x.State) })
+		if i < 0 {
+			return
+		}
+		t.outbound = slices.Delete(t.outbound, i, i+1)
+	}
+}
+
+func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
+	planned, err := t.planAppEffects(c, kind, key, entity, data, now, nil)
+	if err != nil {
+		return 0, err
+	}
+	t.installAcceptedIntents(planned)
+	t.askHeldEffects(c, kind, entity, planned, now)
+	return len(planned), nil
+}
+
+func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *kernel.Error) {
+	a := t.app(c.App)
+	if a == nil || key == "" {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	i := slices.IndexFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind })
+	if i < 0 {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	typ, _, _ := strings.Cut(entity, "/")
+	resource := platform.AssetRef{App: c.App, Kind: platform.AssetObject, Name: typ}
+	if typ == "" {
+		resource = platform.AssetRef{App: c.App, Kind: platform.AssetApp, Name: c.App}
+	}
+	applications, err := t.bindApplications(resource, t.releases.Active(), "")
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The effect application cannot be bound")
+	}
+	agent, run := "", ""
+	if c.Agent {
+		agent, run = c.ID, t.agentRun
+	}
+	name := c.App + "/" + kind
+	body, err := json.Marshal(map[string]any{"type": name, "timestamp": now, "data": data})
+	if err != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	var planned []platform.Effect
+	for _, ep := range t.endpoints {
+		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, c.App, kind, key, ep.ID)
+		if !slices.Contains(ep.Effects, name) || slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id }) ||
+			slices.ContainsFunc(staged, func(x platform.Effect) bool { return x.ID == id }) {
+			continue
+		}
+		state := "pending"
+		if c.Agent && (a.Manifest().Emits[i].Irreversible || ep.Irreversible) {
+			state = "held"
+		}
+		planned = append(planned, platform.Effect{Applications: applications, ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
+			State: state, Agent: agent, Run: run, Due: now, Body: string(body)})
+	}
+	return planned, nil
+}
+
+func (t *Tenant) askHeldEffects(c platform.Caller, kind, entity string, planned []platform.Effect, now time.Time) {
+	a := t.app(c.App)
+	i := slices.IndexFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind })
+	console := t.automated(c, controlowner.PlatformApp)
+	for _, x := range planned {
+		if x.State != "held" {
+			continue
+		}
+		console.Notify(platform.Notification{Title: fmt.Sprintf("Approve %s for %s", a.Manifest().Emits[i].Title, entity),
+			Body: fmt.Sprintf("The AI agent %s caused it, and it cannot be recalled once sent. Approve or discard it in Settings → Integrations.", c.ID),
+			Ref:  controlowner.EffectType + "/" + x.ID, Key: "approve:" + x.ID}, now, platform.Recipient{AppRole: controlowner.Admin})
+	}
+}
+
+func (t *Tenant) Effects(now time.Time) []platform.Effect {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	out := []platform.Effect{}
+	for i := len(t.outbound) - 1; i >= 0; i-- {
+		x := t.outbound[i].Effect
+		if now.Sub(x.At) > bodyKept && x.State != "unknown" {
+			x.Body = ""
+		}
+		out = append(out, x)
+	}
+	return out
+}
+
+type EndpointView struct {
+	Endpoint
+	Pending  int    `json:"pending"`
+	Failing  int    `json:"failing"`
+	Health   string `json:"health"`
+	Delivers int    `json:"delivered"`
+}
+
+func (t *Tenant) Endpoints() []EndpointView {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	out := []EndpointView{}
+	for _, ep := range t.endpoints {
+		v := EndpointView{Endpoint: *ep, Health: "ok"}
+		for _, x := range t.outbound {
+			switch {
+			case x.Endpoint != ep.ID:
+			case x.State == "delivered":
+				v.Delivers++
+			case !platform.EffectSettled(x.State):
+				v.Pending++
+				if x.State == "retrying" && v.Failing == 0 {
+					v.Failing, v.Health = x.Attempts, "failing"
+				}
+			}
+		}
+		if _, ok := t.credentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL); !ok && ep.Secret != "" {
+			v.Health = "secret missing"
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+func (t *Tenant) secret(name string) ([]byte, bool) {
+	if t.Secrets != nil {
+		return t.Secrets(name)
+	}
+	if dir := os.Getenv("PLATFORM_SECRETS_DIR"); dir != "" {
+		if raw, err := os.ReadFile(filepath.Join(dir, filepath.Base(name))); err == nil {
+			return bytes.TrimSpace(raw), true
+		}
+	}
+	v, ok := os.LookupEnv("PLATFORM_SECRET_" + strings.ToUpper(strings.NewReplacer("-", "_", ".", "_").Replace(name)))
+	return []byte(v), ok && v != ""
+}
+
+func (t *Tenant) Dispatch(now time.Time) { integrations.OnLane(t.dispatches(now)) }
+
+func (t *Tenant) dispatches(now time.Time) []func() {
+	if t.businessStopped() {
+		return nil
+	}
+	type job struct {
+		effect   platform.Effect
+		endpoint Endpoint
+		span     trace.SpanContext
+	}
+	var jobs []job
+	t.mu.Lock()
+	if t.businessStopped() {
+		t.mu.Unlock()
+		return nil
+	}
+	t.opsMu.Lock()
+	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
+		if ep.Kind != acceptedformat.ModelEndpoint && !t.breakers.Allow("endpoint:"+ep.ID, now, true) {
+			continue
+		}
+		i := slices.IndexFunc(t.outbound, func(x *effect) bool {
+			return x.Endpoint == ep.ID && !platform.EffectSettled(x.State) && x.State != "held"
+		})
+		if i >= 0 && t.outbound[i].State == "unknown" {
+			blocked := t.outbound[i].ID
+			i = slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && x.Compensates == blocked && x.State == "pending" })
+		}
+		if i < 0 || t.outbound[i].State == "unknown" || t.outbound[i].sending || t.outbound[i].Due.After(now) {
+			continue
+		}
+		t.outbound[i].sending = true
+		jobs = append(jobs, job{t.outbound[i].Effect, *ep, t.outbound[i].span})
+	}
+	t.opsMu.Unlock()
+	t.mu.Unlock()
+	var sends []func()
+	for _, j := range jobs {
+		sends = append(sends, func() {
+			if t.businessStopped() {
+				return
+			}
+			if !t.beginDispatchAttempt(j.effect, now) {
+				return
+			}
+			span := outside(j.span, "send "+j.effect.Event+" to "+j.endpoint.ID, attribute.String("platform.tenant", t.ID),
+				attribute.String("platform.endpoint", j.endpoint.ID), attribute.String("platform.effect", j.effect.ID))
+			outcome, usage := t.sendWithUsage(j.endpoint, j.effect, now)
+			end(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
+			if t.quarantined() {
+				return
+			}
+			counted(t, "effect", j.effect.App, outcome.Result)
+			if j.endpoint.Kind != acceptedformat.ModelEndpoint {
+				t.breakers.Report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
+			}
+			t.settleWithUsage(j.effect.ID, outcome, usage, now)
+		})
+	}
+	return append(sends, t.operationDispatches(now)...)
+}
+
+func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
+	if ep.Kind == acceptedformat.ModelEndpoint {
+		return t.sendModel(x, now)
+	}
+	return t.send(ep, x, now), nil
+}
+
+func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
+	if ep.Kind == acceptedformat.ModelEndpoint {
+		out, _ := t.sendModel(x, now)
+		return out
+	}
+	if ep.Kind == "email" {
+		return t.sendMail(ep, x, now)
+	}
+	if ep.Kind == "a2a" {
+		return t.sendA2A(ep, x, false)
+	}
+	if ep.Kind == "connection" {
+		return t.sendWriteback(x)
+	}
+	if ep.Kind == "books" {
+		return t.sendBooks(x, now)
+	}
+	sum := sha256.Sum256([]byte(x.Body))
+	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
+	secret, ok := t.credentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL)
+	if !ok {
+		out.Result, out.Detail = "retry", "secret "+ep.Secret+" missing"
+		return out
+	}
+	u, err := url.Parse(ep.URL)
+	if err != nil || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
+		out.Result, out.Detail = "rejected", "only https endpoints (http when private addresses are allowed)"
+		return out
+	}
+	stamp := strconv.FormatInt(now.Unix(), 10)
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(x.ID + "." + stamp + "." + x.Body))
+	req, _ := http.NewRequest(http.MethodPost, ep.URL, strings.NewReader(x.Body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("webhook-id", x.ID)
+	req.Header.Set("webhook-timestamp", stamp)
+	req.Header.Set("webhook-signature", "v1,"+base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+	req.Header.Set("Idempotency-Key", x.ID)
+	send := t.Outbound
+	if send == nil {
+		send = guarded
+	}
+	resp, err := send(req, ep.AllowPrivate)
+	switch {
+	case err != nil && strings.Contains(err.Error(), errPrivate.Error()):
+		out.Result, out.Detail = "rejected", errPrivate.Error()
+	case err != nil:
+		out.Result, out.Detail = "unknown", "No delivery answer; reconcile or record a human decision: "+err.Error()
+	default:
+		answer, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		resp.Body.Close()
+		if x.App != "" && json.Valid(answer) {
+			out.Answer = answer
+		}
+		code := resp.StatusCode
+		switch {
+		case code >= 200 && code < 300:
+			out.Result = "delivered"
+		case code >= 400 && code < 500 && code != 408 && code != 429:
+			out.Result, out.Detail = "rejected", resp.Status
+		default:
+			out.Result, out.Detail = "retry", resp.Status
+		}
+	}
+	return out
+}
+
+var errPrivate = fmt.Errorf("private address refused")
+
+func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
+	dialer := guardedDialer(allowPrivate)
+	client := &http.Client{Timeout: effectTimeout, Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	response, err := client.Do(req)
+	return controlowner.RedactCredentialFailure(response, req), err
+}
+
+func guardedDialer(allowPrivate bool) *net.Dialer {
+	return &net.Dialer{Timeout: effectTimeout, Control: func(_, address string, _ syscall.RawConn) error {
+		host, _, _ := net.SplitHostPort(address)
+		ip := net.ParseIP(host)
+		if !allowPrivate && (ip == nil || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {
+			return errPrivate
+		}
+		return nil
+	}}
+}
+
+func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
+	t.settleWithUsage(effect, o, nil, now)
+}
+
+func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platform.AIUsage, now time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.quarantined() {
+		return
+	}
+	if o.Generation != 0 && !t.operationCurrent(effect, o.Generation) {
+		return
+	}
+	if o.Generation != 0 && o.Result == "delivered" {
+		t.opsMu.Lock()
+		var current platform.Effect
+		for _, x := range t.outbound {
+			if x.ID == effect {
+				current = x.Effect
+				break
+			}
+		}
+		t.opsMu.Unlock()
+		if !t.operationAllowed(current, now) {
+			o.Result, o.Detail, o.Answer, o.Digest = "rejected", "Operation permission or source access was revoked", nil, ""
+		}
+	}
+	t.settleAccepted(effect, o, usage, now)
+}
+
+func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
+	x, ok := t.mark(o, at)
+	if !ok {
+		return false
+	}
+	if x.State == "failed" {
+		t.failedWork("Effect to "+x.Endpoint+" failed: "+x.Event, x.Error, x.ID, at, replaying)
+	}
+	if x.Endpoint == acceptedformat.ModelEndpoint {
+		return true
+	}
+	if x.App != "" && platform.EffectSettled(x.State) && x.State != "discarded" {
+		if a, ok := t.app(x.App).(platform.Answerer); ok {
+			a.Answer(t.automation(x.App, replaying), x, o, at)
+			t.enqueue(at)
+		}
+		if t.agents != nil {
+			t.agents.AgentEffectEnded(t.automation(platform.AgentApp, replaying), nil, x, o, at)
+			t.enqueue(at)
+		}
+	}
+	return true
+}
+
+func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, replaying bool) {
+	if t.controlAnswer != nil {
+		t.controlAnswer(x, o, now)
+		return
+	}
+	if x.Endpoint == acceptedformat.ModelEndpoint {
+		return
+	}
+	if a, ok := t.app(x.App).(platform.Answerer); ok && x.App != "" {
+		a.Answer(t.automation(x.App, replaying), x, o, now)
+	}
+}
+
+func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == o.Effect })
+	if i < 0 {
+		return platform.Effect{}, false
+	}
+	x := t.outbound[i]
+	markEffect(x, o, at)
+	return x.Effect, true
+}
+
+func markEffect(x *effect, o platform.Outcome, at time.Time) {
+	x.sending = false
+	acceptedformat.MarkEffect(&x.Effect, x.since, o, at)
+}
+
+func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	t.opsMu.Lock()
+	known := slices.IndexFunc(t.endpoints, func(e *Endpoint) bool { return e.ID == id }) >= 0
+	t.opsMu.Unlock()
+	if s.GetSchema().GetName() == controlowner.SchemaEndpointRemove {
+		if !known {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		t.opsMu.Lock()
+		unknown := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.Endpoint == id && x.State == "unknown" })
+		t.opsMu.Unlock()
+		if unknown {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Resolve unknown deliveries before removing their endpoint")
+		}
+		return func(*pb.ChangeRecord) {
+			t.opsMu.Lock()
+			t.endpoints = slices.DeleteFunc(t.endpoints, func(e *Endpoint) bool { return e.ID == id })
+			var dropped []platform.Effect
+			for _, x := range t.outbound {
+				if x.Endpoint == id && !platform.EffectSettled(x.State) {
+					x.State = "discarded"
+					dropped = append(dropped, x.Effect)
+				}
+			}
+			t.opsMu.Unlock()
+			for _, x := range dropped {
+				t.told(x, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "its endpoint was removed by " + c.ID}, now, c.Replaying)
+			}
+		}, nil
+	}
+	var ep Endpoint
+	if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" {
+		return nil, invalid
+	}
+	u, err := url.Parse(ep.URL)
+	if err != nil || u.Host == "" {
+		return nil, invalid
+	}
+	switch ep.Kind {
+	case "", "webhook":
+		if ep.Secret == "" || len(ep.Events)+len(ep.Effects) == 0 || len(ep.Notifications) > 0 || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
+			return nil, invalid
+		}
+		ep.Kind = "webhook"
+	case "a2a":
+		if len(ep.Effects) == 0 || len(ep.Events)+len(ep.Notifications) > 0 || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
+			return nil, invalid
+		}
+	case "email":
+		if u.Scheme != "smtp" || !strings.Contains(ep.From, "@") || len(ep.Notifications) == 0 || len(ep.Events)+len(ep.Effects) > 0 || u.User != nil && ep.Secret == "" {
+			return nil, invalid
+		}
+		for _, app := range ep.Notifications {
+			if t.app(app) == nil {
+				return nil, invalid
+			}
+		}
+	default:
+		return nil, invalid
+	}
+	for _, event := range ep.Events {
+		if _, declared := t.protocolEvent(event); t.owner["action:"+event] == nil && !declared {
+			return nil, invalid
+		}
+	}
+	for _, kind := range ep.Effects {
+		app, name, _ := strings.Cut(kind, "/")
+		if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == name }) {
+			return nil, invalid
+		}
+	}
+	if known {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
+	ep.ID = id
+	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.endpoints = append(t.endpoints, &ep); t.opsMu.Unlock() }, nil
+}
+
+func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	t.opsMu.Lock()
+	var x *effect
+	if i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == id }); i >= 0 {
+		x = t.outbound[i]
+	}
+	t.opsMu.Unlock()
+	if x != nil && x.App == build.ID && x.Event == build.ID+"/dispatch" {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Manage this command through its dispatch review and declared reviewer role")
+	}
+	if s.GetSchema().GetName() == controlowner.SchemaEffectApprove {
+		if x == nil || x.State != "held" {
+			return nil, notFound
+		}
+		if c.Agent {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+		return func(r *pb.ChangeRecord) {
+			t.opsMu.Lock()
+			x.State, x.Due = "pending", now
+			t.opsMu.Unlock()
+			if x.Run != "" && t.agents != nil {
+				t.agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
+			}
+		}, nil
+	}
+	if s.GetSchema().GetName() == controlowner.SchemaEffectDiscard {
+		if x != nil && x.State == "unknown" {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An unknown delivery needs reconciliation or a recorded human decision")
+		}
+		if x == nil || platform.EffectSettled(x.State) {
+			return nil, notFound
+		}
+		return func(r *pb.ChangeRecord) {
+			t.opsMu.Lock()
+			held := x.State == "held"
+			x.State = "discarded"
+			t.opsMu.Unlock()
+			if held && x.Run != "" && t.agents != nil {
+				t.agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
+			}
+			if t.agents != nil {
+				t.agents.AgentEffectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)
+			}
+			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "discarded by " + c.ID}, now, c.Replaying)
+		}, nil
+	}
+	if s.GetSchema().GetName() == controlowner.SchemaEffectResolve {
+		var input struct {
+			Outcome, Reason string
+			Answer          json.RawMessage
+		}
+		if x == nil || x.State != "unknown" || x.sending || c.Agent || json.Unmarshal(s.GetPayload(), &input) != nil || !slices.Contains([]string{"delivered", "rejected"}, input.Outcome) || strings.TrimSpace(input.Reason) == "" || len(input.Reason) > 4096 || len(input.Answer) > 64<<10 {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An unknown delivery needs a human result and bounded evidence")
+		}
+		return func(*pb.ChangeRecord) {
+			t.opsMu.Lock()
+			x.State, x.Error, x.Last = input.Outcome, "Resolved by "+c.ID+": "+input.Reason, now
+			t.opsMu.Unlock()
+			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: input.Outcome, Detail: x.Error, Answer: input.Answer}, now, c.Replaying)
+		}, nil
+	}
+	if x == nil || (x.State != "failed" && x.State != "rejected") {
+		return nil, notFound
+	}
+	return func(*pb.ChangeRecord) {
+		t.opsMu.Lock()
+		x.State, x.Due, x.since = "pending", now, x.Attempts
+		x.CallbackError = ""
+		t.opsMu.Unlock()
+	}, nil
+}

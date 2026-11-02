@@ -4,9 +4,10 @@ import { Button, ContextHelp, DataTable, Notice, Select, t } from "@platform/ui"
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
-const roles = ["owner", "editor", "viewer"] as const;
-const roleLabels: Record<string, string> = { owner: "Owner", editor: "Editor", viewer: "Viewer" };
+const roles = ["owner", "editor", "viewer", "discoverer"] as const;
+const roleLabels: Record<string, string> = { owner: "Owner", editor: "Editor", viewer: "Viewer", discoverer: "Discoverer" };
 const roleHelp: Record<string, string> = {
+ discoverer: "Find resource names and types in Files and Search; request access to open them.",
   owner: "Edits the project's resources and manages who has access.",
   editor: "Edits the project's resources.",
   viewer: "Opens the project's resources without editing them.",
@@ -21,9 +22,9 @@ export function ProjectAccess({ project, title }: { project: string; title: stri
   const [busy, setBusy] = useState(false);
   const members = view?.members ?? [];
   const name = (id: string) => view?.people?.find(item => item.id === id)?.name ?? id;
-  const save = async (next: Api.ProjectMember[]) => {
+  const save = async (next: Api.ProjectMember[], approvals=view?.approvals??1) => {
     setBusy(true);
-    try { if (await decide("platform.project.save", { type: "platform.project", id: project }, { title, members: next })) await query.refetch(); }
+    try { if (await decide("platform.project.save", { type: "platform.project", id: project }, { title, members: next,approvals })) await query.refetch(); }
     finally { setBusy(false); }
   };
   const candidates = (view?.people ?? []).filter(item => !members.some(member => member.member === item.id));
@@ -36,6 +37,7 @@ export function ProjectAccess({ project, title }: { project: string; title: stri
         <p>{t("Builders and administrators reach every project. Publishing stays with builders.")}</p>
       </ContextHelp>
     </div>
+    <label className="flex items-center gap-3 text-sm">{t("Required approvals")}<Select aria-label={t("Required approvals")} value={view?.approvals||1} disabled={!view?.manage||busy} onChange={event=>void save(members,Number(event.target.value))}>{Array.from({length:16},(_,i)=>i+1).map(value=><option key={value} value={value}>{value}</option>)}</Select></label>
     {query.isError && <Notice tone="danger" role="alert" message={t("Project access could not be loaded.")} />}
     <DataTable storageKey="files:project-members" data={members} getRowId={item => item.member} searchable={false} loading={query.isPending} height={Math.max(150, Math.min(360, 34 + members.length * 36))} rowHeight={36}
       empty={t("No members yet. Builders and administrators reach every project.")} columns={[

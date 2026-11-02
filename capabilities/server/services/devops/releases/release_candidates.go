@@ -1,0 +1,765 @@
+package releases
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"maps"
+	"platformserver/platform"
+	"platformserver/services/resources/authoring"
+	"slices"
+	"strings"
+	"time"
+)
+
+func DependentRoots(ref platform.AssetRef, available []platform.ReleaseAsset) []platform.AssetRef {
+	descriptors := make([]platform.Dependencies, 0, len(available))
+	for _, asset := range available {
+		descriptors = append(descriptors, platform.Dependencies{Ref: asset.Ref, Requires: asset.Requires, Provides: asset.Provides, Version: asset.SourceVersion})
+	}
+	graph, err := platform.NewDependencyGraph(descriptors)
+	if err != nil {
+		return []platform.AssetRef{ref}
+	}
+	roots, err := graph.Impact([]platform.AssetRef{ref})
+	if err != nil {
+		return []platform.AssetRef{ref}
+	}
+	return roots
+}
+
+type ReleasePreview struct {
+	CurrentID        string                `json:"currentId,omitempty"`
+	CandidateID      string                `json:"candidateId,omitempty"`
+	Included         []platform.AssetRef   `json:"included"`
+	Added            []platform.AssetRef   `json:"added"`
+	Removed          []platform.AssetRef   `json:"removed"`
+	Changed          []platform.AssetRef   `json:"changed"`
+	Diagnostic       string                `json:"diagnostic,omitempty"`
+	Drafts           []build.JointDraftRef `json:"drafts,omitempty"`
+	DraftReviews     []ReleaseDraftReview  `json:"draftReviews,omitempty"`
+	CandidateActions []platform.Action     `json:"candidateActions"`
+}
+
+type ReleasePreviewRequest struct {
+	Drafts []build.JointDraftRef `json:"drafts"`
+	Branch string                `json:"branch,omitempty"`
+}
+
+type ReleaseSaveRequest struct {
+	Kind        platform.AssetKind    `json:"kind,omitempty"`
+	ID          string                `json:"id,omitempty"`
+	Drafts      []build.JointDraftRef `json:"drafts,omitempty"`
+	CandidateID string                `json:"candidateId"`
+	Key         string                `json:"key"`
+}
+
+type ReleaseDraftsRequest struct {
+	Kind   platform.AssetKind `json:"kind"`
+	ID     string             `json:"id"`
+	Branch string             `json:"branch,omitempty"`
+}
+
+type ReleaseDraftClosure struct {
+	Drafts []build.JointDraftRef `json:"drafts"`
+}
+
+type ReleaseWorkingState struct {
+	Drafts []ReleaseWorkingDraft `json:"drafts"`
+}
+
+type ReleaseDraftRestore struct {
+	Type    string          `json:"type"`
+	Action  string          `json:"action"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type ReleaseWorkingDraft struct {
+	Kind  platform.AssetKind `json:"kind"`
+	ID    string             `json:"id"`
+	Type  string             `json:"type"`
+	Title string             `json:"title"`
+}
+
+type ReleaseSaved struct {
+	ID string `json:"id"`
+}
+
+type ReleaseActivateRequest struct {
+	CandidateID string `json:"candidateId"`
+	Key         string `json:"key"`
+	UpgradeID   string `json:"upgradeId,omitempty"`
+}
+
+type ReleaseActive struct {
+	ID string `json:"id"`
+}
+
+func CodeObjectDescriptor(entity platform.Entity, info platform.EntityInfo) any {
+	type scope struct {
+		Levels       map[string]string `json:"levels"`
+		Default      string            `json:"default"`
+		Structure    string            `json:"structure"`
+		Unit         string            `json:"unit"`
+		Owner        string            `json:"owner"`
+		Participants bool              `json:"participants"`
+		Through      bool              `json:"through"`
+	}
+	type transition struct {
+		Name, Title, Description string
+		From, To                 []string
+		Roles                    []string
+		Payload                  []platform.Field
+		Capability               string
+		Approval                 any
+		Do, After                bool
+	}
+	type lifecycle struct {
+		Field, Initial string
+		States         []platform.State
+		Transitions    []transition
+	}
+	var steps *lifecycle
+	if entity.Lifecycle != nil {
+		steps = &lifecycle{Field: entity.Lifecycle.Field, Initial: entity.Lifecycle.Initial, States: entity.Lifecycle.States}
+		for _, step := range entity.Lifecycle.Transitions {
+			steps.Transitions = append(steps.Transitions, transition{
+				Name: step.Name, Title: step.Title, Description: step.Description, From: step.From, To: step.To,
+				Roles: step.Roles, Payload: step.Payload, Capability: step.Capability,
+				Approval: codeApprovalDescriptor(step.Approval), Do: step.Do != nil, After: step.After != nil,
+			})
+		}
+	}
+	return struct {
+		Type      string                `json:"type"`
+		Entity    platform.EntityInfo   `json:"entity"`
+		Scope     scope                 `json:"scope"`
+		Standard  platform.Standard     `json:"standard"`
+		Derived   []platform.Derivation `json:"derived"`
+		Withheld  string                `json:"withheld"`
+		Lifecycle *lifecycle            `json:"lifecycle"`
+	}{
+		Type: info.Type, Entity: info,
+		Scope: scope{Levels: entity.Scope.Levels, Default: entity.Scope.Default, Structure: entity.Scope.Structure,
+			Unit: entity.Scope.Unit, Owner: entity.Scope.Owner, Participants: entity.Scope.Participants != nil,
+			Through: entity.Scope.Through != nil},
+		Standard: entity.Standard, Derived: entity.Derived, Withheld: entity.Withheld, Lifecycle: steps,
+	}
+}
+
+func CodeActionDescriptor(action platform.Action) any {
+	return struct {
+		Schema   string          `json:"schema"`
+		Target   string          `json:"target"`
+		Action   platform.Action `json:"action"`
+		Roles    []string        `json:"roles"`
+		Approval any             `json:"approval"`
+	}{Schema: action.Schema, Target: action.Target, Action: action, Roles: action.Roles,
+		Approval: codeApprovalDescriptor(action.Approval)}
+}
+
+func codeApprovalDescriptor(approval *platform.Approval) any {
+	if approval == nil {
+		return nil
+	}
+	type level struct {
+		Title, Structure, Role, AppRole, Member string
+		All                                     bool
+		HasWhen                                 bool
+		Due                                     int64
+		WorkingDays                             int
+	}
+	levels := make([]level, 0, len(approval.Levels))
+	for _, l := range approval.Levels {
+		levels = append(levels, level{Title: l.Title, Structure: l.Structure, Role: l.Role, AppRole: l.AppRole,
+			Member: l.Member, All: l.All, HasWhen: l.When != nil, Due: int64(l.Due), WorkingDays: l.WorkingDays})
+	}
+	return struct {
+		Pending, Rejected string
+		Levels            []level
+	}{Pending: approval.Pending, Rejected: approval.Rejected, Levels: levels}
+}
+
+func CandidateWithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef, resolve func(platform.AssetRef, string, ...string) (platform.ReleaseAsset, error)) (platform.ReleaseCandidate, error) {
+	assets := slices.Clone(available)
+	indices := map[platform.AssetRef]int{}
+	for i, asset := range assets {
+		indices[asset.Ref] = i
+	}
+	visited := map[platform.AssetRef]bool{}
+	pins := map[platform.AssetRef]string{}
+	contentPins := map[platform.AssetRef]string{}
+	restart := errors.New("restart retained page closure")
+	var visit func(platform.AssetRef) error
+	visit = func(ref platform.AssetRef) error {
+		if visited[ref] {
+			return nil
+		}
+		visited[ref] = true
+		i, ok := indices[ref]
+		if !ok {
+			return fmt.Errorf("release requires missing asset %s", ref)
+		}
+		asset := assets[i]
+		var bindings []platform.AssetBinding
+		if ref.Kind == platform.AssetObject {
+			var object struct {
+				Fields []struct {
+					Property  *platform.AssetBinding `json:"property,omitempty"`
+					ValueType *platform.AssetBinding `json:"valueType,omitempty"`
+				} `json:"fields"`
+				Sets    []platform.RecordSet `json:"sets,omitempty"`
+				Actions []struct {
+					Transaction *platform.BusinessTxn `json:"transaction,omitempty"`
+				} `json:"actions,omitempty"`
+			}
+			if json.Unmarshal(asset.Body, &object) != nil {
+				return fmt.Errorf("invalid property consumer")
+			}
+			for _, set := range object.Sets {
+				if set.Binding != nil {
+					bindings = append(bindings, *set.Binding)
+				}
+			}
+			var bindSteps func([]platform.TxnStep)
+			bindSteps = func(steps []platform.TxnStep) {
+				for _, step := range steps {
+					if step.Link != nil {
+						bindings = append(bindings, step.Link.Binding)
+					}
+					if step.ForEach != nil {
+						bindSteps(step.ForEach.Steps)
+					}
+				}
+			}
+			for _, action := range object.Actions {
+				if action.Transaction != nil {
+					bindSteps(action.Transaction.Steps)
+				}
+			}
+			for _, f := range object.Fields {
+				if f.Property != nil {
+					bindings = append(bindings, *f.Property)
+				}
+				if f.ValueType != nil {
+					bindings = append(bindings, *f.ValueType)
+				}
+			}
+		} else if ref.Kind == platform.AssetEvaluation {
+			descriptor, err := platform.ReadEvaluationSet(asset.Body)
+			if err != nil {
+				return err
+			}
+			bindings = append(bindings, descriptor.Function)
+		} else if ref.Kind == platform.AssetFlow {
+			var flow platform.FlowReleaseDescriptor
+			if err := json.Unmarshal(asset.Body, &flow); err != nil {
+				return err
+			}
+			bindings = append(slices.Clone(flow.Functions), flow.Operations...)
+			bindings = append(bindings, flow.Queries...)
+		} else if ref.Kind == platform.AssetApp {
+			var app platform.Application
+			if err := json.Unmarshal(asset.Body, &app); err != nil {
+				return err
+			}
+			for _, q := range app.Queries {
+				if q.Query != nil {
+					bindings = append(bindings, *q.Query)
+				}
+			}
+		} else if ref.Kind == platform.AssetPage {
+			var page platform.Page
+			if err := json.Unmarshal(asset.Body, &page); err != nil {
+				return err
+			}
+			projected, err := page.Safety()
+			if err != nil {
+				return err
+			}
+			for _, binding := range projected.DataBindings {
+				if binding.Query != nil {
+					bindings = append(bindings, *binding.Query)
+				}
+				for _, model := range binding.ModelBindings() {
+					if model.Set != nil && model.Set.Query != nil {
+						bindings = append(bindings, *model.Set.Query)
+					}
+					if model.Options != nil && model.Options.Set != nil && model.Options.Set.Query != nil {
+						bindings = append(bindings, *model.Options.Set.Query)
+					}
+				}
+				for _, e := range binding.Resources {
+					if e.Kind == "page" && e.Asset != nil {
+						ref := e.Asset.Ref
+						if prior := contentPins[ref]; prior != "" && prior != e.ContentVersion {
+							return fmt.Errorf("release binds conflicting contents of page %s", ref)
+						}
+						if prior := pins[ref]; prior != "" && prior != e.Asset.SourceVersion {
+							return fmt.Errorf("release binds conflicting source versions of page %s", ref)
+						}
+						contentPins[ref], pins[ref] = e.ContentVersion, e.Asset.SourceVersion
+						index, ok := indices[ref]
+						if !ok {
+							return fmt.Errorf("embedded page %s is unavailable", ref)
+						}
+						var current platform.Page
+						if json.Unmarshal(assets[index].Body, &current) != nil {
+							return fmt.Errorf("embedded page descriptor is invalid")
+						}
+						digest, err := platform.PageContentVersion(current)
+						if err != nil {
+							return err
+						}
+						if digest != e.ContentVersion || assets[index].SourceVersion != e.Asset.SourceVersion {
+							if slices.Contains(fixed, ref) {
+								return fmt.Errorf("embedded page %s differs from its explicit release root", ref)
+							}
+							asset, err := resolve(ref, e.Asset.SourceVersion, e.ContentVersion)
+							if err != nil {
+								return err
+							}
+							if assets[index].SourceVersion != asset.SourceVersion {
+								return fmt.Errorf("embedded page source version is incompatible")
+							}
+							assets[index] = asset
+							return restart
+						}
+					}
+					if e.Asset != nil && e.Asset.SourceVersion != "" {
+						bindings = append(bindings, *e.Asset)
+					}
+				}
+			}
+			for _, trigger := range projected.ActionTriggers {
+				if trigger.Function != nil {
+					bindings = append(bindings, *trigger.Function)
+				}
+				if trigger.Operation != nil {
+					bindings = append(bindings, *trigger.Operation)
+				}
+			}
+			for _, q := range projected.InputSchema.Queries {
+				if q.Query != nil {
+					bindings = append(bindings, *q.Query)
+				}
+			}
+		}
+		for _, binding := range bindings {
+			if binding.Ref.Check() != nil || binding.SourceVersion == "" {
+				return fmt.Errorf("%s has an invalid version binding", ref)
+			}
+			if prior := pins[binding.Ref]; prior != "" && prior != binding.SourceVersion {
+				return fmt.Errorf("release binds conflicting versions of asset %s", binding.Ref)
+			}
+			pins[binding.Ref] = binding.SourceVersion
+		}
+		for _, dep := range asset.Requires {
+			if err := visit(dep); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for pass := 0; ; pass++ {
+		clear(visited)
+		clear(pins)
+		clear(contentPins)
+		var err error
+		for _, root := range roots {
+			if err = visit(root); err != nil {
+				break
+			}
+		}
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, restart) {
+			return platform.ReleaseCandidate{}, err
+		}
+		if pass >= 4*len(assets) {
+			return platform.ReleaseCandidate{}, fmt.Errorf("page content bindings do not converge")
+		}
+	}
+	for _, ref := range slices.SortedFunc(maps.Keys(pins), func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) }) {
+		version := pins[ref]
+		i, exists := indices[ref]
+		if !exists {
+			return platform.ReleaseCandidate{}, fmt.Errorf("release requires missing bound asset %s", ref)
+		}
+		if assets[i].SourceVersion == version {
+			continue
+		}
+		if slices.Contains(fixed, ref) {
+			return platform.ReleaseCandidate{}, fmt.Errorf("asset %s differs from the version pinned by its dependents", ref)
+		}
+		asset, err := resolve(ref, version)
+		if err != nil {
+			return platform.ReleaseCandidate{}, err
+		}
+		if asset.Ref != ref || asset.SourceVersion != version {
+			return platform.ReleaseCandidate{}, fmt.Errorf("asset %s returned a different retained version", ref)
+		}
+		assets[i] = asset
+	}
+	return platform.Candidate(roots, assets)
+}
+
+func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Definition, special map[platform.AssetRef]platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
+	var available []platform.ReleaseAsset
+	for _, def := range definitions {
+		if def.Ref.App != manifest.ID || def.Source != "code" {
+			continue
+		}
+		switch def.Ref.Kind {
+		case platform.AssetInterface, platform.AssetProtocol, platform.AssetObservation:
+			available = append(available, special[def.Ref])
+		case platform.AssetObject:
+			i := slices.IndexFunc(manifest.Entities, func(e platform.Entity) bool { return e.Type == def.Ref.Name })
+			if i < 0 || def.Entity == nil {
+				return nil, fmt.Errorf("code object %s has no owner declaration", def.Ref)
+			}
+			body, err := json.Marshal(CodeObjectDescriptor(manifest.Entities[i], *def.Entity))
+			if err != nil {
+				return nil, fmt.Errorf("encode code object %s: %w", def.Ref, err)
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
+				SourceVersion: manifest.Version, Body: body})
+		case platform.AssetAction:
+			action, ok := manifest.Actions.Action(def.Ref.Name)
+			if !ok {
+				return nil, fmt.Errorf("code action %s has no owner declaration", def.Ref)
+			}
+			body, err := json.Marshal(CodeActionDescriptor(action))
+			if err != nil {
+				return nil, fmt.Errorf("encode code action %s: %w", def.Ref, err)
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
+				SourceVersion: manifest.Version, Body: body})
+		case platform.AssetPropertyType:
+			if def.PropertyType == nil {
+				return nil, fmt.Errorf("property has no descriptor")
+			}
+			body, err := json.Marshal(def.PropertyType)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Body: body})
+		case platform.AssetValueType:
+			if def.ValueType == nil {
+				return nil, fmt.Errorf("value type has no descriptor")
+			}
+			body, err := json.Marshal(def.ValueType)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Body: body})
+		case platform.AssetLinkType:
+			if def.LinkType == nil {
+				return nil, fmt.Errorf("code link type has no descriptor")
+			}
+			body, err := json.Marshal(def.LinkType)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Body: body})
+		case platform.AssetQuery:
+			if def.Query == nil {
+				return nil, fmt.Errorf("code query %s has no owner declaration", def.Ref)
+			}
+			body, err := json.Marshal(def.Query)
+			if err != nil {
+				return nil, fmt.Errorf("encode code query %s: %w", def.Ref, err)
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
+				SourceVersion: manifest.Version, Body: body})
+		case platform.AssetFlow:
+			if def.Flow == nil {
+				return nil, fmt.Errorf("native flow has no owner descriptor")
+			}
+			available = append(available, special[def.Ref])
+		case platform.AssetFunction:
+			if def.Function == nil {
+				return nil, fmt.Errorf("code function %s has no owner declaration", def.Ref)
+			}
+			body, err := json.Marshal(def.Function)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
+				SourceVersion: manifest.Version, Body: body})
+		case platform.AssetAgent:
+			if def.Agent == nil {
+				return nil, fmt.Errorf("code agent has no owner descriptor")
+			}
+			body, err := json.Marshal(def.Agent)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Body: body})
+		case platform.AssetCompute:
+			if def.Operation == nil {
+				return nil, fmt.Errorf("compute %s has no owner declaration", def.Ref)
+			}
+			body, err := json.Marshal(def.Operation)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Body: body})
+		case platform.AssetPage:
+			if def.Page == nil {
+				return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)
+			}
+			asset, err := platform.PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, asset)
+		}
+	}
+	pages := make([]string, len(manifest.Pages))
+	for i, page := range manifest.Pages {
+		pages[i] = page.Name
+	}
+	resources := []platform.AssetRef{}
+	for _, asset := range available {
+		if asset.Ref.Kind != platform.AssetPage && asset.Ref.Kind != platform.AssetApp {
+			resources = append(resources, asset.Ref)
+		}
+	}
+	asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
+		platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: UniqueRefs(resources)})
+	if err != nil {
+		return nil, err
+	}
+	available = append(available, asset)
+	return available, nil
+}
+
+func (p Planner) Assets(builderAssets []platform.ReleaseAsset, replaceBuilder bool) ([]platform.ReleaseAsset, error) {
+	registry, err := p.Registry()
+	if err != nil {
+		return nil, err
+	}
+	available, err := registry.ReleaseAssets()
+	if err != nil {
+		return nil, err
+	}
+	if !replaceBuilder {
+		return available, nil
+	}
+	code := map[platform.AssetRef]bool{}
+	for _, definition := range p.Definitions {
+		if definition.Source == "code" {
+			code[definition.Ref] = true
+		}
+	}
+	out := slices.DeleteFunc(available, func(asset platform.ReleaseAsset) bool { return asset.Ref.App == build.ID && !code[asset.Ref] })
+	return append(out, builderAssets...), nil
+}
+
+func CodeAssets(app platform.App, allDefinitions []platform.Definition, definitionAsset func(platform.Definition) (platform.ReleaseAsset, error), nativeFlow func(platform.App, string, int) (platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error), shared func(string) []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
+	manifest := app.Manifest()
+	definitions := []platform.Definition{}
+	special := map[platform.AssetRef]platform.ReleaseAsset{}
+	for _, definition := range allDefinitions {
+		if definition.Ref.App != manifest.ID || definition.Source != "code" {
+			continue
+		}
+		definitions = append(definitions, definition)
+		var asset platform.ReleaseAsset
+		var err error
+		switch definition.Ref.Kind {
+		case platform.AssetInterface, platform.AssetProtocol, platform.AssetObservation:
+			asset, err = definitionAsset(definition)
+		case platform.AssetFlow:
+			if definition.Flow == nil {
+				return nil, fmt.Errorf("native flow has no owner descriptor")
+			}
+			asset, err = nativeFlow(app, strings.TrimPrefix(definition.Ref.Name, manifest.ID+"."), definition.Flow.Version)
+		default:
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		special[definition.Ref] = asset
+	}
+	assets, err := CodeReleaseAssets(manifest, definitions, special)
+	if err != nil {
+		return nil, err
+	}
+	for i := range assets {
+		assets[i], err = describe(assets[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return append(assets, shared(manifest.ID)...), nil
+}
+
+func (p Planner) Candidate(selected []platform.AssetRef, builderAssets []platform.ReleaseAsset, additionalRoots []platform.AssetRef) (platform.ReleaseCandidate, error) {
+	available, err := p.Assets(builderAssets, true)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	var roots []platform.AssetRef
+	for _, ref := range selected {
+		roots = append(roots, DependentRoots(ref, available)...)
+	}
+	for _, other := range additionalRoots {
+		if slices.ContainsFunc(available, func(a platform.ReleaseAsset) bool { return a.Ref == other }) &&
+			!slices.Contains(roots, other) {
+			roots = append(roots, other)
+		}
+	}
+	return p.WithBindings(roots, available, selected)
+}
+
+func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
+	owner := p.Drafts
+	if owner == nil {
+		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
+	}
+	assets, diagnostic := owner.DraftReleaseAssetsMulti(drafts, member, p.withReview)
+	reply := ReleasePreview{CandidateActions: []platform.Action{}, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
+	for _, draft := range drafts {
+		if draft.ID != "" && !slices.Contains(reply.Drafts, draft) {
+			reply.Drafts = append(reply.Drafts, draft)
+			review := ReleaseDraftReview{Kind: draft.Kind, ID: draft.ID, Issues: []string{}, Downstream: []ReleaseDraftResource{}}
+			for _, check := range assets.Checks {
+				if check.Kind == draft.Kind && check.ID == draft.ID {
+					review.Checked, review.Issues = check.Checked, append(review.Issues, check.Issues...)
+					review.Change = check.Change
+					break
+				}
+			}
+			reply.DraftReviews = append(reply.DraftReviews, review)
+		}
+	}
+	if diagnostic != nil {
+		reply.Diagnostic = diagnostic.Error()
+		if len(assets.Priors) > 0 {
+			if available, err := p.Assets(nil, false); err == nil {
+				var installedRoots []platform.AssetRef
+				for _, prior := range assets.Priors {
+					for _, owner := range DependentRoots(prior, available) {
+						if !slices.Contains(installedRoots, owner) {
+							installedRoots = append(installedRoots, owner)
+						}
+					}
+				}
+				if current, err := p.WithBindings(installedRoots, available, assets.Priors); err == nil {
+					reply.CurrentID = current.ID
+				}
+			}
+		}
+		return reply, platform.ReleaseCandidate{}, nil
+	}
+	var current platform.ReleaseCandidate
+	var oldOwners []platform.AssetRef
+	if len(assets.Priors) > 0 {
+		available, err := p.Assets(assets.Before, true)
+		if err != nil {
+			return ReleasePreview{}, platform.ReleaseCandidate{}, err
+		}
+		for _, prior := range assets.Priors {
+			for _, owner := range DependentRoots(prior, available) {
+				if !slices.Contains(oldOwners, owner) {
+					oldOwners = append(oldOwners, owner)
+				}
+			}
+		}
+		current, err = p.WithBindings(oldOwners, available, assets.Priors)
+		if err != nil {
+			return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("installed definition: %w", err)
+		}
+		reply.CurrentID = current.ID
+		oldOwners = slices.DeleteFunc(oldOwners, func(ref platform.AssetRef) bool {
+			return slices.Contains(assets.Priors, ref) && !slices.Contains(assets.Nexts, ref)
+		})
+	}
+	candidate, err := p.Candidate(assets.Nexts, assets.After, oldOwners)
+	if err != nil {
+		reply.Diagnostic = err.Error()
+		return reply, platform.ReleaseCandidate{}, nil
+	}
+	if len(drafts) > 1 {
+		if err := p.Validate(candidate, member, time.Now().UTC()); err != nil {
+			reply.Diagnostic = err.Error()
+			return reply, platform.ReleaseCandidate{}, nil
+		}
+	}
+	reply.CandidateID = candidate.ID
+	for _, asset := range candidate.Assets {
+		reply.Included = append(reply.Included, asset.Ref)
+	}
+	if len(assets.Priors) == 0 {
+		for _, asset := range candidate.Assets {
+			reply.Added = append(reply.Added, asset.Ref)
+		}
+		return reply, candidate, nil
+	}
+	reply.Added, reply.Removed, reply.Changed, err = platform.CandidateDiff(current, candidate)
+	return reply, candidate, err
+}
+
+type Planner struct {
+	Definitions []platform.Definition
+	Registry    func() (*platform.AssetRegistry, error)
+	Drafts      build.ConstructionDrafts
+	Validate    func(platform.ReleaseCandidate, platform.Member, time.Time) error
+	withReview  bool
+}
+
+func (p Planner) WithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef) (platform.ReleaseCandidate, error) {
+	registry, err := p.Registry()
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	return CandidateWithBindings(roots, available, fixed, registry.ResolvePinned)
+}
+
+func (p Planner) PreviewWithActions(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, error) {
+	p.withReview = true
+	reply, candidate, err := p.Preview(drafts, member)
+	reply.CandidateActions = []platform.Action{}
+	if err != nil {
+		return reply, err
+	}
+	if err := p.reviewDrafts(&reply); err != nil {
+		return reply, err
+	}
+	if reply.Diagnostic != "" {
+		for i := range reply.DraftReviews {
+			if len(reply.DraftReviews[i].Issues) == 0 {
+				reply.DraftReviews[i].Checked = false
+			}
+		}
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		var object build.Object
+		if err := json.Unmarshal(asset.Body, &object); err != nil {
+			return ReleasePreview{}, fmt.Errorf("candidate object %s: %w", asset.Ref, err)
+		}
+		owner := p.Drafts
+		if owner == nil {
+			return reply, fmt.Errorf("construction owner is unavailable")
+		}
+		actions, err := owner.CandidateActions(asset)
+		if err != nil {
+			return reply, err
+		}
+		for _, action := range actions {
+			if action.Payload == nil {
+				action.Payload = []platform.Field{}
+			}
+			reply.CandidateActions = append(reply.CandidateActions, action)
+		}
+	}
+	return reply, nil
+
+}

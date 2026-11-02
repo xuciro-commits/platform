@@ -40,7 +40,7 @@ type AccessConfig struct {
 
 type ProjectMember struct {
 	Member string `json:"member" field:"required" title:"Member" help:"A member's ID in this tenant"`
-	Role   string `json:"role,omitempty" field:"required,choice:owner,editor,viewer" title:"Role" help:"owner: edits the project's resources and manages its access; editor: edits its resources; viewer: opens them without editing"`
+	Role   string `json:"role,omitempty" field:"required,choice:owner,editor,viewer,discoverer" title:"Role" help:"owner: edits the project's resources and manages its access; editor: edits its resources; viewer: opens them without editing"`
 }
 
 type ProjectAsset struct {
@@ -51,8 +51,9 @@ type ProjectAsset struct {
 
 type BuildProject struct {
 	Record
-	Title   string          `json:"title" field:"required,search" title:"What people call it" example:"Spring rollout"`
-	Members []ProjectMember `json:"members,omitempty" title:"Members"`
+	Approvals int             `json:"approvals,omitempty"`
+	Title     string          `json:"title" field:"required,search" title:"What people call it" example:"Spring rollout"`
+	Members   []ProjectMember `json:"members,omitempty" title:"Members"`
 }
 
 type ProjectPerson struct {
@@ -73,9 +74,10 @@ func ProjectManager(m Member, role string) bool {
 }
 
 type ProjectAccessView struct {
-	Members []ProjectMember `json:"members"`
-	Manage  bool            `json:"manage"`
-	People  []ProjectPerson `json:"people,omitempty"`
+	Approvals int             `json:"approvals"`
+	Members   []ProjectMember `json:"members"`
+	Manage    bool            `json:"manage"`
+	People    []ProjectPerson `json:"people,omitempty"`
 }
 
 type Profile struct {
@@ -295,7 +297,8 @@ func ProjectActions() []Action {
 			Description: "Set who may edit or open a project's resources. Administrators and builders set it first; afterwards the project's owners manage it.",
 			Payload: []Field{
 				{Name: "title", Type: "string", Required: true},
-				{Name: "members", Type: "json", Description: "member IDs with their role in the project: owner, editor or viewer"},
+				{Name: "members", Type: "json", Description: "member IDs and project roles"},
+				{Name: "approvals", Type: "integer", Description: "Required non-author approvals; defaults to one"},
 			}, Roles: []string{AnyMember}},
 	}
 }
@@ -339,11 +342,12 @@ func MarkingCleared(m Member, marking string) bool {
 }
 
 const (
-	ProjectType       = "platform.project"
-	SchemaProjectSave = ProjectType + ".save"
-	ProjectOwnerRole  = "owner"
-	ProjectEditorRole = "editor"
-	ProjectViewerRole = "viewer"
+	ProjectType           = "platform.project"
+	SchemaProjectSave     = ProjectType + ".save"
+	ProjectOwnerRole      = "owner"
+	ProjectEditorRole     = "editor"
+	ProjectViewerRole     = "viewer"
+	ProjectDiscovererRole = "discoverer"
 )
 
 var auditorReads = []string{"audit", "deliveries", "work", "connectors", "settings",

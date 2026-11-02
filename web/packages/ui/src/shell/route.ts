@@ -6,6 +6,12 @@ export function routeKey(route: Route): string {
 }
 
 export function routeToHash(route: Route): string {
+  const id = route.params?.id;
+  if (id?.startsWith("ri.")) {
+    const { id: _, section, ...rest } = route.params!;
+    const query = new URLSearchParams(rest).toString();
+    return `#/${route.view}/${encodeURIComponent(id)}${section ? `/${encodeURIComponent(section)}` : ""}${query ? `?${query}` : ""}`;
+  }
   return `#/${routeKey(route)}`;
 }
 
@@ -14,5 +20,7 @@ export function routeFromHash(hash: string): Route | undefined {
   if (!text) return undefined;
   const [view, query] = text.split("?", 2) as [string, string | undefined];
   const params = Object.fromEntries(new URLSearchParams(query ?? ""));
+  const [owner, rid, section] = view.split("/");
+  if (rid?.startsWith("ri.")) return { view: owner!, params: { ...params, id: decodeURIComponent(rid), ...(section ? { section: decodeURIComponent(section) } : {}) } };
   return Object.keys(params).length ? { view, params } : { view };
 }

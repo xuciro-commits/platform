@@ -1,6 +1,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Review proposed changes": "审阅编辑提议",
+ "Apply proposed changes": "应用编辑提议",
+ "Proposed changes applied": "编辑提议已应用",
+ "The proposed changes were refused.": "编辑提议被拒绝。",
+ "The function has changed no records. Applying this proposal runs the listed actions with your current permissions and rules.": "函数尚未修改任何记录。应用提议时，将按你当前的权限与规则执行所列动作。",
   "This object's Workshop view is unavailable. Ask a builder to check its module and page.": "此对象的 Workshop 视图不可用。请构建者检查模块和页面。",
   "This object's Workshop view does not accept its current object. Ask a builder to check the page inputs.": "此对象的 Workshop 视图无法接收当前对象。请构建者检查页面输入。",
   "Object set builder": "对象集合构建器",

@@ -107,6 +107,7 @@ type Precheck struct {
 }
 
 type PackageView struct {
+	Update       bool              `json:"update,omitempty"`
 	Origin       string            `json:"origin,omitempty"`
 	SourceDigest string            `json:"sourceDigest,omitempty"`
 	Removal      *PackageRemoval   `json:"removal,omitempty"`
@@ -139,6 +140,24 @@ func (p PackageDescriptor) Validate() error {
 	for _, value := range []string{p.ID, p.Namespace, p.Version} {
 		if len(value) > 200 || value == "." || value == ".." || strings.ContainsAny(value, "/\\") || strings.IndexFunc(value, func(r rune) bool { return r <= ' ' || r == 127 }) >= 0 {
 			return fmt.Errorf("package ID, namespace and version must be safe path segments")
+		}
+	}
+	if _, err := ParsePackageVersion(p.Version); err != nil {
+		return err
+	}
+	for _, need := range p.Requires {
+		id, constraint := PackageDependency(need)
+		if id == "" || id == p.ID {
+			return fmt.Errorf("a product dependency names another product")
+		}
+		if constraint != "" && constraint != "*" {
+			for _, alternative := range strings.Split(constraint, "||") {
+				for _, term := range strings.Fields(alternative) {
+					if _, err := ParsePackageVersion(strings.TrimLeft(term, "<>=^~")); err != nil {
+						return err
+					}
+				}
+			}
 		}
 	}
 	for _, c := range p.Contributions {
@@ -188,7 +207,7 @@ func (i *PackageIndex) Latest(id string) (PackageDescriptor, bool) {
 	var out PackageDescriptor
 	found := false
 	for _, p := range i.Packages {
-		if p.ID == id && (!found || strings.Compare(p.Version, out.Version) > 0) {
+		if p.ID == id && (!found || ComparePackageVersions(p.Version, out.Version) > 0) {
 			out, found = p, true
 		}
 	}
@@ -196,6 +215,9 @@ func (i *PackageIndex) Latest(id string) (PackageDescriptor, bool) {
 }
 
 func (i *PackageIndex) Find(id, version string) (PackageDescriptor, bool) {
+	if version == "" {
+		return i.Latest(id)
+	}
 	for _, p := range i.Packages {
 		if p.ID == id && (version == "" || p.Version == version) {
 			return p, true
@@ -240,6 +262,7 @@ type PackageState struct {
 }
 
 type PackageHost interface {
+	PrepareManagedPackage(Caller, PackageDescriptor, bool) (func(*pb.ChangeRecord), *kernel.Error)
 	Apps() []App
 	CodeReleaseAssets() ([]ReleaseAsset, error)
 	PutPackageArtifact(string, []byte) error
@@ -266,9 +289,10 @@ type ConsolePackages interface {
 const PackageType = "platform.package"
 
 type CompositeEdit struct {
-	Schema  string          `json:"schema"`
-	Target  *pb.EntityRef   `json:"target"`
-	Payload json.RawMessage `json:"payload,omitempty"`
+	ExpectedRevision *uint32         `json:"expectedRevision,omitempty"`
+	Schema           string          `json:"schema"`
+	Target           *pb.EntityRef   `json:"target"`
+	Payload          json.RawMessage `json:"payload,omitempty"`
 }
 
 type CompositeAnswer struct {

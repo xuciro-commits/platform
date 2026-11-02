@@ -1,3 +1,4 @@
+import { useWorkingState } from "../session/WorkingState";
 import type {PageUI} from "@platform/app";
 import { validApplicationHeader, sourceFieldInput } from "@platform/app";
 import { StructuredEditor } from "@platform/ui";
@@ -93,10 +94,12 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const pages = useMemo(() => (draft.pages ?? []).map((name) => { const record = pageRecords.data?.records.find((item) => item.name === name && !item.archived); return { name, title: record?.title ?? name, id: record?.id, state: record?.state }; }), [draft.pages, pageRecords.data]);
   const headerInvalid = !validApplicationHeader(draft.header,draft.pages??[]);
   const invalid = session.inputs.invalid || headerInvalid;
+  const working=useWorkingState();
   const { markSaved, confirmDiscard } = useUnsavedChanges(dirty || !!createdPage, () => {
+    void working?.clear();
     if (project) { session.load(hydrate(project,declarationFields)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
     setCreatedPage(undefined); setError(undefined);
-  }, saving || templateBusy);
+  }, saving || templateBusy,working?.saved);
   const persist = async (submitted: ModuleDraft) => {
     const expected = baseRevision.current;
     if (!await decide("build.app.edit", { type: "build.app", id }, declarationChanges(moduleChanges(submitted), declarationValue(project!, declarationFields)), { expectedRevision: expected, quiet: true, onRefused: setError })) return false;

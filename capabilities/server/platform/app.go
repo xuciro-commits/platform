@@ -99,11 +99,18 @@ type Caller struct {
 	App              string
 	Replaying        bool
 	Automation       bool
+	sourceProjection bool
+	restoreSource    bool
 	inputRefused     func(*kernel.Error, []FieldIssue)
 	rt               Runtime
 	creationDepth    int
 	transactionInput *pb.Submission
 	agentRun         string
+}
+
+func (c Caller) WithSourceProjection(restore bool) Caller {
+	c.Automation, c.sourceProjection, c.restoreSource = true, true, restore
+	return c
 }
 
 func (c Caller) AgentRun() string { return c.agentRun }
@@ -460,6 +467,7 @@ type AppCatalog interface {
 }
 
 type ConsoleHost interface {
+	PrepareManagedPackage(Caller, PackageDescriptor, bool) (func(*pb.ChangeRecord), *kernel.Error)
 	AppCatalog
 	CodeReleaseAssets() ([]ReleaseAsset, error)
 	ConsoleSetting(name string) string

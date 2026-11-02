@@ -12,10 +12,10 @@ export const branchStatuses = defineStatuses({ open: { label: "Open", tone: "inf
 const decisions = defineStatuses({ approve: { label: "Approved", tone: "success" }, changes: { label: "Changes requested", tone: "warning" }, pending: { label: "Waiting", tone: "neutral" } });
 
 export function approvalBlock(proposal?: Api.BranchProposal): string | undefined {
-  if (!proposal || !proposal.reviewers.length) return undefined;
+  if (!proposal) return undefined;
   const latest = proposal.reviewers.map(reviewer => [...proposal.reviews].reverse().find(review => review.by === reviewer));
   if (latest.some(review => review?.decision === "changes")) return t("A reviewer asked for changes.");
-  if (!latest.some(review => review?.decision === "approve")) return t("At least one reviewer must approve before merging.");
+  if (latest.filter(review=>review?.decision==="approve").length<Math.max(1,proposal.requiredApprovals)) return t("The project approval requirement has not been met.");
 }
 
 export function mergeBlock(branch: Api.BranchDetail, titles: Record<string, string>): string | undefined {
@@ -83,7 +83,7 @@ export function ProposalScreen({ id }: { id: string }) {
           {reviewing && <ReviewDialog branch={branch} open onOpenChange={setReviewing} onProposed={() => {}} />}
         </Panel>}
         {proposal && <Panel title={t("Reviewers")}>
-          {proposal.reviewers.length ? <ul className="divide-y divide-border">{proposal.reviewers.map(reviewer => <ReviewerRow key={reviewer} reviewer={reviewer} proposal={proposal} />)}</ul> : <p className="text-xs text-muted">{t("No reviewers were named; no approval is required.")}</p>}
+          {proposal.reviewers.length ? <ul className="divide-y divide-border">{proposal.reviewers.map(reviewer => <ReviewerRow key={reviewer} reviewer={reviewer} proposal={proposal} />)}</ul> : <p className="text-xs text-muted">{t("Name the required reviewers before merging.")}</p>}
           {mine && <div className="mt-3 grid gap-2 border-t border-border pt-3">
             <Textarea aria-label={t("Review note")} rows={2} placeholder={t("Note (optional)")} value={note} onChange={event => setNote(event.target.value)} />
             <div className="flex flex-wrap gap-2">

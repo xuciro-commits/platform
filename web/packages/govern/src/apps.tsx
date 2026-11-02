@@ -1,20 +1,23 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { type Api } from "@platform/kernel";
-import { PropertyList, ContextHelp, Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
+import { Dialog, Notice, PropertyList, ContextHelp, Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
 import { Fragment, useState } from "react";
 import { when, type AppInfo, type ProtocolInfo } from "./shared";
 import { PackageSources } from "./package-sources";
 import { PackageRequirements } from "./package-preparation";
 
-export function Apps() {
+export function Apps({tab="catalog"}:{tab?:string}) {
   const { holds} = useHost(), { open } = useWorkspace();
   const packages = useRead<Api.PackageView[]>("/v1/packages");
+  const all=packages.data??[];
+  const shown=tab==="installed"?all.filter(item=>item.installed?.state!=="retired" && item.installed?.version===item.descriptor.version):tab==="updates"?all.filter(item=>item.update):all.filter(item=>item.source!=="installed");
   return (
     <>
-      <PageHeader title={t("Packages")} help={t("Install, switch versions or uninstall packages. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
-      <PackageSources items={packages.data ?? []} />
+      <PageHeader title={t(tab==="installed"?"Installed":tab==="updates"?"Updates":"Catalog")} help={t("Install, switch versions or uninstall packages. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
+      {tab==="catalog" && <PackageSources items={all} />}
       {packages.isError ? <div role="alert"><p>{t("Package inventory could not be loaded.")}</p><Button onClick={() => void packages.refetch()}>{t("Retry")}</Button></div> : packages.isPending ? <p role="status">{t("Loading packages…")}</p> : !packages.data?.length ? <p className="text-sm text-muted">{t("This library is empty. Download a package or import a local file to begin.")}</p> : null}
-      <PackageList items={packages.data ?? []} />
+      <PackageList key={tab} items={shown} updates={tab==="updates"} />
+      {!packages.isPending && !packages.isError && !shown.length && <p role="status" className="text-sm text-muted">{t(tab==="updates"?"Your installed products are up to date.":tab==="installed"?"No products are installed.":"No products are available.")}</p>}
       {holds("platform", "admin") && <Button variant="link" className="mt-4" onClick={() => open({ view: "matrix" })}>{t("Inspect built-in modules in the capability matrix")}</Button>}
     </>
   );
@@ -22,17 +25,23 @@ export function Apps() {
 
 const stateTone = (state?: string): "neutral" | "success" | "warning" => state === "active" ? "success" : state === "draining" ? "warning" : "neutral";
 
-function PackageList({ items }: { items: Api.PackageView[] }) {
+function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boolean }) {
   const { can, decide } = useHost(), { open } = useWorkspace();
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [selection, setSelection] = useState("");
   const [search, setSearch] = useState("");
   const [versions, setVersions] = useState<Record<string, string>>({});
+  const [review,setReview]=useState<{schema:string;id:string;payload:unknown;view:Api.PackageView}>();
   if (!items.length) return null;
-  const act = async (schema: string, id: string, payload: unknown) => {
+  const act = async (schema: string, id: string, payload: unknown, confirmed=false) => {
+    if(!confirmed && ["platform.package.install","platform.package.upgrade","platform.package.retire"].includes(schema)) {
+      const version=(payload as {version?:string}).version;
+      const view=items.find(item=>item.descriptor.id===id && (!version || item.descriptor.version===version))!;
+      setReview({schema,id,payload,view});return;
+    }
     setBusy(id); setRefused((r) => ({ ...r, [id]: "" }));
-    await decide(schema, { type: "platform.package", id }, payload, { onRefused: (reason) => setRefused((r) => ({ ...r, [id]: reason })) });
+    if(await decide(schema, { type: "platform.package", id }, payload, { onRefused: (reason) => setRefused((r) => ({ ...r, [id]: reason })) }))setReview(undefined);
     setBusy("");
   };
   const ids = [...new Set(items.map(item => item.descriptor.id || item.installed?.id || ""))];
@@ -56,7 +65,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
       {(selected ? [selected] : []).map(packageID => {
         const available = items.filter(item => (item.descriptor.id || item.installed?.id) === packageID);
         const held = available.find(item => item.installed)?.installed;
-        const version = versions[packageID] ?? held?.version ?? "";
+        const version = versions[packageID] ?? (updates?available.at(-1)?.descriptor.version:held?.version) ?? available.at(-1)?.descriptor.version ?? "";
         const chosen = available.find(item => item.descriptor.version === version);
         const { descriptor: d, precheck, source, sourceDigest, removal } = chosen ?? available[0]!;
         const id = d.id || held?.id || "";
@@ -127,6 +136,17 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
         );
       })}
       </Panel>
+      <Dialog open={!!review} onOpenChange={open=>{if(!open)setReview(undefined);}} title={t(review?.schema==="platform.package.retire"?"Review uninstall":review?.schema==="platform.package.upgrade"?"Review upgrade":"Review installation")} wide>
+        {review && <div className="grid gap-3 text-sm">
+          <strong>{review.view.descriptor.title||review.id} · {review.view.descriptor.version}</strong>
+          <PropertyList items={[[t("Installed version"),review.view.installed?.version||"—"],[t("Required products"),review.view.descriptor.requires?.join(", ")||t("None")]]}/>
+          <p className="text-muted">{t(review.schema==="platform.package.retire"?"Uninstall archives managed resources and preserves customer data and extensions.":"Review the product resources before confirming this exact version.")}</p>
+          <ul className="max-h-72 overflow-auto divide-y divide-border">{review.view.descriptor.blueprint?.assets.map(asset=><li key={`${asset.ref.app}/${asset.ref.kind}/${asset.ref.name}`} className="flex gap-2 py-1 text-xs"><span className="text-muted">{asset.ref.kind}</span><span className="break-all">{asset.ref.name}</span></li>)}</ul>
+          {review.view.precheck.problems?.map(problem=><Notice key={problem} tone="warning" message={t(problem)}/>)}
+          {refused[review.id] && <Notice tone="danger" role="alert" message={refused[review.id]!}/>}
+          <div className="flex justify-end gap-2"><Button disabled={busy===review.id} onClick={()=>setReview(undefined)}>{t("Cancel")}</Button><Button variant="primary" disabled={busy===review.id} onClick={()=>void act(review.schema,review.id,review.payload,true)}>{t(review.schema==="platform.package.retire"?"Uninstall":review.schema==="platform.package.upgrade"?"Upgrade":"Install")}</Button></div>
+        </div>}
+      </Dialog>
     </div>
   );
 }

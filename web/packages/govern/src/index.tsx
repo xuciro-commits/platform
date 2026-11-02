@@ -3,7 +3,7 @@ import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/ap
 import { Button, Card, ContentTabs, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
 import type { ReactNode } from "react";
 import { Markings } from "./markings";
-import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bookmark, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Network, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bookmark, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
@@ -19,7 +19,6 @@ import { AIConfiguration } from "./ai-configuration";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
 import { Credentials } from "./credentials";
 import { Agents, AgentRuns, AgentMemories, Evaluations } from "./processes";
-import { Glossary, Knowledge } from "./knowledge";
 import { HostMigrations, HostOverview, HostPromotions, HostTenant } from "./host";
 
 import {SystemConsole} from "./system";
@@ -58,7 +57,7 @@ function controlPanelNavigation(host: Host): NavSection[] {
   const sections: NavSection[] = [
     { label: t("Overview and identity"), items: [
       item(t("Overview"), <SlidersHorizontal />, "control-panel"),
-      ...(admin(host) ? [item(t("Organisation"), <Building2 />, "organisation")] : []),
+      ...(admin(host) ? [{...item(t("Organisation"), <Building2 />, "organisation"),covers:["organisation","enterprise"]}] : []),
       ...(admin(host) || auditor(host) ? [item(t("Members"), <Users />, "members")] : []),
     ] },
     { label: t("Access"), items: [
@@ -98,7 +97,8 @@ const controlPanelViews: View[] = [
   { id: "integrations", title: () => t("Connectors"), render: () => <AreaTabs area="settings" current="integrations"><Integrations /></AreaTabs> },
   { id: "control-panel", title: () => t("Control Panel"), render: () => <ControlPanelOverview /> },
   { id: "account", title: () => t("My account"), render: () => <MyAccount /> },
-  { id: "organisation", title: () => t("Organisation"), render: () => <Organisation /> },
+  { id: "organisation", title: () => t("Organisation"), render: () => <TabbedArea label="Organization" current="organisation" tabs={[{view:"organisation",title:"Settings"},{view:"enterprise",title:"Organization directory"}]}><Organisation /></TabbedArea> },
+ { id:"enterprise",title:()=>t("Organization directory"),render:params=><TabbedArea label="Organization" current="enterprise" tabs={[{view:"organisation",title:"Settings"},{view:"enterprise",title:"Organization directory"}]}><Enterprise element={params.element} section={params.section}/></TabbedArea> },
   { id: "members", title: () => t("Members"), render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "permissions", title: () => t("Roles and permissions"), render: () => <AreaTabs area="permissions" current="permissions"><Permissions /></AreaTabs> },
@@ -134,12 +134,14 @@ export const marketplace = defineApp({
   for: (host) => admin(host) || auditor(host) || host.can("build.app.create"),
   home: { view: "apps" },
   views: [
-    { id: "apps", title: () => t("Packages"), render: () => <Apps /> },
+    { id: "apps", title: () => t("Marketplace"), render: p => <Apps tab={p.tab}/> },
     { id: "package-preparation", title: () => t("Prepare package applications"), render: p => <PackagePreparation key={`${p.id}@${p.version}`} id={p.id ?? ""} version={p.version ?? ""} /> },
     { id: "package-help", title: () => t("Package guide"), render: p => <PackageHelp topic={p.topic} /> },
   ],
   nav: () => [{ label: t("Marketplace"), items: [
-    { label: t("Packages"), icon: <Blocks />, route: { view: "apps" } },
+    { label: t("Catalog"), icon: <Store />, route: { view: "apps",params:{tab:"catalog"} } },
+    { label: t("Installed"), icon: <Blocks />, route: { view: "apps",params:{tab:"installed"} } },
+    { label: t("Updates"), icon: <Upload />, route: { view: "apps",params:{tab:"updates"} } },
     { label: t("Package guide"), icon: <BookOpen />, route: { view: "package-help" } },
   ] }],
 });
@@ -202,21 +204,6 @@ export const agentOperations: Pick<AppUI, "for" | "views" | "nav"> = {
   ] }],
 };
 
-export const knowledge = defineApp({
-  id: "knowledge", serves: ["knowledge"], surface: "work", category: "business", title: "Knowledge", icon: <BookOpen />,
-  description: "Documents and the glossary of your organisation.",
-  for: (host) => !!host.role("knowledge"),
-  home: { view: "knowledge" },
-  views: [
-    { id: "knowledge", title: () => t("Knowledge"), render: () => <Knowledge /> },
-    { id: "glossary", title: () => t("Glossary"), render: () => <Glossary /> },
-  ],
-  nav: () => [{ label: t("Knowledge"), items: [
-    { label: t("Documents"), icon: <BookOpen />, route: { view: "knowledge" } },
-    { label: t("Glossary"), icon: <BookA />, route: { view: "glossary" } },
-  ] }],
-});
-
 export const hostConsole = defineApp({
   id: "host-console", serves: [], category: "govern", title: "Host Console", icon: <Server />,
   description: "Every tenant on this host: health, lifecycle, support sessions, promotions and migrations.",
@@ -258,14 +245,5 @@ const masterData = defineApp({
   ] }],
 });
 
-export const enterprise = defineApp({
-  id: "enterprise", serves: ["enterprise"], category: "business", title: "Organisation directory", icon: <Network />,
-  description: "Units, posts, people and assignments. Historical enterprise content is read-only.",
-  for: (host) => admin(host) || host.holds("enterprise", "admin", "viewer"),
-  home: { view: "enterprise" },
-  views: [{ id: "enterprise", title: () => t("Organisation directory"), render: params => <Enterprise element={params.element} section={params.section} /> }],
-  nav: () => [{label:t("Organisation directory"),items:[{ label: t("Organisation directory"), icon: <Building2 />, route: {view:"enterprise"} }]}],
-});
-
-export const contributions: AppUI[] = [marketplace, knowledge, hostConsole, masterData, enterprise];
+export const contributions: AppUI[] = [marketplace, hostConsole, masterData];
 export default controlPanel;

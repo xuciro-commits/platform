@@ -125,7 +125,7 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
       await expect(page.getByText("Looked up by the host", { exact: false })).toBeVisible();
 
       const created = page.waitForResponse(r => r.url().endsWith("/v1/submissions") && r.request().method() === "POST"
-        && r.request().postDataJSON().schema.name === "build.connection.create");
+        && r.request().postDataJSON().schema.name === "build.connection.save");
       await page.getByRole("button", { name: "Create", exact: true }).click();
       const createdResponse = await created;
       expect(createdResponse.ok(), await createdResponse.text()).toBeTruthy();
@@ -152,10 +152,13 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
       await page.goto(`/#/connection?id=${connectionID}`);
       await expect(page.getByRole("textbox", { name: "Secret name", exact: true })).toHaveValue(secretName);
       const cleared = page.waitForResponse(r => r.url().endsWith("/v1/submissions") && r.request().method() === "POST"
-        && r.request().postDataJSON().schema.name === "build.connection.edit");
-      // Clearing the field marks the draft dirty; the editor autosaves the edit.
+        && r.request().postDataJSON().schema.name === "build.connection.save");
       await page.getByRole("textbox", { name: "Secret name", exact: true }).fill("");
       await page.getByRole("textbox", { name: "Connection title", exact: true }).click();
+      await page.getByRole("button", { name: "Save", exact: true }).first().click();
+      const review = page.getByRole("dialog", { name: "Review changes", exact: true });
+      await review.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(review).toBeHidden();
       expect((await cleared).ok(), await (await cleared).text()).toBeTruthy();
       await expect.poll(async () => (await read<{ record: { secret?: string } }>(`/v1/records/build.connection/${connectionID}`)).record.secret ?? "", { timeout: 15_000 }).toBe("");
 
@@ -188,7 +191,7 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
       await page.getByRole("combobox", { name: /^Target dataset/ }).selectOption(datasetID);
 
       const created = page.waitForResponse(r => r.url().endsWith("/v1/submissions") && r.request().method() === "POST"
-        && r.request().postDataJSON().schema.name === "build.source.create");
+        && r.request().postDataJSON().schema.name === "build.source.save");
       await page.getByRole("button", { name: "Create", exact: true }).click();
       expect((await created).ok(), await (await created).text()).toBeTruthy();
 

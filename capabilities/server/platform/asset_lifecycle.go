@@ -16,7 +16,7 @@ import (
 
 func ResourceID(tenant string, ref AssetRef) string {
 	sum := sha256.Sum256([]byte(tenant + "/" + ref.String()))
-	return "ri." + string(ref.Kind) + "." + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:16]))
+	return "ri." + ref.App + "." + tenant + "." + string(ref.Kind) + "." + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:16]))
 }
 
 type AssetEnvironmentRequirement struct {
@@ -26,6 +26,7 @@ type AssetEnvironmentRequirement struct {
 }
 
 type AssetReleaseContext struct {
+	ManagedBy  string
 	DraftsOnly bool
 	DraftIDs   map[AssetRef]string
 	Member     Member

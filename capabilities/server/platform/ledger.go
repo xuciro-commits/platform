@@ -582,6 +582,9 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 		}
 		v.Elem().Field(0).Addr().Interface().(*Record).ID = id
 	}
+	if c.restoreSource {
+		v.Elem().Field(0).Addr().Interface().(*Record).Archived = false
+	}
 	if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
 		return nil, err
 	}
@@ -604,14 +607,14 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 		}
 	}
 	value := v.Elem().Interface()
-	if verb != "create" || e.CreateTxn == nil || c.Replaying {
+	if verb != "create" || e.CreateTxn == nil || c.Replaying || c.sourceProjection {
 		if err := c.rt.Check(c, value); err != nil {
 			return nil, err
 		}
 	}
 	return func(r *pb.ChangeRecord) {
 		c.rt.Put(c, r, value)
-		if verb == "create" && e.CreateTxn != nil && e.ApplyCreateTxn != nil && !c.Replaying {
+		if verb == "create" && e.CreateTxn != nil && e.ApplyCreateTxn != nil && !c.Replaying && !c.sourceProjection {
 			if c.creationDepth >= 16 {
 				c.FailDecision(Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions exceed their depth limit"))
 				return

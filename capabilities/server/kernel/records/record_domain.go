@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 	ruleexpr "platformserver/expr"
-	"platformserver/journal"
+	"platformserver/kernel/journal"
 	"platformserver/platform"
 	"reflect"
 	"slices"

@@ -35,6 +35,13 @@ test("F1 builder goes from an empty project to an application a business user ac
     expect(answer.record.changeId).not.toBe("");
   };
 
+  const saveCurrentResource = async () => {
+    await page.getByRole("button", { name: "Save", exact: true }).first().click();
+    const review = page.getByRole("dialog", { name: "Review changes", exact: true });
+    await review.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(review).toBeHidden();
+  };
+
   await test.step("1 create a project", async () => {
     await signIn(page, "builder", "/projects");
     const projects = page.getByRole("table");
@@ -86,6 +93,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await page.getByRole("button", { name: "Open action type", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "What people call it", exact: true })).toBeVisible();
     await expect(page.getByText("Select a row to edit it here.", { exact: true })).not.toBeVisible();
+    await saveCurrentResource();
   });
 
   await test.step("5 build a page in Workshop from a template bound to the draft object type", async () => {
@@ -144,6 +152,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await page.goto(`/#/object-type?id=${objectID}`);
     await page.getByRole("navigation", { name: "Order", exact: true }).getByRole("button", { name: "Display", exact: true }).click();
     await page.getByRole("combobox", { name: "Object view", exact: true }).selectOption({ label: `${label} / Order object view · ${name}/${viewName}` });
+    await saveCurrentResource();
     await expect.poll(async () => (await read<{ record: { objectView?: ObjectView } }>(`/v1/records/build.object/${objectID}`)).record.objectView).toEqual(objectView);
   });
 
@@ -503,10 +512,11 @@ test("F1 builder goes from an empty project to an application a business user ac
       await expect(user.getByRole("region", { name: "Order object view", exact: true })).toHaveCount(0);
       await page.goto(`/#/object-type?id=${objectID}`);
       await page.getByRole("navigation", { name: "Order", exact: true }).getByRole("button", { name: "Display", exact: true }).click();
-      const clearing = page.waitForResponse(response => response.url().endsWith("/v1/submissions") && response.request().method() === "POST" && response.request().postDataJSON().target.type === "build.object" && response.request().postDataJSON().target.id === objectID);
+      const clearing = page.waitForResponse(response => response.url().endsWith("/v1/submissions") && response.request().method() === "POST" && response.request().postDataJSON().target.type === "build.object" && response.request().postDataJSON().target.id === objectID && response.request().postDataJSON().schema.name === "build.object.save");
       await page.getByRole("combobox", { name: "Object view", exact: true }).selectOption({ label: "Default generated view" });
+      await saveCurrentResource();
       const cleared = await clearing;
-      expect(JSON.parse(Buffer.from(cleared.request().postDataJSON().payload, "base64").toString())).toMatchObject({ objectView: null });
+      expect(JSON.parse(Buffer.from(cleared.request().postDataJSON().payload, "base64").toString())).toMatchObject({ spec:{objectView: null} });
       const answer = await cleared.json();
       expect(cleared.ok(), JSON.stringify(answer)).toBeTruthy();
       expect(answer.error).toBeUndefined();

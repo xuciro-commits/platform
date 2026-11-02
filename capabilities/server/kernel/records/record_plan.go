@@ -3,7 +3,7 @@ package records
 import (
 	"encoding/json"
 	ruleexpr "platformserver/expr"
-	"platformserver/journal"
+	"platformserver/kernel/journal"
 	"platformserver/platform"
 	"reflect"
 	"slices"

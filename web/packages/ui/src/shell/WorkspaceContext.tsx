@@ -66,8 +66,8 @@ export function useViewTitle(name?: string) {
   useEffect(() => { if (api?.retitle && panel && name) api.retitle(panel, name); }, [api, panel, name]);
 }
 
-export function useUnsavedChanges(dirty: boolean, discard: () => void, busy = false) {
-  const inputs=useInputDrafts();dirty ||=!!inputs?.dirty;busy ||=!!inputs?.busy;
+export function useUnsavedChanges(dirty: boolean, discard: () => void, busy = false, stored = false) {
+  const inputs=useInputDrafts();dirty = !stored && (dirty || !!inputs?.dirty);busy ||=!!inputs?.busy;
   const unsaved = useContext(WorkspaceContext)?.unsaved;
   const panel = useContext(PanelContext);
   const owner = useRef(Symbol());

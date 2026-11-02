@@ -97,14 +97,26 @@ test("F2 a builder modifies a published object type on a branch and proposes it 
     await expect(bar.getByRole("combobox", { name: "Branch", exact: true })).toHaveValue(/.+/);
   });
 
-  await test.step("2 the builder adds a property on the branch and the work state auto-saves to the branch", async () => {
+  await test.step("2 the builder adds a property on the branch and the work state stays private until it is saved", async () => {
     await page.getByRole("navigation", { name: objectTitle, exact: true }).getByRole("button", { name: /^Properties/ }).click();
     await page.getByRole("button", { name: "Add a property", exact: true }).click();
     const inspector = page.getByRole("textbox", { name: "What people call it", exact: true });
     await expect(inspector).toBeVisible();
     await inspector.fill(newFieldTitle);
     await page.getByRole("textbox", { name: "Name", exact: true }).fill(newField);
-    await expect(page.getByRole("status").filter({ hasText: "Saved to branch" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("status").filter({ hasText: "Working state saved" })).toBeVisible({ timeout: 30_000 });
+    const branch = await page.getByRole("group", { name: "Branch", exact: true }).getByRole("combobox", { name: "Branch", exact: true }).inputValue();
+    const working = await read<{ id: string; record?: { spec: unknown } }>(`/v1/working-state/${branch}/build.object/${objectID}`);
+    expect(working.record).toBeDefined();
+    const another = await page.request.get(`/v1/records/build.workingstate/${working.id}`, { headers: { authorization: "Bearer admin" } });
+    expect([403, 404]).toContain(another.status());
+    const shared = await read<{ resources: unknown[] }>(`/v1/branches/${branch}`);
+    expect(shared.resources).toHaveLength(0);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const save = page.getByRole("dialog", { name: "Review changes", exact: true });
+    await save.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(save).toBeHidden();
+    await expect(page.getByRole("status").filter({ hasText: "Saved to branch" })).toBeVisible();
     expect(await objectFields()).toEqual(["subject", "note"]);
   });
 
@@ -120,6 +132,7 @@ test("F2 a builder modifies a published object type on a branch and proposes it 
     const branchChanges = resource.getByRole("list", { name: "Changes in this branch", exact: true });
     await expect(branchChanges.getByText(newField, { exact: false }).first()).toBeVisible();
     await expect(dialog.getByRole("region", { name: "Checks", exact: true }).getByText("Passed", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    await dialog.getByRole("checkbox",{name:"admin-1",exact:true}).check();
     await dialog.getByRole("textbox", { name: "Note for reviewers", exact: true }).fill("Please review the added property.");
     const proposed = page.waitForResponse(response => response.url().includes("/proposal") && response.request().method() === "POST");
     await dialog.getByRole("button", { name: "Create proposal", exact: true }).click();
@@ -151,6 +164,7 @@ test("F2 a builder modifies a published object type on a branch and proposes it 
       const reviewerChanges = resource.getByRole("list", { name: "Changes in this branch", exact: true });
       await expect(reviewerChanges.getByText(newField, { exact: false }).first()).toBeVisible();
 
+      await admin.getByRole("button",{name:"Approve",exact:true}).click();
       const merge = admin.getByRole("button", { name: "Merge", exact: true });
       await expect(merge).toBeEnabled({ timeout: 30_000 });
       const merged = admin.waitForResponse(response => response.url().endsWith("/merge") && response.request().method() === "POST");

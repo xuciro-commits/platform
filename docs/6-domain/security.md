@@ -1,6 +1,6 @@
 ---
 level: 6 领域架构
-covers: [capabilities/server/authorization*.go, capabilities/server/markings.go, capabilities/server/engine/authorization/**, capabilities/server/platform/authz/**, web/packages/govern/src/people.tsx, web/packages/build/src/projects/project-access.tsx]
+covers: [capabilities/server/host/authorization*.go, capabilities/server/host/markings.go, capabilities/server/services/security/**, web/packages/govern/src/people.tsx, web/packages/build/src/projects/project-access.tsx]
 read-when: 改动任何授权判断、角色、项目访问、标记、行列策略、导出、AI 上下文的可见性
 ---
 
@@ -87,9 +87,7 @@ read-when: 改动任何授权判断、角色、项目访问、标记、行列策
 
 ## 现存差距
 
-- Discoverer 与项目级读取未实现（路线图 P3.7）。
 - 标记只有分级，以平台应用的 `confidential`、`restricted` 角色表示许可；专项标记、标记资源、解除标记步骤未实现（P3.8）。
-- 大多数资源没有所属项目字段，项目覆盖由项目自身的页面与资源列表推导（P2.2）。
 - 授权上下文构造在宿主根包，未在 `services/security`（P2.6）。
 
 ## 相关

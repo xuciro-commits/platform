@@ -1,3 +1,4 @@
+import { useWorkingState } from "../session/WorkingState";
 import { transactionIssues, transactionIssueText } from "./transaction-edit";
 import { sourceFieldInput } from "@platform/app";
 import { useActionTrial, useHost } from "@platform/app";
@@ -27,10 +28,12 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string>();
   const reset = useRef(onReset); reset.current = onReset;
+  const working=useWorkingState();
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
+    void working?.clear();
     if (object) { baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`; }
     setRefused(undefined); reset.current?.();
-  }, busy);
+  }, busy,working?.saved);
   useEffect(() => {
     const changedScope = loadedScope.current !== scope;
     if (!object || !loaded.current && query.isFetching || query.isPlaceholderData || dirty || busy || !changedScope && loaded.current === `${object.id}:${object.revision}`) return;

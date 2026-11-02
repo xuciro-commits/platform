@@ -34,15 +34,14 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 | 钩子 | 时机 | 作用 |
 |---|---|---|
 | `format.py` | 编辑或写入 `.go` 文件后 | `gofmt -w` 该文件 |
-| `commit-gate.py` | 执行 `git commit` 前 | 对相对 HEAD 的全部改动（含未跟踪文件）：Go 文件 gofmt 与 `go build ./...`；改动的 TS 包 `tsc`；`git diff HEAD --check`；反膨胀门禁（见下）。改动的代码命中某规范 `covers` 而该规范未改时，首次拦下并列出规范；内容不变再次提交则放行 |
+| `commit-gate.py` | 执行 `git commit` 前 | 对相对 HEAD 的全部改动（含未跟踪文件）：Go 文件 gofmt 与 `go build ./...`；改动的 TS 包 `tsc`；`git diff HEAD --check`。改动的代码命中某规范 `covers` 而该规范未改时，首次拦下并列出规范；内容不变再次提交则放行 |
 
-反膨胀门禁只针对本次改动的手写源码（`capabilities/**`、`contract/**`、`web/packages/**`、`web/apps/**` 的 `.go/.ts/.tsx`），排除生成目录与 i18n 字典：单文件超过 600 行即拦下，要求拆分或下沉；`jscpd`（按需 `npx`，`--min-lines 30`，排除 `*.json` 测试向量与快照数据）发现重复片段即拦下，要求合并去重。`npx` 拉取失败时跳过重复检查并提示。
 
 钩子失败时以退出码 2 把原因交回代理；代理修正后重试，不绕过钩子。
 
 ## 7.10 内核不变量
 
-位于 `capabilities/server/invariants_test.go` 及同目录的 `*_invariants_test.go`（夹具在 `invariants_harness_test.go`），只测这些性质：
+位于 `capabilities/server/host/invariants_test.go` 及同目录的 `*_invariants_test.go`（夹具在 `invariants_harness_test.go`），只测这些性质：
 
 | 编号 | 不变量 |
 |---|---|

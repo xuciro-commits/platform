@@ -12,6 +12,7 @@ import {
 } from "@platform/ui";
 import { Boxes, Link2, Plus, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useWorkingState } from "../session/WorkingState";
 import { useObjectDraft } from "./object-draft";
 import { ConstraintsEditor } from "./constraints";
 import { RuleCollectionsEditor } from "./RuleCollectionsEditor";
@@ -34,6 +35,7 @@ const objectGroups = [
 const objectSections = objectGroups.flatMap(group => group.sections.map(section => ({ ...section, group: group.title })));
 type Tab = typeof objectSections[number]["id"];
 export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
+  const working=useWorkingState();
   const call = useViewCall();
   const callInput = call?.input;
   const returnLabel = callInput && typeof callInput === "object" && "returnLabel" in callInput && typeof callInput.returnLabel === "string" ? callInput.returnLabel : t("Return");
@@ -83,7 +85,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
       onFields={(fields) => change({ ...process, fields })} />}
     {action && chosen && <ActionSummary action={action} states={process.states} issues={draft.issuesOf(action.name).length}
-      onOpen={() => void perform(async () => { if (!dirty || await save()) open({ view: "action-type", params: { id, action: action.name } }); })}
+      onOpen={() => void perform(async () => { await working?.persist();open({ view: "action-type", params: { id, action: action.name } }); })}
       onRemove={() => { change({ ...process, actions: process.actions.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} />}
     {!chosen && <p className="p-2 text-xs text-muted">{t("Select a property, state, action or role to edit it.")}</p>}
   </div>;

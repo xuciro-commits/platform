@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformkernel/kernel"
 	"slices"
 	"strings"
 	"time"
 )
 
 type BuildHost interface {
+	ProjectApprovals(string) int
+	CheckResourceSchema(string, *SchemaVersion) *kernel.Error
 	TransactionRuntime(BusinessRuntimeContext) TransactionExecutor
 	SystemDefinitionReadOnly(AssetRef) bool
 	Action(schema string) (app string, a Action, ok bool)

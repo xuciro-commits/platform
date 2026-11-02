@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"platformserver/internal/systembuild"
-	"platformserver/internal/systemscope"
+	"platformserver/kernel/systemscope"
 	"platformserver/platform"
+	"platformserver/services/apps/system/build"
 )
 
 func main() {

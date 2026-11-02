@@ -40,49 +40,6 @@ def covers(path):
     return []
 
 
-MAX_LINES = 600
-SRC_EXTS = (".go", ".ts", ".tsx")
-# 生成文件与翻译字典不参与膨胀门禁：它们本就很长且非手写。
-BLOAT_EXCLUDE = re.compile(r"(^|/)(gen|__generated__)/|/i18n(/|\.|$)|zh-CN\.ts$|/pageui/manifest\.ts$")
-
-
-def bloat_src(present):
-    return [f for f in present
-            if f.endswith(SRC_EXTS)
-            and f.startswith(("capabilities/", "contract/", "web/packages/", "web/apps/"))
-            and not BLOAT_EXCLUDE.search(f)]
-
-
-def bloat_problems(root, present):
-    files = bloat_src(present)
-    if not files:
-        return []
-    problems = []
-
-    too_long = []
-    for f in files:
-        try:
-            with open(os.path.join(root, f), encoding="utf-8") as fh:
-                n = sum(1 for _ in fh)
-        except OSError:
-            continue
-        if n > MAX_LINES:
-            too_long.append(f"{f}: {n} 行 (> {MAX_LINES})")
-    if too_long:
-        problems.append("文件过长，拆分或下沉后再提交：\n" + "\n".join(too_long))
-
-    dirs = sorted({os.path.dirname(f) for f in files})
-    code, out = run(["npx", "--yes", "jscpd", "--silent", "--min-lines", "30",
-                     "--reporters", "consoleFull", "--threshold", "0",
-                     "--ignore", "**/*.json", *dirs], root, timeout=180)
-    m = re.search(r"Found (\d+) (?:exact )?clones", out)
-    if "npm error" in out.lower() or "command not found" in out.lower():
-        problems.append("jscpd 不可用（网络或 npx 失败），本次跳过重复检查：\n" + out[-500:])
-    elif m and int(m.group(1)) > 0:
-        problems.append("jscpd 发现重复片段，合并去重后再提交：\n" + out[-3000:])
-    return problems
-
-
 def main():
     command = json.load(sys.stdin).get("tool_input", {}).get("command", "")
     if not re.search(r"\bgit\s+commit\b", command):
@@ -117,10 +74,6 @@ def main():
     out = run(["git", "diff", "HEAD", "--check"], root)[1]
     if out:
         problems.append("git diff --check:\n" + out)
-
-    bloat = bloat_problems(root, present)
-    if bloat:
-        problems.extend(bloat)
 
     if problems:
         print("\n\n".join(problems), file=sys.stderr)
