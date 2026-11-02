@@ -36,6 +36,7 @@ type AccessConfig struct {
 	Roles    []CustomRole   `json:"roles"`
 	Policies []PolicyRecord `json:"policies"`
 	Teams    []Team         `json:"teams"`
+	Markings []Marking      `json:"markings,omitempty"`
 }
 
 type ProjectMember struct {
@@ -261,11 +262,14 @@ type AuthorizationState struct {
 	Policies map[string]*PolicyRecord
 	Teams    map[string]*Team
 	Projects map[string]*BuildProject
+	Markings map[string]*Marking `json:",omitempty"`
 }
 
 func AccessActions() []Action {
 	admin := []string{"admin"}
 	return []Action{
+		{Schema: SchemaMarkingSave, Target: MarkingType, Capability: "members", Title: "Save marking", Description: "Save a marking and its member or team clearances.", Roles: admin, Payload: []Field{{Name: "title", Type: "string", Required: true}, {Name: "members", Type: "string[]"}, {Name: "teams", Type: "string[]"}, {Name: "declassifiers", Type: "string[]"}, {Name: "declassifierTeams", Type: "string[]"}}},
+		{Schema: SchemaMarkingArchive, Target: MarkingType, Capability: "members", Title: "Archive marking", Description: "Stop granting this marking; existing marked data stays protected.", Roles: admin, Payload: []Field{}},
 		{Schema: SchemaRoleSave, Target: RoleType, Capability: "members", Title: "Define role",
 			Description: "Define or change a role of this tenant in an app: the actions it may call. Members hold it like any role.",
 			Payload: []Field{{Name: "app", Type: "string", Required: true, Description: "App ID"}, {Name: "title", Type: "string"},
@@ -334,7 +338,7 @@ func MarkingCleared(m Member, marking string) bool {
 		return true
 	}
 	for _, clearance := range Markings[MarkingRank(marking):] {
-		if m.Holds("platform", clearance) {
+		if m.Holds("platform", clearance) || slices.Contains(m.Markings, clearance) {
 			return true
 		}
 	}
@@ -365,6 +369,8 @@ func AuditorMayRead(name string) bool {
 type ConsolePolicies interface {
 	Attach(AppCatalog)
 	SnapshotState() AuthorizationState
+	MarkingViews() []Marking
+	MarkingClearances(string) ([]string, []string)
 	Restore(AuthorizationState)
 	PrepareAccess(Caller, *pb.Submission, []string) (func(*pb.ChangeRecord), *kernel.Error)
 	PrepareProject(Caller, *pb.Submission, []string) (func(*pb.ChangeRecord), *kernel.Error)

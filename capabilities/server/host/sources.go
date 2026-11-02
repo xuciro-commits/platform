@@ -57,17 +57,19 @@ func (t *Tenant) PullSources(now time.Time) {
 }
 
 type integrationPreparation struct {
-	Transaction string                      `json:"transaction,omitempty"`
-	Type        string                      `json:"type"`
-	ID          string                      `json:"id"`
-	Rows        []build.SourceRow           `json:"rows,omitempty"`
-	Data        []map[string]any            `json:"data"`
-	Object      string                      `json:"object,omitempty"`
-	Binding     *platform.DataSourceBinding `json:"binding,omitempty"`
-	Dataset     string                      `json:"dataset,omitempty"`
-	Enterprise  *build.EnterpriseTarget     `json:"enterprise,omitempty"`
-	Producer    string                      `json:"producer"`
-	Marking     string                      `json:"marking,omitempty"`
+	Transaction  string                      `json:"transaction,omitempty"`
+	Type         string                      `json:"type"`
+	ID           string                      `json:"id"`
+	Rows         []build.SourceRow           `json:"rows,omitempty"`
+	Data         []map[string]any            `json:"data"`
+	Object       string                      `json:"object,omitempty"`
+	Binding      *platform.DataSourceBinding `json:"binding,omitempty"`
+	Dataset      string                      `json:"dataset,omitempty"`
+	Enterprise   *build.EnterpriseTarget     `json:"enterprise,omitempty"`
+	Producer     string                      `json:"producer"`
+	Marking      string                      `json:"marking,omitempty"`
+	Compartments []string                    `json:"compartments,omitempty"`
+	Declassified []string                    `json:"declassified,omitempty"`
 }
 
 func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now time.Time, plan integrationPreparation) (*build.IntegrationExecution, error) {
@@ -169,13 +171,13 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 	} else if raw, err := t.readSource(s); err != nil {
 		pull.Error = err.Error()
 	} else {
-		marking, refusal := recordRead(t, context.Background(), func() (string, *kernel.Error) { return t.connectionMarking(s.Connection), nil })
+		marking, refusal := recordRead(t, context.Background(), func() (platform.MarkingSet, *kernel.Error) { return t.connectionMarkings(s.Connection), nil })
 		if refusal != nil {
 			log.Printf("source connection state unavailable: %v", refusal)
 			return
 		}
 		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
-		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: marking}
+		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: marking.Level, Compartments: marking.Compartments}
 		plan.Type, plan.ID = build.SourceType, s.ID
 		if s.Stream {
 			plan.Transaction = "append"
@@ -187,7 +189,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 					plan.Data = []map[string]any{}
 				}
 			}
-		} else if build.Guarded(plan.Marking) {
+		} else if (platform.MarkingSet{Level: plan.Marking, Compartments: plan.Compartments}).Guarded() {
 			pull.Error = "A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules"
 		} else if rows, binding, err := t.declaredRows(s.Object, "source", s.ID, raw, now); err != nil {
 			pull.Error = err.Error()
@@ -249,7 +251,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		} else if plan.Dataset != "" {
 			if plan.Data != nil {
 				key := "source:" + pull.Execution.ID + ":dataset"
-				if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, plan.Marking, plan.Data, key, pull.At, plan.Transaction); err != nil {
+				if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, platform.MarkingSet{Level: plan.Marking, Compartments: plan.Compartments}, plan.Data, key, pull.At, plan.Transaction); err != nil {
 					if !t.integrationRefused(build.ID, key) {
 						return
 					}
@@ -410,16 +412,16 @@ func (t *Tenant) submitIntegrationRow(member platform.Member, app, object string
 	return err
 }
 
-func (t *Tenant) connectionMarking(connection string) string {
+func (t *Tenant) connectionMarkings(connection string) platform.MarkingSet {
 	if connection == "" {
-		return ""
+		return platform.MarkingSet{}
 	}
 	conn, _ := platform.Get[build.Connection](t.automation(build.ID, false), connection)
 	fixed, err := t.app(build.ID).(build.IntegrationDefinitions).ExecutionConnection(conn)
 	if err != nil {
-		return "restricted"
+		return platform.MarkingSet{Level: "restricted"}
 	}
-	return fixed.Marking
+	return platform.MarkingSet{Level: fixed.Marking, Compartments: fixed.Compartments}
 }
 
 func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
@@ -459,11 +461,11 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 	return build.NewResolver(rules[i], producer, records)
 }
 
-func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer, marking string, rows []map[string]any, key string, now time.Time, transaction string) *kernel.Error {
+func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer string, marking platform.MarkingSet, rows []map[string]any, key string, now time.Time, transaction string) *kernel.Error {
 	if rows == nil {
 		rows = []map[string]any{}
 	}
-	payload, _ := json.Marshal(map[string]any{"type": transaction, "rows": rows, "producer": producer, "marking": marking})
+	payload, _ := json.Marshal(map[string]any{"type": transaction, "rows": rows, "producer": producer, "marking": marking.Level, "compartments": marking.Compartments})
 	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: build.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: build.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
 	return err

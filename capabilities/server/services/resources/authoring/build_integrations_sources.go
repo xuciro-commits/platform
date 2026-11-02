@@ -183,7 +183,7 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 			if err != nil {
 				return refuse(err.Error())
 			}
-			if Guarded(fixed.Marking) {
+			if Guarded(fixed.Marking) || len(fixed.Compartments) > 0 {
 				return refuse("A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules")
 			}
 		}

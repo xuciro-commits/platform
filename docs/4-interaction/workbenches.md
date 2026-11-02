@@ -149,7 +149,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 - 侧栏：Overview、Organization、Members、Roles and permissions、Markings、AI、Settings、Audit。
 - Organization：组织单元树 + 团队；Members：成员表 → 成员页（身份、角色、标记许可、团队、单位、支持授权）。
 - Roles and permissions：业务角色（来自已安装产品与租户定义）+ 能力矩阵。
-- Markings：标记列表（等级、说明、获准成员与团队数）→ 标记页（获准的成员与团队、被标记的资源）。
+- Markings：标记列表（分级或专项、获准成员与团队数、状态）→ 标记页（数据许可、解除权限、被标记的资源）；两类许可分别选择成员与团队。专项可创建、归档与恢复。
 - AI：供应商、模型、用量、试验场。
 - Settings：语言与词汇、租户与应用设置、凭据。
 - Audit：接受结果查询表（主体、动作、资源、时间、结果）。
@@ -166,4 +166,4 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 - Logic 拥有逻辑流与查询两类旧资源，查询应并入函数或对象集（路线图 P3.11）。
 - 检索源与术语归 Agent Studio，组织目录归 Control Panel Organization；Master data 仍需迁入产品包（P2.10）。
-- Marketplace 已有依赖顺序、资源差异与客户扩展审阅；安装中的业务角色与专项标记映射尚需接通（P5.3、P3.8）。
+- Marketplace 已有依赖顺序、资源差异与客户扩展审阅；安装中的业务角色与专项标记映射尚需接通（P5.3）。

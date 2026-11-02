@@ -6,13 +6,13 @@ import { CreateObjectFromDataset } from "./dataset-object";
 import { ResourceList } from "../editor/ResourceList";
 import { useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
-import { MarkingField } from "./marking";
+import { CompartmentField, MarkingField } from "./marking";
 import { Button, Checkbox, ContentTabs, DataTable, FilePicker, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
 type Field = { name: string; type: string };
 type Load = { at: string; version: number; rows: number; bytes: number; drift?: string[] };
-type Draft = { id: string; revision: number; name: string; title: string; keep?: number; key?: string; stream?: boolean; marking?: string; producer?: string; schema?: Field[]; version?: number; last?: Load };
+type Draft = { id: string; revision: number; name: string; title: string; keep?: number; key?: string; stream?: boolean; marking?: string; compartments?: string[]; producer?: string; schema?: Field[]; version?: number; last?: Load };
 type Version = { id: string; version: number; at: string; rows: number; archived?: boolean; data?: Record<string, unknown>[] };
 type VersionRow = { id: string; dataset: string; version: number; type?: string; at: string; rows: number; archived?: boolean };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "" });
@@ -37,7 +37,7 @@ export function DatasetEditor({ id }: { id: string }) {
     id, type: "build.dataset", view: "dataset", empty,
     failure: t("The dataset could not be saved or loaded. Your draft is still here."),
     payload: draft => {
-      return { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0, marking: draft.marking ?? "", key: draft.key ?? "", stream: !!draft.stream };
+      return { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0, marking: draft.marking ?? "", compartments: draft.compartments ?? [], key: draft.key ?? "", stream: !!draft.stream };
     },
   });
   const [loadType, setLoadType] = useState("snapshot");
@@ -76,7 +76,8 @@ export function DatasetEditor({ id }: { id: string }) {
               <span className="text-xs text-muted">{t("Older versions keep their row count but lose their rows.")}</span></label>
             <label className={fieldClass}>{t("Key column")}<Select value={draft.key ?? ""} onChange={event => patch({ key: event.target.value })}><option value="">{t("No key")}</option>{draft.schema?.map(field => <option key={field.name} value={field.name}>{field.name}</option>)}</Select></label>
             <Checkbox checked={!!draft.stream} onChange={stream => patch({ stream })}>{t("Streaming dataset")}</Checkbox>
-            <MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking })} help={t("Raised by what loads it - the connection, the pipeline's input; lowered only here. Confidential and restricted data only reaches object fields that name their readers; restricted never leaves as CSV.")} />
+            <MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking })} help={t("Markings follow loaded data. Remove markings in an authorized pipeline step; existing versions stay protected.")} />
+            <CompartmentField value={draft.compartments} onChange={compartments => patch({ compartments })} />
             {draft.producer && <p className="text-xs text-muted">{t("Loaded by")}: <span className="font-mono">{draft.producer}</span></p>}
           </Panel>
           {draft.id && <DatasetLineage dataset={draft.id} />}

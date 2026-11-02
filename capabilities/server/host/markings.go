@@ -9,10 +9,13 @@ import (
 )
 
 type markingIndex struct {
-	store      *records.Store
-	generation uint64
-	datasets   map[string]string
-	types      map[string]string
+	store               *records.Store
+	graph               Lineage
+	generation          uint64
+	datasets            map[string]string
+	types               map[string]string
+	datasetCompartments map[string][]string
+	typeCompartments    map[string][]string
 }
 
 func storeRows[T any](store *records.Store, typ string) []T {
@@ -70,13 +73,15 @@ func (t *Tenant) markingsIn(store *records.Store, held bool) markingIndex {
 		pipelines:   storeRows[build.Pipeline](store, build.PipelineType),
 		writebacks:  storeRows[build.Writeback](store, build.WritebackType),
 	})
-	index := markingIndex{store: store, generation: store.Generation(), datasets: map[string]string{}, types: map[string]string{}}
+	index := markingIndex{store: store, graph: graph, generation: store.Generation(), datasets: map[string]string{}, types: map[string]string{}, datasetCompartments: map[string][]string{}, typeCompartments: map[string][]string{}}
 	for _, node := range graph.Nodes {
 		switch node.Kind {
 		case "dataset":
 			index.datasets[node.Record] = node.Effective
+			index.datasetCompartments[node.Record] = node.EffectiveCompartments
 		case "object":
 			index.types[node.Name] = platform.HigherMarking(index.types[node.Name], node.Effective)
+			index.typeCompartments[node.Name] = platform.JoinCompartments(index.typeCompartments[node.Name], node.EffectiveCompartments)
 		}
 	}
 	t.markings = index
@@ -95,7 +100,7 @@ func (index markingIndex) row(typ string, row *records.Row) string {
 
 func (index markingIndex) visible(m platform.Member, value reflect.Value) bool {
 	version, ok := valueAs[build.DatasetVersion](value)
-	return !ok || platform.MarkingCleared(m, index.datasets[version.Dataset])
+	return !ok || (platform.MarkingSet{Level: index.datasets[version.Dataset], Compartments: index.datasetCompartments[version.Dataset]}).Cleared(m)
 }
 
 func (index markingIndex) highest(typ string) string {
@@ -107,4 +112,13 @@ func (index markingIndex) highest(typ string) string {
 		highest = platform.HigherMarking(highest, marking)
 	}
 	return highest
+}
+
+func (index markingIndex) compartments(typ string, row *records.Row) []string {
+	if typ == build.DatasetVersionType {
+		if version, ok := rowAs[build.DatasetVersion](row); ok {
+			return index.datasetCompartments[version.Dataset]
+		}
+	}
+	return index.typeCompartments[typ]
 }

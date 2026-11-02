@@ -63,9 +63,9 @@ func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, c
 	var source build.Source
 	_ = json.Unmarshal(sourceRaw, &source)
 	publisher, _ := t.sourcePublisher(source)
-	marking := ""
+	marking := platform.MarkingSet{}
 	if connection.ID != "" {
-		marking = t.connectionMarking(connection.ID)
+		marking = t.connectionMarkings(connection.ID)
 	}
 	var generation uint64
 	if localRecords {

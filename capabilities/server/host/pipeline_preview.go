@@ -28,6 +28,7 @@ type PipelinePreview struct {
 	Rows         []map[string]any          `json:"rows"`
 	Quarantine   []platform.QuarantinedRow `json:"quarantine"`
 	Marking      string                    `json:"marking,omitempty"`
+	Compartments []string                  `json:"compartments,omitempty"`
 }
 
 func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreviewRequest, at time.Time) (PipelinePreview, *kernel.Error) {
@@ -87,6 +88,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		}
 		sources = append(sources, build.DatasetType+"/"+id, build.DatasetVersionType+"/"+versionID+"#data")
 		out.Marking = platform.HigherMarking(out.Marking, dataset.Marking)
+		out.Compartments = platform.JoinCompartments(out.Compartments, dataset.Compartments)
 		if id == p.Input {
 			out.InputRows, out.InputVersion = len(rows), dataset.Version
 		}

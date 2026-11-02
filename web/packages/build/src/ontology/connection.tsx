@@ -6,7 +6,7 @@ import { ResourceList } from "../editor/ResourceList";
 import { useId } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
-import { MarkingField } from "./marking";
+import { CompartmentField, MarkingField } from "./marking";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 
 type Draft = Api.Connection;
@@ -34,9 +34,9 @@ export function ConnectionEditor({ id }: { id: string }) {
     failure: t("The connection could not be saved or loaded. Your draft is still here."),
     saveSchema:managed?"build.connection.configure":undefined,
     payload: draft => {
-      const { name, title, kind, address, secret, allowPrivate, marking } = draft;
+      const { name, title, kind, address, secret, allowPrivate, marking, compartments } = draft;
       if(managed)return {address,secret:secret??"",allowPrivate:!!allowPrivate};
-      return { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "" };
+      return { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "", compartments: compartments ?? [] };
     },
   });
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Connections")} description={t("Only a builder or integrator can edit connections.")} />;
@@ -68,7 +68,7 @@ export function ConnectionEditor({ id }: { id: string }) {
         <div className={fieldClass}><label htmlFor={`${fieldID}-secret`}>{t("Secret name")}</label><Input id={`${fieldID}-secret`} aria-describedby={`${fieldID}-secret-help`} value={draft.secret ?? ""} placeholder="sap-reader" onChange={(e) => patch({ secret: e.target.value })} />
           <p id={`${fieldID}-secret-help`} className="text-xs text-muted">{t("Looked up by the host (PLATFORM_SECRETS_DIR or PLATFORM_SECRET_<NAME>). For http and OData its content is the Authorization header's value, such as Basic … or Bearer ….")}</p></div>
         <Checkbox checked={!!draft.allowPrivate} onChange={(allowPrivate) => patch({ allowPrivate })}>{t("Allow http and private addresses (on-premise systems)")}</Checkbox>
-        <fieldset disabled={managed}><MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking: marking as Api.Connection["marking"] })} help={t("Everything read through it is at least this; datasets loaded from it are raised to it.")} /></fieldset>
+        <fieldset disabled={managed}><MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking: marking as Api.Connection["marking"] })} help={t("Everything read through it is at least this; datasets loaded from it are raised to it.")} /><CompartmentField value={draft.compartments} onChange={compartments => patch({ compartments })} /></fieldset>
       </Panel>
       <Panel title={t("Last check")} className="grid min-w-0 content-start gap-2">
         {!last ? <p className="text-xs text-muted">{t("Not checked yet.")}</p> : <>

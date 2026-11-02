@@ -19,16 +19,17 @@ type Policies struct {
 	policies map[string]*platform.PolicyRecord
 	teams    map[string]*platform.Team
 	projects map[string]*platform.BuildProject
+	markings map[string]*platform.Marking
 }
 
 func NewPolicies() *Policies {
-	return &Policies{roles: map[string]*platform.CustomRole{}, policies: map[string]*platform.PolicyRecord{}, teams: map[string]*platform.Team{}, projects: map[string]*platform.BuildProject{}}
+	return &Policies{roles: map[string]*platform.CustomRole{}, policies: map[string]*platform.PolicyRecord{}, teams: map[string]*platform.Team{}, projects: map[string]*platform.BuildProject{}, markings: map[string]*platform.Marking{}}
 }
 func (d *Policies) Attach(host platform.AppCatalog) { d.host = host }
 func (d *Policies) SnapshotState() platform.AuthorizationState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return platform.AuthorizationState{Roles: maps.Clone(d.roles), Policies: maps.Clone(d.policies), Teams: maps.Clone(d.teams), Projects: maps.Clone(d.projects)}
+	return platform.AuthorizationState{Roles: maps.Clone(d.roles), Policies: maps.Clone(d.policies), Teams: maps.Clone(d.teams), Projects: maps.Clone(d.projects), Markings: maps.Clone(d.markings)}
 }
 func (d *Policies) Restore(state platform.AuthorizationState) {
 	d.mu.Lock()
@@ -43,7 +44,7 @@ func (d *Policies) Restore(state platform.AuthorizationState) {
 			}
 		}
 	}
-	d.roles, d.policies, d.teams, d.projects = state.Roles, state.Policies, state.Teams, state.Projects
+	d.roles, d.policies, d.teams, d.projects, d.markings = state.Roles, state.Policies, state.Teams, state.Projects, state.Markings
 	if d.roles == nil {
 		d.roles = map[string]*platform.CustomRole{}
 	}
@@ -55,6 +56,9 @@ func (d *Policies) Restore(state platform.AuthorizationState) {
 	}
 	if d.projects == nil {
 		d.projects = map[string]*platform.BuildProject{}
+	}
+	if d.markings == nil {
+		d.markings = map[string]*platform.Marking{}
 	}
 	d.applyAccess()
 }
@@ -85,6 +89,8 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 	}
 	day := func(v string) bool { _, err := time.Parse(time.DateOnly, v); return v == "" || err == nil }
 	switch s.GetSchema().GetName() {
+	case platform.SchemaMarkingSave, platform.SchemaMarkingArchive:
+		return d.decideMarking(c, s, members)
 	case platform.SchemaRoleSave:
 		var p platform.CustomRole
 		if json.Unmarshal(s.GetPayload(), &p) != nil || len(p.Actions) == 0 {
@@ -223,6 +229,9 @@ func (d *Policies) Access() platform.AccessConfig {
 	out := platform.AccessConfig{Roles: []platform.CustomRole{}, Policies: []platform.PolicyRecord{}, Teams: []platform.Team{}}
 	for _, id := range slices.Sorted(maps.Keys(d.roles)) {
 		out.Roles = append(out.Roles, *d.roles[id])
+	}
+	for _, id := range slices.Sorted(maps.Keys(d.markings)) {
+		out.Markings = append(out.Markings, *d.markings[id])
 	}
 	for _, id := range slices.Sorted(maps.Keys(d.policies)) {
 		out.Policies = append(out.Policies, *d.policies[id])

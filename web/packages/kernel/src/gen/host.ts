@@ -134,6 +134,7 @@ export type AccessConfig = {
   roles: CustomRole[];
   policies: PolicyRecord[];
   teams: Team[];
+  markings?: Marking[];
 };
 
 export type Account = {
@@ -1368,6 +1369,7 @@ export type Connection = {
   address: string;
   secret?: string;
   allowPrivate?: boolean;
+  compartments?: string[];
   marking?: "internal" | "confidential" | "restricted";
   state: string;
   requested?: boolean;
@@ -2570,6 +2572,8 @@ export type LineageNode = {
   title: string;
   state?: string;
   marking?: string;
+  compartments?: string[];
+  effectiveCompartments?: string[];
   effective?: string;
   version?: number;
   rows?: number;
@@ -2651,6 +2655,24 @@ export type LoopFrame = {
   while?: boolean;
 };
 
+export type Marking = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  rid: string;
+  title: string;
+  classification: boolean;
+  cleared?: boolean;
+  canDeclassify?: boolean;
+  members?: string[];
+  teams?: string[];
+  declassifiers?: string[];
+  declassifierTeams?: string[];
+};
+
 export type MeView = {
   tenantId: string;
   principalId: string;
@@ -2707,6 +2729,8 @@ export type MediaSetVersion = {
 };
 
 export type Member = {
+  markings?: string[];
+  declassifications?: string[];
   id: string;
   tenant: string;
   roles: Record<string, string>;
@@ -2719,6 +2743,8 @@ export type Member = {
 };
 
 export type MemberView = {
+  markings?: string[];
+  declassifications?: string[];
   id: string;
   tenant: string;
   roles: Record<string, string>;
@@ -3774,6 +3800,7 @@ export type Pipeline = {
   outputDataset?: string;
   outputObject?: string;
   key?: string;
+  compartments?: string[];
   marking?: string;
   outputEnterprise?: EnterpriseTarget;
   every?: string;
@@ -3795,6 +3822,7 @@ export type PipelinePreview = {
   rows: Record<string, unknown>[];
   quarantine: QuarantinedRow[];
   marking?: string;
+  compartments?: string[];
 };
 
 export type PipelinePreviewRequest = {
@@ -3810,6 +3838,8 @@ export type PipelineRun = {
   written: number;
   deleted?: number;
   marking?: string;
+  compartments?: string[];
+  declassified?: string[];
   merged?: number;
   quarantined: number;
   failed: number;
@@ -5110,6 +5140,7 @@ export type TransformMeasure = {
 
 export type TransformStep = {
   kind: string;
+  markings?: string[];
   columns?: string[];
   from?: string;
   to?: string;

@@ -184,11 +184,8 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if plan.connection.Kind != "http" {
 		return plan, observationUnavailable(fmt.Errorf("observation uses an HTTP storage adapter"))
 	}
-	if build.Guarded(plan.connection.Marking) {
-		marking := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: build.ConnectionType, Record: plan.connection.ID}, at, false)
-		if refusal := authorizationRefusal(marking); refusal != nil {
-			return plan, refusal
-		}
+	if !(platform.MarkingSet{Level: plan.connection.Marking, Compartments: plan.connection.Compartments}).Cleared(m) {
+		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The data carries a marking the caller is not cleared for")
 	}
 	if plan.connection.Secret != "" {
 		credential, found := t.credentialHeader(plan.connection.Secret, "connection/"+plan.connection.ID, plan.connection.Address)

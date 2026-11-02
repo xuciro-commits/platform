@@ -12,6 +12,7 @@ import (
 
 type RecordMarkings interface {
 	Row(string, *records.Row) string
+	Compartments(string, *records.Row) []string
 	Highest(string) string
 }
 
@@ -218,7 +219,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 	}
 	if et != nil {
 		index := a.Markings(store, held)
-		if !(c.Automation && c.App == et.Info().App) && !platform.MarkingCleared(c.Member, index.Row(et.Info().Type, current)) {
+		if !(c.Automation && c.App == et.Info().App) && !(platform.MarkingSet{Level: index.Row(et.Info().Type, current), Compartments: index.Compartments(et.Info().Type, current)}).Cleared(c.Member) {
 			context.Markings = platform.AuthorizationGate{Reason: "The data carries a marking the caller is not cleared for"}
 		} else if q.Kind == "export" && index.Highest(et.Info().Type) == "restricted" {
 			context.Markings = platform.AuthorizationGate{Reason: "Restricted data does not leave as CSV"}

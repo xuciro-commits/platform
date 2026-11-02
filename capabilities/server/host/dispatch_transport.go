@@ -126,7 +126,7 @@ func (h hostView) CheckDispatchRead(run platform.DispatchRun, at time.Time) *ker
 	if json.Unmarshal(run.Connection, &connection) != nil || connection.ID == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dispatch read connection is unavailable")
 	}
-	if build.Guarded(connection.Marking) || build.Guarded(h.t.connectionMarking(connection.ID)) {
+	if (platform.MarkingSet{Level: connection.Marking, Compartments: connection.Compartments}).Guarded() || h.t.connectionMarkings(connection.ID).Guarded() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Dispatch status requires an unclassified source projection")
 	}
 	if read.Source != "" {

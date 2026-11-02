@@ -21,6 +21,9 @@ func (b *Build) connectionEntity() platform.Entity {
 	return platform.Entity{Type: ConnectionType, Title: "Connection", Plural: "Connections", Model: Connection{}, Display: "title",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			next := record.(*Connection)
+			if current, ok := platform.Get[Connection](c, next.ID); ok && (platform.MarkingRank(next.Marking) < platform.MarkingRank(current.Marking) || slices.ContainsFunc(current.Compartments, func(id string) bool { return !slices.Contains(next.Compartments, id) })) {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Use a pipeline declassification step to remove data markings")
+			}
 			if err := b.validConnection(*next); err != nil {
 				return err
 			}
@@ -82,6 +85,9 @@ func (b *Build) checkConnection(_ platform.Caller, record any, _ json.RawMessage
 }
 
 func (b *Build) validConnection(c Connection) *kernel.Error {
+	if err := b.checkCompartments(c.Compartments); err != nil {
+		return err
+	}
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -140,6 +146,12 @@ func (b *Build) datasetEntity() platform.Entity {
 	return platform.Entity{Type: DatasetType, Title: "Dataset", Plural: "Datasets", Model: Dataset{}, Display: "title",
 		Validate: func(c platform.Caller, value any) *kernel.Error {
 			next := value.(*Dataset)
+			if err := b.checkCompartments(next.Compartments); err != nil {
+				return err
+			}
+			if current, ok := platform.Get[Dataset](c, next.ID); ok && (platform.MarkingRank(next.Marking) < platform.MarkingRank(current.Marking) || slices.ContainsFunc(current.Compartments, func(id string) bool { return !slices.Contains(next.Compartments, id) })) {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Use a pipeline declassification step to remove data markings")
+			}
 			if current, ok := platform.Get[Dataset](c, next.ID); ok && current.Key != next.Key && next.Key != "" {
 				rows, _, err := DatasetRows(c, next.ID, 0)
 				if err == nil {
@@ -165,7 +177,7 @@ func (b *Build) datasetVersionEntity() platform.Entity {
 
 func datasetActions() []platform.Action {
 	return []platform.Action{{Schema: SchemaDatasetLoad, Target: DatasetType, Capability: "integrations", Title: "Load a version", Description: "Load rows as the dataset's next transaction and version.", Roles: []string{Builder, Integrator},
-		Payload: []platform.Field{{Name: "type", Type: "choice", Choices: []string{string(DatasetTransactionSnapshot), string(DatasetTransactionAppend), string(DatasetTransactionUpdate), string(DatasetTransactionDelete)}, Default: json.RawMessage(`"snapshot"`), Description: "The transaction type; defaults to snapshot"}, {Name: "rows", Type: "json", Description: "The rows, an array of objects"}, {Name: "csv", Type: "longtext", Description: "Or the rows as CSV under a header line"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "string", Description: "The marking the rows carry; raises the dataset's"}}},
+		Payload: []platform.Field{{Name: "type", Type: "choice", Choices: []string{string(DatasetTransactionSnapshot), string(DatasetTransactionAppend), string(DatasetTransactionUpdate), string(DatasetTransactionDelete)}, Default: json.RawMessage(`"snapshot"`), Description: "The transaction type; defaults to snapshot"}, {Name: "rows", Type: "json", Description: "The rows, an array of objects"}, {Name: "csv", Type: "longtext", Description: "Or the rows as CSV under a header line"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "choice", Choices: platform.Markings, Description: "The marking the rows carry; raises the dataset's"}, {Name: "compartments", Type: "string[]"}}},
 		{Schema: SchemaDatasetProjected, Target: DatasetType, Capability: "integrations", Title: "Keep projection result", Description: "Retain what projecting one version into an object type did.", Roles: []string{Builder},
 			Payload: []platform.Field{{Name: "projection", Type: "json", Required: true, Description: "The object type, version, counts and why the projection paused"}}}}
 }
@@ -233,11 +245,12 @@ func DatasetSchema(rows []map[string]any, order []string) []DatasetField {
 func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
-			Type     DatasetTransactionType `json:"type"`
-			Rows     []map[string]any       `json:"rows"`
-			CSV      string                 `json:"csv"`
-			Producer string                 `json:"producer"`
-			Marking  string                 `json:"marking"`
+			Type         DatasetTransactionType `json:"type"`
+			Rows         []map[string]any       `json:"rows"`
+			CSV          string                 `json:"csv"`
+			Producer     string                 `json:"producer"`
+			Marking      string                 `json:"marking"`
+			Compartments []string               `json:"compartments"`
 		}
 		ds, ok := platform.Get[Dataset](c, s.GetTarget().GetId())
 		if !ok {
@@ -249,6 +262,9 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 		}
 		if json.Unmarshal(s.GetPayload(), &payload) != nil || (payload.Rows == nil) == (payload.CSV == "") {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A load carries an array of rows or a CSV body")
+		}
+		if err := b.checkCompartments(payload.Compartments); err != nil {
+			return nil, err
 		}
 		if payload.Type == "" {
 			payload.Type = DatasetTransactionSnapshot
@@ -315,6 +331,7 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 				ds.Producer = payload.Producer
 			}
 			ds.Marking = platform.HigherMarking(ds.Marking, payload.Marking)
+			ds.Compartments = platform.JoinCompartments(ds.Compartments, payload.Compartments)
 			c.Put(r, ds)
 			version := DatasetVersion{Record: platform.Record{ID: VersionID(ds.ID, ds.Version)}, Dataset: ds.ID, Version: ds.Version, Type: payload.Type, At: now, Rows: len(payload.Rows), Data: data}
 			if !c.Replaying {
@@ -373,6 +390,7 @@ type Connection struct {
 	Address           string           `json:"address" help:"Service root URL, or postgres://user@host:5432/db?sslmode=require without the password" source:"record"`
 	Secret            string           `json:"secret,omitempty" title:"Secret name" help:"The credential's name in the host's secret store, never the credential" source:"record"`
 	AllowPrivate      bool             `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
+	Compartments      []string         `json:"compartments,omitempty" title:"Compartment markings"`
 	Marking           string           `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking" help:"What is read through it is at least this: internal, confidential or restricted"`
 	State             string           `json:"state" field:"readonly" source:"record"`
 	Requested         bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`
@@ -423,6 +441,7 @@ type Dataset struct {
 	Name              string              `json:"name" field:"required,search"`
 	Title             string              `json:"title" field:"required,search"`
 	Keep              int                 `json:"keep,omitempty" title:"Versions kept" help:"How many versions stay readable; default 3"`
+	Compartments      []string            `json:"compartments,omitempty" title:"Compartment markings"`
 	Marking           string              `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking"`
 	Producer          string              `json:"producer,omitempty" field:"readonly"`
 	Schema            []DatasetField      `json:"schema,omitempty" field:"readonly" type:"json"`
@@ -512,4 +531,13 @@ type IntegrationExecution struct {
 	Pending  bool           `json:"pending,omitempty"`
 	Snapshot string         `json:"snapshot"`
 	Inputs   map[string]int `json:"inputs,omitempty"`
+}
+
+func (b *Build) checkCompartments(ids []string) *kernel.Error {
+	for _, id := range ids {
+		if !b.host.CompartmentExists(id) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Compartment marking {marking} is unavailable", id)
+		}
+	}
+	return nil
 }

@@ -477,3 +477,12 @@ func (h hostView) CheckResourceSchema(schema string, version *platform.SchemaVer
 	_, refusal := h.t.submissionSchemaVersion(owner, &pb.Submission{Schema: &pb.SchemaRef{Name: schema, Version: version.Family}}, version.Version)
 	return refusal
 }
+
+func (h hostView) CompartmentExists(id string) bool {
+	for _, marking := range h.t.app("platform").(interface{ MarkingViews() []platform.Marking }).MarkingViews() {
+		if marking.ID == id && !marking.Classification && !marking.Archived {
+			return true
+		}
+	}
+	return false
+}

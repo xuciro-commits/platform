@@ -1,6 +1,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Declassification requires clearance and permission for every selected marking": "解除标记需要获得每个所选标记的数据许可与解除权限",
+  "Compartment markings": "专项标记",
+  "Markings to remove": "要解除的标记",
+  "The runner must be cleared for the input and allowed to remove each selected marking. This is the final step of a dataset pipeline.": "执行者必须获准输入数据，并有权解除每个选中的标记。此步骤必须位于数据集管道的最后。",
+  "Remove selected markings with the runner’s explicit permission.": "按执行者的明确权限解除所选标记。",
+  "declassify": "解除标记",
+  "Markings follow loaded data. Remove markings in an authorized pipeline step; existing versions stay protected.": "标记随数据传递。请通过获准的管道步骤解除标记；已有版本仍受保护。",
+  "Use a pipeline declassification step to remove data markings": "请通过管道的解除标记步骤移除数据标记",
+  "Compartment marking {marking} is unavailable": "专项标记 {marking} 不可用",
+  "Declassification is the final step of a dataset pipeline": "解除标记必须是数据集管道的最后一步",
+  "The runner needs clearance and declassification permission for the pipeline's input markings": "执行者需要获得管道输入数据的访问许可与解除标记权限",
+  "The runner no longer has the pipeline's declassification permissions": "执行者已失去此管道的解除标记权限",
+
  "Review working state": "审阅工作状态",
  "Save your private edits to this branch for review. Other builders can see them after saving.": "将本人的私有编辑保存到此分支，供他人审阅。保存后其他构建者才可见。",
  "Save your private edits to main. Published versions are reviewed separately.": "将本人的私有编辑保存到 main；发布版本另行审阅。",

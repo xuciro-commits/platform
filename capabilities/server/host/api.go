@@ -16,6 +16,7 @@ import (
 )
 
 var namedReads = []transport.Route{
+	{Pattern: "GET /v1/markings", Summary: "Marking resources; clearance assignments are visible to administrators and auditors", Answer: []platform.Marking{}},
 	{Pattern: "GET /v1/contributions", Summary: "This tenant's namespaced contributions: every app's views and installed packages' views", Answer: []platform.Contribution{}},
 	{Pattern: "GET /v1/packages", Summary: "Administrators read the package index; application builders discover installed blueprints", Answer: []platform.PackageView{}},
 	{Pattern: "GET /v1/notifications", Summary: "The caller's notifications, newest first, in their language", Answer: []platform.Notification{}},

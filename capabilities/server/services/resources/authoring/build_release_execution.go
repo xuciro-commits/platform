@@ -38,6 +38,7 @@ func (b *Build) ConnectionConfiguration(live Connection) (Connection, error) {
 	}
 	r.Record, r.Address, r.Secret, r.AllowPrivate, r.State, r.Requested, r.Last = live.Record, live.Address, live.Secret, live.AllowPrivate, live.State, live.Requested, live.Last
 	r.Marking = platform.HigherMarking(r.Marking, live.Marking)
+	r.Compartments = platform.JoinCompartments(r.Compartments, live.Compartments)
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }
@@ -75,6 +76,7 @@ func (b *Build) ExecutionDataset(live Dataset) (Dataset, error) {
 	r := fixed.(Dataset)
 	r.Record, r.Producer, r.Schema, r.Version, r.Last = live.Record, live.Producer, live.Schema, live.Version, live.Last
 	r.Marking = platform.HigherMarking(r.Marking, live.Marking)
+	r.Compartments = platform.JoinCompartments(r.Compartments, live.Compartments)
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }
@@ -85,7 +87,7 @@ func (b *Build) ExecutionPipeline(live Pipeline) (Pipeline, error) {
 		return Pipeline{}, err
 	}
 	r := fixed.(Pipeline)
-	r.Record, r.State, r.Runner, r.RunnerScopes, r.Requested, r.Last, r.Marking = live.Record, live.State, live.Runner, live.RunnerScopes, live.Requested, live.Last, live.Marking
+	r.Record, r.State, r.Runner, r.RunnerScopes, r.Requested, r.Last, r.Marking, r.Compartments = live.Record, live.State, live.Runner, live.RunnerScopes, live.Requested, live.Last, live.Marking, live.Compartments
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }
@@ -293,11 +295,12 @@ func canonicalIntegrationExecution(asset platform.ReleaseAsset) ([]byte, error) 
 }
 
 type ConnectionDefinition struct {
-	Name       string `json:"name"`
-	Title      string `json:"title"`
-	Kind       string `json:"kind"`
-	Marking    string `json:"marking,omitempty"`
-	Credential bool   `json:"credential,omitempty"`
+	Name         string   `json:"name"`
+	Title        string   `json:"title"`
+	Kind         string   `json:"kind"`
+	Marking      string   `json:"marking,omitempty"`
+	Compartments []string `json:"compartments,omitempty"`
+	Credential   bool     `json:"credential,omitempty"`
 }
 
 type ListenerDefinition struct {
@@ -328,12 +331,13 @@ type SourceDefinition struct {
 }
 
 type DatasetDefinition struct {
-	Key     string `json:"key,omitempty"`
-	Stream  bool   `json:"stream,omitempty"`
-	Name    string `json:"name"`
-	Title   string `json:"title"`
-	Keep    int    `json:"keep,omitempty"`
-	Marking string `json:"marking,omitempty"`
+	Key          string   `json:"key,omitempty"`
+	Stream       bool     `json:"stream,omitempty"`
+	Name         string   `json:"name"`
+	Title        string   `json:"title"`
+	Keep         int      `json:"keep,omitempty"`
+	Marking      string   `json:"marking,omitempty"`
+	Compartments []string `json:"compartments,omitempty"`
 }
 
 type PipelineDefinition struct {

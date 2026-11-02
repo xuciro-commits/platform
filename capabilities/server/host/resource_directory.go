@@ -307,6 +307,33 @@ type WorkingStateList struct {
 }
 
 func (h *Host) routesResources(rt *routes) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/markings/{id}/resources", Summary: "Resources carrying a marking, without their data", Answer: []ResourceEntry{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		caller := t.caller(m, t.app("platform"), false)
+		if refusal := authorizationRefusal(t.authorizeNative(caller, "GET /v1/markings/{id}/resources", "read", []string{"admin", platform.Auditor}, true)); refusal != nil {
+			Reply(w, nil, refusal)
+			return
+		}
+		id := r.PathValue("id")
+		marked := map[platform.AssetRef]bool{}
+		for _, node := range t.markingsIn(t.records, false).graph.Nodes {
+			if slices.Contains(node.EffectiveCompartments, id) || slices.Contains(platform.Markings[1:], id) && platform.MarkingRank(node.Effective) >= platform.MarkingRank(id) {
+				marked[platform.AssetRef{App: build.ID, Kind: platform.AssetKind(node.Kind), Name: node.Name}] = true
+			}
+		}
+		resources := []ResourceEntry{}
+		t.records.Lock()
+		for _, row := range t.records.Type(build.ResourceType).Rows().All() {
+			resource := row.Value.Interface().(build.Resource)
+			if marked[resource.Ref] && !resource.Archived {
+				role := t.resourceRole(m, resource.Project)
+				resources = append(resources, ResourceEntry{Resource: resource, Path: []string{}, CanOpen: role != "" && role != platform.ProjectDiscovererRole, CanEdit: false})
+			}
+		}
+		t.records.Unlock()
+		slices.SortFunc(resources, func(a, b ResourceEntry) int { return strings.Compare(a.ID, b.ID) })
+		WriteJSON(w, http.StatusOK, resources)
+	})
+
 	rt.recordRead(transport.Route{Pattern: "GET /v1/branches/{id}/reviewers", Summary: "Eligible non-author editors and the project approval requirement", Answer: BranchReviewers{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		branch, refusal := t.readBranchLocked(m, r.PathValue("id"), h.Now())
 		if refusal != nil {

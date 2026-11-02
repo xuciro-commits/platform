@@ -1,4 +1,4 @@
-import { assetKey, definitionPresentation, DependencyGraph, useDependencies, useDefinitions, useHost, useProvidedCapabilities, useReadQuery, type AssetRef, type ProvidedCapability } from "@platform/app";
+import { assetKey, definitionPresentation, DependencyGraph, useDependencies, useDefinitions, useProvidedCapabilities, useReadQuery, type AssetRef, type ProvidedCapability } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, DataTable, Disclosure, PageHeader, Panel, PropertyList, RelationCanvas, relationNodeClasses, SegmentedChoice, Select, useWorkspace, t, type RelationEdge, type RelationNode } from "@platform/ui";
 import { RefreshCw } from "lucide-react";
@@ -30,9 +30,9 @@ function reach(start: string, edges: Api.LineageEdge[]) {
 export function Lineage({ ref: requested, node: requestedNode }: { ref?: string; node?: string }) {
   const { open } = useWorkspace();
   const query = useReadQuery<Api.Lineage>("/v1/lineage", 15000);
+  const markings = useReadQuery<Api.Marking[]>("/v1/markings");
   const graph = query.data ?? { nodes: [], edges: [] };
-  const { holds } = useHost();
-  const cleared = (marking: string) => holds("platform", marking) || (marking === "confidential" && holds("platform", "restricted"));
+  const cleared = (marking: string) => !!markings.data?.find(item => item.id === marking)?.cleared;
   const [colorBy, setColorBy] = useState<ColorBy>("kind");
   const [selected, setSelected] = useState<string | undefined>(requestedNode);
   const chosen = graph.nodes.find(node => node.id === selected);
@@ -69,8 +69,9 @@ export function Lineage({ ref: requested, node: requestedNode }: { ref?: string;
             [t("Name"), <code>{chosen.name}</code>],
             ...(chosen.state ? [[t("State"), t(chosen.state)] as [string, ReactNode]] : []),
             [t("Marking"), chosen.marking ? t(chosen.marking) : t("None")],
+            ...(chosen.effectiveCompartments?.length ? [[t("Compartment markings"), chosen.effectiveCompartments.map(id => markings.data?.find(marking => marking.id === id)?.title ?? id).join(", ")] as [string, ReactNode]] : []),
             ...(chosen.effective && chosen.effective !== chosen.marking ? [[t("Effective marking"), `${t(chosen.effective)} · ${t("inherited from upstream")}`] as [string, ReactNode]] : []),
-            ...(["dataset", "object"].includes(chosen.kind) && guarded(chosen.effective) ? [[t("Your access"), cleared(chosen.effective!) ? t("Cleared") : t("Needs {marking} clearance", { marking: t(chosen.effective!) })] as [string, ReactNode]] : []),
+            ...(["dataset", "object"].includes(chosen.kind) && (guarded(chosen.effective) || chosen.effectiveCompartments?.length) ? [[t("Your access"), (!guarded(chosen.effective) || cleared(chosen.effective!)) && (chosen.effectiveCompartments ?? []).every(cleared) ? t("Cleared") : t("Needs {marking} clearance", { marking: [guarded(chosen.effective) ? t(chosen.effective!) : "", ...(chosen.effectiveCompartments ?? []).map(id => markings.data?.find(item => item.id === id)?.title ?? id)].filter(Boolean).join(", ") })] as [string, ReactNode]] : []),
             ...(chosen.version ? [[t("Latest version"), String(chosen.version)] as [string, ReactNode]] : []),
             ...(chosen.rows ? [[t("Rows"), String(chosen.rows)] as [string, ReactNode]] : []),
             ...(chosen.at ? [[t("Last activity"), new Date(chosen.at).toLocaleString()] as [string, ReactNode]] : []),

@@ -1,6 +1,25 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Marked resources": "被标记的资源",
+  "Grant classification and compartment clearances to members or teams. Every marking is required, including for administrators.": "向成员或团队授予分级和专项标记许可。管理员也必须获得数据携带的每项标记许可。",
+  "New marking": "新建标记",
+  "Markings could not be loaded.": "无法加载标记。",
+  "Classification": "分级",
+  "Compartment": "专项",
+  "Cleared teams": "获准团队",
+  "This marking is unavailable.": "此标记不可用。",
+  "Marking ID": "标记标识",
+  "Marking title": "标记名称",
+  "Data clearance": "数据访问许可",
+  "Declassification permission": "解除标记权限",
+  "Clearance is also required. Declassification runs only as a pipeline step and is recorded in the audit trail.": "同时需要数据访问许可。解除标记只通过管道步骤执行，并写入审计。",
+  "A marking ID uses lowercase letters, digits and hyphens": "标记标识使用小写字母、数字和连字符",
+  "A marking has a title": "标记需要名称",
+  "Choose an existing member for marking permissions": "请选择现有成员授予标记权限",
+  "Choose an existing team for marking permissions": "请选择现有团队授予标记权限",
+  "Only a saved compartment marking can be archived": "只能归档已保存的专项标记",
+
  "References affected by removal": "受移除影响的引用",
  "These resources will keep their data and references, but the removed resources will be unavailable.": "这些资源的数据和引用会保留，但移除的资源将不可用。",
  "Update these references before upgrading this product.": "请先修改这些引用，再升级此产品。",

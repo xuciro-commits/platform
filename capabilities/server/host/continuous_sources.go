@@ -51,6 +51,9 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	if !ok || connection.State != "ready" {
 		return refuse("The Flow connection is not ready")
 	}
+	if !(platform.MarkingSet{Level: connection.Marking, Compartments: connection.Compartments}).Cleared(m) {
+		return refuse("The data carries a marking the caller is not cleared for")
+	}
 	frozenSource, frozenConnection := source, connection
 	frozenSource.Record, frozenSource.State, frozenSource.Cursor, frozenSource.Requested, frozenSource.Last = platform.Record{}, "", "", false, nil
 	frozenConnection.Record, frozenConnection.State, frozenConnection.Requested, frozenConnection.Last = platform.Record{}, "", false, nil

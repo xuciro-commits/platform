@@ -110,7 +110,7 @@ func (t *invariantTenant) accept(tb testing.TB, schema, typ, id string, payload 
 	return record
 }
 
-func (t *invariantTenant) restore(tb testing.TB, entries []Entry) *invariantTenant {
+func (t *invariantTenant) restore(tb testing.TB, entries []Entry, seats ...platform.Seat) *invariantTenant {
 	tb.Helper()
 	stored := make([]Entry, len(entries))
 	for i, e := range entries {
@@ -122,7 +122,7 @@ func (t *invariantTenant) restore(tb testing.TB, entries []Entry) *invariantTena
 			tb.Fatal(err)
 		}
 	}
-	fresh := newInvariantTenant(tb, t.ID)
+	fresh := newInvariantTenant(tb, t.ID, seats...)
 	fresh.Outbound = func(*http.Request, bool) (*http.Response, error) {
 		tb.Fatal("replay made an outbound call")
 		return nil, nil

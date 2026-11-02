@@ -8,7 +8,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { MarkingTag } from "./marking";
+import { DeclassificationField, MarkingTag } from "./marking";
 import { Button, Checkbox, DataTable, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
 
 import { cell } from "./dataset";
@@ -16,7 +16,7 @@ import { useAuthoringModel } from "./authoring-model";
 import { DeclaredByObject, declaringObject } from "./object-datasources";
 
 type Measure = { fn: string; column?: string; to: string };
-type Step = { kind: string; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string;formulaExpr?:import("@platform/kernel").Api.Expr; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[] };
+type Step = { kind: string; markings?: string[]; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string;formulaExpr?:import("@platform/kernel").Api.Expr; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[] };
 type Expectation = { column: string; rule: string; value?: string };
 type Run = Api.PipelineRun;
 type EnterpriseTarget = { source: string; stereotype: string; id: string; name: string; shortName?: string; kind?: string; parent?: string; root?: string; in?: string; relation?: string; at?: string; atKind?: string; from?: string; until?: string; properties?: string[] };
@@ -26,7 +26,7 @@ const EMPTY_ENTERPRISE: EnterpriseTarget = { source: "", stereotype: "ActualOrga
 type Draft = { id: string; revision: number; name: string; title: string; input: string; steps: Step[]; expectations: Expectation[]; outputDataset?: string; outputObject?: string; outputEnterprise?: EnterpriseTarget; key?: string; marking?: string; state: string; requested?: boolean; last?: Run };
 type DatasetRow = { id: string; name: string; title: string; schema?: { name: string; type: string }[] };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", input: "", steps: [], expectations: [], state: "draft" });
-const KINDS = ["select", "rename", "cast", "filter", "compute", "lookup", "join", "dedupe", "aggregate", "sort"];
+const KINDS = ["select", "rename", "cast", "filter", "compute", "lookup", "join", "dedupe", "aggregate", "sort", "declassify"];
 const OPS = ["=", "!=", "<", "<=", ">", ">=", "contains", "empty", "notempty"];
 const TYPES = ["string", "number", "boolean", "date"];
 const FNS = ["sum", "min", "max", "count", "avg"];
@@ -43,6 +43,7 @@ const stepCatalog = (): FlowCatalog => [
 function stepDetail(s: Step, datasets: DatasetRow[]): string {
   const other = datasets.find((d) => d.id === s.dataset)?.title ?? s.dataset ?? "";
   switch (s.kind) {
+    case "declassify": return (s.markings ?? []).join(", ");
     case "select": case "dedupe": return (s.columns ?? []).join(", ");
     case "rename": return `${s.from ?? ""} → ${s.to ?? ""}`;
     case "cast": return `${s.column ?? ""} · ${s.type ?? ""}`;
@@ -57,7 +58,8 @@ function stepDetail(s: Step, datasets: DatasetRow[]): string {
 const kindHelp = (kind: string): string => ({
   select: t("Keep only these columns"), rename: t("Rename one column"), cast: t("Convert a column to a type"), filter: t("Keep rows where the condition holds"),
   compute: t("A new column from arithmetic over number columns"), lookup: t("Take columns from a matching row of another dataset"), join: t("Combine with another dataset's rows on a key"),
-  dedupe: t("First row per key wins"), aggregate: t("Group by columns and measure"), sort: t("Order rows by a column") } as Record<string, string>)[kind] ?? "";
+  dedupe: t("First row per key wins"), aggregate: t("Group by columns and measure"), declassify: t("Remove selected markings with the runner’s explicit permission."),
+  sort: t("Order rows by a column") } as Record<string, string>)[kind] ?? "";
 
 export function Pipelines() {
   const { source , holds} = useHost(), { open } = useApplicationWorkspace();
@@ -237,6 +239,7 @@ function StepFields({ step: s, datasets, onChange }: { step: Step; datasets: Dat
   const other = <label className={fieldClass}>{t("Other dataset")}<Select value={s.dataset ?? ""} onChange={(e) => onChange({ dataset: e.target.value })}><option value="">{t("Choose a dataset")}</option>{datasets.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select></label>;
   const row = "grid min-w-0 grid-cols-1 gap-2 md:grid-cols-4";
   switch (s.kind) {
+    case "declassify": return <DeclassificationField value={s.markings} onChange={markings => onChange({ markings })} />;
     case "select": return <div className={row}><label className={`${fieldClass} md:col-span-4`}>{t("Columns")}<Input value={list(s.columns)} placeholder="matnr, plant, qty" onChange={(e) => onChange({ columns: parse(e.target.value) })} /></label></div>;
     case "rename": return <div className={row}>{text("From", "from", "MaterialNumber")}{text("To", "to", "matnr")}</div>;
     case "cast": return <div className={row}>{text("Column", "column", "qty")}<label className={fieldClass}>{t("Type")}<Select value={s.type ?? ""} onChange={(e) => onChange({ type: e.target.value })}><option value="">{t("Choose a type")}</option>{TYPES.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></label></div>;

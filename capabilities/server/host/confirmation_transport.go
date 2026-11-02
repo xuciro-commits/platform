@@ -270,7 +270,7 @@ func (h hostView) CheckConfirmationRead(run platform.ConfirmationRun, index int,
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original reconciliation descriptor is unavailable")
 	}
 	publisher, known := h.t.sourcePublisher(source)
-	if !known || !publisher.Active() || !h.Readable(publisher, build.SourceType+"/"+policy.Source, at) || build.Guarded(connection.Marking) || build.Guarded(h.t.connectionMarking(connection.ID)) {
+	if !known || !publisher.Active() || !h.Readable(publisher, build.SourceType+"/"+policy.Source, at) || (platform.MarkingSet{Level: connection.Marking, Compartments: connection.Compartments}).Guarded() || h.t.connectionMarkings(connection.ID).Guarded() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Reconciliation source access is unavailable")
 	}
 	return nil

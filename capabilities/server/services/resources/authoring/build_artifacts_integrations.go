@@ -276,6 +276,9 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 			fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
 			record = fixed
 		case Pipeline:
+			if !ctx.DraftsOnly && !ctx.Member.CanDeclassify(r.PublishedDeclassifications()) {
+				return nil, fmt.Errorf("declassification publication requires clearance and permission for every selected marking")
+			}
 			r.State = "published"
 			record = r
 		case Writeback:

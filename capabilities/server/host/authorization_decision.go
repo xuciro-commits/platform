@@ -181,7 +181,10 @@ func (t *Tenant) connectorInputGranted(m platform.Member, app, name string) bool
 type securityMarkings struct{ markingIndex }
 
 func (m securityMarkings) Row(typ string, row *records.Row) string { return m.row(typ, row) }
-func (m securityMarkings) Highest(typ string) string               { return m.highest(typ) }
+func (m securityMarkings) Compartments(typ string, row *records.Row) []string {
+	return m.compartments(typ, row)
+}
+func (m securityMarkings) Highest(typ string) string { return m.highest(typ) }
 
 func (t *Tenant) sourceWithheld(store *records.Store, c platform.Caller, et *records.Type, value reflect.Value, fields []string, at time.Time, depth int, walk *authorizationWalk) []string {
 	w := narrower{store: store, m: c.Member, held: true}

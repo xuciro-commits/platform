@@ -2,7 +2,7 @@ import "./i18n";
 import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/app";
 import { Button, Card, ContentTabs, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
 import type { ReactNode } from "react";
-import { Markings } from "./markings";
+import { MarkingEditor, Markings } from "./markings";
 import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bookmark, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
@@ -94,6 +94,7 @@ const controlPanelViews: View[] = [
   { id: "self-hosting", title: () => t("System history"), render: () => <AreaTabs area="settings" current="self-hosting"><SystemConsole /></AreaTabs> },
   { id: "credentials", title: () => t("Credentials"), render: () => <AreaTabs area="settings" current="credentials"><Credentials /></AreaTabs> },
   { id: "markings", title: () => t("Markings"), render: () => <Markings /> },
+  { id: "marking", title: () => t("Marking"), render: params => <MarkingEditor key={params.id} id={params.id ?? "new"} /> },
   { id: "integrations", title: () => t("Connectors"), render: () => <AreaTabs area="settings" current="integrations"><Integrations /></AreaTabs> },
   { id: "control-panel", title: () => t("Control Panel"), render: () => <ControlPanelOverview /> },
   { id: "account", title: () => t("My account"), render: () => <MyAccount /> },
@@ -125,6 +126,7 @@ export const controlPanel = defineApp({
   icon: <SlidersHorizontal />,
   home: { view: "control-panel" },
   views: controlPanelViews,
+  opens: { "platform.marking": "marking" },
   nav: controlPanelNavigation,
 });
 

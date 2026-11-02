@@ -93,7 +93,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			diff := platform.ConfirmationDifference{At: at}
 			var rows []map[string]any
 			var problem error
-			if build.Guarded(connection.Marking) {
+			if (platform.MarkingSet{Level: connection.Marking, Compartments: connection.Compartments}).Guarded() {
 				problem = fmt.Errorf("Reconciliation requires an unclassified source projection")
 			} else {
 				rows, problem = t.readSourceWithConnection(source, &connection)

@@ -90,6 +90,34 @@ test("F6 an admin invites a member, grants a role, and the member sees only what
     ).toBe(true);
   });
 
+  await test.step("step 2b: admin creates a compartment marking, grants the member clearance and inspects marked resources", async () => {
+    const markingID = unique("pii");
+    const title = `F6 Personal data ${id}`;
+    await page.goto("/#/markings");
+    await page.getByRole("button", { name: "New marking", exact: true }).click();
+    await page.getByRole("textbox", { name: "Marking ID", exact: true }).fill(markingID);
+    await page.getByRole("textbox", { name: "Marking title", exact: true }).fill(title);
+    await page.getByRole("region", { name: "Data clearance", exact: true }).getByRole("button", { name: id, exact: true }).click();
+    const saved = page.waitForResponse(response => response.url().endsWith("/v1/submissions") && response.request().method() === "POST" && response.request().postDataJSON().schema.name === "platform.marking.save");
+    await page.getByRole("region", { name: "Marking", exact: true }).getByRole("button", { name: "Save", exact: true }).click();
+    const response = await saved;
+    expect(response.ok(), await response.text()).toBeTruthy();
+    expect((await response.json()).error).toBeUndefined();
+    const member = (await read<{ id: string; markings?: string[] }[]>(page, "/v1/members")).find(member => member.id === id)!;
+    expect(member.markings).toContain(markingID);
+    const identity = await read<{ tenantId: string; principalId: string }>(page, "/v1/me");
+    const created = await page.request.post("/v1/submissions", { headers: adminHeaders, data: {
+      tenantId: identity.tenantId, principalId: identity.principalId, authority: "build", target: { type: "build.dataset", id: unique("marked") },
+      schema: { name: "build.dataset.create", version: 1 }, idempotencyKey: unique("marking"), expectedRevision: 0,
+      payload: Buffer.from(JSON.stringify({ name: unique("personal"), title: "F6 Marked dataset", compartments: [markingID] })).toString("base64"),
+    } });
+    expect(created.ok(), await created.text()).toBeTruthy();
+    expect((await created.json()).error).toBeUndefined();
+    await page.getByRole("row").filter({ has: page.getByRole("cell", { name: title, exact: true }) }).click();
+    await expect(page).toHaveURL(/\/#\/marking\/ri\./);
+    await expect(page.getByRole("region", { name: "Marked resources", exact: true }).getByRole("cell", { name: "F6 Marked dataset", exact: true })).toBeVisible();
+  });
+
   const memberPage = await (await browser.newContext()).newPage();
   try {
     await test.step("step 3 (success criteria): the invited member signs in and sees only their authorised scope", async () => {

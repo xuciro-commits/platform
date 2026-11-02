@@ -34,6 +34,8 @@ func Transform(engine platform.RuleEngine, steps []platform.TransformStep, expec
 
 func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[string]any, read func(string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, error) {
 	switch s.Kind {
+	case "declassify":
+		return rows, nil
 	case "select":
 		out := make([]map[string]any, len(rows))
 		for i, r := range rows {

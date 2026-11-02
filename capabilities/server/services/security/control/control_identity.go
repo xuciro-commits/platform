@@ -31,6 +31,13 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 	d.migrateGrants(&out)
 	out.Grants = append(slices.Clone(out.Grants), d.ConsolePolicies.TeamGrants(out.ID)...)
 	out.Grants = append(out.Grants, d.ConsolePolicies.ProjectGrants(out.ID, out.Agent)...)
+	out.Markings, out.Declassifications = d.ConsolePolicies.MarkingClearances(out.ID)
+	for _, level := range platform.Markings[1:] {
+		if platform.MarkingCleared(out, level) && !slices.Contains(out.Markings, level) {
+			out.Markings = append(out.Markings, level)
+		}
+	}
+	slices.Sort(out.Markings)
 	d.deriveRoles(&out, today)
 	out.Grants = slices.DeleteFunc(slices.Clone(out.Grants), func(g platform.Grant) bool { return !g.Active(today) })
 	return out

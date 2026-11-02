@@ -155,7 +155,9 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		t.Fatal(refusal)
 	}
 	pipeline := pipelineView.Record.(build.Pipeline)
-	live.accept(t, build.SchemaPipelineRan, build.PipelineType, "PL1", map[string]any{"run": build.PipelineRun{At: invariantClock, DefinitionVersion: pipeline.ExecutionVersion(), Quarantined: 1}})
+	if refusal := live.pipelineResult(live.member(t), pipeline, build.PipelineRun{At: invariantClock, DefinitionVersion: pipeline.ExecutionVersion(), Quarantined: 1}, "finished", nil, invariantClock); refusal != nil {
+		t.Fatal(refusal)
+	}
 	live.accept(t, build.SchemaDatasetProjected, build.DatasetType, "DS1", map[string]any{"projection": build.DatasetProjection{Object: "build.alpha", Version: 1, At: invariantClock, Rows: 1, Refused: 1}})
 	live.accept(t, "build.code.create", build.CodeType, "CODE1", map[string]any{"name": "algorithm", "title": "Algorithm", "language": "go", "source": "package main\nfunc main() {}", "input": platform.ValueSchema{Type: "string"}, "output": platform.ValueSchema{Type: "string"}, "roles": []string{build.Builder}, "limits": platform.OperationLimits{TimeoutMillis: 100, MemoryPages: 1, MaxInputBytes: 1024, MaxOutputBytes: 1024}})
 	live.accept(t, build.SchemaCodeCompile, build.CodeType, "CODE1", map[string]any{})

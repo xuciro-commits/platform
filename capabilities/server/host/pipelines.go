@@ -75,8 +75,10 @@ func (t *Tenant) pipelineResult(member platform.Member, p build.Pipeline, run bu
 	if run.Execution != nil {
 		key = "pipeline:" + run.Execution.ID + ":" + phase
 	}
-	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, ExpectedRevision: revision,
-		Target: &pb.EntityRef{Type: build.PipelineType, Id: p.ID}, Schema: &pb.SchemaRef{Name: build.SchemaPipelineRan, Version: 1}, Payload: payload}, now)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, err := t.submitAccepted(t.app(build.ID), member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, ExpectedRevision: revision,
+		Target: &pb.EntityRef{Type: build.PipelineType, Id: p.ID}, Schema: &pb.SchemaRef{Name: build.SchemaPipelineRan, Version: 1}, Payload: payload}, now, true)
 	return err
 }
 
@@ -123,6 +125,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 					break
 				}
 				run.Marking = platform.HigherMarking(run.Marking, fixed.Marking)
+				run.Compartments = platform.JoinCompartments(run.Compartments, fixed.Compartments)
 			}
 		}
 		t.mu.Unlock()
@@ -132,21 +135,29 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 		} else if run.Input == 0 {
 			run.Error = "The input dataset has no rows yet"
 		} else {
+			if removed := p.Declassifications(); len(removed) > 0 {
+				labels, allowed := (platform.MarkingSet{Level: run.Marking, Compartments: run.Compartments}).Declassify(member, removed)
+				if !allowed {
+					run.Error = "The runner needs clearance and declassification permission for the pipeline's input markings"
+				} else {
+					run.Marking, run.Compartments, run.Declassified = labels.Level, labels.Compartments, slices.Clone(removed)
+				}
+			}
 			kept, quarantined, err := transform.Transform(t.services.Rules, p.Steps, p.Expectations, data[p.Input], func(id string) ([]map[string]any, error) { return data[id], nil })
 			if err != nil {
 				run.Error = err.Error()
-			} else {
+			} else if run.Error == "" {
 				run.Rows, run.Quarantined = len(kept)+len(quarantined), len(quarantined)
 				if len(quarantined) > pipelineQuarantineKept {
 					quarantined = quarantined[:pipelineQuarantineKept]
 				}
 				run.Quarantine = quarantined
-				plan = integrationPreparation{Object: p.OutputObject, Dataset: p.OutputDataset, Enterprise: p.OutputEnterprise, Producer: "pipeline:" + p.Name, Marking: run.Marking, Data: kept}
+				plan = integrationPreparation{Object: p.OutputObject, Dataset: p.OutputDataset, Enterprise: p.OutputEnterprise, Producer: "pipeline:" + p.Name, Marking: run.Marking, Compartments: run.Compartments, Declassified: run.Declassified, Data: kept}
 				plan.Type, plan.ID = build.PipelineType, p.ID
 				if plan.Data == nil {
 					plan.Data = []map[string]any{}
 				}
-				if p.OutputEnterprise != nil && build.Guarded(run.Marking) {
+				if p.OutputEnterprise != nil && (platform.MarkingSet{Level: run.Marking, Compartments: run.Compartments}).Guarded() {
 					run.Error = "The enterprise model is tenant-readable; confidential or restricted rows cannot land there"
 				} else if p.OutputObject != "" {
 					if open := t.unguarded(p.OutputObject, run.Marking); len(open) > 0 {
@@ -217,11 +228,13 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 		}
 		if !ok {
 			run.Error = "The execution member is no longer available"
+		} else if !member.CanDeclassify(plan.Declassified) {
+			run.Error = "The runner no longer has the pipeline's declassification permissions"
 		} else if plan.Enterprise != nil {
 			run.Error = "Enterprise slice targets are retired; import organization directory records explicitly"
 		} else if plan.Dataset != "" {
 			key := "pipeline:" + run.Execution.ID + ":dataset"
-			if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, plan.Marking, plan.Data, key, run.At, "snapshot"); err != nil {
+			if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, platform.MarkingSet{Level: plan.Marking, Compartments: plan.Compartments}, plan.Data, key, run.At, "snapshot"); err != nil {
 				if !t.integrationRefused(build.ID, key) {
 					return
 				}

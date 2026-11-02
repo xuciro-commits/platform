@@ -43,7 +43,7 @@ func TestInvariantK1K2StreamingDatasetAcceptedRecovery(t *testing.T) {
 	second := invariantClock.Add(time.Second)
 	execution := prepare([]map[string]any{{"position": float64(2), "note": "second"}}, "2", second)
 	key := "source:" + execution.ID + ":dataset"
-	if refusal := live.loadDatasetKey(live.member(t), "DATA", "source:eventsource", "", []map[string]any{{"position": float64(2), "note": "second"}}, key, second, "append"); refusal != nil {
+	if refusal := live.loadDatasetKey(live.member(t), "DATA", "source:eventsource", platform.MarkingSet{}, []map[string]any{{"position": float64(2), "note": "second"}}, key, second, "append"); refusal != nil {
 		t.Fatal(refusal)
 	}
 	interrupted := append([]Entry{}, live.entries...)
@@ -58,7 +58,7 @@ func TestInvariantK1K2StreamingDatasetAcceptedRecovery(t *testing.T) {
 		}
 		before := restored.recordImage(t)
 		entries := len(restored.entries)
-		if refusal := restored.loadDatasetKey(restored.member(t), "DATA", "source:eventsource", "", []map[string]any{{"position": float64(2), "note": "second"}}, key, second, "append"); refusal != nil {
+		if refusal := restored.loadDatasetKey(restored.member(t), "DATA", "source:eventsource", platform.MarkingSet{}, []map[string]any{{"position": float64(2), "note": "second"}}, key, second, "append"); refusal != nil {
 			t.Fatal(refusal)
 		}
 		if len(restored.entries) != entries || len(differingTypes(before, restored.recordImage(t))) != 0 {

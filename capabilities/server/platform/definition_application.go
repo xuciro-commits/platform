@@ -12,6 +12,7 @@ import (
 )
 
 type BuildHost interface {
+	CompartmentExists(string) bool
 	ProjectApprovals(string) int
 	CheckResourceSchema(string, *SchemaVersion) *kernel.Error
 	TransactionRuntime(BusinessRuntimeContext) TransactionExecutor

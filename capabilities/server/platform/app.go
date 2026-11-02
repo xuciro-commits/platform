@@ -14,17 +14,19 @@ import (
 )
 
 type Member struct {
-	authorization AuthorizationEngine
-	AIContext     bool              `json:"-"`
-	ID            string            `json:"id"`
-	Tenant        string            `json:"tenant"`
-	Roles         map[string]string `json:"roles"`
-	Grants        []Grant           `json:"grants,omitempty"`
-	Status        string            `json:"status,omitempty"`
-	Scopes        []string          `json:"scopes,omitempty"`
-	Agent         bool              `json:"agent,omitempty"`
-	Language      string            `json:"language,omitempty"`
-	Timezone      string            `json:"timezone,omitempty"`
+	authorization     AuthorizationEngine
+	AIContext         bool              `json:"-"`
+	Markings          []string          `json:"markings,omitempty"`
+	Declassifications []string          `json:"declassifications,omitempty"`
+	ID                string            `json:"id"`
+	Tenant            string            `json:"tenant"`
+	Roles             map[string]string `json:"roles"`
+	Grants            []Grant           `json:"grants,omitempty"`
+	Status            string            `json:"status,omitempty"`
+	Scopes            []string          `json:"scopes,omitempty"`
+	Agent             bool              `json:"agent,omitempty"`
+	Language          string            `json:"language,omitempty"`
+	Timezone          string            `json:"timezone,omitempty"`
 }
 
 type Grant struct {

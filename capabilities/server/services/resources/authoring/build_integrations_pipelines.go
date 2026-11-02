@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-var StepKinds = []string{"select", "rename", "cast", "filter", "compute", "lookup", "join", "dedupe", "aggregate", "sort"}
+var StepKinds = []string{"select", "rename", "cast", "filter", "compute", "lookup", "join", "dedupe", "aggregate", "sort", "declassify"}
 
 func (b *Build) pipelineEntity() platform.Entity {
 	return platform.Entity{Type: PipelineType, Title: "Pipeline", Plural: "Pipelines", Model: Pipeline{}, Display: "title",
@@ -44,7 +44,7 @@ func (b *Build) pipelineEntity() platform.Entity {
 }
 
 func pipelineActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaPipelineRan, Target: PipelineType, Capability: "integrations", Title: "Keep run result", Description: "Retain what one run of a pipeline did.", Roles: []string{Builder, Integrator},
+	return []platform.Action{{Schema: SchemaPipelineRan, Target: PipelineType, Capability: "integrations", Title: "Keep run result", Automation: true, Description: "Retain what one run of a pipeline did.",
 		Payload: []platform.Field{{Name: "run", Type: "json", Required: true, Description: "The run's counts, quarantine and failures"}}}}
 }
 
@@ -54,6 +54,9 @@ func requestRun(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !c.Replaying {
+		if !c.Member.CanDeclassify(p.PublishedDeclassifications()) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Declassification requires clearance and permission for every selected marking")
+		}
 		p.Runner, p.RunnerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
 	}
 	p.Requested = true
@@ -66,6 +69,9 @@ func (b *Build) publishPipeline(c platform.Caller, record any, _ json.RawMessage
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !c.Replaying {
+		if !c.Automation && !c.Member.CanDeclassify(p.Declassifications()) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Declassification requires clearance and permission for every selected marking")
+		}
 		if err := p.NormalizeFormulaRules(); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
@@ -105,6 +111,18 @@ func (b *Build) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 		return refuse(markErr.Error())
 	}
 	for i, s := range p.Steps {
+		if s.Kind == "declassify" {
+			if p.OutputDataset == "" || i != len(p.Steps)-1 {
+				return refuse("Declassification is the final step of a dataset pipeline")
+			}
+			for _, id := range s.Markings {
+				if !slices.Contains(platform.Markings[1:], id) {
+					if err := b.checkCompartments([]string{id}); err != nil {
+						return err
+					}
+				}
+			}
+		}
 		if err := checkStep(c, s); err != nil {
 			return refuse("Step {n} ({kind}): {why}", i+1, s.Kind, err.Error())
 		}
@@ -179,6 +197,11 @@ func checkStep(c platform.Caller, s platform.TransformStep) error {
 		return nil
 	}
 	switch s.Kind {
+	case "declassify":
+		if len(s.Markings) == 0 {
+			return fmt.Errorf("names at least one marking to remove")
+		}
+		return nil
 	case "select", "dedupe":
 		return need(len(s.Columns) > 0, "columns")
 	case "rename":
@@ -266,7 +289,7 @@ func (b *Build) submitPipelineRan(c platform.Caller, s *pb.Submission, now time.
 		return func(r *pb.ChangeRecord) {
 			run := payload.Run
 			p.Last, p.Requested = &run, run.Execution != nil && run.Execution.Pending
-			p.Marking = platform.HigherMarking(p.Marking, run.Marking)
+			p.Marking, p.Compartments = run.Marking, slices.Clone(run.Compartments)
 			c.Put(r, p)
 		}, nil
 	})
@@ -301,6 +324,7 @@ type Pipeline struct {
 	OutputDataset     string                          `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
 	OutputObject      string                          `json:"outputObject,omitempty" title:"Output object"`
 	Key               string                          `json:"key,omitempty" title:"Record id column"`
+	Compartments      []string                        `json:"compartments,omitempty" field:"readonly" title:"Compartment markings"`
 	Marking           string                          `json:"marking,omitempty" field:"readonly" title:"Marking"`
 	OutputEnterprise  *EnterpriseTarget               `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
 	Every             string                          `json:"every,omitempty" field:"readonly" title:"Run every"`
@@ -323,6 +347,8 @@ type PipelineRun struct {
 	Written           int                       `json:"written"`
 	Deleted           int                       `json:"deleted,omitempty"`
 	Marking           string                    `json:"marking,omitempty"`
+	Compartments      []string                  `json:"compartments,omitempty"`
+	Declassified      []string                  `json:"declassified,omitempty"`
 	Merged            int                       `json:"merged,omitempty"`
 	Quarantined       int                       `json:"quarantined"`
 	Failed            int                       `json:"failed"`
@@ -412,4 +438,23 @@ func (p *Pipeline) NormalizeFormulaRules() error {
 		s.Formula = ""
 	}
 	return nil
+}
+
+func (p Pipeline) Declassifications() []string {
+	if len(p.Steps) > 0 && p.Steps[len(p.Steps)-1].Kind == "declassify" {
+		return p.Steps[len(p.Steps)-1].Markings
+	}
+	return nil
+}
+
+func (p Pipeline) PublishedDeclassifications() []string {
+	var asset platform.ReleaseAsset
+	if json.Unmarshal([]byte(p.Published), &asset) != nil {
+		return nil
+	}
+	var definition PipelineDefinition
+	if json.Unmarshal(asset.Body, &definition) != nil {
+		return nil
+	}
+	return (Pipeline{Steps: definition.Steps}).Declassifications()
 }

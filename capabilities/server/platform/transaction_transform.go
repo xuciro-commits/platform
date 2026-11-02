@@ -18,6 +18,7 @@ import (
 
 type TransformStep struct {
 	Kind        string             `json:"kind"`
+	Markings    []string           `json:"markings,omitempty"`
 	Columns     []string           `json:"columns,omitempty"`
 	From        string             `json:"from,omitempty"`
 	To          string             `json:"to,omitempty"`

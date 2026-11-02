@@ -12,19 +12,21 @@ import (
 )
 
 type LineageNode struct {
-	ID        string     `json:"id"`
-	Kind      string     `json:"kind"`
-	Record    string     `json:"record,omitempty"`
-	Name      string     `json:"name"`
-	Title     string     `json:"title"`
-	State     string     `json:"state,omitempty"`
-	Marking   string     `json:"marking,omitempty"`
-	Effective string     `json:"effective,omitempty"`
-	Version   int        `json:"version,omitempty"`
-	Rows      int        `json:"rows,omitempty"`
-	At        *time.Time `json:"at,omitempty"`
-	Error     string     `json:"error,omitempty"`
-	Stale     bool       `json:"stale,omitempty"`
+	ID                    string     `json:"id"`
+	Kind                  string     `json:"kind"`
+	Record                string     `json:"record,omitempty"`
+	Name                  string     `json:"name"`
+	Title                 string     `json:"title"`
+	State                 string     `json:"state,omitempty"`
+	Marking               string     `json:"marking,omitempty"`
+	Compartments          []string   `json:"compartments,omitempty"`
+	EffectiveCompartments []string   `json:"effectiveCompartments,omitempty"`
+	Effective             string     `json:"effective,omitempty"`
+	Version               int        `json:"version,omitempty"`
+	Rows                  int        `json:"rows,omitempty"`
+	At                    *time.Time `json:"at,omitempty"`
+	Error                 string     `json:"error,omitempty"`
+	Stale                 bool       `json:"stale,omitempty"`
 }
 
 type LineageEdge struct {
@@ -117,7 +119,7 @@ func lineageGraph(in lineageInputs) Lineage {
 	}
 
 	for _, conn := range in.connections {
-		node := LineageNode{ID: "connection:" + conn.ID, Kind: "connection", Record: conn.ID, Name: conn.Name, Title: conn.Title, State: conn.State, Marking: conn.Marking}
+		node := LineageNode{ID: "connection:" + conn.ID, Kind: "connection", Record: conn.ID, Name: conn.Name, Title: conn.Title, State: conn.State, Marking: conn.Marking, Compartments: conn.Compartments}
 		if conn.Last != nil {
 			node.At = when(conn.Last.At)
 			node.Error = conn.Last.Error
@@ -127,7 +129,7 @@ func lineageGraph(in lineageInputs) Lineage {
 	versions := map[string]int{}
 	for _, ds := range in.datasets {
 		versions[ds.ID] = ds.Version
-		node := LineageNode{ID: "dataset:" + ds.ID, Kind: "dataset", Record: ds.ID, Name: ds.Name, Title: ds.Title, Marking: ds.Marking, Version: ds.Version}
+		node := LineageNode{ID: "dataset:" + ds.ID, Kind: "dataset", Record: ds.ID, Name: ds.Name, Title: ds.Title, Marking: ds.Marking, Compartments: ds.Compartments, Version: ds.Version}
 		if ds.Last != nil {
 			node.Rows = ds.Last.Rows
 			node.At = when(ds.Last.At)
@@ -147,7 +149,7 @@ func lineageGraph(in lineageInputs) Lineage {
 		add(node)
 	}
 	for _, p := range in.pipelines {
-		node := LineageNode{ID: "pipeline:" + p.ID, Kind: "pipeline", Record: p.ID, Name: p.Name, Title: p.Title, State: p.State, Marking: p.Marking}
+		node := LineageNode{ID: "pipeline:" + p.ID, Kind: "pipeline", Record: p.ID, Name: p.Name, Title: p.Title, State: p.State, Marking: p.Marking, Compartments: p.Compartments}
 		if p.Last != nil {
 			node.Rows = p.Last.Written
 			node.At = when(p.Last.At)
@@ -212,16 +214,25 @@ func lineageGraph(in lineageInputs) Lineage {
 	for i := range out.Nodes {
 		at[out.Nodes[i].ID] = i
 		out.Nodes[i].Effective = out.Nodes[i].Marking
+		out.Nodes[i].EffectiveCompartments = platform.JoinCompartments(out.Nodes[i].Compartments)
+	}
+	declassified := map[string][]string{}
+	for _, pipeline := range in.pipelines {
+		declassified["pipeline:"+pipeline.ID] = pipeline.PublishedDeclassifications()
 	}
 	for changed := true; changed; {
 		changed = false
 		for _, edge := range out.Edges {
 			from, to := &out.Nodes[at[edge.From]], &out.Nodes[at[edge.To]]
-			if to.Kind == "connection" || platform.MarkingRank(from.Effective) <= platform.MarkingRank(to.Effective) {
+			if to.Kind == "connection" {
 				continue
 			}
-			to.Effective = from.Effective
-			changed = true
+			incoming := (platform.MarkingSet{Level: from.Effective, Compartments: from.EffectiveCompartments}).Without(declassified[to.ID])
+			level := platform.HigherMarking(to.Effective, incoming.Level)
+			compartments := platform.JoinCompartments(to.EffectiveCompartments, incoming.Compartments)
+			if level != to.Effective || !slices.Equal(compartments, to.EffectiveCompartments) {
+				to.Effective, to.EffectiveCompartments, changed = level, compartments, true
+			}
 		}
 	}
 	slices.SortStableFunc(out.Edges, func(a, b LineageEdge) int { return strings.Compare(a.From+">"+a.To, b.From+">"+b.To) })

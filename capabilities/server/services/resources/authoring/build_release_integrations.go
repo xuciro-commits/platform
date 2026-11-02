@@ -90,7 +90,7 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 	}
 	switch r := record.(type) {
 	case Connection:
-		body = ConnectionDefinition{Name: r.Name, Title: r.Title, Kind: r.Kind, Marking: r.Marking, Credential: r.Secret != ""}
+		body = ConnectionDefinition{Name: r.Name, Title: r.Title, Kind: r.Kind, Marking: r.Marking, Compartments: r.Compartments, Credential: r.Secret != ""}
 	case Listener:
 		body = ListenerDefinition{Name: r.Name, Title: r.Title, Connector: r.Connector, Path: r.Path, Secret: r.Secret}
 	case Source:
@@ -119,7 +119,7 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		}
 		body = ScheduleDefinition{Name: r.Name, Title: r.Title, Pipeline: pipeline, Every: r.Every, Enabled: r.Enabled}
 	case Dataset:
-		body = DatasetDefinition{Key: r.Key, Stream: r.Stream, Name: r.Name, Title: r.Title, Keep: r.Keep, Marking: r.Marking}
+		body = DatasetDefinition{Key: r.Key, Stream: r.Stream, Name: r.Name, Title: r.Title, Keep: r.Keep, Marking: r.Marking, Compartments: r.Compartments}
 	case Pipeline:
 		input, err := b.integrationName(platform.AssetDataset, r.Input)
 		if err != nil {
@@ -435,7 +435,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		if d.Name != asset.Ref.Name || !slices.Contains(ConnectionKinds, d.Kind) {
 			return nil, fmt.Errorf("invalid connection definition")
 		}
-		record = Connection{Name: d.Name, Title: d.Title, Kind: d.Kind, Marking: d.Marking}
+		record = Connection{Name: d.Name, Title: d.Title, Kind: d.Kind, Marking: d.Marking, Compartments: d.Compartments}
 	case platform.AssetListener:
 		var d ListenerDefinition
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -486,7 +486,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		if d.Name != asset.Ref.Name || d.Keep < 0 {
 			return nil, fmt.Errorf("invalid dataset definition")
 		}
-		record = Dataset{Key: d.Key, Stream: d.Stream, Name: d.Name, Title: d.Title, Keep: d.Keep, Marking: d.Marking}
+		record = Dataset{Key: d.Key, Stream: d.Stream, Name: d.Name, Title: d.Title, Keep: d.Keep, Marking: d.Marking, Compartments: d.Compartments}
 	case platform.AssetPipeline:
 		var d PipelineDefinition
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
