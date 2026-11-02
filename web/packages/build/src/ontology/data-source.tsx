@@ -138,7 +138,7 @@ export function DataSourceEditor({ id, initialStream = false }: { id: string; in
       {!draft.stream && <Panel title={t("Last pull")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         {!last ? <p className="text-xs text-muted">{t("Not pulled yet.")}</p> : <>
           <div className="flex flex-wrap items-center gap-2 text-xs"><Tag label={last.error ? t("Failed") : last.failed ? t("Partly applied") : t("Applied")} tone={last.error ? "danger" : last.failed ? "warning" : "success"} /><time>{new Date(last.at).toLocaleString()}</time></div>
-          <PropertyList columns={3} items={[[t("Rows"), last.rows], [t("Applied"), last.applied], [t("Failed"), last.failed]]} />
+          <PropertyList columns={3} items={[[t("Rows"), last.rows], [t("Applied"), last.applied], [t("Deleted"), last.deleted ?? 0], [t("Failed"), last.failed]]} />
           {last.error && <p className="text-xs text-danger">{last.error}</p>}
           {last.failures?.length ? <ul className="grid gap-1 text-xs">{last.failures.map((f, i) => <li key={i} className="font-mono break-all">{f.id || "—"} · {f.outcome}</li>)}</ul> : null}
         </>}

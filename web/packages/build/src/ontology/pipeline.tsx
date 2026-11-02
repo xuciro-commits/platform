@@ -18,8 +18,7 @@ import { DeclaredByObject, declaringObject } from "./object-datasources";
 type Measure = { fn: string; column?: string; to: string };
 type Step = { kind: string; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string;formulaExpr?:import("@platform/kernel").Api.Expr; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[] };
 type Expectation = { column: string; rule: string; value?: string };
-type Run = { merged?: number; at: string; inputVersion: number; rows: number; written: number; quarantined: number; failed: number; error?: string; outputVersion?: number;
-  quarantine?: { reason: string; row: Record<string, unknown> }[]; failures?: { id: string; outcome: string }[] };
+type Run = Api.PipelineRun;
 type EnterpriseTarget = { source: string; stereotype: string; id: string; name: string; shortName?: string; kind?: string; parent?: string; root?: string; in?: string; relation?: string; at?: string; atKind?: string; from?: string; until?: string; properties?: string[] };
 const STEREOTYPES = ["ActualOrganization", "ActualPost", "ActualPerson", "ActualLocation", "ActualResource", "ActualProject"];
 const AT_KINDS = ["ResponsibleFor", "FillsPost", "ActualOrganizationRole", "IsCapableToPerform"];
@@ -216,7 +215,7 @@ export function PipelineEditor({ id }: { id: string }) {
       <Panel title={t("Last run")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         {!last ? <p className="text-xs text-muted">{t("Not run yet.")}</p> : <>
           <div className="flex flex-wrap items-center gap-2 text-xs"><Tag label={last.error ? t("Failed") : last.quarantined || last.failed ? t("Partly written") : t("Written")} tone={last.error ? "danger" : last.quarantined || last.failed ? "warning" : "success"} /><time>{new Date(last.at).toLocaleString()}</time></div>
-          <PropertyList columns={3} items={[[t("Rows"), last.rows], [t("Written"), last.written], [t("Quarantined"), last.quarantined], [t("Refused"), last.failed], [t("Input version"), last.inputVersion], [t("Output version"), last.outputVersion ?? "—"], ...(last.merged ? [[t("Merged"), last.merged] as [string, React.ReactNode]] : [])]} />
+          <PropertyList columns={3} items={[[t("Rows"), last.rows], [t("Written"), last.written], [t("Deleted"), last.deleted ?? 0], [t("Quarantined"), last.quarantined], [t("Refused"), last.failed], [t("Input version"), last.inputVersion], [t("Output version"), last.outputVersion ?? "—"], ...(last.merged ? [[t("Merged"), last.merged] as [string, React.ReactNode]] : [])]} />
           {last.error && <p className="text-xs text-danger">{last.error}</p>}
           {last.quarantine?.length ? <ul className="grid gap-1 text-xs">{last.quarantine.map((q, i) => <li key={i} className="font-mono break-all"><span className="text-warning">{q.reason}</span> · {Object.entries(q.row).map(([k, v]) => `${k}=${cell(v)}`).join(" ")}</li>)}</ul> : null}
           {last.failures?.length ? <ul className="grid gap-1 text-xs">{last.failures.map((f, i) => <li key={i} className="font-mono break-all">{f.id || "—"} · {f.outcome}</li>)}</ul> : null}

@@ -3806,6 +3806,7 @@ export type PipelineRun = {
   inputVersion: number;
   rows: number;
   written: number;
+  deleted?: number;
   marking?: string;
   merged?: number;
   quarantined: number;
@@ -4777,6 +4778,7 @@ export type SourcePull = {
   at: string;
   rows: number;
   applied: number;
+  deleted?: number;
   failed: number;
   merged?: number;
   error?: string;

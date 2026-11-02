@@ -198,6 +198,14 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 				if err != nil {
 					pull.Error = err.Error()
 				}
+				binding = &platform.DataSourceBinding{Kind: "source", Source: s.ID, Key: s.Key}
+				for _, mapping := range s.Mapping {
+					binding.Columns = append(binding.Columns, platform.DataSourceColumn{Column: mapping.From, Attribute: mapping.To})
+				}
+				for i := range rows {
+					rows[i].At, rows[i].Origin = &now, rows[i].ID
+				}
+				plan.Binding = binding
 			}
 			if pull.Error == "" {
 				plan.Rows = rows
@@ -206,6 +214,14 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 				if refusal != nil {
 					log.Printf("source row preparation unavailable: %v", refusal)
 					return
+				}
+				if binding != nil && s.Since == "" {
+					removed, refusal := t.absentSourceRows(s.Object, binding, rows, now)
+					if refusal != nil {
+						log.Printf("source deletion preparation unavailable: %v", refusal)
+						return
+					}
+					plan.Rows = append(plan.Rows, removed...)
 				}
 			}
 		}
@@ -357,6 +373,9 @@ func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, 
 		if t.quarantined() || !t.integrationPending(plan.Type, plan.ID, execution) {
 			return false
 		}
+		if row.Deleted && pull.Failed > 0 {
+			continue
+		}
 		if row.Error != "" {
 			pull.Fail(row.ID, row.Error)
 			continue
@@ -371,6 +390,8 @@ func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, 
 				return false
 			}
 			pull.Fail(row.ID, err.Code.String()+": "+err.Message)
+		} else if row.Deleted {
+			pull.Deleted++
 		} else {
 			pull.Applied++
 		}
@@ -382,7 +403,7 @@ func (t *Tenant) submitIntegrationRow(member platform.Member, app, object string
 	sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: app, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: object, Id: row.ID}, Schema: &pb.SchemaRef{Name: object + row.Verb, Version: 1}, Payload: row.Payload}
 	if binding != nil {
-		_, err := t.submitSource(member, sub, now, &sourceSubmission{binding: binding, row: row})
+		_, err := t.submitSource(member, sub, now, &sourceSubmission{binding: binding, row: row, deleted: row.Deleted})
 		return err
 	}
 	_, err := t.Submit(member, sub, now)

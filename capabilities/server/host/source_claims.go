@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -68,12 +69,21 @@ func (t *Tenant) recordProvenance(m platform.Member, typ, id string, now time.Ti
 func (t *Tenant) selectedSourceValue(typ, id, attribute string, history []records.RecordChange, incoming *acceptedformat.SourceClaim) RecordFieldProvenance {
 	ref := &pb.EntityRef{Type: typ, Id: id}
 	sources := []RecordFieldProvenance{}
+	absent := map[string]bool{}
+	for _, record := range t.claims.CurrentClaims(t.ID, ref, "$record") {
+		fact := record.GetFact()
+		absent[fact.GetProvenance().GetConnectorId()] = string(fact.GetPayload()) == "false"
+	}
 	for _, record := range t.claims.CurrentClaims(t.ID, ref, attribute) {
 		fact := record.GetFact()
+		connector := fact.GetProvenance().GetConnectorId()
+		if absent[connector] || incoming != nil && connector == incoming.Connector {
+			continue
+		}
 		at := fact.GetProvenance().GetSourceTime().AsTime()
 		sources = append(sources, RecordFieldProvenance{Value: fact.GetPayload(), Kind: "source", Connector: fact.GetProvenance().GetConnectorId(), SourceTime: &at})
 	}
-	if incoming != nil {
+	if incoming != nil && incoming.Attribute == attribute {
 		at := incoming.SourceTime
 		sources = append(sources, RecordFieldProvenance{Value: incoming.Payload, Kind: "source", Connector: incoming.Connector, SourceTime: &at})
 	}
@@ -239,6 +249,7 @@ func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmiss
 	et := t.records.Type(typ)
 	row := et.Rows().Get(id)
 	created := records.Header(row.Value).Created.Change
+	history := row.RecordHistory()
 	fields := et.Info().Fields
 	bindings := et.Info().DataSources
 	t.records.Unlock()
@@ -258,6 +269,9 @@ func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmiss
 		presence[claim.GetFact().GetProvenance().GetConnectorId()] = string(claim.GetFact().GetPayload()) == "true"
 	}
 	otherPresent := false
+	for other, live := range presence {
+		otherPresent = otherPresent || other != connector && live
+	}
 	for _, binding := range bindings {
 		other := binding.Kind + ":" + binding.Source
 		if other == connector {
@@ -286,5 +300,60 @@ func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmiss
 		at = *source.row.At
 	}
 	claim := acceptedformat.SourceClaim{Attribute: "$record", Connector: connector, SourceTime: at, Payload: json.RawMessage("false")}
-	return copy, &preparedSourceClaim{claims: []acceptedformat.SourceClaim{claim}}, nil
+	claims := []acceptedformat.SourceClaim{claim}
+	if verb == "edit" {
+		payload := map[string]json.RawMessage{}
+		for _, field := range fields {
+			if selected := t.selectedSourceValue(typ, id, field.Name, history, &claim); selected.Kind == "source" {
+				payload[field.Name] = selected.Value
+				claims = append(claims, acceptedformat.SourceClaim{Attribute: field.Name, Connector: selected.Connector, SourceTime: *selected.SourceTime, Payload: selected.Value})
+			}
+		}
+		copy.Payload = platform.Raw(payload)
+	}
+	return copy, &preparedSourceClaim{claims: claims}, nil
+}
+
+func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBinding, current []build.SourceRow, now time.Time) ([]build.SourceRow, *kernel.Error) {
+	return recordRead(t, context.Background(), func() ([]build.SourceRow, *kernel.Error) {
+		present := map[string]bool{}
+		for _, row := range current {
+			if row.Error != "" {
+				return nil, nil
+			}
+			present[row.ID] = true
+		}
+		connector := binding.Kind + ":" + binding.Source
+		var removed []build.SourceRow
+		t.records.Lock()
+		defer t.records.Unlock()
+		et := t.records.Type(object)
+		if et == nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
+		}
+		for id, row := range et.Rows().All() {
+			if present[id] || records.Header(row.Value).Archived {
+				continue
+			}
+			ref := &pb.EntityRef{Type: object, Id: id}
+			live, known := false, false
+			for _, claim := range t.claims.CurrentClaims(t.ID, ref, "$record") {
+				if claim.GetFact().GetProvenance().GetConnectorId() == connector {
+					live, known = string(claim.GetFact().GetPayload()) == "true", true
+				}
+			}
+			if !known {
+				for _, field := range et.Info().Fields {
+					live = live || slices.ContainsFunc(t.claims.CurrentClaims(t.ID, ref, field.Name), func(claim *pb.FactRecord) bool {
+						return claim.GetFact().GetProvenance().GetConnectorId() == connector
+					})
+				}
+			}
+			if live {
+				removed = append(removed, build.SourceRow{ID: id, Verb: ".edit", Payload: json.RawMessage("{}"), Key: "delete:" + id, At: &now, Deleted: true})
+			}
+		}
+		slices.SortFunc(removed, func(a, b build.SourceRow) int { return strings.Compare(a.ID, b.ID) })
+		return removed, nil
+	})
 }

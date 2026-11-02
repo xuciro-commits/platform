@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"maps"
 	transform "platformserver/services/data/transform"
 
 	"slices"
@@ -158,6 +159,20 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 							plan.Binding = binding
 							if binding == nil {
 								rows = p.ObjectRows(kept)
+								binding = &platform.DataSourceBinding{Kind: "pipeline", Source: p.ID, Key: p.Key}
+								columns := map[string]bool{}
+								for i := range rows {
+									rows[i].At, rows[i].Origin = &now, rows[i].ID
+									var values map[string]json.RawMessage
+									_ = json.Unmarshal(rows[i].Payload, &values)
+									for field := range values {
+										columns[field] = true
+									}
+								}
+								for _, column := range slices.Sorted(maps.Keys(columns)) {
+									binding.Columns = append(binding.Columns, platform.DataSourceColumn{Column: column, Attribute: column})
+								}
+								plan.Binding = binding
 							}
 							plan.Rows = rows
 							var refusal *kernel.Error
@@ -165,6 +180,14 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 							if refusal != nil {
 								log.Printf("pipeline row preparation unavailable: %v", refusal)
 								return
+							}
+							if binding != nil && run.Quarantined == 0 {
+								removed, refusal := t.absentSourceRows(p.OutputObject, binding, rows, now)
+								if refusal != nil {
+									log.Printf("pipeline deletion preparation unavailable: %v", refusal)
+									return
+								}
+								plan.Rows = append(plan.Rows, removed...)
 							}
 							plan.Data = nil
 						}
@@ -221,7 +244,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 			if !t.applyRows(member, plan, run.Execution, run.At, &pull) {
 				return
 			}
-			run.Written, run.Failed, run.Failures = pull.Applied, pull.Failed, pull.Failures
+			run.Written, run.Deleted, run.Failed, run.Failures = pull.Applied, pull.Deleted, pull.Failed, pull.Failures
 		}
 		execution := *run.Execution
 		execution.Pending = false

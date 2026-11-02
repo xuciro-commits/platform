@@ -321,6 +321,7 @@ type PipelineRun struct {
 	Input             int                       `json:"inputVersion"`
 	Rows              int                       `json:"rows"`
 	Written           int                       `json:"written"`
+	Deleted           int                       `json:"deleted,omitempty"`
 	Marking           string                    `json:"marking,omitempty"`
 	Merged            int                       `json:"merged,omitempty"`
 	Quarantined       int                       `json:"quarantined"`

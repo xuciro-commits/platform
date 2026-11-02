@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -107,30 +106,15 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 		result.Written++
 	}
 	if result.Refused == 0 {
-		removed := slices.DeleteFunc(slices.Clone(previous.Objects), func(id string) bool { return slices.Contains(result.Objects, id) })
-		if previous.MergeVersion == 0 {
-			t.records.Lock()
-			if et := t.records.Type(object); et != nil {
-				for id, row := range et.Rows().All() {
-					if records.Header(row.Value).Archived || slices.Contains(result.Objects, id) {
-						continue
-					}
-					if slices.ContainsFunc(et.Info().Fields, func(field platform.FieldInfo) bool {
-						return slices.ContainsFunc(t.claims.CurrentClaims(t.ID, &pb.EntityRef{Type: object, Id: id}, field.Name), func(claim *pb.FactRecord) bool {
-							return claim.GetFact().GetProvenance().GetConnectorId() == "dataset:"+dataset
-						})
-					}) {
-						removed = append(removed, id)
-					}
-				}
-			}
-			t.records.Unlock()
+		removed, refusal := t.absentSourceRows(object, binding, rows, at)
+		if refusal != nil {
+			pause(refusal.Message)
+			return
 		}
-		for _, id := range removed {
-			key := fmt.Sprintf("dataset-merge-v1:%s:%s@%d:delete:%s", object, dataset, version, id)
-			sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: app, IdempotencyKey: key, Target: &pb.EntityRef{Type: object, Id: id}, Schema: &pb.SchemaRef{Name: object + ".edit", Version: 1}, Payload: json.RawMessage("{}")}
-			if _, refusal := t.submitSource(member, sub, now, &sourceSubmission{binding: binding, row: build.SourceRow{ID: id, At: &at}, deleted: true}); refusal != nil {
-				problem(build.SourceRow{ID: id}, refusal.Message)
+		for _, row := range removed {
+			key := fmt.Sprintf("dataset-merge-v1:%s:%s@%d:%s", object, dataset, version, row.Key)
+			if refusal := t.submitIntegrationRow(member, app, object, binding, row, key, now); refusal != nil {
+				problem(row, refusal.Message)
 			} else {
 				result.Deleted++
 			}

@@ -356,6 +356,7 @@ type SourcePull struct {
 	At                time.Time             `json:"at"`
 	Rows              int                   `json:"rows"`
 	Applied           int                   `json:"applied"`
+	Deleted           int                   `json:"deleted,omitempty"`
 	Failed            int                   `json:"failed"`
 	Merged            int                   `json:"merged,omitempty"`
 	Error             string                `json:"error,omitempty"`
@@ -394,6 +395,7 @@ type SourceRow struct {
 	Key     string
 	Verb    string
 	Error   string
+	Deleted bool       `json:",omitempty"`
 	Origin  string     `json:",omitempty"`
 	At      *time.Time `json:",omitempty"`
 }
