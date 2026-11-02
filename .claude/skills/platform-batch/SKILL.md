@@ -20,13 +20,12 @@ A batch is one thin, usable slice across layers. It ends committed and pushed, w
 ## 3 Plan
 
 - Multi-file or cross-layer work: plan first (plan mode), listing files per step.
-- Split into briefs that touch disjoint files. A brief for `implementer` contains:
+- Record the batch's scope:
   - goal and the spec sections it implements (paths with § numbers);
   - files in scope, and files explicitly out of scope;
   - paths to delete;
   - checks to run;
   - what to report back.
-- Gather facts with Explore (Haiku for lookups, Sonnet for reading code); keep design decisions in the lead.
 
 ## 4 Build
 
@@ -37,7 +36,7 @@ A batch is one thin, usable slice across layers. It ends committed and pushed, w
 ## 5 Verify
 
 - Run the checks in docs/7-system/verification §7.8 for what changed, plus any acceptance spec on the touched path.
-- For large or risky diffs, ask `reviewer` for an independent pass against the specs and fix its confirmed findings.
+- For large or risky diffs, review the changes against the specs and fix confirmed findings.
 - The commit hook re-runs build, types and whitespace, and lists specs whose `covers` match the change. Update them, or re-run the same commit if they are still true.
 
 ## 6 Close

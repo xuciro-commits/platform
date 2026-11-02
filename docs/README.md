@@ -1,7 +1,7 @@
 ---
 level: 治理
 covers: [AGENTS.md, CLAUDE.md, docs/**, .claude/**]
-read-when: 新建、拆分、删除文档，改技能、规则、子代理或钩子，处理外部评审
+read-when: 新建、拆分、删除文档，改技能、规则或钩子，处理外部评审
 ---
 
 # 文档治理
@@ -29,7 +29,6 @@ read-when: 新建、拆分、删除文档，改技能、规则、子代理或钩
 | 术语表 | `docs/glossary.md` | 命名时 | 术语、中英文、定义、所属层 | 用法教程 | 一词一行 |
 | 路径规则 | `.claude/rules/*.md` | 编辑匹配路径时 | 该区域必须遵守的短规则与要读的规范 | 流程步骤 | ≤60 行 |
 | 技能 | `.claude/skills/*/SKILL.md` | 任务匹配时 | 可重复的操作流程与检查清单 | 规范本身（链接到规范） | ≤300 行 |
-| 子代理 | `.claude/agents/*.md` | 委派时 | 角色、工具、模型、交付格式 | 项目规则（它们也加载 `AGENTS.md`） | ≤40 行 |
 | 钩子 | `.claude/settings.json`、`.claude/hooks/` | 自动 | 确定性检查 | 判断性规则 | — |
 
 不再建立的文档：ADR 目录、按变更归档的 spec、审计报告、评审报告、会议纪要、进度日志。它们是历史，历史在 git 与提交说明里。
@@ -91,22 +90,3 @@ read-when: 新建或修改页面、面板、表单、表格、弹窗
 
 - 外部评审是输入，不入库。逐条对照代码：采纳的写入规范或路线图，不采纳的在会话中说明理由。
 - 项目知识（决定、约束、易错点、进度）只写进仓库。代理的私有记忆只存负责人的个人偏好。
-
-## 7 角色分工
-
-| 角色 | 承担 | 模型 |
-|---|---|---|
-| 负责人 | 方向、持久代价的决定、浏览器走查与观感判断 | — |
-| 主代理 | 设计、规范、拆分批次、审查合并 | Claude Opus 5.5（高） |
-| `implementer` | 按已设计的批次实现、检查、提交 | Claude Sonnet 5.5 |
-| `backend-worker` | 只在 `capabilities/**`、`contract/**` 内施工 | GPT-6.1 Sol（高） |
-| `frontend-worker` | 只在 `web/**` 内施工 | Claude Sonnet 5.5 |
-| `reviewer` | 对照规范审查差异，只读；全新上下文、换一个模型家族审 | GPT-6.1 Sol（高，非 Claude 家族） |
-| `scout` | 资料收集、代码定位，只读，可并发多个 | Deepseek-V4.1-Flash（免费） |
-| `entropy-reducer` | 里程碑结束做减法：扫重复与死代码并精简，不改外部行为 | GPT-6.1 Sol（高） |
-
-委派原则：定位与机械活交给免费 `scout`（省 60-90% 主模型 token）；需要取舍的设计留在主代理；独立审查用全新上下文、不同家族的 `reviewer`；每批收尾用 `entropy-reducer` 收敛膨胀。并行多个施工手时按目录划界，先在 main 上冻结契约与共享类型，再分发互不重叠的文件清单。
-
-主代理 token 纪律：主代理贵，只花 token 在决策、切片、写简报、看结论做 go/no-go。不自己 `rg`/`sed`/`cat` 读代码、不逐行复核子代理 diff、不自己跑 `make verify`——定位与核实派 `scout`（免费，可并发），实现派 worker，验证让 worker 跑完报结果；主代理只读结论摘要与关键断言。`reviewer` 只在大后端批次用，验收与文案批次跳过；`entropy-reducer` 只在里程碑收尾用。
-
-角色与模型写在两处且内容一致：Codex 读 `~/.codex/config.toml` 的 `[agents]`（全局，`spawn_agent` 据此调度），各工具读 `.claude/agents/*.md` 的 frontmatter。换工具时调度配置需在新工具重建，角色提示词可复用；Magpie 负责把模型 slug 路由到对应渠道。
