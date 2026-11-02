@@ -2,6 +2,7 @@ import { useHost, useReadQuery } from "@platform/app";
 import { useDraftInventory } from "../branches/records";
 import { t, type EntityInfo } from "@platform/ui";
 import type { Api } from "@platform/kernel";
+import type { ActionTypeRecord } from "./action-draft";
 import type { ObjectRecord } from "./object-model";
 import { actionDestinations, actionStateInput } from "./process-rules";
 
@@ -46,7 +47,13 @@ export function useAuthoringModel() {
   const host = useHost();
   const builder = host.holds("build", "builder");
   const query = useDraftInventory<ObjectRecord & { archived?: boolean }>("build.object", 1000, builder);
-  const drafts = { ...query, data: builder ? query.data : undefined, isError: builder && query.isError };
+  const actionTypes = useDraftInventory<ActionTypeRecord>("build.actiontype", 1000, builder);
+  const records = query.data?.records.map(record => ({ ...record, actions: record.actionTypes?.length
+    ? record.actionTypes.flatMap(binding => {
+      const action = actionTypes.data?.records.find(value => value.name === binding.ref.name && !value.archived);
+      return action ? [action.definition] : [];
+    }) : record.actions }));
+  const drafts = { ...query, data: builder && query.data ? { ...query.data, records: records! } : undefined, isError: builder && (query.isError || actionTypes.isError) };
   const entities = new Map(host.entities.map(entity => [entity.type, entity]));
   const actions = new Map<string, AuthoringAction>(host.catalog.map(action => [action.schema, action]));
   for (const draft of drafts.data?.records ?? []) {
@@ -63,7 +70,7 @@ export function useAuthoringModel() {
       actions.set(schema, { schema, title: action.title, target: type, draft: true });
     }
   }
-  return { entities: [...entities.values()], entity: (type: string) => entities.get(type) ?? host.source.entity(type), actions: [...actions.values()], drafts };
+  return { actionTypes, entities: [...entities.values()], entity: (type: string) => entities.get(type) ?? host.source.entity(type), actions: [...actions.values()], drafts };
 }
 
 export function useAuthoringCapabilities<T extends Api.CapabilityDescriptor = Api.CapabilityDescriptor>() {

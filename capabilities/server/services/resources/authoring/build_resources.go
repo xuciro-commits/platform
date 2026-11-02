@@ -297,7 +297,15 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 			if !known {
 				c.Put(r, resource)
 			}
-			if refusal := b.ledger.ApplyTxnRecord(c, r, entity, verb, id, input.Spec, now); refusal != nil {
+			var refusal *kernel.Error
+			if typ == ObjectType {
+				refusal = b.writeObject(c, r, verb, id, input.Spec, now)
+			} else if typ == ActionTypeType {
+				refusal = b.writeActionType(c, r, verb, id, input.Spec, now)
+			} else {
+				refusal = b.ledger.ApplyTxnRecord(c, r, entity, verb, id, input.Spec, now)
+			}
+			if refusal != nil {
 				c.FailDecision(refusal)
 				return
 			}

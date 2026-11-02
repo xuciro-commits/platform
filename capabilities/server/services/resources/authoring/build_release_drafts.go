@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"reflect"
 	"slices"
+	"time"
 
 	"platformserver/platform"
 )
@@ -81,6 +83,8 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	declarations := slices.Clone(drafts)
 	priority := func(kind platform.AssetKind) int {
 		switch kind {
+		case platform.AssetAction:
+			return 3
 		case platform.AssetEvaluation:
 			return 2
 		case platform.AssetAgent:
@@ -121,7 +125,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 			continue
 		}
 	}
-	for _, draft := range drafts {
+	for _, draft := range declarations {
 		if !recordKind(draft.Kind) {
 			continue
 		}
@@ -253,17 +257,42 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 				inv.processes[i] = record
 			}
 		}
+	case platform.AssetAction:
+		action, found := platform.Get[ActionType](b.host.Automation(platform.Caller{}, ID), id)
+		if !found || action.Archived {
+			return prior, next, false, fmt.Errorf("action type %s is unavailable", id)
+		}
+		i := slices.IndexFunc(inv.objects, func(object Object) bool { return TypeOf(object.Name) == action.Object && !object.Archived })
+		if i < 0 {
+			return prior, next, false, fmt.Errorf("action type %s has no target object", id)
+		}
+		_, _, _, err = b.applyRecordDraft(inv, platform.AssetObject, inv.objects[i].ID, member)
+		next = platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: action.Name}
+		original, _ := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), inv.objects[i].ID)
+		if installed, found := ReadPublication[Object](original.Published); found && slices.ContainsFunc(installed.Actions, func(definition Action) bool { return definition.Name == action.Definition.Name }) {
+			prior, hadPrior = next, true
+		}
 	case platform.AssetObject:
 		i := slices.IndexFunc(inv.objects, func(o Object) bool { return o.ID == id && !o.Archived })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft object %q not found", id)
 		}
 		record := inv.objects[i]
+		if member.ID != "" {
+			caller := b.host.Caller(platform.Caller{}, member, ID)
+			submission := &pb.Submission{TenantId: caller.Tenant, PrincipalId: member.ID, Authority: ID, Schema: &pb.SchemaRef{Name: SchemaPublish, Version: 1}, Target: &pb.EntityRef{Type: ObjectType, Id: record.ID}, Payload: platform.Raw(map[string]any{})}
+			if decision := b.ledger.Catalog.DecideSubmission(caller, submission, time.Now()); !decision.Allow {
+				return prior, next, false, fmt.Errorf("Publishing the target object: %s", decision.Reason)
+			}
+		}
 		if was, ok := ReadPublication[Object](record.Published); ok {
 			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
 			hadPrior = true
 		}
 		next = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(record.Name)}
+		if err = b.bindObjectActions(b.host.Automation(platform.Caller{}, ID), &record); err != nil {
+			return prior, next, hadPrior, err
+		}
 		if err = b.captureExtensionSource(&record); err != nil {
 			return prior, next, hadPrior, err
 		}

@@ -223,6 +223,33 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 	if err != nil {
 		return
 	}
+	if _, object := record.(Object); object {
+		authoring := func(raw json.RawMessage) (json.RawMessage, error) {
+			var object Object
+			if err := json.Unmarshal(raw, &object); err != nil {
+				return nil, err
+			}
+			object.ActionTypes = slices.Clone(object.ActionTypes)
+			if len(object.ActionTypes) == 0 {
+				for _, action := range object.Actions {
+					object.ActionTypes = append(object.ActionTypes, platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: TypeOf(object.Name) + "." + action.Name}})
+				}
+			}
+			for i := range object.ActionTypes {
+				object.ActionTypes[i].SourceVersion = ""
+			}
+			object.Actions = nil
+			return json.Marshal(object)
+		}
+		current, err = authoring(current)
+		if err != nil {
+			return
+		}
+		previous, err = authoring(previous)
+		if err != nil {
+			return
+		}
+	}
 	canonicalFields := func(raw json.RawMessage) (map[string]json.RawMessage, error) {
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &fields); err != nil {

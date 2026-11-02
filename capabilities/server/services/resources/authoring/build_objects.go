@@ -207,6 +207,13 @@ func (b *Build) objectEntity() platform.Entity {
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
+					compiled := *object
+					if !c.Replaying {
+						if err := b.bindObjectActions(c, &compiled); err != nil {
+							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+						}
+					}
+					object = &compiled
 					if !c.Replaying {
 						if err := b.captureExtensionSource(object); err != nil {
 							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -230,6 +237,13 @@ func (b *Build) objectEntity() platform.Entity {
 					}
 					object.Installed = TypeOf(object.Name)
 					object.Published = published(*object)
+					if len(object.ActionTypes) > 0 {
+						object.Actions = nil
+						for i := range object.ActionTypes {
+							object.ActionTypes[i].SourceVersion = ""
+						}
+					}
+					*record.(*Object) = *object
 					return nil
 				}}}}}
 }

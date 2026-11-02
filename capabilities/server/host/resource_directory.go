@@ -166,6 +166,7 @@ func (t *Tenant) initializeResources(now time.Time) error {
 		return refusal
 	}
 	directory := map[string]build.Resource{}
+	legacyObjects := []string{}
 	projects := map[platform.AssetRef][]string{}
 	t.records.Lock()
 	if apps := t.records.Type(build.AppType); apps != nil {
@@ -191,6 +192,9 @@ func (t *Tenant) initializeResources(now time.Time) error {
 			continue
 		}
 		for id, row := range t.records.Type(info.Type).Rows().All() {
+			if info.Type == build.ObjectType && len(row.Value.Interface().(build.Object).Actions) > 0 {
+				legacyObjects = append(legacyObjects, id)
+			}
 			raw, _ := json.Marshal(row.Value.Interface())
 			var meta struct {
 				platform.Record
@@ -250,18 +254,22 @@ func (t *Tenant) initializeResources(now time.Time) error {
 	for _, rid := range slices.SortedFunc(maps.Keys(directory), strings.Compare) {
 		pending = append(pending, directory[rid])
 	}
-	if len(pending) == 0 {
-		return nil
+	if len(pending) > 0 {
+		digest, err := platform.CanonicalDigest(pending)
+		if err != nil {
+			return err
+		}
+		submission := &pb.Submission{TenantId: t.ID, Authority: build.ID, IdempotencyKey: "resource-directory-v1:" + digest, Schema: &pb.SchemaRef{Name: build.SchemaResourceRegister, Version: 1}, Target: &pb.EntityRef{Type: build.ResourceType, Id: "directory-v1"}, Payload: platform.Raw(map[string]any{"resources": pending})}
+		if refusal := t.submitAutomated(owner, t.automation(build.ID, false), submission, now); refusal != nil {
+			return refusal
+		}
 	}
-	digest, err := platform.CanonicalDigest(pending)
-	if err != nil {
-		return err
+	for _, id := range legacyObjects {
+		submission := &pb.Submission{TenantId: t.ID, Authority: build.ID, IdempotencyKey: "action-types-v1:" + id, Schema: &pb.SchemaRef{Name: build.SchemaExtractActions, Version: 1}, Target: &pb.EntityRef{Type: build.ObjectType, Id: id}, Payload: platform.Raw(map[string]any{})}
+		if refusal := t.submitAutomated(owner, t.automation(build.ID, false), submission, now); refusal != nil {
+			return refusal
+		}
 	}
-	submission := &pb.Submission{TenantId: t.ID, Authority: build.ID, IdempotencyKey: "resource-directory-v1:" + digest, Schema: &pb.SchemaRef{Name: build.SchemaResourceRegister, Version: 1}, Target: &pb.EntityRef{Type: build.ResourceType, Id: "directory-v1"}, Payload: platform.Raw(map[string]any{"resources": pending})}
-	if refusal := t.submitAutomated(owner, t.automation(build.ID, false), submission, now); refusal != nil {
-		return refusal
-	}
-
 	return nil
 }
 

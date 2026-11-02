@@ -1,6 +1,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "An action type has its own saved definition and versions. Choose its target object, then define parameters, rules, criteria and side effects. Publish it with the object to make it available.": "动作类型独立保存定义和版本。选择目标对象，再定义参数、规则、提交条件和副作用；随对象发布后即可使用。",
+ "The action request could not be completed. Your draft is still here.": "未能完成动作请求，草稿仍保留。",
+ "Save the object type before opening this action.": "请先保存对象类型，再打开此动作。",
+
  "The product version could not be added to the catalog.": "无法将产品版本加入目录。",
  "The product version could not be inspected.": "无法检查产品版本。",
  "The product version could not be created.": "无法创建产品版本。",

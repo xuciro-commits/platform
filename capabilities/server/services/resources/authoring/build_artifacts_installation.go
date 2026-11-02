@@ -306,13 +306,13 @@ func orderOwnerInstallations(assets []platform.ReleaseAsset, plans []platform.As
 		}
 	}
 	if len(byRef) != 0 {
-		return nil, fmt.Errorf("installation lacks its candidate descriptor")
+		return nil, fmt.Errorf("installation lacks its candidate descriptor: %v", slices.SortedFunc(maps.Keys(byRef), func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) }))
 	}
 	return out, nil
 }
 
 func draftAssetRef(typ, name string) (platform.AssetRef, error) {
-	kinds := map[string]platform.AssetKind{ObjectType: platform.AssetObject, PageType: platform.AssetPage, AppType: platform.AssetApp, ProcessType: platform.AssetFlow, SampleSetType: platform.AssetSampleSet,
+	kinds := map[string]platform.AssetKind{ObjectType: platform.AssetObject, ActionTypeType: platform.AssetAction, PageType: platform.AssetPage, AppType: platform.AssetApp, ProcessType: platform.AssetFlow, SampleSetType: platform.AssetSampleSet,
 		PropertyTypeType: platform.AssetPropertyType, ValueTypeType: platform.AssetValueType, ObjectTypeGroupType: platform.AssetObjectTypeGroup, LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, FunctionType: platform.AssetFunction, AgentType: platform.AssetAgent,
 		CodeType: platform.AssetCompute, TableType: platform.AssetCompute, AlertType: platform.AssetAlert, TestPlanType: platform.AssetTestPlan}
 	kind := kinds[typ]

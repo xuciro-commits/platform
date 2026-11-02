@@ -4,22 +4,23 @@ import { TransactionEditor } from "./TransactionEditor";
 import {ConfirmationEditor} from "./ConfirmationEditor";
 import { DispatchEditor } from "./DispatchEditor";
 import {RefusalEditor} from "./RefusalEditor";
-import { PayloadFields, SemanticObjectSelect, assetKey, useHost, useRecordInventory, type Definition } from "@platform/app";
+import { PayloadFields, SemanticObjectSelect, assetKey, useHost, type Definition } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { projectGroup, useProjectIndex } from "../projects/membership";
 import { Button, Card, Checkbox, GroupedList, Input, PageHeader, Panel, ProblemList, ResourceNavigation, Select, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { DraftStatus } from "../editor/workbench";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
-import { Plus, Shield, Trash2, Zap, Blocks } from "lucide-react";
+import { Plus, Shield, Trash2, Zap } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { EnterpriseReferenceTypes, Label } from "./process";
 import { actionInputFields, conditionSubjects, inputTypes, nameOf, type Action, type ApproverLevel, type Input_ } from "./object-model";
 import { actionResultEdges } from "./process-rules";
-import { useObjectDraft } from "./object-draft";
+import { useActionTypeDraft, type ActionTypeRecord } from "./action-draft";
+import { useAuthoringModel } from "./authoring-model";
 
-type Section = "overview" | "rules" | "parameters" | "form" | "criteria" | "effects";
+type Section = "overview" | "rules" | "parameters" | "form" | "criteria" | "effects" | "versions";
 type Pick = { kind: "parameter"; at: number } | undefined;
 const sections: { id: Section; title: () => string; group?: () => string }[] = [
   { id: "overview", title: () => t("Overview") },
@@ -28,21 +29,25 @@ const sections: { id: Section; title: () => string; group?: () => string }[] = [
   { id: "form", title: () => t("Form"), group: () => t("Definition") },
   { id: "criteria", title: () => t("Submission criteria"), group: () => t("Behavior") },
   { id: "effects", title: () => t("Side effects"), group: () => t("Behavior") },
+  { id: "versions", title: () => t("Versions") },
 ];
 
 type ObjectDraft = { id: string; name: string; title: string; state: string; archived?: boolean; actions?: Action[]; states?: { name: string; title: string }[] };
-type ActionRow = { key: string; object: ObjectDraft; action: Action };
+type ActionRow = { key: string; object: ObjectDraft; action: Action; record: ActionTypeRecord };
 
 type BuiltInRow = { key: string; definition: Definition; object?: Definition };
 
 export function ActionTypes() {
   const { definitions, me , holds} = useHost(), { open } = useApplicationWorkspace();
-  const inventory = useRecordInventory<ObjectDraft>("build.object");
+  const model = useAuthoringModel(), inventory = model.actionTypes;
   const projects = useProjectIndex();
   const [showSystem, setShowSystem] = useSystemDefinitionsVisibility();
   if (!holds("build", "builder")) return <PageHeader title={t("Action types")} description={t("Only a builder can edit action types.")} />;
-  const drafts = (inventory.data?.records ?? []).filter((object) => !object.archived);
-  const rows: ActionRow[] = drafts.flatMap((object) => (object.actions ?? []).map((action) => ({ key: `${object.id}:${action.name}`, object, action })));
+  const drafts = (model.drafts.data?.records ?? []).filter(object => !object.archived);
+  const rows: ActionRow[] = (inventory.data?.records ?? []).filter(record => !record.archived).flatMap(record => {
+    const object = drafts.find(object => `build.${object.name}` === record.object);
+    return object ? [{ key: record.id, object, action: record.definition, record }] : [];
+  });
   const stateTitle = (object: ObjectDraft, name?: string) => object.states?.find((s) => s.name === name)?.title ?? name ?? "";
   const transition = (row: ActionRow) => `${row.action.from.map((f) => stateTitle(row.object, f)).join(", ")} → ${actionResultEdges(row.action).map(name=>stateTitle(row.object,name)).join(", ") || t("Where it was")}`;
   const own = new Set(rows.map((row) => assetKey({ app: "build", kind: "action", name: `build.${row.object.name}.${row.action.name}` })));
@@ -51,21 +56,21 @@ export function ActionTypes() {
   const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
   const objectRef = (object: ObjectDraft): Api.AssetRef => ({ app: "build", kind: "object", name: `build.${object.name}` });
   return <div className="grid min-w-0 gap-3">
-    <PageHeader title={t("Action types")} help={t("An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one. The host already ships create, edit and archive for every object type and each module its own actions — they are listed below so you declare only what is missing.")} actions={<Button size="sm" onClick={() => open({ view: "object-type" })}><Blocks aria-hidden className="size-4" />{t("Open the object model")}</Button>} />
+    <PageHeader title={t("Action types")} help={t("An action type has its own saved definition and versions. Choose its target object, then define parameters, rules, criteria and side effects. Publish it with the object to make it available.")} actions={<Button size="sm" onClick={() => open({ view: "action-type", params: { id: "new" } })}><Plus aria-hidden className="size-4" />{t("New action")}</Button>} />
     <SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />
     <Panel title={t("Declared in this organisation")} description={t("{n} action types on {objects} object types", { n: rows.length, objects: drafts.filter((o) => o.actions?.length).length })}>
       <GroupedList<ActionRow> items={rows} id={(row) => row.key} text={(row) => `${row.action.title} ${row.action.name} ${row.object.title} ${row.object.name}`}
-        onSelect={(row) => open({ view: "action-type", params: { id: row.object.id, action: row.action.name } })}
+        onSelect={(row) => open({ view: "action-type", params: { id: row.record.id } })}
         groupings={[
           { id: "object", label: t("Object type"), of: (row) => ({ id: row.object.id, label: row.object.title || row.object.name, hint: `build.${row.object.name}` }) },
           { id: "project", label: t("Project"), of: (row) => projectGroup(projects, objectRef(row.object)) },
-          { id: "status", label: t("Status"), of: (row) => ({ id: row.object.state, label: t(row.object.state === "published" ? "Published" : "Draft") }) },
+          { id: "status", label: t("Status"), of: (row) => ({ id: row.record.state ?? "draft", label: t(row.record.state === "published" ? "Published" : "Draft") }) },
         ]}
         row={(row) => <><Zap className="size-3 shrink-0 text-muted" /><span className="min-w-0 flex-1 truncate">{row.action.title || row.action.name}</span>
           <span className="hidden min-w-0 truncate text-muted md:inline">{transition(row)}</span>
           {!!row.action.inputs?.length && <span className="shrink-0 text-muted">{t("{n} parameters", { n: row.action.inputs.length })}</span>}
           {row.action.approval && <span className="shrink-0 text-muted">{t("Approval")}</span>}
-          <DraftStatus state={row.object.state} /></>}
+          <DraftStatus state={row.record.state ?? "draft"} /></>}
         empty={inventory.isLoading ? t("Loading…") : t("No action types yet. Add a lifecycle state and an action to an object type.")} />
     </Panel>
     <Panel aria-label={t("Published action definitions")} title={t("Published action definitions")} help={t("Read-only action definitions. Open an action to inspect its parameters, rules and access.")}>
@@ -82,29 +87,35 @@ export function ActionTypes() {
   </div>;
 }
 
-export function ActionTypeEditor({ id, action: initial }: { id: string; action?: string }) {
+export function ActionTypeEditor({ id, action, object }: { id: string; action?: string; object?: string }) {
+  const model = useAuthoringModel();
+  const { open } = useApplicationWorkspace();
+  const legacyObject = model.drafts.data?.records.find(record => record.id === id);
+  const legacyAction = action && legacyObject ? model.actionTypes.data?.records.find(record => record.name === `build.${legacyObject.name}.${action}`) : undefined;
+  useEffect(() => { if (legacyAction) open({ view: "action-type", params: { id: legacyAction.id } }, { replace: true }); }, [legacyAction?.id]);
+  if (action) return <Workbench storageKey="action-type" title={t("Action type")}><WorkbenchMessage>{model.actionTypes.isLoading ? t("Loading…") : t("Save the object type before opening this action.")}</WorkbenchMessage></Workbench>;
+  return <IndependentActionTypeEditor key={id} id={id} object={object} />;
+}
+
+function IndependentActionTypeEditor({ id, object: initialObject }: { id: string; object?: string }) {
   const [pick, setPick] = useState<Pick>();
-  const draft = useObjectDraft(id, () => setPick(undefined));
-  const { object, process, dirty, busy, blocked, refused, change, parent, entities, roles, approverRoles, session, discardChanges, open } = draft;
-  const [name, setName] = useState(initial);
+  const draft = useActionTypeDraft(id, initialObject);
+  const { object, process, dirty, busy, change, parent, entities, roles, approverRoles, discardChanges, open, record } = draft;
+  const refused = draft.error;
+  const name = record.definition.name;
   const [section, setSection] = useState<Section>("overview");
-  useEffect(() => { if (initial) setName(initial); }, [initial]);
-  if (!object || !draft.ready) return <Workbench storageKey="action-type" title={t("Action type")}><WorkbenchMessage>{draft.failed ? t("The object type could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
+  if (!object) return <Workbench storageKey="action-type" title={t("New action")}><div className="grid max-w-xl gap-3 p-4"><Label text={t("Object type")}><Select value={parent} onChange={event => draft.selectObject(event.target.value)}><option value="">{t("Choose an object type")}</option>{draft.objects.filter(value => !value.archived).map(value => <option key={value.id} value={`build.${value.name}`}>{value.title}</option>)}</Select></Label>{refused && <p role="alert">{refused}</p>}</div></Workbench>;
   const at = process.actions.findIndex(action => action.name === name), action = process.actions[at];
   const patch = (next: Partial<Action>) => { if (at >= 0) change({ ...process, actions: process.actions.map((action, index) => index === at ? { ...action, ...next } : action) }); };
-  const addAction = () => {
-    const fresh = nameOf("action", process.actions.map(action => action.name)), from = process.states[0]?.name;
-    change({ ...process, actions: [...process.actions, { name: fresh, title: t("Step {n}", { n: process.actions.length + 1 }), from: from ? [from] : [], transaction: { subject: parent, steps: [{ name: "update", kind: "update", target: { type: parent, id: "$subject" }, changes: [] }] } }] });
-    setName(fresh); setSection("overview"); setPick(undefined);
-  };
-  const issues = action ? draft.issuesOf(action.name) : [];
+  const addAction = () => open({ view: "action-type", params: { id: "new", object: parent } });
+  const issues = draft.issues;
   const problems: WorkbenchProblem[] = issues.map((text, index) => ({ id: `issue:${index}`, text }));
   const inputs = action?.inputs ?? [], subjects = action ? conditionSubjects(process, action, parent, entities) : [];
   const reviewerRoles = [...new Set(["builder", ...process.access.map(access => access.role)])];
   const main: Record<Section, ReactNode> = !action ? {} as Record<Section, ReactNode> : {
     overview: <div className="grid max-w-2xl content-start gap-3 p-4">
       <Label text={t("What people call it")}><Input value={action.title} onChange={event => patch({ title: event.target.value })} /></Label>
-      <Label text={t("Name")}><Input value={action.name} className="font-mono" onChange={event => { patch({ name: event.target.value }); setName(event.target.value); }} /></Label>
+      <Label text={t("Name")}><Input value={action.name} disabled={!!record.id} className="font-mono" onChange={event => { patch({ name: event.target.value }); }} /></Label>
       <Label text={t("What it does")}><Textarea rows={2} value={action.description ?? ""} onChange={event => patch({ description: event.target.value })} /></Label>
       <Checkbox checked={!!action.confirmationOnly} onChange={confirmationOnly=>patch({confirmationOnly})}>{t("Require original confirmation receipt")}</Checkbox>
       {action.confirmationOnly&&<p className="text-xs text-muted">{t("Only the original confirmation can invoke this action. The initiating member still needs current business permissions.")}</p>}
@@ -131,7 +142,7 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
     </div>,
     criteria: <div className="grid min-w-0 max-w-4xl content-start gap-4 p-4 text-sm"><h2 className="text-sm font-semibold">{t("Submission criteria")}</h2>
       <fieldset className="grid gap-1 text-xs"><legend className="mb-1 font-semibold">{t("Taken from")}</legend><Toggles options={process.states.map(state => ({ value: state.name, label: state.title }))} value={action.from} onChange={from => patch({ from })} /></fieldset>
-      <section className="grid gap-2 border-t border-border pt-3"><h3 className="text-xs font-semibold">{t("Who may take it")}</h3>{roles.length ? <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("Taken by")}</legend><Toggles options={roles.map(role => ({ value: role, label: role }))} value={action.roles ?? []} onChange={roles => patch({ roles: roles.length ? roles : undefined })} /><p className="text-muted">{t("None chosen: every role that may read the object. The builder always may.")}</p></fieldset> : <p className="text-muted">{t("The object has no roles yet; only builders may take this action.")}</p>}<Button size="sm" className="w-fit" onClick={() => open({ view: "object-type", params: { id, tab: "permissions" } })}><Shield />{t("Edit the object's roles")}</Button></section>
+      <section className="grid gap-2 border-t border-border pt-3"><h3 className="text-xs font-semibold">{t("Who may take it")}</h3>{roles.length ? <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("Taken by")}</legend><Toggles options={roles.map(role => ({ value: role, label: role }))} value={action.roles ?? []} onChange={roles => patch({ roles: roles.length ? roles : undefined })} /><p className="text-muted">{t("None chosen: every role that may read the object. The builder always may.")}</p></fieldset> : <p className="text-muted">{t("The object has no roles yet; only builders may take this action.")}</p>}<Button size="sm" className="w-fit" onClick={() => open({ view: "object-type", params: { id: object.id, tab: "permissions" } })}><Shield />{t("Edit the object's roles")}</Button></section>
       <section className="grid gap-2 border-t border-border pt-3"><h3 className="text-xs font-semibold">{t("Approval")}</h3><Checkbox checked={!!action.approval} onChange={enabled => patch({ approval: enabled ? { pending: "", levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }] } : undefined })}>{t("Wait for approval")}</Checkbox>
       {action.approval && <><p className="text-xs text-muted">{t("Business records stay unchanged while approval waits. After the final approval, the transaction runs with the requester's current permissions.")}</p>
         <Rows<ApproverLevel> title={t("Approver levels, in order")} add={t("Add a level")} items={action.approval.levels} make={() => ({ title: t("Approver"), role: approverRoles[0] ?? "builder" })} onChange={levels => patch({ approval: { ...action.approval!, levels } })} row={(level, set) => <><Label text={t("What this level is called")}><Input value={level.title} onChange={event => set({ title: event.target.value })} /></Label><Label text={t("Approver role")}><Select value={level.role} onChange={event => set({ role: event.target.value })}>{approverRoles.map(role => <option key={role}>{role}</option>)}</Select></Label><Checkbox checked={!!level.all} onChange={all => set({ all })}>{t("Everyone in the role must approve")}</Checkbox></>} /></>}
@@ -140,6 +151,7 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
         <RefusalEditor value={action.transaction} onChange={transaction => patch({ transaction })} choices={subjects} actions={process.actions.filter(candidate => candidate.name !== action.name && candidate.transaction && !candidate.approval && !candidate.adoption).map(candidate => candidate.name)} entities={entities} roles={reviewerRoles} />
       </section>}
     </div>,
+    versions: <div className="grid max-w-3xl gap-3 p-4">{record.versions?.map(version => <Card key={version.version} className="p-3"><h3 className="text-sm font-semibold">{t("Version {n}", { n: version.version })} · {version.definition.title}</h3><pre className="overflow-auto text-xs">{JSON.stringify(version.definition, null, 2)}</pre></Card>)}</div>,
     effects: <div className="grid min-w-0 max-w-4xl content-start gap-3 p-4"><h2 className="text-sm font-semibold">{t("Side effects")}</h2>
       {action.transaction ? <>
         <ConfirmationEditor value={action.transaction.confirmation} onChange={confirmation => patch({ transaction: { ...action.transaction!, confirmation } })} actions={process.actions.filter(candidate => candidate.name !== action.name).map(candidate => candidate.name)} roles={reviewerRoles} inputs={inputs} />
@@ -151,21 +163,20 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
   };
   const inspector = action && pick && inputs[pick.at] ? <div className="p-2"><RowCard title={t("Parameter")} onRemove={() => { patch({ inputs: inputs.filter((_, index) => index !== pick.at) }); setPick(undefined); }}><ParameterEditor input={inputs[pick.at]!} inputs={inputs} entities={entities} onChange={change => patch({ inputs: inputs.map((input, index) => index === pick.at ? { ...input, ...change } : input) })} /></RowCard></div> : <p className="p-3 text-xs text-muted">{t("Select a row to edit it here.")}</p>;
   return <Workbench storageKey="action-type" title={action?.title || t("Action type")}
-    crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }, { label: object.title, onClick: () => open({ view: "object-type", params: { id, tab: "actions" } }) }]}
-    status={<DraftStatus state={object.state} problems={issues.length} />} busy={busy}
-    history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setPick(undefined); }, redo: () => { session.redo(); setPick(undefined); } }}
-    actions={<ResourceControls type="build.object" record={object} dirty={dirty} busy={busy} invalid={draft.issues.length > 0} onSave={() => draft.perform(draft.save)} onCancel={discardChanges} route={{ view: "action-type", params: { id, action: name ?? "" } }} />}
-    right={{ label: t("Action inspector"), scope: JSON.stringify([at, pick]), selection: action && pick && inputs[pick.at] ? JSON.stringify([at, pick]) : undefined, locate: path => { const scope = path?.split("/").find(part => part.startsWith("[")); setPick(scope ? (JSON.parse(scope) as [number, Pick])[1] : pick); }, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
+    crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }, { label: object.title, onClick: () => open({ view: "object-type", params: { id: object.id, tab: "actions" } }) }]}
+    status={<DraftStatus state={record.state ?? "draft"} problems={issues.length} />} busy={busy}
+    actions={<ResourceControls type="build.actiontype" record={record} dirty={dirty} busy={busy} invalid={issues.length > 0} onSave={() => draft.perform(() => draft.save())} onCancel={discardChanges} route={{ view: "action-type", params: { id } }} />}
+    right={{ label: t("Action inspector"), scope: JSON.stringify([at, pick]), selection: action && pick && inputs[pick.at] ? JSON.stringify([at, pick]) : undefined, locate: path => { const scope = path?.split("/").find(part => part.startsWith("[")); setPick(scope ? (JSON.parse(scope) as [number, Pick])[1] : pick); }, content: <div className="contents">{inspector}</div> }}
     dock={{ label: t("Action dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The action can be published with its object type.")} /> }] }}>
     <ResourceNavigation back={{ label: t("Action types"), onClick: () => open({ view: "action-type" }) }} title={action?.title || t("Action type")} icon={<Zap />} meta={action ? `build.${object.name}.${action.name}` : object.title}
       sections={[
         ...(action ? sections.map(item => ({ id: item.id, label: item.title(), group: item.group?.(), badge: item.id === "parameters" ? inputs.length || undefined : item.id === "rules" ? action.transaction?.steps.length || undefined : undefined })) : []),
-        ...process.actions.filter(other => other.name !== name).map(other => ({ id: `action:${other.name}`, label: other.title || other.name, icon: <Zap />, group: t("Other actions on {object}", { object: object.title }) })),
+
         ...(process.states.length ? [{ id: "new-action", label: t("New action"), icon: <Plus />, group: t("Other actions on {object}", { object: object.title }) }] : []),
       ]}
-      value={section} onChange={next => { if (next === "new-action") addAction(); else if (next.startsWith("action:")) { setName(next.slice(7)); setSection("overview"); } else setSection(next as Section); setPick(undefined); }} />
+      value={section} onChange={next => { if (next === "new-action") addAction(); else setSection(next as Section); setPick(undefined); }} />
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
-    {action ? <StructuredEditor expectedRevision={draft.structured.expectedRevision} fieldInput={sourceFieldInput} value={{ ...action }} fields={draft.structured.fields.find(field => field.name === "actions")?.fields} scope={`build.object:${id}:action:${name}`} disabled={busy || blocked} onTrial={next => draft.structured.onTrial({ ...process, actions: process.actions.map((item, index) => index === at ? next as Action : item) })} onChange={next => { change({ ...process, actions: process.actions.map((item, index) => index === at ? next as Action : item) }); if (typeof next.name === "string") setName(next.name); }}><fieldset disabled={busy || blocked} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[section]}</fieldset></StructuredEditor> : <WorkbenchMessage>{process.actions.length ? t("Choose an action on the left.") : t("This object type has no actions yet.")}</WorkbenchMessage>}
+    {action ? <StructuredEditor expectedRevision={draft.structured.expectedRevision} fieldInput={sourceFieldInput} value={{ ...action }} fields={draft.definitionFields} scope={`build.actiontype:${id}:definition`} disabled={busy} onTrial={next => draft.structured.onTrial({ ...draft.structured.value, definition: next })} onChange={next => { change({ ...process, actions: process.actions.map((item, index) => index === at ? next as Action : item) }); }}><fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[section]}</fieldset></StructuredEditor> : <WorkbenchMessage>{process.actions.length ? t("Choose an action on the left.") : t("This object type has no actions yet.")}</WorkbenchMessage>}
   </Workbench>;
 }
 

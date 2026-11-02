@@ -65,7 +65,7 @@ const ontologyViews: View[] = [
   view("property-type", () => t("Shared properties"), p => p.id ? <PropertyTypeEditor key={p.id} id={p.id} /> : <PropertyTypes />),
   view("value-type", () => t("Value types"), p => p.id ? <ValueTypeEditor key={p.id} id={p.id} /> : <ValueTypes />),
   view("object-type-group", () => t("Object type groups"), p => p.id ? <ObjectTypeGroupEditor key={p.id} id={p.id} /> : <ObjectTypeGroups />),
-  view("action-type", () => t("Action types"), p => p.id ? <ActionTypeEditor key={p.id} id={p.id} action={p.action} /> : <ActionTypes />),
+  view("action-type", () => t("Action types"), p => p.id ? <ActionTypeEditor key={p.id} id={p.id} action={p.action} object={p.object} /> : <ActionTypes />),
   view("changes", () => t("Branches and proposals"), () => <Branches />),
   { id: "proposal", documentKey: p => p.id ?? "", title: () => t("Proposal"), render: p => <ProposalScreen key={p.id} id={p.id ?? ""} /> },
 ];

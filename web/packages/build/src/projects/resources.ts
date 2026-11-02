@@ -10,6 +10,7 @@ export type ResourceKindInfo = {
 };
 
 export const resourceKinds: ResourceKindInfo[] = [
+  { kind: "action", type: "build.actiontype", view: "action-type", label: "Action type", plural: "Action types", ref: "action" },
  {kind:"sample-set",type:"build.sample-set",view:"sample-set",label:"Sample set",plural:"Sample sets",ref:"sample-set"},
   { kind: "object", type: "build.object", view: "object-type", label: "Object type", plural: "Object types", ref: "object" },
   { kind: "object-type-group", type: "build.objecttypegroup", view: "object-type-group", label: "Object type group", plural: "Object type groups", ref: "object-type-group" },

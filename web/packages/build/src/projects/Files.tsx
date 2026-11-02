@@ -9,7 +9,7 @@ import { WorkingState } from "../session/WorkingState";
 import { kindOfType, resourceKinds, resourceRoute } from "./resources";
 
 export function ResourceIdentity({ view, params }: { view: View; params: Record<string, string> }) {
-  const nativeType=view.id==="action-type"?"build.object":view.id==="project" || view.id==="module" && !params.page?"build.app":resourceKinds.find(kind=>kind.view===view.id)?.type;
+  const nativeType=view.id==="project" || view.id==="module" && !params.page?"build.app":resourceKinds.find(kind=>kind.view===view.id)?.type;
   const nativeID=params.page||params.id;
   const directory=useReadQuery<Api.ResourceDirectory>("/v1/resources",undefined,!!nativeType && !!nativeID && nativeID!=="new" && !nativeID.startsWith("ri."));
   const native=directory.data?.resources.find(resource=>resource.type===nativeType && resource.draft===nativeID);
@@ -22,7 +22,7 @@ export function ResourceIdentity({ view, params }: { view: View; params: Record<
   const rid = params.id?.startsWith("ri.") ? params.id : params.page?.startsWith("ri.") ? params.page : undefined;
   const query = useReadQuery<Api.ResourceEntry>(`/v1/resources/${encodeURIComponent(rid ?? "")}`, undefined, !!rid);
   const scoped = (resolved: Record<string,string>) => {
-    const type = view.id==="action-type" ? "build.object" : view.id==="project" || view.id==="module" && !resolved.page ? "build.app" : resourceKinds.find(kind=>kind.view===view.id)?.type;
+    const type = view.id==="project" || view.id==="module" && !resolved.page ? "build.app" : resourceKinds.find(kind=>kind.view===view.id)?.type;
     const id=resolved.page || resolved.id;
     const project=resolved.application || (view.id==="project" || view.id==="module"&&!resolved.page?resolved.id:undefined);
     const body=<ApplicationScope application={project}><BranchDecisions project={project}>{view.render(resolved)}</BranchDecisions></ApplicationScope>;

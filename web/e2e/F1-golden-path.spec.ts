@@ -88,12 +88,11 @@ test("F1 builder goes from an empty project to an application a business user ac
   await test.step("4 add an action type", async () => {
     await page.getByRole("navigation", { name: "Order" }).getByRole("button", { name: "Actions", exact: true }).click();
     await page.getByRole("button", { name: "Add an action", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Open action type", exact: true })).toBeVisible();
-    await expect(page.getByRole("status").filter({ hasText: "Unsaved changes" })).toBeVisible();
-    await page.getByRole("button", { name: "Open action type", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "What people call it", exact: true })).toBeVisible();
+    await page.getByRole("textbox", { name: "What people call it", exact: true }).fill("Step 1");
     await expect(page.getByText("Select a row to edit it here.", { exact: true })).not.toBeVisible();
-    await saveCurrentResource();
+    await page.getByRole("button", { name: "Create", exact: true }).first().click();
+    await expect(page).not.toHaveURL(/id=new/);
   });
 
   await test.step("5 build a page in Workshop from a template bound to the draft object type", async () => {
@@ -341,7 +340,7 @@ test("F1 builder goes from an empty project to an application a business user ac
         expect(resource).toMatchObject({ title, ref: { app: "build", kind, name: resourceName } });
         const row = downstream.getByRole("listitem").filter({ has: page.getByText(resourceName, { exact: true }) });
         await expect(row.getByText(resourceName, { exact: true })).toBeVisible();
-        await expect(row.getByText(`${title} · ${kind === "page" ? "Pages" : kind === "app" ? "Applications" : "action"}`, { exact: true })).toBeVisible();
+        await expect(row.getByText(`${title} · ${kind === "page" ? "Pages" : kind === "app" ? "Applications" : "Action types"}`, { exact: true })).toBeVisible();
       }
       await expect(page.getByRole("button", { name: "Save immutable candidate", exact: true })).toHaveCount(0);
     } finally {

@@ -22,7 +22,7 @@ export async function applicationDraftSelection(roots: JointChoice[], referenced
   return selection;
 }
 
-export type ReleaseKind = Exclude<ResourceKind, "action" | "automation" | "media-set"> | "mediaset" | "app";
+export type ReleaseKind = Exclude<ResourceKind, "automation" | "media-set"> | "mediaset" | "app";
 export function releaseSelectionProblem(drafts: readonly JointChoice[]): string | undefined {
   if (drafts.length > 128) return "A joint candidate accepts at most 128 drafts. Select a supported application closure.";
   if (new TextEncoder().encode(JSON.stringify({ drafts: drafts.map(ownerDraft) })).length > releaseCommandBytes) return "The release selection exceeds the original 65536-byte request budget. No drafts were dropped.";

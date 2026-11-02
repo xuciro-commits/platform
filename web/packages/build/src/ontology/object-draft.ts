@@ -16,10 +16,14 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const fields = source.entity("build.object")?.fields ?? [];
   const trial = useActionTrial();
   const hydrate = (record: ObjectRecord): Process => ({ ...declarationValue(record, fields), states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], implements: record.implements ?? [], extends: record.extends ?? "" });
-  const { entities, drafts } = useAuthoringModel();
+  const { entities, drafts, actionTypes } = useAuthoringModel();
   const { open } = useApplicationWorkspace();
   const { query, scope, branch, save: saveToBranch, mainRevision } = useDraftRecord<ObjectRecord>("build.object", id);
-  const object = query.data?.record;
+  const savedObject = query.data?.record;
+  const object = savedObject && { ...savedObject, actions: savedObject.actionTypes?.length ? savedObject.actionTypes.flatMap(binding => {
+    const action = actionTypes.data?.records.find(value => value.name === binding.ref.name && !value.archived);
+    return action ? [action.definition] : [];
+  }) : savedObject.actions };
   const conversionError = query.data?.valueErrors?.actions;
   const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [], implements: [], extends: "" });
   const { draft: process, dirty } = session;
@@ -31,15 +35,15 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const working=useWorkingState();
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     void working?.clear();
-    if (object) { baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`; }
+    if (object) { baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}:${actionTypes.dataUpdatedAt}`; }
     setRefused(undefined); reset.current?.();
   }, busy,working?.saved);
   useEffect(() => {
     const changedScope = loadedScope.current !== scope;
-    if (!object || !loaded.current && query.isFetching || query.isPlaceholderData || dirty || busy || !changedScope && loaded.current === `${object.id}:${object.revision}`) return;
+    if (!object || object.actionTypes?.length && !actionTypes.data || !loaded.current && query.isFetching || query.isPlaceholderData || dirty || busy || !changedScope && loaded.current === `${object.id}:${object.revision}:${actionTypes.dataUpdatedAt}`) return;
     loadedScope.current = scope;
-    baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`;
-  }, [object, scope, query.isFetching, query.isPlaceholderData, dirty, busy, session.load]);
+    baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}:${actionTypes.dataUpdatedAt}`;
+  }, [object, scope, actionTypes.dataUpdatedAt, query.isFetching, query.isPlaceholderData, dirty, busy, session.load]);
 
   const parent = object ? `build.${object.name}` : "";
   const savedObjects = new Set((drafts.data?.records ?? []).filter(draft => !draft.archived).map(draft => `build.${draft.name}`));

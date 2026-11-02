@@ -8,7 +8,7 @@ import (
 )
 
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{schemaAlertMigrate, SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaValueType, SchemaObjectTypeGroup, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
+	return []string{SchemaActionType, schemaAlertMigrate, SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaValueType, SchemaObjectTypeGroup, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
 }
 
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
@@ -78,6 +78,9 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaActionType {
+		return actionTypeImage(image)
+	}
 	if schema == schemaAlertMigrate {
 		schema = SchemaProcess
 	}
@@ -159,6 +162,9 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 }
 
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaActionType {
+		return actionTypeImage(image)
+	}
 	if schema == schemaAlertMigrate {
 		schema = SchemaProcess
 	}

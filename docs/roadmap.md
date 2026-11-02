@@ -16,7 +16,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 | P2 内核收敛 | 资源内核、单一实现、服务包边界、薄验收 | 进行中 |
 | P3 构建者闭环 | 黄金路径 F1–F10 每一步达到 4-interaction 与 5-experience 的标准 | 与 P2 交错 |
 | P4 行业应用 | 用平台工具重建行业产品包，作为平台的探针 | 未开始 |
-| P5 交付运营 | 产品依赖、受管项目、客户扩展、升级审阅 | 未开始 |
+| P5 交付运营 | 产品依赖、受管项目、客户扩展、升级审阅 | 进行中 |
 
 ## 下一批
 
@@ -27,7 +27,6 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 | 编号 | 事项 | 完成标准 | 规范 |
 |---|---|---|---|
 | P2.2 | 资源内核 | 所有资源有 RID、项目、文件夹、版本、状态；路由以 RID 为键；项目覆盖不再从页面列表推导 | 6-domain §6.3、3-information §3.6 |
-| P2.3 | 动作类型独立资源 | 动作类型有自己的记录、版本与资源页；对象类型只引用 | 6-domain §6.7 |
 | P2.8 | 删除流程残留 | 以 Flow 命名的宿主文件与 `flow.instance` 视图删除；逻辑流只作为函数引擎 | 2-product R7 |
 | P2.9 | 行业代码出宿主 | `apps/core/books.go`、根目录 `books.go` 的总账逻辑移出平台 | 2-product R4 |
 | P2.10 | 内置业务应用归位 | Knowledge → Agent Studio 检索源；Master data → 产品包；Organisation directory → Control Panel Organization | 4-interaction/workbenches |

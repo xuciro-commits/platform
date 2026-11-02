@@ -62,12 +62,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     change({ ...process, states: [...process.states, { name: nameOf("state", process.states.map((s) => s.name)), title, tone: "info" }] });
     setChosen({ kind: "state", at: process.states.length });
   };
-  const addAction = () => {
-    const title = t("Step {n}", { n: process.actions.length + 1 });
-    const from = process.states[0]?.name;
-    change({ ...process, actions: [...process.actions, { name: nameOf("action", process.actions.map((a) => a.name)), title, from: from ? [from] : [], transaction: {subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}] } }] });
-    setChosen({ kind: "action", at: process.actions.length });
-  };
+  const addAction = () => open({ view: "action-type", params: { id: "new", object: parent } });
   const { save, perform } = draft;
   const action = chosen?.kind === "action" ? process.actions[chosen.at] : undefined;
   const state = chosen?.kind === "state" ? process.states[chosen.at] : undefined;

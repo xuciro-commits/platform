@@ -87,7 +87,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, 
     setError(message); return false;
   };
   const showSaved = (target: string) => {
-    open({ view, params: { id: target } }, { ifCurrent: { view, params: { id } }, replace: true });
+    open({ view, params: { id: target } }, { replace: true });
   };
   const save = async (deferNavigation = false): Promise<Saved | undefined> => {
     if (inputs?.invalid) return;

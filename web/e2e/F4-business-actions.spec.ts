@@ -80,13 +80,30 @@ test("F4 a business user finds an object, runs an action, and sees it in the act
       actions: [
         { name: "resolve", title: "Resolve ticket", description: "Record how the ticket was resolved.", from: ["open"], to: "",
           inputs: [{ name: "note", title: "Resolution note", type: "text", required: true }], sets: [{ field: "note", from: "note" }] },
-        { name: "escalate", title: "Escalate ticket", description: "Escalate a high-priority ticket.", from: ["open"], to: "",
-          conditions: [{ field: "priority", operator: "=", value: "high", message: "Only high-priority tickets can be escalated." }],
-          inputs: [{ name: "reason", title: "Escalation reason", type: "text", required: true }], sets: [{ field: "note", from: "reason" }] },
       ],
     }, 0);
     await expect.poll(async () => (await read<{ record: { revision: number } }>(`/v1/records/build.object/${objectID}`)).record.revision).toBe(1);
+    const draft = (await read<{ record: { actions?: unknown[]; actionTypes: { ref: { name: string } }[] } }>(`/v1/records/build.object/${objectID}`)).record;
+    expect(draft.actions ?? []).toEqual([]);
+    expect(draft.actionTypes).toHaveLength(1);
+    await submit({ type: "build.actiontype", id: unique("ACT") }, "build", "create", {
+      name: `${type}.escalate`, object: type,
+      definition: { name: "escalate", title: "Escalate ticket", description: "Escalate a high-priority ticket.", from: ["open"], to: "",
+        conditions: [{ field: "priority", operator: "=", value: "high", message: "Only high-priority tickets can be escalated." }],
+        inputs: [{ name: "reason", title: "Escalation reason", type: "text", required: true }], sets: [{ field: "note", from: "reason" }] },
+    }, 0);
     await publish("object", objectID);
+    const action = (await read<{ record: { id: string; version: number } }>(`/v1/records/build.actiontype/${type}.resolve`)).record;
+    expect(action.version).toBe(1);
+    await page.goto(`/#/action-type?id=${encodeURIComponent(action.id)}`);
+    await page.getByRole("textbox", { name: "What people call it", exact: true }).fill("Resolve ticket now");
+    await page.getByRole("button", { name: "Save", exact: true }).first().click();
+    const review = page.getByRole("dialog", { name: "Review changes", exact: true });
+    await review.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(async () => (await read<{ record: { version: number } }>(`/v1/records/build.actiontype/${action.id}`)).record.version).toBe(2);
+    await publish("action", action.id);
+    const retained = (await read<{ record: { versions: { definition: { title: string } }[] } }>(`/v1/records/build.actiontype/${action.id}`)).record;
+    expect(retained.versions.map(version => version.definition.title)).toEqual(["Resolve ticket", "Resolve ticket now"]);
     const installed = await read<{ record: { published: string } }>(`/v1/records/build.object/${objectID}`);
     expect(installed.record.published).not.toBe("");
     const declarations = await read<{ tenantId: string; dataClass: string; authorityId: string }[]>("/v1/declarations");
@@ -121,13 +138,13 @@ test("F4 a business user finds an object, runs an action, and sees it in the act
       await expect(escalate).toBeDisabled();
       await expect(view.getByText("Only high-priority tickets can be escalated.", { exact: false })).toBeVisible();
 
-      await view.getByRole("button", { name: "Resolve ticket", exact: true }).click();
-      const form = user.getByRole("dialog", { name: `Resolve ticket ${recordID}`, exact: true });
+      await view.getByRole("button", { name: "Resolve ticket now", exact: true }).click();
+      const form = user.getByRole("dialog", { name: `Resolve ticket now ${recordID}`, exact: true });
       await expect(form).toBeVisible();
       await form.getByRole("textbox", { name: /^Resolution note/ }).fill("Closed after a call with the customer.");
       const accepted = user.waitForResponse(response => response.url().endsWith("/v1/submissions") && response.request().method() === "POST"
         && response.request().postDataJSON().schema.name === `${type}.resolve`);
-      await form.getByRole("button", { name: "Resolve ticket", exact: true }).click();
+      await form.getByRole("button", { name: "Resolve ticket now", exact: true }).click();
       const response = await accepted;
       const answer = await response.json();
       expect(response.ok(), JSON.stringify(answer)).toBeTruthy();

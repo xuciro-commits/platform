@@ -6,6 +6,7 @@ import (
 	"maps"
 	"reflect"
 	"slices"
+	"strconv"
 
 	"platformserver/platform"
 )
@@ -58,6 +59,46 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 			objects[i].SchemaVersions = frozen.SchemaVersions
 			if err := add(SchemaPublish, objects[i]); err != nil {
 				return nil, err
+			}
+			all, err := readDefinitionInventory[ActionType](b.host.Automation(platform.Caller{}, ID))
+			if err != nil {
+				return nil, err
+			}
+			bindings := slices.Clone(frozen.ActionTypes)
+			if len(bindings) == 0 {
+				for _, definition := range frozen.Actions {
+					name := TypeOf(frozen.Name) + "." + definition.Name
+					index := slices.IndexFunc(all, func(action ActionType) bool { return action.Name == name })
+					if index >= 0 {
+						bindings = append(bindings, platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: name}, SourceVersion: strconv.Itoa(all[index].Version)})
+					}
+				}
+			}
+			for _, binding := range bindings {
+				if !slices.ContainsFunc(assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == binding.Ref }) {
+					continue
+				}
+				index := slices.IndexFunc(all, func(action ActionType) bool { return action.Name == binding.Ref.Name })
+				if index < 0 {
+					continue
+				}
+				version, err := strconv.Atoi(binding.SourceVersion)
+				if err != nil || version < 1 {
+					return nil, fmt.Errorf("action type %s has no retained version %s", binding.Ref.Name, binding.SourceVersion)
+				}
+				definition := slices.IndexFunc(frozen.Actions, func(definition Action) bool { return TypeOf(frozen.Name)+"."+definition.Name == binding.Ref.Name })
+				if definition < 0 {
+					return nil, fmt.Errorf("action type %s has no frozen definition", binding.Ref.Name)
+				}
+				action := all[index]
+				selected := ActionType{Record: platform.Record{ID: action.ID}, Name: action.Name, Object: action.Object, Title: frozen.Actions[definition].Title, Definition: frozen.Actions[definition], State: "published", Version: version}
+				if version <= len(action.Versions) && string(platform.Raw(action.Versions[version-1].Definition)) == string(platform.Raw(selected.Definition)) {
+					selected.Commands = action.Versions[version-1].Commands
+				}
+				action.State, action.Published = "published", string(platform.Raw(selected))
+				if err := add(SchemaActionType, action); err != nil {
+					return nil, err
+				}
 			}
 		case platform.AssetPage:
 			i := slices.IndexFunc(pages, func(p Page) bool { return !p.Archived && p.Name == asset.Ref.Name })

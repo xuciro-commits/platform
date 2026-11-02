@@ -169,6 +169,7 @@ func compatibleObjectSchema(previous, next Object) bool {
 		object.ObjectView = nil
 		object.State, object.Installed, object.Published = "", "", ""
 		object.ExtensionSource, object.SchemaVersions = nil, nil
+		object.ActionTypes = nil
 		object.Fields = nil
 		object.States = slices.Clone(object.States)
 		for index := range object.States {

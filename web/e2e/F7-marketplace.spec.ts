@@ -12,7 +12,8 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   const providerTitle=`Provider ${tag}`, consumerTitle=`Consumer ${tag}`;
   const ref=(kind:string,name:string)=>({app:"build",kind,name});
   const fields=[{name:"code",title:"Code",type:"text",required:true}];
-  await source.submit("build.object",providerObject,"create",{name:provider,title:providerTitle,fields});
+  const confirm={name:"confirm",title:"Confirm provider",from:["open"],inputs:[{name:"description",title:"Description",type:"text",required:true}],sets:[{field:"description",from:"description"}]};
+  await source.submit("build.object",providerObject,"create",{name:provider,title:providerTitle,fields:[...fields,{name:"description",title:"Description",type:"text"}],states:[{name:"open",title:"Open"}],actions:[confirm]});
   await source.submit("build.app",providerApp,"create",{name:`${provider}app`,title:providerTitle,resources:[ref("object",baseType)]});
   const freeze=async(id:string,version:string,object:string,app:string,title:string,requires:string[]=[]):Promise<PackageDescriptor>=>{
     const candidate=await source.publish([{kind:"object",id:object},{kind:"app",id:app}]);
@@ -27,6 +28,7 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   };
   const first=await freeze(provider,"1.2.0",providerObject,providerApp,providerTitle);
   await source.submit("build.object",providerObject,"edit",{fields:[...fields,{name:"description",title:"Description",type:"text"}]});
+  await source.submit("build.actiontype",`${baseType}.confirm`,"edit",{definition:{...confirm,title:"Confirm provider now"}});
   const latest=await freeze(provider,"1.10.0",providerObject,providerApp,providerTitle);
   await source.submit("build.object",consumerObject,"create",{name:consumer,title:consumerTitle,fields:[{name:"provider",title:"Provider",type:"reference",ref:baseType}]});
   await source.submit("build.app",consumerApp,"create",{name:`${consumer}app`,title:consumerTitle,resources:[ref("object",`build.${consumer}`)]});
@@ -58,6 +60,8 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   await customer.publish([{kind:"object",id:extension}]);
   const baseRecord=unique("BASE"), extensionRecord=unique("LOCAL");
   await customer.submit(baseType,baseRecord,"create",{code:"CUSTOMER"});
+  await customer.submit(baseType,baseRecord,"confirm",{description:"Confirmed"});
+  expect((await customer.read<{record:{description:string}}>(`/v1/records/${baseType}/${baseRecord}`)).record.description).toBe("Confirmed");
   await customer.submit(customerType,extensionRecord,"create",{base:baseRecord,note:"Keep my extension"});
   await source.submit("build.object",providerObject,"edit",{fields:[...fields,{name:"description",title:"Description",type:"text"},{name:"enabled",title:"Enabled",type:"boolean"}]});
   const update=await freeze(provider,"1.11.0",providerObject,providerApp,providerTitle);

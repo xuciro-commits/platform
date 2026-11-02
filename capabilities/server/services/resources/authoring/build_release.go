@@ -13,7 +13,7 @@ import (
 
 func recordKind(kind platform.AssetKind) bool {
 	switch kind {
-	case platform.AssetObject, platform.AssetPage, platform.AssetApp, platform.AssetFlow:
+	case platform.AssetObject, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetAction:
 		return true
 	}
 	return false
@@ -304,9 +304,15 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 			if err != nil {
 				return nil, fmt.Errorf("encode action %s: %w", action.Schema, err)
 			}
+			actionVersion := sourceVersion
+			for _, binding := range saved.ActionTypes {
+				if binding.Ref.Name == action.Schema {
+					actionVersion += ".action-" + binding.SourceVersion
+				}
+			}
 			asset, err := platform.WithDependencies(platform.ReleaseAsset{
 				Ref:             platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: action.Schema},
-				ContractVersion: 1, SourceVersion: sourceVersion, Body: actionBody,
+				ContractVersion: 1, SourceVersion: actionVersion, Body: actionBody,
 			})
 			if err != nil {
 				return nil, err

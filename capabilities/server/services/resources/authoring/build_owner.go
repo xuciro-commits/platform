@@ -23,6 +23,9 @@ func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error)
 	actions := []platform.Action{}
 	for _, object := range objects {
 		if !object.Archived {
+			if err := b.bindObjectActions(c, &object); err != nil {
+				return nil, err
+			}
 			actions = append(actions, objectActions(object, Entity(object))...)
 		}
 	}
@@ -57,6 +60,8 @@ func (b *Build) AttachFiles(h platform.FileHost)  { b.files = h }
 func New(tenant string) *Build {
 	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, valueTypes: map[string]ValueType{}, objectTypeGroups: map[string]ObjectTypeGroup{}, queries: map[string]Query{}, functions: map[string]Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
+	actions = append(actions, platform.EntityActions(b.actionTypeEntity())...)
+	actions = append(actions, platform.Action{Schema: SchemaExtractActions, Target: ObjectType, Title: "Extract action types", Description: "Move current inline action drafts into independent retained resources.", Automation: true, Payload: []platform.Field{}})
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
 	actions = append(actions, platform.EntityActions(b.processEntity())...)
@@ -102,7 +107,7 @@ func New(tenant string) *Build {
 	actions = append(actions, codeActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = append(actions, resourceActions(actions)...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ListenerType, ConnectionType, DatasetType, DatasetVersionType, platform.ScheduleType, platform.MediaSetType, platform.MediaSetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, SampleSetType, ObservationType, BranchType, ResourceType, FolderType, WorkingStateType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, ActionTypeType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ListenerType, ConnectionType, DatasetType, DatasetVersionType, platform.ScheduleType, platform.MediaSetType, platform.MediaSetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, SampleSetType, ObservationType, BranchType, ResourceType, FolderType, WorkingStateType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType)
 	return b
 }
 
@@ -130,7 +135,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.scheduleEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.scheduleEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
 	for i := range entities {
@@ -311,6 +316,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
+	if !c.Replaying && s.GetSchema().GetName() == SchemaExtractActions {
+		return b.submitOntologyWrite(c, s, now)
+	}
 	if s.GetTarget().GetType() == WorkingStateType {
 		return b.submitWorkingState(c, s, now)
 	}
@@ -432,6 +440,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
+	if !c.Replaying && (s.GetTarget().GetType() == ObjectType || s.GetTarget().GetType() == ActionTypeType) && (s.GetSchema().GetName() == s.GetTarget().GetType()+".create" || s.GetSchema().GetName() == s.GetTarget().GetType()+".edit") {
+		return b.submitOntologyWrite(c, s, now)
+	}
 	pageEntity := b.pageEntity()
 	if name := s.GetSchema().GetName(); name == PageType+".create" || name == PageType+".edit" {
 		pageEntity = b.pageDraftEntity()
@@ -440,7 +451,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agentDraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.scheduleEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.scheduleEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
 	for i := range entities {
@@ -550,6 +561,7 @@ type Object struct {
 	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
 	EnterpriseUse     *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Current enterprise use"`
 	States            []State                      `json:"states,omitempty" field:"aside" title:"States"`
+	ActionTypes       []platform.AssetBinding      `json:"actionTypes,omitempty" field:"aside" type:"json" title:"Action types"`
 	Actions           []Action                     `json:"actions,omitempty" field:"aside" title:"Actions"`
 	Access            []Access                     `json:"access,omitempty" field:"aside" title:"Access"`
 	Scope             *ObjectScope                 `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
