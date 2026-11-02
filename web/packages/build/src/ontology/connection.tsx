@@ -27,11 +27,15 @@ export function ConnectionEditor({ id }: { id: string }) {
   const { holds} = useHost(), { open } = useApplicationWorkspace();
   const fieldID = useId();
   const kinds = useReadQuery<{ items: Api.ConnectionKind[] }>("/v1/connection-kinds");
+  const directory=useReadQuery<Api.ResourceDirectory>("/v1/resources");
+  const managed=!!directory.data?.resources.some(resource=>resource.type==="build.connection" && resource.draft===id && resource.managedBy);
   const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.connection", view: "connection", empty,
     failure: t("The connection could not be saved or loaded. Your draft is still here."),
+    saveSchema:managed?"build.connection.configure":undefined,
     payload: draft => {
       const { name, title, kind, address, secret, allowPrivate, marking } = draft;
+      if(managed)return {address,secret:secret??"",allowPrivate:!!allowPrivate};
       return { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "" };
     },
   });
@@ -52,9 +56,9 @@ export function ConnectionEditor({ id }: { id: string }) {
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("System")} className="grid min-w-0 content-start gap-3">
-        <label className={fieldClass}>{t("Connection name")}<Input disabled={draft.state === "ready"} value={draft.name} placeholder="sap" onChange={(e) => patch({ name: e.target.value })} /></label>
-        <label className={fieldClass}>{t("Connection title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
-        <label className={fieldClass}>{t("Kind")}<Select value={selected?.id ?? ""} disabled={kinds.isPending} onChange={(e) => chooseKind(e.target.value)}>
+        <label className={fieldClass}>{t("Connection name")}<Input disabled={managed || draft.state === "ready"} value={draft.name} placeholder="sap" onChange={(e) => patch({ name: e.target.value })} /></label>
+        <label className={fieldClass}>{t("Connection title")}<Input disabled={managed} value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
+        <label className={fieldClass}>{t("Kind")}<Select value={selected?.id ?? ""} disabled={managed || kinds.isPending} onChange={(e) => chooseKind(e.target.value)}>
           {!selected && <option value="">{t("Choose a connection kind")}</option>}
           {options.map(option => <option key={option.id} value={option.id}>{t(option.title)}</option>)}
         </Select></label>
@@ -64,7 +68,7 @@ export function ConnectionEditor({ id }: { id: string }) {
         <div className={fieldClass}><label htmlFor={`${fieldID}-secret`}>{t("Secret name")}</label><Input id={`${fieldID}-secret`} aria-describedby={`${fieldID}-secret-help`} value={draft.secret ?? ""} placeholder="sap-reader" onChange={(e) => patch({ secret: e.target.value })} />
           <p id={`${fieldID}-secret-help`} className="text-xs text-muted">{t("Looked up by the host (PLATFORM_SECRETS_DIR or PLATFORM_SECRET_<NAME>). For http and OData its content is the Authorization header's value, such as Basic … or Bearer ….")}</p></div>
         <Checkbox checked={!!draft.allowPrivate} onChange={(allowPrivate) => patch({ allowPrivate })}>{t("Allow http and private addresses (on-premise systems)")}</Checkbox>
-        <MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking: marking as Api.Connection["marking"] })} help={t("Everything read through it is at least this; datasets loaded from it are raised to it.")} />
+        <fieldset disabled={managed}><MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking: marking as Api.Connection["marking"] })} help={t("Everything read through it is at least this; datasets loaded from it are raised to it.")} /></fieldset>
       </Panel>
       <Panel title={t("Last check")} className="grid min-w-0 content-start gap-2">
         {!last ? <p className="text-xs text-muted">{t("Not checked yet.")}</p> : <>

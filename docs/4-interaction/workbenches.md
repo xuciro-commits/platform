@@ -118,7 +118,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 - 侧栏：Products、Releases、Test plans。
 - 产品页面：Contents（从项目选资源，显示依赖闭包）→ Versions（候选与已发布）→ Test plans。
-- Releases：候选表（原型 A）；选中候选打开发布审阅（M18：内容差异、检查、测试计划结果）；“New candidate”在页内组合。
+- Releases：候选表（原型 A）；选中候选打开发布审阅（M18：内容差异、检查、测试计划结果）；“New candidate”在页内组合。保存的候选可选择应用根资源、产品名、语义版本与依赖范围，创建产品版本并下载或加入 Marketplace。
 
 ## Marketplace
 
@@ -166,4 +166,4 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 - Logic 拥有逻辑流与查询两类旧资源，查询应并入函数或对象集（路线图 P3.11）。
 - 检索源与术语归 Agent Studio，组织目录归 Control Panel Organization；Master data 仍需迁入产品包（P2.10）。
-- Marketplace 已有目录、已安装与更新导航及安装、升级、卸载确认；升级审阅仍需列出逐项差异和受影响的客户扩展（P5.3）。
+- Marketplace 已有依赖顺序、资源差异与客户扩展审阅；安装中的业务角色与专项标记映射尚需接通（P5.3、P3.8）。

@@ -26,12 +26,13 @@ type AssetEnvironmentRequirement struct {
 }
 
 type AssetReleaseContext struct {
-	ManagedBy  string
-	DraftsOnly bool
-	DraftIDs   map[AssetRef]string
-	Member     Member
-	At         time.Time
-	Upgrade    bool
+	ManagedAssets map[AssetRef]bool
+	ManagedBy     string
+	DraftsOnly    bool
+	DraftIDs      map[AssetRef]string
+	Member        Member
+	At            time.Time
+	Upgrade       bool
 }
 
 type AssetApplyContext struct {

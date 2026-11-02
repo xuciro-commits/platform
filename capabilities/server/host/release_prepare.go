@@ -31,6 +31,9 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	if err != nil {
 		return nil, nil, err
 	}
+	if context.ManagedAssets != nil {
+		drafts = slices.DeleteFunc(drafts, func(draft platform.AssetDraft) bool { return !context.ManagedAssets[draft.Ref] })
+	}
 	drafts, err = releaseowner.SelectOwnerDrafts(drafts, context, request)
 	if err != nil {
 		return nil, nil, err
@@ -133,6 +136,9 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	}
 	for _, asset := range candidate.Assets {
 		assets[asset.Ref] = asset
+		if context.ManagedAssets != nil && !context.ManagedAssets[asset.Ref] {
+			continue
+		}
 		if !hasDraft[asset.Ref] && !context.DraftsOnly {
 			if err := declare(asset); err != nil {
 				return nil, nil, err

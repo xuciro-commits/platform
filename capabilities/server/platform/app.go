@@ -467,7 +467,7 @@ type AppCatalog interface {
 }
 
 type ConsoleHost interface {
-	PrepareManagedPackage(Caller, PackageDescriptor, bool) (func(*pb.ChangeRecord), *kernel.Error)
+	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool) (func(*pb.ChangeRecord), *kernel.Error)
 	AppCatalog
 	CodeReleaseAssets() ([]ReleaseAsset, error)
 	ConsoleSetting(name string) string

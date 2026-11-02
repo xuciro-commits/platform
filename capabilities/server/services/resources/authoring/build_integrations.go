@@ -39,8 +39,31 @@ func (b *Build) connectionEntity() platform.Entity {
 }
 
 func connectionActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaConnectionChecked, Target: ConnectionType, Capability: "integrations", Title: "Keep check result", Description: "Retain what one check of a connection found.", Automation: true,
-		Payload: []platform.Field{{Name: "revision", Type: "integer", Required: true, Description: "The connection revision checked"}, {Name: "check", Type: "json", Required: true, Description: "When, whether it answered and what"}}}}
+	return []platform.Action{{Schema: ConnectionType + ".configure", Target: ConnectionType, Capability: "integrations", Title: "Configure connection", Description: "Set this tenant's connection address and credential reference without changing the installed product definition.", Roles: []string{Builder, Integrator}, Payload: []platform.Field{{Name: "address", Type: "string"}, {Name: "secret", Type: "string"}, {Name: "allowPrivate", Type: "boolean"}}},
+		{Schema: SchemaConnectionChecked, Target: ConnectionType, Capability: "integrations", Title: "Keep check result", Description: "Retain what one check of a connection found.", Automation: true,
+			Payload: []platform.Field{{Name: "revision", Type: "integer", Required: true, Description: "The connection revision checked"}, {Name: "check", Type: "json", Required: true, Description: "When, whether it answered and what"}}}}
+}
+
+func (b *Build) configureConnection(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		connection, found := platform.Get[Connection](c, s.GetTarget().GetId())
+		if !found || connection.Archived {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		var input struct {
+			Address      string `json:"address"`
+			Secret       string `json:"secret"`
+			AllowPrivate bool   `json:"allowPrivate"`
+		}
+		if json.Unmarshal(s.GetPayload(), &input) != nil {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
+		connection.Address, connection.Secret, connection.AllowPrivate = input.Address, input.Secret, input.AllowPrivate
+		if refusal := b.connectionEntity().Validate(c, &connection); refusal != nil {
+			return nil, refusal
+		}
+		return func(r *pb.ChangeRecord) { c.Put(r, connection) }, nil
+	})
 }
 
 func (b *Build) checkConnection(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {

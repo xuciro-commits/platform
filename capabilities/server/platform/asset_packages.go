@@ -107,14 +107,34 @@ type Precheck struct {
 }
 
 type PackageView struct {
-	Update       bool              `json:"update,omitempty"`
-	Origin       string            `json:"origin,omitempty"`
-	SourceDigest string            `json:"sourceDigest,omitempty"`
-	Removal      *PackageRemoval   `json:"removal,omitempty"`
-	Descriptor   PackageDescriptor `json:"descriptor"`
-	Installed    *InstalledPackage `json:"installed,omitempty"`
-	Precheck     Precheck          `json:"precheck"`
-	Source       string            `json:"source"`
+	Plan         PackageInstallPlan `json:"plan"`
+	Update       bool               `json:"update,omitempty"`
+	Origin       string             `json:"origin,omitempty"`
+	SourceDigest string             `json:"sourceDigest,omitempty"`
+	Removal      *PackageRemoval    `json:"removal,omitempty"`
+	Descriptor   PackageDescriptor  `json:"descriptor"`
+	Installed    *InstalledPackage  `json:"installed,omitempty"`
+	Precheck     Precheck           `json:"precheck"`
+	Source       string             `json:"source"`
+}
+
+type PackageInstallStep struct {
+	ID      string `json:"id"`
+	Version string `json:"version"`
+	Title   string `json:"title"`
+	Action  string `json:"action"`
+}
+
+type PackageResourceChange struct {
+	Ref    AssetRef `json:"ref"`
+	Change string   `json:"change"`
+	Before string   `json:"before,omitempty"`
+	After  string   `json:"after,omitempty"`
+}
+
+type PackageInstallPlan struct {
+	Steps    []PackageInstallStep `json:"steps"`
+	Problems []string             `json:"problems,omitempty"`
 }
 
 type Contribution struct {
@@ -207,7 +227,8 @@ func (i *PackageIndex) Latest(id string) (PackageDescriptor, bool) {
 	var out PackageDescriptor
 	found := false
 	for _, p := range i.Packages {
-		if p.ID == id && (!found || ComparePackageVersions(p.Version, out.Version) > 0) {
+		version, _ := ParsePackageVersion(p.Version)
+		if p.ID == id && version.Prerelease == "" && (!found || ComparePackageVersions(p.Version, out.Version) > 0) {
 			out, found = p, true
 		}
 	}
@@ -262,7 +283,7 @@ type PackageState struct {
 }
 
 type PackageHost interface {
-	PrepareManagedPackage(Caller, PackageDescriptor, bool) (func(*pb.ChangeRecord), *kernel.Error)
+	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool) (func(*pb.ChangeRecord), *kernel.Error)
 	Apps() []App
 	CodeReleaseAssets() ([]ReleaseAsset, error)
 	PutPackageArtifact(string, []byte) error
@@ -284,6 +305,7 @@ type ConsolePackages interface {
 	Precheck(PackageDescriptor) Precheck
 	Offer(string) (Offer, error)
 	PreparationBlueprint(string, string) (PackageBlueprint, *InstalledPackage, error)
+	PackagePrerequisites(string, string) ([]ReleaseAsset, error)
 }
 
 const PackageType = "platform.package"

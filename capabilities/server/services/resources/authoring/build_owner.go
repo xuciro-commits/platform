@@ -351,6 +351,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaConnectionChecked {
 		return b.submitConnectionChecked(c, s, now)
 	}
+	if s.GetSchema().GetName() == ConnectionType+".configure" {
+		return b.configureConnection(c, s, now)
+	}
 	if name := s.GetSchema().GetName(); name == platform.SchemaMediaSetAdd || name == platform.SchemaMediaSetRemove {
 		return dataowner.SubmitMediaSet(b.ledger, b.files, c, s, now)
 	}

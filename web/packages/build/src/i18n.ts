@@ -1,6 +1,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "The product version could not be added to the catalog.": "无法将产品版本加入目录。",
+ "The product version could not be inspected.": "无法检查产品版本。",
+ "The product version could not be created.": "无法创建产品版本。",
+ "Add to Marketplace": "加入 Marketplace",
+ "Download product": "下载产品",
+ "Dependency products": "依赖产品",
+ "Product ID": "产品 ID",
+ "Only the selected applications and their dependencies are exported from this saved candidate. Dependency products must already be in this catalog.": "从此保存的候选中仅导出选定应用及其依赖。依赖产品须先加入当前目录。",
+ "Create product version": "创建产品版本",
  "Return edit proposals": "返回编辑提议",
  "Choose non-author editors or owners. Their approvals are required before merging.": "请选择未参与修改的编辑者或所有者，合并前需要他们批准。",
  "The project approval requirement has not been met.": "尚未达到项目要求的批准人数。",

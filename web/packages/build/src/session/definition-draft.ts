@@ -13,10 +13,10 @@ import { useDraftRecord } from "../branches/draft-record";
 type DefinitionDraft = { id: string; revision: number; name: string };
 type Saved = { id: string; revision: number; reloaded?: boolean };
 
-export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, empty, normalize, payload, failure, joinApplication = true, onDiscard }: {
+export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, empty, normalize, payload, failure, joinApplication = true, onDiscard, saveSchema }: {
   id: string; type: string; view: string; empty: () => T;
   normalize?: (record: T) => T; payload: (draft: T) => unknown; failure: string;
-  joinApplication?: boolean; onDiscard?: () => void;
+  joinApplication?: boolean; onDiscard?: () => void; saveSchema?:string;
 }) {
   const host = useHost(), { open } = useApplicationWorkspace();
   const application = useApplicationScope();
@@ -99,7 +99,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, 
         const fresh = (await query.refetch()).data?.record;
         if (fresh) { load(fresh); revision = fresh.revision; } else load({ ...submitted, id: target });
       } else {
-        if (!await host.decide(type + "." + (submitted.id ? "edit" : "create"), { type, id: target }, ownerPayload(submitted),
+        if (!await host.decide(saveSchema ?? type + "." + (submitted.id ? "edit" : "create"), { type, id: target }, saveSchema ? payload(submitted) : ownerPayload(submitted),
           { expectedRevision: submitted.id ? revision : 0, quiet: true, onRefused: setError })) return;
         revision += 1; load({ ...submitted, id: target, revision });
       }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -16,7 +17,7 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.PackageDescriptor, archive bool) (func(*pb.ChangeRecord), *kernel.Error) {
+func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.PackageDescriptor, available []platform.ReleaseAsset, archive bool) (func(*pb.ChangeRecord), *kernel.Error) {
 	if c.Replaying || descriptor.Blueprint == nil && !archive {
 		return nil, nil
 	}
@@ -57,13 +58,21 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
-	candidate, err := packages.BlueprintCandidate(*descriptor.Blueprint, owner, code)
+	candidate, err := packages.BlueprintCandidate(*descriptor.Blueprint, owner, available)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+	}
+	native := map[platform.AssetRef]bool{}
+	for _, asset := range code {
+		native[asset.Ref] = true
+	}
+	owned, err := owner.CompleteBlueprintAssets(descriptor.Blueprint.Assets)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
 	refs := map[platform.AssetRef]bool{}
-	for _, asset := range candidate.Assets {
-		if asset.Ref.App == build.ID {
+	for _, asset := range owned {
+		if !native[asset.Ref] {
 			refs[asset.Ref] = true
 		}
 	}
@@ -72,7 +81,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot replace resource {resource} in another project", resource.Ref.String())
 		}
 	}
-	context := platform.AssetReleaseContext{Member: c.Member, At: d.at, ManagedBy: descriptor.ID, Upgrade: true}
+	context := platform.AssetReleaseContext{Member: c.Member, At: d.at, ManagedBy: descriptor.ID, ManagedAssets: refs, Upgrade: true}
 	_, _, err = h.t.bootstrapOwnerDraftsLocked(candidate, context, false, nil, d)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())
@@ -86,7 +95,8 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
 	defer end()
-	plans, err := registry.PrepareReleaseAssets(candidate.Assets, context)
+	owned = slices.DeleteFunc(slices.Clone(candidate.Assets), func(asset platform.ReleaseAsset) bool { return !refs[asset.Ref] })
+	plans, err := registry.PrepareReleaseAssets(owned, context)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}

@@ -196,10 +196,7 @@ func (d *Owner) BlueprintViews() []platform.PackageView {
 func (d *Owner) packagesOf() map[string]*platform.InstalledPackage {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.packages == nil {
-		d.packages = map[string]*platform.InstalledPackage{}
-	}
-	return d.packages
+	return maps.Clone(d.packages)
 }
 
 func (d *Owner) packageIndex() (*platform.PackageIndex, error) {
@@ -216,8 +213,12 @@ func (d *Owner) packageIndex() (*platform.PackageIndex, error) {
 	return d.sourceIndex(current)
 }
 
-func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIndex) platform.Precheck {
+func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIndex, planned ...[]platform.PackageDescriptor) platform.Precheck {
 	out := platform.Precheck{ID: p.ID, Version: p.Version, OK: true}
+	var proposed []platform.PackageDescriptor
+	if len(planned) > 0 {
+		proposed = planned[0]
+	}
 	if err := p.Validate(); err != nil {
 		out.OK, out.Problems = false, []string{err.Error()}
 		return out
@@ -233,7 +234,7 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 		if owner == nil {
 			out.Problems = append(out.Problems, "application blueprints need the Build owner")
 		} else {
-			code, err := d.host.CodeReleaseAssets()
+			code, err := d.prerequisiteAssets(p, index, proposed)
 			if err == nil {
 				_, err = BlueprintCandidate(*p.Blueprint, owner, code)
 			}
@@ -248,6 +249,11 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 	installed := d.packagesOf()
 	if err := d.verifyPackageVersion(p, installed[p.ID]); err != nil {
 		out.Problems = append(out.Problems, err.Error())
+	}
+	for _, descriptor := range proposed {
+		if descriptor.ID != p.ID {
+			installed[descriptor.ID] = &platform.InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, State: "active"}
+		}
 	}
 	for _, requirement := range p.Requires {
 		need, constraint := platform.PackageDependency(requirement)
@@ -276,7 +282,7 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 			out.Problems = append(out.Problems, fmt.Sprintf("view %s is already brought by %s", key, owner))
 		}
 	}
-	if plan, err := d.packageComposition(p, index); err != nil {
+	if plan, err := d.packageComposition(p, index, proposed...); err != nil {
 		out.Problems = append(out.Problems, err.Error())
 	} else {
 		out.Bindings = plan.Bindings
@@ -396,7 +402,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		var archive func(*pb.ChangeRecord)
 		if schema == SchemaPackageRetire {
 			var refusal *kernel.Error
-			archive, refusal = d.host.PrepareManagedPackage(c, platform.PackageDescriptor{ID: p.ID}, true)
+			archive, refusal = d.host.PrepareManagedPackage(c, platform.PackageDescriptor{ID: p.ID}, nil, true)
 			if refusal != nil {
 				return nil, refusal
 			}
@@ -445,7 +451,11 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} cannot be sealed: {reason}", p.ID, err.Error())
 	}
-	install, refusal := d.host.PrepareManagedPackage(c, descriptor, false)
+	available, assetErr := d.prerequisiteAssets(descriptor, index, nil)
+	if assetErr != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", assetErr.Error())
+	}
+	install, refusal := d.host.PrepareManagedPackage(c, descriptor, available, false)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -489,7 +499,7 @@ func (d *Owner) PackageViews() []platform.PackageView {
 			pre.OK = false
 			pre.Problems = append(pre.Problems, indexErr.Error())
 		}
-		view := platform.PackageView{Descriptor: descriptor, Precheck: pre, Source: "index"}
+		view := platform.PackageView{Descriptor: descriptor, Precheck: pre, Plan: d.installationPlan(descriptor, index), Source: "index"}
 		d.mu.Lock()
 		for digest, source := range d.packageSources {
 			if source.ID == descriptor.ID && source.Version == descriptor.Version {

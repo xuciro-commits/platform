@@ -14,8 +14,34 @@ type PackageVersion struct {
 
 func ParsePackageVersion(value string) (PackageVersion, error) {
 	var version PackageVersion
-	number, _, _ := strings.Cut(value, "+")
-	number, version.Prerelease, _ = strings.Cut(number, "-")
+	number, metadata, build := strings.Cut(value, "+")
+	var prerelease bool
+	number, version.Prerelease, prerelease = strings.Cut(number, "-")
+	for _, suffix := range []struct {
+		value            string
+		present, numeric bool
+	}{{version.Prerelease, prerelease, true}, {metadata, build, false}} {
+		if !suffix.present {
+			continue
+		}
+		for _, identifier := range strings.Split(suffix.value, ".") {
+			if identifier == "" {
+				return version, fmt.Errorf("invalid product version %q", value)
+			}
+			digits := true
+			for _, char := range identifier {
+				if char < '0' || char > '9' {
+					digits = false
+				}
+				if !(char >= '0' && char <= '9' || char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char == '-') {
+					return version, fmt.Errorf("invalid product version %q", value)
+				}
+			}
+			if suffix.numeric && digits && len(identifier) > 1 && identifier[0] == '0' {
+				return version, fmt.Errorf("invalid product version %q", value)
+			}
+		}
+	}
 	parts := strings.Split(number, ".")
 	if len(parts) != 3 {
 		return version, fmt.Errorf("product version %q must be major.minor.patch", value)
@@ -73,10 +99,14 @@ func PackageDependency(requirement string) (string, string) {
 }
 
 func PackageVersionMatches(version, constraint string) bool {
+	parsedVersion, _ := ParsePackageVersion(version)
 	if constraint == "" || constraint == "*" {
-		return true
+		return parsedVersion.Prerelease == ""
 	}
 	for _, alternative := range strings.Split(constraint, "||") {
+		if parsedVersion.Prerelease != "" && !strings.Contains(alternative, "-") {
+			continue
+		}
 		matched := true
 		for _, term := range strings.Fields(alternative) {
 			op, base := "=", term

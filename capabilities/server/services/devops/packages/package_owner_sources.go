@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -214,30 +215,19 @@ func Module(p platform.PackageDescriptor) platform.CapabilityModule {
 	return module
 }
 
-func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *platform.PackageIndex) (platform.CompositionPlan, error) {
+func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *platform.PackageIndex, proposed ...platform.PackageDescriptor) (platform.CompositionPlan, error) {
 	modules := d.host.BaseModules()
-	installed := d.packagesOf()
-	for id, held := range installed {
-		if id == candidate.ID || held.State != "active" {
-			continue
-		}
-		var descriptor platform.PackageDescriptor
-		var err error
-		if held.Artifact != "" {
-			descriptor, err = d.sealedPackageDescriptor(id, held.Version, held.Artifact)
-		} else {
-			var found bool
-			descriptor, found = index.Find(id, held.Version)
-			if !found {
-				err = fmt.Errorf("installed package %s has no retained declaration", id)
-			}
-		}
-		if err != nil {
-			return platform.CompositionPlan{}, err
-		}
-		modules = append(modules, Module(descriptor))
+	installed, err := d.installedDescriptors(index)
+	if err != nil {
+		return platform.CompositionPlan{}, err
 	}
-	modules = append(modules, Module(candidate))
+	for _, descriptor := range proposed {
+		installed[descriptor.ID] = descriptor
+	}
+	installed[candidate.ID] = candidate
+	for _, id := range slices.Sorted(maps.Keys(installed)) {
+		modules = append(modules, Module(installed[id]))
+	}
 	return platform.ResolveComposition(modules, nil)
 }
 

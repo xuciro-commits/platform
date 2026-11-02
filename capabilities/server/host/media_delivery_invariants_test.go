@@ -135,7 +135,7 @@ func TestInvariantK1K2K4MediaProductDeliveryRetainsVersionsAndBytes(t *testing.T
 	if local.Title != "Local documents" || local.Version != 0 {
 		t.Fatal("package draft creation rewrote an existing media set")
 	}
-	edit := target.submission(platform.SchemaMediaSetAdd, platform.MediaSetType, mediaID, map[string]any{"hash": hash, "name": "local.txt", "size": len(raw), "contentType": "text/plain"})
+	edit := target.submission(platform.MediaSetType+".edit", platform.MediaSetType, mediaID, map[string]any{"title": "Customer override"})
 	edit.PrincipalId = admin.ID
 	if _, refusal := target.Submit(admin, edit, invariantClock); refusal == nil {
 		t.Fatal("customer edited a managed media set")

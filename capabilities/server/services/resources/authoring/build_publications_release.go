@@ -124,6 +124,10 @@ var _ platform.ReleaseExecutionOwner = (*Build)(nil)
 
 func (b *Build) checkSystemDefinitionWrite(s *pb.Submission) *kernel.Error {
 	typ, id := s.GetTarget().GetType(), s.GetTarget().GetId()
+	schema := s.GetSchema().GetName()
+	if schema != typ+".create" && schema != typ+".edit" && schema != typ+".archive" && !slices.Contains(b.AcceptedPublicationSchemas(), schema) {
+		return nil
+	}
 	_, err := draftAssetRef(typ, "")
 	if err != nil {
 		return nil

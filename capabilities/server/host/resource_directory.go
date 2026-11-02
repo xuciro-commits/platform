@@ -160,6 +160,11 @@ func (t *Tenant) initializeResources(now time.Time) error {
 	if owner == nil {
 		return nil
 	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if refusal := t.recordReadRefusal(); refusal != nil {
+		return refusal
+	}
 	directory := map[string]build.Resource{}
 	projects := map[platform.AssetRef][]string{}
 	t.records.Lock()

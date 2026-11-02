@@ -50,7 +50,7 @@ export function PackageSources({ items, reviewOnly = false, inspectPath = "/v1/p
       {preview && <div className="grid min-w-0 gap-3 border-t pt-3">
         <PropertyList items={[[t("Package"), preview.descriptor.title || preview.descriptor.id], [t("Version"), preview.descriptor.version], [t("Source"), preview.origin], [t("Reviewed content"), <span className="break-all font-mono text-xs">{preview.digest}</span>]]} />
         {preview.descriptor.description && <p className="text-sm">{preview.descriptor.description}</p>}
-        <p className="text-sm">{t("Installation registers this version only. Publishing application definitions, granting access and creating business data are separate actions.")}</p>
+        <p className="text-sm">{t("Adding a reviewed version keeps it in the library. Installation, business access and initial data are separate actions.")}</p>
         {!!preview.precheck.missing?.length && <p className="text-sm text-[var(--tone-warning)]">{t("Install required packages first: {packages}", { packages: preview.precheck.missing.join(", ") })}</p>}
         {preview.precheck.problems?.map(problem => <p key={problem} className="text-sm text-[var(--tone-warning)]">{problem}</p>)}
         {!preview.precheck.ok && <p className="text-sm">{t("This version cannot be installed here. Install its dependencies or obtain a compatible package.")}</p>}

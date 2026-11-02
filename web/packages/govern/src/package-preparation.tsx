@@ -1,5 +1,5 @@
 import { useHost, useReadQuery } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { type Api } from "@platform/kernel";
 import { Button, Checkbox, Disclosure, PageHeader, Panel, PropertyList, Tag, t, useWorkspace } from "@platform/ui";
 import { useState } from "react";
 
@@ -25,7 +25,7 @@ export function PackageRequirements({ id, version }: { id: string; version: stri
     <p>{t("Applications: {names}", { names: plan.applications.map(app => app.title).join(", ") })}</p>
     <p>{plan.connections.length ? t("Configure {count} external connections in this environment.", { count: plan.connections.length }) : t("No external connection is required.")}</p>
     {plan.ai.length > 0 && <p>{t("Configure a model after installation to use AI features. Evaluate the actual configuration when needed.")}</p>}
-    <p>{t("Installation makes the package available. Prepare and activate its applications before using them.")}</p>
+    <p>{t("Installation activates the managed applications. Configure external services and assign business access separately.")}</p>
   </div>;
 }
 
@@ -38,19 +38,6 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
   const scope = `package-task:${client.connection.server}:${client.connection.tenant}:${client.connection.principal}:${id}@${version}`;
   const [setupRun, setSetupRun] = useState(() => localStorage.getItem(`${scope}:setup`) ?? "");
   const perform = async (work: () => Promise<void>) => { if (busy) return; setBusy(true); setError(""); try { await work(); await query.refetch(); } catch (e) { setError(e instanceof Error ? e.message : t("The operation could not be completed.")); } finally { setBusy(false); } };
-  const install = () => perform(async () => {
-    const schema = query.data?.installationState === "active" ? "platform.package.upgrade" : "platform.package.install";
-    const accepted = await decide(schema, { type: "platform.package", id }, { id, version }, { onRefused: setError });
-    if (!accepted) return;
-    await query.refetch();
-  });
-  const create = () => perform(async () => {
-    const storage = `${scope}:create`, key = localStorage.getItem(storage) ?? crypto.randomUUID();
-    localStorage.setItem(storage, key);
-    const result = await client.call<Api.PackageDraftResult>("POST", `/v1/packages/${encodeURIComponent(id)}/drafts`, { version, key });
-    if (!result.ok) throw Error(apiErrorMessage(result.body) ?? t("Application drafts could not be created."));
-    localStorage.removeItem(storage);
-  });
   const plan = query.data;
   const initialize = () => perform(async () => {
     if (!plan?.setup || !reviewedSetup) return;
@@ -71,7 +58,6 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
     }
   });
   const openApp = (app: Api.PackageApplication) => open({ view: "page", params: { app: app.ref.app, kind: "page", name: app.pages[0]!, application: `${app.ref.app}:${app.ref.name}` } });
-  const missingDrafts = !!plan?.applications.some(app => !app.draftId);
   const allPublished = !!plan?.applications.length && plan.applications.every(app => app.published);
   const setupEntries = plan?.setup?.steps.map((step, index) => setupRun ? host.outbox.find(entry => entry.submission.tenantId === client.connection.tenant && entry.submission.principalId === client.connection.principal && entry.submission.schema?.name === step.schema && entry.submission.target?.id === step.target?.id && entry.submission.idempotencyKey?.endsWith(`:${setupRun}:${index}`)) : undefined) ?? [];
   const setupComplete = setupEntries.length > 0 && setupEntries.every(entry => entry?.state === "SUBMISSION_STATE_CONFIRMED");
@@ -87,22 +73,10 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
     {query.isLoading && <p role="status">{t("Loading application requirements…")}</p>}
     {error && <Panel role="alert" className="break-words text-danger">{error}</Panel>}
     {plan && <>
-      <Panel className="grid min-w-0 grid-cols-1 gap-3" title={t("Install and create drafts")}>
-        <p className="text-sm text-muted">{t("Follow the remaining steps here. Editing definitions is optional; using the application starts after activation.")}</p>
-        {!plan.installed && <div className="flex flex-wrap items-center gap-2"><p className="text-sm">{t(plan.installationState === "draining" ? "Finish uninstalling this package in Packages before preparing applications." : "Install this exact package version to begin.")}</p>{plan.installationState !== "draining" && (can(plan.installationState === "active" ? "platform.package.upgrade" : "platform.package.install") ? <Button variant="primary" disabled={busy} onClick={() => void install()}>{plan.installationState === "active" ? t("Switch to {v}", { v: version }) : t("Install package")}</Button> : <p>{t("Ask an administrator to install this package.")}</p>)}</div>}
-        <p className="text-sm text-muted">{t("Existing drafts keep your edits. Changing the package version does not overwrite them.")}</p>
-        {plan.installed && missingDrafts && <Button variant="primary" disabled={busy} onClick={() => void create()}>{t("Create application drafts")}</Button>}
-        {plan.applications.map(app => <div key={app.ref.name} className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-          <strong className="mr-auto">{app.title}</strong><Tag label={t(app.state === "withdrawn" ? "Entry withdrawn" : app.published ? "Published" : app.draftId ? "Draft" : "Not created")} />
-          {app.draftId && <Button disabled={busy} onClick={() => open({ view: "project", params: { id: app.draftId! } })}>{t("Edit application")}</Button>}
-        </div>)}
-      </Panel>
-      <Panel title={t("Publish applications")} className="grid min-w-0 grid-cols-1 gap-3">
-        <p className="text-sm text-muted">{t("Publish the complete application independently. Configure external services afterward for the features you use.")}</p>
-        <div className="grid gap-2 border-t border-border pt-3">
-          <p className="text-sm text-muted">{t("Review the exact candidate and its checks before activation. Return here and refresh readiness after publishing.")}</p>
-          {plan.applications.map(app => <div key={app.ref.name} className="flex flex-wrap items-center gap-2 text-sm"><span className="mr-auto font-medium">{app.title}</span><Tag label={t(app.published ? "Published" : "Not published")} />{app.draftId && <Button variant={app.published ? "default" : "primary"} disabled={busy || !plan.installed} onClick={() => open(systemScope ? { view: "self-hosting" } : { view: "release-review", params: { kind: "app", id: app.draftId!, application: app.draftId!, applicationName: app.ref.name } })}>{t(systemScope ? "Open self-hosting" : app.published ? "Review release" : "Publish application")}</Button>}</div>)}
-        </div>
+      <Panel title={t("Installed applications")} className="grid gap-3">
+        {!plan.installed && <><p>{t("Review and install this version in Marketplace before configuring it.")}</p><Button onClick={()=>open({view:"apps"})}>{t("Marketplace")}</Button></>}
+        {plan.installed && <Button onClick={()=>open({view:"projects",params:{project:`package:${id}`}})}>{t("Open managed project")}</Button>}
+        {plan.applications.map(app=><div key={app.ref.name} className="flex justify-between gap-2"><strong>{app.title}</strong><Tag label={t(app.published?"Installed":"Not installed")}/></div>)}
       </Panel>
       <Panel title={t("Configure services when needed")} className="grid min-w-0 grid-cols-1 gap-3">
         {!plan.connections.length && !plan.ai.length && <p className="text-sm">{t("This package has no external service requirements.")}</p>}

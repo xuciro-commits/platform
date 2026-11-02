@@ -62,7 +62,7 @@ func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 
 func (h *Host) routesBuild(rt *routes) {
 	h.routesConnectionKinds(rt)
-	h.routesPackageDrafts(rt)
+	h.routesPackages(rt)
 	rt.handle(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: ActionCheckRequest{}, Answer: ActionCheckResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ActionCheckRequest
 		if decodeBodyLimit(r, &request, 64<<10) != nil || request.Target.Object == "" || request.Target.ID == "" {

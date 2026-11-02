@@ -21,7 +21,7 @@ export function acceptedClient(page: Page, subject = "admin", tenant?: string) {
     expect(response.ok(), await response.text()).toBeTruthy();
     return response.json();
   };
-  const submit = async (type: string, id: string, action: string, payload: unknown, expectedRevision?: number) => {
+  const submit = async (type: string, id: string, action: string, payload: unknown, expectedRevision?: number | null) => {
     const identity = await read<{ tenantId: string; principalId: string }>("/v1/me");
     const declarations = await read<{ dataClass: string; authorityId: string }[]>("/v1/declarations");
     const authority = declarations.find(declaration => declaration.dataClass === type)?.authorityId;
@@ -29,7 +29,7 @@ export function acceptedClient(page: Page, subject = "admin", tenant?: string) {
     const schema = `${type}.${action}`;
     const catalog = await read<{ schema: string; schemaVersion?: { version: string; family: number } }[]>("/v1/actions");
     const version = catalog.find(entry => entry.schema === schema)?.schemaVersion;
-    const revision = expectedRevision ?? (action === "create" ? 0 : (await read<{ record: { revision: number } }>(`/v1/records/${type}/${encodeURIComponent(id)}`)).record.revision);
+    const revision = expectedRevision === null ? undefined : expectedRevision ?? (action === "create" ? 0 : (await read<{ record: { revision: number } }>(`/v1/records/${type}/${encodeURIComponent(id)}`)).record.revision);
     const response = await page.request.post("/v1/submissions", {
       headers: { ...headers, ...(version ? { "Platform-Schema-Version": version.version } : {}) },
       data: {

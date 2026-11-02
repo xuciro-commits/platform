@@ -71,7 +71,7 @@ POST /v1/submissions
 
 ## 7.4 读取路径
 
-- 协调读取：每次记录读取持有租户车道，并在 SQL 状态上开启固定到“已应用位置”的可重复读只读事务；位置不一致即隔离。
+- 协调读取：每次记录读取持有租户车道，并在 SQL 状态上开启固定到“已应用位置”的可重复读只读事务；位置不一致即隔离。启动时的资源目录扫描及其接受结果提交也在同一租户车道内完成。
 - 命名读取：`GET /v1/{read}` → 入口授权 → 拥有者 Read → 行与字段收窄。
 - ObjectSet：编译为计划 → 能下推的条件下推到索引列 → 可见性（行策略 + 标记）→ 字段视图。
 - 授权：一条决定路径，构造上下文（租户、主体、动词、项目、标记、行、字段、派生）后交给唯一的决定函数；集合读取与单条读取同路径。
@@ -105,9 +105,6 @@ POST /v1/submissions
 ## 现存差距
 
 - 旧主数据与总账仍在 `apps/core`，需迁移为产品包并保留历史读取（P2.9、P2.10）。
-- 授权上下文构造在 `Tenant.authorizeDepth`（根包），决定函数在 `platform/authz`，应一并移入 `services/security`，`platform` 只留接口（P2.6）。
-- Expr 求值器在 `internal/rules`，应成为 `expr` 包；`platform/field_policy.go`、`platform/entity.go`、`platform/definition.go`、`kernel/records/record_domain.go` 绕过可注入的规则引擎（P2.5）。
-- AI 分散在 `aigateway`、`apps/ai`、`internal/aistate`、`internal/agents`、`engine/agents`、`platform/ai.go`；两个包都叫 `agents`，`aigateway` 反向依赖 `engine/agents`（P2.7）。
 - 重放仍重新执行旧条目类型（submission、input、effect、usage、agent、delivery、job），违反 R6（P2.13）。
 
 ## 相关

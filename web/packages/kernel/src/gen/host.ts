@@ -3302,29 +3302,21 @@ export type PackageDescriptor = {
   description?: string;
 };
 
-export type PackageDraft = {
-  ref: AssetRef;
-  type: string;
-  id: string;
-};
-
-export type PackageDraftRequest = {
-  version: string;
-  key: string;
-};
-
-export type PackageDraftResult = {
-  package: string;
-  version: string;
-  key: string;
-  application: string;
-  applicationID: string;
-  drafts: PackageDraft[];
-};
-
 export type PackageInspectRequest = {
   url?: string;
   content?: unknown;
+};
+
+export type PackageInstallPlan = {
+  steps: PackageInstallStep[];
+  problems?: string[];
+};
+
+export type PackageInstallStep = {
+  id: string;
+  version: string;
+  title: string;
+  action: string;
 };
 
 export type PackagePreparation = {
@@ -3353,6 +3345,21 @@ export type PackageRemoval = {
   blockers: string[];
 };
 
+export type PackageResourceChange = {
+  ref: AssetRef;
+  change: string;
+  before?: string;
+  after?: string;
+};
+
+export type PackageReview = {
+  id: string;
+  version: string;
+  changes: PackageResourceChange[];
+  extensions: ReleaseExtensionReview[];
+  problems?: string[];
+};
+
 export type PackageRoleRequirement = {
   app: string;
   role: string;
@@ -3379,6 +3386,7 @@ export type PackageSetupStep = {
 };
 
 export type PackageView = {
+  plan: PackageInstallPlan;
   update?: boolean;
   origin?: string;
   sourceDigest?: string;
@@ -3926,6 +3934,15 @@ export type ProcessStep = {
   retryBackoffMs?: number;
   flow?: string;
   flowVersion?: number;
+};
+
+export type ProductExportRequest = {
+  id: string;
+  version: string;
+  title: string;
+  namespace: string;
+  roots: AssetRef[];
+  requires?: string[];
 };
 
 export type Profile = {

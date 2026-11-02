@@ -1,6 +1,22 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "The product review could not be loaded.": "无法加载产品审阅。",
+ "Compatible with this version": "与此版本兼容",
+ "Customer extensions": "客户扩展",
+ "Resource changes": "资源变更",
+ "Adding a reviewed version keeps it in the library. Installation, business access and initial data are separate actions.": "添加审阅过的版本只会将其加入目录。安装、业务授权和初始化数据分别执行。",
+ "Ask an administrator to review and install {id} version {version}.": "请管理员审阅并安装 {id} 的 {version} 版本。",
+ "Configure applications": "配置应用",
+ "Installation activates the managed applications. Configure external services and assign business access separately.": "安装后受管应用即可使用；外部服务配置和业务访问授权单独完成。",
+ "Open managed project": "打开受管项目",
+ "Review and install this version in Marketplace before configuring it.": "请先在 Marketplace 审阅并安装此版本，再配置环境。",
+ "Installed applications": "已安装应用",
+  "Installation order": "安装顺序",
+  "Product version": "产品版本",
+  "Dependencies are included in the installation review.": "安装审阅已包含依赖产品。",
+  "Installed. Product resources are read-only; create extensions in your own project.": "已安装。产品资源只读；请在自己的项目中创建扩展。",
+  "Install the reviewed product and its dependencies into managed projects. Customer extensions stay in your own projects; business data and access grants are separate.": "将审阅过的产品及其依赖安装到受管项目。客户扩展保留在自己的项目中；业务数据和访问授权单独管理。",
  "Catalog": "目录", "Updates": "更新",
  "Your installed products are up to date.": "已安装产品均为最新版本。",
  "No products are installed.": "尚未安装产品。",

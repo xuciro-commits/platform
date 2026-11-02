@@ -7,6 +7,7 @@ import { matchesResourceKind, refKey, resourceKinds, resourceRef } from "../proj
 import { branchRefusal } from "../branches/decisions";
 import { useCurrentBranch } from "../branches/current";
 import { diagnose } from "./diagnostics";
+import {ProductExport} from "./product-export";
 import { DraftReview } from "./draft-changes";
 import { useEffect, useRef, useState } from "react";
 
@@ -357,6 +358,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     </Card>}
     {review && <Card className="grid gap-3 p-3" aria-live="polite">
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{savedReview ? t("Saved candidate review") : review.diagnostic ? t("Candidate rejected") : (review.drafts?.length ?? 0) > 1 ? t("Joint candidate ready for review") : t("Candidate ready for review")}</span>
+        {savedReview && <ProductExport candidate={savedID} assets={assets} application={applicationName}/>}
         {savedReview && <StatusTag status={activeID === savedID ? "active" : "saved"} registry={{ active: { label: t("Active"), tone: "success" }, saved: { label: t("Saved"), tone: "info" } }} />}
         {savedReview && origin && <StatusTag status="promoted" registry={{ promoted: { label: t("Promoted from {tenant}", { tenant: origin.from }), tone: "info" } }} />}
         {savedReview && promotedTo.map((target) => <StatusTag key={target.tenant} status={target.active ? "live" : "held"} registry={{ live: { label: t("Active in {tenant}", { tenant: target.tenant }), tone: "success" }, held: { label: t("Awaiting review in {tenant}", { tenant: target.tenant }), tone: "warning" } }} />)}
