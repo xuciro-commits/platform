@@ -100,6 +100,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     if (project) { session.load(hydrate(project,declarationFields)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
     setCreatedPage(undefined); setError(undefined);
   }, saving || templateBusy,working?.saved);
+  working?.prepare(project ? { schema: "build.app.edit", target: { type: "build.app", id }, payload: declarationChanges(moduleChanges(draft), declarationValue(project, declarationFields)), expectedRevision: baseRevision.current } : undefined, invalid ? [t("Fix the problems to save")] : []);
   const persist = async (submitted: ModuleDraft) => {
     const expected = baseRevision.current;
     if (!await decide("build.app.edit", { type: "build.app", id }, declarationChanges(moduleChanges(submitted), declarationValue(project!, declarationFields)), { expectedRevision: expected, quiet: true, onRefused: setError })) return false;

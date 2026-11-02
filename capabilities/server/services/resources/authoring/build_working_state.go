@@ -17,13 +17,15 @@ const SchemaWorkingStateClear = WorkingStateType + ".clear"
 
 type WorkingState struct {
 	platform.Record
-	Member string          `json:"member" field:"readonly"`
-	Branch string          `json:"branch" field:"readonly"`
-	Type   string          `json:"type" field:"readonly"`
-	Draft  string          `json:"draft" field:"readonly"`
-	Base   json.RawMessage `json:"base,omitempty" field:"readonly" type:"json"`
-	Spec   json.RawMessage `json:"spec" field:"readonly" type:"json"`
-	Inputs json.RawMessage `json:"inputs,omitempty" field:"readonly" type:"json"`
+	Member   string                  `json:"member" field:"readonly"`
+	Branch   string                  `json:"branch" field:"readonly"`
+	Type     string                  `json:"type" field:"readonly"`
+	Draft    string                  `json:"draft" field:"readonly"`
+	Base     json.RawMessage         `json:"base,omitempty" field:"readonly" type:"json"`
+	Spec     json.RawMessage         `json:"spec" field:"readonly" type:"json"`
+	Inputs   json.RawMessage         `json:"inputs,omitempty" field:"readonly" type:"json"`
+	Edit     *platform.CompositeEdit `json:"edit,omitempty" field:"readonly" type:"json"`
+	Problems []string                `json:"problems,omitempty" field:"readonly"`
 }
 
 func WorkingStateID(member, branch, typ, draft string) string {
@@ -37,7 +39,7 @@ func workingStateEntity() platform.Entity {
 
 func workingStateActions() []platform.Action {
 	return []platform.Action{
-		{Schema: SchemaWorkingStateSave, Target: WorkingStateType, Title: "Autosave working state", Description: "Keep this builder's current edits private on the selected branch.", Roles: []string{Builder}, Capability: "resources", Payload: []platform.Field{{Name: "branch", Type: "string", Required: true}, {Name: "type", Type: "string", Required: true}, {Name: "draft", Type: "string", Required: true}, {Name: "spec", Type: "json", Required: true}, {Name: "inputs", Type: "json"}, {Name: "base", Type: "json"}}},
+		{Schema: SchemaWorkingStateSave, Target: WorkingStateType, Title: "Autosave working state", Description: "Keep this builder's current edits private on the selected branch.", Roles: []string{Builder}, Capability: "resources", Payload: []platform.Field{{Name: "branch", Type: "string", Required: true}, {Name: "type", Type: "string", Required: true}, {Name: "draft", Type: "string", Required: true}, {Name: "spec", Type: "json", Required: true}, {Name: "inputs", Type: "json"}, {Name: "base", Type: "json"}, {Name: "edit", Type: "json"}, {Name: "problems", Type: "string[]"}}},
 		{Schema: SchemaWorkingStateClear, Target: WorkingStateType, Title: "Discard working state", Description: "Remove this builder's private edits after saving or discarding them.", Roles: []string{Builder}, Capability: "resources", Payload: []platform.Field{}},
 	}
 }
@@ -65,7 +67,7 @@ func (b *Build) submitWorkingState(c platform.Caller, s *pb.Submission, now time
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Choose an open branch")
 				}
 			}
-			state = WorkingState{Record: platform.Record{ID: id}, Member: c.ID, Branch: input.Branch, Type: input.Type, Draft: input.Draft, Spec: input.Spec, Inputs: input.Inputs, Base: input.Base}
+			state = WorkingState{Record: platform.Record{ID: id}, Member: c.ID, Branch: input.Branch, Type: input.Type, Draft: input.Draft, Spec: input.Spec, Inputs: input.Inputs, Base: input.Base, Edit: input.Edit, Problems: input.Problems}
 		}
 		return func(r *pb.ChangeRecord) { c.Put(r, state) }, nil
 	})

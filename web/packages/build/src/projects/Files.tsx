@@ -9,6 +9,7 @@ import { WorkingState } from "../session/WorkingState";
 import { kindOfType, resourceKinds, resourceRoute } from "./resources";
 
 export function ResourceIdentity({ view, params }: { view: View; params: Record<string, string> }) {
+  const { open } = useWorkspace();
   const nativeType=view.id==="project" || view.id==="module" && !params.page?"build.app":resourceKinds.find(kind=>kind.view===view.id)?.type;
   const nativeID=params.page||params.id;
   const directory=useReadQuery<Api.ResourceDirectory>("/v1/resources",undefined,!!nativeType && !!nativeID && nativeID!=="new" && !nativeID.startsWith("ri."));
@@ -26,7 +27,7 @@ export function ResourceIdentity({ view, params }: { view: View; params: Record<
     const id=resolved.page || resolved.id;
     const project=resolved.application || (view.id==="project" || view.id==="module"&&!resolved.page?resolved.id:undefined);
     const body=<ApplicationScope application={project}><BranchDecisions project={project}>{view.render(resolved)}</BranchDecisions></ApplicationScope>;
-    return type && id ? <WorkingState key={`${type}/${id}`} type={type} id={id}>{body}</WorkingState> : body;
+    return type && id ? <WorkingState key={`${type}/${id}`} type={type} id={id} project={project} onShared={target => { if (id === "new") open({ view: view.id, params: { ...resolved, id: target } }, { ifCurrent: { view: view.id, params: resolved }, replace: true }); }}>{body}</WorkingState> : body;
   };
   if (!rid) return <>{scoped(params)}</>;
   if (query.isLoading) return <p role="status">{t("Loading…")}</p>;

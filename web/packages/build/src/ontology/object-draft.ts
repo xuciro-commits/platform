@@ -51,6 +51,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     && (savedObjects.has(entity.type) || definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type)));
   const issuesOf = (name: string) => { const a = process.actions.find((x) => x.name === name); return a ? actionIssues(a, process, parent, targets, entities) : []; };
   const issues = [...conversionError ? [conversionError] : [], ...(process.createTransaction ? transactionIssues(process.createTransaction).map(issue => `${t("Creation transaction")}: ${transactionIssueText(issue, t)}`) : []), ...process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`))];
+  working?.prepare({ schema: "build.object.edit", target: { type: "build.object", id }, payload: objectChanges(process, baseline.current), expectedRevision: baseRevision.current }, issues);
   const change = (next: Process) => {
     if(lock.current || conversionError)return;
     const indexOf=(before:unknown[],after:unknown[],at:number)=>{const found=after.indexOf(before[at]);return found>=0?found:before.length===after.length?at:-1;};

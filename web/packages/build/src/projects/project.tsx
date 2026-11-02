@@ -162,6 +162,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   }, [project, settings, edited]);
   const dirty = Object.keys(changedSettings).length > 0;
   const working=usePrivateDraft(settings,dirty,value=>{setSettings(value);setEdited(true);},!!baseline.current,baseline.current?.values);
+  working?.prepare({ schema: "build.app.edit", target: { type: "build.app", id }, payload: changedSettings, expectedRevision: baseline.current?.revision ?? 0 });
   const { markSaved, confirmDiscard } = useUnsavedChanges(dirty || !!pendingPatch || !!createdResource || !!retireIntent, () => {
     pendingRef.current = undefined; setPendingPatch(undefined); setCreatedResource(undefined);
     rememberRetirement(undefined);

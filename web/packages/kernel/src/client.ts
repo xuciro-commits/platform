@@ -254,7 +254,7 @@ export class EdgeClient {
     return response.json();
   }
 
-  async composite(key: string, edits: { schema: string; target: { type: string; id: string }; payload?: unknown }[]): Promise<CompositeAnswer> {
+  async composite(key: string, edits: { schema: string; target: { type: string; id: string }; payload?: unknown; expectedRevision?: number }[]): Promise<CompositeAnswer> {
     const answer = await this.call<CompositeAnswer & { error?: string | { detail?: string; message?: string }; outcome?: "refused" }>("POST", "/v1/composites", { key, edits });
     if (!answer.ok) {
       const detail = answer.body.error;

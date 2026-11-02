@@ -1,6 +1,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Review working state": "审阅工作状态",
+ "Save your private edits to this branch for review. Other builders can see them after saving.": "将本人的私有编辑保存到此分支，供他人审阅。保存后其他构建者才可见。",
+ "Save your private edits to main. Published versions are reviewed separately.": "将本人的私有编辑保存到 main；发布版本另行审阅。",
+ "Private resource edits": "私有资源编辑",
+ "Selected private edit": "所选私有编辑",
+ "Include {name}": "包含 {name}",
+ "Discard this edit": "放弃此项编辑",
+ "Open this resource once to prepare its saved edits.": "请先打开此资源，准备它的保存请求。",
+ "Edits stay in your private working state until you review and save them.": "编辑会保留在本人的私有工作状态中，审阅并保存后才共享。",
+
  "An action type has its own saved definition and versions. Choose its target object, then define parameters, rules, criteria and side effects. Publish it with the object to make it available.": "动作类型独立保存定义和版本。选择目标对象，再定义参数、规则、提交条件和副作用；随对象发布后即可使用。",
  "The action request could not be completed. Your draft is still here.": "未能完成动作请求，草稿仍保留。",
  "Save the object type before opening this action.": "请先保存对象类型，再打开此动作。",

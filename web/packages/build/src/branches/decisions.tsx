@@ -1,4 +1,4 @@
-import { useWorkingState } from "../session/WorkingState";
+import { resourceSaveEdit, useWorkingState } from "../session/WorkingState";
 import { HostContext, type Host } from "@platform/app";
 import { apiErrorMessage, type Api, type Entry } from "@platform/kernel";
 import { notify, t } from "@platform/ui";
@@ -26,7 +26,8 @@ export function BranchDecisions({ children, project }: { children: ReactNode; pr
     const mainDecide: Host["decide"] = async (schema,target,payload,options) => {
       const cut=schema.lastIndexOf("."),type=schema.slice(0,cut),verb=schema.slice(cut+1);
       if (draftTypes.has(type) && type===target.type && (verb==="create" || verb==="edit")) {
-        const accepted=await host.decide(type+".save",target,{spec:payload,project,specSchema:options?.schemaVersion},{...options,schemaVersion:host.action(type+".save")?.schemaVersion});
+        const edit=resourceSaveEdit({schema,target,payload,expectedRevision:options?.expectedRevision},project,options?.schemaVersion);
+        const accepted=await host.decide(edit.schema,target,edit.payload,{...options,schemaVersion:host.action(edit.schema)?.schemaVersion});
         if(accepted)await working?.clear();
         return accepted;
       }

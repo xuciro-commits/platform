@@ -29,10 +29,11 @@ const empty = (): CodeDraft => ({ id: "", revision: 0, name: "", title: "", desc
 
 
 export function CodeEditor({ id }: { id: string }) {
+  const working=useWorkingState();
   const { decide, client , holds} = useHost(), { open } = useApplicationWorkspace(), invoke = useInvokeCapability();
   const authoringHost = useHost(), trial = useActionTrial(), declarationFields = authoringHost.source.entity("build.code")?.fields ?? [];
   const [draft, setDraft] = useState<CodeDraft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
- const [createID]=useState(()=>crypto.randomUUID());
+ const [createID]=useState(()=>working?.edit?.target.id ?? crypto.randomUUID());
  const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const [tab, setTab] = useState<"source" | "contract" | "sdk" | "test">("source"), [sdk, setSDK] = useState("");
   const testInputs=useInputBuffers();
@@ -40,7 +41,6 @@ export function CodeEditor({ id }: { id: string }) {
   const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0), confirmedDraft = useRef<CodeDraft>(empty());
   const { query, scope, branch, mainRevision } = useDraftRecord<CodeDraft>("build.code", id);
   const loadedScope = useRef(scope);
-  const working=useWorkingState();
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     void working?.clear();
     const saved = query.data?.record;
@@ -64,6 +64,7 @@ export function CodeEditor({ id }: { id: string }) {
   usePrivateDraft(draft,dirty,value=>{setDraft(value);setDirty(true);},id==="new" || !!loaded.current,confirmedDraft.current);
   const change = (patch: Partial<CodeDraft>) => { if (lock.current) return; setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); setSDK(""); };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : t("The code function could not be saved or loaded.")); } finally { lock.current = false; setBusy(false); } };
+  working?.prepare({ schema: `build.code.${draft.id ? "edit" : "create"}`, target: { type: "build.code", id: draft.id || createID }, payload: declarationValue(draft, declarationFields), expectedRevision: draft.id ? baseRevision.current : 0 }, inputs?.invalid ? [t("Correct the input drafts before submitting.")] : []);
   const save = async (): Promise<number | undefined> => {
     if (inputs?.invalid) return;
     const submitted = structuredClone(draft), target = submitted.id || createID, expected = submitted.id ? baseRevision.current : 0;

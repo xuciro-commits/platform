@@ -237,6 +237,8 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     } catch { setRefused(t("The page could not be saved. Your draft is still here.")); return false; }
     finally { lock.current = false; setSaving(false); }
   };
+  const preparedPage = savedPage && !invalid ? { ...encodePage(asPage({ ...savedPage, ...session.draft }, session.draft.sections.map(canonicalModelSection), { ...session.draft.document, uiProfile: pageEditingProfile(session.draft) }), definitions), object: savedPage.object } : undefined;
+  working?.prepare(preparedPage ? { schema: "build.page.edit", target: { type: "build.page", id }, payload: declarationChanges(preparedPage, declarationValue(savedPage!, declarationFields)), expectedRevision: baseRevision.current } : undefined, invalid ? [t("Fix the problems to save")] : []);
   const nothing = sections.length === 0;
   const canvasSelection = sections[chosen];
   const nodeID = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id && node.kind === "widget")?.[0];

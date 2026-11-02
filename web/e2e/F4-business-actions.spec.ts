@@ -97,9 +97,10 @@ test("F4 a business user finds an object, runs an action, and sees it in the act
     expect(action.version).toBe(1);
     await page.goto(`/#/action-type?id=${encodeURIComponent(action.id)}`);
     await page.getByRole("textbox", { name: "What people call it", exact: true }).fill("Resolve ticket now");
-    await page.getByRole("button", { name: "Save", exact: true }).first().click();
-    const review = page.getByRole("dialog", { name: "Review changes", exact: true });
-    await review.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("group", { name: "Branch", exact: true }).getByRole("button", { name: "Review and save", exact: true }).click();
+    const review = page.getByRole("dialog", { name: "Review working state", exact: true });
+    await review.getByRole("button", { name: "Save to main", exact: true }).click();
+    await expect(review).toBeHidden();
     await expect.poll(async () => (await read<{ record: { version: number } }>(`/v1/records/build.actiontype/${action.id}`)).record.version).toBe(2);
     await publish("action", action.id);
     const retained = (await read<{ record: { versions: { definition: { title: string } }[] } }>(`/v1/records/build.actiontype/${action.id}`)).record;

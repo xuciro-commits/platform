@@ -20,11 +20,12 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard }: {
   id: string; view: "flow" | "automation"; empty: () => WorkflowDraft; failure: string;
   onDiscard?: () => void;
 }) {
+  const working = useWorkingState();
   const { decide } = useHost(), { open } = useApplicationWorkspace();
   const { query, scope, branch, save: saveToBranch } = useDraftRecord<WorkflowDraft>("build.process", id);
   const session = useDraftSession<WorkflowDraft>(empty());
   const { draft, dirty } = session;
-  const [createID] = useState(() => crypto.randomUUID());
+  const [createID] = useState(() => working?.edit?.target.id ?? crypto.randomUUID());
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const confirmed = useRef(draft), loaded = useRef(""), lock = useRef(false), allocatedName = useRef<string | undefined>(undefined), loadedScope = useRef(scope);
   const load = (record: WorkflowDraft) => {
@@ -36,7 +37,6 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard }: {
     loadedScope.current = scope; loaded.current = ""; confirmed.current = empty();
     session.load(confirmed.current); setError("");
   }, [scope]);
-  const working=useWorkingState();
   const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
     void working?.clear();
     const record = query.data?.record;
@@ -66,6 +66,9 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard }: {
     setError(message);
   };
   const invalidInputs = () => Object.values(session.inputProblems).some(Boolean);
+  const prepared = { ...draft };
+  if (!prepared.name && view === "automation") prepared.name = allocatedName.current ??= (prepared.title.toLowerCase().replace(/[^a-z0-9]/g, "") || "automation") + createID.replace(/-/g, "").slice(0, 8);
+  working?.prepare({ schema: `build.process.${draft.id ? "edit" : "create"}`, target: { type: "build.process", id: draft.id || createID }, payload: workflowInputs(prepared), expectedRevision: draft.id ? confirmed.current.revision : 0 }, Object.values(session.inputProblems).filter(Boolean));
   const save = async () => {
     if (invalidInputs()) return;
     const submitted = structuredClone(draft), target = submitted.id || createID;

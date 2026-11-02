@@ -5463,6 +5463,12 @@ export type WorkingState = {
   base?: unknown;
   spec: unknown;
   inputs?: unknown;
+  edit?: CompositeEdit;
+  problems?: string[];
+};
+
+export type WorkingStateList = {
+  resources: WorkingState[];
 };
 
 export type WorkingStateView = {

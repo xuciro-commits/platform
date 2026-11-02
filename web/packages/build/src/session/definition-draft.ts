@@ -7,7 +7,7 @@ import { useApplicationScope, useApplicationWorkspace } from "../projects/applic
 import { joinProjectResource } from "../projects/membership";
 import { kindOfType, resourceRef } from "../projects/resources";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
-import { usePrivateDraft } from "./WorkingState";
+import { usePrivateDraft, useWorkingState } from "./WorkingState";
 import { useDraftRecord } from "../branches/draft-record";
 
 type DefinitionDraft = { id: string; revision: number; name: string };
@@ -18,13 +18,14 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, 
   normalize?: (record: T) => T; payload: (draft: T) => unknown; failure: string;
   joinApplication?: boolean; onDiscard?: () => void; saveSchema?:string;
 }) {
+  const privateState = useWorkingState();
   const host = useHost(), { open } = useApplicationWorkspace();
   const application = useApplicationScope();
   const { query, scope, branch, save: saveToBranch, publishRefusal, mainRevision } = useDraftRecord<T>(type, id);
   const [draft, setDraft] = useState(empty), [edited, setDirty] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [joining, setJoining] = useState(false);
-  const [createID] = useState(() => crypto.randomUUID());
+  const [createID] = useState(() => privateState?.edit?.target.id ?? crypto.randomUUID());
   const trial = useActionTrial();
   const fields = host.source.entity(type)?.fields ?? [];
   const declaration = (value: T) => declarationValue(value, fields);
@@ -67,6 +68,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, 
     const record = query.data?.record;
     if (record && !dirty && !busy && loaded.current !== record.id + ":" + record.revision) load(record);
   }, [query.data, dirty, busy]);
+  working?.prepare({ schema: saveSchema ?? `${type}.${draft.id ? "edit" : "create"}`, target: { type, id: draft.id || createID }, payload: saveSchema ? payload(draft) : ownerPayload(draft), expectedRevision: draft.id ? confirmed.current.revision : 0 }, inputs?.invalid ? [t("Correct the input drafts before submitting.")] : []);
   const patch = (change: Partial<T>) => {
     if (lock.current) return;
     setDraft(current => ({ ...current, ...change })); setDirty(true); setError("");

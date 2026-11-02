@@ -283,6 +283,10 @@ type WorkingStateView struct {
 	ID     string              `json:"id"`
 }
 
+type WorkingStateList struct {
+	Resources []build.WorkingState `json:"resources"`
+}
+
 func (h *Host) routesResources(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/branches/{id}/reviewers", Summary: "Eligible non-author editors and the project approval requirement", Answer: BranchReviewers{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		branch, refusal := t.readBranchLocked(m, r.PathValue("id"), h.Now())
@@ -320,6 +324,32 @@ func (h *Host) routesResources(rt *routes) {
 			}
 		}
 		WriteJSON(w, http.StatusOK, out)
+	})
+	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}", Summary: "All current builder's private resource edits on this branch", Answer: WorkingStateList{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		states := []build.WorkingState{}
+		query := platform.Query{Domain: platform.Raw([][]any{{"branch", "=", r.PathValue("branch")}}), Limit: 500, Sort: []string{"id"}}
+		for {
+			page, refusal := t.recordsRead(m, build.WorkingStateType, query, h.Now())
+			if refusal != nil {
+				Reply(w, nil, refusal)
+				return
+			}
+			var selected []build.WorkingState
+			if err := json.Unmarshal(platform.Raw(page.Records), &selected); err != nil {
+				WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			for _, state := range selected {
+				if !state.Archived {
+					states = append(states, state)
+				}
+			}
+			if len(page.Records) < query.Limit {
+				break
+			}
+			query.Offset += len(page.Records)
+		}
+		WriteJSON(w, http.StatusOK, WorkingStateList{Resources: states})
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}/{type}/{draft}", Summary: "Only the current builder's private working state", Answer: WorkingStateView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		id := build.WorkingStateID(m.ID, r.PathValue("branch"), r.PathValue("type"), r.PathValue("draft"))

@@ -7,6 +7,9 @@ import { CloseBranchDialog, NewBranchDialog } from "./BranchDialogs";
 import { useCurrentBranch } from "./current";
 import { ReviewDialog, useOpenProposal } from "./ReviewDialog";
 import { useWorkingDrafts } from "./working-state";
+import { flushWorkingStates } from "../session/WorkingState";
+import { WorkingReview, usePrivateWorkingStates } from "./WorkingReview";
+import type { Api } from "@platform/kernel";
 import { releaseDraftsValue } from "../releases/selection";
 
 const branchStates = defineStatuses({ open: { label: "Open", tone: "info" }, proposed: { label: "Proposed", tone: "purple" }, merged: { label: "Merged", tone: "success" }, closed: { label: "Archived", tone: "neutral" } });
@@ -25,6 +28,8 @@ export function BranchControls() {
   const current = live.find(branch => branch.id === currentId);
   useEffect(() => { if (currentId && list.data && !current) select(undefined); }, [currentId, list.data, current]);
   const working = useWorkingDrafts(builder && !currentId);
+  const privateState = usePrivateWorkingStates(currentId || "main", builder);
+  const [privateReview, setPrivateReview] = useState<Api.WorkingState[]>();
   const shortcut = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     if (!builder) return;
@@ -37,10 +42,18 @@ export function BranchControls() {
     return () => removeEventListener("keydown", onKey);
   }, [builder]);
   if (!builder) return null;
-  const count = current ? current.resources.length : working.drafts.length;
-  const reviewMain = () => confirmLeave(() => open({ view: "release-review", params: { drafts: releaseDraftsValue(working.drafts.slice(0, 128)) } }));
+  const privateEdits = privateState.data?.resources ?? [];
+  const sharedKeys = new Set(current ? current.resources.map(resource => `${resource.type}/${resource.id}`) : working.drafts.map(resource => `${resource.type}/${resource.id}`));
+  const count = sharedKeys.size + privateEdits.filter(state => !sharedKeys.has(`${state.type}/${state.draft}`)).length;
+  const reviewMain = () => confirmLeave(() => open({ view: "release-review", params: { drafts: releaseDraftsValue(working.drafts) } }));
   const switchTo = (id?: string) => confirmDiscard(() => confirmLeave(() => select(id)));
-  const review = current?.state === "open" ? () => confirmLeave(() => setReviewing(true)) : current?.state === "proposed" ? () => openProposal(current.id) : count ? reviewMain : undefined;
+  const review = current?.state === "proposed" ? () => openProposal(current.id) : async () => {
+    await flushWorkingStates();
+    const resources = (await privateState.refetch()).data?.resources ?? [];
+    if (resources.length) setPrivateReview(resources);
+    else if (current?.state === "open") confirmLeave(() => setReviewing(true));
+    else reviewMain();
+  };
   shortcut.current = review;
   const commands: ContextCommand[] = [
     { id: "new", label: t("New branch…"), run: () => setCreating(true) },
@@ -48,16 +61,17 @@ export function BranchControls() {
     { id: "all", label: t("All branches and proposals"), run: () => open({ view: "changes" }) },
     ...(current ? [{ id: "archive", label: t("Archive branch…"), danger: true, separatorBefore: true, run: () => setArchiving(true) }] : []),
   ];
-  const select_ = <Tooltip content={current ? undefined : t("Edits on main are saved as drafts immediately.")}><Select aria-label={t("Branch")} value={current?.id ?? ""} className="h-7 min-w-0 flex-1 text-xs" onChange={event => switchTo(event.target.value || undefined)}>
+  const select_ = <Tooltip content={current ? undefined : t("Edits stay in your private working state until you review and save them.")}><Select aria-label={t("Branch")} value={current?.id ?? ""} className="h-7 min-w-0 flex-1 text-xs" onChange={event => switchTo(event.target.value || undefined)}>
       <option value="">main</option>
       {live.map(branch => <option key={branch.id} value={branch.id}>{branch.title}</option>)}
     </Select></Tooltip>;
-  const save = current?.state === "open" ? <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("This branch has no changes.")} onClick={() => confirmLeave(() => setReviewing(true))}>{t("Review and save")}</Button>
+  const save = current?.state === "open" ? <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("This branch has no changes.")} onClick={() => void review()}>{t("Review and save")}</Button>
     : current?.state === "proposed" ? <Button size="sm" variant="primary" onClick={() => openProposal(current.id)}>{t("Open proposal")}</Button>
-    : <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("Every resource is published.")} onClick={reviewMain}>{t("Review and save")}</Button>;
+    : <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("Every resource is published.")} onClick={() => void review()}>{t("Review and save")}</Button>;
   const pending = count > 0 ? <Tooltip content={!current ? working.drafts.slice(0, 12).map(draft => `${t(draft.label)} · ${draft.title}`).join("\n") : undefined}><span><Tag label={t("Changes ({n})", { n: count })} tone="warning" /></span></Tooltip>
     : <span className="text-2xs text-muted">{working.loading ? t("Loading…") : current ? t("Up to date") : t("Everything is published")}</span>;
   const dialogs = <>
+    {privateReview && <WorkingReview branch={currentId} states={privateReview} onClose={() => setPrivateReview(undefined)} onSaved={async () => { await Promise.all([privateState.refetch(), list.refetch()]); if (currentId) setReviewing(true); }} />}
     {list.isError && <span role="alert" className="text-xs text-danger">{t("Branches could not be loaded.")}</span>}
     <NewBranchDialog open={creating} onOpenChange={setCreating} onCreated={branch => select(branch.id)} />
     {current && <CloseBranchDialog branch={current} open={archiving} onOpenChange={setArchiving} onClosed={() => select(undefined)} />}
