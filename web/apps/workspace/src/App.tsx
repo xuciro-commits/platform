@@ -1,6 +1,6 @@
 import "./i18n";
-import { ApplicationSessionsProvider, HostContext, withApp, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
-import { EdgeClient, OfflineReadError, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
+import { ApplicationSessionsProvider, HostContext, resourceEntryRoute, withApp, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
+import { EdgeClient, OfflineReadError, keepFresh, signOut, type Api, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Layers } from "lucide-react";
@@ -137,9 +137,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const registry = useRef(definitions);
   registry.current = definitions;
   const recordRoutes = useRef(host?.opens); recordRoutes.current = host?.opens;
-  const searchRecords = useCallback(async (text: string) => (await client.get<{ type: string; id: string; title?: string; group?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
-    .map((hit) => ({ id: `${hit.type}/${hit.id}`, label: hit.title || hit.id, detail: `${hit.type} · ${hit.id}`, group: hit.group === "object" ? "object" as const : "resource" as const,
-      open: () => { const view = recordRoutes.current?.get(hit.type); location.hash = routeToHash(view ? { view, params: { id: hit.id } } : { view: "record", params: { type: hit.type, id: hit.id } }); } })), [client, identityScope, host?.source.scope]);
+  const searchRecords = useCallback(async (text: string) => (await client.get<Api.Hit[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
+    .map((hit) => ({ id: `${hit.type}/${hit.id}`, label: hit.title || hit.id, detail: hit.resource ? hit.resource.path.join(" / ") : `${hit.typeTitle ?? hit.type} · ${hit.id}`, group: hit.group === "object" ? "object" as const : "resource" as const,
+      open: () => { const opens = recordRoutes.current!; const view = opens.get(hit.type); location.hash = routeToHash(hit.resource ? resourceEntryRoute(hit.resource, opens) : view ? { view, params: { id: hit.id } } : { view: "record", params: { type: hit.type, id: hit.id } }); } })), [client, identityScope, host?.source.scope]);
   const app = all.find((a) => a.id === current);
   const preparedApplication=activeRoute?.params?.application&&all.some(entry=>entry.id===activeRoute.params!.application)?activeRoute.params.application:app?.id;
   useEffect(()=>{

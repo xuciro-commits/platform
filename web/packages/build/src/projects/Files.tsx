@@ -1,4 +1,4 @@
-import { useHost, useNewRecord, useReadQuery } from "@platform/app";
+import { resourceEntryRoute, useHost, useNewRecord, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, DataTable, Dialog, Input, Notice, PageHeader, Select, Tag, t, routeToHash, useWorkspace, type View } from "@platform/ui";
 import { ChevronDown, File, Folder, FolderPlus, FolderTree, MoveRight, Plus } from "lucide-react";
@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { BranchDecisions } from "../branches/decisions";
 import { ApplicationScope } from "./application-scope";
 import { WorkingState } from "../session/WorkingState";
-import { kindOfType, resourceKinds, resourceRoute } from "./resources";
+import { resourceKinds } from "./resources";
 
 export function ResourceIdentity({ view, params }: { view: View; params: Record<string, string> }) {
   const { open } = useWorkspace();
@@ -61,9 +61,7 @@ export function Files({ project: initialProject = "", folder: initialFolder = ""
   const visit = (resource: Api.ResourceEntry) => {
     if (resource.ref.kind === "app") { select(resource); return; }
     if (!resource.canOpen) { setError(t("Request project access to open this resource.")); return; }
-    const kind = resourceKinds.find(kind => kind.type === resource.type && (kind.kind !== "automation" || resource.variant==="automation") && (kind.kind!=="flow" || resource.variant!=="automation")) ?? kindOfType(resource.type ?? "");
-    if (kind && resource.draft) open(resourceRoute(kind, resource.id, project));
-    else open({ view: "definition", params: { app: resource.ref.app, kind: resource.ref.kind, name: resource.ref.name } });
+    open(resourceEntryRoute(resource, host.opens));
   };
   const saveFolder = async () => {
     setBusy(true); setError("");

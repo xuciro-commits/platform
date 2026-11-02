@@ -25,8 +25,8 @@ function publishedExtensions(definitions: readonly Definition[], entries: readon
     .sort((a, b) => refKey(a.definition.ref).localeCompare(refKey(b.definition.ref)));
 }
 
-function pageRoute(definition: ApplicationDefinition, page: string, params?: Route["params"]): Route {
-  return { view: "page", params: { ...params, app: definition.ref.app, kind: "page", name: page, application: applicationID(definition) } };
+function pageRoute(definitions: readonly Definition[], definition: ApplicationDefinition, page: string, params?: Route["params"]): Route {
+  return { view: "page", params: { ...params, id: definitions.find(item => item.ref.app === definition.ref.app && item.ref.kind === "page" && item.ref.name === page)!.rid!, app: definition.ref.app, kind: "page", name: page, application: applicationID(definition) } };
 }
 
 function hasPage(definitions: readonly Definition[], definition: ApplicationDefinition, name: string) {
@@ -58,10 +58,10 @@ export function resolveApplicationRoute(route: Route, definitions: readonly Defi
   for (const { definition, entry } of publishedExtensions(definitions, entries)) {
     if (!replacementEntryView(entries, entry, route.view)) continue;
     const replacement = definition.application.replacements?.find(replacement => replacement.view === route.view && hasPage(definitions, definition, replacement.page));
-    if (replacement) return pageRoute(definition, replacement.page, route.params);
+    if (replacement) return pageRoute(definitions, definition, replacement.page, route.params);
   }
   const definition = pageMembership(route, definitions, entries, current);
-  return route.view === "page" && definition && !route.params?.application ? pageRoute(definition, route.params?.name ?? "", route.params) : route;
+  return route.view === "page" && definition && !route.params?.application ? pageRoute(definitions, definition, route.params?.name ?? "", route.params) : route;
 }
 
 function replacementEntryView(entries: readonly ApplicationUIInfo[], entry: string, view: string) {
@@ -89,7 +89,7 @@ export function extendApplications(entries: readonly AppUI[], definitions: reado
         const groups = (application.groups ?? []).map(group => ({ ...group, pages: group.pages.filter(name => pages.includes(name)) })).filter(group => group.pages.length);
         const grouped = new Set(groups.flatMap(group => group.pages));
         const item = (name: string) => ({ label: definitions.find(page => page.ref.app === definition.ref.app && page.ref.kind === "page" && page.ref.name === name)?.page?.title ?? name,
-          route: pageRoute(definition, name, context?.application === applicationID(definition) && context.instance ? { instance: context.instance } : undefined) });
+          route: pageRoute(definitions, definition, name, context?.application === applicationID(definition) && context.instance ? { instance: context.instance } : undefined) });
         return [{ label: application.title, items: [...pages.filter(name => !grouped.has(name)).map(item), ...groups.map(group => ({ label: group.title, items: group.pages.map(item) }))] }];
       }),
     ] });

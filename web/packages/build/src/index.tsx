@@ -160,7 +160,7 @@ const ontology = defineApp({
   for: builder,
   home: { view: "object-type" },
   views: contextualViews(ontologyViews),
-  opens: { "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.valuetype": "value-type", "build.objecttypegroup": "object-type-group" },
+  opens: { "build.actiontype": "action-type", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.valuetype": "value-type", "build.objecttypegroup": "object-type-group" },
   navigation,
   nav: (_host, route) => [
     section(t("Ontology"), route, [{ label: t("Overview"), icon: <Network />, view: "discover" }]),
@@ -238,7 +238,7 @@ const logic = defineApp({
   for: builder,
   home: { view: "functions" },
   views: contextualViews(logicViews),
-  opens: { "build.process": "flow", "build.function": "function", "build.code": "code", "build.query": "query" },
+  opens: { "build.table": "decision-table", "build.process": "flow", "build.function": "function", "build.code": "code", "build.query": "query" },
   navigation,
   nav: (_host, route) => [section(t("Logic"), route, [
     { label: t("Functions"), icon: <Braces />, view: "functions" },
@@ -252,7 +252,7 @@ const automate = defineApp({
   for: builder,
   home: { view: "automation" },
   views: contextualViews(automateViews),
-  opens: { "build.alertrule": "alert" },
+  opens: { "build.process/automation": "automation", "build.alertrule": "alert" },
   navigation,
   nav: (_host, route) => [section(t("Automate"), route, [
     { label: t("Automations"), icon: <Zap />, view: "automation" },
@@ -280,6 +280,7 @@ const devops = defineApp({
   for: host => builder(host) || publisher(host),
   home: { view: "release-review" },
   views: contextualViews(releaseViews),
+  opens: { "build.testplan": "test-plan", "build.testplan/evaluation-set": "evaluation-set", "build.sample-set": "sample-set" },
   navigation,
   nav: (host, route) => [
     section(t("Releases"), route, [

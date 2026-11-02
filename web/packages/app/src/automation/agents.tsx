@@ -304,8 +304,8 @@ export function Search({ initial = "" }: { initial?: string }) {
           {hits.map((h) => (
             <li key={`${h.type}/${h.id}`}>
               <Button variant="row" onClick={() => openRecord(h)}>
-                <span className="w-40 shrink-0 truncate text-xs text-muted">{title(h.type)}</span>
-                <span className="truncate">{h.title}</span><span className="font-mono text-xs text-muted">{h.id}</span>
+                <span className="w-40 shrink-0 truncate text-xs text-muted">{h.typeTitle || title(h.type)}</span>
+                <span className="min-w-0 flex-1 truncate">{h.title}{h.resource && <span className="ml-2 text-xs text-muted">{h.resource.path.join(" / ")}</span>}</span><span className="font-mono text-xs text-muted">{h.id}</span>
               </Button>
             </li>
           ))}

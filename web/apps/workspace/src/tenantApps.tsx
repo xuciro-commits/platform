@@ -11,13 +11,13 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
   return definitions.flatMap((definition) => {
     const application = definition.application;
     if (definition.ref.kind !== "app" || !application || definition.source === "code" || application.extends) return [];
-    const pages = new Map(definitions.filter((d) => d.ref.kind === "page" && d.ref.app === definition.ref.app).map((d) => [d.ref.name, d.page]));
+    const pages = new Map(definitions.filter((d) => d.ref.kind === "page" && d.ref.app === definition.ref.app).map((d) => [d.ref.name, d]));
     const held = application.pages.filter((name) => pages.has(name));
     if (held.length === 0 && !application.resources?.length) return [];
     const icon = <IconGlyph name={application.icon} />;
     const id = `${definition.ref.app}:${application.name}`;
-    const route = (name: string): Route => ({ view: "page", params: { app: definition.ref.app, kind: "page", name, application: id, ...(context?.application === id && context.instance ? { instance: context.instance } : {}) } });
-    const item = (name: string) => ({ label: pages.get(name)?.title ?? name, route: route(name) });
+    const route = (name: string): Route => ({ view: "page", params: { id: pages.get(name)!.rid!, app: definition.ref.app, kind: "page", name, application: id, ...(context?.application === id && context.instance ? { instance: context.instance } : {}) } });
+    const item = (name: string) => ({ label: pages.get(name)?.page?.title ?? name, route: route(name) });
     const groups = (application.groups ?? []).map((g) => ({ label: g.title, pages: g.pages.filter((name) => held.includes(name)) }))
       .filter((g) => g.pages.length > 0);
     const grouped = new Set(groups.flatMap((g) => g.pages));

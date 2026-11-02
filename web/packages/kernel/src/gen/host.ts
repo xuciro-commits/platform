@@ -2303,9 +2303,11 @@ export type HistogramResult = {
 
 export type Hit = {
   type: string;
+  typeTitle?: string;
   id: string;
   title: string;
   group: string;
+  resource?: ResourceEntry;
 };
 
 export type HostArtifactView = {
@@ -4465,6 +4467,7 @@ export type ResourceEntry = {
   version: number;
   state: string;
   managedBy?: string;
+  path: string[];
   canOpen: boolean;
   canEdit: boolean;
 };

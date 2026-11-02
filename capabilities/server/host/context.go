@@ -117,10 +117,12 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 }
 
 type Hit struct {
-	Type  string `json:"type"`
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Group string `json:"group"`
+	Type      string         `json:"type"`
+	TypeTitle string         `json:"typeTitle,omitempty"`
+	ID        string         `json:"id"`
+	Title     string         `json:"title"`
+	Group     string         `json:"group"`
+	Resource  *ResourceEntry `json:"resource,omitempty"`
 }
 
 var searchScopes = map[byte]string{'#': build.AppType, ':': build.ObjectType, '@': controlowner.MemberType}
@@ -141,6 +143,18 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 	if q == "" && only == "" {
 		return out
 	}
+	text := strings.ToLower(q)
+	counts := map[string]int{}
+	for _, resource := range t.resourceDirectory(m).Resources {
+		if resource.State == "archived" || only != "" && resource.Type != only || counts[resource.Type] >= 5 {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(resource.Title+" "+resource.Ref.Name+" "+string(resource.Ref.Kind)+" "+resource.ID), text) {
+			continue
+		}
+		out = append(out, Hit{Type: resource.Type, ID: resource.Draft, Title: resource.Title, Group: "resource", Resource: &resource})
+		counts[resource.Type]++
+	}
 	resources := map[string]bool{}
 	if owner := t.app(build.ID); owner != nil {
 		for _, entity := range owner.Manifest().Entities {
@@ -148,7 +162,7 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 		}
 	}
 	for _, info := range t.Entities(m) {
-		if info.Type == platform.FollowType || only != "" && info.Type != only {
+		if info.Type == platform.FollowType || info.Type == build.ResourceType || build.BranchDraftType(info.Type) || only != "" && info.Type != only {
 			continue
 		}
 		query := platform.Query{Search: q, Limit: 5}
@@ -165,7 +179,7 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 		}
 		for _, r := range page.Records {
 			v := reflect.ValueOf(r)
-			hit := Hit{Type: info.Type, ID: v.FieldByName("ID").String(), Group: group}
+			hit := Hit{Type: info.Type, TypeTitle: info.Title, ID: v.FieldByName("ID").String(), Group: group}
 			if f, ok := info.Field(info.Display); ok {
 				hit.Title = v.FieldByIndex(f.Index).String()
 			}

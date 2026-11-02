@@ -1,15 +1,14 @@
 import { useMemo, useState } from "react";
 import type { Api } from "@platform/kernel";
-import { assetKey, definitionPresentation, useDependencies, useHost, useRecordInventory } from "@platform/app";
+import { assetKey, definitionPresentation, useDependencies, resourceEntryRoute, useHost, useReadQuery } from "@platform/app";
 import { Button, EmptyState, IconGlyph, Input, Notice, PageHeader, PanelSection, RelationCanvas, SegmentedChoice, Tag, Toggles, relationNodeClasses, t, toneNames, type RelationEdge, type RelationNode, type Route, type Tone } from "@platform/ui";
 import { useApplicationWorkspace } from "./application-scope";
 import { kindIcon } from "./resource-icons";
-import { matchesResourceKind, refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
+import { refKey, resourceKinds } from "./resources";
 import { studioAreas } from "./studio-model";
 import { ExploreRecords } from "./explore-records";
 
 const areaTone: Record<string, Tone> = { model: "info", logic: "purple", interface: "success", integration: "orange", release: "teal" };
-const types = [...new Set(resourceKinds.map(kind => kind.type))];
 const limit = 300;
 const areaOf = (kind: string) => studioAreas.find(area => area.kinds.includes(kind) || kind === "action" && area.id === "logic")?.id;
 const kindTitle = (kind: string) => {
@@ -18,29 +17,11 @@ const kindTitle = (kind: string) => {
 };
 
 function useResourceRoutes() {
-  const { definitions, opens } = useHost();
-  const inventories = types.map(type => useRecordInventory<ResourceRecord>(type, 1000));
-  const drafts = useMemo(() => {
-    const found = new Map<string, { kind: ResourceKindInfo; record: ResourceRecord }>();
-    for (const kind of resourceKinds) for (const record of inventories[types.indexOf(kind.type)]?.data?.records ?? []) {
-      if (record.archived || !record.name || !matchesResourceKind(kind, record)) continue;
-      const key = refKey(resourceRef(kind, record.name));
-      if (!found.has(key)) found.set(key, { kind, record });
-    }
-    return found;
-  }, inventories.map(inventory => inventory.data));
+  const { opens } = useHost();
+  const directory = useReadQuery<Api.ResourceDirectory>("/v1/resources");
   return (ref: Api.AssetRef): Route => {
-    const draft = drafts.get(refKey(ref));
-    if (draft) {
-      const route = resourceRoute(draft.kind, draft.record.id);
-      return draft.kind.kind === "automation" || draft.kind.kind === "page" ? route : { ...route, view: opens.get(draft.kind.type) ?? route.view };
-    }
-    if (ref.kind === "action") {
-      const target = definitions.find(definition => refKey(definition.ref) === refKey(ref))?.action?.target;
-      const object = target ? drafts.get(refKey({ app: ref.app, kind: "object", name: target })) : undefined;
-      const name = object && ref.name.slice(target!.length + 1);
-      if (object?.record.actions?.some(action => action.name === name)) return { view: "action-type", params: { id: object.record.id, action: name! } };
-    }
+    const resource = directory.data?.resources.find(resource => refKey(resource.ref) === refKey(ref) && resource.state !== "archived");
+    if (resource) return resourceEntryRoute(resource, opens);
     if (ref.kind === "observation") return { view: "observations", params: { app: ref.app, name: ref.name } };
     return { view: "definition", params: { ...ref, surface: "studio" } };
   };

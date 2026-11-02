@@ -370,6 +370,29 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 			t.Fatalf("uncleared read differs from a missing version: hidden=%+v refusal=%+v missing=%+v refusal=%+v", hidden, refusal, missing, absent)
 		}
 	})
+	t.Run("discovery exposes resource identity without granting definition access", func(t *testing.T) {
+		sub := tn.submission(platform.SchemaProjectSave, platform.ProjectType, build.WorkspaceProject, map[string]any{
+			"title": "Workspace", "members": []platform.ProjectMember{{Member: uncleared.ID, Role: platform.ProjectOwnerRole}, {Member: unprivileged.ID, Role: platform.ProjectDiscovererRole}},
+		})
+		sub.Authority = "platform"
+		if _, refusal := tn.Submit(uncleared, sub, invariantClock); refusal != nil {
+			t.Fatal(refusal)
+		}
+		for _, reader := range []platform.Member{uncleared, unprivileged} {
+			hits := tn.Search(&reader, "guarded", invariantClock)
+			if len(hits) != 1 || hits[0].Resource == nil {
+				t.Fatalf("%s resource discovery: %+v", reader.ID, hits)
+			}
+			resource := hits[0].Resource
+			if resource.ID != platform.ResourceID(tn.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetDataset, Name: "guarded"}) || resource.Project != build.WorkspaceProject || resource.CanOpen != (reader.ID == uncleared.ID) {
+				t.Fatalf("%s discovered wrong identity or permission: %+v", reader.ID, resource)
+			}
+		}
+		if _, refusal := tn.RecordOf(unprivileged, build.DatasetType, "GUARDED", invariantClock); refusal == nil {
+			t.Fatal("discovery granted access to a resource definition")
+		}
+	})
+
 }
 
 func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {

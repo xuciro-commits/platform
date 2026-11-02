@@ -46,6 +46,8 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 - 目标：`#/<app>/<RID>/<分区>`（3-information §3.6）。路由对象为 `{ app, rid?, section?, params? }`，由外壳序列化。
 - 侧窗与 transfer 的状态不进入可分享的 URL。
 
+资源入口共享资源目录的 RID、位置和原生记录身份；Search、Files 与依赖图复用拥有者注册的打开路由。依赖图不再逐种读取所有草稿来猜编辑器。业务门户与扩展页面使用已授权发布定义的 RID。
+
 ## 数据与状态
 
 | 状态 | 位置 |
@@ -64,6 +66,6 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 ## 现存差距
 
-- 路由仍为 `{view, params}`，无 RID（路线图 P2.2）。
+- 资源 URL 已使用 RID；治理资源与容器尚未全面采用同一路由入口（路线图 P2.2）。
 - `web/packages/platform` 是空目录；`@platform/kernel` 未改名（路线图“已知漂移”）。
 - Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；尚未测量实际首屏耗时（路线图“已知漂移”）。

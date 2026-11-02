@@ -17,8 +17,9 @@ import (
 
 type ResourceEntry struct {
 	build.Resource
-	CanOpen bool `json:"canOpen"`
-	CanEdit bool `json:"canEdit"`
+	Path    []string `json:"path"`
+	CanOpen bool     `json:"canOpen"`
+	CanEdit bool     `json:"canEdit"`
 }
 
 type ResourceDirectory struct {
@@ -149,6 +150,24 @@ func (t *Tenant) resourceDirectory(m platform.Member) ResourceDirectory {
 				out.Folders = append(out.Folders, folder)
 			}
 		}
+	}
+	projects := map[string]string{}
+	for _, resource := range out.Resources {
+		if resource.Type == build.AppType {
+			projects[resource.Draft] = resource.Title
+		}
+	}
+	folders := map[string]build.Folder{}
+	for _, folder := range out.Folders {
+		folders[folder.ID] = folder
+	}
+	for i := range out.Resources {
+		resource := &out.Resources[i]
+		for folder := folders[resource.Folder]; folder.ID != ""; folder = folders[folder.Parent] {
+			resource.Path = append(resource.Path, folder.Name)
+		}
+		slices.Reverse(resource.Path)
+		resource.Path = append([]string{projects[resource.Project]}, resource.Path...)
 	}
 	slices.SortFunc(out.Resources, func(a, b ResourceEntry) int { return strings.Compare(a.ID, b.ID) })
 	slices.SortFunc(out.Folders, func(a, b build.Folder) int { return strings.Compare(a.ID, b.ID) })

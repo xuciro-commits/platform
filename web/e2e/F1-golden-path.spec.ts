@@ -194,6 +194,22 @@ test("F1 builder goes from an empty project to an application a business user ac
     }, `${name}rows`), { timeout: 30_000 }).toBe(2);
   });
 
+  await test.step("6b Search opens the same resource by RID", async () => {
+    const hits = await read<{ type: string; id: string; resource?: { id: string; project: string } }[]>(`/v1/search?q=${encodeURIComponent(objectName)}`);
+    const found = hits.filter(hit => hit.type === "build.object" && hit.id === objectID);
+    expect(found).toHaveLength(1);
+    const rid = found[0]!.resource!.id;
+    expect(rid).toMatch(/^ri\./);
+    const project = (await read<{ records: { id: string; name: string }[] }>("/v1/records/build.app?limit=500")).records.find(project => project.name === name)!;
+    expect(found[0]!.resource!.project).toBe(project.id);
+    await page.goto("/#/search");
+    await page.getByRole("textbox", { name: "Search", exact: true }).fill(objectName);
+    await page.getByRole("textbox", { name: "Search", exact: true }).press("Enter");
+    await page.getByRole("button").filter({ hasText: objectID }).click();
+    await expect(page).toHaveURL(new RegExp(`/#/object-type/${rid.replaceAll(".", "\\.")}`));
+    await expect(page.getByRole("heading", { name: "Order", level: 1, exact: true })).toBeVisible();
+  });
+
   await test.step("7 a business user sees the dataset rows as orders and creates one", async () => {
     const user = await (await browser.newContext()).newPage();
     await signIn(user, "user");
@@ -202,6 +218,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await expect(portal.getByRole("button", { name: /^Control Panel/ })).toHaveCount(0);
     await expect(portal.getByRole("button", { name: /^Asset Library/ })).toHaveCount(0);
     await user.getByRole("region", { name: "Business applications" }).getByRole("button", { name: label, exact: true }).click();
+    await expect(user).toHaveURL(/\/#\/page\/ri\./);
     const app = user.getByRole("region", { name: "Orders" });
     await expect(app.getByRole("heading", { name: "Orders", level: 1 })).toBeVisible();
     await expect(app.getByRole("cell", { name: "Globex" })).toBeVisible({ timeout: 30_000 });

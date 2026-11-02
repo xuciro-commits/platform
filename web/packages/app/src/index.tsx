@@ -173,10 +173,20 @@ export function definitionPresentation(definition: Definition): { title: string;
     description: body && "description" in body && typeof body.description === "string" ? body.description : undefined };
 }
 
-export function useOpenRecord(): (ref: string | { type: string; id: string }, options?: { window: "tab" | "beside" | "popout" | "inspect" }) => void {
+export function resourceEntryRoute(resource: Api.ResourceEntry, opens: ReadonlyMap<string, string>): Route {
+  const view = opens.get(`${resource.type}/${resource.variant || resource.ref.kind}`) ?? opens.get(resource.type ?? "");
+  return view ? { view, params: { id: resource.id, application: resource.project } }
+    : { view: "definition", params: { ...resource.ref } };
+}
+
+export function useOpenRecord(): (ref: string | { type: string; id: string; resource?: Api.ResourceEntry }, options?: { window: "tab" | "beside" | "popout" | "inspect" }) => void {
   const { opens } = useHost();
   const { open } = useWorkspace();
   return (ref, options) => {
+    if (typeof ref !== "string" && ref.resource) {
+      open(resourceEntryRoute(ref.resource, opens), options);
+      return;
+    }
     const { type, id } = typeof ref === "string" ? { type: ref.split("/")[0]!, id: ref.split("/").slice(1).join("/") } : ref;
     if (type === "enterprise.element") {
       open({ view: "enterprise", params: { element: id, section: "organization" } }, options);
