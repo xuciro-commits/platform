@@ -339,7 +339,8 @@ export function WorkspaceShell() {
   return <Workspace product={t("Catalog preview")} storageKey="platform.catalog.workspace-preview" layoutScope={current} scopeOf={(route) => route.view === "catalog-records" ? "records" : route.view === "catalog-graph" ? "steps" : undefined} views={views} home={{ view: "catalog-home" }}
     rail={{ home: { view: "catalog-home" }, applications: { view: "catalog-portal" }, notifications: { route: { view: "catalog-home" }, unread: 2 } }}
     applications={{ apps, categories, current, onSelect: setCurrent }}
-    session={{ tenant: "demo", principal: "ada", options: [{ id: "ada", label: "ada · demo" }], current: "ada", onSwitch: () => {} }}
+    session={{ tenant: "demo", principal: "ada", options: [{ id: "ada", label: "ada · demo" }], current: "ada", onSwitch: () => {},
+      accounts: [{ id: "ada", label: "ada@platform.test" }, { id: "grace", label: "grace@platform.test" }], currentAccount: "ada", onAccountSwitch: () => {}, onAddAccount: () => {} }}
     nav={[{ label: current === "records" ? t("Records") : t("Steps"), items: current === "records" ? [{ label: t("Records"), route: { view: "catalog-records" } }] : [{ label: t("Steps"), route: { view: "catalog-graph" } }] }]} />;
 }
 
