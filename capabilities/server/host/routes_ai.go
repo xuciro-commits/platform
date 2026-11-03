@@ -92,9 +92,9 @@ func (h *Host) routesAI(rt *routes) {
 				answer, err, failure := chat(m, req, h.Now(), func(piece string) { event("delta", map[string]string{"content": piece}) })
 				switch {
 				case err != nil && !started:
-					Reply(w, nil, err)
+					Reply(w, nil, t.i18n.Said(err, t.Language(m, r)))
 				case err != nil:
-					event("error", map[string]any{"code": err.Code.String(), "detail": err.Message})
+					event("error", map[string]any{"code": err.Code.String(), "detail": t.i18n.Say(t.Language(m, r), err.Message)})
 				case failure != nil && failure.Quota && !started:
 					WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
 				case failure != nil:
@@ -107,7 +107,7 @@ func (h *Host) routesAI(rt *routes) {
 			answer, err, failure := chat(m, req, h.Now())
 			switch {
 			case err != nil:
-				Reply(w, nil, err)
+				Reply(w, nil, t.i18n.Said(err, t.Language(m, r)))
 			case failure != nil && failure.Quota:
 				WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
 			case failure != nil:

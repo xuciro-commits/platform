@@ -322,7 +322,7 @@ func (a *AI) Callable(m platform.Member, name string) (Model, Provider, *kernel.
 		return Model{}, Provider{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if !a.allows(m, a.models[i]) {
-		return Model{}, Provider{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return Model{}, Provider{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This model is enabled for members holding a role in the AI application; ask an administrator for access")
 	}
 	pv, _ := a.provider(a.models[i].Provider)
 	return a.models[i], pv, nil

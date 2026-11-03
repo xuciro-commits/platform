@@ -121,16 +121,13 @@ func (t *Tenant) chatForStage(m platform.Member, req platform.ChatRequest, now t
 		}
 		var err *kernel.Error
 		model, pv, err = t.ai.Callable(m, req.Model)
-		if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+		if err != nil {
 			return struct{}{}, err
 		}
 		c := platform.NewCaller(runtime{t}, m, platform.AIApp, false, false)
-		decision := t.authorizeNative(c, "model:"+req.Model, "action", []string{platform.AnyMember}, err == nil)
+		decision := t.authorizeNative(c, "model:"+req.Model, "action", []string{platform.AnyMember}, true)
 		if refusal := authorizationRefusal(decision); refusal != nil {
 			return struct{}{}, refusal
-		}
-		if err != nil {
-			return struct{}{}, err
 		}
 		options := req.Options
 		if req.MaxTokens > 0 {

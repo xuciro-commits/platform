@@ -168,14 +168,14 @@ export function AIPlayground({initialModel=""}:{initialModel?:string}) {
     const turn: { prompt: string; answer?: string; error?: string; usage?: Usage } = { prompt, answer: "" };
     const show = () => setTurns([{ ...turn }, ...turns]);
     show();
-    const r = await client.stream<{ error?: { detail?: string; code?: string } }>("/v1/build/ai/chat", { model: chosen, messages, options, stream: true }, (event, data) => {
+    const r = await client.stream<{ error?: { detail?: string; message?: string; code?: string } }>("/v1/build/ai/chat", { model: chosen, messages, options, stream: true }, (event, data) => {
       const d = data as { content?: string; usage?: Usage; detail?: string; code?: string };
       if (event === "delta") turn.answer += d.content ?? "";
       if (event === "done" || event === "error") turn.usage = d.usage;
       if (event === "error") turn.error = d.detail ?? d.code;
       show();
     });
-    if (!r.ok || r.body?.error) { turn.error = r.body?.error?.detail ?? r.body?.error?.code ?? `HTTP ${r.status}`; show(); }
+    if (!r.ok || r.body?.error) { turn.error = r.body?.error?.detail ?? r.body?.error?.message ?? r.body?.error?.code ?? `HTTP ${r.status}`; show(); }
     setBusy(false);
     await queries.invalidateQueries();
   };
