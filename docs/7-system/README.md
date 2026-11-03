@@ -91,6 +91,19 @@ POST /v1/submissions
 | AI 网关 | 预留额度 → 调用供应商 → 结算；推断许可由部署环境指定 |
 | 可观测 | OpenTelemetry 追踪与指标；`/healthz`、`/metrics` |
 
+## 7.5.1 发布路径
+
+候选构建经 `Build.PrepareReleaseAssets` 产出安装计划，现分四族：
+
+| 族 | 入口 | 资源类型 | 形态 |
+|---|---|---|---|
+| record/page | `build_artifacts.go` 的 `prepareReleasePublications` | object、action（随 object）、page、app、flow | 一个 switch，逐类型手写冻结与版本规则 |
+| definition | `build_kinds.go` 的 `definitionKinds` + `prepareDefinitionPublications` | query、property-type、value-type、link-type、function、object-type-group | 表驱动泛型，新增类型只加一条 |
+| integration | `build_release_integration_registry.go` 的注册表 + `PrepareReleaseAssets` | connection、listener、source、dataset、mediaset、schedule、pipeline、writeback、observation、matching | 类型、元数据与记录访问已表驱动；发布状态迁移与安装校验仍是逐类型 switch |
+| versioned | `prepareAgentReleasePublications`、`prepareTestPlanPublications`、`PrepareCodeReleasePublications`、`prepareTablePublications`、`prepareAlertPublications`、`prepareSampleSetInstallations` | agent、evaluation-set、test-plan、compute、sample-set、alert | 五个函数骨架相同（盘库存、找草稿、保留字节校验、版本推进），保留与冻结规则各异 |
+
+收敛次序：先把 integration 的发布状态迁移并入注册表（每类型一个 `publish` 步骤），再评估 versioned 族能否共用带回调的版本推进；每一步都要用发布前后快照与重放结果证明字节不变。
+
 ## 7.6 协议与版本
 
 - `contract/proto` 是协议的唯一来源；Go 与 TypeScript 类型由它与宿主类型生成（`go run ./cmd/api-types` 生成 `web/packages/kernel/src/gen/host.ts`），生成文件不手改。
