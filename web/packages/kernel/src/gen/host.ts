@@ -2675,12 +2675,17 @@ export type Marking = {
   declassifierTeams?: string[];
 };
 
+export type MeTenant = {
+  id: string;
+  name?: string;
+};
+
 export type MeView = {
   tenantId: string;
   principalId: string;
   profile: Member;
   apps: AppEntry[];
-  tenants: string[];
+  tenants: MeTenant[];
   language: string;
   languages: string[];
   preferred?: string;

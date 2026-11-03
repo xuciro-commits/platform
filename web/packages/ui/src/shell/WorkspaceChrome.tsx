@@ -160,7 +160,7 @@ export function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme 
                 <UserPlus className={menuIcon} /><span className="min-w-0 flex-1 truncate">{t("Add account")}</span>
               </DropdownMenu.Item>
             </>)}
-          {session.options.length > 0 && section(<Repeat2 className={menuIcon} />, t("Switch tenant or identity"), current,
+          {session.options.length > 0 && section(<Repeat2 className={menuIcon} />, session.switchTitle ?? t("Switch tenant or identity"), current,
             <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>
               {session.options.map((option) => choice(option.id, option.label))}
             </DropdownMenu.RadioGroup>)}

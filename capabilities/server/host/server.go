@@ -155,14 +155,19 @@ func (h *Host) join(t *Tenant, d platform.IdentitySessions, subject string, now 
 	return err == nil
 }
 
-func (h *Host) tenantsOf(r *http.Request) []string {
+func (h *Host) tenantsOf(r *http.Request) []MeTenant {
 	subject, _ := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-	out := []string{}
+	out := []MeTenant{}
 	for _, t := range h.currentTenants() {
 		if d := consoleOf(t); d != nil {
-			if _, ok := d.MemberBySubject(subject); ok {
-				out = append(out, t.ID)
+			if _, ok := d.MemberBySubject(subject); !ok {
+				continue
 			}
+			name := ""
+			if p, ok := t.app(controlowner.PlatformApp).(platform.IdentityProfile); ok {
+				name = p.TenantRecord().Name
+			}
+			out = append(out, MeTenant{ID: t.ID, Name: name})
 		}
 	}
 	return out

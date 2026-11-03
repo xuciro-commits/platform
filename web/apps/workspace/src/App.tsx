@@ -256,10 +256,11 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     chosen.current = { id, from: activeRoute && routeToHash(activeRoute) };
     select(id);
   };
-  const sessionOptions = [
-    ...(me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant}`, label: tenant === "system" ? t("System self-hosting") : `${t("Tenant")} ${tenant}` })) : []),
-    ...(!signedIn ? identities.filter((i) => i.tenant === me!.tenantId).map((i) => ({ id: `as:${i.token}`, label: `${i.member} · ${Object.entries(i.roles).map(([a, r]) => `${a} ${r}`).join(", ")}` })) : []),
-  ];
+  const tenantLabel = (tenant: { id: string; name?: string }) => tenant.id === "system" ? t("The platform itself") : tenant.name || tenant.id;
+  const tenantOptions = me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant.id}`, label: tenantLabel(tenant) })) : [];
+  const identityOptions = !signedIn ? identities.filter((i) => i.tenant === me!.tenantId).map((i) => ({ id: `as:${i.token}`, label: `${i.member} · ${Object.entries(i.roles).map(([a, r]) => `${a} ${r}`).join(", ")}` })) : [];
+  const sessionOptions = [...tenantOptions, ...identityOptions];
+  const switchTitle = tenantOptions.length && identityOptions.length ? t("Switch tenant or identity") : identityOptions.length ? t("Switch identity") : t("Switch tenant");
   const onSwitch = (id: string) => {
     if (id.startsWith("tenant:") || id.startsWith("as:")) {
       client.close();
@@ -314,8 +315,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           </button>
           {(!online || client.usingPrepared) && <button type="button" onClick={() => setOfflineOpen(true)} className="truncate rounded-sm px-2 py-0.5 text-left text-[var(--tone-warning)] hover:bg-row-hover">{preparedAt ? t("Saved {time}", { time: new Date(preparedAt).toLocaleString() }) : t("Offline work")}</button>}
         </div>}
-        session={{ tenant: me!.tenantId === "system" ? t("System self-hosting") : me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
-          current: signedIn ? "" : `as:${token}`, onSwitch,
+        session={{ tenant: tenantLabel({ id: me!.tenantId, name: me!.tenant?.name }), principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions, switchTitle,
+          current: signedIn ? `tenant:${me!.tenantId}` : `as:${token}`, onSwitch,
           accounts: signedIn ? accounts(signedIn.config).map((entry) => ({ id: entry.subject, label: entry.email || entry.subject })) : undefined,
           currentAccount: signedIn?.session.subject, onAccountSwitch: changeAccount, onAddAccount: addAccount,
           onSignOut: signedIn ? () => void leaveSession() : undefined,

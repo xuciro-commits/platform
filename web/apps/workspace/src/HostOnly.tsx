@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 export type HostAdmin = { subject: string; tenants: string[] };
 
 function hostOnly(client: EdgeClient, admin: HostAdmin): Host {
-  const me: Me = { tenantId: "", principalId: admin.subject, profile: { id: admin.subject, tenant: "", roles: {} }, apps: [], tenants: admin.tenants,
+  const me: Me = { tenantId: "", principalId: admin.subject, profile: { id: admin.subject, tenant: "", roles: {} }, apps: [], tenants: admin.tenants.map((id) => ({ id })),
     language: language(), languages: [], currency: "", account: {} as Me["account"], tenant: {} as Me["tenant"] };
   const refuse = () => Promise.reject(new Error("a host administrator reads no tenant records"));
   return {

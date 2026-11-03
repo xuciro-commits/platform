@@ -17,6 +17,7 @@ export type Session = {
   tenant: string; principal: string; detail?: string;
   name?: string;
   options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;
+  switchTitle?: string;
   accounts?: { id: string; label: string }[];
   currentAccount?: string;
   onAccountSwitch?: (id: string) => void;

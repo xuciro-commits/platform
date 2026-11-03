@@ -76,13 +76,18 @@ type MeView struct {
 	PrincipalID string                `json:"principalId"`
 	Profile     platform.Member       `json:"profile"`
 	Apps        []AppEntry            `json:"apps"`
-	Tenants     []string              `json:"tenants"`
+	Tenants     []MeTenant            `json:"tenants"`
 	Language    string                `json:"language"`
 	Languages   []string              `json:"languages"`
 	Preferred   string                `json:"preferred,omitempty"`
 	Currency    string                `json:"currency"`
 	Account     platform.Account      `json:"account"`
 	Tenant      platform.TenantRecord `json:"tenant"`
+}
+
+type MeTenant struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
 }
 
 type SignIn struct {
