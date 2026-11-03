@@ -22,7 +22,7 @@ read-when: 运行或新增检查、验收用例、钩子；判断一项改动需
 | 改动 | 命令 |
 |---|---|
 | Go | `cd capabilities/server && go build ./... && go vet ./...`；`gofmt -l` 为空 |
-| 宿主类型 | `go run ./cmd/api-types` 后生成文件无意外差异 |
+| 宿主类型与页面契约 | `make contract` 后 `kernel/src/gen/*.ts`、`pageui/safety.ts` 无差异 |
 | Web | 改动包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 文案 | 新字符串在 `zh-CN` 字典中；动态键取值齐全 |
 | 全部 | `git diff --check` |

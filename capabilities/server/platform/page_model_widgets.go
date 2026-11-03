@@ -11,6 +11,10 @@ import (
 //go:embed page_compat.json
 var pageWidgetJSON []byte
 
+func PageContractJSON() []byte {
+	return pageWidgetJSON
+}
+
 type pageModelRole struct {
 	Kinds    []string `json:"kinds"`
 	Required bool     `json:"required,omitempty"`

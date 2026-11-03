@@ -18,7 +18,7 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 - R4 共享组件只来自 `@platform/ui`；应用不复制或包装出第二个同类组件（新需要先进 ui 并在 4-interaction/patterns 登记）。
 - R5 生成的类型（`packages/kernel/src/gen`）不手改；改宿主类型后重新生成。
 - R6 每个包一个 i18n 字典；英文原文是键；动态键的所有取值都在字典中。模块加载时不调用 `t()`：模块级文案写英文原文，由 `defineApp`、`defineStatuses` 或 getter 在读取时翻译；复制应用对象用 `withApp` 保留读取时翻译。切换语言不刷新页面，工作区按语言重新挂载。
-- R7 手写文件 ≤ 600 行；超出按职责拆分。只含字面量的数据文件（翻译字典、`pageui/manifest.ts`、`pageui/safety.ts`）不计。
+- R7 手写文件 ≤ 600 行；超出按职责拆分。只含字面量的数据文件（翻译字典、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`kernel/src/gen/*.ts`）不计。
 
 ## 包
 

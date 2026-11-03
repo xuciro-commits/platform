@@ -99,7 +99,7 @@ POST /v1/submissions
 
 ## 7.7 代码规范
 
-- 手写文件 ≤ 800 行（Go）/ 600 行（TS）；超出按职责拆分，不按“工具函数”拆。只含字面量的数据文件（各包 `i18n.ts`、`zh-CN.ts`、`pageui/manifest.ts`、`pageui/safety.ts`）不计。
+- 手写文件 ≤ 800 行（Go）/ 600 行（TS）；超出按职责拆分，不按“工具函数”拆。只含字面量的数据文件（各包 `i18n.ts`、`zh-CN.ts`、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`kernel/src/gen/*.ts`）不计。
 - 包名表达职责；同一名字不指两样东西（如 `kernel`、`agents`）。
 - 不留兼容分支，除非存储格式需要（且写明版本）。
 - 注释、删除旧路径、新依赖的规则见 AGENTS.md 硬规则。
