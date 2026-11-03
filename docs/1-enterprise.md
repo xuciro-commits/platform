@@ -142,8 +142,7 @@ read-when: 判断一项工作是否属于平台、调整终局或阶段、引入
 
 ## 现存差距
 
-- 行业应用包（`deploy/packages/*.json`）早于本体与 Workshop 的现行模型，尚未用现行工具重建（路线图 P4.1、P4.2）。
-- Object Explorer 只有基础探索（路线图 P3.15）。
+- Object Explorer 目前只有基础探索，新的探索能力从下一批排期。
 
 ## 相关
 

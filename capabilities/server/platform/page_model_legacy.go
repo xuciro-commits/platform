@@ -110,7 +110,10 @@ func MarshalPageSection(value any, visual map[string]json.RawMessage) ([]byte, e
 		return nil, err
 	}
 	for name, raw := range visual {
-		if _, known := values[name]; !known {
+		if len(raw) > 0 {
+			if _, known := values[name]; known {
+				continue
+			}
 			values[name] = raw
 		}
 	}

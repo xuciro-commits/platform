@@ -9,7 +9,6 @@ import (
 	controlowner "platformserver/services/security/control"
 	_ "time/tzdata"
 
-	"platformserver/apps/core"
 	platformserver "platformserver/host"
 	"platformserver/host/composition"
 	"platformserver/kernel/systemscope"
@@ -41,7 +40,7 @@ func main() {
 	if *admin != "" {
 		roles := map[string]string{
 			controlowner.PlatformApp: controlowner.Admin,
-			build.ID:                 build.Builder, core.ID: core.Steward, ai.ID: ai.Admin,
+			build.ID:                 build.Builder, ai.ID: ai.Admin,
 			work.ID: work.Admin, platform.AgentApp: platform.AgentAdmin,
 		}
 		if *tenant == systemscope.Tenant {

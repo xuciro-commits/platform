@@ -312,67 +312,6 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 				return err
 			}
 		}
-	case "journal":
-		j := step.Journal
-		if j != nil && j.Reverses != "" {
-			if !Named(j.Reverses) || len(j.Lines) > 0 || j.Set != "" || j.ClosedPeriod != "" {
-				return fmt.Errorf("A journal reversal names one original action and declares no new lines")
-			}
-			return check(j.Date, "date", "text")
-		}
-		if j == nil || len(j.Lines) < 2 || len(j.Lines) > 256 {
-			return fmt.Errorf("Journal steps need two or more bounded accounting lines")
-		}
-		if j.ClosedPeriod != "" && j.ClosedPeriod != "reject" && j.ClosedPeriod != "next-open" {
-			return fmt.Errorf("Journal steps need a known closed period policy")
-		}
-		if err := check(j.Date, "date", "text"); err != nil {
-			return err
-		}
-		if err := check(j.Text, "text"); err != nil {
-			return err
-		}
-		if err := check(j.Currency, "text"); err != nil {
-			return err
-		}
-		if j.Set != "" {
-			for name := range scope.Inputs {
-				if strings.HasPrefix(name, "row.") {
-					return fmt.Errorf("Journal collections cannot nest an iteration")
-				}
-			}
-			info, _ := lookup(scope.Object)
-			index := slices.IndexFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == j.Set })
-			if index < 0 {
-				return fmt.Errorf("Journal collection is undeclared")
-			}
-			item, found := lookup(info.Sets[index].Object)
-			if !found || item.App != ID {
-				return fmt.Errorf("Journal collection must belong to its authority")
-			}
-			scope = platform.WithTxnRow(scope, item)
-		}
-		for _, line := range j.Lines {
-			if err := check(line.When, "boolean"); err != nil {
-				return err
-			}
-			if (line.Debit == nil) == (line.Credit == nil) {
-				return fmt.Errorf("Each accounting line needs exactly one debit or credit")
-			}
-			if err := check(&line.Account, "text", "reference", "choice"); err != nil {
-				return err
-			}
-			for _, expr := range []*platform.Expr{line.Debit, line.Credit} {
-				if err := check(expr, "integer", "decimal"); err != nil {
-					return err
-				}
-			}
-			for _, expr := range []*platform.Expr{line.Text, line.Object, line.Partner} {
-				if err := check(expr, "text", "reference", "choice"); err != nil {
-					return err
-				}
-			}
-		}
 	case "effect":
 		if step.Effect == nil || step.Effect.Writeback == "" {
 			return fmt.Errorf("Effect steps need a declared transaction writeback")

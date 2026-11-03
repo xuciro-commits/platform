@@ -4,7 +4,7 @@ import { memberRoles } from "@platform/app/roles";
 type PackageLoad = { default: AppUI; contributions?: AppUI[] };
 export type Package = { serves: string[]; roles?: string[]; public?: boolean; load: () => Promise<PackageLoad> };
 
-const governPackage: Package = { serves: ["platform", "enterprise", "core", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@platform/govern") };
+const governPackage: Package = { serves: ["platform", "enterprise", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@platform/govern") };
 const buildPackage: Package = { serves: ["build"], roles: ["builder", "integrator", "publisher"], load: () => import("@platform/build") };
 export const packages: Package[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },

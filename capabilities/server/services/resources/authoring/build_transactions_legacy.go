@@ -103,61 +103,6 @@ func compileLegacyTransaction(object Object, action Action, lookup func(string) 
 		p.Amount = amount
 		txn.Steps = append(txn.Steps, platform.TxnStep{Name: fmt.Sprintf("post%d", i+1), Kind: "post", Target: platform.TxnRef{Type: post.Object}, Post: p})
 	}
-	if journal := object.EffectiveJournal(action); journal != nil {
-		j := &platform.TxnJournal{}
-		if action.Reverses != "" {
-			j.Reverses = action.Reverses
-			txn.Steps = append(txn.Steps, platform.TxnStep{Name: "journal", Kind: "journal", Journal: j})
-			return txn, nil
-		}
-		j.ClosedPeriod = journal.ClosedPeriod
-		for _, field := range []struct {
-			source, kind string
-			value        **platform.Expr
-		}{{journal.Date, "date", &j.Date}, {journal.Text, "text", &j.Text}} {
-			if field.source != "" {
-				expr, err := legacyTxnExpr(object, action, field.source, field.kind, lookup)
-				if err != nil {
-					return nil, err
-				}
-				fallback := platform.ExprLiteralValue(expr.Kind, "")
-				if expr.Kind == "date" {
-					fallback = platform.Expr{Op: "$today", Kind: "date"}
-				}
-				expr = platform.Expr{Op: "coalesce", Kind: expr.Kind, Args: []platform.Expr{expr, fallback}}
-				*field.value = &expr
-			}
-		}
-		for _, line := range journal.Lines {
-			l := platform.TxnJournalLine{}
-			account, err := legacyTxnExpr(object, action, line.Account, "text", lookup)
-			if err != nil {
-				return nil, err
-			}
-			l.Account = account
-			for _, field := range []struct {
-				source, kind string
-				value        **platform.Expr
-			}{{line.Debit, "decimal", &l.Debit}, {line.Credit, "decimal", &l.Credit}, {line.Object, "text", &l.Object}, {line.Partner, "text", &l.Partner}} {
-				if field.source != "" {
-					expr, err := legacyTxnExpr(object, action, field.source, field.kind, lookup)
-					if err != nil {
-						return nil, err
-					}
-					if field.kind == "text" {
-						expr = platform.Expr{Op: "coalesce", Kind: expr.Kind, Args: []platform.Expr{expr, platform.ExprLiteralValue(expr.Kind, "")}}
-					}
-					*field.value = &expr
-				}
-			}
-			if line.Text != "" {
-				expr := platform.ExprLiteralValue("text", line.Text)
-				l.Text = &expr
-			}
-			j.Lines = append(j.Lines, l)
-		}
-		txn.Steps = append(txn.Steps, platform.TxnStep{Name: "journal", Kind: "journal", Journal: j})
-	}
 	return txn, nil
 }
 
@@ -173,7 +118,7 @@ func (b *Build) migrateObjectTransactions(object *Object) error {
 				return err
 			}
 			action.Transaction = txn
-		} else if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || len(action.Conditions) > 0 || action.Journal != nil || action.Reverses != "" || action.To != "" || action.ToInput != "" {
+		} else if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || len(action.Conditions) > 0 || action.Reverses != "" || action.To != "" || action.ToInput != "" {
 			legacy := *action
 			legacy.Transaction = nil
 			compiled, err := compileLegacyTransaction(original, legacy, lookup)
@@ -224,7 +169,6 @@ func (b *Build) migrateObjectTransactions(object *Object) error {
 			}
 		}
 		action.Sets, action.Creates, action.Posts, action.Conditions = nil, nil, nil, nil
-		action.Journal = nil
 		action.Reverses, action.To, action.ToInput = "", "", ""
 		action.Reads = nil
 	}

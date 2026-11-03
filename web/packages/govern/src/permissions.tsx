@@ -166,7 +166,7 @@ function PolicyForm({ members, onSubmit, onCancel }: { members: Member[]; onSubm
       {field(t("Policy ID"), <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="freeze-closing" />)}
       {field(t("Title"), <Input value={title} onChange={(e) => setTitle(e.target.value)} />)}
       {field(t("Effect"), <Select value={effect} onChange={(e) => setEffect(e.target.value)}><option value="deny">{t("deny")}</option><option value="allow">{t("allow")}</option></Select>)}
-      {field(t("Permission (an action, or a prefix ending in *)"), <Input value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="core.material.*" />)}
+      {field(t("Permission (an action, or a prefix ending in *)"), <Input value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="build.erpitem.*" />)}
       {field(t("Only for member (optional)"), <Select value={member} onChange={(e) => setMember(e.target.value)}><option value="">—</option>{members.map((m) => <option key={m.id} value={m.id}>{m.profile.displayName || m.id}</option>)}</Select>)}
       <Checkbox className="text-sm" checked={agent} onChange={setAgent}>{t("Only when an AI agent acts")}</Checkbox>
       <div className="grid grid-cols-2 gap-2">{field(t("From (optional)"), <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />)}{field(t("Until (optional)"), <Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />)}</div>

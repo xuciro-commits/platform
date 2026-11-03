@@ -474,13 +474,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				continue
 			}
 			if step.Journal != nil {
-				if c.TxnTransport() == nil {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction journal transport is unavailable")
-				}
-				if err := b.txnJournal(c, receipt, stepKey, *step.Journal, scope, subject, facts, &iterations, now); err != nil {
-					return err
-				}
-				continue
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This package version still uses a retired journal step; upgrade the package before running the action")
 			}
 			if step.Effect != nil {
 				definition, failure := b.Effect(c, step.Effect.Writeback)

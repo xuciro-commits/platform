@@ -109,6 +109,15 @@ func DecodeRelease(raw []byte) (Release, error) {
 		for _, asset := range candidate.Assets {
 			refs[asset.Ref] = true
 		}
+		generatedPages := map[platform.AssetRef]bool{}
+		for _, asset := range candidate.Assets {
+			if asset.Ref.Kind == platform.AssetObject {
+				page := platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetPage, Name: asset.Ref.Name}
+				generatedPages[page] = true
+				page.Name = strings.TrimPrefix(asset.Ref.Name, asset.Ref.App+".")
+				generatedPages[page] = true
+			}
+		}
 		seen := map[platform.AssetRef]bool{}
 		records := map[string]bool{}
 		for _, installation := range saved.Installations {
@@ -126,16 +135,27 @@ func DecodeRelease(raw []byte) (Release, error) {
 				sub := r.GetSubmission()
 				ref := sub.GetTarget().GetType() + "/" + sub.GetTarget().GetId()
 				if !records[ref] || sub.GetSchema().GetName() != sub.GetTarget().GetType()+".create" || decision.Publication != nil {
-					return saved, fmt.Errorf("release bootstrap is not an original create of its installation metadata")
+					return saved, fmt.Errorf("release bootstrap decision %s is not an original create of its installation metadata", ref)
 				}
 			}
 			for _, row := range batch.Rows {
-				if !records[row.Type+"/"+row.ID] {
-					return saved, fmt.Errorf("release bootstrap has an unrelated row")
+				var resource map[string]json.RawMessage
+				var resourceRef platform.AssetRef
+				_ = json.Unmarshal(row.Image.Value, &resource)
+				_ = json.Unmarshal(resource["ref"], &resourceRef)
+				generated := generatedPages[resourceRef]
+				if !records[row.Type+"/"+row.ID] && !generated {
+					return saved, fmt.Errorf("release bootstrap has an unrelated row %s/%s (%s)", row.Type, row.ID, resourceRef)
 				}
 			}
-			if len(batch.DirectRows) > 0 || batch.Control != nil {
-				return saved, fmt.Errorf("release bootstrap has an unrelated callback or control mutation")
+			for _, callback := range batch.DirectRows {
+				page := platform.AssetRef{App: callback.Row.App, Kind: platform.AssetPage, Name: callback.Row.ID}
+				if !generatedPages[page] {
+					return saved, fmt.Errorf("release bootstrap has an unrelated callback")
+				}
+			}
+			if batch.Control != nil {
+				return saved, fmt.Errorf("release bootstrap has an unrelated control mutation")
 			}
 		}
 	}

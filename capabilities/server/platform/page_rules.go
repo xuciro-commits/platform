@@ -117,7 +117,7 @@ func (p Page) CheckDataBinding(binding PageDataBinding, lookup func(string) (Ent
 	if binding.Object.Name != "" {
 		info, ok := lookup(binding.Object.Name)
 		if !ok || info.App != binding.Object.App {
-			return fmt.Errorf("page binding object differs from its original owner")
+			return fmt.Errorf("page binding object %s expects owner %s but the installed owner is %s", binding.Object.Name, binding.Object.App, info.App)
 		}
 	}
 	models := []ModelBinding{}

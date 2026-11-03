@@ -1,5 +1,5 @@
 import "./i18n";
-import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/app";
+import { defineApp, useHost, type AppUI, type Host } from "@platform/app";
 import { Button, Card, ContentTabs, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
 import type { ReactNode } from "react";
 import { MarkingEditor, Markings } from "./markings";
@@ -224,28 +224,5 @@ export const hostConsole = defineApp({
   ] }],
 });
 
-function MasterDataView({ type }: { type?: string }) {
-  const host = useHost();
-  const chosen = type ?? host.entities.find(entity => entity.app === "core")?.type ?? "core.account";
-  return <Records key={chosen} type={chosen} />;
-}
-
-const masterData = defineApp({
-  id: "core", serves: ["core"], category: "business", title: "Master data", icon: <BookOpen />,
-  description: "Shared master data and accounting records.",
-  for: (host) => !!host.role("core"), home: { view: "master-data" },
-  views: [{ id: "master-data", title: () => t("Master data"), render: (p) => <MasterDataView type={p.type} /> }],
-  nav: (host) => [{ label: t("Master data"), items: [
-    ...[
-      { label: t("People and places"), types: ["core.person", "core.partner", "core.site", "core.location"] },
-      { label: t("Materials and units"), types: ["core.material", "core.uom", "core.currency"] },
-      { label: t("Accounting"), types: ["core.account", "core.period", "core.journal"] },
-    ].map(group => ({ label: group.label, icon: <BookOpen />, items: group.types.flatMap(type => {
-      const entity = host.entities.find(entity => entity.app === "core" && entity.type === type);
-      return entity ? [{ label: entity.plural, icon: <BookOpen />, route: { view: "master-data", params: { type } } }] : [];
-    }) })).filter(group => group.items.length > 0),
-  ] }],
-});
-
-export const contributions: AppUI[] = [marketplace, hostConsole, masterData];
+export const contributions: AppUI[] = [marketplace, hostConsole];
 export default controlPanel;

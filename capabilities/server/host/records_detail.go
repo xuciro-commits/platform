@@ -6,7 +6,6 @@ import (
 	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
 	"reflect"
 	"slices"
 	"strings"
@@ -174,15 +173,6 @@ func (t *Tenant) recordDeliveries(m platform.Member, target string, now time.Tim
 	out := make([]RecordDelivery, 0, len(effects))
 	for _, effect := range effects {
 		delivery := RecordDelivery{ID: effect.ID, Event: effect.Event, State: effect.State, At: effect.At, Message: effect.PublicMessage}
-		if effect.Endpoint == build.BooksEndpoint && effect.State == "delivered" {
-			var journal platform.Journal
-			if json.Unmarshal([]byte(effect.Body), &journal) == nil && journal.ID != "" {
-				domain, _ := json.Marshal([]any{[]any{"id", "=", journal.ID}})
-				if page, err := t.recordsRead(m, platform.JournalType, platform.Query{Domain: domain, Limit: 1}, now); err == nil && len(page.Records) == 1 {
-					delivery.Receipt = platform.JournalType + "/" + journal.ID
-				}
-			}
-		}
 		out = append(out, delivery)
 	}
 	return out

@@ -164,5 +164,4 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 ## 现存差距
 
-- 检索源与术语归 Agent Studio，组织目录归 Control Panel Organization；Master data 仍需迁入产品包（P2.10）。
-- Marketplace 已有依赖顺序、资源差异与客户扩展审阅；安装中的业务角色与专项标记映射尚需接通（P5.3）。
+无。

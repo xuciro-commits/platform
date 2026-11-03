@@ -58,7 +58,6 @@ const (
 
 func (t *Tenant) emit(e platform.Event, names []string) {
 	planned, _ := t.eventEffects(e, names, false)
-	planned = append(planned, t.legacyJournalEffects(e)...)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, x := range planned {
@@ -253,7 +252,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		return nil
 	}
 	t.opsMu.Lock()
-	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
+	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), &Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
 		if ep.Kind != acceptedformat.ModelEndpoint && !t.breakers.Allow("endpoint:"+ep.ID, now, true) {
 			continue
 		}
@@ -318,9 +317,6 @@ func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Ou
 	}
 	if ep.Kind == "connection" {
 		return t.sendWriteback(x)
-	}
-	if ep.Kind == "books" {
-		return t.sendBooks(x, now)
 	}
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}

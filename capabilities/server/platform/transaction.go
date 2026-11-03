@@ -13,37 +13,6 @@ import (
 	"time"
 )
 
-const (
-	BooksApp    = "core"
-	JournalType = "core.journal"
-)
-
-type Journal struct {
-	Record
-	Number       string        `json:"number,omitempty" field:"readonly,search" title:"Document number"`
-	Date         string        `json:"date" field:"required" title:"Posting date" help:"YYYY-MM-DD"`
-	Period       string        `json:"period,omitempty" field:"readonly" title:"Period"`
-	ClosedPeriod string        `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
-	Shifted      bool          `json:"shifted,omitempty" field:"readonly" title:"Posted to a later period"`
-	Text         string        `json:"text,omitempty" field:"search"`
-	Currency     string        `json:"currency,omitempty" help:"ISO 4217; default the tenant's first currency"`
-	Lines        []JournalLine `json:"lines" field:"required" type:"json" title:"Lines"`
-	Total        float64       `json:"total,omitempty" field:"readonly" title:"Total debit"`
-	Source       string        `json:"source,omitempty" field:"search" help:"The decision that posted it, set by the platform"`
-	Reverses     string        `json:"reverses,omitempty" field:"readonly" title:"Reverses"`
-	Reversed     string        `json:"reversed,omitempty" field:"readonly" title:"Reversed by"`
-	State        string        `json:"state" field:"readonly"`
-}
-
-type JournalLine struct {
-	Account string  `json:"account"`
-	Debit   float64 `json:"debit,omitempty"`
-	Credit  float64 `json:"credit,omitempty"`
-	Text    string  `json:"text,omitempty"`
-	Object  string  `json:"object,omitempty"`
-	Partner string  `json:"partner,omitempty"`
-}
-
 type RecordSetPredicate struct {
 	Domain     json.RawMessage      `json:"domain,omitempty"`
 	Filter     *Expr                `json:"filter,omitempty"`
@@ -287,7 +256,6 @@ type TxnTransport interface {
 	TakeTxnStep() *kernel.Error
 	BeginTxnCalls(Caller, time.Time) (TxnCalls, *kernel.Error)
 	QueueTxnEffect(Caller, *pb.ChangeRecord, string, TxnRef, json.RawMessage, time.Time) *kernel.Error
-	QueueTxnJournal(Caller, *pb.ChangeRecord, string, Journal, string, time.Time) *kernel.Error
 }
 
 type TxnRuntime interface{ TxnTransport() TxnTransport }

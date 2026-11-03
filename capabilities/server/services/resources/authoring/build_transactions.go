@@ -321,7 +321,7 @@ func (b *Build) checkTransactions(object Object, engines ...platform.RuleEngine)
 		if txn.Subject != subject || len(txn.Steps) == 0 {
 			return fmt.Errorf("transaction needs its subject and steps")
 		}
-		if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || action.Journal != nil || action.Reverses != "" || len(action.Conditions) > 0 || action.To != "" || action.ToInput != "" {
+		if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || action.Reverses != "" || len(action.Conditions) > 0 || action.To != "" || action.ToInput != "" {
 			return fmt.Errorf("transaction replaces legacy mutations and state routing")
 		}
 		spec := ruleSpec(object, action, txn.Reads)
@@ -456,14 +456,20 @@ func (b *Build) checkTransactions(object Object, engines ...platform.RuleEngine)
 				if step.ForEach != nil {
 					return fmt.Errorf("%s has unexpected iteration fields", where)
 				}
-				typed := map[string]bool{"post": step.Post != nil, "journal": step.Journal != nil, "effect": step.Effect != nil, "work": step.Work != nil, "call": step.Call != nil, "intervals": step.Intervals != nil}
+				if step.Kind == "journal" {
+					if step.Journal == nil || step.Link != nil || step.Sequence != nil || step.Effect != nil || step.Work != nil || step.Call != nil || step.Intervals != nil || step.Post != nil || step.Target != (platform.TxnRef{}) || len(step.Changes) > 0 {
+						return fmt.Errorf("%s has invalid retired journal fields", where)
+					}
+					continue
+				}
+				typed := map[string]bool{"post": step.Post != nil, "effect": step.Effect != nil, "work": step.Work != nil, "call": step.Call != nil, "intervals": step.Intervals != nil}
 				count := 0
 				for _, present := range typed {
 					if present {
 						count++
 					}
 				}
-				if count > 0 || slices.Contains([]string{"post", "journal", "effect", "work", "call", "intervals"}, step.Kind) {
+				if count > 0 || slices.Contains([]string{"post", "effect", "work", "call", "intervals"}, step.Kind) {
 					if count != 1 || !typed[step.Kind] || step.Link != nil || step.Sequence != nil || len(step.Changes) > 0 {
 						return fmt.Errorf("%s needs exactly its typed payload", where)
 					}

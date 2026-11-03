@@ -98,7 +98,7 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 		}
 		for _, b := range []platform.CompiledAgentTool{
 			{Kind: "context", Tool: platform.Tool{Name: "context", Description: "Read a record with its history, the records it references and that reference it, its links across apps, the flows and tasks about it.",
-				Properties: map[string]any{"type": map[string]any{"type": "string", "description": "The entity type, like core.material"}, "id": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"type", "id", "rationale"}}},
+				Properties: map[string]any{"type": map[string]any{"type": "string", "description": "The entity type, like build.erpitem"}, "id": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"type", "id", "rationale"}}},
 			{Kind: "search", Tool: platform.Tool{Name: "search", Description: "Search records of every type you may read by text; answers types, IDs and titles.",
 				Properties: map[string]any{"query": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"query", "rationale"}}},
 			{Kind: "knowledge", Tool: platform.Tool{Name: "knowledge", Description: "Search the tenant's documents and knowledge (house rules, manuals, FAQs) by what you need to know; answers passages with their sources, to cite.",

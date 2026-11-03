@@ -301,7 +301,7 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	if err := b.checkCreates(o); err != nil {
 		return err
 	}
-	if err := b.checkJournal(o); err != nil {
+	if err := b.checkActionPosts(o); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	if err := b.checkPosts(o); err != nil {

@@ -259,6 +259,8 @@ type PageWidgetSpec struct {
 	Body   json.RawMessage `json:"body"`
 }
 
+func (b PageWidgetSpec) IsZero() bool { return b.Format == "" && len(b.Body) == 0 }
+
 func (b PageDataBinding) PrimaryModel() *ModelBinding {
 	if b.Model != nil {
 		return b.Model

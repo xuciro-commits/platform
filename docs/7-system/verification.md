@@ -66,4 +66,4 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 
 ## 现存差距
 
-- K1–K6 已写；验收有 F1、F2、F3、F4、F5、F6、F7、F8、F9，F10 待补（路线图 P2.14）。
+无。K1–K6 与 F1–F10 均已接通。

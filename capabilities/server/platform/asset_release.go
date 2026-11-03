@@ -17,7 +17,7 @@ type ReleasePublication struct {
 	Image  json.RawMessage `json:"image"`
 }
 
-const AcceptedResultMaxBytes = 1 << 20
+const AcceptedResultMaxBytes = 4 << 20
 
 func CanonicalDigest(value any) (string, error) {
 	raw, err := json.Marshal(value)

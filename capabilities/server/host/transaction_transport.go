@@ -45,6 +45,12 @@ func (h hostView) BeginTxnCalls(c platform.Caller, at time.Time) (platform.TxnCa
 	return &txnCalls{decision: h.decision, caller: c, snapshot: h.decision.records.ForkRecords()}, nil
 }
 
+func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *pb.Submission, now time.Time) *kernel.Error {
+	sub.PrincipalId = caller.ID
+	_, err := t.submitAccepted(app, caller.Member, sub, now, true)
+	return err
+}
+
 func (h hostView) CheckTxnCall(call platform.TxnCall) error {
 	if call.Ref.Check() != nil || call.Ref.Kind != platform.AssetQuery || call.Version < 0 || !slices.Contains([]string{"", "snapshot", "current"}, call.View) {
 		return fmt.Errorf("Transaction calls need a synchronous pure query with snapshot or current reads")
@@ -93,32 +99,6 @@ func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, st
 	key := receipt.GetChangeId() + ":" + step
 	endpoint := build.WritebackEndpoint + request.Connection
 	x := platform.Effect{ID: fmt.Sprintf("%s:%s:transaction:%s:%s", c.Tenant, c.App, key, endpoint), App: c.App, Endpoint: endpoint, Event: c.App + "/transaction", Key: key, Target: target.Type + "/" + target.ID, At: at, Due: at, State: "pending", Body: string(raw)}
-	return h.queueTxnIntent(c, receipt, x)
-}
-
-func (h hostView) QueueTxnJournal(c platform.Caller, receipt *pb.ChangeRecord, step string, journal platform.Journal, reverseAction string, at time.Time) *kernel.Error {
-	if h.decision == nil || !c.Staging() || c.App != build.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction journal intents require their original private owner")
-	}
-	if h.t.app(platform.BooksApp) == nil {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The books owner is unavailable")
-	}
-	key := receipt.GetChangeId() + ":" + step
-	journal.ID, journal.Source = "jnl-"+key, c.App+"/"+receipt.GetChangeId()
-	x := platform.Effect{ID: fmt.Sprintf("%s:%s:journal:%s:%s", c.Tenant, c.App, key, build.BooksEndpoint), App: c.App, Endpoint: build.BooksEndpoint, Event: c.App + "/journal", Key: key, Target: target(receipt.GetSubmission()), At: at, Due: at, State: "pending", Body: string(platform.Raw(journal))}
-	if step == "journal" {
-		key = receipt.GetChangeId()
-		journal.ID = "jnl-" + key
-		typ := receipt.GetSubmission().GetTarget().GetType()
-		x.ID, x.Key = fmt.Sprintf("%s:%s:journal:%s:%s", c.Tenant, c.App, key, build.BooksEndpoint), key
-		var entry map[string]any
-		_ = json.Unmarshal(platform.Raw(journal), &entry)
-		x.Body = h.t.bookBody(entry, typ, receipt.GetSubmission().GetTarget().GetId(), reverseAction)
-	} else if reverseAction != "" {
-		var entry map[string]any
-		_ = json.Unmarshal(platform.Raw(journal), &entry)
-		x.Body = h.t.bookBody(entry, receipt.GetSubmission().GetTarget().GetType(), receipt.GetSubmission().GetTarget().GetId(), reverseAction)
-	}
 	return h.queueTxnIntent(c, receipt, x)
 }
 

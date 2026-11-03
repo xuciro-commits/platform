@@ -77,7 +77,7 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 	}
 	if raw, exists := given["state"]; exists {
 		var state string
-		if e.Type != invocation.GetTarget().GetType() || id != invocation.GetTarget().GetId() || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s State) bool { return s.Name == state }) {
+		if verb != "create" && (e.Type != invocation.GetTarget().GetType() || id != invocation.GetTarget().GetId()) || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s State) bool { return s.Name == state }) {
 			return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction state must be a declared state of its subject")
 		}
 		delete(given, "state")
@@ -133,12 +133,6 @@ func (l *Ledger) ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target Tx
 	}
 	apply(r)
 	return failure
-}
-
-type BooksChecks interface {
-	CheckPosting(Caller, Journal) (Outcome, *kernel.Error)
-	CheckReversal(Caller, string, json.RawMessage, time.Time) (Outcome, *kernel.Error)
-	HistoricalPostingMessage(string) string
 }
 
 type TransactionHost interface {

@@ -23,10 +23,11 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 	var publications []platform.ReleasePublication
 	add := func(schema string, record any) error {
 		raw, err := json.Marshal(record)
-		if err == nil {
-			publications = append(publications, platform.ReleasePublication{Schema: schema, Image: raw})
+		if err != nil {
+			return fmt.Errorf("%s: %w", schema, err)
 		}
-		return err
+		publications = append(publications, platform.ReleasePublication{Schema: schema, Image: raw})
+		return nil
 	}
 	for _, asset := range assets {
 		if asset.Ref.App != ID {
@@ -103,9 +104,6 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 		case platform.AssetPage:
 			i := slices.IndexFunc(pages, func(p Page) bool { return !p.Archived && p.Name == asset.Ref.Name })
 			if i < 0 {
-				continue
-			}
-			if pages[i].Published == "" {
 				generated, err := generatedReleasePage(asset, assets, b.Manifest().Version)
 				if err != nil {
 					return nil, err
@@ -118,21 +116,25 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 			if err := json.Unmarshal(asset.Body, &pageDescriptor); err != nil || pageDescriptor.Name != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid saved page %s", asset.Ref)
 			}
-			if previous, ok := ReadPublication[Page](pages[i].Published); ok && !maps.Equal(pageFunctionBindings(pageDescriptor), pageFunctionBindings(descriptor(previous))) {
+			current := Page{Record: platform.Record{ID: asset.Ref.Name}, Name: asset.Ref.Name}
+			if i >= 0 {
+				current = pages[i]
+			}
+			if previous, ok := ReadPublication[Page](current.Published); ok && !maps.Equal(pageFunctionBindings(pageDescriptor), pageFunctionBindings(descriptor(previous))) {
 				return nil, fmt.Errorf("page %s changes AI function bindings; publish the binding through its owner before release activation", asset.Ref)
 			}
 			frozen, err := pageDraft(pageDescriptor)
 			if err != nil {
 				return nil, fmt.Errorf("%w in page %s", err, asset.Ref)
 			}
-			frozen.Record = pages[i].Record
-			frozen.Versions = slices.Clone(pages[i].Versions)
-			frozen.Published = pages[i].Published
+			frozen.Record = current.Record
+			frozen.Versions = slices.Clone(current.Versions)
+			frozen.Published = current.Published
 			if err := retainPagePublication(&frozen); err != nil {
 				return nil, err
 			}
-			pages[i].State, pages[i].Published, pages[i].Versions = "published", frozen.Published, frozen.Versions
-			if err := add(SchemaRelease, pages[i]); err != nil {
+			current.State, current.Published, current.Versions = "published", frozen.Published, frozen.Versions
+			if err := add(SchemaRelease, current); err != nil {
 				return nil, err
 			}
 		case platform.AssetApp:
@@ -208,7 +210,7 @@ func generatedReleasePage(page platform.ReleaseAsset, assets []platform.ReleaseA
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return false, err
 		}
-		if object.Name != page.Ref.Name {
+		if TypeOf(object.Name) != page.Ref.Name {
 			continue
 		}
 		generated, err := platform.PageReleaseAsset(ID, version, CompileObjectPage(object))

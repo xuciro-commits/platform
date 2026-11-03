@@ -59,7 +59,7 @@ export function useProjectResources(project?: Pick<import("@platform/kernel").Ap
     const drafts = new Set(available.map(draft => refKey(draft.ref)));
     return definitions.filter((d) => d.ref.kind !== "page" && d.ref.kind !== "app" && !held.has(refKey(d.ref)) && !drafts.has(refKey(d.ref)))
       .map((d) => ({ ref: d.ref, title: definitionPresentation(d).title, app: d.ref.app }))
-      .sort((a, b) => (a.app === "core" ? 0 : 1) - (b.app === "core" ? 0 : 1) || a.title.localeCompare(b.title));
+      .sort((a, b) => a.title.localeCompare(b.title));
   }, [owned, available, definitions]);
   const loading = definitionQuery.isLoading || readDrafts && Object.values(byType).some(inventory => inventory.isLoading);
   const unavailable = definitionQuery.isError || readDrafts && Object.values(byType).some(inventory => inventory.isError);

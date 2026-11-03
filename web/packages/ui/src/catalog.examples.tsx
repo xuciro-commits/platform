@@ -531,4 +531,4 @@ export function WorkbenchExample() {
   </Workbench></div>;
 }
 
-export function RecordDeliveriesExample(){return <RecordDeliveries deliveries={[{id:"waiting",event:"build/journal",state:"pending",at:stamp.at},{id:"posted",event:"build/journal",state:"delivered",at:stamp.at,receipt:"core.journal/receipt-1"},{id:"refused",event:"build/journal",state:"rejected",at:stamp.at,message:"The posting period is closed. The business document remains accepted."}]} onOpen={()=>{}}/>;}
+export function RecordDeliveriesExample(){return <RecordDeliveries deliveries={[{id:"waiting",event:"build/erpentry",state:"pending",at:stamp.at},{id:"posted",event:"build/erpentry",state:"delivered",at:stamp.at,receipt:"build.erpentry/receipt-1"},{id:"refused",event:"build/erpentry",state:"rejected",at:stamp.at,message:"The accounting document was refused."}]} onOpen={()=>{}}/>;}

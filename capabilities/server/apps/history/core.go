@@ -1,10 +1,8 @@
-package core
+package history
 
 import (
-	"embed"
 	"encoding/json"
 	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -12,13 +10,9 @@ import (
 	"platformserver/platform"
 )
 
-//go:embed i18n
-var languageFiles embed.FS
-
-var languages = platform.LoadLanguages(languageFiles, "i18n")
-
 const (
 	ID           = "core"
+	Coded        = "core.coded"
 	PersonType   = "core.person"
 	PartnerType  = "core.partner"
 	SiteType     = "core.site"
@@ -26,7 +20,9 @@ const (
 	MaterialType = "core.material"
 	UoMType      = "core.uom"
 	CurrencyType = "core.currency"
-	Steward      = "steward"
+	AccountType  = "core.account"
+	PeriodType   = "core.period"
+	JournalType  = "core.journal"
 )
 
 type Person struct {
@@ -114,17 +110,58 @@ type Currency struct {
 	Symbol   string `json:"symbol,omitempty"`
 }
 
-const Coded = "core.coded"
+type Account struct {
+	platform.Record
+	Code    string `json:"code" field:"required,search" help:"Unique, sorts the chart, e.g. 1403" source:"record"`
+	Name    string `json:"name" field:"required,search" source:"record"`
+	Kind    string `json:"kind" field:"required" choices:"asset,liability,equity,revenue,expense" source:"record"`
+	Parent  string `json:"parent,omitempty" title:"Under" help:"The summary account's code"`
+	Posting bool   `json:"posting" title:"Postable"`
+	Active  bool   `json:"active" title:"Active"`
+}
+
+type Period struct {
+	platform.Record
+	Code  string `json:"code" field:"required,search" help:"e.g. 2026-10" source:"record"`
+	Year  int    `json:"year" field:"required"`
+	From  string `json:"from" field:"required" title:"First day" help:"YYYY-MM-DD"`
+	To    string `json:"to" field:"required" title:"Last day" help:"YYYY-MM-DD, inclusive"`
+	State string `json:"state" field:"readonly" source:"record"`
+}
+
+type Journal struct {
+	platform.Record
+	Number       string        `json:"number,omitempty" field:"readonly,search" title:"Document number"`
+	Date         string        `json:"date" field:"required" title:"Posting date" help:"YYYY-MM-DD"`
+	Period       string        `json:"period,omitempty" field:"readonly" title:"Period"`
+	ClosedPeriod string        `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
+	Shifted      bool          `json:"shifted,omitempty" field:"readonly" title:"Posted to a later period"`
+	Text         string        `json:"text,omitempty" field:"search"`
+	Currency     string        `json:"currency,omitempty" help:"ISO 4217; default the tenant's first currency"`
+	Lines        []JournalLine `json:"lines" field:"required" type:"json" title:"Lines"`
+	Total        float64       `json:"total,omitempty" field:"readonly" title:"Total debit"`
+	Source       string        `json:"source,omitempty" field:"search" help:"The decision that posted it, set by the platform"`
+	Reverses     string        `json:"reverses,omitempty" field:"readonly" title:"Reverses"`
+	Reversed     string        `json:"reversed,omitempty" field:"readonly" title:"Reversed by"`
+	State        string        `json:"state" field:"readonly"`
+}
+
+type JournalLine struct {
+	Account string  `json:"account"`
+	Debit   float64 `json:"debit,omitempty"`
+	Credit  float64 `json:"credit,omitempty"`
+	Text    string  `json:"text,omitempty"`
+	Object  string  `json:"object,omitempty"`
+	Partner string  `json:"partner,omitempty"`
+}
 
 func Interfaces() []platform.Interface {
 	return []platform.Interface{{Name: Coded, Title: "Coded", Description: "Anything found by a short unique code and a name.",
 		Fields: []platform.InterfaceField{{Name: "code", Type: "text", Title: "Code"}, {Name: "name", Type: "text", Title: "Name"}}}}
 }
 
-type Core struct{ ledger *platform.Ledger }
-
 func standard() platform.Standard {
-	return platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Steward}}
+	return platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"steward"}}
 }
 
 func isValue(field, value string) platform.Expr {
@@ -159,84 +196,54 @@ func Entities() []platform.Entity {
 			},
 			Description: "Anything counted, stored, bought, made or sold.", Standard: standard(), Implements: []string{Coded}},
 		{Type: UoMType, Title: "Unit of measure", Model: UoM{}, Display: "code", Synonyms: "unit,UoM",
-			Description: "A unit quantities are measured in.", Standard: standard(), Implements: []string{Coded}, Seed: DefaultUnits()},
+			Description: "A unit quantities are measured in.", Standard: standard(), Implements: []string{Coded}},
 		{Type: CurrencyType, Title: "Currency", Model: Currency{}, Display: "code",
-			Description: "A currency amounts are kept in.", Standard: standard(), Implements: []string{Coded}, Seed: DefaultCurrencies()},
+			Description: "A currency amounts are kept in.", Standard: standard(), Implements: []string{Coded}},
+		{Type: AccountType, Title: "Account", Model: Account{}, Display: "name", Synonyms: "GL account,ledger account,chart of accounts",
+			Description: "One line of the chart of accounts; entries post to postable accounts, summary accounts total them.", Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"accountant"}}, Implements: []string{Coded}},
+		{Type: PeriodType, Title: "Fiscal period", Model: Period{}, Display: "code", Synonyms: "accounting period,month,close",
+			Description: "A fiscal period entries belong to; closing it sends late entries to the next open one.", Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"accountant"}},
+			Lifecycle: &platform.Lifecycle{Field: "state", Initial: "open", States: []platform.State{{Name: "open", Title: "Open", Tone: "success"}, {Name: "closed", Title: "Closed", Tone: "neutral"}},
+				Transitions: []platform.Transition{
+					{Name: "close", Title: "Close", Description: "No more entries in it; later ones go to the next open period.", From: []string{"open"}, To: []string{"closed"}, Roles: []string{"accountant"}, Payload: []platform.Field{}},
+					{Name: "reopen", Title: "Reopen", Description: "Accept entries again.", From: []string{"closed"}, To: []string{"open"}, Roles: []string{"accountant"}, Payload: []platform.Field{}}}}},
+		{Type: JournalType, Title: "Journal entry", Model: Journal{}, Display: "number", Synonyms: "accounting document,voucher,posting",
+			Description: "A balanced double-entry record of what happened in money; applications' actions post them, people reverse them.",
+			Standard:    platform.Standard{Create: true, Roles: []string{"accountant"}},
+			Lifecycle: &platform.Lifecycle{Field: "state", Initial: "posted", States: []platform.State{{Name: "posted", Title: "Posted", Tone: "success"}, {Name: "reversed", Title: "Reversed", Tone: "neutral"}},
+				Transitions: []platform.Transition{
+					{Name: "reverse", Title: "Reverse", Description: "Post the opposite entry today; nothing is deleted.", From: []string{"posted"}, To: []string{"reversed"}, Roles: []string{"accountant"},
+						Payload: []platform.Field{{Name: "date", Type: "string", Description: "The reversal's posting date; default today"}}}}}},
 	}
-	entities := append(out, bookEntities()...)
-	for i := range entities {
-		if entities[i].Type == AccountType {
-			entities[i].Seed = DefaultAccounts()
-		}
-		if entities[i].Type == PeriodType {
-			entities[i].Seed = DefaultPeriods(2026)
+	for i := range out {
+		if slices.Contains([]string{PersonType, SiteType, LocationType}, out[i].Type) {
+			out[i].EnterpriseUse = &active
 		}
 	}
-	for i := range entities {
-		if slices.Contains([]string{PersonType, SiteType, LocationType}, entities[i].Type) {
-			entities[i].EnterpriseUse = &active
-		}
-	}
-	return entities
+	return out
 }
+
+type Core struct{ ledger *platform.Ledger }
 
 func New(tenant string) *Core {
 	entities := Entities()
-	var actions []platform.Action
-	for _, e := range entities {
-		actions = append(actions, platform.EntityActions(e)...)
-	}
 	types := make([]string, len(entities))
-	for i, e := range entities {
-		types[i] = e.Type
+	for i, entity := range entities {
+		types[i] = entity.Type
 	}
-	return &Core{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), types...)}
+	return &Core{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(), types...)}
 }
 
 func (c *Core) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: "Master data", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(),
-		Interfaces: Interfaces(), Roles: []string{Steward, Accountant, ReferenceReader}, Reads: []string{ReadTrialBalance}}
+	return platform.Manifest{ID: ID, Title: "Legacy core records", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(), Interfaces: Interfaces()}
 }
 
 func (c *Core) AcceptedLedger() *platform.Ledger         { return c.ledger }
 func (c *Core) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 func (c *Core) SnapshotFormat() string                   { return "platform.ledger.v1" }
+func (c *Core) Snapshot() (json.RawMessage, error)       { return c.ledger.Snapshot() }
+func (c *Core) Restore(raw json.RawMessage) error        { return c.ledger.Restore(raw) }
 
-func (c *Core) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
-func (c *Core) Restore(raw json.RawMessage) error  { return c.ledger.Restore(raw) }
-func (c *Core) Read(caller platform.Caller, name string) (any, *kernel.Error) {
-	if period, ok := strings.CutPrefix(name, ReadTrialBalance); ok {
-		return trialBalance(caller, strings.TrimPrefix(period, "/"))
-	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-}
-
-func (c *Core) Submit(caller platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	if record, err, ok := c.ledger.Generated(caller, s, now, nil, Entities()...); ok {
-		return record, err
-	}
+func (c *Core) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
-
-func DefaultUnits() []any {
-	return []any{
-		UoM{Record: platform.Record{ID: "uom-pce"}, Code: "PCE", Name: "Piece", Dimension: "count"},
-		UoM{Record: platform.Record{ID: "uom-kgm"}, Code: "KGM", Name: "Kilogram", Dimension: "mass", Decimals: 3},
-		UoM{Record: platform.Record{ID: "uom-grm"}, Code: "GRM", Name: "Gram", Dimension: "mass"},
-		UoM{Record: platform.Record{ID: "uom-mtr"}, Code: "MTR", Name: "Metre", Dimension: "length", Decimals: 2},
-		UoM{Record: platform.Record{ID: "uom-ltr"}, Code: "LTR", Name: "Litre", Dimension: "volume", Decimals: 2},
-		UoM{Record: platform.Record{ID: "uom-hur"}, Code: "HUR", Name: "Hour", Dimension: "time", Decimals: 2},
-		UoM{Record: platform.Record{ID: "uom-box"}, Code: "BX", Name: "Box", Dimension: "count"},
-		UoM{Record: platform.Record{ID: "uom-plt"}, Code: "PF", Name: "Pallet", Dimension: "count"},
-	}
-}
-
-func DefaultCurrencies() []any {
-	return []any{
-		Currency{Record: platform.Record{ID: "cur-cny"}, Code: "CNY", Name: "Renminbi", Decimals: 2, Symbol: "¥"},
-		Currency{Record: platform.Record{ID: "cur-usd"}, Code: "USD", Name: "US dollar", Decimals: 2, Symbol: "$"},
-		Currency{Record: platform.Record{ID: "cur-eur"}, Code: "EUR", Name: "Euro", Decimals: 2, Symbol: "€"},
-	}
-}
-
-func (c *Core) NewSimulationApp(tenant string) platform.App { return New(tenant) }

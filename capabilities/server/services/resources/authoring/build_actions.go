@@ -425,6 +425,22 @@ type Action struct {
 	Reverses         string                     `json:"reverses,omitempty" title:"Reverses action"`
 }
 
+type JournalPost struct {
+	ClosedPeriod string            `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
+	Date         string            `json:"date,omitempty" example:"record.receivedOn"`
+	Text         string            `json:"text,omitempty" help:"A literal or a source for the entry's text"`
+	Lines        []JournalPostLine `json:"lines" title:"Lines"`
+}
+
+type JournalPostLine struct {
+	Account string `json:"account" help:"=<account code> or a source holding one" example:"=1403"`
+	Debit   string `json:"debit,omitempty" example:"amount"`
+	Credit  string `json:"credit,omitempty" example:"amount"`
+	Text    string `json:"text,omitempty"`
+	Object  string `json:"object,omitempty" help:"What the line is about, e.g. record.material"`
+	Partner string `json:"partner,omitempty" example:"record.supplier"`
+}
+
 type Create struct {
 	Object string `json:"object" field:"required" help:"A defined object of this builder whose reference points at this one" example:"build.followup"`
 	Via    string `json:"via" field:"required" help:"That object's reference field to this record" example:"visit"`
@@ -497,7 +513,7 @@ type ObjectScope struct {
 	Structure string `json:"structure,omitempty" help:"The relationship kind \"below\" follows in the enterprise model, e.g. management"`
 }
 
-func (b *Build) checkJournal(o Object) error {
+func (b *Build) checkActionPosts(o Object) error {
 	if o.Numbering != nil {
 		if err := o.Numbering.Check(o); err != nil {
 			return err
@@ -514,36 +530,8 @@ func (b *Build) checkJournal(o Object) error {
 			switch {
 			case j < 0 || a.Reverses == a.Name:
 				return fmt.Errorf("the action %q reverses %q, which is not another action of this object", a.Name, a.Reverses)
-			case len(a.Posts) > 0 || a.Journal != nil:
-				return fmt.Errorf("the action %q reverses %q and so posts and books nothing of its own", a.Name, a.Reverses)
-			}
-		}
-		if a.Journal == nil {
-			continue
-		}
-		where := fmt.Sprintf("the action %q books", a.Name)
-		if a.Journal.ClosedPeriod != "" && a.Journal.ClosedPeriod != "reject" && a.Journal.ClosedPeriod != "next-open" {
-			return fmt.Errorf("%s with an unknown closed period policy", where)
-		}
-		if len(a.Journal.Lines) < 2 {
-			return fmt.Errorf("%s fewer than two lines", where)
-		}
-		if a.Journal.Date != "" {
-			if err := checkSource(o, a, a.Journal.Date); err != nil {
-				return fmt.Errorf("%s, date: %w", where, err)
-			}
-		}
-		for i, l := range a.Journal.Lines {
-			if l.Account == "" || (l.Debit == "") == (l.Credit == "") {
-				return fmt.Errorf("%s line %d without an account, or without exactly one of debit and credit", where, i+1)
-			}
-			for _, src := range []string{l.Account, l.Debit, l.Credit, l.Object, l.Partner} {
-				if src == "" {
-					continue
-				}
-				if err := checkSource(o, a, src); err != nil {
-					return fmt.Errorf("%s line %d: %w", where, i+1, err)
-				}
+			case len(a.Posts) > 0:
+				return fmt.Errorf("the action %q reverses %q and so posts nothing of its own", a.Name, a.Reverses)
 			}
 		}
 	}

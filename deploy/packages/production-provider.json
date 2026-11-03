@@ -1,6 +1,6 @@
 {
   "id": "application.production-provider",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "namespace": "application.production-provider",
   "title": "Production batch provider",
   "description": "Independent declarative production batch example. Install and publish using platform capabilities; configure external cooperation after installation. Quantities are local facts, and cross-system receipts remain independent.",
@@ -749,96 +749,6 @@
                           "kind": "decimal",
                           "lit": {
                             "value": "0"
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "name": "books",
-                    "kind": "journal",
-                    "when": {
-                      "op": ">",
-                      "kind": "boolean",
-                      "args": [
-                        {
-                          "op": "*",
-                          "kind": "decimal",
-                          "args": [
-                            {
-                              "kind": "decimal",
-                              "ref": "input.yield"
-                            },
-                            {
-                              "kind": "decimal",
-                              "ref": "unitcost"
-                            }
-                          ]
-                        },
-                        {
-                          "kind": "decimal",
-                          "lit": {
-                            "value": "0"
-                          }
-                        }
-                      ]
-                    },
-                    "journal": {
-                      "text": {
-                        "kind": "text",
-                        "ref": "input.batch"
-                      },
-                      "lines": [
-                        {
-                          "account": {
-                            "kind": "text",
-                            "lit": {
-                              "value": "1403"
-                            }
-                          },
-                          "debit": {
-                            "op": "*",
-                            "kind": "decimal",
-                            "args": [
-                              {
-                                "kind": "decimal",
-                                "ref": "input.yield"
-                              },
-                              {
-                                "kind": "decimal",
-                                "ref": "unitcost"
-                              }
-                            ]
-                          },
-                          "object": {
-                            "kind": "reference",
-                            "ref": "step.receipt"
-                          }
-                        },
-                        {
-                          "account": {
-                            "kind": "text",
-                            "lit": {
-                              "value": "2290"
-                            }
-                          },
-                          "credit": {
-                            "op": "*",
-                            "kind": "decimal",
-                            "args": [
-                              {
-                                "kind": "decimal",
-                                "ref": "input.yield"
-                              },
-                              {
-                                "kind": "decimal",
-                                "ref": "unitcost"
-                              }
-                            ]
-                          },
-                          "object": {
-                            "kind": "reference",
-                            "ref": "step.receipt"
                           }
                         }
                       ]

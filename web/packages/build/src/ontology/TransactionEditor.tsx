@@ -2,7 +2,7 @@ import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, useProvidedCapabilities, useRecordInventory } from "@platform/app";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import { ContextHelp, Button, Checkbox, Disclosure, Input, InputDraftProvider, Panel, Select, Textarea, t, useInputDrafts, type EntityInfo , AdvancedJson } from "@platform/ui";
+import { ContextHelp, Button, Checkbox, Input, InputDraftProvider, Panel, Select, Textarea, t, useInputDrafts, type EntityInfo , AdvancedJson } from "@platform/ui";
 import { useState } from "react";
 import { ExpressionEditor, literalExpression, observationContextChoices, type ExpressionChoice } from "../editor/ExpressionEditor";
 import { nameOf, type Input_, type Process } from "./object-model";
@@ -12,7 +12,7 @@ import { renameTransactionStep, transactionIssues, transactionIssueText } from "
 import { RuleCollectionsEditor } from "./RuleCollectionsEditor";
 
 const fieldClass = "grid min-w-0 gap-1 text-xs";
-const labels: Record<string, string> = { create: "Create record", update: "Update record", archive: "Archive record", link: "Link records", unlink: "Unlink records", sequence: "Take next number", post: "Post to a balance", journal: "Request journal entry", effect: "Request external write", work: "Create or close work", call: "Read a pure capability", intervals: "Reconcile observed intervals", "for-each": "For each item" };
+const labels: Record<string, string> = { create: "Create record", update: "Update record", archive: "Archive record", link: "Link records", unlink: "Unlink records", sequence: "Take next number", post: "Post to a balance", effect: "Request external write", work: "Create or close work", call: "Read a pure capability", intervals: "Reconcile observed intervals", "for-each": "For each item" };
 const expressionKind = (type: string) => ({ longtext: "text", number: "decimal", string: "text" } as Record<string, string>)[type] ?? type;
 const resultChoice = (step: Api.TxnStep): ExpressionChoice[] => step.kind === "create" || step.kind === "post" ? [{ value: `step.${step.name}`, label: t("Result of {step}", { step: step.name }), type: "reference", ref: step.target?.type }] : step.kind === "sequence" ? [{ value: `step.${step.name}`, label: t("Number from {step}", { step: step.name }), type: "text" }] : step.call ? [{ value: `step.${step.name}`, label: t("Result of {step}", { step: step.name }), type: step.call.resultType.kind, ref: step.call.resultType.object }] : [];
 type EditorContext = {
@@ -35,7 +35,7 @@ export function TransactionEditor({ value, onChange, process, inputs = [], roles
   const issues = transactionIssues(value);
   const actionIndex = process.actions.findIndex(action => action.transaction === value);
   return <InputDraftProvider scope={actionIndex >= 0 ? JSON.stringify({ kind: "action", at: actionIndex }) : "creation-transaction"}><Panel data-transaction-editor title={t("Transaction steps")} className="grid min-w-0 gap-3">
-    <ContextHelp title={t("Transaction steps")}><p className="text-sm text-muted">{t("Records and numbers are saved together. Journal requests, external writes and tasks run after the transaction is accepted.")}</p></ContextHelp>
+    <ContextHelp title={t("Transaction steps")}><p className="text-sm text-muted">{t("Records and numbers are saved together. External writes and tasks run after the transaction is accepted.")}</p></ContextHelp>
     <RuleCollectionsEditor value={value.reads} onChange={reads=>onChange({...value,reads})} subject={lookup(subject)!} inputs={inputs}/>
     <Checkbox checked={!!value.guard} onChange={enabled => onChange({ ...value, guard: enabled ? literalExpression("boolean") : undefined, message: enabled ? value.message : undefined })}>{t("Require a transaction guard")}</Checkbox>
     {value.guard && <div className="grid gap-2 rounded border border-border p-3"><ExpressionEditor draftKey="transaction-guard" value={value.guard} choices={choices} lookup={lookup} collections={value.reads?.collections} onChange={guard => onChange({ ...value, guard })} /><label className={fieldClass}>{t("Message when the transaction guard fails")}<Input value={value.message ?? ""} onChange={event => onChange({ ...value, message: event.target.value })} /></label></div>}
@@ -55,7 +55,6 @@ function initialStep(kind: string, name: string, context: EditorContext, item?: 
   if (kind === "create" || kind === "update") step.changes = [];
   if (kind === "sequence") step.sequence = { Name: name, Pattern: "{n:6}", Yearly: false };
   if (kind === "post") step.post = { match: [], field: "", amount: literalExpression("decimal") };
-  if (kind === "journal") step.journal = { lines: [{ account: literalExpression("text"), debit: literalExpression("integer") }, { account: literalExpression("text"), credit: literalExpression("integer") }] };
   if (kind === "effect") step.effect = { writeback: "", payload: [] };
   if (kind === "work") step.work = { title: "", role: context.roles[0] ?? "builder" };
   if (kind === "call") step.call = { ref: { app: "", kind: "query", name: "" }, version: 1, view: "snapshot", inputs: [], resultType: { kind: "text" } };
@@ -101,10 +100,7 @@ function StepEditor({ step, onChange, context, previous, item, rangeKind, path }
   const iterationReferences=recordPaths(context.subject,context.lookup).filter(path=>path.field.type==="reference"&&path.field.ref?.startsWith("build."));
   const iterationObject=step.forEach?.of?iterationReferences.find(path=>path.path.join(".")===step.forEach!.of)?.field.ref:context.subject;
   const iterationSets=(iterationObject===context.subject?context.process.sets:context.lookup(iterationObject??"")?.sets)??[];
-  const journalSet = context.process.sets?.find(set => set.name === step.journal?.set);
-  const journalChoices = [...choices, ...(journalSet ? context.lookup(journalSet.object)?.fields.map(field => ({ value: `row.${field.name}`, label: t("Current item: {name}", { name: field.title }), type: expressionKind(field.type), ref: field.ref })) ?? [] : [])];
   const fields = context.lookup(step.target?.type ?? "")?.fields.filter(field => !field.readOnly || ["create", "update"].includes(step.kind) && step.target?.type === context.subject && field.name === "state") ?? [];
-  const journalActions = context.process.actions.filter(action => action.name !== context.actionName && action.transaction?.steps.some(step => [step, ...step.forEach?.steps ?? []].some(step => step.journal && !step.journal.reverses)));
   const setType = (type: string) => patch({ target: { type, ...step.kind === "create" || step.kind === "post" ? {} : type === context.subject ? { id: "$subject" } : item === type ? { id: "$item" } : { id: "" } }, changes: step.changes ? [] : undefined });
   return <>
     {["create", "update", "archive", "post", "effect", "work"].includes(step.kind) && <label className={fieldClass}>{t("Step object")}<Select value={target.type} onChange={event => setType(event.target.value)}>{context.objects.map(object => <option key={object.type} value={object.type}>{object.title}</option>)}</Select></label>}
@@ -122,29 +118,6 @@ function StepEditor({ step, onChange, context, previous, item, rangeKind, path }
       <fieldset className="grid gap-2"><legend className="text-xs font-medium">{t("Balance identity fields")}</legend><Assignments scope="post-match" value={step.post.match} onChange={match => patch({ post: { ...step.post!, match } })} fields={fields.filter(field => field.name !== step.post!.field)} choices={choices} context={context} /></fieldset>
       <fieldset className="grid gap-2"><legend className="text-xs font-medium">{t("Posting amount")}</legend><ExpressionEditor draftKey="posting-amount" value={step.post.amount} kind={step.post.amount.kind} choices={choices} lookup={context.lookup} collections={context.collections} onChange={amount => patch({ post: { ...step.post!, amount } })} /></fieldset>
       <div className="flex flex-wrap gap-3"><Checkbox checked={!!step.post.subtract} onChange={subtract => patch({ post: { ...step.post!, subtract } })}>{t("Subtract from the balance")}</Checkbox><Checkbox checked={!!step.post.floor} onChange={floor => patch({ post: { ...step.post!, floor } })}>{t("Refuse a negative balance")}</Checkbox></div>
-    </>}
-    {step.journal && <>
-      <ContextHelp title={t("Request journal entry")}><p className="text-xs text-muted">{t("This transaction saves the journal intent atomically with its records. Core independently validates and posts the entry after acceptance; this is not an atomic commit across authorities.")}</p></ContextHelp>
-      <Checkbox checked={!!step.journal.reverses} disabled={!step.journal.reverses && !journalActions.length} onChange={reverse => patch({ journal: reverse ? { reverses: journalActions[0]!.name, date: step.journal!.date, lines: [] } : { date: step.journal!.date, lines: [{ account: literalExpression("text"), debit: literalExpression("integer") }, { account: literalExpression("text"), credit: literalExpression("integer") }] } })}>{t("Reverse an earlier journal request")}</Checkbox>
-      <OptionalExpression label="Posting date" kind="date" value={step.journal.date} onChange={date => patch({ journal: { ...step.journal!, date } })} choices={choices} context={context} />
-      {step.journal.reverses ? <>
-        <label className={fieldClass}>{t("Reverse journal from action")}<Select value={step.journal.reverses} onChange={event => patch({ journal: { reverses: event.target.value, date: step.journal!.date, lines: [] } })}>{journalActions.map(action => <option key={action.name} value={action.name}>{action.title || action.name}</option>)}</Select></label>
-        <p className="text-xs text-muted">{t("Core reverses the original entry for this record and action. Current inputs do not recalculate its amounts.")}</p>
-      </> : <>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <label className={fieldClass}>{t("Journal line collection")}<Select disabled={!!item || !!rangeKind} value={step.journal.set ?? ""} onChange={event => patch({ journal: { ...step.journal!, set: event.target.value || undefined } })}><option value="">{t("Fixed lines")}</option>{context.process.sets?.map(set => <option key={set.name} value={set.name}>{set.name} · {context.lookup(set.object)?.title ?? set.object}</option>)}</Select></label>
-        <label className={fieldClass}>{t("Closed period policy")}<Select value={step.journal.closedPeriod ?? ""} onChange={event => patch({ journal: { ...step.journal!, closedPeriod: (event.target.value || undefined) as Api.TxnJournal["closedPeriod"] } })}><option value="">{t("Default: next open period")}</option><option value="reject">{t("Reject posting")}</option><option value="next-open">{t("Next open period")}</option></Select></label>
-      </div>
-      {(["text", "currency"] as const).map(key => <OptionalExpression key={key} label={{ text: "Entry text", currency: "Journal currency" }[key]} kind="text" value={step.journal![key]} onChange={expression => patch({ journal: { ...step.journal!, [key]: expression } })} choices={choices} context={context} />)}
-      {step.journal.lines.map((line, index) => <fieldset key={index} className="grid min-w-0 gap-2 rounded border border-border p-3"><legend className="text-xs">{t("Journal line {n}", { n: index + 1 })}</legend>
-        <OptionalExpression label="Include this line when" draftKey={`journal:${index}:when`} kind="boolean" value={line.when} onChange={when => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, when } : entry) } })} choices={journalChoices} context={context} />
-        <label className="text-xs font-medium">{t("Account")}</label><ExpressionEditor draftKey={`journal:${index}:account`} value={line.account} kind="text" choices={journalChoices} lookup={context.lookup} collections={context.collections} onChange={account => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, account } : entry) } })} />
-        <Select aria-label={t("Debit or credit")} value={line.credit ? "credit" : "debit"} onChange={event => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, debit: event.target.value === "debit" ? line.credit ?? literalExpression("integer") : undefined, credit: event.target.value === "credit" ? line.debit ?? literalExpression("integer") : undefined } : entry) } })}><option value="debit">{t("Debit")}</option><option value="credit">{t("Credit")}</option></Select>
-        <ExpressionEditor draftKey={`journal:${index}:amount`} value={line.debit ?? line.credit ?? literalExpression("integer")} kind={(line.debit ?? line.credit)?.kind ?? "integer"} choices={journalChoices} lookup={context.lookup} collections={context.collections} onChange={amount => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, [line.credit ? "credit" : "debit"]: amount } : entry) } })} />
-        <Disclosure summary={t("Journal line details")}>{(["text", "object", "partner"] as const).map(key => <OptionalExpression key={key} label={{ text: "Line text", object: "Business reference", partner: "Partner" }[key]} kind="text" value={line[key]} onChange={expression => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, [key]: expression } : entry) } })} choices={journalChoices} context={context} />)}</Disclosure>
-        <Button size="sm" variant="ghost" className="w-fit" onClick={() => patch({ journal: { ...step.journal!, lines: step.journal!.lines.filter((_, at) => at !== index) } })}>{t("Remove line")}</Button>
-      </fieldset>)}<Button size="sm" className="w-fit" onClick={() => patch({ journal: { ...step.journal!, lines: [...step.journal!.lines, { account: literalExpression("text"), debit: literalExpression("integer") }] } })}>{t("Add a line")}</Button>
-      </>}
     </>}
     {step.effect && <>
       <label className={fieldClass}>{t("Transaction writeback")}<Select value={context.writes.find(write => write.id === step.effect!.writeback || write.name === step.effect!.writeback)?.id ?? step.effect.writeback} onChange={event => patch({ effect: { ...step.effect!, writeback: event.target.value } })}><option value="">{t("Choose a transaction writeback")}</option>{context.writes.filter(write => write.state === "published" && write.on === "transaction" && write.object === target.type).map(write => <option key={write.id} value={write.id}>{write.title}</option>)}</Select></label>

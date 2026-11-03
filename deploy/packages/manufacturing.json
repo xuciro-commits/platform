@@ -1,9 +1,9 @@
 {
   "id": "application.manufacturing",
-  "version": "0.1.2",
+  "version": "0.1.6",
   "namespace": "application.manufacturing",
   "title": "Manufacturing",
-  "description": "Editable business documents and production declarations; the shared Core owns the general ledger.",
+  "description": "Manufacturing ERP and MES product with product-owned master data and accounting records.",
   "blueprint": {
     "roots": [
       {
@@ -47,11 +47,6 @@
               "title": "Business reference",
               "type": "text",
               "required": true
-            },
-            {
-              "name": "linecount",
-              "title": "Submitted line count",
-              "type": "integer"
             }
           ],
           "access": [
@@ -59,14 +54,28 @@
               "role": "accountant",
               "read": "all",
               "create": true,
-              "edit": false,
+              "edit": true,
               "archive": false
             },
             {
               "role": "controller",
               "read": "all",
               "create": true,
-              "edit": false,
+              "edit": true,
+              "archive": false
+            },
+            {
+              "role": "buyer",
+              "read": "all",
+              "create": true,
+              "edit": true,
+              "archive": false
+            },
+            {
+              "role": "production",
+              "read": "all",
+              "create": true,
+              "edit": true,
               "archive": false
             }
           ],
@@ -98,69 +107,7 @@
               "limit": 10000
             }
           ],
-          "constraints": [
-            {
-              "name": "frozenlines",
-              "kind": "expression",
-              "fields": [
-                "linecount"
-              ],
-              "level": "txn",
-              "expr": {
-                "op": "or",
-                "kind": "boolean",
-                "args": [
-                  {
-                    "op": "=",
-                    "kind": "boolean",
-                    "args": [
-                      {
-                        "op": "",
-                        "kind": "choice",
-                        "ref": "state"
-                      },
-                      {
-                        "op": "",
-                        "kind": "choice",
-                        "lit": {
-                          "value": "draft"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "op": "=",
-                    "kind": "boolean",
-                    "args": [
-                      {
-                        "op": "count",
-                        "kind": "integer",
-                        "agg": {
-                          "source": "lines"
-                        }
-                      },
-                      {
-                        "op": "",
-                        "kind": "integer",
-                        "ref": "linecount"
-                      }
-                    ]
-                  }
-                ]
-              },
-              "message": "A submitted document retains its complete original lines.",
-              "reads": {
-                "collections": {
-                  "lines": {
-                    "app": "build",
-                    "object": "build.erpline",
-                    "set": "lines",
-                    "policy": "complete"
-                  }
-                }
-              }
-            }
-          ],
+          "constraints": [],
           "actions": [
             {
               "name": "post",
@@ -176,145 +123,6 @@
                 "subject": "build.erpentry",
                 "steps": [
                   {
-                    "name": "journal",
-                    "kind": "journal",
-                    "journal": {
-                      "set": "lines",
-                      "date": {
-                        "op": "",
-                        "kind": "date",
-                        "ref": "date"
-                      },
-                      "currency": {
-                        "op": "",
-                        "kind": "text",
-                        "ref": "currency"
-                      },
-                      "text": {
-                        "op": "",
-                        "kind": "text",
-                        "ref": "reference"
-                      },
-                      "closedPeriod": "reject",
-                      "lines": [
-                        {
-                          "when": {
-                            "op": "=",
-                            "kind": "boolean",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "choice",
-                                "ref": "row.side"
-                              },
-                              {
-                                "op": "",
-                                "kind": "choice",
-                                "lit": {
-                                  "value": "debit"
-                                }
-                              }
-                            ]
-                          },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "reference",
-                                "ref": "row.account"
-                              }
-                            ],
-                            "path": [
-                              "code"
-                            ]
-                          },
-                          "debit": {
-                            "op": "",
-                            "kind": "decimal",
-                            "ref": "row.amount"
-                          },
-                          "text": {
-                            "op": "coalesce",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "text",
-                                "ref": "row.memo"
-                              },
-                              {
-                                "op": "",
-                                "kind": "text",
-                                "lit": {
-                                  "value": ""
-                                }
-                              }
-                            ]
-                          }
-                        },
-                        {
-                          "when": {
-                            "op": "=",
-                            "kind": "boolean",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "choice",
-                                "ref": "row.side"
-                              },
-                              {
-                                "op": "",
-                                "kind": "choice",
-                                "lit": {
-                                  "value": "credit"
-                                }
-                              }
-                            ]
-                          },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "reference",
-                                "ref": "row.account"
-                              }
-                            ],
-                            "path": [
-                              "code"
-                            ]
-                          },
-                          "credit": {
-                            "op": "",
-                            "kind": "decimal",
-                            "ref": "row.amount"
-                          },
-                          "text": {
-                            "op": "coalesce",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "text",
-                                "ref": "row.memo"
-                              },
-                              {
-                                "op": "",
-                                "kind": "text",
-                                "lit": {
-                                  "value": ""
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
                     "name": "submitted",
                     "kind": "update",
                     "target": {
@@ -322,16 +130,6 @@
                       "id": "$subject"
                     },
                     "changes": [
-                      {
-                        "field": "linecount",
-                        "expr": {
-                          "op": "count",
-                          "kind": "integer",
-                          "agg": {
-                            "source": "lines"
-                          }
-                        }
-                      },
                       {
                         "field": "state",
                         "expr": {
@@ -350,48 +148,146 @@
                   "kind": "boolean",
                   "args": [
                     {
-                      "op": ">=",
+                      "op": "and",
                       "kind": "boolean",
                       "args": [
                         {
-                          "op": "count",
-                          "kind": "integer",
-                          "agg": {
-                            "source": "lines"
-                          }
+                          "op": ">=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "count",
+                              "kind": "integer",
+                              "agg": {
+                                "source": "lines"
+                              }
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 2
+                              }
+                            }
+                          ]
                         },
                         {
-                          "op": "",
-                          "kind": "integer",
-                          "lit": {
-                            "value": 2
-                          }
+                          "op": "<=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "count",
+                              "kind": "integer",
+                              "agg": {
+                                "source": "lines"
+                              }
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 128
+                              }
+                            }
+                          ]
                         }
                       ]
                     },
                     {
-                      "op": "<=",
+                      "op": "=",
                       "kind": "boolean",
                       "args": [
                         {
-                          "op": "count",
-                          "kind": "integer",
+                          "op": "sum",
+                          "kind": "decimal",
                           "agg": {
                             "source": "lines"
+                          },
+                          "in": {
+                            "op": "if",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "=",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "ref": "row.side"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "lit": {
+                                      "value": "debit"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "row.amount"
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "lit": {
+                                  "value": 0
+                                }
+                              }
+                            ]
                           }
                         },
                         {
-                          "op": "",
-                          "kind": "integer",
-                          "lit": {
-                            "value": 128
+                          "op": "sum",
+                          "kind": "decimal",
+                          "agg": {
+                            "source": "lines"
+                          },
+                          "in": {
+                            "op": "if",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "=",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "ref": "row.side"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "lit": {
+                                      "value": "credit"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "row.amount"
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "lit": {
+                                  "value": 0
+                                }
+                              }
+                            ]
                           }
                         }
                       ]
                     }
                   ]
                 },
-                "message": "Choose a complete bounded journal with at least two lines.",
+                "message": "Choose at least two balanced accounting lines.",
                 "reads": {
                   "collections": {
                     "lines": {
@@ -487,15 +383,9 @@
               "required": true
             },
             {
-              "name": "number",
-              "title": "Line reference",
-              "type": "text"
-            },
-            {
               "name": "account",
               "title": "Ledger account",
-              "type": "reference",
-              "ref": "core.account",
+              "type": "text",
               "required": true
             },
             {
@@ -531,6 +421,20 @@
               "create": true,
               "edit": true,
               "archive": true
+            },
+            {
+              "role": "buyer",
+              "read": "all",
+              "create": true,
+              "edit": false,
+              "archive": false
+            },
+            {
+              "role": "production",
+              "read": "all",
+              "create": true,
+              "edit": false,
+              "archive": false
             }
           ],
           "constraints": [
@@ -554,7 +458,6 @@
               "kind": "immutable",
               "fields": [
                 "document",
-                "number",
                 "account",
                 "side",
                 "amount",
@@ -624,62 +527,6 @@
               "message": "An accounting line has a positive amount on exactly one side."
             }
           ],
-          "createTransaction": {
-            "subject": "build.erpline",
-            "steps": [
-              {
-                "name": "linenumber",
-                "kind": "sequence",
-                "sequence": {
-                  "Name": "erplines",
-                  "Pattern": "LN-{year}-{n:6}",
-                  "Yearly": true
-                }
-              },
-              {
-                "name": "reference",
-                "kind": "update",
-                "target": {
-                  "type": "build.erpline",
-                  "id": "$subject"
-                },
-                "changes": [
-                  {
-                    "field": "number",
-                    "from": "step.linenumber"
-                  }
-                ]
-              }
-            ],
-            "guard": {
-              "op": "=",
-              "kind": "boolean",
-              "args": [
-                {
-                  "op": "path",
-                  "kind": "choice",
-                  "args": [
-                    {
-                      "op": "",
-                      "kind": "reference",
-                      "ref": "document"
-                    }
-                  ],
-                  "path": [
-                    "state"
-                  ]
-                },
-                {
-                  "op": "",
-                  "kind": "choice",
-                  "lit": {
-                    "value": "draft"
-                  }
-                }
-              ]
-            },
-            "message": "Only a draft document accepts new lines."
-          },
           "type": "build.erpline"
         }
       },
@@ -753,7 +600,6 @@
           },
           "listFields": [
             "document",
-            "number",
             "account",
             "side",
             "amount",
@@ -761,7 +607,6 @@
           ],
           "detailFields": [
             "document",
-            "number",
             "account",
             "side",
             "amount",
@@ -784,6 +629,82 @@
       {
         "ref": {
           "app": "build",
+          "kind": "object",
+          "name": "build.erpaccount"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "body": {
+          "name": "erpaccount",
+          "title": "Ledger account",
+          "fields": [
+            {
+              "name": "code",
+              "title": "Account code",
+              "type": "text",
+              "required": true
+            },
+            {
+              "name": "name",
+              "title": "Account name",
+              "type": "text",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "title": "Account type",
+              "type": "choice",
+              "choices": "asset,liability,equity,revenue,expense",
+              "required": true
+            },
+            {
+              "name": "parent",
+              "title": "Summary account",
+              "type": "text"
+            },
+            {
+              "name": "posting",
+              "title": "Postable",
+              "type": "boolean"
+            },
+            {
+              "name": "active",
+              "title": "Active",
+              "type": "boolean"
+            }
+          ],
+          "access": [
+            {
+              "role": "accountant",
+              "read": "all",
+              "create": true,
+              "edit": true,
+              "archive": true
+            },
+            {
+              "role": "controller",
+              "read": "all",
+              "create": true,
+              "edit": true,
+              "archive": true
+            }
+          ],
+          "constraints": [
+            {
+              "name": "uniquecode",
+              "kind": "unique",
+              "fields": [
+                "code"
+              ],
+              "message": "An account code is unique."
+            }
+          ],
+          "type": "build.erpaccount"
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
           "kind": "page",
           "name": "erpaccounts"
         },
@@ -793,9 +714,9 @@
           "name": "erpaccounts",
           "title": "Chart of accounts",
           "object": {
-            "app": "core",
+            "app": "build",
             "kind": "object",
-            "name": "core.account"
+            "name": "build.erpaccount"
           },
           "listFields": [
             "code",
@@ -810,36 +731,6 @@
             "kind",
             "posting",
             "active"
-          ]
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "page",
-          "name": "erpperiods"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1",
-        "body": {
-          "name": "erpperiods",
-          "title": "Fiscal periods",
-          "object": {
-            "app": "core",
-            "kind": "object",
-            "name": "core.period"
-          },
-          "listFields": [
-            "code",
-            "from",
-            "to",
-            "state"
-          ],
-          "detailFields": [
-            "code",
-            "from",
-            "to",
-            "state"
           ]
         }
       },
@@ -853,25 +744,23 @@
         "sourceVersion": "1",
         "body": {
           "name": "erpjournals",
-          "title": "General ledger receipts",
+          "title": "Accounting documents",
           "object": {
-            "app": "core",
+            "app": "build",
             "kind": "object",
-            "name": "core.journal"
+            "name": "build.erpentry"
           },
           "listFields": [
-            "number",
+            "reference",
             "date",
-            "period",
-            "state",
-            "source"
+            "currency",
+            "state"
           ],
           "detailFields": [
-            "number",
+            "reference",
             "date",
-            "period",
-            "state",
-            "source"
+            "currency",
+            "state"
           ]
         }
       },
@@ -1022,21 +911,21 @@
               "name": "clearing",
               "title": "Goods received clearing account",
               "type": "reference",
-              "ref": "core.account",
+              "ref": "build.erpaccount",
               "required": true
             },
             {
               "name": "payables",
               "title": "Payables account",
               "type": "reference",
-              "ref": "core.account",
+              "ref": "build.erpaccount",
               "required": true
             },
             {
               "name": "variance",
               "title": "Price variance account",
               "type": "reference",
-              "ref": "core.account",
+              "ref": "build.erpaccount",
               "required": true
             }
           ],
@@ -1150,7 +1039,7 @@
               "name": "account",
               "title": "Stock account",
               "type": "reference",
-              "ref": "core.account",
+              "ref": "build.erpaccount",
               "required": true
             },
             {
@@ -3247,8 +3136,46 @@
                     }
                   },
                   {
-                    "name": "journal",
-                    "kind": "journal",
+                    "name": "journalentry",
+                    "kind": "create",
+                    "target": {
+                      "type": "build.erpentry"
+                    },
+                    "changes": [
+                      {
+                        "field": "date",
+                        "expr": {
+                          "op": "$today",
+                          "kind": "date"
+                        }
+                      },
+                      {
+                        "field": "currency",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "currency"
+                        }
+                      },
+                      {
+                        "field": "reference",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "number"
+                        }
+                      },
+                      {
+                        "field": "state",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "submitted"
+                          }
+                        }
+                      }
+                    ],
                     "when": {
                       "op": ">",
                       "kind": "boolean",
@@ -3304,26 +3231,86 @@
                           }
                         }
                       ]
-                    },
-                    "journal": {
+                    }
+                  },
+                  {
+                    "name": "journallines",
+                    "kind": "for-each",
+                    "forEach": {
                       "set": "lines",
-                      "date": {
-                        "op": "$today",
-                        "kind": "date"
-                      },
-                      "currency": {
-                        "op": "",
-                        "kind": "text",
-                        "ref": "currency"
-                      },
-                      "text": {
-                        "op": "",
-                        "kind": "text",
-                        "ref": "number"
-                      },
-                      "closedPeriod": "reject",
-                      "lines": [
+                      "steps": [
                         {
+                          "name": "journallinesline0",
+                          "kind": "create",
+                          "target": {
+                            "type": "build.erpline"
+                          },
+                          "changes": [
+                            {
+                              "field": "document",
+                              "expr": {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "step.journalentry"
+                              }
+                            },
+                            {
+                              "field": "account",
+                              "expr": {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.product"
+                                  }
+                                ],
+                                "path": [
+                                  "account",
+                                  "code"
+                                ]
+                              }
+                            },
+                            {
+                              "field": "side",
+                              "expr": {
+                                "op": "",
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "debit"
+                                }
+                              }
+                            },
+                            {
+                              "field": "amount",
+                              "expr": {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.quantity"
+                                  },
+                                  {
+                                    "op": "path",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "reference",
+                                        "ref": "row.product"
+                                      }
+                                    ],
+                                    "path": [
+                                      "cost"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ],
                           "when": {
                             "op": ">",
                             "kind": "boolean",
@@ -3361,49 +3348,71 @@
                                 }
                               }
                             ]
+                          }
+                        },
+                        {
+                          "name": "journallinesline1",
+                          "kind": "create",
+                          "target": {
+                            "type": "build.erpline"
                           },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
+                          "changes": [
+                            {
+                              "field": "document",
+                              "expr": {
                                 "op": "",
                                 "kind": "reference",
-                                "ref": "row.product"
+                                "ref": "step.journalentry"
                               }
-                            ],
-                            "path": [
-                              "account",
-                              "code"
-                            ]
-                          },
-                          "debit": {
-                            "op": "*",
-                            "kind": "decimal",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "decimal",
-                                "ref": "row.quantity"
-                              },
-                              {
+                            },
+                            {
+                              "field": "account",
+                              "expr": {
                                 "op": "path",
-                                "kind": "decimal",
+                                "kind": "text",
                                 "args": [
                                   {
                                     "op": "",
                                     "kind": "reference",
-                                    "ref": "row.product"
+                                    "ref": "policy"
                                   }
                                 ],
                                 "path": [
-                                  "cost"
+                                  "clearing",
+                                  "code"
                                 ]
                               }
-                            ]
-                          }
-                        },
-                        {
+                            },
+                            {
+                              "field": "side",
+                              "expr": {
+                                "op": "",
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "credit"
+                                }
+                              }
+                            },
+                            {
+                              "field": "amount",
+                              "expr": {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.quantity"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.price"
+                                  }
+                                ]
+                              }
+                            }
+                          ],
                           "when": {
                             "op": ">",
                             "kind": "boolean",
@@ -3432,40 +3441,91 @@
                                 }
                               }
                             ]
-                          },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "reference",
-                                "ref": "policy"
-                              }
-                            ],
-                            "path": [
-                              "clearing",
-                              "code"
-                            ]
-                          },
-                          "credit": {
-                            "op": "*",
-                            "kind": "decimal",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "decimal",
-                                "ref": "row.quantity"
-                              },
-                              {
-                                "op": "",
-                                "kind": "decimal",
-                                "ref": "row.price"
-                              }
-                            ]
                           }
                         },
                         {
+                          "name": "journallinesline2",
+                          "kind": "create",
+                          "target": {
+                            "type": "build.erpline"
+                          },
+                          "changes": [
+                            {
+                              "field": "document",
+                              "expr": {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "step.journalentry"
+                              }
+                            },
+                            {
+                              "field": "account",
+                              "expr": {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "policy"
+                                  }
+                                ],
+                                "path": [
+                                  "variance",
+                                  "code"
+                                ]
+                              }
+                            },
+                            {
+                              "field": "side",
+                              "expr": {
+                                "op": "",
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "debit"
+                                }
+                              }
+                            },
+                            {
+                              "field": "amount",
+                              "expr": {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.quantity"
+                                  },
+                                  {
+                                    "op": "-",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "row.price"
+                                      },
+                                      {
+                                        "op": "path",
+                                        "kind": "decimal",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.product"
+                                          }
+                                        ],
+                                        "path": [
+                                          "cost"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ],
                           "when": {
                             "op": ">",
                             "kind": "boolean",
@@ -3490,60 +3550,91 @@
                                 ]
                               }
                             ]
+                          }
+                        },
+                        {
+                          "name": "journallinesline3",
+                          "kind": "create",
+                          "target": {
+                            "type": "build.erpline"
                           },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
+                          "changes": [
+                            {
+                              "field": "document",
+                              "expr": {
                                 "op": "",
                                 "kind": "reference",
-                                "ref": "policy"
+                                "ref": "step.journalentry"
                               }
-                            ],
-                            "path": [
-                              "variance",
-                              "code"
-                            ]
-                          },
-                          "debit": {
-                            "op": "*",
-                            "kind": "decimal",
-                            "args": [
-                              {
+                            },
+                            {
+                              "field": "account",
+                              "expr": {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "policy"
+                                  }
+                                ],
+                                "path": [
+                                  "variance",
+                                  "code"
+                                ]
+                              }
+                            },
+                            {
+                              "field": "side",
+                              "expr": {
                                 "op": "",
-                                "kind": "decimal",
-                                "ref": "row.quantity"
-                              },
-                              {
-                                "op": "-",
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "credit"
+                                }
+                              }
+                            },
+                            {
+                              "field": "amount",
+                              "expr": {
+                                "op": "*",
                                 "kind": "decimal",
                                 "args": [
                                   {
                                     "op": "",
                                     "kind": "decimal",
-                                    "ref": "row.price"
+                                    "ref": "row.quantity"
                                   },
                                   {
-                                    "op": "path",
+                                    "op": "-",
                                     "kind": "decimal",
                                     "args": [
                                       {
+                                        "op": "path",
+                                        "kind": "decimal",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.product"
+                                          }
+                                        ],
+                                        "path": [
+                                          "cost"
+                                        ]
+                                      },
+                                      {
                                         "op": "",
-                                        "kind": "reference",
-                                        "ref": "row.product"
+                                        "kind": "decimal",
+                                        "ref": "row.price"
                                       }
-                                    ],
-                                    "path": [
-                                      "cost"
                                     ]
                                   }
                                 ]
                               }
-                            ]
-                          }
-                        },
-                        {
+                            }
+                          ],
                           "when": {
                             "op": "<",
                             "kind": "boolean",
@@ -3568,35 +3659,38 @@
                                 ]
                               }
                             ]
+                          }
+                        }
+                      ]
+                    },
+                    "when": {
+                      "op": ">",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "sum",
+                          "kind": "decimal",
+                          "agg": {
+                            "source": "lines"
                           },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "reference",
-                                "ref": "policy"
-                              }
-                            ],
-                            "path": [
-                              "variance",
-                              "code"
-                            ]
-                          },
-                          "credit": {
+                          "in": {
                             "op": "*",
                             "kind": "decimal",
                             "args": [
                               {
                                 "op": "",
                                 "kind": "decimal",
-                                "ref": "row.quantity"
+                                "ref": "item.quantity"
                               },
                               {
-                                "op": "-",
+                                "op": "+",
                                 "kind": "decimal",
                                 "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "item.price"
+                                  },
                                   {
                                     "op": "path",
                                     "kind": "decimal",
@@ -3604,21 +3698,23 @@
                                       {
                                         "op": "",
                                         "kind": "reference",
-                                        "ref": "row.product"
+                                        "ref": "item.product"
                                       }
                                     ],
                                     "path": [
                                       "cost"
                                     ]
-                                  },
-                                  {
-                                    "op": "",
-                                    "kind": "decimal",
-                                    "ref": "row.price"
                                   }
                                 ]
                               }
                             ]
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "lit": {
+                            "value": 0
                           }
                         }
                       ]
@@ -3776,8 +3872,46 @@
                 "subject": "build.erppurchase",
                 "steps": [
                   {
-                    "name": "journal",
-                    "kind": "journal",
+                    "name": "journalentry",
+                    "kind": "create",
+                    "target": {
+                      "type": "build.erpentry"
+                    },
+                    "changes": [
+                      {
+                        "field": "date",
+                        "expr": {
+                          "op": "$today",
+                          "kind": "date"
+                        }
+                      },
+                      {
+                        "field": "currency",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "currency"
+                        }
+                      },
+                      {
+                        "field": "reference",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "input.invoice"
+                        }
+                      },
+                      {
+                        "field": "state",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "submitted"
+                          }
+                        }
+                      }
+                    ],
                     "when": {
                       "op": ">",
                       "kind": "boolean",
@@ -3813,26 +3947,77 @@
                           }
                         }
                       ]
-                    },
-                    "journal": {
+                    }
+                  },
+                  {
+                    "name": "journallines",
+                    "kind": "for-each",
+                    "forEach": {
                       "set": "lines",
-                      "date": {
-                        "op": "$today",
-                        "kind": "date"
-                      },
-                      "currency": {
-                        "op": "",
-                        "kind": "text",
-                        "ref": "currency"
-                      },
-                      "text": {
-                        "op": "",
-                        "kind": "text",
-                        "ref": "input.invoice"
-                      },
-                      "closedPeriod": "reject",
-                      "lines": [
+                      "steps": [
                         {
+                          "name": "journallinesline0",
+                          "kind": "create",
+                          "target": {
+                            "type": "build.erpline"
+                          },
+                          "changes": [
+                            {
+                              "field": "document",
+                              "expr": {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "step.journalentry"
+                              }
+                            },
+                            {
+                              "field": "account",
+                              "expr": {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "policy"
+                                  }
+                                ],
+                                "path": [
+                                  "clearing",
+                                  "code"
+                                ]
+                              }
+                            },
+                            {
+                              "field": "side",
+                              "expr": {
+                                "op": "",
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "debit"
+                                }
+                              }
+                            },
+                            {
+                              "field": "amount",
+                              "expr": {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.quantity"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.price"
+                                  }
+                                ]
+                              }
+                            }
+                          ],
                           "when": {
                             "op": ">",
                             "kind": "boolean",
@@ -3859,42 +4044,73 @@
                                 "lit": {
                                   "value": 0
                                 }
-                              }
-                            ]
-                          },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "reference",
-                                "ref": "policy"
-                              }
-                            ],
-                            "path": [
-                              "clearing",
-                              "code"
-                            ]
-                          },
-                          "debit": {
-                            "op": "*",
-                            "kind": "decimal",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "decimal",
-                                "ref": "row.quantity"
-                              },
-                              {
-                                "op": "",
-                                "kind": "decimal",
-                                "ref": "row.price"
                               }
                             ]
                           }
                         },
                         {
+                          "name": "journallinesline1",
+                          "kind": "create",
+                          "target": {
+                            "type": "build.erpline"
+                          },
+                          "changes": [
+                            {
+                              "field": "document",
+                              "expr": {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "step.journalentry"
+                              }
+                            },
+                            {
+                              "field": "account",
+                              "expr": {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "policy"
+                                  }
+                                ],
+                                "path": [
+                                  "payables",
+                                  "code"
+                                ]
+                              }
+                            },
+                            {
+                              "field": "side",
+                              "expr": {
+                                "op": "",
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "credit"
+                                }
+                              }
+                            },
+                            {
+                              "field": "amount",
+                              "expr": {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.quantity"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.price"
+                                  }
+                                ]
+                              }
+                            }
+                          ],
                           "when": {
                             "op": ">",
                             "kind": "boolean",
@@ -3923,37 +4139,42 @@
                                 }
                               }
                             ]
+                          }
+                        }
+                      ]
+                    },
+                    "when": {
+                      "op": ">",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "sum",
+                          "kind": "decimal",
+                          "agg": {
+                            "source": "lines"
                           },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "reference",
-                                "ref": "policy"
-                              }
-                            ],
-                            "path": [
-                              "payables",
-                              "code"
-                            ]
-                          },
-                          "credit": {
+                          "in": {
                             "op": "*",
                             "kind": "decimal",
                             "args": [
                               {
                                 "op": "",
                                 "kind": "decimal",
-                                "ref": "row.quantity"
+                                "ref": "item.quantity"
                               },
                               {
                                 "op": "",
                                 "kind": "decimal",
-                                "ref": "row.price"
+                                "ref": "item.price"
                               }
                             ]
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "lit": {
+                            "value": 0
                           }
                         }
                       ]
@@ -6857,21 +7078,21 @@
               "name": "wip",
               "title": "Work in progress account",
               "type": "reference",
-              "ref": "core.account",
+              "ref": "build.erpaccount",
               "required": true
             },
             {
               "name": "scrap",
               "title": "Scrap expense account",
               "type": "reference",
-              "ref": "core.account",
+              "ref": "build.erpaccount",
               "required": true
             },
             {
               "name": "variance",
               "title": "Production variance account",
               "type": "reference",
-              "ref": "core.account",
+              "ref": "build.erpaccount",
               "required": true
             }
           ],
@@ -6956,7 +7177,7 @@
               "name": "account",
               "title": "Frozen material stock account",
               "type": "reference",
-              "ref": "core.account",
+              "ref": "build.erpaccount",
               "required": true
             }
           ],
@@ -7208,7 +7429,7 @@
               "name": "account",
               "title": "Account",
               "type": "reference",
-              "ref": "core.account",
+              "ref": "build.erpaccount",
               "required": true
             },
             {
@@ -7330,25 +7551,25 @@
               "name": "account",
               "title": "Frozen finished stock account",
               "type": "reference",
-              "ref": "core.account"
+              "ref": "build.erpaccount"
             },
             {
               "name": "wip",
               "title": "Frozen work in progress account",
               "type": "reference",
-              "ref": "core.account"
+              "ref": "build.erpaccount"
             },
             {
               "name": "scrapaccount",
               "title": "Frozen scrap expense account",
               "type": "reference",
-              "ref": "core.account"
+              "ref": "build.erpaccount"
             },
             {
               "name": "variance",
               "title": "Frozen production variance account",
               "type": "reference",
-              "ref": "core.account"
+              "ref": "build.erpaccount"
             },
             {
               "name": "componentcount",
@@ -9754,8 +9975,46 @@
                     ]
                   },
                   {
-                    "name": "journal",
-                    "kind": "journal",
+                    "name": "journalentry",
+                    "kind": "create",
+                    "target": {
+                      "type": "build.erpentry"
+                    },
+                    "changes": [
+                      {
+                        "field": "date",
+                        "expr": {
+                          "op": "$today",
+                          "kind": "date"
+                        }
+                      },
+                      {
+                        "field": "currency",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "currency"
+                        }
+                      },
+                      {
+                        "field": "reference",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "input.batch"
+                        }
+                      },
+                      {
+                        "field": "state",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "submitted"
+                          }
+                        }
+                      }
+                    ],
                     "when": {
                       "op": ">",
                       "kind": "boolean",
@@ -9896,26 +10155,65 @@
                           }
                         }
                       ]
-                    },
-                    "journal": {
+                    }
+                  },
+                  {
+                    "name": "journallines",
+                    "kind": "for-each",
+                    "forEach": {
                       "set": "currentposting",
-                      "date": {
-                        "op": "$today",
-                        "kind": "date"
-                      },
-                      "currency": {
-                        "op": "",
-                        "kind": "text",
-                        "ref": "currency"
-                      },
-                      "text": {
-                        "op": "",
-                        "kind": "text",
-                        "ref": "input.batch"
-                      },
-                      "closedPeriod": "reject",
-                      "lines": [
+                      "steps": [
                         {
+                          "name": "journallinesline0",
+                          "kind": "create",
+                          "target": {
+                            "type": "build.erpline"
+                          },
+                          "changes": [
+                            {
+                              "field": "document",
+                              "expr": {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "step.journalentry"
+                              }
+                            },
+                            {
+                              "field": "account",
+                              "expr": {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.account"
+                                  }
+                                ],
+                                "path": [
+                                  "code"
+                                ]
+                              }
+                            },
+                            {
+                              "field": "side",
+                              "expr": {
+                                "op": "",
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "debit"
+                                }
+                              }
+                            },
+                            {
+                              "field": "amount",
+                              "expr": {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "row.amount"
+                              }
+                            }
+                          ],
                           "when": {
                             "op": "and",
                             "kind": "boolean",
@@ -9957,28 +10255,59 @@
                                 ]
                               }
                             ]
-                          },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "reference",
-                                "ref": "row.account"
-                              }
-                            ],
-                            "path": [
-                              "code"
-                            ]
-                          },
-                          "debit": {
-                            "op": "",
-                            "kind": "decimal",
-                            "ref": "row.amount"
                           }
                         },
                         {
+                          "name": "journallinesline1",
+                          "kind": "create",
+                          "target": {
+                            "type": "build.erpline"
+                          },
+                          "changes": [
+                            {
+                              "field": "document",
+                              "expr": {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "step.journalentry"
+                              }
+                            },
+                            {
+                              "field": "account",
+                              "expr": {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.account"
+                                  }
+                                ],
+                                "path": [
+                                  "code"
+                                ]
+                              }
+                            },
+                            {
+                              "field": "side",
+                              "expr": {
+                                "op": "",
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "credit"
+                                }
+                              }
+                            },
+                            {
+                              "field": "amount",
+                              "expr": {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "row.amount"
+                              }
+                            }
+                          ],
                           "when": {
                             "op": "and",
                             "kind": "boolean",
@@ -10020,25 +10349,147 @@
                                 ]
                               }
                             ]
-                          },
-                          "account": {
-                            "op": "path",
-                            "kind": "text",
-                            "args": [
-                              {
-                                "op": "",
-                                "kind": "reference",
-                                "ref": "row.account"
+                          }
+                        }
+                      ]
+                    },
+                    "when": {
+                      "op": ">",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "+",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "sum",
+                              "kind": "decimal",
+                              "agg": {
+                                "source": "components"
+                              },
+                              "in": {
+                                "op": "round",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "*",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "*",
+                                        "kind": "decimal",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "decimal",
+                                            "ref": "item.quantity"
+                                          },
+                                          {
+                                            "op": "+",
+                                            "kind": "decimal",
+                                            "args": [
+                                              {
+                                                "op": "",
+                                                "kind": "decimal",
+                                                "ref": "input.yield"
+                                              },
+                                              {
+                                                "op": "",
+                                                "kind": "decimal",
+                                                "ref": "input.scrap"
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "item.cost"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "integer",
+                                    "lit": {
+                                      "value": 2
+                                    }
+                                  }
+                                ]
                               }
-                            ],
-                            "path": [
-                              "code"
-                            ]
-                          },
-                          "credit": {
-                            "op": "",
-                            "kind": "decimal",
-                            "ref": "row.amount"
+                            },
+                            {
+                              "op": "+",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "round",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "*",
+                                      "kind": "decimal",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "input.yield"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "unitcost"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 2
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "round",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "*",
+                                      "kind": "decimal",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "input.scrap"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "unitcost"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 2
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "lit": {
+                            "value": 0
                           }
                         }
                       ]
@@ -22901,7 +23352,6 @@
             "erpentry",
             "erpline",
             "erpaccounts",
-            "erpperiods",
             "erpjournals",
             "erpitem",
             "erpcomponent",
@@ -22929,6 +23379,11 @@
               "app": "build",
               "kind": "object",
               "name": "build.erpline"
+            },
+            {
+              "app": "build",
+              "kind": "object",
+              "name": "build.erpaccount"
             },
             {
               "app": "build",
@@ -24461,7 +24916,7 @@
           "name": "mesobservations"
         },
         "contractVersion": 1,
-        "sourceVersion": "1",
+        "sourceVersion": "1.connection-1",
         "body": {
           "name": "mesobservations",
           "title": "Equipment state store",
@@ -25302,10 +25757,6 @@
         {
           "app": "build",
           "role": "builder"
-        },
-        {
-          "app": "core",
-          "role": "accountant"
         }
       ],
       "steps": [
@@ -25371,70 +25822,70 @@
         },
         {
           "name": "configureassetssummary",
-          "app": "core",
-          "schema": "core.account.create",
+          "app": "build",
+          "schema": "build.erpaccount.create",
           "target": {
-            "type": "core.account",
+            "type": "build.erpaccount",
             "id": "sampleassetsaccount"
           },
           "payload": "{\"code\":\"SAMPLE-1000\",\"name\":\"Example assets\",\"kind\":\"asset\",\"parent\":\"\",\"posting\":false,\"active\":true}"
         },
         {
           "name": "configureexpensessummary",
-          "app": "core",
-          "schema": "core.account.create",
+          "app": "build",
+          "schema": "build.erpaccount.create",
           "target": {
-            "type": "core.account",
+            "type": "build.erpaccount",
             "id": "sampleexpensesaccount"
           },
           "payload": "{\"code\":\"SAMPLE-6400\",\"name\":\"Example expenses\",\"kind\":\"expense\",\"parent\":\"\",\"posting\":false,\"active\":true}"
         },
         {
           "name": "configurematerialsaccount",
-          "app": "core",
-          "schema": "core.account.create",
+          "app": "build",
+          "schema": "build.erpaccount.create",
           "target": {
-            "type": "core.account",
+            "type": "build.erpaccount",
             "id": "samplematerialsaccount"
           },
           "payload": "{\"code\":\"SAMPLE-1403\",\"name\":\"Example raw materials\",\"kind\":\"asset\",\"parent\":\"SAMPLE-1000\",\"posting\":true,\"active\":true}"
         },
         {
           "name": "configurefinishedaccount",
-          "app": "core",
-          "schema": "core.account.create",
+          "app": "build",
+          "schema": "build.erpaccount.create",
           "target": {
-            "type": "core.account",
+            "type": "build.erpaccount",
             "id": "samplefinishedaccount"
           },
           "payload": "{\"code\":\"SAMPLE-1405\",\"name\":\"Example finished goods\",\"kind\":\"asset\",\"parent\":\"SAMPLE-1000\",\"posting\":true,\"active\":true}"
         },
         {
           "name": "configure7",
-          "app": "core",
-          "schema": "core.account.create",
+          "app": "build",
+          "schema": "build.erpaccount.create",
           "target": {
-            "type": "core.account",
+            "type": "build.erpaccount",
             "id": "samplewipaccount"
           },
           "payload": "{\"code\":\"SAMPLE-5001\",\"name\":\"Work in progress\",\"kind\":\"asset\",\"parent\":\"SAMPLE-1000\",\"posting\":true,\"active\":true}"
         },
         {
           "name": "configure8",
-          "app": "core",
-          "schema": "core.account.create",
+          "app": "build",
+          "schema": "build.erpaccount.create",
           "target": {
-            "type": "core.account",
+            "type": "build.erpaccount",
             "id": "samplescrapaccount"
           },
           "payload": "{\"code\":\"SAMPLE-6711\",\"name\":\"Production scrap\",\"kind\":\"expense\",\"parent\":\"SAMPLE-6400\",\"posting\":true,\"active\":true}"
         },
         {
           "name": "configure9",
-          "app": "core",
-          "schema": "core.account.create",
+          "app": "build",
+          "schema": "build.erpaccount.create",
           "target": {
-            "type": "core.account",
+            "type": "build.erpaccount",
             "id": "samplevarianceaccount"
           },
           "payload": "{\"code\":\"SAMPLE-6404\",\"name\":\"Production variance\",\"kind\":\"expense\",\"parent\":\"SAMPLE-6400\",\"posting\":true,\"active\":true}"

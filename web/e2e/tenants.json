@@ -14,7 +14,9 @@
         ],
         "roles": {
           "platform": "admin",
-          "build": "builder"
+          "build": "builder",
+          "ai": "admin",
+          "agent": "admin"
         }
       },
       {

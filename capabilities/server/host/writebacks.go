@@ -39,11 +39,10 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	out := []IntegrationEffect{}
 	for _, effect := range t.Effects(now) {
 		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		books := (strings.HasPrefix(effect.Event, "journal/") || effect.Event == build.ID+"/journal") && effect.Endpoint == build.BooksEndpoint
 		confirmation := effect.Event == build.ID+"/confirmation" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
 		dispatch := effect.Event == build.ID+"/dispatch" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
 		transaction := effect.Event == build.ID+"/transaction" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		if effect.App != build.ID || !writeback && !books && !confirmation && !dispatch && !transaction {
+		if effect.App != build.ID || !writeback && !confirmation && !dispatch && !transaction {
 			continue
 		}
 		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
@@ -51,12 +50,6 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 			item.Error = "The last delivery attempt failed"
 			if effect.PublicMessage != "" {
 				item.Error = effect.PublicMessage
-			} else if books {
-				if owner, ok := t.app(platform.BooksApp).(platform.BooksChecks); ok {
-					if message := owner.HistoricalPostingMessage(effect.Error); message != "" {
-						item.Error = message
-					}
-				}
 			}
 		}
 		out = append(out, item)

@@ -49,13 +49,13 @@ func (d *stagedDecision) requestApproval(a platform.App, m platform.Member, s *p
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
 	if err := d.checkFinalConstraints(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("batch constraints: %w", err)
 	}
 	if receipt == nil || len(d.events) == 0 || d.failure != nil {
 		return nil, fmt.Errorf("batch needs accepted decisions and all written records")
 	}
 	if err := d.records.ValidateChangedLinkConstraints(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("batch links: %w", err)
 	}
 	result := acceptedformat.Batch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
 		Definitions: slices.Clone(d.installations),
@@ -65,37 +65,37 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	var err error
 	result.Authorizations, err = d.savedAuthorizations()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("batch authorizations: %w", err)
 	}
 	result.Control, err = d.savedControl()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("batch control: %w", err)
 	}
 	if result.Control != nil {
 		result.Version = 3
 	}
 	result.Operations, err = d.savedOperationCancellations()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("batch operations: %w", err)
 	}
 	result.States, err = d.savedStates()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("batch states: %w", err)
 	}
 	result.Receipt, err = protojson.Marshal(receipt)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("batch receipt: %w", err)
 	}
 	if !proto.Equal(request, receipt.GetSubmission()) {
 		result.Submission, err = protojson.Marshal(request)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("batch submission: %w", err)
 		}
 	}
 	result.SchemaVersion = d.schemaVersion
 	result.RequestHash, err = acceptedformat.SubmissionHash(request, result.SchemaVersion)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("batch request hash: %w", err)
 	}
 	seen := map[string]bool{}
 	for _, event := range d.events {
@@ -115,11 +115,11 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		}
 		raw, err := protojson.Marshal(event.Record)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("batch event %s: %w", event.App, err)
 		}
 		plan, refusal := d.routingTenant().planAcceptedEvent(event)
 		if refusal != nil {
-			return nil, refusal
+			return nil, fmt.Errorf("batch event plan %s: %w", event.App, refusal)
 		}
 		plan.Observed = d.observed
 		plan.Hops = d.hops
@@ -145,7 +145,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if len(seen) != d.records.WriteCount() {
 		result.DirectRows, err = d.savedCallbackRows(seen)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("batch direct rows: %w", err)
 		}
 		if len(seen)+len(result.DirectRows) != d.records.WriteCount() {
 			return nil, fmt.Errorf("batch event omits a written record")
@@ -187,18 +187,18 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		}
 		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("batch image %s/%s: %w", typ, id, err)
 		}
 		row := acceptedformat.BatchRow{Image: image, App: et.Info().App, Authorities: slices.Clone(d.writers[ref]), HistoryBase: image.HistoryRef.Base}
 		row.Before, err = records.Predecessor(typ, id, prior)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("batch predecessor %s/%s: %w", typ, id, err)
 		}
 		result.Rows = append(result.Rows, row)
 	}
 	result.Digest, err = acceptedformat.DigestBatch(result)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("batch digest: %w", err)
 	}
 	raw, err := json.Marshal(result)
 	if err != nil {

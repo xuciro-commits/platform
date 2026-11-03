@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { defineConfig } from "@playwright/test";
 
 const port = Number(process.env.PLATFORM_E2E_PORT ?? 18496);
+const aiPort = Number(process.env.PLATFORM_E2E_AI_PORT ?? port + 1);
 const tenants = join(mkdtempSync(join(tmpdir(), "platform-acceptance-")), "tenants.json");
 copyFileSync(new URL("./tenants.json", import.meta.url), tenants);
 
@@ -21,6 +22,9 @@ export default defineConfig({
     url: `http://127.0.0.1:${port}/healthz`,
     timeout: 240_000,
     reuseExistingServer: false,
-    env: { GOPROXY: "https://goproxy.cn,direct" },
+    env: {
+      GOPROXY: "https://goproxy.cn,direct",
+      PLATFORM_AI_INFERENCE_POLICY: JSON.stringify({ runtime: [{ provider: "f10-mock", origin: `http://127.0.0.1:${aiPort}`, location: "edge" }] }),
+    },
   },
 });

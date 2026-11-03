@@ -17,10 +17,6 @@ function references(step: Api.TxnStep, change: (ref: string) => string) {
   expression(step.when); target(step.target); assignments(step.changes);
   target(step.link?.parent); target(step.link?.child);
   if (step.post) { assignments(step.post.match); expression(step.post.amount); }
-  if (step.journal) {
-    expression(step.journal.date); expression(step.journal.text); expression(step.journal.currency);
-    step.journal.lines.forEach(line => { expression(line.when); expression(line.account); expression(line.debit); expression(line.credit); expression(line.text); expression(line.object); expression(line.partner); });
-  }
   expression(step.forEach?.range?.from); expression(step.forEach?.range?.until);
   assignments(step.effect?.payload); assignments(step.call?.inputs);
   if (step.work) { expression(step.work.unit); expression(step.work.body); expression(step.work.member); expression(step.work.due); expression(step.work.key); }
