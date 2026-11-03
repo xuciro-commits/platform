@@ -28,3 +28,9 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 - “kernel”一词指三处：`capabilities/server/kernel`、`contract/go/kernel`、`web/packages/kernel`。
 - Workspace 构建仍有大于 500 kB 的分块与三处无效动态导入告警；先测量实际加载成本，再决定拆包。
+
+## 清理待办
+
+- `pageui/manifest.ts` 与 `platform/page_compat.json` 仍是两份手工组件数据；共享字段已有差异（observation 输出端口、scopeRule 默认值）。先定一份权威来源，再删除生成副本。
+- 发布准备仍按 definition、integration、record、page 四族分派；Confirmation 与 Dispatch 各自维护状态机。收敛前先给出资源族盘点，并证明发布字节与重放结果不变。
+- `platform/page_model_legacy.go` 仍解码旧页面格式；确认已接受映像中不再存在旧格式后，按版本化迁移退役。
