@@ -15,8 +15,6 @@ const (
 
 var tones = []string{"neutral", "info", "success", "warning", "danger", "purple", "pink", "teal", "orange"}
 
-func Tones() []string { return slices.Clone(tones) }
-
 type FormatRule struct {
 	When  Expr   `json:"when"`
 	Tone  string `json:"tone" enum:"neutral,info,success,warning,danger,purple,pink,teal,orange"`

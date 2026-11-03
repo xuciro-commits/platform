@@ -22,11 +22,6 @@ import (
 	"time"
 )
 
-func resultRequestHash(raw []byte) (string, error) {
-	identity, err := acceptedIdentity(raw)
-	return identity.Hash, err
-}
-
 func acceptedIdentity(raw []byte) (resultIdentity, error) {
 	var identity resultIdentity
 	var envelope struct{ Kind string }

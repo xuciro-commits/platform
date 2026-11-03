@@ -29,8 +29,6 @@ func (h *HostState) State() string {
 	return ""
 }
 
-func (h *HostState) setState(v string) { h.lifecycle.Store(&v) }
-
 func (h *HostState) Suspended() bool {
 	l := h.State()
 	return l != "" && l != "open"

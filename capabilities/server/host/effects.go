@@ -419,30 +419,6 @@ func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platf
 	t.settleAccepted(effect, o, usage, now)
 }
 
-func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
-	x, ok := t.mark(o, at)
-	if !ok {
-		return false
-	}
-	if x.State == "failed" {
-		t.failedWork("Effect to "+x.Endpoint+" failed: "+x.Event, x.Error, x.ID, at, replaying)
-	}
-	if x.Endpoint == acceptedformat.ModelEndpoint {
-		return true
-	}
-	if x.App != "" && platform.EffectSettled(x.State) && x.State != "discarded" {
-		if a, ok := t.app(x.App).(platform.Answerer); ok {
-			a.Answer(t.automation(x.App, replaying), x, o, at)
-			t.enqueue(at)
-		}
-		if t.agents != nil {
-			t.agents.AgentEffectEnded(t.automation(platform.AgentApp, replaying), nil, x, o, at)
-			t.enqueue(at)
-		}
-	}
-	return true
-}
-
 func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, replaying bool) {
 	if t.controlAnswer != nil {
 		t.controlAnswer(x, o, now)
@@ -454,18 +430,6 @@ func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, repl
 	if a, ok := t.app(x.App).(platform.Answerer); ok && x.App != "" {
 		a.Answer(t.automation(x.App, replaying), x, o, now)
 	}
-}
-
-func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == o.Effect })
-	if i < 0 {
-		return platform.Effect{}, false
-	}
-	x := t.outbound[i]
-	markEffect(x, o, at)
-	return x.Effect, true
 }
 
 func markEffect(x *effect, o platform.Outcome, at time.Time) {

@@ -23,14 +23,6 @@ import (
 	"platformserver/services/work/activity"
 )
 
-func NewTenant(id string, seats ...platform.Seat) (*platformserver.Tenant, error) {
-	return NewTenantWithSource(id, nil, seats...)
-}
-
-func NewTenantWithSource(id string, source *platform.SystemSource, seats ...platform.Seat) (*platformserver.Tenant, error) {
-	return NewTenantWithSourceAndCapabilities(id, source, platform.DefaultRuntimeCapabilities(security.Standard{}), seats...)
-}
-
 func NewTenantWithSourceAndCapabilities(id string, source *platform.SystemSource, services platform.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
 	services.BindOwner = bindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator

@@ -91,10 +91,6 @@ func wakeWork() {
 	}
 }
 
-func RunWork(tenants ...*Tenant) func(context.Context) error {
-	return runWorkFrom(func() []*Tenant { return tenants })
-}
-
 func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	var loops, outsideRuns sync.WaitGroup

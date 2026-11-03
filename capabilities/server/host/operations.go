@@ -223,29 +223,6 @@ func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) strin
 	return outcome
 }
 
-func (t *Tenant) replayWork(kind string, raw []byte, at time.Time) error {
-	var b workBody
-	if json.Unmarshal(raw, &b) != nil {
-		return fmt.Errorf("bad %s entry", kind)
-	}
-	var task *automation.Task
-	t.opsMu.Lock()
-	if kind == "job" {
-		task = t.work.Job(b.Work)
-	} else {
-		task = t.work.AnyDelivery(b.Work)
-	}
-	t.opsMu.Unlock()
-	if task == nil {
-		return fmt.Errorf("%s %s is not due in the replay", kind, b.Work)
-	}
-	outcome := map[bool]func(*automation.Task, time.Time, bool) string{true: t.run, false: t.attempt}[kind == "job"](task, at, true)
-	if outcome != b.Outcome {
-		return fmt.Errorf("%s %s ended %s, recorded %s", kind, b.Work, outcome, b.Outcome)
-	}
-	return nil
-}
-
 func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool) {
 	if t.app(controlowner.PlatformApp) == nil {
 		return

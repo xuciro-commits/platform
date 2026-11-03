@@ -193,8 +193,6 @@ type AcceptedFactApp interface {
 	HasAcceptedFact(tenant, id string) bool
 }
 
-func As(app string, m Member) Caller { return Caller{Member: m, App: app} }
-
 type AuthorizationEngineRuntime interface{ AuthorizationEngine() AuthorizationEngine }
 
 func NewCaller(rt Runtime, m Member, app string, replaying, automation bool) Caller {

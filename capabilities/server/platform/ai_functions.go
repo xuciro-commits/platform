@@ -232,16 +232,6 @@ type RecordAdvice struct {
 	Review   bool   `json:"review"`
 }
 
-func RecordAdviceFunction(object string, fields, roles []string) AIFunction {
-	return AIFunction{Name: "record-advice", Title: "Record summary and review advice",
-		Description: "Summarise the selected record and suggest whether a person should review it.",
-		Object:      object, Fields: fields, Roles: roles, MaxInputBytes: 4096, MaxOutputBytes: 1024, MaxTokens: 256,
-		Instructions: "Summarise only the provided record. Use category routine or review. Flag review when the record needs human attention; do not invent facts or propose executing actions.",
-		Output: []Field{{Name: "summary", Type: "string", Required: true, Description: "A short factual summary"},
-			{Name: "category", Type: "string", Required: true, Description: "Routine or needs review", Choices: []string{"routine", "review"}},
-			{Name: "review", Type: "boolean", Required: true, Description: "Whether a person should review it"}}}
-}
-
 type RetainedFunctionAssets interface {
 	FunctionReleaseAsset(string, string) (ReleaseAsset, error)
 }

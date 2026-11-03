@@ -240,40 +240,6 @@ func ConditionValue(kind, raw string) (any, error) {
 	}
 }
 
-func Holds(got any, kind, op, want string) bool {
-	kind = RuleFieldKind(kind)
-	v := got
-	if kind == "date" {
-		if t, ok := got.(time.Time); ok {
-			v = t.UTC().Format(time.DateOnly)
-		}
-	}
-	e := Expr{Kind: "boolean", Op: op, Args: []Expr{ExprReference(kind, "value")}}
-	if op == "not empty" {
-		e.Op = "not-empty"
-	}
-	if op != "empty" && op != "not empty" {
-		x, err := ConditionValue(kind, want)
-		if err != nil {
-			return false
-		}
-		if t, ok := x.(time.Time); ok {
-			if kind == "date" {
-				x = t.Format(time.DateOnly)
-			} else {
-				x = t.Format(time.RFC3339Nano)
-			}
-		}
-		e.Args = append(e.Args, ExprLiteralValue(kind, x))
-	}
-	p, err := CompileExpr(e, ExprSchema{Refs: map[string]ExprType{"value": {Kind: kind}}})
-	if err != nil {
-		return false
-	}
-	r, err := p.Eval(ExprContext{Refs: map[string]ExprValue{"value": ExprPresent(kind, v)}})
-	return err == nil && string(r.Value.Data) == "true"
-}
-
 func TextOf(v any) string {
 	if v != nil {
 		rv := reflect.ValueOf(v)

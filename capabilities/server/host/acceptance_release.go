@@ -236,25 +236,6 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	return t.commitReleaseLocked(m, saved)
 }
 
-func (t *Tenant) runningMatchesLocked(candidateID string, raw []byte) error {
-	saved, err := platform.ReadCandidate(candidateID, raw)
-	if err != nil {
-		return err
-	}
-	running, err := t.runningReleaseLocked(saved)
-	if err != nil {
-		return fmt.Errorf("release differs from the running definitions: %w", err)
-	}
-	if running.ID == candidateID {
-		return nil
-	}
-	added, removed, changed, err := platform.CandidateDiff(saved, running)
-	if err != nil {
-		return err
-	}
-	return fmt.Errorf("release differs from the running definitions: changed %v, missing %v, extra %v", changed, removed, added)
-}
-
 func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
 	available, err := t.releaseAssetsLocked(nil, false)
 	if err != nil {

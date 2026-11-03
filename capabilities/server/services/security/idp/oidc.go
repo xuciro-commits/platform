@@ -7,11 +7,6 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-func OIDC(issuer, keys string) Authenticate {
-	authenticate, _ := OIDCProvider(issuer, keys)
-	return authenticate
-}
-
 func OIDCProvider(issuer, keys string) (Authenticate, Attest) {
 	verifier := oidc.NewVerifier(issuer, oidc.NewRemoteKeySet(context.Background(), keys),
 		&oidc.Config{SkipClientIDCheck: true, SupportedSigningAlgs: []string{oidc.EdDSA, oidc.RS256, oidc.ES256}})

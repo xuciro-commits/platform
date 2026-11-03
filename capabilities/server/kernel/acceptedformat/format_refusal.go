@@ -27,10 +27,6 @@ type Refusal struct {
 	Error         kernel.Error                  `json:"error"`
 }
 
-func EncodeRefusal(s *pb.Submission, at time.Time, refusal *kernel.Error, issues ...platform.FieldIssue) ([]byte, error) {
-	return EncodeSchemaRefusal(s, at, refusal, nil, issues...)
-}
-
 func EncodeSchemaRefusal(s *pb.Submission, at time.Time, refusal *kernel.Error, binding *platform.SchemaVersion, issues ...platform.FieldIssue) ([]byte, error) {
 	return EncodeBusinessRefusal(s, at, refusal, binding, nil, issues...)
 }

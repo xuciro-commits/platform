@@ -27,8 +27,6 @@ type ValueType struct {
 	Choices     []string         `json:"choices,omitempty"`
 }
 
-func ValueBases() []string { return slices.Clone(valueBases) }
-
 func valueInputType(base string) string {
 	switch base {
 	case "integer":
