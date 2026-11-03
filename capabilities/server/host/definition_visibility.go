@@ -66,28 +66,17 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.PropertyType == nil {
 				continue
 			}
-			def.PropertyVersions = maps.Clone(def.PropertyVersions)
 			visible := func(version string) bool {
 				if m.Holds(def.Ref.App, "builder") {
 					return true
 				}
-				for _, e := range entities {
-					for _, f := range e.Fields {
-						if f.Property != nil && f.Property.Ref == def.Ref && f.Property.SourceVersion == version {
-							return true
-						}
-					}
-				}
-				return false
+				return definitionVersionVisible(entities, def.Ref, version, func(f platform.FieldInfo) *platform.AssetBinding { return f.Property })
 			}
-			for version := range def.PropertyVersions {
-				if !visible(version) {
-					delete(def.PropertyVersions, version)
-				}
-			}
-			if !visible(def.Version) {
+			versions, currentVisible := retainVisibleDefinitionVersions(def.PropertyVersions, def.Version, visible)
+			def.PropertyVersions = versions
+			if !currentVisible {
 				def.PropertyType = nil
-				if len(def.PropertyVersions) == 0 {
+				if len(versions) == 0 {
 					continue
 				}
 			}
@@ -95,28 +84,17 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.ValueType == nil {
 				continue
 			}
-			def.ValueVersions = maps.Clone(def.ValueVersions)
 			visible := func(version string) bool {
 				if m.Holds(def.Ref.App, "builder") {
 					return true
 				}
-				for _, e := range entities {
-					for _, f := range e.Fields {
-						if f.ValueType != nil && f.ValueType.Ref == def.Ref && f.ValueType.SourceVersion == version {
-							return true
-						}
-					}
-				}
-				return false
+				return definitionVersionVisible(entities, def.Ref, version, func(f platform.FieldInfo) *platform.AssetBinding { return f.ValueType })
 			}
-			for version := range def.ValueVersions {
-				if !visible(version) {
-					delete(def.ValueVersions, version)
-				}
-			}
-			if !visible(def.Version) {
+			versions, currentVisible := retainVisibleDefinitionVersions(def.ValueVersions, def.Version, visible)
+			def.ValueVersions = versions
+			if !currentVisible {
 				def.ValueType = nil
-				if len(def.ValueVersions) == 0 {
+				if len(versions) == 0 {
 					continue
 				}
 			}
@@ -377,6 +355,27 @@ func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {
 		}
 	}
 	return false
+}
+
+func definitionVersionVisible(entities map[string]platform.EntityInfo, ref platform.AssetRef, version string, pick func(platform.FieldInfo) *platform.AssetBinding) bool {
+	for _, entity := range entities {
+		for _, field := range entity.Fields {
+			if binding := pick(field); binding != nil && binding.Ref == ref && binding.SourceVersion == version {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func retainVisibleDefinitionVersions[V any](versions map[string]V, current string, visible func(string) bool) (map[string]V, bool) {
+	retained := maps.Clone(versions)
+	for version := range retained {
+		if !visible(version) {
+			delete(retained, version)
+		}
+	}
+	return retained, visible(current)
 }
 
 type retainedPageDefinitionSources struct{ tenant *Tenant }
