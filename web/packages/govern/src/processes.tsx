@@ -39,7 +39,7 @@ export function Evaluations() {
   const chosen = agent || agents[0]?.id || "";
   return (
     <>
-      <PageHeader title={t("Evaluations")} help={t("A candidate model re-runs an agent's latest runs that people confirmed, changed, rejected, accepted or corrected — dry: it sees what the run saw, its actions are checked, never taken. Each case agrees or differs with what people accepted, or repeats or avoids what they corrected.")} />
+      <PageHeader title={t("Evaluations")} help={t("A candidate model re-runs an agent's latest runs that people confirmed, changed, rejected, accepted or corrected — dry: it sees what the run saw, its actions are checked, never taken. Each case agrees or differs with what people accepted, or repeats or avoids what they corrected. Reports are newest first; open one for each case.")} />
       {can("agent.evaluation.start") && (
         <Form className="mb-3 grid gap-3 rounded-md border border-border bg-surface p-3" onSubmit={async () => {const ok=await decide("agent.evaluation.start",{type:"agent.evaluation",id:evaluation},{agent:chosen,model,suite});if(ok)setEvaluation(newId("EVAL"));return ok;}}>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
@@ -60,7 +60,7 @@ export function Evaluations() {
           </div>
         </Form>
       )}
-      <Records type="agent.evaluation" fields={["agent", "model", "state", "score", "agrees", "differs", "repeats", "avoids", "tokens", "cost"]} help={t("Reports, newest first; open one for each case.")} />
+      <Records header={false} type="agent.evaluation" fields={["agent", "model", "state", "score", "agrees", "differs", "repeats", "avoids", "tokens", "cost"]} />
     </>
   );
 }

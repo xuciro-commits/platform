@@ -272,7 +272,7 @@ export function GeneratedForm({ type, record, initial, fields, essential = false
 
 export type SavedView = Api.SavedView;
 
-export function Records({ type, description, help, actions, covers, saved, kanban, fields }: { type: string; description?: string; help?:ReactNode; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"]; fields?: string[] }) {
+export function Records({ type, description, help, actions, covers, saved, kanban, fields, header = true }: { type: string; description?: string; help?:ReactNode; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"]; fields?: string[]; header?: boolean }) {
   const { source, decide, can, catalog } = useHost();
   const openRecord = useOpenRecord();
   const info = source.entity(type);
@@ -292,8 +292,8 @@ export function Records({ type, description, help, actions, covers, saved, kanba
     ? [] : recordKanbanMoves(info, catalog), [info, catalog, kanban?.stateField]);
   return (
     <>
-      <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} /></>}
-        description={description} help={help ?? (saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see."))} />
+      {header && <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} /></>}
+        description={description} help={help ?? (saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see."))} />}
       <RecordList
         key={saved?.id ?? type}
         source={source}
