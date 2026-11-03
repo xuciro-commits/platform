@@ -400,10 +400,17 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 }
 
 func (*Build) AssetKinds() []platform.AssetKind {
-	return []platform.AssetKind{
-		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetValueType, platform.AssetObjectTypeGroup, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
-		platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetMediaSet, platform.AssetSchedule, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetAgent, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert,
+	kinds := []platform.AssetKind{
+		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow,
+		platform.AssetCompute, platform.AssetAgent, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetAlert,
 	}
+	for _, entry := range integrationEntries {
+		kinds = append(kinds, entry.kind)
+	}
+	for _, definition := range definitionKinds {
+		kinds = append(kinds, definition.assetKind())
+	}
+	return kinds
 }
 
 func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVersion ...string) (platform.ReleaseAsset, error) {

@@ -295,7 +295,8 @@ func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAss
 
 func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
 	var out []platform.ReleaseAsset
-	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetMediaSet, platform.AssetSchedule, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
+	for _, entry := range integrationEntries {
+		kind := entry.kind
 		rows, err := b.integrationInventory(kind)
 		if err != nil {
 			return nil, err

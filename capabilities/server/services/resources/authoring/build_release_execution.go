@@ -379,11 +379,7 @@ type MatchingDefinition struct {
 }
 
 func ValueIntegrationKind(kind platform.AssetKind) bool {
-	switch kind {
-	case platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetMediaSet, platform.AssetSchedule, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation:
-		return true
-	}
-	return false
+	return integrationEntryOfKind(kind) != nil
 }
 
 func ValueDecodeIntegration(raw []byte, value any) error {
