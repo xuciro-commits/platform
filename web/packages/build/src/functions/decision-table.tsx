@@ -3,17 +3,19 @@ import { cellRuleText } from "../editor/rule-text";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { DraftStatus, ResourceControls } from "../editor/workbench";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
-import { useHost } from "@platform/app";
-import { Button, DataTable, Input, PageHeader, Panel, Select, Textarea, t, type ColumnDef } from "@platform/ui";
+import { EditProposalReview, useHost, useInvokeCapability, useReadQuery } from "@platform/app";
+import { Button, DataTable, Input, InputDraftProvider, PageHeader, Panel, SegmentedChoice, Select, Textarea, t, type ColumnDef } from "@platform/ui";
+import { JSONEditor } from "../automate/workflow-binding";
 
-type Draft = Omit<Api.Table,"rows">&{rows:(Omit<Api.TableRow,"when">&{when:string[]})[]};
+type Draft = Omit<Api.Table,"rows">&{proposal?:boolean;rows:(Omit<Api.TableRow,"when">&{when:string[]})[]};
 const rowValues=(row:Draft["rows"][number],key:"when"|"then")=>key==="when"?row.when??row.expressions?.map(cellRuleText)??[]:row.then??[];
-const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", description: "", inputs: [{ name: "input", type: "text" }], outputs: [{ name: "result", type: "text" }], rows: [{ when: [""], then: [""] }], default: [], state: "draft" });
+const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", description: "", inputs: [{ name: "input", type: "text" }], outputs: [{ name: "result", type: "text" }], proposal: false, rows: [{ when: [""], then: [""] }], default: [], state: "draft" });
 const types = ["text", "number", "boolean"];
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 const cell = "h-8 min-w-24 px-2 text-xs";
+const proposalSkeleton = JSON.stringify({kind:"edit-proposal/v1",edits:[{schema:"",type:"",id:"",payload:"{}",revision:0}]});
 
 
 export function DecisionTableEditor({ id }: { id: string }) {
@@ -22,8 +24,8 @@ export function DecisionTableEditor({ id }: { id: string }) {
     id, type: "build.table", view: "decision-table", empty,
     normalize: record => ({ ...record, rows: (record.rows ?? []).map(row => ({ ...row, when: row.when ?? row.expressions?.map(cellRuleText) ?? [] })), default: record.default ?? [] }),
     failure: t("The decision table could not be saved or loaded. Your draft is still here."),
-    payload: ({ name, title, description, inputs, outputs, rows, default: fallback }) => ({
-      name, title, rows: (rows ?? []).map(row => row.expressions?.length ? { expressions: row.expressions, then: row.then } : { when: row.when, then: row.then }),
+    payload: ({ name, title, description, inputs, outputs, proposal, rows, default: fallback }) => ({
+      name, title, rows: (rows ?? []).map(row => row.expressions?.length ? { expressions: row.expressions, then: row.then } : { when: row.when, then: row.then }), proposal:proposal??false,
       description: description ?? "", inputs, outputs, default: fallback?.some(cell => cell.trim() !== "") ? fallback : [],
     }),
   });
@@ -39,18 +41,21 @@ export function DecisionTableEditor({ id }: { id: string }) {
   };
   const setCell = (row: number, key: "when" | "then", i: number, value: string) => patch({ rows: (draft.rows ?? []).map((r, j) => j === row ? { ...r, ...(key==="when"?{expressions:undefined}:{}),[key]: rowValues(r,key).map((c, k) => k === i ? value : c) } : r) });
   const moveRow = (row: number, by: number) => { const to = row + by; if (to < 0 || to >= (draft.rows ?? []).length) return; const rows = [...(draft.rows ?? [])]; const a = rows[row]!, b = rows[to]!; rows[row] = b; rows[to] = a; patch({ rows }); };
+  const setProposal = (proposal:boolean) => patch({ proposal, outputs:[{name:proposal?"proposal":"result",type:"text"}],
+    rows:(draft.rows ?? []).map(row => ({...row,expressions:undefined,then:[proposal?proposalSkeleton:""]})),
+    default:draft.default?.length?[proposal?proposalSkeleton:""]:[] });
   const defaults = draft.default?.length === (draft.outputs ?? []).length ? draft.default : (draft.outputs ?? []).map(() => "");
   const tableState = useRef({ draft, defaults, patch, setColumn, addColumn, removeColumn, setCell, moveRow });
   tableState.current = { draft, defaults, patch, setColumn, addColumn, removeColumn, setCell, moveRow };
   const columns = useMemo<ColumnDef<number, unknown>[]>(() => [
     { id: "order", header: "", meta: { width: 60 }, enableSorting: false, cell: ({ row }) => row.original < 0 ? t("else") : row.original + 1 },
     ...(["inputs", "outputs"] as const).map(side => ({
-      id: side, header: () => <div className="flex items-center gap-2">{t(side === "inputs" ? "When" : "Then")}<Button size="sm" variant="ghost" onClick={() => tableState.current.addColumn(side)}>+ {t(side === "inputs" ? "condition" : "result")}</Button></div>,
+      id: side, header: () => <div className="flex items-center gap-2">{t(side === "inputs" ? "When" : "Then")}<Button size="sm" variant="ghost" disabled={side==="outputs"&&!!draft.proposal} onClick={() => tableState.current.addColumn(side)}>+ {t(side === "inputs" ? "condition" : "result")}</Button></div>,
       columns: (draft[side] ?? []).map((_, i): ColumnDef<number, unknown> => ({
         id: `${side}-${i}`, enableSorting: false, meta: { width: 220 },
-        header: () => { const { draft, setColumn, removeColumn } = tableState.current, col = (draft[side] ?? [])[i]!; return <div className="grid gap-1"><Input className={cell} value={col.name} onChange={e => setColumn(side, i, { name: e.target.value })} />
-          <div className="flex gap-1"><Select className={cell} value={col.type} onChange={e => setColumn(side, i, { type: e.target.value })}>{types.map(x => <option key={x} value={x}>{t(x)}</option>)}</Select>
-            <Button size="sm" variant="ghost" aria-label={t("Remove column")} disabled={(draft[side] ?? []).length <= 1} onClick={() => removeColumn(side, i)}>×</Button></div></div>; },
+        header: () => { const { draft, setColumn, removeColumn } = tableState.current, col = (draft[side] ?? [])[i]!, locked=side==="outputs"&&!!draft.proposal; return <div className="grid gap-1"><Input className={cell} disabled={locked} value={col.name} onChange={e => setColumn(side, i, { name: e.target.value })} />
+          <div className="flex gap-1"><Select className={cell} disabled={locked} value={col.type} onChange={e => setColumn(side, i, { type: e.target.value })}>{types.map(x => <option key={x} value={x}>{t(x)}</option>)}</Select>
+            <Button size="sm" variant="ghost" aria-label={t("Remove column")} disabled={locked||(draft[side] ?? []).length <= 1} onClick={() => removeColumn(side, i)}>×</Button></div></div>; },
         cell: ({ row: { original: r } }) => { const { draft, defaults, patch, setCell } = tableState.current; return r < 0 && side === "inputs" ? i === 0 ? t("no row matches") : null
           : <Input className={cell} value={r < 0 ? defaults[i] : rowValues((draft.rows ?? [])[r]!,side === "inputs" ? "when" : "then")[i]} placeholder={r < 0 ? t("refuse") : side === "inputs" ? "*" : undefined}
             onChange={e => r < 0 ? patch({ default: defaults.map((c, k) => k === i ? e.target.value : c) }) : setCell(r, side === "inputs" ? "when" : "then", i, e.target.value)} />; },
@@ -73,12 +78,43 @@ export function DecisionTableEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Table name")}<Input disabled={!!draft.version} value={draft.name} placeholder="discount" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Table title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("Description")}<Textarea rows={1} value={draft.description ?? ""} onChange={(e) => patch({ description: e.target.value })} /></label>
+        <SegmentedChoice label={t("Output mode")} value={draft.proposal?"edit-proposal":"results"} onChange={value=>setProposal(value==="edit-proposal")} options={[{value:"results",label:t("Typed results")},{value:"edit-proposal",label:t("Edit proposal")}]} />
       </Panel>
       <Panel title={t("Rules")} className="grid min-w-0 gap-2 overflow-auto">
         <DataTable data={[...(draft.rows ?? []).map((_, i) => i), -1]} columns={columns} getRowId={r => r < 0 ? "default" : String(r)} height={Math.min(480, 124 + ((draft.rows ?? []).length + 1) * 40)} rowHeight={40} searchable={false} resizable={false} columnChooser={false} />
         <div><Button size="sm" onClick={() => patch({ rows: [...(draft.rows ?? []), { when: (draft.inputs ?? []).map(() => ""), then: (draft.outputs ?? []).map(() => "") }] })}>{t("Add row")}</Button></div>
         <p className="text-xs text-muted">{t("Leave the default empty to refuse a call no row matches; fill it to answer anyway.")}</p>
       </Panel>
+      {!dirty&&draft.version&&<DecisionTableProbe key={`${draft.id}:${draft.version}`} draft={draft} />}
     </fieldset></StructuredEditor>
   </div>;
+}
+
+function DecisionTableProbe({draft}:{draft:Draft}) {
+  const invoke=useInvokeCapability();
+  const [input,setInput]=useState<unknown>(()=>Object.fromEntries((draft.inputs??[]).map(column=>[column.name,column.type==="number"?0:column.type==="boolean"?false:""])));
+  const [call,setCall]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  const result=useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`,1000,!!call);
+  const run=async()=>{
+    setBusy(true);setError("");setCall("");
+    try{
+      const answer=await invoke({ref:{app:"build",kind:"compute",name:draft.name},key:crypto.randomUUID(),version:draft.version,inputs:input});
+      setCall(answer.call??"");
+    }catch(failure){setError(failure instanceof Error?failure.message:t("The decision table could not be called."));}
+    finally{setBusy(false);}
+  };
+  return <Panel title={t("Call the published decision table")} className="grid gap-3">
+    <InputDraftProvider isolated scope={`decision-table-call:${draft.id}`}>
+      <JSONEditor label={t("Test input")} value={input} onChange={setInput} rows={6} />
+    </InputDraftProvider>
+    <div><Button loading={busy} disabled={!draft.version} onClick={()=>void run()}>{t("Call decision table")}</Button></div>
+    {call&&<div className="grid gap-2 text-xs">
+      <span>{t("Decision state")}: {result.data?.state??t("Pending")}</span>
+      {result.data?.output!==undefined&&<EditProposalReview key={call} call={call} output={result.data.output}/>}
+      {result.data?.output!==undefined&&<pre className="max-h-64 overflow-auto rounded bg-background p-2">{JSON.stringify(result.data.output,null,2)}</pre>}
+      {result.data?.error&&<p role="alert" className="text-danger">{result.data.error}</p>}
+      {result.isError&&<p role="alert" className="text-danger">{t("The decision result could not be loaded.")}</p>}
+    </div>}
+    {error&&<p role="alert" className="text-xs text-danger">{error}</p>}
+  </Panel>;
 }

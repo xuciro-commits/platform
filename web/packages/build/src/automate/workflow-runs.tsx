@@ -1,4 +1,4 @@
-import { useReadQuery, useRecordInventory } from "@platform/app";
+import { EditProposalReview, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, DataTable, Disclosure, FlowReleaseBinding, FlowCanvas, StatusTag, useFlowArrangement, flowStates, loops, notationOf, t, type FlowNodeStatus, type FlowNode, type ColumnDef, type FlowDefinition, type FlowInstanceData, type FlowCatalog } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
@@ -60,6 +60,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
         <FlowCanvas mode="view" label={t("Execution map")} catalog={catalog} nodes={nodes} edges={edges} height={300} selected={step} onSelect={inspect} storeKey={`workflow-runs:${name}`} />
         <div className="grid content-start gap-2 rounded-lg border border-border p-3"><h4 className="text-xs font-medium">{step ? t("Accepted output: {step}", { step }) : t("Workflow input")}</h4>
           <pre className="max-h-52 overflow-auto rounded bg-background p-2 text-2xs">{step ? output === undefined ? t("No accepted output for this step yet.") : JSON.stringify(output, null, 2) : shown.data || "{}"}</pre>
+          {step && output !== undefined && <EditProposalReview call={shown.id} output={output} engine="flow" step={step} />}
           {token && <><h4 className="text-xs font-medium">{t("Current token")}</h4><pre className="max-h-40 overflow-auto rounded bg-background p-2 text-2xs">{JSON.stringify(token, null, 2)}</pre></>}
         </div>
       </div>}

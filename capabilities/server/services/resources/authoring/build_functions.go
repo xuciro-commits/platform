@@ -43,7 +43,7 @@ var functionKind = resourceKind[Function, platform.AIFunction]{
 	},
 	identity: func(a, b Function) bool { return a.Name == b.Name && a.Object == b.Object },
 	fromDeclaration: func(d platform.AIFunction) Function {
-		return Function{Proposal: d.Proposal, Conversation: d.Conversation, Name: d.Name, Title: d.Title, Description: d.Description, Object: d.Object, Fields: d.Fields, Instructions: d.Instructions, Output: d.Output, Model: d.Model, ModelOptions: d.ModelOptions, MaxInputBytes: d.MaxInputBytes, MaxOutputBytes: d.MaxOutputBytes, MaxTokens: d.MaxTokens, Roles: d.Roles}
+		return Function{Proposal: d.Proposal, Conversation: d.Conversation, Name: d.Name, Title: d.Title, Description: d.Description, Object: d.Object, Fields: d.Fields, Instructions: d.Instructions, Output: d.Output, OutputMode: d.OutputMode, Model: d.Model, ModelOptions: d.ModelOptions, MaxInputBytes: d.MaxInputBytes, MaxOutputBytes: d.MaxOutputBytes, MaxTokens: d.MaxTokens, Roles: d.Roles}
 	},
 	beforeInstall: func(b *Build) {
 		catalog := b.ledger.Catalog
@@ -187,6 +187,7 @@ type Function struct {
 	Fields         []string                 `json:"fields" field:"aside" title:"Input fields"`
 	Instructions   string                   `json:"instructions" field:"required" type:"longtext"`
 	Output         []platform.Field         `json:"output" field:"aside" title:"Output fields"`
+	OutputMode     string                   `json:"outputMode,omitempty" field:"aside" choices:"fields,edit-proposal" title:"Output mode"`
 	Model          string                   `json:"model,omitempty"`
 	ModelOptions   platform.ModelOptions    `json:"modelOptions,omitzero" type:"json"`
 	MaxInputBytes  int                      `json:"maxInputBytes" field:"required" title:"Maximum input bytes"`
@@ -201,7 +202,7 @@ type Function struct {
 
 func (f Function) Definition() platform.AIFunction {
 	return platform.AIFunction{Proposal: f.Proposal, Conversation: f.Conversation, Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object,
-		Fields: f.Fields, Instructions: f.Instructions, Output: f.Output, Model: f.Model,
+		Fields: f.Fields, Instructions: f.Instructions, Output: f.Output, OutputMode: f.OutputMode, Model: f.Model,
 		MaxInputBytes: f.MaxInputBytes, MaxOutputBytes: f.MaxOutputBytes, MaxTokens: f.MaxTokens, ModelOptions: f.ModelOptions, Roles: f.Roles}
 }
 

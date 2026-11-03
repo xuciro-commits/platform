@@ -23,6 +23,7 @@ export type AIFunction = {
   fields: string[];
   instructions: string;
   output: Field[];
+  outputMode?: string;
   model?: string;
   modelOptions?: ModelOptions;
   maxInputBytes: number;
@@ -651,6 +652,7 @@ export type ApplicationWarning = {
 
 export type ApplyEditsRequest = {
   key: string;
+  step?: string;
 };
 
 export type ApprovalRequest = {
@@ -4935,6 +4937,7 @@ export type Table = {
   reads?: RuleReadSpec;
   inputs: TableColumn[];
   outputs: TableColumn[];
+  proposal?: boolean;
   rows: TableRow[];
   default?: string[];
   state: string;

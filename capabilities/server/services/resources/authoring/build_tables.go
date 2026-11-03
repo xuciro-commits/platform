@@ -119,6 +119,9 @@ func (b *Build) checkTableShape(tb Table, engines ...platform.RuleEngine) error 
 	if strings.TrimSpace(tb.Title) == "" || len(tb.Inputs) == 0 || len(tb.Outputs) == 0 || len(tb.Inputs)+len(tb.Outputs) > tableCols || len(tb.Rows) == 0 || len(tb.Rows) > tableRows {
 		return fmt.Errorf("a table needs a title, 1 to %d columns and 1 to %d rows", tableCols, tableRows)
 	}
+	if tb.Proposal && (len(tb.Outputs) != 1 || tb.Outputs[0].Name != "proposal" || tb.Outputs[0].Type != "text") {
+		return fmt.Errorf("an edit-proposal table has one text result column named proposal")
+	}
 	seen := map[string]bool{}
 	for _, col := range append(append([]TableColumn{}, tb.Inputs...), tb.Outputs...) {
 		if !columnName.MatchString(col.Name) || seen[col.Name] || col.Type != "text" && col.Type != "number" && col.Type != "boolean" {
@@ -151,7 +154,11 @@ func (b *Build) checkTableShape(tb Table, engines ...platform.RuleEngine) error 
 			}
 		}
 		for j, cell := range row.Then {
-			if _, err := platform.CastCell(cell, tb.Outputs[j].Type); err != nil {
+			if tb.Proposal {
+				if err := platform.EditProposalSchema().Validate(json.RawMessage(cell), 16<<10); err != nil {
+					return fmt.Errorf("row %d, proposal: %w", i+1, err)
+				}
+			} else if _, err := platform.CastCell(cell, tb.Outputs[j].Type); err != nil {
 				return fmt.Errorf("row %d, %s: %w", i+1, tb.Outputs[j].Name, err)
 			}
 		}
@@ -161,7 +168,11 @@ func (b *Build) checkTableShape(tb Table, engines ...platform.RuleEngine) error 
 			return fmt.Errorf("the default result fills every result column")
 		}
 		for j, cell := range tb.Default {
-			if _, err := platform.CastCell(cell, tb.Outputs[j].Type); err != nil {
+			if tb.Proposal {
+				if err := platform.EditProposalSchema().Validate(json.RawMessage(cell), 16<<10); err != nil {
+					return fmt.Errorf("default, proposal: %w", err)
+				}
+			} else if _, err := platform.CastCell(cell, tb.Outputs[j].Type); err != nil {
 				return fmt.Errorf("default, %s: %w", tb.Outputs[j].Name, err)
 			}
 		}
@@ -208,6 +219,7 @@ type Table struct {
 	Reads       *platform.RuleReadSpec `json:"reads,omitempty" type:"json" field:"aside"`
 	Inputs      []TableColumn          `json:"inputs" title:"Condition columns"`
 	Outputs     []TableColumn          `json:"outputs" title:"Result columns"`
+	Proposal    bool                   `json:"proposal,omitempty" title:"Return edit proposals"`
 	Rows        []TableRow             `json:"rows"`
 	Default     []string               `json:"default,omitempty" title:"Default result"`
 	State       string                 `json:"state" field:"readonly"`
@@ -240,7 +252,11 @@ func ValueColumnSchema(cols []TableColumn) platform.ValueSchema {
 
 func (tb Table) Definition() platform.Operation {
 	plan, _ := tb.RulePlan()
-	return platform.Operation{Rules: plan, Name: tb.Name, Title: tb.Title, Description: tb.Description, Input: ValueColumnSchema(tb.Inputs), Output: ValueColumnSchema(tb.Outputs), Roles: []string{Builder, User},
+	output := ValueColumnSchema(tb.Outputs)
+	if tb.Proposal {
+		output = platform.EditProposalSchema()
+	}
+	return platform.Operation{Rules: plan, Name: tb.Name, Title: tb.Title, Description: tb.Description, Input: ValueColumnSchema(tb.Inputs), Output: output, Roles: []string{Builder, User},
 		Binding: platform.OperationBinding{Kind: "native"}, Limits: platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 1, MaxInputBytes: 64 << 10, MaxOutputBytes: 16 << 10}}
 }
 
@@ -329,6 +345,13 @@ func (tb Table) RulePlan() (*platform.RuleTablePlan, error) {
 	result := func(cells []string) (json.RawMessage, error) {
 		if len(cells) != len(tb.Outputs) {
 			return nil, fmt.Errorf("table result columns differ")
+		}
+		if tb.Proposal {
+			proposal := json.RawMessage(cells[0])
+			if err := platform.EditProposalSchema().Validate(proposal, 16<<10); err != nil {
+				return nil, err
+			}
+			return proposal, nil
 		}
 		out := map[string]any{}
 		for i, col := range tb.Outputs {

@@ -3,19 +3,19 @@ import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
-import { useHost, ModelPicker, ModelOptionsEditor, useRecordInventory, useReadQuery } from "@platform/app";
+import { EditProposalReview, useHost, useInvokeCapability, ModelPicker, ModelOptionsEditor, useRecordInventory, useReadQuery } from "@platform/app";
 import { type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, FlowCanvas, Panel, Select, Textarea, Workbench, t,
+import { Button, Card, Checkbox, Input, FlowCanvas, Panel, RecordLookup, Select, Textarea, Workbench, t,
   type FlowNode, type FlowCatalog } from "@platform/ui";
 import { useState } from "react";
 import { type WorkflowObject } from "../automate/workflow-model";
 
-type FunctionDraft = { proposal?:Api.ProposalPolicy; conversation?:boolean; id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
+type FunctionDraft = { outputMode?:"fields"|"edit-proposal"; proposal?:Api.ProposalPolicy; conversation?:boolean; id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
   instructions: string; output: Api.Field[]; model?: string; modelOptions?:Api.ModelOptions; maxInputBytes: number; maxOutputBytes: number; maxTokens: number;
   roles: string[]; version?: number; published?: string };
 type Source = WorkflowObject & { archived?: boolean; fields: { name: string; title: string; type: string; aiInput?:boolean;read?: string[] }[] };
 type Stage = "settings" | "source" | "model" | "output";
-const empty = (): FunctionDraft => ({ id: "", revision: 0, name: "", title: "", description: "", object: "", fields: [], instructions: "",
+const empty = (): FunctionDraft => ({ outputMode: "fields", id: "", revision: 0, name: "", title: "", description: "", object: "", fields: [], instructions: "",
   output: [{ name: "summary", type: "string", required: true, description: "" }], maxInputBytes: 4096, maxOutputBytes: 1024, maxTokens: 256, roles: ["builder", "user"] });
 const loaded = (record: FunctionDraft): FunctionDraft => ({ ...record, fields: record.fields ?? [], output: record.output ?? [], roles: record.roles ?? [] });
 const scalarTypes = ["text", "longtext", "integer", "decimal", "boolean", "choice"];
@@ -31,8 +31,8 @@ export function FunctionEditor({ id }: { id: string }) {
   const editor = useDefinitionDraft<FunctionDraft>({
     id, type: "build.function", view: "function", empty, normalize: loaded,
     failure: t("The function could not be saved or loaded. Your draft is still here."), onDiscard: () => setChosen("settings"),
-    payload: ({proposal,conversation,name,title,description,object,fields,instructions,output,model,modelOptions,maxInputBytes,maxOutputBytes,maxTokens,roles}) =>
-      ({proposal:proposal??null,conversation:conversation??false,name,title,description,object,fields,instructions,output,model:model??"",modelOptions:modelOptions??{},maxInputBytes,maxOutputBytes,maxTokens,roles}),
+    payload: ({outputMode,proposal,conversation,name,title,description,object,fields,instructions,output,model,modelOptions,maxInputBytes,maxOutputBytes,maxTokens,roles}) =>
+      ({outputMode:outputMode??"fields",proposal:proposal??null,conversation:conversation??false,name,title,description,object,fields,instructions,output,model:model??"",modelOptions:modelOptions??{},maxInputBytes,maxOutputBytes,maxTokens,roles}),
   });
   const {draft,query,dirty,busy,error,setError,patch:change,perform,discardChanges,confirmDiscard}=editor;
   const modelSelection=useReadQuery<Api.ModelSelection>("/v1/ai/model-selection?purpose=generation").data;
@@ -46,7 +46,7 @@ export function FunctionEditor({ id }: { id: string }) {
   if (!source || !(draft.fields ?? []).length || (draft.fields ?? []).some((name) => !fields.some((field) => field.name === name))) issues.push(t("Choose direct scalar fields from a saved object."));
   if (!(draft.roles ?? []).length || (draft.roles ?? []).some((role) => !roles.includes(role))) issues.push(t("Choose at least one callable role of the source object."));
   if (!(draft.instructions ?? "").trim()) issues.push(t("Write instructions for the model stage."));
-  if (!(draft.output ?? []).length || (draft.output ?? []).some((field) => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(field.name) || !field.description?.trim()) || new Set((draft.output ?? []).map((field) => field.name)).size !== (draft.output ?? []).length)
+  if (draft.outputMode !== "edit-proposal" && (!(draft.output ?? []).length || (draft.output ?? []).some((field) => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(field.name) || !field.description?.trim()) || new Set((draft.output ?? []).map((field) => field.name)).size !== (draft.output ?? []).length))
     issues.push(t("Give every output a unique field name, scalar type and description."));
   const save = async (deferNavigation = false) => {
     const saved = await editor.save(deferNavigation);
@@ -64,7 +64,7 @@ export function FunctionEditor({ id }: { id: string }) {
           operations={[{ id: "test", label: testing ? t("Hide test") : t("Test"), disabled: !draft.id || dirty, run: () => setTesting(!testing) }]} onCancel={discardChanges} route={{ view: "function", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("AI function")}><p className="text-xs text-muted">{t("Save the declaration, test fixed cases, then review its release candidate.")}</p></ContextHelp>
-    {testing && draft.id && !dirty && <Card className="p-3"><CandidateTest functionId={draft.id} embedded /></Card>}
+    {testing && draft.id && !dirty && <Card className="grid gap-4 p-3"><CandidateTest functionId={draft.id} embedded /><FunctionProbe draft={draft} /></Card>}
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed function version {version}. Accepted calls keep their saved inputs and definition.", { version: draft.version })}</Panel> : null}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {dirty && issues.length > 0 && <Panel aria-live="polite" className="text-xs text-muted">{issues.join(" ")}</Panel>}
@@ -77,7 +77,7 @@ export function FunctionEditor({ id }: { id: string }) {
       <FunctionMap draft={draft} source={source?.title} chosen={chosen} onChoose={setChosen} />
       <Panel role="region" aria-label={t("Function properties")} className="grid min-w-0 content-start gap-3 p-3">
         {chosen === "settings" && <>
- <Checkbox checked={!!draft.proposal} onChange={enabled=>change({proposal:enabled?{expiresAfterSeconds:3600}:undefined,conversation:false})}>{t("Produce a business proposal")}</Checkbox>
+ <Checkbox disabled={draft.outputMode==="edit-proposal"} checked={!!draft.proposal} onChange={enabled=>change({proposal:enabled?{expiresAfterSeconds:3600}:undefined,conversation:false})}>{t("Produce a business proposal")}</Checkbox>
  {draft.proposal&&<fieldset className="grid gap-2 rounded border border-border p-2"><legend className="text-xs">{t("Proposal review policy")}</legend>
  <label className="grid gap-1 text-xs">{t("Proposal expiry (seconds)")}<Input type="number" min={1} max={604800} value={draft.proposal.expiresAfterSeconds} onChange={event=>change({proposal:{...draft.proposal!,expiresAfterSeconds:Number(event.target.value)}})}/></label>
  <label className="grid gap-1 text-xs">{t("Handover role")}<Select value={draft.proposal.handoffRole??""} onChange={event=>change({proposal:{...draft.proposal!,handoffRole:event.target.value||undefined,confidenceField:undefined,minimumConfidence:0}})}><option value="">{t("Original adoption action roles")}</option>{roles.map(role=><option key={role} value={role}>{role}</option>)}</Select></label>
@@ -110,8 +110,9 @@ export function FunctionEditor({ id }: { id: string }) {
 
         </>}
         {chosen === "output" && <>
+          <SegmentedChoice label={t("Output mode")} value={draft.outputMode ?? "fields"} onChange={value => change({ outputMode: value as FunctionDraft["outputMode"], output: value === "edit-proposal" ? [] : [{ name: "summary", type: "string", required: true, description: "" }], proposal: value === "edit-proposal" ? undefined : draft.proposal })} options={[{ value: "fields", label: t("Typed fields") }, { value: "edit-proposal", label: t("Edit proposal") }]} />
           <label className="grid gap-1 text-xs">{t("Maximum output bytes")}<Input draftKey="maximum-output-bytes" type="number" min={1} max={32768} value={draft.maxOutputBytes} onChange={(e) => change({ maxOutputBytes: Number(e.target.value) })} /></label>
-          {(draft.output ?? []).map((field, index) => <Card key={index} role="group" aria-label={t("Output field {n}", { n: index + 1 })} className="grid gap-2 p-2">
+          {draft.outputMode === "edit-proposal" ? <ContextHelp title={t("Edit proposal")}><p className="text-xs text-muted">{t("The function returns actions and expected revisions. It changes no records; a person reviews the proposal and applies it through the normal action engine.")}</p></ContextHelp> : <>{(draft.output ?? []).map((field, index) => <Card key={index} role="group" aria-label={t("Output field {n}", { n: index + 1 })} className="grid gap-2 p-2">
             <label className="grid gap-1 text-xs">{t("Output field name")}<Input value={field.name} onChange={(e) => updateOutput(index, { name: e.target.value })} /></label>
             <label className="grid gap-1 text-xs">{t("Output type")}<Select value={field.type} onChange={(e) => updateOutput(index, { type: e.target.value, choices: undefined })}>
               <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="integer">{t("Integer")}</option><option value="decimal">{t("Decimal")}</option>
@@ -121,11 +122,39 @@ export function FunctionEditor({ id }: { id: string }) {
             {field.type === "string" && <label className="grid gap-1 text-xs">{t("Allowed text values (one per line, optional)")}<Textarea rows={2} value={field.choices?.join("\n") ?? ""} onChange={(e) => updateOutput(index, { choices: e.target.value ? e.target.value.split("\n") : undefined })} /></label>}
             <Button disabled={(draft.output ?? []).length === 1} onClick={() => change({ output: (draft.output ?? []).filter((_, i) => i !== index) })}>{t("Remove output")}</Button>
           </Card>)}
-          <Button disabled={(draft.output ?? []).length >= 16} onClick={() => change({ output: [...(draft.output ?? []), { name: "", type: "string", required: true, description: "" }] })}>{t("Add output field")}</Button>
+          <Button disabled={(draft.output ?? []).length >= 16} onClick={() => change({ output: [...(draft.output ?? []), { name: "", type: "string", required: true, description: "" }] })}>{t("Add output field")}</Button></>}
         </>}
       </Panel>
     </fieldset></StructuredEditor>
   </div></Workbench>;
+}
+
+function FunctionProbe({draft}:{draft:FunctionDraft}) {
+  const {source}=useHost(), invoke=useInvokeCapability();
+  const [record,setRecord]=useState(""),[call,setCall]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  const result=useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/ai/${encodeURIComponent(call)}`,1000,!!call);
+  const run=async()=>{
+    setBusy(true);setError("");setCall("");
+    try{
+      const answer=await invoke({ref:{app:"build",kind:"function",name:draft.name},key:crypto.randomUUID(),version:draft.version,inputs:{source:record}});
+      setCall(answer.call??"");
+    }catch(failure){setError(failure instanceof Error?failure.message:t("The function could not be called."));}
+    finally{setBusy(false);}
+  };
+  return <div className="grid gap-2 border-t border-border pt-3">
+    <h4 className="text-xs font-medium">{t("Call the published function")}</h4>
+    <p className="text-xs text-muted">{t("The call reads the selected record with your permissions and retains its output.")}</p>
+    <RecordLookup source={source} type={draft.object} value={record} onChange={value=>setRecord(value??"")} ariaLabel={t("Source record")} />
+    <div><Button loading={busy} disabled={!record||!draft.version} onClick={()=>void run()}>{t("Call function")}</Button></div>
+    {call&&<Panel role="status" className="grid gap-2 text-xs">
+      <span>{t("Function state")}: {result.data?.state??t("Pending")}</span>
+      {result.data?.output!==undefined&&<EditProposalReview key={call} call={call} output={result.data.output} engine="ai" />}
+      {result.data?.output!==undefined&&<pre className="max-h-64 overflow-auto rounded bg-background p-2">{JSON.stringify(result.data.output,null,2)}</pre>}
+      {result.data?.error&&<p role="alert" className="text-danger">{result.data.error}</p>}
+      {result.isError&&<p role="alert" className="text-danger">{t("The function result could not be loaded.")}</p>}
+    </Panel>}
+    {error&&<p role="alert" className="text-xs text-danger">{error}</p>}
+  </div>;
 }
 
 function FunctionMap({ draft, source, chosen, onChoose }: { draft: FunctionDraft; source?: string; chosen: Stage; onChoose: (stage: Stage) => void }) {
@@ -137,7 +166,7 @@ function FunctionMap({ draft, source, chosen, onChoose }: { draft: FunctionDraft
   const nodes: FlowNode[] = [
     { id: "source", kind: "source", label: source || t("Choose an object"), detail: (draft.fields ?? []).join(", ") || t("Choose input fields"), position: { x: 0, y: 0 } },
     { id: "model", kind: "model", label: draft.model || t("Application default model"), detail: t("Up to {n} output tokens", { n: draft.maxTokens }), position: { x: 0, y: 150 } },
-    { id: "output", kind: "output", label: t("Strict JSON object"), detail: (draft.output ?? []).map((field) => `${field.name}: ${field.type}`).join(", "), position: { x: 0, y: 300 } },
+    { id: "output", kind: "output", label: t(draft.outputMode === "edit-proposal" ? "Edit proposal" : "Strict JSON object"), detail: draft.outputMode === "edit-proposal" ? t("Actions for human review") : (draft.output ?? []).map((field) => `${field.name}: ${field.type}`).join(", "), position: { x: 0, y: 300 } },
   ];
   return <Card className="min-w-0 p-3">
     <FlowCanvas label={t("Function map")} catalog={catalog} nodes={nodes} selected={chosen} onSelect={(id) => onChoose(id as Stage)} height={460}

@@ -34,12 +34,6 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 | P2.13 | 重放只应用接受映像 | 重放不再重新执行 submission、input、effect、usage、agent、delivery、job 等旧条目；旧条目经版本化迁移转为接受映像 | 7-system/README R6 |
 | P2.14 | 验收补齐 | 内核不变量 K4–K6；F2–F10 随相关批次逐条加入 | 7-system/verification |
 
-## P3 构建者闭环
-
-| 编号 | 事项 | 规范 |
-|---|---|---|
-| P3.11 | 函数编辑提议；查询并入函数或对象集 | 6-domain §6.8 |
-
 ## P4 行业应用
 
 | 编号 | 事项 |

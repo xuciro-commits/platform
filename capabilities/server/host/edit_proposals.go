@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -11,10 +12,11 @@ import (
 )
 
 type ApplyEditsRequest struct {
-	Key string `json:"key"`
+	Key  string `json:"key"`
+	Step string `json:"step,omitempty"`
 }
 
-func (t *Tenant) readEditProposal(member platform.Member, engine, id string) (platform.EditProposal, *kernel.Error) {
+func (t *Tenant) readEditProposal(member platform.Member, engine, id, step string) (platform.EditProposal, *kernel.Error) {
 	var result platform.OperationResult
 	var refusal *kernel.Error
 	switch engine {
@@ -22,6 +24,26 @@ func (t *Tenant) readEditProposal(member platform.Member, engine, id string) (pl
 		result, refusal = t.ReadOperation(member, id)
 	case "ai":
 		result, refusal = t.ReadCapabilityAI(member, id, Now())
+	case "flow":
+		return recordRead(t, context.Background(), func() (platform.EditProposal, *kernel.Error) {
+			view, refusal := t.recordOf(member, platform.FlowInstanceType, id, Now())
+			if refusal != nil {
+				return platform.EditProposal{}, refusal
+			}
+			run, ok := view.Record.(platform.FlowInstance)
+			if !ok || run.State != "done" || step == "" {
+				return platform.EditProposal{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Choose an edit proposal from a completed flow step")
+			}
+			output := run.Outputs[step]
+			if platform.EditProposalSchema().Validate(output, 48<<10) != nil {
+				return platform.EditProposal{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "This flow step did not return an edit proposal")
+			}
+			var proposal platform.EditProposal
+			if err := json.Unmarshal(output, &proposal); err != nil {
+				return proposal, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			return proposal, nil
+		})
 	default:
 		return platform.EditProposal{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a function call")
 	}
@@ -43,7 +65,7 @@ func (t *Tenant) readEditProposal(member platform.Member, engine, id string) (pl
 
 func (h *Host) routesEditProposals(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/capabilities/calls/{engine}/{id}/edits", Summary: "Review the original pure function's proposed actions without executing them", Answer: platform.EditProposal{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		proposal, refusal := t.readEditProposal(m, r.PathValue("engine"), r.PathValue("id"))
+		proposal, refusal := t.readEditProposal(m, r.PathValue("engine"), r.PathValue("id"), r.URL.Query().Get("step"))
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
@@ -56,7 +78,7 @@ func (h *Host) routesEditProposals(rt *routes) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a stable request key"))
 			return
 		}
-		proposal, refusal := t.readEditProposal(m, r.PathValue("engine"), r.PathValue("id"))
+		proposal, refusal := t.readEditProposal(m, r.PathValue("engine"), r.PathValue("id"), request.Step)
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return

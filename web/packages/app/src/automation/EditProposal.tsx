@@ -3,7 +3,7 @@ import { apiErrorMessage, type Api } from "@platform/kernel";
 import { Button, Dialog, Notice, t } from "@platform/ui";
 import { useState } from "react";
 
-export function EditProposalReview({ call, output, engine = "compute" }: { call: string; output: unknown; engine?: "compute" | "ai" }) {
+export function EditProposalReview({ call, output, engine = "compute", step }: { call: string; output: unknown; engine?: "compute" | "ai" | "flow"; step?: string }) {
   const host = useHost();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [applied, setApplied] = useState(false), [key] = useState(() => crypto.randomUUID());
@@ -11,7 +11,7 @@ export function EditProposalReview({ call, output, engine = "compute" }: { call:
   if (proposal?.kind !== "edit-proposal/v1") return null;
   const apply = async () => {
     setBusy(true); setError("");
-    const answer = await host.client.call<Api.CompositeAnswer>("POST", `/v1/capabilities/calls/${engine}/${encodeURIComponent(call)}/edits`, { key });
+    const answer = await host.client.call<Api.CompositeAnswer>("POST", `/v1/capabilities/calls/${engine}/${encodeURIComponent(call)}/edits`, { key, ...(step ? { step } : {}) });
     setBusy(false);
     if (!answer.ok) { setError(apiErrorMessage(answer.body) ?? t("The proposed changes were refused.")); return; }
     host.client.refreshLiveReads(); setApplied(true); setOpen(false);

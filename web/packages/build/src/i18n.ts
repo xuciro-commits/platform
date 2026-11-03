@@ -1,6 +1,17 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Output mode": "输出模式",
+  "Typed fields": "类型化字段",
+  "Edit proposal": "编辑提议",
+  "Actions for human review": "供人工审核的动作",
+  "The function returns actions and expected revisions. It changes no records; a person reviews the proposal and applies it through the normal action engine.": "函数返回动作与预期修订，不修改记录；由人工审阅提议，再通过正常动作引擎应用。",
+  "Call the published function": "调用已发布函数",
+  "The call reads the selected record with your permissions and retains its output.": "调用按你的权限读取所选记录，并保留输出。",
+  "Call function": "调用函数",
+  "The function could not be called.": "无法调用函数。",
+  "Function state": "函数状态",
+
   "Object sets": "对象集",
   "Saved object sets": "已保存的对象集",
   "Only a builder can edit saved object sets.": "仅构建者可编辑已保存的对象集。",
@@ -2175,6 +2186,7 @@ register("zh-CN", {
   "Version {n}": "版本 {n}",
   "Table name": "表名称",
   "Table title": "表标题",
+  "Typed results": "类型化结果",
   "condition": "条件",
   "result": "结果",
   "Remove column": "删除列",
@@ -2184,6 +2196,11 @@ register("zh-CN", {
   "refuse": "拒绝",
   "Add row": "添加行",
   "Leave the default empty to refuse a call no row matches; fill it to answer anyway.": "默认结果留空时，无行命中的调用会被拒绝；填写后则照常返回。",
+  "Call the published decision table": "调用已发布决策表",
+  "Call decision table": "调用决策表",
+  "The decision table could not be called.": "无法调用决策表。",
+  "Decision state": "决策状态",
+  "The decision result could not be loaded.": "无法加载决策结果。",
   "Data sources": "数据源",
   "Data source": "数据源",
   "Only a builder can edit data sources.": "只有构建者可以编辑数据源。",
