@@ -23,7 +23,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 ## Data Connection
 
-- 侧栏：Sources（Connections、Syncs）、Streams（Streams、Observation sources）、Exports（Writebacks）、Listeners、Webhooks。
+- 侧栏：Sources（Connections、Syncs）、Streams（Streams、Observation sources）、Exports（Writebacks）、Listeners、Webhooks；Syncs 是数据源的列表视图，Streams 是流式数据源与观测源的列表视图，Webhooks 是投递监控。
 - 新建连接：选访问类型（http、odata、postgres），填地址与凭据引用，可选允许私有地址；Check 保留最近一次检查结果。
 - 数据源页面：连接、读取方式（JSON、CSV、OData 实体集、数据库表）、相对地址、目标对象或数据集、字段映射、周期或手动触发；History 为运行表，失败行可重试。
 - 流页面：连接配置、可选的目标流式数据集、读取位置与运行状态；Publish/Pause 控制持续读取。配置目标后持续批次写入该数据集；未指定目标的观测源仍可供函数使用。
