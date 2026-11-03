@@ -272,7 +272,7 @@ export function GeneratedForm({ type, record, initial, fields, essential = false
 
 export type SavedView = Api.SavedView;
 
-export function Records({ type, description, help, actions, covers, saved, kanban }: { type: string; description?: string; help?:ReactNode; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"] }) {
+export function Records({ type, description, help, actions, covers, saved, kanban, fields }: { type: string; description?: string; help?:ReactNode; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"]; fields?: string[] }) {
   const { source, decide, can, catalog } = useHost();
   const openRecord = useOpenRecord();
   const info = source.entity(type);
@@ -298,6 +298,7 @@ export function Records({ type, description, help, actions, covers, saved, kanba
         key={saved?.id ?? type}
         source={source}
         type={type}
+        fields={fields}
         initial={initial}
         inlineEdit={inlineEdit}
         onSave={setSaving}

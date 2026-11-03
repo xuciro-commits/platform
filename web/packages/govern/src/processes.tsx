@@ -41,18 +41,26 @@ export function Evaluations() {
     <>
       <PageHeader title={t("Evaluations")} help={t("A candidate model re-runs an agent's latest runs that people confirmed, changed, rejected, accepted or corrected — dry: it sees what the run saw, its actions are checked, never taken. Each case agrees or differs with what people accepted, or repeats or avoids what they corrected.")} />
       {can("agent.evaluation.start") && (
-        <Form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={async () => {const ok=await decide("agent.evaluation.start",{type:"agent.evaluation",id:evaluation},{agent:chosen,model,suite});if(ok)setEvaluation(newId("EVAL"));return ok;}}>
-          <Select aria-label={t("Agent")} className="w-64" value={chosen} onChange={(e) => setAgent(e.target.value)}>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
-          </Select>
-          <ModelPicker value={model} onChange={setModel} purpose="agent" inherit={false} label={t("Candidate model")} />
-          <Tooltip content={t("The agent's declared cases, three runs each, instead of its past runs")}><span>
-            <Checkbox className="text-sm" checked={suite} onChange={setSuite}>{t("Declared cases")}</Checkbox>
-          </span></Tooltip>
-          <Button type="submit" variant="primary" disabled={!chosen || !model}>{t("Evaluate")}</Button>
+        <Form className="mb-3 grid gap-3 rounded-md border border-border bg-surface p-3" onSubmit={async () => {const ok=await decide("agent.evaluation.start",{type:"agent.evaluation",id:evaluation},{agent:chosen,model,suite});if(ok)setEvaluation(newId("EVAL"));return ok;}}>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+            <label className="grid content-start gap-1 text-xs font-medium">{t("Agent")}
+              <Select value={chosen} onChange={(e) => setAgent(e.target.value)}>
+                {agents.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
+              </Select>
+            </label>
+            <div className="grid min-w-0 content-start gap-1 text-xs font-medium">{t("Candidate model")}
+              <ModelPicker value={model} onChange={setModel} purpose="agent" inherit={false} label={t("Candidate model")} />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Tooltip content={t("The agent's declared cases, three runs each, instead of its past runs")}><span>
+              <Checkbox className="text-sm" checked={suite} onChange={setSuite}>{t("Declared cases")}</Checkbox>
+            </span></Tooltip>
+            <Button type="submit" variant="primary" className="ml-auto" disabled={!chosen || !model}>{t("Evaluate")}</Button>
+          </div>
         </Form>
       )}
-      <Records type="agent.evaluation" help={t("Reports, newest first; open one for each case.")} />
+      <Records type="agent.evaluation" fields={["agent", "model", "state", "score", "agrees", "differs", "repeats", "avoids", "tokens", "cost"]} help={t("Reports, newest first; open one for each case.")} />
     </>
   );
 }
