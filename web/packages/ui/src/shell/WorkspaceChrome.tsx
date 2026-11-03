@@ -1,4 +1,4 @@
-import { Check, ChevronRight, ChevronsLeft, Languages, LogOut, Repeat2, Star, SunMoon, UserRound } from "lucide-react";
+import { Check, ChevronRight, ChevronsLeft, Languages, LogOut, Repeat2, Star, SunMoon, UserPlus, UserRound, Users } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { Component, type ReactNode } from "react";
 import { cn } from "../lib/cn";
@@ -150,6 +150,16 @@ export function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme 
             <DropdownMenu.RadioGroup value={language()} onValueChange={onLanguageSelect}>
               {languages.map((entry) => choice(entry.id, entry.name))}
             </DropdownMenu.RadioGroup>)}
+          {session.accounts && section(<Users className={menuIcon} />, t("Switch account"), session.accounts.find((entry) => entry.id === session.currentAccount)?.label,
+            <>
+              <DropdownMenu.RadioGroup value={session.currentAccount} onValueChange={(id) => session.onAccountSwitch?.(id)}>
+                {session.accounts.map((entry) => choice(entry.id, entry.label))}
+              </DropdownMenu.RadioGroup>
+              <DropdownMenu.Separator className={menuSeparator} />
+              <DropdownMenu.Item className={menuRow} onSelect={() => session.onAddAccount?.()}>
+                <UserPlus className={menuIcon} /><span className="min-w-0 flex-1 truncate">{t("Add account")}</span>
+              </DropdownMenu.Item>
+            </>)}
           {session.options.length > 0 && section(<Repeat2 className={menuIcon} />, t("Switch tenant or identity"), current,
             <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>
               {session.options.map((option) => choice(option.id, option.label))}

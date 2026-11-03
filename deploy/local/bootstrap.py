@@ -31,8 +31,30 @@ def private_write(path, data):
         os.chmod(path, 0o600)
         output.write(data)
 
+def private_replace(path, data):
+    temporary = path.with_suffix('.new')
+    with temporary.open('w', encoding='utf-8') as output:
+        os.chmod(temporary, 0o600)
+        output.write(data)
+    os.replace(temporary, path)
+
 def json_text(value):
     return json.dumps(value, ensure_ascii=False, indent=2) + '\n'
+
+def branding_keys():
+    return [{'name': 'platform-branding', 'secret': {'Plain': secrets.token_urlsafe(48)},
+             'access': [{'group': 'Clients', 'access_rights': ['read', 'update']}]}]
+
+def ensure_branding_key(root, local):
+    path = local / 'rauthy/bootstrap/api_keys.json'
+    manifest_path = local / 'manifest.json'
+    manifest = json.loads(manifest_path.read_text())
+    relative = str(path.relative_to(root))
+    if relative in manifest['files']:
+        return
+    private_replace(path, json_text(branding_keys()))
+    manifest['files'][relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+    private_replace(manifest_path, json_text(manifest))
 
 def validate(root):
     local = root / '.build/local'
@@ -63,7 +85,9 @@ def bootstrap(root=None, check=False):
     root = Path(root or ROOT).resolve()
     local, env_path = root / '.build/local', root / 'deploy/local/.env'
     if env_path.exists() or local.exists():
-        return validate(root)
+        config = validate(root)
+        ensure_branding_key(root, local)
+        return config
     if check:
         raise RuntimeError('Local configuration has not been initialized; run make bootstrap.')
     os.umask(0o077)
@@ -95,8 +119,7 @@ def bootstrap(root=None, check=False):
               'access_token_alg': 'EdDSA', 'id_token_alg': 'EdDSA', 'auth_code_lifetime': 60, 'access_token_lifetime': 900,
               'scopes': ['openid', 'email', 'profile'], 'default_scopes': ['openid', 'email', 'profile'],
               'force_mfa': False, 'flows_enabled': ['authorization_code', 'refresh_token'], 'challenges': ['S256']}
-    branding = [{'name': 'platform-branding', 'secret': {'Plain': secrets.token_urlsafe(48)},
-                 'access': [{'group': 'Clients', 'access_rights': ['read', 'update']}]}]
+    branding = branding_keys()
     users = [{'email': a['email'], 'given_name': a['member'].removeprefix('dev-').capitalize(), 'password': {'Plain': a['password']},
               'roles': [], 'enabled': True, 'email_verified': True} for a in accounts[1:]]
     rauthy = f'''[bootstrap]

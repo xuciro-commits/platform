@@ -5,7 +5,7 @@ export type { PreparedApplication, LocalFormDraft } from "./prepared";
 export type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
 export type { AuthorityDeclarationJson, SubmissionStateJson } from "./gen/platform/kernel/v1alpha1/authority_pb";
 export type { ErrorCodeJson } from "./gen/platform/kernel/v1alpha1/error_pb";
-export { codeChallenge, currentSession, keepFresh, signIn, signOut, type OidcConfig, type OidcSession } from "./oidc";
+export { accounts, codeChallenge, currentSession, forgetAccount, keepFresh, signIn, signOut, switchAccount, type OidcConfig, type OidcSession } from "./oidc";
 export type * as Api from "./gen/host";
 export { imageRegionLimits, editProposalSchema } from "./gen/host";
 export * from "./gen/enterprise-sdk";

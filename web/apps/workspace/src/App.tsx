@@ -1,6 +1,6 @@
 import "./i18n";
 import { ApplicationSessionsProvider, HostContext, resourceEntryRoute, withApp, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
-import { EdgeClient, OfflineReadError, keepFresh, signOut, type Api, type OidcConfig, type OidcSession } from "@platform/kernel";
+import { EdgeClient, OfflineReadError, accounts, forgetAccount, keepFresh, signIn, signOut, switchAccount, type Api, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Layers } from "lucide-react";
@@ -54,6 +54,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     forget(IDENTITY_KEY);
     forget(TENANT_KEY);
     try {
+      if (forgetAccount(signedIn.config, signedIn.session.subject) > 0) { location.reload(); return; }
       await signOut(signedIn.config);
     } catch {
       const message = t("Could not reach the sign-in provider. Retry signing out.");
@@ -61,6 +62,16 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       notify.error(message);
       setSigningOut(false);
     }
+  };
+  const addAccount = () => {
+    if (!signedIn) return;
+    client.close();
+    void signIn(signedIn.config, "login");
+  };
+  const changeAccount = (id: string) => {
+    if (!signedIn) return;
+    client.close();
+    void switchAccount(signedIn.config, id).then(() => location.reload());
   };
 
   const meQuery = useQuery({ queryKey: [token, tenant, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
@@ -305,6 +316,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         </div>}
         session={{ tenant: me!.tenantId === "system" ? t("System self-hosting") : me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch,
+          accounts: signedIn ? accounts(signedIn.config).map((entry) => ({ id: entry.subject, label: entry.email || entry.subject })) : undefined,
+          currentAccount: signedIn?.session.subject, onAccountSwitch: changeAccount, onAddAccount: addAccount,
           onSignOut: signedIn ? () => void leaveSession() : undefined,
           onAccount: all.some((a) => a.id === "platform") ? () => { chosen.current = { id: "platform", from: activeRoute && routeToHash(activeRoute) }; select("platform"); location.hash = routeToHash({ view: "account" }); } : undefined }} />
       <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} />

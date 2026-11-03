@@ -1024,6 +1024,8 @@ export default {
   "Stuck": "卡住",
   "Sub-flow": "子流程",
   "Switch tenant or identity": "切换租户或身份",
+  "Switch account": "切换账户",
+  "Add account": "添加账户",
   "Sign out": "退出登录",
   "This view no longer exists.": "此视图已不存在。",
   "This view failed to show.": "这个视图显示出错。",
