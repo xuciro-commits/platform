@@ -248,55 +248,11 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		if err != nil {
 			return nil, err
 		}
-		switch r := record.(type) {
-		case Listener:
-			r.State, r.Enabled = "published", true
-			record = r
-		case Source:
-			r.State, r.Publisher, r.PublisherScopes = "published", ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
-			if r.Stream && r.Dataset != "" && r.Puller == "" {
-				r.Puller, r.PullerScopes = ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
-			}
-			record = r
-		case platform.MediaSet:
-			configuration, err := b.integrationConfiguration(asset)
+		if entry := integrationEntryOfRecord(record); entry != nil && entry.publish != nil {
+			record, err = entry.publish(b, record, asset, ctx)
 			if err != nil {
 				return nil, err
 			}
-			fixed := configuration.(platform.MediaSet)
-			fixed.Record, fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.Record, r.DefinitionVersion, r.Published, r.Versions
-			record = fixed
-		case platform.Schedule:
-			configuration, err := b.integrationConfiguration(asset)
-			if err != nil {
-				return nil, err
-			}
-			fixed := configuration.(platform.Schedule)
-			fixed.Record, fixed.LastRun, fixed.Runner, fixed.RunnerScopes = r.Record, r.LastRun, ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
-			fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
-			record = fixed
-		case Pipeline:
-			if !ctx.DraftsOnly && !ctx.Member.CanDeclassify(r.PublishedDeclassifications()) {
-				return nil, fmt.Errorf("declassification publication requires clearance and permission for every selected marking")
-			}
-			r.State = "published"
-			record = r
-		case Writeback:
-			r.State, r.Publisher = "published", ctx.Member.ID
-			record = r
-		case Observation:
-			configuration, err := b.integrationConfiguration(asset)
-			if err != nil {
-				return nil, err
-			}
-			fixed := configuration.(Observation)
-			fixed.Record, fixed.State, fixed.Publisher = r.Record, "published", ctx.Member.ID
-			fixed.PublisherScopes = string(platform.Raw(ctx.Member.Scopes))
-			fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
-			record = fixed
-		case Match:
-			r.State, r.Publisher = "published", ctx.Member.ID
-			record = r
 		}
 		raw, err := json.Marshal(record)
 		if err != nil {
@@ -309,7 +265,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 	}
 	if !ctx.DraftsOnly {
 		for _, plan := range out {
-			if slices.Contains([]platform.AssetKind{platform.AssetSource, platform.AssetListener, platform.AssetPipeline, platform.AssetWriteback, platform.AssetObservation, platform.AssetMatching}, plan.Ref.Kind) && (!ctx.Member.Active() || !ctx.Member.InScope(plan.Schema)) {
+			if entry := integrationEntryOfKind(plan.Ref.Kind); entry != nil && entry.requiresToken && (!ctx.Member.Active() || !ctx.Member.InScope(plan.Schema)) {
 				return nil, fmt.Errorf("release publication token does not permit %s", plan.Schema)
 			}
 		}

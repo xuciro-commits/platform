@@ -11,25 +11,86 @@ import (
 )
 
 type integrationEntry struct {
-	kind       platform.AssetKind
-	typ        string
-	recordType reflect.Type
+	kind          platform.AssetKind
+	typ           string
+	recordType    reflect.Type
+	requiresToken bool
+	publish       func(*Build, any, platform.ReleaseAsset, platform.AssetReleaseContext) (any, error)
 }
 
-var integrationEntries = []integrationEntry{
-	{platform.AssetConnection, ConnectionType, reflect.TypeFor[Connection]()},
-	{platform.AssetListener, ListenerType, reflect.TypeFor[Listener]()},
-	{platform.AssetSource, SourceType, reflect.TypeFor[Source]()},
-	{platform.AssetMediaSet, platform.MediaSetType, reflect.TypeFor[platform.MediaSet]()},
-	{platform.AssetSchedule, platform.ScheduleType, reflect.TypeFor[platform.Schedule]()},
-	{platform.AssetDataset, DatasetType, reflect.TypeFor[Dataset]()},
-	{platform.AssetPipeline, PipelineType, reflect.TypeFor[Pipeline]()},
-	{platform.AssetWriteback, WritebackType, reflect.TypeFor[Writeback]()},
-	{platform.AssetObservation, ObservationType, reflect.TypeFor[Observation]()},
-	{platform.AssetMatching, MatchType, reflect.TypeFor[Match]()},
+func newIntegrationEntry[T any](kind platform.AssetKind, typ string, requiresToken bool, publish func(*Build, T, platform.ReleaseAsset, platform.AssetReleaseContext) (T, error)) integrationEntry {
+	entry := integrationEntry{kind: kind, typ: typ, recordType: reflect.TypeFor[T](), requiresToken: requiresToken}
+	if publish != nil {
+		entry.publish = func(b *Build, record any, asset platform.ReleaseAsset, ctx platform.AssetReleaseContext) (any, error) {
+			return publish(b, record.(T), asset, ctx)
+		}
+	}
+	return entry
 }
+
+var integrationEntries []integrationEntry
 
 func init() {
+	integrationEntries = []integrationEntry{
+		newIntegrationEntry[Connection](platform.AssetConnection, ConnectionType, false, nil),
+		newIntegrationEntry[Listener](platform.AssetListener, ListenerType, true, func(_ *Build, r Listener, _ platform.ReleaseAsset, _ platform.AssetReleaseContext) (Listener, error) {
+			r.State, r.Enabled = "published", true
+			return r, nil
+		}),
+		newIntegrationEntry[Source](platform.AssetSource, SourceType, true, func(_ *Build, r Source, _ platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Source, error) {
+			r.State, r.Publisher, r.PublisherScopes = "published", ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
+			if r.Stream && r.Dataset != "" && r.Puller == "" {
+				r.Puller, r.PullerScopes = ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
+			}
+			return r, nil
+		}),
+		newIntegrationEntry[platform.MediaSet](platform.AssetMediaSet, platform.MediaSetType, false, func(b *Build, r platform.MediaSet, asset platform.ReleaseAsset, _ platform.AssetReleaseContext) (platform.MediaSet, error) {
+			configuration, err := b.integrationConfiguration(asset)
+			if err != nil {
+				return r, err
+			}
+			fixed := configuration.(platform.MediaSet)
+			fixed.Record, fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.Record, r.DefinitionVersion, r.Published, r.Versions
+			return fixed, nil
+		}),
+		newIntegrationEntry[platform.Schedule](platform.AssetSchedule, platform.ScheduleType, false, func(b *Build, r platform.Schedule, asset platform.ReleaseAsset, ctx platform.AssetReleaseContext) (platform.Schedule, error) {
+			configuration, err := b.integrationConfiguration(asset)
+			if err != nil {
+				return r, err
+			}
+			fixed := configuration.(platform.Schedule)
+			fixed.Record, fixed.LastRun, fixed.Runner, fixed.RunnerScopes = r.Record, r.LastRun, ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
+			fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
+			return fixed, nil
+		}),
+		newIntegrationEntry[Dataset](platform.AssetDataset, DatasetType, false, nil),
+		newIntegrationEntry[Pipeline](platform.AssetPipeline, PipelineType, true, func(_ *Build, r Pipeline, _ platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Pipeline, error) {
+			if !ctx.DraftsOnly && !ctx.Member.CanDeclassify(r.PublishedDeclassifications()) {
+				return r, fmt.Errorf("declassification publication requires clearance and permission for every selected marking")
+			}
+			r.State = "published"
+			return r, nil
+		}),
+		newIntegrationEntry[Writeback](platform.AssetWriteback, WritebackType, true, func(_ *Build, r Writeback, _ platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Writeback, error) {
+			r.State, r.Publisher = "published", ctx.Member.ID
+			return r, nil
+		}),
+		newIntegrationEntry[Observation](platform.AssetObservation, ObservationType, true, func(b *Build, r Observation, asset platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Observation, error) {
+			configuration, err := b.integrationConfiguration(asset)
+			if err != nil {
+				return r, err
+			}
+			fixed := configuration.(Observation)
+			fixed.Record, fixed.State, fixed.Publisher = r.Record, "published", ctx.Member.ID
+			fixed.PublisherScopes = string(platform.Raw(ctx.Member.Scopes))
+			fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
+			return fixed, nil
+		}),
+		newIntegrationEntry[Match](platform.AssetMatching, MatchType, true, func(_ *Build, r Match, _ platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Match, error) {
+			r.State, r.Publisher = "published", ctx.Member.ID
+			return r, nil
+		}),
+	}
 	for _, entry := range integrationEntries {
 		for _, name := range []string{"Name", "DefinitionVersion", "Published", "Versions", "Record"} {
 			if _, ok := entry.recordType.FieldByName(name); !ok {

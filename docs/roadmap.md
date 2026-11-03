@@ -12,7 +12,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 ## 当前批次
 
-- 发布准备的四族盘点已写入 `docs/7-system/README.md` §7.5.1；下一步把 integration 的发布状态迁移并入注册表，再用快照与重放证明字节不变。Confirmation 与 Dispatch 各自维护状态机，暂不动。
+- 发布准备四族盘点见 `docs/7-system/README.md` §7.5.1，integration 发布迁移已并入注册表。下一步评估 versioned 族共用版本推进，再收敛 Confirmation 与 Dispatch；每步用快照与重放证明字节不变。
 - `platform/page_model_legacy.go` 仍解码旧页面格式；确认已接受映像中不再存在旧格式后，按版本化迁移退役。
 
 ## 已知漂移
