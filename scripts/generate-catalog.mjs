@@ -1,19 +1,17 @@
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { stripTypeScriptTypes } from "node:module";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const catalog = join(root, "web/apps/catalog");
 const generated = join(catalog, "src/gen");
-const require = createRequire(pathToFileURL(join(catalog, "package.json")));
-const ts = require("typescript");
 
 function moduleURL(file, imports = {}) {
   let source = readFileSync(join(root, file), "utf8");
   for (const [name, url] of Object.entries(imports)) source = source.replace(`from "${name}"`, `from ${JSON.stringify(url)}`);
-  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const code = stripTypeScriptTypes(source, { sourceUrl: file });
   return `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
 }
 

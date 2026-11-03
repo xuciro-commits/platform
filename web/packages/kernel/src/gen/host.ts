@@ -2980,6 +2980,7 @@ export type NamedQuery = {
   implementations?: string[];
   by?: string;
   domain?: unknown;
+  filter?: Expr;
   sort?: string[];
   limit?: number;
 };

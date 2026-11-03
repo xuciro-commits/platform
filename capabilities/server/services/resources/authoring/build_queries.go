@@ -21,6 +21,7 @@ type Query struct {
 	Implementations []string            `json:"implementations,omitempty" field:"readonly,aside" title:"Published implementations"`
 	By              string              `json:"by,omitempty" title:"Parent reference"`
 	Domain          json.RawMessage     `json:"domain,omitempty" field:"aside" type:"json"`
+	Filter          *platform.Expr      `json:"filter,omitempty" field:"aside" type:"json"`
 	Sort            []string            `json:"sort,omitempty" field:"aside"`
 	Limit           int                 `json:"limit" field:"required"`
 	State           string              `json:"state" field:"readonly" choices:"draft,published"`
@@ -30,7 +31,7 @@ type Query struct {
 }
 
 func (f Query) Definition() platform.NamedQuery {
-	return platform.NamedQuery{Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object, Interface: f.Interface, InterfaceShape: f.InterfaceShape, Implementations: f.Implementations, By: f.By, Domain: f.Domain, Sort: f.Sort, Limit: f.Limit}
+	return platform.NamedQuery{Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object, Interface: f.Interface, InterfaceShape: f.InterfaceShape, Implementations: f.Implementations, By: f.By, Domain: f.Domain, Filter: f.Filter, Sort: f.Sort, Limit: f.Limit}
 }
 
 func (b *Build) queryDraftObjects() []platform.EntityInfo {
@@ -71,9 +72,9 @@ func validateQuery(b *Build, f Query) (Query, error) {
 }
 
 var queryKind = resourceKind[Query, platform.NamedQuery]{
-	asset: platform.AssetQuery, typ: QueryType, prefix: "query", noun: "query", title: "Query", plural: "Queries", capability: "queries", joint: true,
-	description: "A reusable record query over a published object or interface; draft edits do not change published bindings.",
-	transition:  "Install this record query as its next retained version.",
+	asset: platform.AssetQuery, typ: QueryType, prefix: "query", noun: "query", title: "Object set", plural: "Object sets", capability: "queries", joint: true,
+	description: "A saved object set over a published object or interface; reads use the shared ObjectSet executor and the caller’s permissions.",
+	transition:  "Publish this object set as its next retained version.",
 	immutable:   "A published query keeps its name and source object",
 	records:     func(b *Build) map[string]Query { return b.queries },
 	validate:    validateQuery,
@@ -81,7 +82,7 @@ var queryKind = resourceKind[Query, platform.NamedQuery]{
 		return a.Name == b.Name && a.Object == b.Object && a.Interface == b.Interface
 	},
 	fromDeclaration: func(q platform.NamedQuery) Query {
-		return Query{Name: q.Name, Title: q.Title, Description: q.Description, Object: q.Object, Interface: q.Interface, InterfaceShape: q.InterfaceShape, Implementations: q.Implementations, By: q.By, Domain: q.Domain, Sort: q.Sort, Limit: q.Limit}
+		return Query{Name: q.Name, Title: q.Title, Description: q.Description, Object: q.Object, Interface: q.Interface, InterfaceShape: q.InterfaceShape, Implementations: q.Implementations, By: q.By, Domain: q.Domain, Filter: q.Filter, Sort: q.Sort, Limit: q.Limit}
 	},
 	install: func(h platform.BuildHost, c platform.Caller, d platform.NamedQuery, version int) error {
 		return h.InstallQuery(c, d, version)

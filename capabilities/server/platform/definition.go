@@ -51,6 +51,7 @@ type NamedQuery struct {
 	Implementations []string        `json:"implementations,omitempty"`
 	By              string          `json:"by,omitempty"`
 	Domain          json.RawMessage `json:"domain,omitempty"`
+	Filter          *Expr           `json:"filter,omitempty"`
 	Sort            []string        `json:"sort,omitempty"`
 	Limit           int             `json:"limit,omitempty"`
 }

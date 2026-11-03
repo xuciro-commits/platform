@@ -17,7 +17,7 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "link-type", type: "build.linktype", view: "link-type", label: "Link type", plural: "Link types", ref: "link-type" },
   { kind: "property-type", type: "build.propertytype", view: "property-type", label: "Shared property", plural: "Shared properties", ref: "property-type" },
   { kind: "value-type", type: "build.valuetype", view: "value-type", label: "Value type", plural: "Value types", ref: "value-type" },
-  { kind: "query", type: "build.query", view: "query", label: "Query", plural: "Queries", ref: "query" },
+  { kind: "query", type: "build.query", view: "object-set", label: "Object set", plural: "Object sets", ref: "query" },
   { kind: "page", type: "build.page", view: "module", label: "Page", plural: "Pages", ref: "page" },
   { kind: "flow", type: "build.process", view: "flow", label: "Logic flow", plural: "Logic flows", ref: "flow" },
   { kind: "automation", type: "build.process", view: "automation", label: "Automation", plural: "Automations", ref: "flow" },

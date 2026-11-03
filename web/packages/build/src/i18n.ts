@@ -1,6 +1,26 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Object sets": "对象集",
+  "Saved object sets": "已保存的对象集",
+  "Only a builder can edit saved object sets.": "仅构建者可编辑已保存的对象集。",
+  "Save object sets for reuse in modules, functions and actions. Reads use the caller’s permissions.": "保存对象集，供模块、函数与动作复用。读取使用调用者的权限。",
+  "New object set": "新建对象集",
+  "The object set could not be saved or loaded. Your draft is still here.": "无法保存或加载对象集。你的草稿仍保留。",
+  "Reload the saved object set before editing again.": "重新加载已保存的对象集后再编辑。",
+  "Object set settings": "对象集设置",
+  "Object set name": "对象集 API 名",
+  "Object set title": "对象集名称",
+  "Object set description": "对象集说明",
+  "Object set source kind": "对象集起点类型",
+  "Object set window limit": "对象集读取上限",
+  "Object set sort": "对象集排序",
+  "Object set filter": "对象集筛选",
+  "Published object set versions": "已发布的对象集版本",
+  "No published object set yet.": "尚无已发布的对象集。",
+  "Try published object set": "试读已发布的对象集",
+  "Object set result record": "对象集结果记录",
+
   "Declassification requires clearance and permission for every selected marking": "解除标记需要获得每个所选标记的数据许可与解除权限",
   "Compartment markings": "专项标记",
   "Markings to remove": "要解除的标记",

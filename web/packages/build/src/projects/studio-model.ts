@@ -12,7 +12,7 @@ const domains = [
   { id: "model", title: "Model", description: "Objects, fields, relationships and reusable queries", groups: [
     { id: "business-model", title: "Business model", kinds: ["object"], links: [{ title: "Discover", view: "discover" }] },
     { id: "relationships", title: "Relationships and shared properties", kinds: ["link-type", "property-type", "value-type", "interface"] },
-    { id: "queries", title: "Queries", kinds: ["query"] },
+    { id: "object-sets", title: "Object sets", kinds: ["query"] },
   ] },
   { id: "logic", title: "Behavior", description: "States, actions, flows, computation and intelligence", groups: [
     { id: "actions", title: "Object behavior", kinds: ["action"], contextKinds: ["object"], links: [{ title: "Object behavior", view: "action-type" }] },

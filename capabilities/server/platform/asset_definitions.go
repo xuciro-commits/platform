@@ -121,6 +121,9 @@ func (q NamedQuery) Check() error {
 	} else if q.InterfaceShape != nil || len(q.Implementations) != 0 {
 		return fmt.Errorf("object query cannot carry an interface binding")
 	}
+	if q.Filter != nil && q.Filter.Kind != "boolean" {
+		return fmt.Errorf("saved object set filter must return boolean")
+	}
 	var terms []json.RawMessage
 	if len(q.Domain) > 0 && (json.Unmarshal(q.Domain, &terms) != nil || len(terms) > 32) {
 		return fmt.Errorf("query domain needs a bounded list of conditions")

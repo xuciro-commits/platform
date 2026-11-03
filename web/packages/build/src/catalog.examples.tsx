@@ -2,7 +2,7 @@ import {PageEditor} from "./workshop/editor";
 import "./i18n";
 import { CatalogFixture, sampleObject, samplePage } from "@platform/app/catalog/fixtures";
 import { PageWorkspaceExample } from "@platform/app/catalog/examples";
-import { QueryEditor } from "./ontology/query";
+import { SavedObjectSetEditor } from "./explorer/object-sets";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
 import { ComposedPage } from "@platform/app";
 import { t } from "@platform/ui";
@@ -53,7 +53,7 @@ const queryDefinitions = [
  {ref:{app:"build",kind:"query" as const,name:"shared"},source:"tenant",version:"1.query-1",contractVersion:1,requires:[],provides:[],query:queryDeclaration,queryVersions:{"1.query-1":queryDeclaration}},
 ];
 const queryReads = {"/v1/records/build.query/QUERY-SAMPLE":{record:{...queryDeclaration,id:"QUERY-SAMPLE",revision:1,state:"published",version:1,published:JSON.stringify(queryDeclaration)}}};
-export const QueryStudioExample = () => <CatalogFixture reads={queryReads} roles={builderRole} definitions={queryDefinitions}><QueryEditor id="QUERY-SAMPLE" /></CatalogFixture>;
+export const QueryStudioExample = () => <CatalogFixture reads={queryReads} roles={builderRole} definitions={queryDefinitions}><SavedObjectSetEditor id="QUERY-SAMPLE" /></CatalogFixture>;
 
 import {pageUIProfile} from "@platform/app";
 

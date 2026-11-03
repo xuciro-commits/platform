@@ -97,7 +97,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   const [loadedPackages, setLoadedPackages] = useState<{ scope: string; applications: (host: Host) => AppUI[] }>();
   const loadedApps = useMemo(() => loadedPackages && loadedPackages.scope === packageScope
-    ? (host: Host) => [...loadedPackages.applications(host), personalWork, explorerApplication, lineageApplication]
+    ? (host: Host) => [...loadedPackages.applications(host), personalWork, lineageApplication]
     : undefined, [loadedPackages, packageScope]);
   const [packageAttempt, setPackageAttempt] = useState(0);
   const [packageFailure, setPackageFailure] = useState<string>();
@@ -106,7 +106,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (!me) return;
     let live = true;
     setPackageFailure(undefined);
-    void loadPackages(selectedPackages)
+    void loadPackages(selectedPackages, explorerApplication)
       .then((applications) => { if (live) setLoadedPackages({ scope: packageScope!, applications }); })
       .catch(() => { if (live) setPackageFailure(t("The workspace's applications could not load. Retry, or sign in again.")); });
     return () => { live = false; };

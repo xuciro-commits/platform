@@ -23,6 +23,11 @@ func checkQueryFields(q platform.NamedQuery, info platform.EntityInfo) error {
 	if _, err := records.CompileDomain(info, q.Domain); err != nil {
 		return err
 	}
+	if q.Filter != nil {
+		if _, err := records.CompilePlan(info, *q.Filter, ""); err != nil {
+			return err
+		}
+	}
 	if q.By != "" {
 		f, ok := info.Field(q.By)
 		if !ok || f.Type != "reference" && f.SourceType != "record" {

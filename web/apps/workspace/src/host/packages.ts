@@ -19,7 +19,7 @@ export function availablePackages(apps: readonly string[], member: Me["profile"]
     || p === buildPackage && (held.has("platform") && memberRoles(member, "platform").includes("admin") || held.has("agent") && !!member.roles.agent));
 }
 
-export async function loadPackages(selected: readonly Package[]): Promise<(host: Host) => AppUI[]> {
+export async function loadPackages(selected: readonly Package[], objectExplorer: AppUI): Promise<(host: Host) => AppUI[]> {
   const groups = await Promise.all(selected.map(async source => ({ source, module: await source.load() })));
   const govern = groups.find(group => group.source === governPackage)?.module as typeof import("@platform/govern") | undefined;
   const build = groups.find(group => group.source === buildPackage)?.module as typeof import("@platform/build") | undefined;
@@ -27,6 +27,7 @@ export async function loadPackages(selected: readonly Package[]): Promise<(host:
     .map(app => withApp(app, { serves: app.serves ?? source.serves })));
   return host => [
     ...entries,
+    build ? build.extendObjectExplorer(objectExplorer, host) : objectExplorer,
     ...(govern ? [govern.createMonitoring(host, build?.integrationMonitoring)] : []),
     ...(build && govern ? [build.createDataConnection(host, govern.dataConnectionOperations), build.createAgentStudio(host, govern.agentOperations)] : []),
   ];

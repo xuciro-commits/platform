@@ -7,6 +7,7 @@ type Params = Record<string, string>;
 const keep = (params: Params | undefined, ...names: string[]): Params => Object.fromEntries(names.flatMap((name) => params?.[name] ? [[name, params[name]!]] : []));
 
 const retired: Record<string, Route | ((params?: Params) => Route)> = {
+  query: params => ({ view: "object-set", params }),
   "tenant-overview": { view: "portal", params: { workspace: "admin" } },
   launcher: { view: "portal" },
   applications: (params) => params?.surface === "studio" || !params?.surface ? { view: "projects", params: keep(params, "surface") } : { view: "portal" },

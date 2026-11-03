@@ -136,9 +136,9 @@ func (q NamedQuery) ObjectSet(of string) ObjectSet {
 	if q.By != "" {
 		terms = append(terms, []any{q.By, "=", of})
 	}
-	set := ObjectSet{Object: q.Object}
+	set := ObjectSet{Object: q.Object, Filter: q.Filter}
 	if q.Interface != "" {
-		set = ObjectSet{Interface: q.Interface}
+		set = ObjectSet{Interface: q.Interface, Filter: q.Filter}
 	}
 	if len(terms) > 0 {
 		set.Domain, _ = json.Marshal(terms)

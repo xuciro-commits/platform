@@ -2,7 +2,7 @@ import { ApplicationSampleAsset } from "./releases/samples";
 import "./i18n";
 import { Glossary, Knowledge } from "./agents/knowledge";
 import { Files, ResourceIdentity } from "./projects/Files";
-import { defineApp, useHost, type AppUI, type Host } from "@platform/app";
+import { defineApp, useHost, withApp, type AppUI, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
 import { ObjectViews } from "./workshop/ObjectViews";
 import { ObjectTypeEditor } from "./ontology/process";
@@ -27,7 +27,7 @@ import { WritebackEditor, Writebacks } from "./ontology/writeback";
 import { MatchEditor, Matches } from "./ontology/match";
 import { IntegrationHealth } from "./ontology/integration-health";
 import { DecisionTableEditor } from "./functions/decision-table";
-import { QueryEditor, Queries } from "./ontology/query";
+import { SavedObjectSetEditor, SavedObjectSets } from "./explorer/object-sets";
 import { FunctionEditor } from "./functions/function";
 import { CodeEditor } from "./functions/code";
 import { AgentEditor, Agents } from "./functions/agent";
@@ -98,7 +98,6 @@ const logicViews: View[] = [
   view("function", () => t("AI function"), p => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
   view("flow", () => t("Logic flow"), p => p.id ? <FlowEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
   view("runs", () => t("Runs"), p => <WorkflowRuns name={p.name ?? ""} onStepSelect={() => {}} />),
-  view("query", () => t("Queries"), p => p.id ? <QueryEditor key={p.id} id={p.id} /> : <Queries />),
 ];
 const automateViews: View[] = [
   view("automation", () => t("Automations"), p => p.id ? <AutomationEditor key={p.id} id={p.id} /> : <Automations />),
@@ -238,11 +237,10 @@ const logic = defineApp({
   for: builder,
   home: { view: "functions" },
   views: contextualViews(logicViews),
-  opens: { "build.table": "decision-table", "build.process": "flow", "build.function": "function", "build.code": "code", "build.query": "query" },
+  opens: { "build.table": "decision-table", "build.process": "flow", "build.function": "function", "build.code": "code" },
   navigation,
   nav: (_host, route) => [section(t("Logic"), route, [
     { label: t("Functions"), icon: <Braces />, view: "functions" },
-    { label: t("Queries"), icon: <Search />, view: "query" },
   ])],
 });
 
@@ -310,3 +308,12 @@ export function createAgentStudio(host: Host, operations: Pick<AppUI, "for" | "v
 }
 
 export const contributions = [ontology, pipelineBuilder, datasetPreview, logic, automate, workshop, devops];
+
+export function extendObjectExplorer(base: AppUI, host: Host): AppUI {
+  if (!builder(host)) return base;
+  return withApp(base, {
+    views: [...base.views, ...contextualViews([view("object-set", () => t("Object sets"), params => params.id ? <SavedObjectSetEditor key={params.id} id={params.id} /> : <SavedObjectSets />)])],
+    opens: { ...base.opens, "build.query": "object-set" },
+    nav: (host, route) => [...base.nav(host, route), { label: t("Object sets"), items: [{ label: t("Saved object sets"), icon: <Search />, route: { view: "object-set" } }] }],
+  });
+}
