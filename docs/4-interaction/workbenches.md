@@ -23,16 +23,17 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 ## Data Connection
 
-- 侧栏：Sources、Syncs、Streams、Exports、Listeners、Webhooks。
-- 新建源：Sheet 中先选连接器类型（数据库、REST、文件、消息），再填连接参数与凭据引用；“测试连接”在 Sheet 内给出结果。
-- 源页面：Connection（参数、凭据引用、标记）→ Syncs → Exports → Explorer。Explorer 为左树（库、模式、表）+ 右预览表 + “创建同步”主按钮。
-- 同步页面：Source table、Target dataset（选取或新建）、Schedule；History 为运行表，失败行可重试。
+- 侧栏：Sources（Connections、Syncs）、Streams（Streams、Observation sources）、Exports（Writebacks）、Listeners、Webhooks。
+- 新建连接：选访问类型（http、odata、postgres），填地址与凭据引用，可选允许私有地址；Check 保留最近一次检查结果。
+- 数据源页面：连接、读取方式（JSON、CSV、OData 实体集、数据库表）、相对地址、目标对象或数据集、字段映射、周期或手动触发；History 为运行表，失败行可重试。
 - 流页面：连接配置、可选的目标流式数据集、读取位置与运行状态；Publish/Pause 控制持续读取。配置目标后持续批次写入该数据集；未指定目标的观测源仍可供函数使用。
 - 监听器页面：入站路径、投递到的连接器输入、共享密钥（凭据引用）、启用开关；页面展示外部系统要 POST 的 Inbound URL；Publish/Pause 控制是否接受投递。入站投递经已有连接器输入写入，不另设写入路径。
+- 回写页面：连接、触发条件、对象、方法、路径、请求与结果映射、状态读取；Publish/Pause 控制是否发送。
+- 观测源页面：连接、对象、设备身份字段、信号、单位、窗口与判定；发布后按窗口读取并形成观测。
 
 ## Pipeline Builder
 
-- 侧栏：Pipelines、Schedules。
+- 侧栏：Pipelines、Schedules、Matching rules。
 - 调度列表与资源页：选择管道、设置周期、启用或暂停；显示最近构建与下次执行时间。管道页链接其调度，周期只在调度资源编辑。
 - 管道编辑器（原型 C）：
   - 左：输入数据集（选取并返回）+ 变换库（筛选、连接、聚合、透视、公式、去重、函数）。
@@ -65,11 +66,11 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
   - Parameters：参数表 + Inspector（类型、默认值、必填、可见性条件、取值约束）。
   - Form：表单预览（与 M20 一致）+ 字段顺序与分组。
   - Submission criteria：条件列表，每条带失败提示文案（M10）。
-  - Side effects：通知、出站 webhook，带触发时机。
+  - Side effects：通知、回写，带触发时机。
 
 ## Logic
 
-- 侧栏：Functions、Runs。
+- 侧栏：Functions。
 - 新建函数：Sheet 中选引擎（代码、决策表、AIP Logic、逻辑流）。
 - 函数编辑器（原型 C，按引擎换中区）：
   - 左：输入与输出签名、引用的对象类型。

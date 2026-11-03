@@ -49,11 +49,11 @@ read-when: 设计或改变一条用户任务路径、写界面文案与翻译、
 
 ### F3 集成者：接入外部系统并保持同步
 
-1. Data Connection → “New source” → 选连接器 → 填参数与凭据引用 → “Test connection”。
-2. 源 Explorer → 选表 → “Create sync” → 目标数据集 → 计划。
-3. 首次运行后数据集出现版本；失败在 Monitoring 可见并可重试。
+1. Data Connection → Connections → “New connection” → 选访问类型 → 地址与凭据引用 → “Check”。
+2. Data sources → “New data source” → 选连接与读取方式 → 目标对象或数据集 → 映射与周期 → “Publish”。
+3. 首次拉取后数据集出现版本；失败在 Monitoring 可见并可重试。
 
-成功标准：凭据从不明文显示；同步失败时原因指向可操作的修正。
+成功标准：凭据从不明文显示；拉取失败时原因指向可操作的修正。
 
 ### F4 业务用户：查找对象并执行动作
 

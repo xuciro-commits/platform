@@ -8,7 +8,7 @@
 
 | 任务涉及 | 先读 |
 |---|---|
-| 选下一批、记录新差距 | [roadmap](docs/roadmap.md) |
+| 选当前批次、记录新差距 | [roadmap](docs/roadmap.md) |
 | 命名、翻译 | [glossary](docs/glossary.md) |
 | 判断是否属于平台、终局、质量目标、外部依赖 | [1-enterprise](docs/1-enterprise.md) |
 | 新能力或资源类型放哪个应用、平台还是产品包 | [2-product](docs/2-product.md) |
@@ -49,7 +49,7 @@
 |---|---|
 | 本地运行 | `make local`（入口 http://localhost:8495，热更新；宿主日志 `.build/dev/platform-api.log`） |
 | Go 检查 | `cd capabilities/server && GOPROXY=https://goproxy.cn,direct go build ./... && go vet ./...`；`gofmt -l .` |
-| 宿主类型 | `cd capabilities/server && go run ./cmd/api-types`（生成 `web/packages/kernel/src/gen/host.ts`） |
+| 宿主类型与页面契约 | `make contract`（生成 `kernel/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json`） |
 | Web 检查 | 改动的包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 空白 | `git diff --check` |
 | 全部检查 | `make verify`（静态检查、内核不变量、黄金路径验收；验收自带隔离宿主） |

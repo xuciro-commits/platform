@@ -1,7 +1,7 @@
 ---
 level: 路线图
 covers: []
-read-when: 每批开始（选下一批）与结束（删除已完成条目、记录新发现的差距）
+read-when: 每批开始（选当前批次）与结束（删除已完成条目、记录新发现的差距）
 ---
 
 # 路线图
@@ -20,3 +20,8 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 - “kernel”一词指三处：`capabilities/server/kernel`、`contract/go/kernel`、`web/packages/kernel`。
 - Workspace 构建仍有大于 500 kB 的分块与三处无效动态导入告警；先测量实际加载成本，再决定拆包。
+- 门户的业务组未按产品或项目分组（`3-information` §3.3）。
+- 治理资源与容器尚未采用同一路由入口（`7-system/web`）。
+- 授权上下文在宿主根包构造，未进入 `services/security`（`6-domain/security`）。
+- 少数位置直接编译 Expr，绕过可注入的规则引擎（`6-domain`）。
+- `SetBuilder` 的 `domain` 条件行仍由命名查询依赖（`4-interaction/patterns` M10）。

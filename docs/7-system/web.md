@@ -62,10 +62,10 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 ## 构建与生成
 
 - `pnpm build` 构建全部；每个包 `tsc -p .` 类型检查。
-- `go run ./cmd/api-types` 生成宿主类型；`go run ./cmd/page-contract` 从手写的 `pageui/manifest.ts` 与服务器规则生成 `platform/page_compat.json` 和 `pageui/safety.ts`；`scripts/rule-browser.mjs` 生成 Expr 的 WASM；`scripts/generate-catalog.mjs` 生成开发目录。
+- `make contract` 生成宿主类型与页面契约（来源与生成关系见 §7.6）；`scripts/rule-browser.mjs` 生成 Expr 的 WASM；`scripts/generate-catalog.mjs` 生成开发目录。
 
 ## 现存差距
 
-- 资源 URL 已使用 RID；治理资源与容器尚未全面采用同一路由入口（路线图 P2.2）。
+- 资源 URL 已使用 RID；治理资源与容器尚未全面采用同一路由入口。
 - `@platform/kernel` 未改名（路线图“已知漂移”）。
 - Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；尚未测量实际首屏耗时（路线图“已知漂移”）。

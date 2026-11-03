@@ -9,7 +9,7 @@ A batch is one thin, usable slice across layers. It ends committed and pushed, w
 
 ## 1 Choose
 
-- Read `docs/roadmap.md`. Take the item under "下一批" unless the owner named another. The owner sets direction, not order; ask only about decisions with a lasting cost.
+- Read `docs/roadmap.md`. Take the item under "当前批次" unless the owner named another; when it is empty, the owner picks the next one. The owner sets direction, not order; ask only about decisions with a lasting cost.
 - Confirm the item's owner in `docs/2-product.md`. If there is none, the batch starts by fixing that spec.
 
 ## 2 Read
@@ -42,6 +42,6 @@ A batch is one thin, usable slice across layers. It ends committed and pushed, w
 ## 6 Close
 
 - In the specs: delete gap entries the batch closed; add gaps it found; change rules it overturned.
-- In the roadmap: delete finished rows, update "下一批", and add newly found work under its phase.
+- In the roadmap: delete finished rows, keep "当前批次" truthful, and put newly found unscheduled work under "已知漂移".
 - Commit message: Chinese subject naming the batch, a blank line, a body of what changed and why, then the attribution line. Push to main.
 - Report to the owner: what is now true, the screens to walk, and anything not verified (say exactly what was not run).

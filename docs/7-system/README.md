@@ -38,7 +38,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `services/objects` | 对象投影、编辑事实、索引、ObjectSet 执行 | `platform`、ontology |
 | `services/actions` | 动作执行、提交条件、副作用调度 | `platform`、objects、functions |
 | `services/functions` | 函数制品、受控编译、隔离执行 | `platform` |
-| `services/data` | 源、同步、流、数据集、管道、调度、导出、血缘与标记推导 | `platform`、resources |
+| `services/data` | 连接、数据源、观测源、数据集、管道、调度、回写、匹配规则、血缘与标记推导 | `platform`、resources |
 | `services/automate` | 自动化与其运行 | `platform`、actions |
 | `services/apps` | Workshop 模块与页面运行 | `platform`、objects、actions |
 | `services/work` | 工作项、通知与投递 | `platform`、actions |

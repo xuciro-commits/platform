@@ -22,12 +22,12 @@ Home、Search、Files、Applications、Notifications、Data Connection、Pipelin
 | Project | 项目 | 资源的容器与访问边界 | Files |
 | Folder | 文件夹 | 项目内的组织层级 | Files |
 | Managed project | 受管项目 | 安装产品后放置其资源的只读项目 | Marketplace |
-| Source | 源 | 外部系统的连接 | Data Connection |
-| Sync | 同步 | 从源写入数据集的计划任务 | Data Connection |
-| Stream | 流 | 持续写入的数据来源 | Data Connection |
-| Export | 导出 | 写回外部系统 | Data Connection |
-| Listener | 监听器 | 入站 webhook | Data Connection |
-| Webhook | Webhook | 出站 HTTP 调用定义 | Data Connection |
+| Connection | 连接 | 外部系统的访问定义（地址与凭据引用） | Data Connection |
+| Data source | 数据源 | 从连接按计划或请求拉取行到对象 | Data Connection |
+| Listener | 监听器 | 接收外部系统入站调用的入口 | Data Connection |
+| Writeback | 回写 | 按已声明规则把结果发回外部系统 | Data Connection |
+| Observation source | 观测源 | 按时间窗读取外部信号并形成业务观测 | Data Connection |
+| Matching rule | 匹配规则 | 判定不同来源的行是否指同一对象并选择取值 | Pipeline Builder |
 | Dataset | 数据集 | 带模式与版本的表 | Dataset Preview |
 | Transaction | 事务 | 数据集的一次写入，形成新版本 | Dataset Preview |
 | Media set | 媒体集 | 非结构化文件集合 | Dataset Preview |
@@ -92,7 +92,7 @@ Home、Search、Files、Applications、Notifications、Data Connection、Pipelin
 | Template | 模板 | 生成模块或动作类型的预置起点 | Workshop、Ontology Manager |
 | Object list | 对象列表 | 保存的一组具体对象 | Object Explorer |
 | Business concept | 业务概念 | 项目中对象类型与动作的业务视图 | Files |
-| Connector | 连接器 | 源的连接类型（数据库、REST、文件、消息） | Data Connection |
+| Connector | 连接器 | 连接的访问类型（数据库、REST、文件、消息） | Data Connection |
 | Activate | 激活 | 在产品所在租户中把某版本设为生效 | DevOps |
 | Capability matrix | 能力矩阵 | 角色到动作与字段的授权总览 | Control Panel |
 | Independent builder | 独立构建者 | 直接被授予构建者角色、而非经项目角色获得的成员 | 6-domain/security |

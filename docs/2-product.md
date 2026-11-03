@@ -36,8 +36,8 @@ read-when: 新增能力或应用、判断能力归属、新增资源类型、处
 
 | 产品 | 拥有的资源 | 用户 |
 |---|---|---|
-| Data Connection | 源、同步、流、导出、监听器（入站 webhook）、出站 webhook | 集成者 |
-| Pipeline Builder | 管道、调度 | 构建者 |
+| Data Connection | 连接、数据源、监听器、回写、观测源 | 集成者 |
+| Pipeline Builder | 管道、调度、匹配规则 | 构建者 |
 | Dataset Preview | 数据集、媒体集（非结构化文件集） | 构建者 |
 
 ### 本体
@@ -98,7 +98,7 @@ read-when: 新增能力或应用、判断能力归属、新增资源类型、处
 | 文件与附件 | 媒体集 + 附件属性类型 | 对象以属性引用文件，不各自存文件 |
 | 评论与时间线 | 内置“评论”动作 + 对象视图的 Activity 分区 | 不在模块里自建时间线 |
 | 调度 | Pipeline Builder 的调度（构建的时间计划）；自动化的时间条件属于自动化本身 | 不在其他产品里放定时器 |
-| 出站调用 | Data Connection 的出站 webhook 与导出 | 动作副作用引用它们，不直接发 HTTP |
+| 出站调用 | Data Connection 的回写 | 动作副作用引用它们，不直接发 HTTP |
 | 模型调用 | AI 网关（模型在 Control Panel 配置） | AIP Logic、Agent Studio、AIP Assist 调用网关 |
 | 搜索 | Search 索引 | 各产品提供可索引的元数据，不自建搜索 |
 | 审计 | 接受结果日志 | Control Panel 查询；资源页 History 分区展示 |

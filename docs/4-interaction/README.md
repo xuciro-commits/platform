@@ -89,8 +89,9 @@ read-when: 新建或改动任何页面、面板、编辑器、对话框、侧窗
 | 资源 | 定义分区 |
 |---|---|
 | 项目 | Resources、Business concepts；Delivery：Verification and delivery、Runs；Access、Settings |
-| 源 | Connection、Syncs、Exports、Explorer（浏览外部表） |
-| 同步 | Source table、Target dataset、Schedule |
+| 连接 | System、Last check |
+| 数据源 | Endpoint、Target and mapping、Last pull |
+| 匹配规则 | Object、Keys、Preferred producers |
 | 数据集 | Schema、Preview、Transactions |
 | 管道 | Graph、Outputs、Schedule |
 | 对象类型 | Properties、Links、Actions、Datasources、Security、Display |
@@ -103,10 +104,10 @@ read-when: 新建或改动任何页面、面板、编辑器、对话框、侧窗
 | Workshop 模块 | Pages、Variables、Layout、Settings（在画布编辑器中，见 workbenches） |
 | 智能体 | Instructions、Tools、Retrieval、Evaluations |
 | 产品 | Contents、Versions、Test plans |
-| 流 | Source、Target dataset、Throughput |
-| 导出 | Source data、Destination、Schedule |
-| 监听器 | Endpoint、Authentication、Target |
-| Webhook | Request、Authentication、Retries |
+| 观测源 | Observation source、State interval analysis、Observation decision |
+| 回写 | Trigger、Request、Body、Answer、Deliveries |
+| 监听器 | Listener、Inbound delivery |
+| 调度 | Pipeline、Period、Last build |
 | 媒体集 | Items、Schema |
 | 共享属性 | Type、Used by |
 | 对象类型组 | Members |
