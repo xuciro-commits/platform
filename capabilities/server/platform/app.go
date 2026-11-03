@@ -440,6 +440,24 @@ func Refuse(code pb.ErrorCode, text string, values ...any) *kernel.Error {
 	return &kernel.Error{Code: code, Message: message}
 }
 
+const (
+	actionOutsideAcceptedBoundary = "This action uses an effect outside the accepted-result boundary"
+	inputOutsideAcceptedBoundary  = "This input uses an effect outside the accepted-result boundary"
+)
+
+func RefuseOutsideAcceptedBoundary() *kernel.Error {
+	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: actionOutsideAcceptedBoundary}
+}
+
+func RefuseInputOutsideAcceptedBoundary() *kernel.Error {
+	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: inputOutsideAcceptedBoundary}
+}
+
+func IsOutsideAcceptedBoundary(err *kernel.Error) bool {
+	return err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT &&
+		(err.Message == actionOutsideAcceptedBoundary || err.Message == inputOutsideAcceptedBoundary)
+}
+
 type CompositionReady interface {
 	Ready() error
 }

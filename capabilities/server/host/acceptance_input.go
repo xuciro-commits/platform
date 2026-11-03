@@ -187,7 +187,7 @@ func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m p
 				panic(p)
 			}
 			answer = nil
-			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This input uses an effect outside the accepted-result boundary")
+			refusal = platform.RefuseInputOutsideAcceptedBoundary()
 			unsupported = true
 		}
 	}()

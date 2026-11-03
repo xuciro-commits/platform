@@ -251,7 +251,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 			if _, unsupported := p.(stagedEffectPanic); !unsupported {
 				panic(p)
 			}
-			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action uses an effect outside the accepted-result boundary")
+			refusal = platform.RefuseOutsideAcceptedBoundary()
 		}
 	}()
 	owner := t.app(task.App)

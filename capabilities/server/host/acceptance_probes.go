@@ -189,7 +189,7 @@ func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller
 			if _, ok := failure.(stagedEffectPanic); !ok {
 				panic(failure)
 			}
-			err = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action uses an effect outside the accepted-result boundary")
+			err = platform.RefuseOutsideAcceptedBoundary()
 		}
 	}()
 	d.probing = true

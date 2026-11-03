@@ -76,7 +76,7 @@ func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submi
 		out.Refusal = explained(refusal, a, s.GetSchema().GetName(), target(s)).Message
 		out.RefusalCode = refusal.Code.String()
 		out.Issues = t.readableFieldIssues(member, draft.inputIssues[refusal], now)
-		out.Unsupported = refusal.Code == pb.ErrorCode_ERROR_CODE_CONFLICT && refusal.Message == "This action uses an effect outside the accepted-result boundary"
+		out.Unsupported = platform.IsOutsideAcceptedBoundary(refusal)
 		return out, nil
 	}
 	out.Accepted = true

@@ -360,7 +360,7 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 				panic(p)
 			}
 			record = nil
-			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action uses an effect outside the accepted-result boundary")
+			refusal = platform.RefuseOutsideAcceptedBoundary()
 		}
 	}()
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil &&

@@ -107,7 +107,7 @@ func (t *Tenant) decideBranchChild(draft *stagedDecision, m platform.Member, ite
 			if _, ok := p.(stagedEffectPanic); !ok {
 				panic(p)
 			}
-			out = branchChild{refusal: platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action uses an effect outside the accepted-result boundary")}
+			out = branchChild{refusal: platform.RefuseOutsideAcceptedBoundary()}
 		}
 	}()
 	if item.schema != "" {

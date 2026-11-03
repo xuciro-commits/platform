@@ -415,7 +415,7 @@ func (r *candidateRun) Step(i int, step trialowner.SimulationStep) (trialowner.S
 		result.Refusal = refusal.Message
 		result.RefusalCode = refusal.Code.String()
 		result.Issues = issues
-		result.Unsupported = refusal.Code == pb.ErrorCode_ERROR_CODE_CONFLICT && refusal.Message == "This action uses an effect outside the accepted-result boundary"
+		result.Unsupported = platform.IsOutsideAcceptedBoundary(refusal)
 	} else {
 		for _, change := range r.visibleChanges(actor) {
 			prior, exists := before[change.Type+"/"+change.ID]
