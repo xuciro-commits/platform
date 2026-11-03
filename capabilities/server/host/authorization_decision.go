@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	acceptedformat "platformserver/kernel/acceptedformat"
 
@@ -79,6 +80,13 @@ func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string
 		draft.RecordAuthorization(c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Action: permission}, decision)
 	}
 	return decision
+}
+
+func (t *Tenant) authorizeRead(c platform.Caller, permission, kind string, allowed []string) *kernel.Error {
+	_, refusal := recordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
+		return struct{}{}, authorizationRefusal(t.authorizeNative(c, permission, kind, allowed, true))
+	})
+	return refusal
 }
 
 func (d *stagedDecision) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool) *kernel.Error {
