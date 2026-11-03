@@ -17,8 +17,8 @@ import (
 func (b *Build) observationEntity() platform.Entity {
 	return platform.Entity{Type: ObservationType, Title: "Observation source", Plural: "Observation sources", Model: Observation{}, Display: "title",
 		Description: "Read external time-series summaries and apply declared business decisions without retaining raw points.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Scope:       integrationScope(),
+		Standard:    integrationStandard(),
 		Validate: func(c platform.Caller, value any) *kernel.Error {
 			if c.Replaying {
 				return nil

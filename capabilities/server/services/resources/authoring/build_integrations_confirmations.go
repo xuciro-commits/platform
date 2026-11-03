@@ -23,10 +23,10 @@ const confirmationTick = confirmationType + ".tick"
 func (b *Build) confirmationEntity() platform.Entity {
 	return platform.Entity{Type: confirmationType, Title: "Business confirmation", Plural: "Business confirmations", Model: platform.ConfirmationRun{}, Display: "subject",
 		Description: "Independent party receipts, unknown outcomes, source reconciliation and declared compensation.",
-		Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}, Participants: func(value any) []string {
+		Scope: integrationScopeWithParticipants(func(value any) []string {
 			r := value.(platform.ConfirmationRun)
 			return append([]string{r.Member}, b.host.(platform.ConfirmationHost).Holding(ID, r.Definition.ReviewerRole)...)
-		}},
+		}),
 		Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"input", "parties", "definition", "assets"}}},
 	}
 }

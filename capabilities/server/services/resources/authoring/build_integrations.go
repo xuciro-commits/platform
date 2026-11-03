@@ -17,6 +17,20 @@ import (
 	dataowner "platformserver/services/data"
 )
 
+func integrationScope() platform.Scope {
+	return platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}}
+}
+
+func integrationScopeWithParticipants(participants func(any) []string) platform.Scope {
+	scope := integrationScope()
+	scope.Participants = participants
+	return scope
+}
+
+func integrationStandard() platform.Standard {
+	return platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"}
+}
+
 func (b *Build) connectionEntity() platform.Entity {
 	return platform.Entity{Type: ConnectionType, Title: "Connection", Plural: "Connections", Model: Connection{}, Display: "title",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
@@ -33,8 +47,8 @@ func (b *Build) connectionEntity() platform.Entity {
 			return nil
 		},
 		Description: "An external system the tenant reads from: a kind, an address and the name of its credential in the host's secret store.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Scope:       integrationScope(),
+		Standard:    integrationStandard(),
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "ready", Title: "Ready", Tone: "success"}},
 			Transitions: []platform.Transition{
 				{Name: "check", Title: "Check", Description: "Reach the system once from the host and keep what answered.", From: []string{"draft", "ready"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.checkConnection},
@@ -164,14 +178,14 @@ func (b *Build) datasetEntity() platform.Entity {
 			return nil
 		},
 		Description: "Rows as they came from a source or a pipeline: versioned, schema inferred, read only by builders.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"}}
+		Scope:       integrationScope(),
+		Standard:    integrationStandard()}
 }
 
 func (b *Build) datasetVersionEntity() platform.Entity {
 	return platform.Entity{Type: DatasetVersionType, Title: "Dataset version", Plural: "Dataset versions", Model: DatasetVersion{}, Display: "version",
 		Description: "One version of a dataset: its rows at one load.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
+		Scope:       integrationScope(),
 		Standard:    platform.Standard{Roles: []string{Builder, Integrator}, Capability: "integrations"}}
 }
 

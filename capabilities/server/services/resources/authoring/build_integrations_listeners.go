@@ -34,7 +34,7 @@ func (b *Build) listenerEntity() platform.Entity {
 	roles := []string{Builder, Integrator}
 	return platform.Entity{Type: ListenerType, Title: "Listener", Plural: "Listeners", Model: Listener{}, Display: "title",
 		Description: "An inbound webhook that delivers payloads to an existing connector input.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
+		Scope:       integrationScope(),
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: roles, Capability: "integrations"},
 		Validate: func(c platform.Caller, value any) *kernel.Error {
 			next := value.(*Listener)

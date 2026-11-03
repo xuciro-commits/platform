@@ -34,8 +34,8 @@ func (b *Build) pipelineEntity() platform.Entity {
 			return nil
 		},
 		Description: "Declared steps from a dataset to a dataset or an object, with expectations that quarantine bad rows.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Scope:       integrationScope(),
+		Standard:    integrationStandard(),
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
 				{Name: "publish", Title: "Publish", Description: "Publish this pipeline definition. Use Run now to start it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishPipeline},

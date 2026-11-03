@@ -14,10 +14,10 @@ import (
 func (b *Build) dispatchEntity() platform.Entity {
 	return platform.Entity{Type: platform.DispatchType, Title: "Device dispatch", Plural: "Device dispatches", Model: platform.DispatchRun{}, Display: "subject",
 		Description: "Declared commands, durable delivery attempts, status reads and authorized human intervention. Control loops and safety interlocks remain local to the equipment.",
-		Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}, Participants: func(value any) []string {
+		Scope: integrationScopeWithParticipants(func(value any) []string {
 			run := value.(platform.DispatchRun)
 			return append([]string{run.Member}, b.host.(platform.ConfirmationHost).Holding(ID, run.Definition.ReviewerRole)...)
-		}}, Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"reason", "input", "request", "source", "connection", "observation", "device", "attempts", "readback", "definition", "assets", "compensationCommand", "compensationRequest"}}}}
+		}), Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"reason", "input", "request", "source", "connection", "observation", "device", "attempts", "readback", "definition", "assets", "compensationCommand", "compensationRequest"}}}}
 }
 
 func dispatchActions() []platform.Action {
