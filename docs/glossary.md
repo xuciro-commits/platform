@@ -28,6 +28,10 @@ Home、Search、Files、Applications、Notifications、Data Connection、Pipelin
 | Writeback | 回写 | 按已声明规则把结果发回外部系统 | Data Connection |
 | Observation source | 观测源 | 按时间窗读取外部信号并形成业务观测 | Data Connection |
 | Matching rule | 匹配规则 | 判定不同来源的行是否指同一对象并选择取值 | Pipeline Builder |
+| Sync | 同步 | 数据源列表的界面分组名 | Data Connection |
+| Stream | 流 | 流式数据源与观测源列表的界面分组名 | Data Connection |
+| Export | 导出 | 回写列表的界面分组名 | Data Connection |
+| Webhook | Webhook | 出站投递监控的界面分组名 | Data Connection |
 | Dataset | 数据集 | 带模式与版本的表 | Dataset Preview |
 | Transaction | 事务 | 数据集的一次写入，形成新版本 | Dataset Preview |
 | Media set | 媒体集 | 非结构化文件集合 | Dataset Preview |
