@@ -22,6 +22,9 @@ COMPUTE = ROOT / '.build/dev/compute'
 def run(command):
     subprocess.run(command, cwd=ROOT, check=True)
 
+def apply_branding():
+    subprocess.run([sys.executable, str(ROOT / 'deploy/local/branding.py')], cwd=ROOT)
+
 def configuration():
     spec = importlib.util.spec_from_file_location('local_bootstrap', ROOT / 'deploy/local/bootstrap.py')
     module = importlib.util.module_from_spec(spec)
@@ -254,6 +257,7 @@ def local():
     config = configuration()
     if alive(read_state()) and ready() and public_url(read_state()) == config['PLATFORM_PUBLIC_URL'].rstrip('/'):
         write_state({**read_state(), 'mode': 'native'})
+        apply_branding()
         print('本地热更新已运行：Platform ' + config['PLATFORM_PUBLIC_URL'])
         return
     air = os.environ.get('AIR') or shutil.which('air')
@@ -273,6 +277,7 @@ def local():
                 raise RuntimeError((LOGS / 'environment.log').read_text())
             state = read_state()
             if state.get('pid') == supervisor.pid and state.get('status') == 'ready' and ready(state):
+                apply_branding()
                 print('本地热更新已就绪：Platform ' + config['PLATFORM_PUBLIC_URL'])
                 print('Go 自动编译重启，前端 HMR；日志：.build/dev/；切回容器：make docker')
                 return

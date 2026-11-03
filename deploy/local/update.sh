@@ -54,6 +54,8 @@ while True:
     if time.monotonic() >= deadline:
         raise SystemExit('Platform or same-origin identity service did not become healthy')
     time.sleep(2)
+if mode == 'docker':
+    environment.apply_branding()
 with urllib.request.urlopen(base + '/', timeout=10) as response:
     html = response.read()
 if mode == 'native':

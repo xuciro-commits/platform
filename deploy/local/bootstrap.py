@@ -95,6 +95,8 @@ def bootstrap(root=None, check=False):
               'access_token_alg': 'EdDSA', 'id_token_alg': 'EdDSA', 'auth_code_lifetime': 60, 'access_token_lifetime': 900,
               'scopes': ['openid', 'email', 'profile'], 'default_scopes': ['openid', 'email', 'profile'],
               'force_mfa': False, 'flows_enabled': ['authorization_code', 'refresh_token'], 'challenges': ['S256']}
+    branding = [{'name': 'platform-branding', 'secret': {'Plain': secrets.token_urlsafe(48)},
+                 'access': [{'group': 'Clients', 'access_rights': ['read', 'update']}]}]
     users = [{'email': a['email'], 'given_name': a['member'].removeprefix('dev-').capitalize(), 'password': {'Plain': a['password']},
               'roles': [], 'enabled': True, 'email_verified': True} for a in accounts[1:]]
     rauthy = f'''[bootstrap]
@@ -131,6 +133,7 @@ rp_origin = '{public_url}'
         local / 'rauthy/config.toml': rauthy,
         local / 'rauthy/bootstrap/users.json': json_text(users),
         local / 'rauthy/bootstrap/clients.json': json_text([client]),
+        local / 'rauthy/bootstrap/api_keys.json': json_text(branding),
         local / 'credentials.md': '# 本地开发测试账号\n\n入口：' + public_url + '\n\n业务工作区：`' + tenant + '`\n\n| 账号 | 密码 | 权限 |\n|---|---|---|\n' + '\n'.join(
             '| ' + a['email'] + ' | `' + a['password'] + '` | ' + description + ' |' for a, description in zip(accounts, ['平台和宿主管理；无默认业务角色', '构建与集成；无宿主管理', '普通成员；无业务角色'])
         ) + '\n\n这些密码仅供本机开发测试。首次登录管理员可能需要确认个人资料。AI服务、业务包与业务角色均需另行配置。\n日常启动保持本文件、密钥和数据不变；不要提交或公开本文件。\n',
