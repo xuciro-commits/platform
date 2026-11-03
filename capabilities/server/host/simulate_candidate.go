@@ -31,8 +31,8 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 		return empty, err
 	}
 	caller := platform.NewCaller(runtime{t}, builder, build.ID, false, false)
-	if refusal := t.authorizeRead(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}); refusal != nil {
-		return empty, refusal
+	if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}, true)); err != nil {
+		return empty, err
 	}
 	if staged != nil {
 		request.ObjectID, request.ProcessID, request.ApplicationID, request.Roots, request.CandidateID = "", "", "", nil, ""

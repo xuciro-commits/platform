@@ -96,18 +96,30 @@ func TestInvariantBuilderWorkingDraftsAuthorizeInsideTheReadScope(t *testing.T) 
 	}
 }
 
-func TestInvariantAuthorizationReadsTheResourceDirectoryInsideTheReadScope(t *testing.T) {
+func TestInvariantAuthorizationOutsideTheReadScopeReadsTheResourceDirectory(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-authorize-read-scope")
 	reads := &sqlShapedReads{}
 	withSQLShapedReads(t, live, reads)
 	c := platform.NewCaller(runtime{live.Tenant}, live.member(t), build.ID, false, false)
-	if refusal := live.authorizeRead(c, "GET /v1/releases/drafts/working", "read", []string{build.Builder}); refusal != nil {
-		t.Fatalf("a builder was refused an authorized read: %s", refusal.Message)
+	if decision := live.authorizeNative(c, "GET /v1/releases/drafts/working", "read", []string{build.Builder}, true); !decision.Allow {
+		t.Fatalf("a builder was refused an authorized read: %s", decision.Reason)
 	}
 	if reads.opened == 0 {
 		t.Fatal("the authorization did not open the read scope")
 	}
 	if !slices.Contains(reads.candidates, build.ResourceType) {
 		t.Fatalf("the authorization did not read %s inside the read scope; read %v", build.ResourceType, reads.candidates)
+	}
+}
+
+func TestInvariantRecordAuthorizationOutsideTheReadScopeReadsTheRecord(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-record-authorize-read-scope")
+	reads := &sqlShapedReads{}
+	withSQLShapedReads(t, live, reads)
+	member := live.member(t)
+	c := platform.NewCaller(runtime{live.Tenant}, member, build.ID, false, false)
+	live.authorizeFrom(live.records, c, platform.AuthzRequest{Principal: member.ID, Tenant: live.ID, Kind: "action", Action: "build.app.create", Type: build.AppType, Record: "workspace"}, invariantClock, false)
+	if reads.opened == 0 {
+		t.Fatal("the record authorization did not open the read scope")
 	}
 }

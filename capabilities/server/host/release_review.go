@@ -38,8 +38,8 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 		return releaseowner.ReleasePage{}, err
 	}
 	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
-	if refusal := t.authorizeRead(c, "GET /v1/releases/candidates", "read", []string{build.Builder, build.Publisher}); refusal != nil {
-		return releaseowner.ReleasePage{}, refusal
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
+		return releaseowner.ReleasePage{}, err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -55,8 +55,8 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (releaseowner.
 		return releaseowner.SavedReleaseReview{}, err
 	}
 	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
-	if refusal := t.authorizeRead(c, "GET /v1/releases/candidates/{id}", "read", []string{build.Builder, build.Publisher}); refusal != nil {
-		return releaseowner.SavedReleaseReview{}, refusal
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates/{id}", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
+		return releaseowner.SavedReleaseReview{}, err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()

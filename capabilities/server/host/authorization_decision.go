@@ -68,8 +68,25 @@ func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.Authz
 
 type authorizationDetails = security.NativeDetails
 
+func (t *Tenant) authorizeReading(decide func() platform.AuthzDecision) platform.AuthzDecision {
+	if t.quarantined() {
+		return platform.AuthzDecision{}
+	}
+	if !t.currentReadScopes || t.records.Current().View() != nil {
+		return decide()
+	}
+	var decision platform.AuthzDecision
+	_, _ = coordinatedRecordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
+		decision = decide()
+		return struct{}{}, nil
+	})
+	return decision
+}
+
 func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool, details ...authorizationDetails) platform.AuthzDecision {
-	return t.authorizer().Native(c, permission, kind, allowed, declared && t.resourceActionActive(permission), details...)
+	return t.authorizeReading(func() platform.AuthzDecision {
+		return t.authorizer().Native(c, permission, kind, allowed, declared && t.resourceActionActive(permission), details...)
+	})
 }
 
 func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string, allowed []string, declared bool, detail authorizationDetails) platform.AuthzDecision {
@@ -80,13 +97,6 @@ func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string
 		draft.RecordAuthorization(c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Action: permission}, decision)
 	}
 	return decision
-}
-
-func (t *Tenant) authorizeRead(c platform.Caller, permission, kind string, allowed []string) *kernel.Error {
-	_, refusal := recordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
-		return struct{}{}, authorizationRefusal(t.authorizeNative(c, permission, kind, allowed, true))
-	})
-	return refusal
 }
 
 func (d *stagedDecision) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool) *kernel.Error {
@@ -143,7 +153,12 @@ func (t *Tenant) authorizeFrom(store *records.Store, c platform.Caller, q platfo
 			t.simulationTrace(platform.DecisionTrace{Kind: "authorization", Request: &q, Authorization: &decision})
 		}()
 	}
-	return t.authorizeDepth(store, c, q, at, held, 0, newAuthorizationWalk())
+	if held {
+		return t.authorizeDepth(store, c, q, at, held, 0, newAuthorizationWalk())
+	}
+	return t.authorizeReading(func() platform.AuthzDecision {
+		return t.authorizeDepth(store, c, q, at, false, 0, newAuthorizationWalk())
+	})
 }
 
 type authorizationWalk = security.Traversal
