@@ -13,7 +13,6 @@ const manifestPrefix = "export const pageUIManifest = "
 
 type rulesFile struct {
 	Format             json.RawMessage       `json:"format"`
-	Legacy             json.RawMessage       `json:"legacy"`
 	Section            json.RawMessage       `json:"section"`
 	Scope              json.RawMessage       `json:"scope"`
 	ScalarFieldPaths   json.RawMessage       `json:"scalarFieldPaths"`
@@ -71,7 +70,6 @@ type port struct {
 
 type contract struct {
 	Format             json.RawMessage  `json:"format"`
-	Legacy             json.RawMessage  `json:"legacy"`
 	Section            json.RawMessage  `json:"section"`
 	Scope              json.RawMessage  `json:"scope"`
 	ScalarFieldPaths   json.RawMessage  `json:"scalarFieldPaths"`
@@ -131,7 +129,6 @@ func main() {
 
 	generated := contract{
 		Format:           rules.Format,
-		Legacy:           rules.Legacy,
 		Section:          rules.Section,
 		Scope:            rules.Scope,
 		ScalarFieldPaths: rules.ScalarFieldPaths,
