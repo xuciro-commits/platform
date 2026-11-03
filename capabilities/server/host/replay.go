@@ -6,10 +6,6 @@ import (
 	acceptedformat "platformserver/kernel/acceptedformat"
 	controlowner "platformserver/services/security/control"
 
-	"google.golang.org/protobuf/encoding/protojson"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
@@ -24,65 +20,16 @@ func (t *Tenant) Replay(entries []Entry) error {
 		if t.procs != nil {
 			t.procs.Pin(e.Versions)
 		}
+		if e.Kind != "accepted-result" {
+			return fmt.Errorf("entry %d: legacy %s requires the versioned journal migration", i+1, e.Kind)
+		}
 		var m platform.Member
 		a := t.app(e.App)
 		if a == nil || json.Unmarshal(e.Principal, &m) != nil {
 			return fmt.Errorf("entry %d: app %q not enabled or member unreadable", i+1, e.App)
 		}
-		var err *kernel.Error
-		if e.Kind == "effect" {
-			var o platform.Outcome
-			if json.Unmarshal(e.Body, &o) != nil || !t.apply(o, e.At, true) {
-				return fmt.Errorf("entry %d: effect outcome for an effect the replay did not create", i+1)
-			}
-			continue
-		}
-		if e.Kind == "usage" && t.ai != nil {
-			var u platform.AIUsage
-			if json.Unmarshal(e.Body, &u) != nil {
-				return fmt.Errorf("entry %d: bad usage", i+1)
-			}
-			t.ai.Meter(u)
-			continue
-		}
-		if e.Kind == "agent" && t.agents != nil {
-			var b platform.AgentResultStep
-			if json.Unmarshal(e.Body, &b) != nil {
-				return fmt.Errorf("entry %d: bad agent step", i+1)
-			}
-			if err := t.agents.ApplyAgentStep(b, e.At, true); err != nil {
-				return fmt.Errorf("entry %d: agent step: %v", i+1, err)
-			}
-			t.enqueue(e.At)
-			continue
-		}
-		if e.Kind == "delivery" || e.Kind == "job" {
-			if err := t.replayWork(e.Kind, e.Body, e.At); err != nil {
-				return fmt.Errorf("entry %d: %v", i+1, err)
-			}
-			continue
-		}
-		if e.Kind == "accepted-result" {
-			if err := t.replayAcceptedResult(i, e, m, a); err != nil {
-				return err
-			}
-			continue
-		}
-		if e.Kind == "submission" {
-			s := &pb.Submission{}
-			if protojson.Unmarshal(e.Body, s) != nil {
-				return fmt.Errorf("entry %d: bad submission", i+1)
-			}
-			_, err = a.Submit(t.caller(m, a, true), s, e.At)
-			t.audit.Remember(submitted(m.ID, a, s, e.At))
-			t.enqueue(e.At)
-		} else {
-			_, err = inputApp(a, t.caller(m, a, true), e.Kind, e.Body, e.At)
-			t.audit.Remember(platform.AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + e.Kind})
-			t.enqueue(e.At)
-		}
-		if err != nil {
-			return fmt.Errorf("entry %d (%s %s): %v", i+1, e.App, e.Kind, err)
+		if err := t.replayAcceptedResult(i, e, m, a); err != nil {
+			return err
 		}
 	}
 	return nil

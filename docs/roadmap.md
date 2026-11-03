@@ -30,7 +30,6 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 | P2.9 | 行业代码出宿主 | `apps/core/books.go`、根目录 `books.go` 的总账逻辑移出平台 | 2-product R4 |
 | P2.10 | 内置业务应用归位 | Knowledge → Agent Studio 检索源；Master data → 产品包；Organisation directory → Control Panel Organization | 4-interaction/workbenches |
 | P2.11 | 服务包迁移 | 宿主按 7-system §7.2 的目标包逐个迁移，每次迁移删除旧路径 | 7-system §7.2 |
-| P2.13 | 重放只应用接受映像 | 重放不再重新执行 submission、input、effect、usage、agent、delivery、job 等旧条目；旧条目经版本化迁移转为接受映像 | 7-system/README R6 |
 | P2.14 | 验收补齐 | 内核不变量 K4–K6；F2–F10 随相关批次逐条加入 | 7-system/verification |
 
 ## P4 行业应用

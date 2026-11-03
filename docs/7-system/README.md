@@ -107,7 +107,6 @@ POST /v1/submissions
 ## 现存差距
 
 - 旧主数据与总账仍在 `apps/core`，需迁移为产品包并保留历史读取（P2.9、P2.10）。
-- 重放仍重新执行旧条目类型（submission、input、effect、usage、agent、delivery、job），违反 R6（P2.13）。
 
 ## 相关
 
