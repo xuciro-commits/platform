@@ -40,15 +40,14 @@ func compressible(contentType string) bool {
 
 type edgeWriter struct {
 	http.ResponseWriter
-	request     *http.Request
-	acceptGzip  bool
-	status      int
-	started     bool
-	gz          *gzip.Writer
-	buffer      []byte
-	buffering   bool
-	noCompress  bool
-	writeFailed bool
+	request    *http.Request
+	acceptGzip bool
+	status     int
+	started    bool
+	gz         *gzip.Writer
+	buffer     []byte
+	buffering  bool
+	noCompress bool
 }
 
 func (w *edgeWriter) WriteHeader(status int) {
@@ -187,7 +186,6 @@ type Stats struct {
 }
 
 type latencyHist struct {
-	mu      sync.Mutex
 	buckets [len(latencyBounds) + 1]atomic.Int64
 	sumNs   atomic.Int64
 	count   atomic.Int64

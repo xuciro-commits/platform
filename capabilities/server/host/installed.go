@@ -7,7 +7,6 @@ import (
 
 	pageowner "platformserver/services/apps/pages"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -212,8 +211,6 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, en
 	}
 	return t.installDefinitions(id, info, nil, []platform.Page{canonical})
 }
-
-var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
 func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
 	safe, err := p.Safety()

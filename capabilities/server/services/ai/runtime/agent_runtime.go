@@ -114,8 +114,6 @@ func (a *Agents) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot(
 
 func (a *Agents) Restore(raw json.RawMessage) error { return a.ledger.Restore(raw) }
 
-var jsonTypes = map[string]string{"string": "string", "integer": "integer", "number": "number", "boolean": "boolean", "date": "string", "datetime": "string"}
-
 func agentToolName(s string) string {
 	return strings.NewReplacer(".", "_", "#", "__", "/", "_", ":", "_", "-", "_").Replace(s)
 }

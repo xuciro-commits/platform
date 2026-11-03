@@ -24,8 +24,6 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-const aiTimeout = 120 * time.Second
-
 type models interface {
 	platform.App
 	Snapshot() (json.RawMessage, error)

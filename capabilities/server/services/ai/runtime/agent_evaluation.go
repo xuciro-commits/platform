@@ -29,10 +29,6 @@ func (a *Agents) evaluationDefinition(candidate, agent string) (*platform.Compil
 }
 
 const (
-	evaluationRuns = 20
-)
-
-const (
 	memoryDays   = 90
 	proposalDays = 14
 	memoriesUsed = 8

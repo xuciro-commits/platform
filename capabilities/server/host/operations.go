@@ -108,11 +108,6 @@ func (t *Tenant) automated(parent platform.Caller, app string) platform.Caller {
 	return t.automation(app, parent.Replaying)
 }
 
-type workBody struct {
-	Work    string `json:"work"`
-	Outcome string `json:"outcome"`
-}
-
 func (t *Tenant) Work(now time.Time) {
 	for range workBurst {
 		if !t.Round(now, len(t.apps)) {
