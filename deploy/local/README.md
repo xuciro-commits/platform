@@ -13,7 +13,7 @@ make local
 
 配置保存在忽略的 `deploy/local/.env` 与 `.build/local/`。重复启动复用原租户、账号和密钥；不得删除配置或数据卷来修复启动问题。不要手改 bootstrap 校验的配置文件。
 
-登录页使用身份服务的每客户端品牌：`make local` 与 `make local-update` 在平台就绪后由 `deploy/local/branding.py` 写入平台主题与标记，色值取自 `web/packages/ui/src/themes/tokens.css`。品牌访问键由 bootstrap 生成（已有环境在下次启动时补写），身份服务只在空数据卷把它写入数据库，因此在本功能之前创建的数据卷要重建一次才生效（账号与密码按 `.build/local/` 原样重建，仅登录会话与 JWKS 重新生成）：
+`make local` 与 `make local-update` 在平台就绪后由 `deploy/local/identity.py` 写入平台的身份服务设置：`platform-web` 客户端的主题与标记（色值取自 `web/packages/ui/src/themes/tokens.css`），以及平台登录表单使用的直接登录流程——凭据直接送到身份服务换取令牌，不经过平台后端；启用 MFA 或通行密钥的账号仍走 SSO。品牌访问键由 bootstrap 生成（已有环境在下次启动时补写），身份服务只在空数据卷把它写入数据库，因此在本功能之前创建的数据卷要重建一次才生效（账号与密码按 `.build/local/` 原样重建，仅登录会话与 JWKS 重新生成）：
 
 ```bash
 source deploy/local/.env && docker compose --env-file deploy/local/.env -f deploy/local/compose.yaml stop rauthy \

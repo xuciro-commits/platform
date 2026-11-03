@@ -1,10 +1,11 @@
-import { currentSession, signIn, type Api, type OidcConfig } from "@platform/kernel";
+import { currentSession, type Api, type OidcConfig } from "@platform/kernel";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
 import {preparedSignIn} from "./offline/signin";
+import {SignIn} from "./session/SignIn";
 import {t} from "@platform/ui";
 
 const root = createRoot(document.getElementById("root")!);
@@ -17,11 +18,13 @@ if (previewWorkspace) {
   let offline=false;
   const how = await fetch("/v1/sign-in").then((r) => r.json() as Promise<Api.SignIn>).catch((): Api.SignIn => {offline=true;return preparedSignIn()??{};});
   const oidc: OidcConfig | undefined = how.issuer && how.client ? { issuer: how.issuer, clientId: how.client, redirectUri: `${location.origin}/` } : undefined;
-  const session = oidc ? (await currentSession(oidc)) ?? (!offline?await signIn(oidc):undefined) : undefined;
+  const session = oidc ? await currentSession(oidc) ?? undefined : undefined;
 
   const queries = new QueryClient({ defaultOptions: { queries: { refetchInterval: false, retry: 1, networkMode:"always" } } });
 
-  if(oidc&&!session)root.render(<main role="alert" className="grid h-dvh place-items-center p-6 text-sm">{t("Connect to sign in. A new or expired identity cannot use prepared content.")}</main>);
+  if(oidc&&!session)root.render(offline
+    ?<main role="alert" className="grid h-dvh place-items-center p-6 text-sm">{t("Connect to sign in. A new or expired identity cannot use prepared content.")}</main>
+    :<StrictMode><SignIn config={oidc}/></StrictMode>);
   else root.render(
     <StrictMode>
       <QueryClientProvider client={queries}>

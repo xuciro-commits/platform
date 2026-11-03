@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Apply the platform theme and mark to the local identity service.
+"""Apply platform settings to the local identity service.
 
-The colors are the platform tokens from web/packages/ui/src/themes/tokens.css.
+The client theme and mark brand the sign-in page; the direct sign-in flow lets the platform's own form exchange credentials for tokens. The colors are the platform tokens from web/packages/ui/src/themes/tokens.css.
 """
 import importlib.util
 import json
@@ -55,6 +55,11 @@ def send(url, authorization, content_type=None, data=None, method='GET'):
     with urllib.request.urlopen(request, timeout=10) as response:
         return response.status
 
+def fetch_client(base, client, authorization):
+    request = urllib.request.Request(f'{base}/clients/{client}', headers={'Authorization': authorization})
+    with urllib.request.urlopen(request, timeout=10) as response:
+        return json.loads(response.read())
+
 def multipart(field, path):
     boundary = 'platform' + secrets.token_hex(16)
     head = f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; filename="{path.name}"\r\nContent-Type: image/svg+xml\r\n\r\n'.encode()
@@ -71,6 +76,10 @@ def apply(config, key):
         try:
             send(f'{base}/theme/{client}', authorization, 'application/json', theme, 'PUT')
             send(f'{base}/clients/{client}/logo', authorization, f'multipart/form-data; boundary={boundary}', logo, 'PUT')
+            registration = fetch_client(base, client, authorization)
+            if 'password' not in registration['flows_enabled']:
+                registration['flows_enabled'] = registration['flows_enabled'] + ['password']
+                send(f'{base}/clients/{client}', authorization, 'application/json', json.dumps(registration).encode(), 'PUT')
             return 'applied'
         except urllib.error.HTTPError as error:
             if error.code in (401, 403):

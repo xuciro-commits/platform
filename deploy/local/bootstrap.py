@@ -118,7 +118,7 @@ def bootstrap(root=None, check=False):
               'redirect_uris': [public_url + '/'], 'post_logout_redirect_uris': [public_url + '/'], 'allowed_origins': [public_url],
               'access_token_alg': 'EdDSA', 'id_token_alg': 'EdDSA', 'auth_code_lifetime': 60, 'access_token_lifetime': 900,
               'scopes': ['openid', 'email', 'profile'], 'default_scopes': ['openid', 'email', 'profile'],
-              'force_mfa': False, 'flows_enabled': ['authorization_code', 'refresh_token'], 'challenges': ['S256']}
+              'force_mfa': False, 'flows_enabled': ['authorization_code', 'refresh_token', 'password'], 'challenges': ['S256']}
     branding = branding_keys()
     users = [{'email': a['email'], 'given_name': a['member'].removeprefix('dev-').capitalize(), 'password': {'Plain': a['password']},
               'roles': [], 'enabled': True, 'email_verified': True} for a in accounts[1:]]

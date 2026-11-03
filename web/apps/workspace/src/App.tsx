@@ -66,7 +66,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const addAccount = () => {
     if (!signedIn) return;
     client.close();
-    void signIn(signedIn.config, "login");
+    void signIn(signedIn.config, { prompt: "login" });
   };
   const changeAccount = (id: string) => {
     if (!signedIn) return;

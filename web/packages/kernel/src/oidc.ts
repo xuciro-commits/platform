@@ -72,15 +72,26 @@ async function token(config: OidcConfig, grant: Record<string, string>): Promise
   return response.ok ? store(config, await response.json() as TokenResponse) : null;
 }
 
-export async function signIn(config: OidcConfig, prompt?: "login"): Promise<never> {
+export async function signIn(config: OidcConfig, options?: { prompt?: "login"; hint?: string }): Promise<never> {
   const { authorization_endpoint } = await discover(config.issuer);
   const verifier = random(32), state = random(16);
   sessionStorage.setItem(PENDING, JSON.stringify({ issuer: config.issuer, clientId: config.clientId, verifier, state } satisfies Pending));
   const url = new URL(authorization_endpoint);
   url.search = new URLSearchParams({ response_type: "code", client_id: config.clientId, redirect_uri: config.redirectUri,
-    scope: "openid email profile", state, code_challenge: await codeChallenge(verifier), code_challenge_method: "S256", ...(prompt ? { prompt } : {}) }).toString();
+    scope: "openid email profile", state, code_challenge: await codeChallenge(verifier), code_challenge_method: "S256",
+    ...(options?.prompt ? { prompt: options.prompt } : {}), ...(options?.hint ? { login_hint: options.hint } : {}) }).toString();
   location.assign(url);
   return new Promise<never>(() => {});
+}
+
+export type CredentialProblem = "credentials" | "unavailable";
+
+export async function credentialSignIn(config: OidcConfig, email: string, password: string): Promise<{ session?: OidcSession; problem?: CredentialProblem }> {
+  const { token_endpoint } = await discover(config.issuer);
+  const response = await fetch(token_endpoint, { method: "POST", body: new URLSearchParams({
+    grant_type: "password", client_id: config.clientId, username: email, password, scope: "openid email profile" }) });
+  if (response.ok) return { session: store(config, await response.json() as TokenResponse) };
+  return { problem: [400, 401, 404].includes(response.status) ? "credentials" : "unavailable" };
 }
 
 export async function currentSession(config: OidcConfig): Promise<OidcSession | null> {
@@ -108,7 +119,7 @@ export async function switchAccount(config: OidcConfig, subject: string): Promis
   if (stored.expiresAt > Date.now() + 30_000) { keep(config, stored); return stored; }
   const renewed = stored.refreshToken ? await token(config, { grant_type: "refresh_token", refresh_token: stored.refreshToken }).catch(() => null) : null;
   if (renewed) return renewed;
-  await signIn(config, "login");
+  await signIn(config, { prompt: "login" });
   return null;
 }
 
