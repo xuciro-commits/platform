@@ -77,42 +77,49 @@ type definitionFamily struct {
 }
 
 func definitionFamilyOf(record any) definitionFamily {
-	switch r := record.(type) {
-	case Query:
-		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
-	case Function:
-		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
-	case PropertyType:
-		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
-	case ValueType:
-		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
-	case ObjectTypeGroup:
-		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
-	case LinkType:
-		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
-	case SampleSetRecord:
-		return definitionFamily{r.Record, r.Name, r.State, r.DefinitionVersion, r.Published, r.Versions}
+	value := reflect.ValueOf(record)
+	version, ok := definitionVersionField(value)
+	if !ok || value.Kind() != reflect.Struct || !value.FieldByName("Name").IsValid() {
+		panic("unsupported retained definition")
 	}
-	panic("unsupported retained definition")
+	return definitionFamily{
+		Record:    value.FieldByName("Record").Interface().(platform.Record),
+		Name:      value.FieldByName("Name").String(),
+		State:     value.FieldByName("State").String(),
+		Version:   int(version.Int()),
+		Published: value.FieldByName("Published").String(),
+		Versions:  value.FieldByName("Versions").Interface().([]string),
+	}
 }
 
 func setDefinitionFamily(record any, family definitionFamily) {
-	switch r := record.(type) {
-	case *Query:
-		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
-	case *Function:
-		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
-	case *PropertyType:
-		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
-	case *ValueType:
-		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
-	case *ObjectTypeGroup:
-		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
-	case *LinkType:
-		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
-	default:
+	value := reflect.ValueOf(record)
+	if value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Kind() != reflect.Struct {
 		panic("unsupported retained definition")
 	}
+	value = value.Elem()
+	version, ok := definitionVersionField(value)
+	if !ok {
+		panic("unsupported retained definition")
+	}
+	value.FieldByName("Record").Set(reflect.ValueOf(family.Record))
+	value.FieldByName("State").SetString(family.State)
+	version.SetInt(int64(family.Version))
+	value.FieldByName("Published").SetString(family.Published)
+	value.FieldByName("Versions").Set(reflect.ValueOf(family.Versions))
+}
+
+func definitionVersionField(value reflect.Value) (reflect.Value, bool) {
+	if value.Kind() != reflect.Struct {
+		return reflect.Value{}, false
+	}
+	if version := value.FieldByName("Version"); version.IsValid() {
+		return version, true
+	}
+	if version := value.FieldByName("DefinitionVersion"); version.IsValid() {
+		return version, true
+	}
+	return reflect.Value{}, false
 }
 
 func portableDefinitionAssets[T, D any](inventory func() ([]T, error), decode func(platform.ReleaseAsset) (D, int, error), label string) ([]platform.ReleaseAsset, error) {
