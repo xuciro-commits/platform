@@ -186,25 +186,7 @@ func (t *Tenant) initializeResources(now time.Time) error {
 	}
 	directory := map[string]build.Resource{}
 	legacyObjects := []string{}
-	projects := map[platform.AssetRef][]string{}
 	t.records.Lock()
-	if apps := t.records.Type(build.AppType); apps != nil {
-		for id, row := range apps.Rows().All() {
-			app := row.Value.Interface().(build.Application)
-			if app.Archived {
-				continue
-			}
-			refs := slices.Clone(app.Resources)
-			for _, page := range app.Pages {
-				refs = append(refs, platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: page})
-			}
-			for _, ref := range refs {
-				if !slices.Contains(projects[ref], id) {
-					projects[ref] = append(projects[ref], id)
-				}
-			}
-		}
-	}
 	for _, recordType := range t.records.Types() {
 		info := recordType.Info()
 		if !build.BranchDraftType(info.Type) {
@@ -237,9 +219,6 @@ func (t *Tenant) initializeResources(now time.Time) error {
 			}
 			rid := platform.ResourceID(t.ID, ref)
 			project := build.WorkspaceProject
-			if len(projects[ref]) == 1 {
-				project = projects[ref][0]
-			}
 			if info.Type == build.AppType {
 				project = id
 			}

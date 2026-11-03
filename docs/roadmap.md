@@ -26,7 +26,6 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 | 编号 | 事项 | 完成标准 | 规范 |
 |---|---|---|---|
-| P2.2 | 资源内核 | 所有资源有 RID、项目、文件夹、版本、状态；路由以 RID 为键；项目覆盖不再从页面列表推导 | 6-domain §6.3、3-information §3.6 |
 | P2.8 | 删除流程残留 | 以 Flow 命名的宿主文件与 `flow.instance` 视图删除；逻辑流只作为函数引擎 | 2-product R7 |
 | P2.9 | 行业代码出宿主 | `apps/core/books.go`、根目录 `books.go` 的总账逻辑移出平台 | 2-product R4 |
 | P2.10 | 内置业务应用归位 | Knowledge → Agent Studio 检索源；Master data → 产品包；Organisation directory → Control Panel Organization | 4-interaction/workbenches |
