@@ -203,24 +203,33 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 				return nil, notFound
 			}
 			if id == "" || strings.Contains(id, "/") {
-				return nil, invalid
+				return nil, platform.Refuse(invalid.Code, "An AI provider needs a simple ID without a slash")
 			}
 			pv := Provider{ID: id, Kind: p.Kind, Secret: p.Secret, Wire: "openai"}
 			switch p.Kind {
 			case "vendor":
 				i := slices.IndexFunc(Vendors, func(v Vendor) bool { return v.ID == p.Vendor })
-				if i < 0 || p.Secret == "" {
-					return nil, invalid
+				if i < 0 {
+					return nil, platform.Refuse(invalid.Code, "Choose one of the known AI vendors")
+				}
+				if p.Secret == "" {
+					return nil, platform.Refuse(invalid.Code, "A vendor provider needs a credential")
 				}
 				pv.Vendor, pv.BaseURL, pv.Wire = p.Vendor, Vendors[i].BaseURL, Vendors[i].Wire
 			case "compatible", "local":
 				u, err := url.Parse(p.BaseURL)
-				if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Scheme != "https" && !(u.Scheme == "http" && p.Kind == "local") || p.Kind == "compatible" && p.Secret == "" {
-					return nil, invalid
+				if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+					return nil, platform.Refuse(invalid.Code, "The provider address must be one http or https URL without credentials, query or fragment")
+				}
+				if u.Scheme != "https" && !(u.Scheme == "http" && p.Kind == "local") {
+					return nil, platform.Refuse(invalid.Code, "A third-party compatible API needs an https address; only a local model server may use http")
+				}
+				if p.Kind == "compatible" && p.Secret == "" {
+					return nil, platform.Refuse(invalid.Code, "A third-party compatible API needs a credential")
 				}
 				pv.BaseURL = strings.TrimRight(p.BaseURL, "/")
 			default:
-				return nil, invalid
+				return nil, platform.Refuse(invalid.Code, "Choose a vendor, a compatible API or a local model server")
 			}
 			return func(*pb.ChangeRecord) {
 				index := slices.IndexFunc(a.providers, func(value Provider) bool { return value.ID == id })
