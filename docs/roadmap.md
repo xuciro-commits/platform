@@ -26,7 +26,6 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 | 编号 | 事项 | 完成标准 | 规范 |
 |---|---|---|---|
-| P2.8 | 删除流程残留 | 以 Flow 命名的宿主文件与 `flow.instance` 视图删除；逻辑流只作为函数引擎 | 2-product R7 |
 | P2.9 | 行业代码出宿主 | `apps/core/books.go`、根目录 `books.go` 的总账逻辑移出平台 | 2-product R4 |
 | P2.10 | 内置业务应用归位 | Knowledge → Agent Studio 检索源；Master data → 产品包；Organisation directory → Control Panel Organization | 4-interaction/workbenches |
 | P2.11 | 服务包迁移 | 宿主按 7-system §7.2 的目标包逐个迁移，每次迁移删除旧路径 | 7-system §7.2 |

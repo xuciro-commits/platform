@@ -145,7 +145,6 @@ read-when: 新增能力或应用、判断能力归属、新增资源类型、处
 ## 现存差距
 
 - 总账与 Master data 仍在 `apps/core`（P2.9、P2.10）；工作项及评论已为内置对象与动作，检索源归 Agent Studio，组织目录归 Control Panel Organization。
-- 以 Flow 命名的流程实现仍在宿主中，违反 R7（P2.8）。
 - 行业包用旧蓝图格式，不经 DevOps 产品版本（P4.1、P4.2）。
 - 安装所需的业务角色与专项标记映射尚未接通（P5.3）。
 

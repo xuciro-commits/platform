@@ -1,16 +1,14 @@
 import { EditProposalReview, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, DataTable, Disclosure, FlowReleaseBinding, FlowCanvas, StatusTag, useFlowArrangement, flowStates, loops, notationOf, t, type FlowNodeStatus, type FlowNode, type ColumnDef, type FlowDefinition, type FlowInstanceData, type FlowCatalog } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
-import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { controlEdges, workflowKindTitle, workflowStepClass, type WorkflowDraft } from "./workflow-model";
 
 export type WorkflowRun = FlowInstanceData & { data?: string; outputs?: Record<string, unknown>; withheld?: boolean; sources?: string[] };
 
-export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { name: string; versions?: string[]; onStepSelect: (step: string) => void; onRunSelect?: (run: WorkflowRun | undefined) => void }) {
-  const project = useApplicationScope(), { open } = useApplicationWorkspace();
+export function WorkflowRuns({ name, initialRun, versions, onStepSelect, onRunSelect }: { name: string; initialRun?: string; versions?: string[]; onStepSelect: (step: string) => void; onRunSelect?: (run: WorkflowRun | undefined) => void }) {
   const inventory = useRecordInventory<WorkflowRun>("flow.instance");
   const definitions = useReadQuery<FlowDefinition[]>("/v1/flows");
-  const [selected, setSelected] = useState(""), [step, setStep] = useState("");
+  const [selected, setSelected] = useState(initialRun ?? ""), [step, setStep] = useState("");
   const runs = useMemo(() => (inventory.data?.records ?? []).filter((run) => name ? run.flow === `build.${name}` : run.flow.startsWith("build."))
     .sort((a, b) => (b.trace?.at(-1)?.at ?? "").localeCompare(a.trace?.at(-1)?.at ?? "")), [inventory.data, name]);
   const shown = runs.find((run) => run.id === selected) ?? runs[0];
@@ -52,9 +50,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
     {inventory.isError && <p role="alert" className="text-xs text-danger">{t("Run history could not be loaded for this member.")}</p>}
     <DataTable storageKey="automate:workflow-runs" data={runs} columns={columns} getRowId={(run) => run.id} height={160} searchable={false} selectedId={shown?.id} onRowClick={(run) => { setSelected(run.id); setStep(""); }} loading={inventory.isLoading} empty={t("No runs of this workflow yet.")} />
     {shown && <>
-      <div className="flex flex-wrap items-center gap-2 text-xs"><StatusTag status={shown.state} registry={flowStates} /><code>{shown.id}</code><span className="text-muted">v{shown.version}</span>
-        <Button onClick={() => open({ view: "flow-instance", params: { id: shown.id, ...(project ? { project } : {}) } }, { window: "beside" })}>{t("Open run")}</Button>
-      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs"><StatusTag status={shown.state} registry={flowStates} /><code>{shown.id}</code><span className="text-muted">v{shown.version}</span></div>
       <FlowReleaseBinding dependencies={shown.dependencies} release={shown.release} />
       {shown.withheld ? <p className="text-xs text-muted">{t("Run data is withheld by the current source permissions.")}</p> : <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
         <FlowCanvas mode="view" label={t("Execution map")} catalog={catalog} nodes={nodes} edges={edges} height={300} selected={step} onSelect={inspect} storeKey={`workflow-runs:${name}`} />

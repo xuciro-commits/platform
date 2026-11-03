@@ -97,7 +97,7 @@ const logicViews: View[] = [
   view("decision-table", () => t("Decision table"), p => p.id ? <DecisionTableEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
   view("function", () => t("AI function"), p => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
   view("flow", () => t("Logic flow"), p => p.id ? <FlowEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
-  view("runs", () => t("Runs"), p => <WorkflowRuns name={p.name ?? ""} onStepSelect={() => {}} />),
+  view("runs", () => t("Runs"), p => <WorkflowRuns name={p.name ?? ""} initialRun={p.run ?? p.id} onStepSelect={() => {}} />),
 ];
 const automateViews: View[] = [
   view("automation", () => t("Automations"), p => p.id ? <AutomationEditor key={p.id} id={p.id} /> : <Automations />),

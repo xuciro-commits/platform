@@ -177,7 +177,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
 
   const host = useMemo<Host | undefined>(() => {
     if (!me || !source) return undefined;
-    const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "flow-instance"]]);
+    const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "runs"]]);
     const host: Host = {
       client, me, entities, definitions, source, opens, outbox, decide, refresh,
       role: (app) => me.apps.some(enabled => enabled.id === app) ? me.profile.roles[app] || undefined : undefined,

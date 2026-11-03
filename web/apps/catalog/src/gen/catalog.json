@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:65b0e2f776637fae",
+  "revision": "sha256:804190b953744afb",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -230,7 +230,6 @@
       ],
       "dependencies": [
         "ui/data-table",
-        "app/flow-instance",
         "app/agent-run",
         "app/operation-run"
       ],
@@ -829,74 +828,6 @@
         "ui/input",
         "ui/notice",
         "ui/page-header"
-      ]
-    },
-    {
-      "id": "app/flow-instance",
-      "owner": "@platform/app",
-      "name": "Authorized workflow run",
-      "summary": "Inspect a workflow's recorded version and startup release through the member's original read permissions.",
-      "layer": 3,
-      "authority": "api",
-      "maturity": "recommended",
-      "scope": "platform",
-      "uses": [
-        "code",
-        "reference"
-      ],
-      "tags": [
-        "flow",
-        "run",
-        "version",
-        "release"
-      ],
-      "source": "web/packages/app/src/automation/flows.tsx",
-      "exports": [
-        "FlowInstanceView"
-      ],
-      "example": "FlowInstanceExample",
-      "constraints": [
-        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
-      ],
-      "dependencies": [
-        "ui/flow",
-        "app/agent-run"
-      ],
-      "states": [
-        "loading",
-        "error",
-        "running",
-        "waiting",
-        "done"
-      ],
-      "snippet": "import { FlowInstanceView } from \"@platform/app\";\n<FlowInstanceView id={runID} />",
-      "props": [
-        {
-          "name": "id",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "application",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "project",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        }
-      ],
-      "composed": [
-        "ui/button",
-        "ui/flow",
-        "ui/panels"
       ]
     },
     {
@@ -12931,7 +12862,6 @@
     "app/agent-run": [
       "app/agent-assistant",
       "app/application-runs",
-      "app/flow-instance",
       "app/operation-run",
       "scenario/logic-studio"
     ],
@@ -12952,9 +12882,6 @@
     ],
     "app/external-observations": [
       "app/record-detail"
-    ],
-    "app/flow-instance": [
-      "app/application-runs"
     ],
     "app/generated-form": [
       "app/composed-page",
@@ -13007,7 +12934,6 @@
       "app/application-runs",
       "app/application-sessions",
       "app/external-observations",
-      "app/flow-instance",
       "app/knowledge-search",
       "app/operation-run",
       "app/page-workspace",
@@ -13146,7 +13072,6 @@
       "ui/record-list"
     ],
     "ui/flow": [
-      "app/flow-instance",
       "app/layered-model-graph"
     ],
     "ui/flow-canvas": [
@@ -13242,7 +13167,6 @@
       "app/application-runs",
       "app/application-sessions",
       "app/composed-page",
-      "app/flow-instance",
       "app/knowledge-search",
       "app/operation-run",
       "app/record-detail",

@@ -19,7 +19,7 @@ export function TenantReferencesExample() {
     <MemberSelect value={member} onChange={setMember} />
   </div></CatalogFixture>;
 }
-import { ObservationWindowResult, DependencyGraph, ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
+import { ObservationWindowResult, DependencyGraph, ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
 import type {Api} from "@platform/kernel";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 import {ObservationStatistics,type EntityInfo} from "@platform/ui";
@@ -59,14 +59,6 @@ export function GeneratedFormExample() {
 }
 export const RecordsExample = () => <CatalogFixture><Records type={sampleObject.type} /></CatalogFixture>;
 export const RecordDetailExample = () => <CatalogFixture><RecordDetail type={sampleObject.type} id="SAMPLE-001" /></CatalogFixture>;
-export const FlowInstanceExample = () => <CatalogFixture reads={{
-  "/v1/records/flow.instance/FLOW-SAMPLE": { record: { id: "FLOW-SAMPLE", flow: "catalog.review", title: "Sample review", version: 1,
-    key: "sample", state: "waiting", dependencies: "fixture-release-v1", release: "fixture-release-v1",
-    tokens: [{ id: 1, step: "review", waits: "ask" }], undo: [], trace: [] } },
-  "/v1/flows": [{ id: "catalog.review", app: "catalog", title: "Sample review", version: 1, start: [],
-    steps: [{ name: "review", title: "Review", kind: "ask", next: [] }] }],
-  "/v1/chain/flow.instance/FLOW-SAMPLE": { nodes: [{ ref: "flow.instance/FLOW-SAMPLE", title: "Sample review", kind: "flow", state: "waiting" }], edges: [] },
-}}><FlowInstanceView id="FLOW-SAMPLE" /></CatalogFixture>;
 export const PageWorkspaceExample = () => <CatalogFixture><PagePreview definition={samplePage} definitions={sampleDefinitions} /></CatalogFixture>;
 export function ActionsExample() {
   const [values, setValues] = useState<Record<string, unknown>>({});

@@ -1,7 +1,7 @@
 import type { Route } from "@platform/ui";
 import type { Projection } from "./registry";
 
-export const shellViews = ["flow-instance", "home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "observations"];
+export const shellViews = ["home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "observations"];
 
 type Params = Record<string, string>;
 const keep = (params: Params | undefined, ...names: string[]): Params => Object.fromEntries(names.flatMap((name) => params?.[name] ? [[name, params[name]!]] : []));
@@ -59,7 +59,7 @@ export function resolveLegacyRoute(route: Route, context: {
       catch (error) { if (!/HTTP (401|403|404)\b/.test(String(error))) throw error; }
     }
     try {
-      return readableRecord(await context.read("flow.instance", id)) ? { ...route, view: "flow-instance" } : route;
+      return readableRecord(await context.read("flow.instance", id)) ? { view: "runs", params: { ...keep(params, "application", "project"), run: id } } : route;
     } catch (error) {
       if (!/HTTP (401|403|404)\b/.test(String(error))) throw error;
       return route;

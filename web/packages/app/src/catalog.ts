@@ -41,17 +41,12 @@ export const entries: CatalogEntry[] = [
     states: ["loading", "error", "pending", "conflict"], snippet: 'import { RecordDetail } from "@platform/app";\n<RecordDetail type="your.object" id={selectedID} />',
   }),
   asset("application-runs", "Application runtime diagnostics", "Inspect authorized current and historical resource-linked runs without claiming exclusive application origin.", ["ApplicationRuns", "ApplicationRuntimePanel"], "ApplicationRunsExample", {
-    source: "web/packages/app/src/automation/application-runs.tsx", uses: ["code", "reference"], dependencies: ["ui/data-table", "app/flow-instance", "app/agent-run", "app/operation-run"], states: ["loading", "error", "shared", "failed"],
+    source: "web/packages/app/src/automation/application-runs.tsx", uses: ["code", "reference"], dependencies: ["ui/data-table", "app/agent-run", "app/operation-run"], states: ["loading", "error", "shared", "failed"],
     snippet: 'import { ApplicationRuns } from "@platform/app";\n<ApplicationRuns owner="build" name="yourapp" />',
   }),
   asset("operation-run", "Authorized calculation run", "Read the original computation binding and result; retry through the original authorized effect action.", ["OperationRunView"], "OperationRunExample", {
     source: "web/packages/app/src/automation/application-runs.tsx", uses: ["code", "reference"], dependencies: ["app/agent-run"], states: ["pending", "completed", "failed", "denied"],
     snippet: 'import { OperationRunView } from "@platform/app";\n<OperationRunView id={callID} />',
-  }),
-  asset("flow-instance", "Authorized workflow run", "Inspect a workflow's recorded version and startup release through the member's original read permissions.", ["FlowInstanceView"], "FlowInstanceExample", {
-    source: "web/packages/app/src/automation/flows.tsx", uses: ["code", "reference"], tags: ["flow", "run", "version", "release"],
-    dependencies: ["ui/flow", "app/agent-run"], states: ["loading", "error", "running", "waiting", "done"],
-    snippet: 'import { FlowInstanceView } from "@platform/app";\n<FlowInstanceView id={runID} />',
   }),
   asset("dashboard", "Bound dashboard", "Render the existing chart specification over the member’s permitted aggregates.", ["DashboardView"], "DashboardExample", {
     tags: ["aggregate", "chart", "metric"], uses: ["code", "widget"], widgets: ["chart", "metric"], source: "web/packages/app/src/index.tsx",

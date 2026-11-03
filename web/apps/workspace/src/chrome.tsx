@@ -1,5 +1,5 @@
 import "./i18n";
-import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, FlowInstanceView, PagePreview, PageWorkspace, ObjectRecordView, Records, RunView, Search, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, PagePreview, PageWorkspace, ObjectRecordView, Records, RunView, Search, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Disclosure, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -289,7 +289,6 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "operation-run", title: (p) => p.id ?? t("Run"), render: (p) => <OperationRunView id={p.id ?? ""} application={p.application} project={p.project} subject={p.subject} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} application={p.application} project={p.project} /> },
-  { id: "flow-instance", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowInstanceView id={p.id ?? ""} application={p.application} project={p.project} /> },
   { id: "assistant", title: (p) => p.about ? `${t("Assistant")}: ${p.about}` : t("Assistant"), render: (p) => <Assistant about={p.about} /> },
   { id: "search", title: () => t("Search"), render: () => <Search /> },
 ];

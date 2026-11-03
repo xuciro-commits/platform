@@ -56,8 +56,8 @@ export function ApplicationRuns({ owner, name, project }: { owner: string; name:
   </>}
   {selected&&<Panel className="grid min-w-0 gap-3" role="region" aria-label={t("Selected run")}>
    <h2 className="text-sm font-semibold">{selected.title||selected.id}</h2>
-   <div className="flex flex-wrap gap-2">{["flow","agent","compute"].includes(selected.kind)&&<Button onClick={()=>open({view:selected.kind==="flow"?"flow-instance":selected.kind==="agent"?"run":"operation-run",params:{id:selected.id,...context,...(selected.kind==="compute"&&selected.subject?{subject:selected.subject}:{})}}, {window:"beside"})}>{t("Open run")}</Button>}
-    {selected.subject&&<Button onClick={()=>selected.subject!.startsWith("flow.instance/")?open({view:"flow-instance",params:{id:selected.subject!.slice("flow.instance/".length),...context}},{window:"beside"}):openRecord(selected.subject!)}>{t("Open related record")}</Button>}
+   <div className="flex flex-wrap gap-2">{["flow","agent","compute"].includes(selected.kind)&&<Button onClick={()=>open({view:selected.kind==="flow"?"runs":selected.kind==="agent"?"run":"operation-run",params:{...(selected.kind==="flow"?{run:selected.id}:{id:selected.id}),...context,...(selected.kind==="compute"&&selected.subject?{subject:selected.subject}:{})}}, {window:"beside"})}>{t("Open run")}</Button>}
+    {selected.subject&&<Button onClick={()=>selected.subject!.startsWith("flow.instance/")?open({view:"runs",params:{run:selected.subject!.slice("flow.instance/".length),...context}},{window:"beside"}):openRecord(selected.subject!)}>{t("Open related record")}</Button>}
     {selected.kind === "dispatch" && <Button onClick={() => openRecord({ type: "build.dispatch", id: selected.id }, {window:"tab"})}>{t("Open dispatch record")}</Button>}
     {selected.kind === "function" && <Button onClick={() => openRecord({type:"build.function-call",id:selected.id},{window:"tab"})}>{t("Open function call")}</Button>}
     {selected.kind === "effect" && can("platform.effect.resolve") && <Button onClick={()=>open({view:"integrations"},{window:"beside"})}>{t("Open original delivery controls")}</Button>}
@@ -285,7 +285,7 @@ export function OperationRunView({id,application,project,subject}:{id:string;app
  if(!answer)return <p role="status">{t("Loading…")}</p>;
  return <div className="grid min-w-0 gap-3">
   {project?<Button variant="ghost" onClick={()=>open({view:"project",params:{id:project,section:"runs"}})}>{t("Back to project")}</Button>:application&&<Button variant="ghost" onClick={()=>open({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":"),application}})}>{t("Back to application runs")}</Button>}
-  {subject?.startsWith("flow.instance/")&&<Button variant="ghost" onClick={()=>open({view:"flow-instance",params:{id:subject.slice("flow.instance/".length),...(application?{application}:{}),...(project?{project}:{})}},{window:"beside"})}>{t("Open related workflow run")}</Button>}
+  {subject?.startsWith("flow.instance/")&&<Button variant="ghost" onClick={()=>open({view:"runs",params:{run:subject.slice("flow.instance/".length),...(application?{application}:{}),...(project?{project}:{})}},{window:"beside"})}>{t("Open related workflow run")}</Button>}
   {control.error&&<Notice tone="danger" message={control.error} />}
   {control.pending&&<Panel role="status" className="grid gap-2 text-sm"><p>{t("A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.")}</p><Button disabled={control.busy} onClick={()=>void control.retry()}>{t("Retry original operation")}</Button></Panel>}
   <Tag label={stateName(answer.state)} tone={answer.state==="failed"?"danger":"neutral"}/>
