@@ -6218,7 +6218,7 @@ export const pageUIManifest = {
           "bindingField": "collectionVariable",
           "type": "object-set",
           "requiredUIProfile": "platform.page.v2.78",
-          "scopeRule": "local"
+          "scopeRule": "exact"
         },
         {
           "id": "context",
@@ -7064,7 +7064,7 @@ export const pageUIManifest = {
           "bindingField": "collectionVariable",
           "type": "object-set",
           "requiredUIProfile": "platform.page.v2.82",
-          "scopeRule": "local"
+          "scopeRule": "exact"
         },
         {
           "id": "record",
@@ -7127,7 +7127,16 @@ export const pageUIManifest = {
           "requiredUIProfile": "platform.page.v2.82"
         }
       ],
-      "outputPorts": [],
+      "outputPorts": [
+        {
+          "id": "asset",
+          "bindingField": "observation.assetOutput",
+          "type": "record",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.103",
+          "scopeRule": "exact"
+        }
+      ],
       "layoutPreferences": {
         "frame": "card"
       },

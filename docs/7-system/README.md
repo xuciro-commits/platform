@@ -94,6 +94,7 @@ POST /v1/submissions
 ## 7.6 协议与版本
 
 - `contract/proto` 是协议的唯一来源；Go 与 TypeScript 类型由它与宿主类型生成（`go run ./cmd/api-types` 生成 `web/packages/kernel/src/gen/host.ts`），生成文件不手改。
+- `web/packages/app/src/pageui/manifest.ts` 手写，是页面组件契约的唯一来源；`capabilities/server/platform/page_compat.json` 与 `web/packages/app/src/pageui/safety.ts` 由 `go run ./cmd/page-contract` 生成，服务器专用规则在 `capabilities/server/platform/page_compat_rules.json`。
 - 每个提交带模式版本头；接受结果格式带版本；存储格式演进只经版本化迁移，迁移本身是接受结果。
 - 错误带错误码与可翻译的英文原因；原因字符串是翻译键。
 

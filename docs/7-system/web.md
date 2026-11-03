@@ -62,7 +62,7 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 ## 构建与生成
 
 - `pnpm build` 构建全部；每个包 `tsc -p .` 类型检查。
-- `go run ./cmd/api-types` 生成宿主类型；`scripts/rule-browser.mjs` 生成 Expr 的 WASM；`scripts/generate-catalog.mjs` 生成开发目录。
+- `go run ./cmd/api-types` 生成宿主类型；`go run ./cmd/page-contract` 从手写的 `pageui/manifest.ts` 与服务器规则生成 `platform/page_compat.json` 和 `pageui/safety.ts`；`scripts/rule-browser.mjs` 生成 Expr 的 WASM；`scripts/generate-catalog.mjs` 生成开发目录。
 
 ## 现存差距
 

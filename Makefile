@@ -66,13 +66,22 @@ build:
 	cd capabilities/server && $(GO) build -o ../../.build/host/platform-server ./cmd/platform-server
 
 contract:
+	cd capabilities/server && $(GO) run ./cmd/page-contract
 	cd capabilities/server && $(GO) run ./cmd/api-types
 
 verify:
 	cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"
 	cd capabilities/server && $(GO) test -count=1 -run 'TestInvariant' ./host
+	@mkdir -p .build/contract
+	@cp web/packages/kernel/src/gen/host.ts .build/contract/host.ts
+	@cp web/packages/kernel/src/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts
+	@cp web/packages/app/src/pageui/safety.ts .build/contract/safety.ts
+	@cp capabilities/server/platform/page_compat.json .build/contract/page_compat.json
 	$(MAKE) contract
-	git diff --exit-code -- web/packages/kernel/src/gen/host.ts web/packages/kernel/src/gen/enterprise-sdk.ts web/packages/app/src/pageui/safety.ts
+	@cmp .build/contract/host.ts web/packages/kernel/src/gen/host.ts
+	@cmp .build/contract/enterprise-sdk.ts web/packages/kernel/src/gen/enterprise-sdk.ts
+	@cmp .build/contract/safety.ts web/packages/app/src/pageui/safety.ts
+	@cmp .build/contract/page_compat.json capabilities/server/platform/page_compat.json
 	cd web && $(PNPM) typecheck && $(PNPM) build
 	git diff --check
 	cd web/e2e && $(PNPM) exec playwright test
