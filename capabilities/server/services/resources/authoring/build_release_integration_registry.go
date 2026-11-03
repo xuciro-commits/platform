@@ -10,36 +10,73 @@ import (
 	"strconv"
 )
 
+type integrationEntry struct {
+	kind       platform.AssetKind
+	typ        string
+	recordType reflect.Type
+}
+
+var integrationEntries = []integrationEntry{
+	{platform.AssetConnection, ConnectionType, reflect.TypeFor[Connection]()},
+	{platform.AssetListener, ListenerType, reflect.TypeFor[Listener]()},
+	{platform.AssetSource, SourceType, reflect.TypeFor[Source]()},
+	{platform.AssetMediaSet, platform.MediaSetType, reflect.TypeFor[platform.MediaSet]()},
+	{platform.AssetSchedule, platform.ScheduleType, reflect.TypeFor[platform.Schedule]()},
+	{platform.AssetDataset, DatasetType, reflect.TypeFor[Dataset]()},
+	{platform.AssetPipeline, PipelineType, reflect.TypeFor[Pipeline]()},
+	{platform.AssetWriteback, WritebackType, reflect.TypeFor[Writeback]()},
+	{platform.AssetObservation, ObservationType, reflect.TypeFor[Observation]()},
+	{platform.AssetMatching, MatchType, reflect.TypeFor[Match]()},
+}
+
+func init() {
+	for _, entry := range integrationEntries {
+		for _, name := range []string{"Name", "DefinitionVersion", "Published", "Versions", "Record"} {
+			if _, ok := entry.recordType.FieldByName(name); !ok {
+				panic("integration record " + entry.recordType.Name() + " lacks " + name)
+			}
+		}
+	}
+}
+
+func integrationEntryOfKind(kind platform.AssetKind) *integrationEntry {
+	for i := range integrationEntries {
+		if integrationEntries[i].kind == kind {
+			return &integrationEntries[i]
+		}
+	}
+	return nil
+}
+
+func integrationEntryOfRecord(record any) *integrationEntry {
+	typ := reflect.TypeOf(record)
+	for i := range integrationEntries {
+		if integrationEntries[i].recordType == typ {
+			return &integrationEntries[i]
+		}
+	}
+	return nil
+}
+
+func integrationValue(record any) (reflect.Value, bool) {
+	value := reflect.ValueOf(record)
+	if !value.IsValid() || value.Kind() != reflect.Struct || integrationEntryOfRecord(record) == nil {
+		return reflect.Value{}, false
+	}
+	return value, true
+}
+
 func integrationType(kind platform.AssetKind) string {
-	switch kind {
-	case platform.AssetConnection:
-		return ConnectionType
-	case platform.AssetListener:
-		return ListenerType
-	case platform.AssetSource:
-		return SourceType
-	case platform.AssetMediaSet:
-		return platform.MediaSetType
-	case platform.AssetSchedule:
-		return platform.ScheduleType
-	case platform.AssetDataset:
-		return DatasetType
-	case platform.AssetPipeline:
-		return PipelineType
-	case platform.AssetWriteback:
-		return WritebackType
-	case platform.AssetObservation:
-		return ObservationType
-	case platform.AssetMatching:
-		return MatchType
+	if entry := integrationEntryOfKind(kind); entry != nil {
+		return entry.typ
 	}
 	return ""
 }
 
 func integrationKindOf(typ string) platform.AssetKind {
-	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetListener, platform.AssetDataset, platform.AssetMediaSet, platform.AssetSchedule, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
-		if integrationType(kind) == typ {
-			return kind
+	for i := range integrationEntries {
+		if integrationEntries[i].typ == typ {
+			return integrationEntries[i].kind
 		}
 	}
 	return ""
@@ -50,29 +87,12 @@ func integrationVersion(version int, kind platform.AssetKind) string {
 }
 
 func integrationMetadata(record any) (name string, version int, published string, versions []string) {
-	switch r := record.(type) {
-	case Connection:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Listener:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Source:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case platform.MediaSet:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case platform.Schedule:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Dataset:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Pipeline:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Writeback:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Observation:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
-	case Match:
-		return r.Name, r.DefinitionVersion, r.Published, r.Versions
+	value, ok := integrationValue(record)
+	if !ok {
+		return
 	}
-	return
+	return value.FieldByName("Name").String(), int(value.FieldByName("DefinitionVersion").Int()),
+		value.FieldByName("Published").String(), value.FieldByName("Versions").Interface().([]string)
 }
 
 func retainIntegration(record any, asset platform.ReleaseAsset) (any, error) {
@@ -113,39 +133,16 @@ func retainIntegration(record any, asset platform.ReleaseAsset) (any, error) {
 	versions = append(slices.Clone(versions), string(raw))
 saved:
 	version = max(version, ordinal)
-	switch r := record.(type) {
-	case Connection:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Listener:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Source:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case platform.MediaSet:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case platform.Schedule:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Dataset:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Pipeline:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Writeback:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Observation:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
-	case Match:
-		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
-		return r, nil
+	value, ok := integrationValue(record)
+	if !ok {
+		return nil, fmt.Errorf("unknown integration owner")
 	}
-	return nil, fmt.Errorf("unknown integration owner")
+	retained := reflect.New(value.Type()).Elem()
+	retained.Set(value)
+	retained.FieldByName("DefinitionVersion").SetInt(int64(version))
+	retained.FieldByName("Published").SetString(string(raw))
+	retained.FieldByName("Versions").Set(reflect.ValueOf(versions))
+	return retained.Interface(), nil
 }
 
 func (b *Build) integrationInventory(kind platform.AssetKind) ([]any, error) {
@@ -168,53 +165,16 @@ func (b *Build) integrationInventory(kind platform.AssetKind) ([]any, error) {
 }
 
 func integrationRecordType(kind platform.AssetKind) reflect.Type {
-	switch kind {
-	case platform.AssetConnection:
-		return reflect.TypeFor[Connection]()
-	case platform.AssetListener:
-		return reflect.TypeFor[Listener]()
-	case platform.AssetSource:
-		return reflect.TypeFor[Source]()
-	case platform.AssetMediaSet:
-		return reflect.TypeFor[platform.MediaSet]()
-	case platform.AssetSchedule:
-		return reflect.TypeFor[platform.Schedule]()
-	case platform.AssetDataset:
-		return reflect.TypeFor[Dataset]()
-	case platform.AssetPipeline:
-		return reflect.TypeFor[Pipeline]()
-	case platform.AssetWriteback:
-		return reflect.TypeFor[Writeback]()
-	case platform.AssetObservation:
-		return reflect.TypeFor[Observation]()
-	case platform.AssetMatching:
-		return reflect.TypeFor[Match]()
+	if entry := integrationEntryOfKind(kind); entry != nil {
+		return entry.recordType
 	}
 	return nil
 }
 
 func integrationRecord(record any) platform.Record {
-	switch r := record.(type) {
-	case Connection:
-		return r.Record
-	case Listener:
-		return r.Record
-	case Source:
-		return r.Record
-	case platform.MediaSet:
-		return r.Record
-	case platform.Schedule:
-		return r.Record
-	case Dataset:
-		return r.Record
-	case Pipeline:
-		return r.Record
-	case Writeback:
-		return r.Record
-	case Observation:
-		return r.Record
-	case Match:
-		return r.Record
+	value, ok := integrationValue(record)
+	if !ok {
+		return platform.Record{}
 	}
-	return platform.Record{}
+	return value.FieldByName("Record").Interface().(platform.Record)
 }
