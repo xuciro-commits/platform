@@ -8,7 +8,7 @@ import (
 
 	"math"
 
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -258,7 +258,7 @@ func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limi
 		found[c] = true
 		candidates = append(candidates, c)
 	}
-	_, databaseSearch := ctx.Store.(journal.VectorIndex)
+	_, databaseSearch := ctx.Store.(persistence.VectorIndex)
 	if model == "" || databaseSearch {
 		for _, w := range asked {
 			for _, c := range k.postings[w] {

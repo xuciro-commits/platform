@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	automation "platformserver/services/automate/runtime"
 
 	"reflect"
@@ -32,7 +32,7 @@ type flowExecutionRuntime struct {
 	readStore   *records.Store
 	readSource  *records.Store
 	readOrigins map[string]retainedReadOrigin
-	readSQLView journal.StateReadView
+	readSQLView persistence.StateReadView
 }
 
 type retainedReadOrigin struct {

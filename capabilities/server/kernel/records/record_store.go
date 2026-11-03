@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"iter"
 	"maps"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 
 	"reflect"
@@ -271,7 +271,7 @@ func (s *Store) UseCurrentRows() {
 	}
 }
 
-func (s *Store) AttachHistory(et *Type, id string, r *Row, store journal.RuntimeState, tenant string) {
+func (s *Store) AttachHistory(et *Type, id string, r *Row, store persistence.RuntimeState, tenant string) {
 	count := r.HistoryLength()
 	copy := *r
 	copy.History = nil

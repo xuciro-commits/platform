@@ -7,33 +7,33 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"time"
 )
 
 type Input struct {
-	Unique         []journal.StateUnique   `json:"unique,omitempty"`
-	Authorizations []AuthorizationEvidence `json:"authorizations,omitempty"`
-	Version        int                     `json:"version"`
-	Kind           string                  `json:"kind"`
-	Tenant         string                  `json:"tenant"`
-	App            string                  `json:"app"`
-	Name           string                  `json:"name"`
-	Member         string                  `json:"member"`
-	Key            string                  `json:"key"`
-	At             time.Time               `json:"at"`
-	Body           []byte                  `json:"body"`
-	RequestHash    string                  `json:"requestHash"`
-	Digest         string                  `json:"digest"`
-	Answer         json.RawMessage         `json:"answer,omitempty"`
-	Refusal        *kernel.Error           `json:"refusal,omitempty"`
-	Changes        json.RawMessage         `json:"changes,omitempty"`
-	Rows           []InputRow              `json:"rows,omitempty"`
-	Deliveries     []ConnectorDelivery     `json:"deliveries,omitempty"`
-	States         []State                 `json:"states,omitempty"`
-	Notices        *Notices                `json:"notices,omitempty"`
+	Unique         []persistence.StateUnique `json:"unique,omitempty"`
+	Authorizations []AuthorizationEvidence   `json:"authorizations,omitempty"`
+	Version        int                       `json:"version"`
+	Kind           string                    `json:"kind"`
+	Tenant         string                    `json:"tenant"`
+	App            string                    `json:"app"`
+	Name           string                    `json:"name"`
+	Member         string                    `json:"member"`
+	Key            string                    `json:"key"`
+	At             time.Time                 `json:"at"`
+	Body           []byte                    `json:"body"`
+	RequestHash    string                    `json:"requestHash"`
+	Digest         string                    `json:"digest"`
+	Answer         json.RawMessage           `json:"answer,omitempty"`
+	Refusal        *kernel.Error             `json:"refusal,omitempty"`
+	Changes        json.RawMessage           `json:"changes,omitempty"`
+	Rows           []InputRow                `json:"rows,omitempty"`
+	Deliveries     []ConnectorDelivery       `json:"deliveries,omitempty"`
+	States         []State                   `json:"states,omitempty"`
+	Notices        *Notices                  `json:"notices,omitempty"`
 }
 
 func InputHash(tenant, app, name, member string, body []byte) (string, error) {

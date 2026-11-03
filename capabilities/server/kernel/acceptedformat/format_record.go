@@ -7,8 +7,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"strings"
 	"time"
@@ -21,7 +21,7 @@ const RecordClaimVersion = 6
 type Record struct {
 	Claims         []SourceClaim                `json:"claims,omitempty"`
 	Origin         string                       `json:"origin,omitempty"`
-	Unique         []journal.StateUnique        `json:"unique,omitempty"`
+	Unique         []persistence.StateUnique    `json:"unique,omitempty"`
 	Definition     *platform.DecisionDefinition `json:"definition,omitempty"`
 	SchemaVersion  *platform.SchemaVersion      `json:"schemaVersion,omitempty"`
 	Authorizations []AuthorizationEvidence      `json:"authorizations,omitempty"`

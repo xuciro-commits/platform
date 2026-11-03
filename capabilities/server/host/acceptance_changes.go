@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/kernel/acceptedformat"
-	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -387,22 +387,22 @@ func (t *Tenant) applyAcceptedStates(states []acceptedformat.State) error {
 	return nil
 }
 
-func uniqueReplacements(changes map[string]map[string]string) []journal.StateUnique {
-	out := make([]journal.StateUnique, 0, len(changes))
+func uniqueReplacements(changes map[string]map[string]string) []persistence.StateUnique {
+	out := make([]persistence.StateUnique, 0, len(changes))
 	for _, ref := range slices.Sorted(maps.Keys(changes)) {
 		typ, id, _ := strings.Cut(ref, "/")
-		out = append(out, journal.StateUnique{Type: typ, ID: id, Keys: changes[ref]})
+		out = append(out, persistence.StateUnique{Type: typ, ID: id, Keys: changes[ref]})
 	}
 	return out
 }
 
-func (d *stagedDecision) savedUniqueChanges() []journal.StateUnique {
+func (d *stagedDecision) savedUniqueChanges() []persistence.StateUnique {
 	d.records.Lock()
 	defer d.records.Unlock()
 	return uniqueReplacements(d.records.UniqueChanges())
 }
 
-func validateUniqueReplacements(store *records.Store, saved []journal.StateUnique) error {
+func validateUniqueReplacements(store *records.Store, saved []persistence.StateUnique) error {
 	store.Lock()
 	defer store.Unlock()
 	expected := store.UniqueChanges()

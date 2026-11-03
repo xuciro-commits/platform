@@ -10,7 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
 
@@ -96,14 +96,14 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	if envelope.Kind == "release-result" {
 		saved, err := t.applyAcceptedRelease(e.Body)
 		if err != nil || saved.App != e.App || saved.Member != m.ID ||
-			!journal.SameTime(saved.At, e.At) {
+			!persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: immutable release result: %v", i+1, err)
 		}
 		return nil
 	}
 	if envelope.Kind == "composite-result" {
 		saved, err := t.applyAcceptedComposite(e.Body)
-		if err != nil || saved.App != e.App || saved.Member != m.ID || !journal.SameTime(saved.At, e.At) {
+		if err != nil || saved.App != e.App || saved.Member != m.ID || !persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: composite result: %v", i+1, err)
 		}
 		t.changed()
@@ -111,7 +111,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	}
 	if envelope.Kind == "input-result" {
 		saved, applied, err := t.applyAcceptedInput(e.Body)
-		if err != nil || !applied || saved.App != e.App || saved.Member != m.ID || !journal.SameTime(saved.At, e.At) {
+		if err != nil || !applied || saved.App != e.App || saved.Member != m.ID || !persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: connector result: %v (applied=%t)", i+1, err, applied)
 		}
 		if saved.Refusal == nil {
@@ -123,7 +123,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	if envelope.Kind == "effect-result" {
 		saved, applied, err := t.applyAcceptedEffect(e.Body)
 		if err != nil || !applied || saved.App != e.App || m.ID != "app:"+controlowner.PlatformApp ||
-			!journal.SameTime(saved.At, e.At) {
+			!persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: effect result: %v (applied=%t)", i+1, err, applied)
 		}
 		t.enqueue(saved.At)
@@ -131,7 +131,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	}
 	if envelope.Kind == "host-result" {
 		saved, err := acceptedformat.DecodeHostControl(e.Body)
-		if err != nil || saved.App != e.App || saved.Member != m.ID || saved.Tenant != t.ID || !journal.SameTime(saved.At, e.At) {
+		if err != nil || saved.App != e.App || saved.Member != m.ID || saved.Tenant != t.ID || !persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: invalid host result: %v", i+1, err)
 		}
 		if _, err := t.applyAcceptedHostControl(e.Body); err != nil {
@@ -141,14 +141,14 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	}
 	if envelope.Kind == "usage-result" {
 		saved, err := t.applyAcceptedUsage(e.Body)
-		if err != nil || saved.App != e.App || saved.Member != m.ID || !journal.SameTime(saved.At, e.At) {
+		if err != nil || saved.App != e.App || saved.Member != m.ID || !persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: model usage result: %v", i+1, err)
 		}
 		return nil
 	}
 	if envelope.Kind == "agent-result" {
 		saved, err := t.applyAcceptedAgent(e.Body)
-		if err != nil || saved.App != e.App || saved.Member != m.ID || !journal.SameTime(saved.At, e.At) {
+		if err != nil || saved.App != e.App || saved.Member != m.ID || !persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: agent result: %v", i+1, err)
 		}
 		t.enqueue(saved.At)
@@ -156,7 +156,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	}
 	if envelope.Kind == "operation-claim" {
 		saved, err := t.applyOperationClaim(e.Body)
-		if err != nil || saved.App != e.App || m.ID != "app:"+controlowner.PlatformApp || !journal.SameTime(saved.At, e.At) {
+		if err != nil || saved.App != e.App || m.ID != "app:"+controlowner.PlatformApp || !persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: operation claim: %v", i+1, err)
 		}
 		t.opsMu.Lock()
@@ -171,7 +171,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	ra := a
 	if envelope.Kind == "work-result" {
 		saved, decodeErr := acceptedformat.DecodeWork(e.Body)
-		if decodeErr != nil || saved.App != e.App || !journal.SameTime(saved.At, e.At) || m.ID != "app:"+e.App {
+		if decodeErr != nil || saved.App != e.App || !persistence.SameTime(saved.At, e.At) || m.ID != "app:"+e.App {
 			return fmt.Errorf("entry %d: invalid work result: %v", i+1, decodeErr)
 		}
 		if _, err := t.applyAcceptedWork(e.Body); err != nil {
@@ -183,7 +183,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	if envelope.Kind == "refusal" {
 		saved, sub, decodeErr := acceptedformat.DecodeRefusal(e.Body)
 		if decodeErr != nil || saved.App != e.App || saved.Tenant != t.ID ||
-			!journal.SameTime(saved.At, e.At) || sub.GetPrincipalId() != m.ID {
+			!persistence.SameTime(saved.At, e.At) || sub.GetPrincipalId() != m.ID {
 			return fmt.Errorf("entry %d: invalid refused result: %v", i+1, decodeErr)
 		}
 		key := e.App + "/" + sub.GetIdempotencyKey()
@@ -202,7 +202,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		if subErr != nil {
 			return fmt.Errorf("entry %d: invalid record batch request: %w", i+1, subErr)
 		}
-		if saved.App != e.App || saved.Tenant != t.ID || !journal.SameTime(saved.At, e.At) || sub.GetPrincipalId() != m.ID {
+		if saved.App != e.App || saved.Tenant != t.ID || !persistence.SameTime(saved.At, e.At) || sub.GetPrincipalId() != m.ID {
 			return fmt.Errorf("entry %d: record batch journal identity differs (app=%q/%q tenant=%q/%q principal=%q/%q time=%s/%s)",
 				i+1, saved.App, e.App, saved.Tenant, t.ID, sub.GetPrincipalId(), m.ID, saved.At, e.At)
 		}
@@ -223,7 +223,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		return fmt.Errorf("entry %d: invalid accepted result: %v", i+1, decodeErr)
 	}
 	if saved.App != e.App || receipt.GetSubmission().GetPrincipalId() != m.ID ||
-		saved.Version >= 2 && !journal.SameTime(saved.At, e.At) {
+		saved.Version >= 2 && !persistence.SameTime(saved.At, e.At) {
 		return fmt.Errorf("entry %d: accepted result app or input clock differs from journal entry", i+1)
 	}
 	if _, refused := t.committed.Refusal(e.App + "/" + receipt.GetSubmission().GetIdempotencyKey()); refused {

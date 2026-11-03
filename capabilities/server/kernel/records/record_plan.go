@@ -3,7 +3,7 @@ package records
 import (
 	"encoding/json"
 	ruleexpr "platformserver/expr"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -12,7 +12,7 @@ import (
 
 type Plan struct {
 	Match      func(reflect.Value) bool
-	Pushdown   []journal.StateFilter
+	Pushdown   []persistence.StateFilter
 	Candidates func(IndexImage, ImageLookup) ([]string, bool)
 }
 

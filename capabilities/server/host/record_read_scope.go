@@ -11,7 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
 
@@ -35,7 +35,7 @@ func (t *Tenant) openRecordRead(ctx context.Context) {
 	view, err := t.records.Current().Open(ctx)
 	if err != nil {
 		t.recordReadError = err
-		var mismatch *journal.StatePositionError
+		var mismatch *persistence.StatePositionError
 		if errors.As(err, &mismatch) {
 			t.quarantine(err)
 		}
@@ -80,7 +80,7 @@ func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func() (T
 		if failure := recover(); failure != nil {
 			if err, ok := failure.(error); ok {
 				t.recordReadError = err
-				var mismatch *journal.StatePositionError
+				var mismatch *persistence.StatePositionError
 				if errors.As(err, &mismatch) {
 					t.quarantine(err)
 				}

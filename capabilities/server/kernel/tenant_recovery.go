@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
 
@@ -66,9 +66,9 @@ func NewChangeArchive(store AcceptedStateReader, tenant, app string) ChangeArchi
 }
 
 type SQLCheckpoint struct {
-	Format   string              `json:"format"`
-	Position int64               `json:"position"`
-	Records  journal.StateDigest `json:"records"`
+	Format   string                  `json:"format"`
+	Position int64                   `json:"position"`
+	Records  persistence.StateDigest `json:"records"`
 }
 
 const SQLCheckpointFormat = "platform.sql-checkpoint.v1"
@@ -94,13 +94,13 @@ func ReadCheckpoint(raw []byte) (*SQLCheckpoint, error) {
 	return header.Runtime, nil
 }
 
-func SaveCheckpoint(ctx context.Context, j journal.Journals, tenant string, seq int64, key string, state []byte) error {
+func SaveCheckpoint(ctx context.Context, j persistence.Journals, tenant string, seq int64, key string, state []byte) error {
 	runtime, err := ReadCheckpoint(state)
 	if err != nil {
 		return err
 	}
 	if runtime != nil {
-		snapshots, ok := j.(journal.StateSnapshotStorage)
+		snapshots, ok := j.(persistence.StateSnapshotStorage)
 		if !ok {
 			return fmt.Errorf("tenant %s: SQL checkpoint archive unavailable", tenant)
 		}

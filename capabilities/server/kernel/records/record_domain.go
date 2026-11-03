@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 	ruleexpr "platformserver/expr"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -16,7 +16,7 @@ import (
 type RowFilter struct {
 	program platform.RowProgram
 	readers map[string]func(reflect.Value) ruleexpr.Value
-	sql     []journal.StateFilter
+	sql     []persistence.StateFilter
 }
 
 type rowRefs struct {
@@ -36,7 +36,7 @@ func (f *RowFilter) Match(v reflect.Value) bool {
 	return f == nil || f.program == nil || f.program.Match(&rowRefs{value: v, readers: f.readers})
 }
 
-func (f *RowFilter) Pushdown() []journal.StateFilter { return f.sql }
+func (f *RowFilter) Pushdown() []persistence.StateFilter { return f.sql }
 
 func CompileDomain(info platform.EntityInfo, raw json.RawMessage, engines ...platform.RuleEngine) (*RowFilter, error) {
 	expr, err := DomainToExpr(info, raw)
@@ -60,7 +60,7 @@ func CompilePolicy(info platform.EntityInfo, expr ruleexpr.Expr, attributes []Ro
 	return compileRowFilter(info, expr, nil, attributes, engines...)
 }
 
-func compileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr, sql []journal.StateFilter, attributes []RowAttribute, engines ...platform.RuleEngine) (*RowFilter, error) {
+func compileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr, sql []persistence.StateFilter, attributes []RowAttribute, engines ...platform.RuleEngine) (*RowFilter, error) {
 	filter := &RowFilter{readers: map[string]func(reflect.Value) ruleexpr.Value{}, sql: sql}
 	if expr.Lit != nil && string(expr.Lit.Value) == "true" {
 		return filter, nil
@@ -506,8 +506,8 @@ func combine(op string, parts ...ruleexpr.Expr) ruleexpr.Expr {
 	return ruleexpr.Expr{Op: op, Kind: "boolean", Args: flat}
 }
 
-func pushdown(info platform.EntityInfo, expr ruleexpr.Expr) []journal.StateFilter {
-	var out []journal.StateFilter
+func pushdown(info platform.EntityInfo, expr ruleexpr.Expr) []persistence.StateFilter {
+	var out []persistence.StateFilter
 	var walk func(ruleexpr.Expr)
 	walk = func(e ruleexpr.Expr) {
 		if e.Op == "and" {
@@ -524,9 +524,9 @@ func pushdown(info platform.EntityInfo, expr ruleexpr.Expr) []journal.StateFilte
 	return out
 }
 
-func stateFilter(info platform.EntityInfo, e ruleexpr.Expr) (journal.StateFilter, bool) {
+func stateFilter(info platform.EntityInfo, e ruleexpr.Expr) (persistence.StateFilter, bool) {
 	if len(e.Args) != 2 {
-		return journal.StateFilter{}, false
+		return persistence.StateFilter{}, false
 	}
 	field, literal, list := "", e.Args[1], false
 	switch e.Op {
@@ -542,30 +542,30 @@ func stateFilter(info platform.EntityInfo, e ruleexpr.Expr) (journal.StateFilter
 		}
 	}
 	if field == "" || strings.Contains(field, "#") || literal.Lit == nil {
-		return journal.StateFilter{}, false
+		return persistence.StateFilter{}, false
 	}
 	f, ok := info.Field(field)
 	if field == "id" {
 		f, ok = platform.FieldInfo{Name: "id", Type: "text", Index: []int{0}}, true
 	}
 	if !ok || len(f.Index) == 0 || f.AliasOf != "" || f.Property != nil {
-		return journal.StateFilter{}, false
+		return persistence.StateFilter{}, false
 	}
 	isList := f.Type == "references" || f.Type == "tags"
 	if isList != list || !isList && f.Type != "text" && f.Type != "longtext" && f.Type != "reference" && f.Type != "choice" && f.Type != "date" {
-		return journal.StateFilter{}, false
+		return persistence.StateFilter{}, false
 	}
-	filter := journal.StateFilter{Path: []string{"value", field}, List: isList}
+	filter := persistence.StateFilter{Path: []string{"value", field}, List: isList}
 	if e.Op == "=" || list && e.Op == "in" {
 		var value string
 		if literal.Kind != "text" || json.Unmarshal(literal.Lit.Value, &value) != nil {
-			return journal.StateFilter{}, false
+			return persistence.StateFilter{}, false
 		}
 		filter.Values = []string{value}
 		return filter, true
 	}
 	if literal.Lit.Element != "text" || json.Unmarshal(literal.Lit.Value, &filter.Values) != nil {
-		return journal.StateFilter{}, false
+		return persistence.StateFilter{}, false
 	}
 	return filter, true
 }

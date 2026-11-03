@@ -11,7 +11,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
 
@@ -19,8 +19,8 @@ func (t *Tenant) migrateRuntimeState(ctx context.Context, j Journals) error {
 	return t.migrateRuntimeStateFrom(ctx, j, nil)
 }
 
-func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix *journal.StateCheckpoint) error {
-	store, ok := j.(journal.RuntimeState)
+func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix *persistence.StateCheckpoint) error {
+	store, ok := j.(persistence.RuntimeState)
 	if !ok {
 		return nil
 	}
@@ -30,7 +30,7 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 	if err != nil {
 		return err
 	}
-	if upgrade, ok := j.(journal.RuntimeStateUpgrade); ok {
+	if upgrade, ok := j.(persistence.RuntimeStateUpgrade); ok {
 		needed, upgradeErr := upgrade.StateNeedsUpgrade(ctx, t.ID)
 		if upgradeErr != nil {
 			return upgradeErr
@@ -52,7 +52,7 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 		}
 	}
 	if prefix != nil {
-		recovery, ok := j.(journal.RuntimeStateRecovery)
+		recovery, ok := j.(persistence.RuntimeStateRecovery)
 		if !ok {
 			return fmt.Errorf("tenant %s state store cannot recover a retained suffix", t.ID)
 		}
@@ -81,15 +81,15 @@ func (t *Tenant) installRuntimeHistory(store runtimekernel.AcceptedStateReader, 
 	t.committed.UseStorage(store, t.ID, position)
 }
 
-func (t *Tenant) installRuntimeRecords(store journal.RuntimeState, position func() int64) {
+func (t *Tenant) installRuntimeRecords(store persistence.RuntimeState, position func() int64) {
 	t.records.Lock()
 	defer t.records.Unlock()
 	t.records.Current().Configure(store, t.ID, position(), position)
 	t.records.UseCurrentRows()
 }
 
-func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
-	d := journal.StateDelta{}
+func (t *Tenant) runtimeStateDeltaLocked() (persistence.StateDelta, error) {
+	d := persistence.StateDelta{}
 	if err := func() error {
 		t.records.Lock()
 		defer t.records.Unlock()
@@ -104,39 +104,39 @@ func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
 				if err != nil {
 					return err
 				}
-				rr := journal.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1, HistoryHead: head}
+				rr := persistence.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1, HistoryHead: head}
 				for _, h := range r.RecordHistory() {
 					rr.History = append(rr.History, jsonOf(h))
 				}
 				d.Records = append(d.Records, rr)
-				d.Unique = append(d.Unique, journal.StateUnique{Type: typ, ID: id, Keys: t.records.UniqueKeys(typ, id)})
+				d.Unique = append(d.Unique, persistence.StateUnique{Type: typ, ID: id, Keys: t.records.UniqueKeys(typ, id)})
 			}
 		}
 		return nil
 	}(); err != nil {
-		return journal.StateDelta{}, err
+		return persistence.StateDelta{}, err
 	}
 	for _, a := range t.apps {
 		for index, r := range a.AcceptedLedger().RecordsFor(t.ID) {
 			image, err := proto.MarshalOptions{Deterministic: true}.Marshal(r)
 			if err != nil {
-				return journal.StateDelta{}, err
+				return persistence.StateDelta{}, err
 			}
-			d.Changes = append(d.Changes, journal.StateChange{App: a.Manifest().ID, ID: r.GetChangeId(), Key: r.GetSubmission().GetIdempotencyKey(), Index: index + 1, Image: image})
+			d.Changes = append(d.Changes, persistence.StateChange{App: a.Manifest().ID, ID: r.GetChangeId(), Key: r.GetSubmission().GetIdempotencyKey(), Index: index + 1, Image: image})
 		}
 	}
 	for _, a := range t.apps {
 		if owner, ok := a.(platform.AcceptedStateApp); ok {
 			raw, err := owner.AcceptedState()
 			if err != nil {
-				return journal.StateDelta{}, err
+				return persistence.StateDelta{}, err
 			}
-			d.Values = append(d.Values, journal.StateValue{Owner: "app-state", Key: a.Manifest().ID, Image: raw})
+			d.Values = append(d.Values, persistence.StateValue{Owner: "app-state", Key: a.Manifest().ID, Image: raw})
 		}
 	}
 	t.committed.StorageValues(&d)
 	for name, n := range t.sequences.Clone() {
-		d.Values = append(d.Values, journal.StateValue{Owner: "sequence", Key: name, Image: jsonOf(n)})
+		d.Values = append(d.Values, persistence.StateValue{Owner: "sequence", Key: name, Image: jsonOf(n)})
 	}
 	return d, nil
 }

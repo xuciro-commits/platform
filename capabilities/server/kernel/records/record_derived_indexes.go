@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"iter"
 	"maps"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
 	"strings"
@@ -174,7 +174,7 @@ func (i *DerivedIndexes) ReferenceBucket(image IndexImage, field platform.FieldI
 		return i.References(image, field).Get(target)
 	}
 	current := image.Current()
-	filters := []journal.StateFilter{{Path: []string{"value", field.Name}, Values: []string{target}}}
+	filters := []persistence.StateFilter{{Path: []string{"value", field.Name}, Values: []string{target}}}
 	if len(image.Info.RecordImages) > 0 {
 		filters = nil
 	}

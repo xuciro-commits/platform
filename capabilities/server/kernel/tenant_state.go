@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"maps"
 	acceptedformat "platformserver/kernel/acceptedformat"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -169,7 +169,7 @@ func storedValues[T any](c *Committed, owner string, memory map[string]T, field 
 	}
 	var values map[string]json.RawMessage
 	var err error
-	if selection, ok := c.storage.(journal.StateValueSelection); ok && len(field) > 0 {
+	if selection, ok := c.storage.(persistence.StateValueSelection); ok && len(field) > 0 {
 		values, err = selection.StateValuesWithField(context.Background(), c.tenant, owner, field[0], c.appliedPosition)
 	} else if c.storage != nil {
 		values, err = c.storage.StateValues(context.Background(), c.tenant, owner, c.appliedPosition)
@@ -280,9 +280,9 @@ func (c *Committed) SaveRefusal(key string, r acceptedformat.Refusal) {
 	}
 	c.refusals[key] = r
 }
-func (c *Committed) StorageValues(d *journal.StateDelta) {
+func (c *Committed) StorageValues(d *persistence.StateDelta) {
 	add := func(owner, key string, v any) {
-		d.Values = append(d.Values, journal.StateValue{Owner: owner, Key: key, Image: platform.Raw(v)})
+		d.Values = append(d.Values, persistence.StateValue{Owner: owner, Key: key, Image: platform.Raw(v)})
 	}
 	for k, v := range c.AllAnswers() {
 		add("answer", k, v)
@@ -315,7 +315,7 @@ func (c *Committed) ReleasePending() {
 	c.answers, c.inputs, c.compositeAnswers = nil, nil, nil
 	c.refusals, c.composites, c.schemaVersions, c.decisionDefinitions = nil, nil, nil, nil
 }
-func (c *Committed) HoldPending(d journal.StateDelta) {
+func (c *Committed) HoldPending(d persistence.StateDelta) {
 	if c.storage == nil {
 		return
 	}

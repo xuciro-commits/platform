@@ -6,8 +6,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -17,7 +17,7 @@ import (
 type Batch struct {
 	Claims         []SourceClaim                  `json:"claims,omitempty"`
 	Origin         string                         `json:"origin,omitempty"`
-	Unique         []journal.StateUnique          `json:"unique,omitempty"`
+	Unique         []persistence.StateUnique      `json:"unique,omitempty"`
 	Business       []platform.BusinessRefusalFact `json:"business,omitempty"`
 	SchemaVersion  *platform.SchemaVersion        `json:"schemaVersion,omitempty"`
 	Authorizations []AuthorizationEvidence        `json:"authorizations,omitempty"`

@@ -21,7 +21,7 @@ import (
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"sync"
 	"sync/atomic"
@@ -54,7 +54,7 @@ type Tenant struct {
 	Record                func(Entry)
 	AcceptResult          func(Entry, string, string) ([]byte, error)
 	Store                 Store
-	memStore              journal.Memory
+	memStore              persistence.Memory
 	knowledge             platform.Glossary
 	index                 knowledgeindex.Index
 	i18n                  transport.Translator

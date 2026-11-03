@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 
 	"slices"
@@ -55,7 +55,7 @@ func (k *Index) Sync(load func(bool) ([]Source, map[string]bool)) {
 	k.walked = true
 }
 
-func (k *Index) syncVectorSources(ctx Context, store journal.VectorIndex, model string) error {
+func (k *Index) syncVectorSources(ctx Context, store persistence.VectorIndex, model string) error {
 	k.vectorMu.Lock()
 	defer k.vectorMu.Unlock()
 	k.mu.Lock()
@@ -69,11 +69,11 @@ func (k *Index) syncVectorSources(ctx Context, store journal.VectorIndex, model 
 			dirty[source] = true
 		}
 	}
-	sources := make([]journal.VectorSource, 0, len(dirty))
+	sources := make([]persistence.VectorSource, 0, len(dirty))
 	for source := range dirty {
-		item := journal.VectorSource{Source: source}
+		item := persistence.VectorSource{Source: source}
 		for _, c := range k.chunks[source] {
-			item.Passages = append(item.Passages, journal.VectorPassage{Chunk: c.n, Hash: c.hash, Scope: c.scope, Apps: slices.Clone(c.apps)})
+			item.Passages = append(item.Passages, persistence.VectorPassage{Chunk: c.n, Hash: c.hash, Scope: c.scope, Apps: slices.Clone(c.apps)})
 		}
 		sources = append(sources, item)
 	}
@@ -93,7 +93,7 @@ func (k *Index) syncVectorSources(ctx Context, store journal.VectorIndex, model 
 }
 
 func (k *Index) Nearest(ctx Context, model string, query []float32, reader *platform.Member, app string, limit int, now time.Time) map[*chunk]float64 {
-	store := ctx.Store.(journal.VectorIndex)
+	store := ctx.Store.(persistence.VectorIndex)
 	out := map[*chunk]float64{}
 	if err := k.syncVectorSources(ctx, store, model); err != nil {
 		log.Printf("knowledge sources %s: %v", ctx.Tenant, err)
@@ -201,7 +201,7 @@ func (k *Index) Embed(ctx Context, now time.Time) {
 	k.mu.Unlock()
 	slices.Sort(hashes)
 	var missing []string
-	if search, ok := ctx.Store.(journal.VectorIndex); ok {
+	if search, ok := ctx.Store.(persistence.VectorIndex); ok {
 		if err := k.syncVectorSources(ctx, search, space); err != nil {
 			return
 		}

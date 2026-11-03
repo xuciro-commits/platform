@@ -1,6 +1,6 @@
 ---
 level: 7 系统架构
-covers: [capabilities/server/host/**, capabilities/server/kernel/**, capabilities/server/kernel/journal/**, capabilities/server/host/composition/**, capabilities/server/cmd/**, contract/**]
+covers: [capabilities/server/host/**, capabilities/server/kernel/**, capabilities/server/kernel/store/**, capabilities/server/host/composition/**, capabilities/server/cmd/**, contract/**]
 read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果格式、重放与快照、租户装配、后台任务、协议与 API 类型
 ---
 
@@ -31,7 +31,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | 包 | 职责 | 依赖 |
 |---|---|---|
 | `expr` | Expr 的解析、类型检查、求值与 SQL 下推编译；前端经 WASM 复用 | 无 |
-| `kernel` | 提交接收、幂等、修订、接受结果编码、日志、记录存储、车道、重放、快照 | `expr` |
+| `kernel` | 提交接收、幂等、修订、接受结果编码、车道、重放与快照；`kernel/store` 拥有 PostgreSQL、文件及内存持久化，`kernel/records` 拥有记录投影与读取计划 | `expr` |
 | `platform` | 应用 SDK：Manifest、Caller、动作目录、Expr 与 ObjectSet 接口、授权接口 | `kernel` |
 | `services/resources` | RID、项目、文件夹、资源生命周期、工作状态、分支、提案 | `platform` |
 | `services/ontology` | 本体元数据与类型检查 | `platform`、resources |

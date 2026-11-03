@@ -15,8 +15,8 @@ import (
 	"platformserver/services/devops/releases"
 	controlowner "platformserver/services/security/control"
 
-	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"reflect"
 	"slices"
 	"strings"
@@ -208,7 +208,7 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 	if err != nil {
 		return nil, 0, err
 	}
-	var read journal.StateReadView
+	var read persistence.StateReadView
 	var ownsRead bool
 	defer func() {
 		if read != nil && ownsRead {
@@ -224,7 +224,7 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 			}
 			return nil, nil
 		}
-		views, ok := t.records.Current().Backend().(journal.StateReadViews)
+		views, ok := t.records.Current().Backend().(persistence.StateReadViews)
 		if !ok {
 			return nil, nil
 		}
@@ -271,7 +271,7 @@ func (t *Tenant) detachSnapshotRead() {
 }
 
 func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessage, int64, error) {
-	views, ok := j.(journal.StateReadViews)
+	views, ok := j.(persistence.StateReadViews)
 	if !ok || t.records.Current().Backend() == nil {
 		return t.Snapshot(func() int64 { return j.Position(t.ID) })
 	}
@@ -279,7 +279,7 @@ func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessa
 	if err != nil {
 		return nil, 0, err
 	}
-	var view journal.StateReadView
+	var view persistence.StateReadView
 	var viewErr error
 	var ownsRead bool
 	s, _, seq, err := t.capture(func() int64 {

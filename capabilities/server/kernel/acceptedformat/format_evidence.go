@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -27,7 +27,7 @@ type ChangePlan struct {
 	Notices       *Notices
 	Sequences     map[string]int
 	SequenceBases map[string]int
-	Unique        []journal.StateUnique
+	Unique        []persistence.StateUnique
 	CheckUnique   bool
 }
 

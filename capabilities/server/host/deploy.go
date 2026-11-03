@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	runtimekernel "platformserver/kernel"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	fileowner "platformserver/services/data/blobs"
 	"platformserver/services/devops/packages"
@@ -175,7 +175,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 		recoveryStarted := time.Now().UTC()
 		var statePosition int64
 		var stateActive bool
-		if recovery, ok := j.(journal.RuntimeStateRecovery); ok {
+		if recovery, ok := j.(persistence.RuntimeStateRecovery); ok {
 			var err error
 			statePosition, stateActive, err = recovery.StatePosition(ctx, t.ID)
 			if err != nil {
@@ -183,7 +183,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			}
 		}
 		legacyState := false
-		if upgrade, ok := j.(journal.RuntimeStateUpgrade); ok {
+		if upgrade, ok := j.(persistence.RuntimeStateUpgrade); ok {
 			var err error
 			legacyState, err = upgrade.StateNeedsUpgrade(ctx, t.ID)
 			if err != nil {
@@ -269,7 +269,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			}
 			return fmt.Errorf("read journal %s: %w", t.ID, err)
 		}
-		var prefix *journal.StateCheckpoint
+		var prefix *persistence.StateCheckpoint
 		if stateActive && statePosition >= after && statePosition < j.Position(t.ID) {
 			split := int(statePosition - after)
 			if err := t.recoverEntries(entries[:split]); err != nil {
@@ -284,7 +284,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 				continue
 			}
-			prefix = &journal.StateCheckpoint{Position: statePosition, Delta: delta}
+			prefix = &persistence.StateCheckpoint{Position: statePosition, Delta: delta}
 			acceptedOnly := true
 			for _, entry := range entries[split:] {
 				acceptedOnly = acceptedOnly && entry.Kind == "accepted-result"
@@ -325,7 +325,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			continue
 		}
 		t.attachJournal(ctx, j)
-		if _, ok := j.(journal.StateSnapshotStorage); ok && d.SnapshotEvery > 0 {
+		if _, ok := j.(persistence.StateSnapshotStorage); ok && d.SnapshotEvery > 0 {
 			seq, err := t.checkpointRuntime(ctx, j, code)
 			if err != nil {
 				t.quarantine(fmt.Errorf("SQL checkpoint save: %w", err))

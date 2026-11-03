@@ -1,4 +1,4 @@
-package journal
+package store
 
 import (
 	"slices"

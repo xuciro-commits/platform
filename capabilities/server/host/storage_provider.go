@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
 
@@ -30,7 +30,7 @@ func PostgresProvider(address string) JournalProvider {
 }
 
 func FileProvider(directory string) JournalProvider {
-	return JournalProvider{Module: platform.CapabilityModule{ID: "platform.storage.file", Title: "Local journal storage", Version: "1", Scope: "deployment", Replacement: "restart", StateFormat: "platform.file-journal.v1", Provides: []platform.CapabilityContract{{ID: "platform.storage", Version: "1", Semantics: "1"}}}, Durable: true, Open: func(context.Context) (Journals, error) { return OpenFileJournal(directory) }}
+	return JournalProvider{Module: platform.CapabilityModule{ID: "platform.storage.file", Title: "Local journal storage", Version: "1", Scope: "deployment", Replacement: "restart", StateFormat: "platform.file-persistence.v1", Provides: []platform.CapabilityContract{{ID: "platform.storage", Version: "1", Semantics: "1"}}}, Durable: true, Open: func(context.Context) (Journals, error) { return OpenFileJournal(directory) }}
 }
 
 func (d *Deployment) journalProvider() JournalProvider {
@@ -65,16 +65,16 @@ func (d *Deployment) openJournals(ctx context.Context) (Journals, error) {
 		return nil, fmt.Errorf("selected storage returned no journal")
 	}
 	if provider.AtomicCurrentState {
-		_, state := store.(journal.RuntimeState)
-		_, recovery := store.(journal.RuntimeStateRecovery)
-		_, unique := store.(journal.UniqueState)
+		_, state := store.(persistence.RuntimeState)
+		_, recovery := store.(persistence.RuntimeStateRecovery)
+		_, unique := store.(persistence.UniqueState)
 		if !state || !recovery || !unique {
 			store.Close()
 			return nil, fmt.Errorf("selected storage lacks its declared accepted state, recovery or unique-key contract")
 		}
 	}
 	if provider.FixedReadViews {
-		if _, ok := store.(journal.StateReadViews); !ok {
+		if _, ok := store.(persistence.StateReadViews); !ok {
 			store.Close()
 			return nil, fmt.Errorf("selected storage lacks its declared fixed read views")
 		}

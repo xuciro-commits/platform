@@ -7,7 +7,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 
 	"reflect"
@@ -406,7 +406,7 @@ func (s *Store) UniqueConstraint(info platform.EntityInfo, rule platform.Constra
 	}
 	et := s.types[info.Type]
 	if s.current.Backend() != nil {
-		storage, ok := s.current.Reader().(journal.UniqueState)
+		storage, ok := s.current.Reader().(persistence.UniqueState)
 		if !ok {
 			panic("record storage does not provide derived unique keys")
 		}

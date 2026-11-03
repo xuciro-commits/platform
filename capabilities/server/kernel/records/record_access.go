@@ -9,7 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	ruleexpr "platformserver/expr"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -251,8 +251,8 @@ func Write(info platform.EntityInfo, receipt *pb.ChangeRecord, prev *Row, v refl
 }
 
 type CurrentScope struct {
-	backend         journal.RuntimeState
-	view            journal.StateReadView
+	backend         persistence.RuntimeState
+	view            persistence.StateReadView
 	tenant, release string
 	applied         int64
 	position        func() int64
@@ -267,19 +267,19 @@ func (s *CurrentScope) Fork(info func(string) platform.EntityInfo) *CurrentScope
 	copy.info = info
 	return &copy
 }
-func (s *CurrentScope) Configure(backend journal.RuntimeState, tenant string, applied int64, position func() int64) {
+func (s *CurrentScope) Configure(backend persistence.RuntimeState, tenant string, applied int64, position func() int64) {
 	s.backend, s.tenant, s.applied, s.position = backend, tenant, applied, position
 }
-func (s *CurrentScope) Backend() journal.RuntimeState           { return s.backend }
-func (s *CurrentScope) UseBackend(backend journal.RuntimeState) { s.backend = backend }
-func (s *CurrentScope) View() journal.StateReadView             { return s.view }
-func (s *CurrentScope) Bind(view journal.StateReadView)         { s.view = view }
-func (s *CurrentScope) Tenant() string                          { return s.tenant }
-func (s *CurrentScope) Applied() int64                          { return s.applied }
-func (s *CurrentScope) MarkApplied(position int64)              { s.applied = position }
-func (s *CurrentScope) Position() func() int64                  { return s.position }
-func (s *CurrentScope) Release() string                         { return s.release }
-func (s *CurrentScope) SelectRelease(release string)            { s.release = release }
+func (s *CurrentScope) Backend() persistence.RuntimeState           { return s.backend }
+func (s *CurrentScope) UseBackend(backend persistence.RuntimeState) { s.backend = backend }
+func (s *CurrentScope) View() persistence.StateReadView             { return s.view }
+func (s *CurrentScope) Bind(view persistence.StateReadView)         { s.view = view }
+func (s *CurrentScope) Tenant() string                              { return s.tenant }
+func (s *CurrentScope) Applied() int64                              { return s.applied }
+func (s *CurrentScope) MarkApplied(position int64)                  { s.applied = position }
+func (s *CurrentScope) Position() func() int64                      { return s.position }
+func (s *CurrentScope) Release() string                             { return s.release }
+func (s *CurrentScope) SelectRelease(release string)                { s.release = release }
 func (s *CurrentScope) Source(typ string, info *platform.EntityInfo) RowSource {
 	return &currentRows{store: s, typ: typ, info: info}
 }
@@ -290,7 +290,7 @@ type currentRows struct {
 	info  *platform.EntityInfo
 }
 
-func (r *currentRows) view() journal.StateReadView {
+func (r *currentRows) view() persistence.StateReadView {
 	if r.store.view == nil {
 		panic("SQL record read has no consistent view")
 	}
@@ -353,8 +353,8 @@ func (r *currentRows) IDs(after string, limit int) []string {
 	return ids
 }
 
-func (s *CurrentScope) Open(ctx context.Context) (journal.StateReadView, error) {
-	views, ok := s.backend.(journal.StateReadViews)
+func (s *CurrentScope) Open(ctx context.Context) (persistence.StateReadView, error) {
+	views, ok := s.backend.(persistence.StateReadViews)
 	if !ok {
 		return nil, nil
 	}
@@ -365,9 +365,9 @@ func (s *CurrentScope) Open(ctx context.Context) (journal.StateReadView, error) 
 	s.view = view
 	return view, nil
 }
-func (s *CurrentScope) Detach() journal.StateReadView { view := s.view; s.view = nil; return view }
+func (s *CurrentScope) Detach() persistence.StateReadView { view := s.view; s.view = nil; return view }
 func (s *CurrentScope) Reader() interface {
-	StateCandidates(context.Context, string, string, []journal.StateFilter, string, int, int64) ([]string, error)
+	StateCandidates(context.Context, string, string, []persistence.StateFilter, string, int, int64) ([]string, error)
 } {
 	if s.view != nil {
 		return s.view
@@ -397,7 +397,7 @@ func VisitPlan(image IndexImage, lookup ImageLookup, plan Plan, visible func(ref
 			visit(image.Rows.Get(id))
 		}
 	} else if current.Backend() != nil {
-		var filters []journal.StateFilter
+		var filters []persistence.StateFilter
 		if !image.RetainedProjection && len(image.Info.RecordImages) == 0 {
 			filters = plan.Pushdown
 		}

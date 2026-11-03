@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 	"platformserver/kernel/systemscope"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
@@ -123,7 +123,7 @@ func DecodeHostControl(raw []byte) (HostControl, error) {
 }
 
 type Work struct {
-	Unique         []journal.StateUnique       `json:"unique,omitempty"`
+	Unique         []persistence.StateUnique   `json:"unique,omitempty"`
 	Authorizations []AuthorizationEvidence     `json:"authorizations,omitempty"`
 	Version        int                         `json:"version"`
 	Kind           string                      `json:"kind"`

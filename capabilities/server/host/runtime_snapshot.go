@@ -12,7 +12,7 @@ import (
 	controlowner "platformserver/services/security/control"
 	"time"
 
-	"platformserver/kernel/journal"
+	persistence "platformserver/kernel/store"
 )
 
 func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state []byte, seq, current int64, started time.Time) error {
@@ -23,11 +23,11 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	if saved == nil || saved.Format != runtimekernel.SQLCheckpointFormat || saved.Position != seq || seq > current {
 		return fmt.Errorf("tenant %s: SQL checkpoint format or position differs", t.ID)
 	}
-	snapshots, ok := j.(journal.StateSnapshotStorage)
+	snapshots, ok := j.(persistence.StateSnapshotStorage)
 	if !ok {
 		return fmt.Errorf("tenant %s: SQL checkpoint archive unavailable", t.ID)
 	}
-	store, ok := j.(journal.RuntimeState)
+	store, ok := j.(persistence.RuntimeState)
 	if !ok {
 		return fmt.Errorf("tenant %s: SQL state unavailable", t.ID)
 	}
@@ -83,12 +83,12 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 }
 
 func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snapshot, current int64, entries []Entry) error {
-	verifier, ok := j.(journal.StateSnapshotVerifier)
+	verifier, ok := j.(persistence.StateSnapshotVerifier)
 	if !ok {
 		return fmt.Errorf("tenant %s: SQL checkpoint comparison unavailable", t.ID)
 	}
-	deltas := make([]journal.StateDelta, 0, len(entries))
-	changed := map[string]journal.StateRecord{}
+	deltas := make([]persistence.StateDelta, 0, len(entries))
+	changed := map[string]persistence.StateRecord{}
 	owners := map[string]json.RawMessage{}
 	for _, entry := range entries {
 		delta, err := StorageDelta(entry.Body)
@@ -107,9 +107,9 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 				if readErr != nil {
 					return readErr
 				}
-				expected = journal.StateRecord{Type: replacement.Type, ID: replacement.ID, Image: current.Image, HistoryBase: current.HistoryCount, HistoryHead: current.HistoryHead}
+				expected = persistence.StateRecord{Type: replacement.Type, ID: replacement.ID, Image: current.Image, HistoryBase: current.HistoryCount, HistoryHead: current.HistoryHead}
 			}
-			expected.Image, err = journal.ReplaceStateRecordValue(expected.Image, replacement)
+			expected.Image, err = persistence.ReplaceStateRecordValue(expected.Image, replacement)
 			if err != nil {
 				return err
 			}

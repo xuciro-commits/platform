@@ -9,48 +9,48 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
-	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"platformserver/services/ai/state"
 	"slices"
 	"strings"
 )
 
-func StorageDelta(raw []byte) (journal.StateDelta, error) {
-	b := storageDeltaBuilder{records: map[string]journal.StateRecord{}, changes: map[string]journal.StateChange{}, values: map[string]journal.StateValue{}, unique: map[string]journal.StateUnique{}}
+func StorageDelta(raw []byte) (persistence.StateDelta, error) {
+	b := storageDeltaBuilder{records: map[string]persistence.StateRecord{}, changes: map[string]persistence.StateChange{}, values: map[string]persistence.StateValue{}, unique: map[string]persistence.StateUnique{}}
 	if err := b.accepted(raw); err != nil {
-		return journal.StateDelta{}, err
+		return persistence.StateDelta{}, err
 	}
-	changes := make([]journal.StateChange, 0, len(b.changeOrder))
+	changes := make([]persistence.StateChange, 0, len(b.changeOrder))
 	for _, key := range b.changeOrder {
 		changes = append(changes, b.changes[key])
 	}
-	return journal.StateDelta{Records: slices.Collect(maps.Values(b.records)), Replacements: b.replacements, Changes: changes, Values: slices.Collect(maps.Values(b.values)), ValueUpdates: b.valueUpdates, Unique: slices.Collect(maps.Values(b.unique)), LegacyUnique: b.legacyUnique}, nil
+	return persistence.StateDelta{Records: slices.Collect(maps.Values(b.records)), Replacements: b.replacements, Changes: changes, Values: slices.Collect(maps.Values(b.values)), ValueUpdates: b.valueUpdates, Unique: slices.Collect(maps.Values(b.unique)), LegacyUnique: b.legacyUnique}, nil
 }
 
 type storageDeltaBuilder struct {
-	records      map[string]journal.StateRecord
-	replacements []journal.StateReplacement
-	changes      map[string]journal.StateChange
+	records      map[string]persistence.StateRecord
+	replacements []persistence.StateReplacement
+	changes      map[string]persistence.StateChange
 	changeOrder  []string
-	values       map[string]journal.StateValue
-	valueUpdates []journal.StateValueUpdate
-	unique       map[string]journal.StateUnique
+	values       map[string]persistence.StateValue
+	valueUpdates []persistence.StateValueUpdate
+	unique       map[string]persistence.StateUnique
 	legacyUnique bool
 }
 
 func (b *storageDeltaBuilder) value(owner, key string, image any) {
-	b.valueUpdates = slices.DeleteFunc(b.valueUpdates, func(update journal.StateValueUpdate) bool { return update.Owner == owner && update.Key == key })
+	b.valueUpdates = slices.DeleteFunc(b.valueUpdates, func(update persistence.StateValueUpdate) bool { return update.Owner == owner && update.Key == key })
 	raw, err := json.Marshal(image)
 	if err != nil {
 		panic(err)
 	}
-	b.values[owner+"/"+key] = journal.StateValue{Owner: owner, Key: key, Image: raw}
+	b.values[owner+"/"+key] = persistence.StateValue{Owner: owner, Key: key, Image: raw}
 }
 
 func (b *storageDeltaBuilder) meter(usage platform.AIUsage) {
-	b.valueUpdates = append(b.valueUpdates, journal.StateValueUpdate{Owner: "app-state", Key: platform.AIApp, Apply: func(raw json.RawMessage) (json.RawMessage, error) { return aistate.ApplyUsageState(raw, usage) }})
+	b.valueUpdates = append(b.valueUpdates, persistence.StateValueUpdate{Owner: "app-state", Key: platform.AIApp, Apply: func(raw json.RawMessage) (json.RawMessage, error) { return aistate.ApplyUsageState(raw, usage) }})
 }
 
 func (b *storageDeltaBuilder) record(r records.Image, base int) error {
@@ -61,7 +61,7 @@ func (b *storageDeltaBuilder) record(r records.Image, base int) error {
 	if r.HistoryRef != nil {
 		base = r.HistoryRef.Base
 	}
-	stored := journal.StateRecord{Type: r.Type, ID: r.ID, Image: image, HistoryBase: base}
+	stored := persistence.StateRecord{Type: r.Type, ID: r.ID, Image: image, HistoryBase: base}
 	if r.HistoryRef != nil {
 		stored.HistoryPrior = r.HistoryRef.Prior
 		stored.HistoryHead = r.HistoryRef.Head
@@ -86,7 +86,7 @@ func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definitio
 	if _, exists := b.changes[key]; !exists {
 		b.changeOrder = append(b.changeOrder, key)
 	}
-	b.changes[key] = journal.StateChange{App: app, ID: r.GetChangeId(), Key: r.GetSubmission().GetIdempotencyKey(), Image: image}
+	b.changes[key] = persistence.StateChange{App: app, ID: r.GetChangeId(), Key: r.GetSubmission().GetIdempotencyKey(), Image: image}
 	if definition != nil {
 		b.value("decision-definition", app+"/"+r.GetChangeId(), definition)
 	}
@@ -266,7 +266,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 			if !ok {
 				return fmt.Errorf("installation record identity differs")
 			}
-			b.replacements = append(b.replacements, journal.StateReplacement{Type: typ, ID: id, Before: installation.Before, Value: installation.Image})
+			b.replacements = append(b.replacements, persistence.StateReplacement{Type: typ, ID: id, Before: installation.Before, Value: installation.Image})
 		}
 		return nil
 	case "operation-claim":
@@ -314,7 +314,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 	}
 }
 
-func LegacyStatePreimages(ctx context.Context, j journal.Journals, tenant string, through int64) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
+func LegacyStatePreimages(ctx context.Context, j persistence.Journals, tenant string, through int64) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
 	entries, err := j.Entries(ctx, tenant, 0)
 	if err != nil {
 		return nil, nil, err

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -23,31 +23,31 @@ type EffectState struct {
 }
 
 type Effect struct {
-	Unique         []journal.StateUnique   `json:"unique,omitempty"`
-	Authorizations []AuthorizationEvidence `json:"authorizations,omitempty"`
-	Version        int                     `json:"version"`
-	Kind           string                  `json:"kind"`
-	Tenant         string                  `json:"tenant"`
-	App            string                  `json:"app"`
-	Key            string                  `json:"key"`
-	At             time.Time               `json:"at"`
-	RequestHash    string                  `json:"requestHash"`
-	Digest         string                  `json:"digest"`
-	Outcome        platform.Outcome        `json:"outcome"`
-	Usage          *platform.AIUsage       `json:"usage,omitempty"`
-	UsageBefore    string                  `json:"usageBefore,omitempty"`
-	CallbackError  string                  `json:"callbackError,omitempty"`
-	Before         EffectState             `json:"before"`
-	After          EffectState             `json:"after"`
-	Member         string                  `json:"member,omitempty"`
-	Rows           []InputRow              `json:"rows,omitempty"`
-	Changes        json.RawMessage         `json:"changes,omitempty"`
-	Notices        *Notices                `json:"notices,omitempty"`
-	Intents        []platform.Effect       `json:"intents,omitempty"`
-	States         []State                 `json:"states,omitempty"`
-	WorkBefore     json.RawMessage         `json:"workBefore,omitempty"`
-	Work           json.RawMessage         `json:"work,omitempty"`
-	Control        *Control                `json:"control,omitempty"`
+	Unique         []persistence.StateUnique `json:"unique,omitempty"`
+	Authorizations []AuthorizationEvidence   `json:"authorizations,omitempty"`
+	Version        int                       `json:"version"`
+	Kind           string                    `json:"kind"`
+	Tenant         string                    `json:"tenant"`
+	App            string                    `json:"app"`
+	Key            string                    `json:"key"`
+	At             time.Time                 `json:"at"`
+	RequestHash    string                    `json:"requestHash"`
+	Digest         string                    `json:"digest"`
+	Outcome        platform.Outcome          `json:"outcome"`
+	Usage          *platform.AIUsage         `json:"usage,omitempty"`
+	UsageBefore    string                    `json:"usageBefore,omitempty"`
+	CallbackError  string                    `json:"callbackError,omitempty"`
+	Before         EffectState               `json:"before"`
+	After          EffectState               `json:"after"`
+	Member         string                    `json:"member,omitempty"`
+	Rows           []InputRow                `json:"rows,omitempty"`
+	Changes        json.RawMessage           `json:"changes,omitempty"`
+	Notices        *Notices                  `json:"notices,omitempty"`
+	Intents        []platform.Effect         `json:"intents,omitempty"`
+	States         []State                   `json:"states,omitempty"`
+	WorkBefore     json.RawMessage           `json:"workBefore,omitempty"`
+	Work           json.RawMessage           `json:"work,omitempty"`
+	Control        *Control                  `json:"control,omitempty"`
 }
 
 func EffectResultKey(before EffectState) string {

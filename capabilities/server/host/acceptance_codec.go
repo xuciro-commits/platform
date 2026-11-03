@@ -11,8 +11,8 @@ import (
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
-	"platformserver/kernel/journal"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
@@ -366,7 +366,7 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 			t.committed.ReleasePending()
 		}
 		raw, err := t.AcceptResult(entry, key, hash)
-		if err != nil && (errors.Is(err, journal.ErrCommitUnknown) ||
+		if err != nil && (errors.Is(err, persistence.ErrCommitUnknown) ||
 			t.runtimePosition != nil && t.runtimePosition() > before) {
 			t.quarantine(fmt.Errorf("accepted result commit could not be resolved: %w", err))
 		}
