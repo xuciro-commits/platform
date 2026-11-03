@@ -9,7 +9,7 @@ export function SignIn({ config }: { config: OidcConfig }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [problem, setProblem] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<"" | "sso" | "form">("");
   const next = languages[(languages.findIndex((entry) => entry.id === language()) + 1) % languages.length] ?? { id: "en", name: "English" };
   const features: [ReactNode, string, string][] = [
     [<Boxes />, t("Objects & Relations"), t("Model your business with flexible objects, relationships, and reusable schemas.")],
@@ -18,14 +18,20 @@ export function SignIn({ config }: { config: OidcConfig }) {
     [<Building2 />, t("Multi-tenant Governance"), t("Isolate workspaces with strong boundaries, RBAC, and centralized oversight.")],
   ];
   const assurance: [ReactNode, string][] = [[<KeyRound />, t("SSO")], [<ScrollText />, t("Audit")], [<ShieldCheck />, t("RBAC")], [<History />, t("History")], [<Rocket />, t("Activation")]];
-  const continueWithSso = () => {
-    setBusy(true);
-    void signIn(config, email.trim() ? { hint: email.trim() } : undefined);
+  const continueWithSso = async () => {
+    setPending("sso");
+    setProblem("");
+    try {
+      await signIn(config, email.trim() ? { hint: email.trim() } : undefined);
+    } catch {
+      setProblem(unavailable);
+      setPending("");
+    }
   };
   const unavailable = t("The identity service is unavailable. Retry, or continue with SSO.");
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    setBusy(true);
+    setPending("form");
     setProblem("");
     try {
       const result = await credentialSignIn(config, email.trim(), password);
@@ -36,9 +42,9 @@ export function SignIn({ config }: { config: OidcConfig }) {
     } catch {
       setProblem(unavailable);
     }
-    setBusy(false);
+    setPending("");
   };
-  return <div data-density="comfortable" className="min-h-dvh overflow-x-hidden bg-background text-foreground">
+  return <div data-density="comfortable" className="flex min-h-dvh flex-col overflow-x-hidden bg-background text-foreground">
     <header className="mx-auto flex w-full max-w-[1200px] items-center gap-3 px-5 py-4 max-md:px-4">
       <img src="/favicon.svg" alt="" className="size-6" />
       <span className="font-semibold">{t("Platform")}</span>
@@ -46,7 +52,7 @@ export function SignIn({ config }: { config: OidcConfig }) {
       <span className="truncate text-xs text-muted">{t("Build adaptive enterprise systems.")}</span>
       <Button variant="ghost" size="sm" className="ml-auto shrink-0" aria-label={t("Language")} onClick={() => setLanguage(next.id)}><Languages />{next.name}</Button>
     </header>
-    <main className="mx-auto grid w-full max-w-[1200px] gap-8 px-5 pb-12 max-md:px-4 lg:grid-cols-[minmax(0,1fr)_minmax(380px,420px)] lg:items-start lg:gap-14">
+    <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col justify-center gap-8 px-5 py-8 max-md:px-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(380px,420px)] lg:items-center lg:gap-14">
       <section className="order-2 grid min-w-0 content-start gap-6 lg:order-1">
         <h1 className="max-w-2xl text-2xl font-semibold tracking-tight lg:text-[28px] lg:leading-9">{t("One platform for applications, workflows, and operations.")}</h1>
         <p className="max-w-xl text-sm text-muted">{t("Model your enterprise, orchestrate workflows, enforce permissions, and deliver secure, adaptable applications across your organization.")}</p>
@@ -71,7 +77,7 @@ export function SignIn({ config }: { config: OidcConfig }) {
         {problem && <Notice tone="danger" message={problem} />}
         <ContentTabs label={t("Sign in")} value={tab} onChange={setTab} items={[
           { id: "signin", title: t("Sign in"), content: <form className="grid gap-3 pt-2" onSubmit={submit}>
-            <Button type="button" variant="primary" size="lg" className="w-full" loading={busy} onClick={continueWithSso}><Lock />{t("Continue with SSO")}</Button>
+            <Button type="button" variant="primary" size="lg" className="w-full" loading={pending === "sso"} disabled={pending === "form"} onClick={() => void continueWithSso()}><Lock />{t("Continue with SSO")}</Button>
             <p className="flex items-center gap-3 text-2xs text-muted"><span className="h-px flex-1 bg-border" />{t("or")}<span className="h-px flex-1 bg-border" /></p>
             <label className="grid gap-1 text-xs font-medium">{t("Email")}
               <Input type="email" required autoComplete="username" className="h-[var(--ctrl-h-lg)]" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("you@company.com")} />
@@ -79,7 +85,7 @@ export function SignIn({ config }: { config: OidcConfig }) {
             <label className="grid gap-1 text-xs font-medium">{t("Password")}
               <Input type="password" required autoComplete="current-password" className="h-[var(--ctrl-h-lg)]" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t("Enter your password")} />
             </label>
-            <Button type="submit" variant="primary" size="lg" className="w-full" loading={busy}>{t("Sign in")}</Button>
+            <Button type="submit" variant="primary" size="lg" className="w-full" loading={pending === "form"} disabled={pending === "sso"}>{t("Sign in")}</Button>
             <p className="text-2xs text-muted">{t("Accounts with MFA or a passkey continue with SSO.")}</p>
           </form> },
           { id: "access", title: t("Request access"), content: <p className="pt-2 text-sm text-muted">{t("Access is granted by workspace administrators as seats. Sign in with your organization email; if you have no seat yet, the workspace shows the administrators you can contact.")}</p> },
