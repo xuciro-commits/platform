@@ -5,7 +5,7 @@ import {Button} from '../primitives/button';
 import {Tooltip} from '../primitives/tooltip';
 
 export type ContextCommand={id:string;label:string;disabled?:boolean;reason?:string;icon?:ReactNode;shortcut?:string;danger?:boolean;separatorBefore?:boolean;run:()=>void};
-const panel='z-[100] max-h-80 min-w-44 overflow-auto rounded-md border border-border bg-surface p-1 text-sm shadow-lg';
+const panel='z-[100] max-h-80 min-w-44 overflow-auto rounded-xl border border-border bg-surface p-1 text-sm shadow-lg';
 const item='flex cursor-default items-center rounded px-2 py-1 outline-none data-[highlighted]:bg-row-selected data-[disabled]:opacity-40';
 const commandClass=(command:ContextCommand)=>`${item} ${command.reason?'':'data-[disabled]:pointer-events-none'} ${command.danger?'text-[var(--tone-danger)]':''} ${command.separatorBefore?'mt-1 border-t border-border pt-2':''}`;
 function CommandLabel({command}:{command:ContextCommand}){

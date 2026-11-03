@@ -251,6 +251,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const accountShortcut = useRef<(() => void) | undefined>(undefined);
   const [sideWidth, setSideWidth] = useState(() => { let stored = 480; try { stored = Number(localStorage.getItem("workspace.side-width")) || 480; } catch {   } return Math.min(720, Math.max(360, stored)); });
   const resizeSide = (width: number, keep = false) => {
     const next = Math.round(Math.min(720, Math.max(360, width)));
@@ -346,6 +347,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((v) => !v); }
       if ((e.metaKey || e.ctrlKey) && e.key === "\\") { e.preventDefault(); toggleSidebar(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") { if (accountShortcut.current) { e.preventDefault(); accountShortcut.current(); } }
       if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target instanceof HTMLElement && e.target.closest("input,textarea,select,[contenteditable=true],[role=textbox]"))) { e.preventDefault(); setShortcutsOpen(true); }
       if (e.key === "Escape" && !e.defaultPrevented && compact && mobileNavOpen) setMobileNavOpen(false);
     };
@@ -366,7 +368,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     { id: "applications", label: t("Applications"), icon: <Grid2x2 />, active: onRailRoute(rail.applications), run: () => open(rail.applications) },
   ] : [];
   const notificationsItem = rail?.notifications && { id: "notifications", label: t("Notifications"), icon: <Bell />, badge: rail.notifications.unread, active: onRailRoute(rail.notifications.route), run: () => open(rail.notifications!.route) };
-  const sessionMenu = session && <SessionMenu rail={!compact} scheme={appearance.scheme} onScheme={appearance.setScheme} session={{ ...session, onAccount: session.onAccount ? () => leave(() => session.onAccount?.()) : undefined, onSwitch: (id) => leave(() => session.onSwitch(id)) }}
+  accountShortcut.current = session?.onAccount ? () => leave(() => session.onAccount?.()) : undefined;
+  const sessionMenu = session && <SessionMenu rail={!compact} scheme={appearance.scheme} onScheme={appearance.setScheme} session={{ ...session, onAccount: accountShortcut.current, onSignOut: session.onSignOut ? () => leave(() => session.onSignOut?.()) : undefined, onSwitch: (id) => leave(() => session.onSwitch(id)) }}
     onLanguageSelect={(id) => leave(() => {
       void Promise.resolve(onLanguage?.(id)).catch(() => undefined).finally(() => setLanguage(id));
     })} />;

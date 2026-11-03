@@ -102,6 +102,7 @@
   --r-sm: 2px;
   --r-md: 3px;
   --r-lg: 4px;
+  --r-overlay: 10px;
 
   --dur-fast: 100ms;
   --dur-base: 160ms;

@@ -5,7 +5,7 @@ import { cn } from '../lib/cn';
 import type { ContextCommand } from './CommandMenu';
 import { Tooltip } from '../primitives/tooltip';
 
-const panel = 'z-[100] max-h-80 min-w-44 overflow-auto rounded-md border border-border bg-surface p-1 text-sm shadow-lg';
+const panel = 'z-[100] max-h-80 min-w-44 overflow-auto rounded-xl border border-border bg-surface p-1 text-sm shadow-lg';
 const item = 'flex cursor-default items-center rounded px-2 py-1 outline-none data-[highlighted]:bg-row-selected data-[disabled]:opacity-40';
 
 export function ActionMenu({ label, commands, icon, size, variant = 'ghost', className, children }: {

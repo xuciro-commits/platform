@@ -29,7 +29,7 @@ Tokens only: `ui/src/themes/tokens.css`, mapped in `styles.css` `@theme`. Never 
 | Accent | one blue, `--primary` #2D72D2 (dark #4C90F0) |
 | Tones | neutral, info, success, warning, danger; purple, pink, teal, orange only for categorical identity |
 | Type | 10 / 11 / 12 / 13 / 15 / 18 px (`text-2xs` … `text-xl`); body 13; page title `text-lg` semibold; section labels `text-2xs` semibold uppercase tracking-wider muted |
-| Radii | 2 / 3 / 4 px (`rounded-sm|md|lg`) |
+| Radii | 2 / 3 / 4 px (`rounded-sm|md|lg`); menu panels 10 px (`rounded-xl` → `--r-overlay`) |
 | Controls | 22 / 26 / 30 / 36 px (`--ctrl-h-*`); compact table rows 28, comfortable 36 |
 | Shadows | overlays only (menus, sheets, palette, side pane) |
 

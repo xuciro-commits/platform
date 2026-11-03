@@ -18,6 +18,7 @@ export type Session = {
   name?: string;
   options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;
   onAccount?: () => void;
+  onSignOut?: () => void;
 };
 
 export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };

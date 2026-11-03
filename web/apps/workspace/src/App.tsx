@@ -247,11 +247,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   };
   const sessionOptions = [
     ...(me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant}`, label: tenant === "system" ? t("System self-hosting") : `${t("Tenant")} ${tenant}` })) : []),
-    ...(signedIn ? [{ id: "sign-out", label: t("Sign out {email}", { email: signedIn.session.email }) }]
-      : identities.filter((i) => i.tenant === me!.tenantId).map((i) => ({ id: `as:${i.token}`, label: `${i.member} · ${Object.entries(i.roles).map(([a, r]) => `${a} ${r}`).join(", ")}` }))),
+    ...(!signedIn ? identities.filter((i) => i.tenant === me!.tenantId).map((i) => ({ id: `as:${i.token}`, label: `${i.member} · ${Object.entries(i.roles).map(([a, r]) => `${a} ${r}`).join(", ")}` })) : []),
   ];
   const onSwitch = (id: string) => {
-    if (id === "sign-out" && signedIn) void leaveSession();
     if (id.startsWith("tenant:") || id.startsWith("as:")) {
       client.close();
       history.replaceState(null, "", "#/home");
@@ -307,6 +305,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         </div>}
         session={{ tenant: me!.tenantId === "system" ? t("System self-hosting") : me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch,
+          onSignOut: signedIn ? () => void leaveSession() : undefined,
           onAccount: all.some((a) => a.id === "platform") ? () => { chosen.current = { id: "platform", from: activeRoute && routeToHash(activeRoute) }; select("platform"); location.hash = routeToHash({ view: "account" }); } : undefined }} />
       <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} />
       <OfflinePreparation application={preparedApplication} release={release.data?.id} open={offlineOpen} onOpenChange={setOfflineOpen}/></ApplicationSessionsProvider>

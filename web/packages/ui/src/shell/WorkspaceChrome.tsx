@@ -1,4 +1,4 @@
-import { ChevronsLeft, Star } from "lucide-react";
+import { Check, ChevronRight, ChevronsLeft, Languages, LogOut, Repeat2, Star, SunMoon, UserRound } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { Component, type ReactNode } from "react";
 import { cn } from "../lib/cn";
@@ -12,7 +12,7 @@ import type {PlatformApplication, Session} from "./WorkspaceContext";
 export const paletteScopes = [">", "@", "#", ":"];
 
 export const shortcutList: [string, string][] = [
-  ["⌘K", "Command palette and search"], ["⌘\\", "Collapse or expand the app sidebar"], ["⌘S", "Save now to your working state"], ["⌘⇧S", "Open Review and save"],
+  ["⌘K", "Command palette and search"], ["⌘\\", "Collapse or expand the app sidebar"], ["⌘,", "Open my account"], ["⌘S", "Save now to your working state"], ["⌘⇧S", "Open Review and save"],
   ["⌘Z / ⇧⌘Z", "Undo / redo"], ["⌘C / ⌘V / ⌘D", "Copy / paste / duplicate"], ["Delete", "Delete the selection"], ["Esc", "Close the top overlay, or clear the selection"],
   ["⌥⌘\\ / ⌘J", "Right inspector / bottom dock"], ["↑↓ / Enter", "Move / open"], ["?", "This list"],
 ];
@@ -92,7 +92,7 @@ export function RailList({ label, icon, items, empty }: { label: string; icon: R
           <DropdownMenu.Label className={menuLabel}>{label}</DropdownMenu.Label>
           {items.length === 0 && <p className="px-2 py-1.5 text-xs text-muted">{empty}</p>}
           {items.map((item) => (
-            <DropdownMenu.Item key={item.id} onSelect={item.run} className={cn(menuItem, "gap-2 pl-2 [&_svg]:size-3.5")}>
+            <DropdownMenu.Item key={item.id} onSelect={item.run} className={cn(menuRow, "[&_svg]:size-3.5")}>
               {item.icon}<span className="truncate">{item.label}</span>{item.detail && <span className="ml-auto truncate pl-3 text-xs text-muted">{item.detail}</span>}
             </DropdownMenu.Item>
           ))}
@@ -104,45 +104,61 @@ export function RailList({ label, icon, items, empty }: { label: string; icon: R
 
 export function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme }: { session: Session; onLanguageSelect: (id: string) => void; rail: boolean; scheme: string; onScheme: (scheme: "light" | "dark" | "system") => void }) {
   const shown = session.name || session.principal;
+  const initial = shown.slice(0, 1).toUpperCase();
+  const secondary = [session.name ? session.principal : undefined, session.tenant, session.detail].filter(Boolean).join(" · ");
+  const appearances = [["light", t("Light")], ["dark", t("Dark")], ["system", t("Follow system")]] as const;
+  const appearance = appearances.find(([id]) => id === scheme)?.[1];
+  const current = session.options.find((option) => option.id === session.current)?.label;
+  const choice = (value: string, label: string) => (
+    <DropdownMenu.RadioItem key={value} value={value} className={menuRadio}>
+      <DropdownMenu.ItemIndicator className={menuIndicator}><Check /></DropdownMenu.ItemIndicator>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </DropdownMenu.RadioItem>
+  );
+  const section = (icon: ReactNode, label: string, value: string | undefined, body: ReactNode) => (
+    <DropdownMenu.Sub>
+      <DropdownMenu.SubTrigger className={cn(menuRow, "data-[state=open]:bg-row-hover")}>
+        {icon}<span className="min-w-0 flex-1 truncate">{label}</span>{value && <span className={menuValue}>{value}</span>}<ChevronRight className={menuChevron} />
+      </DropdownMenu.SubTrigger>
+      <DropdownMenu.Portal><DropdownMenu.SubContent sideOffset={6} alignOffset={-4} className={cn(menuPanel, "min-w-52")}>{body}</DropdownMenu.SubContent></DropdownMenu.Portal>
+    </DropdownMenu.Sub>
+  );
   return (
     <DropdownMenu.Root>
       <Tooltip content={`${shown} · ${session.tenant}`} side={rail ? "right" : "bottom"}><DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`}
         className={cn("grid size-9 shrink-0 place-items-center rounded-md", rail ? "hover:bg-rail-hover data-[state=open]:bg-rail-selected" : "hover:bg-row-hover")}>
-        <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{shown.slice(0, 1).toUpperCase()}</span>
+        <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{initial}</span>
       </DropdownMenu.Trigger></Tooltip>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content side={rail ? "right" : "bottom"} align="end" sideOffset={8} className={cn(menuPanel, "min-w-64")}>
-          <div className="px-2 pb-2 pt-1">
-            <span className="block text-sm font-medium">{shown}</span>
-            <span className="block text-xs text-muted">{session.name ? `${session.principal} · ` : ""}{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
+        <DropdownMenu.Content side={rail ? "right" : "bottom"} align="end" sideOffset={8} className={cn(menuPanel, "w-72")}>
+          <div className="flex min-w-0 items-center gap-2.5 px-2 pb-2 pt-1.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{initial}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{shown}</span>
+              <span className="block truncate text-xs text-muted">{secondary}</span>
+            </span>
           </div>
-          {session.onAccount && <DropdownMenu.Item className={cn(menuItem, "pl-2")} onSelect={() => session.onAccount?.()}>{t("My account")}</DropdownMenu.Item>}
-          <DropdownMenu.Separator className="my-1 h-px bg-border" />
-          <DropdownMenu.Label className={menuLabel}>{t("Appearance")}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={scheme} onValueChange={value => onScheme(value as "light" | "dark" | "system")}>
-            {([["light", t("Light")], ["dark", t("Dark")], ["system", t("Follow system")]] as const).map(([id, label]) => <DropdownMenu.RadioItem key={id} value={id} className={menuItem}>
-              <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{label}
-            </DropdownMenu.RadioItem>)}
-          </DropdownMenu.RadioGroup>
-          <DropdownMenu.Separator className="my-1 h-px bg-border" />
-          <DropdownMenu.Label className={menuLabel}>{t("Language")}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={language()} onValueChange={onLanguageSelect}>
-            {languages.map((l) => (
-              <DropdownMenu.RadioItem key={l.id} value={l.id} className={menuItem}>
-                <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{l.name}
-              </DropdownMenu.RadioItem>
-            ))}
-          </DropdownMenu.RadioGroup>
-          {session.options.length > 0 && <>
-            <DropdownMenu.Separator className="my-1 h-px bg-border" />
-            <DropdownMenu.Label className={menuLabel}>{t("Switch tenant or identity")}</DropdownMenu.Label>
+          <DropdownMenu.Separator className={menuSeparator} />
+          {session.onAccount && <DropdownMenu.Item className={menuRow} onSelect={() => session.onAccount?.()}>
+            <UserRound className={menuIcon} /><span className="min-w-0 flex-1 truncate">{t("My account")}</span><span className={menuValue}>⌘,</span>
+          </DropdownMenu.Item>}
+          {section(<SunMoon className={menuIcon} />, t("Appearance"), appearance,
+            <DropdownMenu.RadioGroup value={scheme} onValueChange={value => onScheme(value as "light" | "dark" | "system")}>
+              {appearances.map(([id, label]) => choice(id, label))}
+            </DropdownMenu.RadioGroup>)}
+          {section(<Languages className={menuIcon} />, t("Language"), languages.find((entry) => entry.id === language())?.name,
+            <DropdownMenu.RadioGroup value={language()} onValueChange={onLanguageSelect}>
+              {languages.map((entry) => choice(entry.id, entry.name))}
+            </DropdownMenu.RadioGroup>)}
+          {session.options.length > 0 && section(<Repeat2 className={menuIcon} />, t("Switch tenant or identity"), current,
             <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>
-              {session.options.map((o) => (
-                <DropdownMenu.RadioItem key={o.id} value={o.id} className={menuItem}>
-                  <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{o.label}
-                </DropdownMenu.RadioItem>
-              ))}
-            </DropdownMenu.RadioGroup>
+              {session.options.map((option) => choice(option.id, option.label))}
+            </DropdownMenu.RadioGroup>)}
+          {session.onSignOut && <>
+            <DropdownMenu.Separator className={menuSeparator} />
+            <DropdownMenu.Item className={menuRow} onSelect={() => session.onSignOut?.()}>
+              <LogOut className={menuIcon} /><span className="min-w-0 flex-1 truncate">{t("Sign out")}</span>
+            </DropdownMenu.Item>
           </>}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -150,8 +166,15 @@ export function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme 
   );
 }
 
-const menuPanel = "z-50 min-w-48 rounded-md border border-border bg-surface p-1 text-sm text-foreground shadow-md";
+const menuPanel = "z-50 min-w-48 rounded-xl border border-border bg-surface p-1 text-sm text-foreground shadow-lg";
 const menuLabel = "px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-muted";
-const menuItem = "relative flex h-7 cursor-default select-none items-center rounded-sm pl-6 pr-2 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-row-hover";
+const menuItem = "relative flex h-8 cursor-default select-none items-center gap-2 rounded-lg outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-row-hover";
+const menuRow = cn(menuItem, "px-2");
+const menuRadio = cn(menuItem, "pl-8 pr-2");
+const menuSeparator = "my-1 h-px bg-border";
+const menuIcon = "size-4 shrink-0 text-muted";
+const menuValue = "ml-auto shrink-0 pl-4 text-xs text-muted";
+const menuChevron = "size-3.5 shrink-0 text-muted";
+const menuIndicator = "absolute left-2 inline-flex [&_svg]:size-4 [&_svg]:text-primary";
 export const paletteGroup = "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted";
 export const paletteItem = "flex h-8 cursor-default items-center gap-2 rounded-sm px-2 text-sm data-[selected=true]:bg-row-selected [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted";

@@ -36,8 +36,7 @@ export function HostOnly({ client, token, admin, email, onSignOut }: { client: E
         views={app.views} home={typeof app.home === "function" ? app.home(host) : app.home} nav={app.nav(host)}
         status={<span className="text-xs text-muted">{t("{n} tenants", { n: admin.tenants.length })}</span>}
         session={{ tenant: t("Host"), principal: admin.subject, detail: email, current: "",
-          options: onSignOut ? [{ id: "sign-out", label: email ? t("Sign out {email}", { email }) : t("Sign out") }] : [],
-          onSwitch: (id) => { if (id === "sign-out") onSignOut?.(); } }} />
+          options: [], onSwitch: () => {}, onSignOut }} />
     </HostContext.Provider>
   );
 }
