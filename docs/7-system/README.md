@@ -102,7 +102,7 @@ POST /v1/submissions
 | integration | `build_release_integration_registry.go` 的注册表 + `PrepareReleaseAssets` | connection、listener、source、dataset、mediaset、schedule、pipeline、writeback、observation、matching | 类型、元数据与记录访问已表驱动；发布状态迁移与安装校验仍是逐类型 switch |
 | versioned | `prepareAgentReleasePublications`、`prepareTestPlanPublications`、`PrepareCodeReleasePublications`、`prepareTablePublications`、`prepareAlertPublications`、`prepareSampleSetInstallations` | agent、evaluation-set、test-plan、compute、sample-set、alert | 五个函数骨架相同（盘库存、找草稿、保留字节校验、版本推进），保留与冻结规则各异 |
 
-收敛次序：先把 integration 的发布状态迁移并入注册表（每类型一个 `publish` 步骤），再评估 versioned 族能否共用带回调的版本推进；每一步都要用发布前后快照与重放结果证明字节不变。
+integration 的发布步骤已并入注册表。versioned 族的保留规则各异（agent 版本表、evaluation/test-plan 版本前缀、compute 构建摘要、sample-set、alert 冻结），共用回调框架会比五个显式函数更难读，故保留现状；新增类型在 `prepareReleasePublications` 的调用列表加一项。Confirmation 有补偿与状态，Dispatch 是单向派发，二者语义不同，保持各自状态机。
 
 ## 7.6 协议与版本
 
@@ -115,7 +115,7 @@ POST /v1/submissions
 
 - 手写文件 ≤ 800 行（Go）/ 600 行（TS）；超出按职责拆分，不按“工具函数”拆。只含字面量的数据文件（各包 `i18n.ts`、`zh-CN.ts`、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`kernel/src/gen/*.ts`）不计。
 - 包名表达职责；同一名字不指两样东西（如 `kernel`、`agents`）。
-- 不留兼容分支，除非存储格式需要（且写明版本）。
+- 不留兼容分支，除非存储格式需要（且写明版本）。页面 `format` 0/3 属此类：三个产品包的页面仍以 document 或 documentless 的旧格式交付，且历史接受映像按原字节恢复，退役需要先迁移产品包与已接受映像。
 - 注释、删除旧路径、新依赖的规则见 AGENTS.md 硬规则。
 
 ## 现存差距
