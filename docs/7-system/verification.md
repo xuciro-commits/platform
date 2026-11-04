@@ -67,8 +67,8 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 
 ## 7.13 SQL 模式
 
-`make verify-sql` 在本机 PostgreSQL 容器中创建隔离临时库，启动独立宿主，接受一次资源写入，停止并重启宿主后读取同一记录，最后删除临时库。它验证 SQL 接受结果、启动恢复和按需记录投影，不替代 `make verify` 的完整 Playwright 路径，也不把内存测试当成 SQL 覆盖。
+`make verify-sql` 在本机 PostgreSQL 容器中创建隔离临时库，启动独立宿主，验证项目委派构建者创建对象、viewer/discoverer 的资源目录权限、停止并重启宿主后的读取，最后删除临时库。它验证 SQL 接受结果、项目权限和启动恢复，不替代 `make verify` 的完整 Playwright 路径，也不把内存测试当成 SQL 覆盖。
 
 ## 现存差距
 
-- `make verify` 的内核不变量与 F1–F16 仍运行在内存宿主；SQL 模式当前由 `make verify-sql` 覆盖“写入、重启、读取”，尚未把全部角色、恢复和 E2E 用例跑在 PostgreSQL 上。
+- `make verify` 的内核不变量与 F1–F16 仍运行在内存宿主；SQL 模式当前覆盖创建、项目委派、viewer/discoverer 目录权限和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。
