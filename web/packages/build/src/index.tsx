@@ -45,7 +45,7 @@ import { ToolContext } from "./projects/tool-context";
 import { studioApplicationID, studioAreaForRoute } from "./projects/studio-model";
 import { FunctionCatalog } from "./functions/catalog";
 import { Interfaces } from "./ontology/ModelWorkbench";
-import { Activity, Bot, Boxes, Braces, CalendarClock, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
+import { Activity, Bot, Boxes, Braces, CalendarClock, ClipboardCheck, Clock, Code, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Sparkles, Tags, TableProperties, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.holds("build", "builder");
 const integrator = (host: Host) => host.holds("build", "integrator");
@@ -93,15 +93,19 @@ const monitoringViews: View[] = [
 ];
 const logicViews: View[] = [
   view("functions", () => t("Functions"), () => <FunctionCatalog />),
+  view("code-functions", () => t("Code functions"), () => <FunctionCatalog engine="code" />),
+  view("decision-tables", () => t("Decision tables"), () => <FunctionCatalog engine="table" />),
+  view("ai-functions", () => t("AI functions"), () => <FunctionCatalog engine="ai" />),
+  view("logic-flows", () => t("Logic flows"), () => <FunctionCatalog engine="flow" />),
   view("code", () => t("Code function"), p => p.id ? <CodeEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
   view("decision-table", () => t("Decision table"), p => p.id ? <DecisionTableEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
   view("function", () => t("AI function"), p => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
   view("flow", () => t("Logic flow"), p => p.id ? <FlowEditor key={p.id} id={p.id} /> : <FunctionCatalog />),
-  view("runs", () => t("Runs"), p => <WorkflowRuns name={p.name ?? ""} initialRun={p.run ?? p.id} onStepSelect={() => {}} />),
 ];
 const automateViews: View[] = [
   view("automation", () => t("Automations"), p => p.id ? <AutomationEditor key={p.id} id={p.id} /> : <Automations />),
   view("alert", () => t("Automations"), p => p.id ? <AutomationEditor key={p.id} id={`alert-${p.id}`} /> : <Automations />),
+  view("runs", () => t("Runs"), p => <WorkflowRuns name={p.name ?? ""} initialRun={p.run ?? p.id} onStepSelect={() => {}} />),
 ];
 const workshopViews: View[] = [
   view("object-views", () => t("Object views"), () => <ObjectViews />),
@@ -241,6 +245,10 @@ const logic = defineApp({
   navigation,
   nav: (_host, route) => [section(t("Logic"), route, [
     { label: t("Functions"), icon: <Braces />, view: "functions" },
+    { label: t("Code functions"), icon: <Code />, view: "code-functions" },
+    { label: t("Decision tables"), icon: <TableProperties />, view: "decision-tables" },
+    { label: t("AI functions"), icon: <Sparkles />, view: "ai-functions" },
+    { label: t("Logic flows"), icon: <Workflow />, view: "logic-flows" },
   ])],
 });
 
@@ -254,6 +262,7 @@ const automate = defineApp({
   navigation,
   nav: (_host, route) => [section(t("Automate"), route, [
     { label: t("Automations"), icon: <Zap />, view: "automation" },
+    { label: t("Runs"), icon: <Clock />, view: "runs" },
   ])],
 });
 

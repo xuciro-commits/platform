@@ -269,7 +269,7 @@ export const lineageApplication = defineApp({
   for: host => host.holds("build", "builder", "integrator"),
   home: { view: "lineage" },
   views: [{ id: "lineage", title: () => t("Data Lineage"), render: (p) => <Lineage ref={p.ref} node={p.node} /> }],
-  nav: () => [],
+  nav: () => [{ label: t("Data Lineage"), items: [{ label: t("Lineage"), icon: <Network />, route: { view: "lineage" } }] }],
 });
 
 export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[] = () => []): View[] => [

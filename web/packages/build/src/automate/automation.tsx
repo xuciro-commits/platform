@@ -4,7 +4,7 @@ import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useHost, useReadQuery } from "@platform/app";
 import { ActionMenu, Button, Checkbox, Dialog, Notice, RecordLookup, Input, PageHeader, ProblemList, Select, Tag, Workbench, cn, t, type WorkbenchProblem } from "@platform/ui";
-import { ArrowDown, ArrowUp, Brain, Clock, Pause, Play, Plus, Trash2, Workflow, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, Brain, Pause, Play, Plus, Trash2, Workflow, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
@@ -42,8 +42,6 @@ export function Automations() {
       actions={holds("build", "builder") && <Button variant="primary" onClick={() => open({ view: "automation", params: { id: "new" } })}><Plus />{t("New automation")}</Button>} />
     <div className="flex flex-wrap items-center gap-2">
       <Input type="search" aria-label={t("Filter automations")} placeholder={t("Filter automations")} value={search} onChange={(event) => setSearch(event.target.value)} className="max-w-xs" />
-      <Button variant="ghost" size="sm" onClick={() => open({ view: "runs" })}><Clock />{t("Runs")}</Button>
-      <Button variant="ghost" size="sm" onClick={() => open({ view: "flow" })}><Workflow />{t("All flows")}</Button>
     </div>
     <SystemDefinitionReferences type="build.process" search={search} title="System flows" description="System flows are available here as read-only references." />
     {query.isLoading && <p className="text-sm text-muted">{t("Loading…")}</p>}

@@ -70,7 +70,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 ## Logic
 
-- 侧栏：Functions。
+- 侧栏：Functions、Code functions、Decision tables、AI functions、Logic flows。
 - 新建函数：Sheet 中选引擎（代码、决策表、AIP Logic、逻辑流）。
 - 函数编辑器（原型 C，按引擎换中区）：
   - 左：输入与输出签名、引用的对象类型。
@@ -129,7 +129,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 ## Data Lineage
 
-- 侧栏：无。
+- 侧栏：Lineage。
 - 单视图：PageHeader（着色方式：资源类型 / 标记 / 状态；刷新）→ 画布（M19 只读）+ 右侧详情面板（类型、版本、标记、生效标记、你的访问、输入、输出、打开资源）。
 - 从任意资源页的 Usage 分区“Open in Data Lineage”进入，并聚焦该节点。
 
