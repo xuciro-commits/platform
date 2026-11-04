@@ -64,7 +64,7 @@ function ModulesList() {
       </Button></li>)}
     </ul>
     {projects.isError && <p role="alert" className="text-sm text-danger">{t("Modules are unavailable. This does not mean no applications exist.")}</p>}
-    {!projects.isError && !projects.isLoading && !rows.length && <EmptyState className="py-8" icon={<LayoutTemplate aria-hidden className="size-5 opacity-60" />} title={t("No projects yet")} hint={t("Create a project in Files to start building its module.")} action={<Button onClick={() => open({ view: "projects" })}>{t("Go to Files")}</Button>} />}
+    {!projects.isError && !projects.isLoading && !rows.length && <EmptyState className="py-8" icon={<LayoutTemplate aria-hidden className="size-5 opacity-60" />} title={t("No projects yet")} hint={t("Create a project in Files to start building its module.")} action={<Button onClick={() => open({ view: "files" })}>{t("Go to Files")}</Button>} />}
   </div>;
 }
 
@@ -135,7 +135,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     } catch (failure) { setError(failure instanceof Error ? failure.message : t("The page was created but could not be added to this module. Retry adding the same page.")); }
     finally { lock.current = false; setSaving(false); }
   };
-  const createPage = useNewRecord("build.page", target => { void attachCreatedPage(target); }, { essential: true });
+  const createPage = useNewRecord("build.page", target => { void attachCreatedPage(target); }, { essential: true, ...(project ? { fixed: { project: project.id } } : {}) });
   const addPage = () => { if (!lock.current && !createdPage && !invalid) createPage.take(); };
   const reload = () => confirmDiscard(() => {
     if (project) { session.load(hydrate(project,declarationFields)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
@@ -200,7 +200,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const tabs: { id: ModuleFocus; title: string }[] = [{ id: "navigation", title: t("Navigation") }, { id: "header", title: t("Header") }, { id: "variables", title: t("Variables") }, { id: "queries", title: t("Queries") }, { id: "settings", title: t("Settings") }];
   const previewPage = pages[0]?.name ?? "";
   return <>
-    <Workbench storageKey="module" crumbs={[{ label: t("Files"), onClick: () => open({ view: "projects" }) }, { label: project.title || project.name, onClick: () => open({ view: "project", params: { id: project.id } }) }]} title={t("Module")}
+    <Workbench storageKey="module" crumbs={[{ label: t("Files"), onClick: () => open({ view: "files" }) }, { label: project.title || project.name, onClick: () => open({ view: "project", params: { id: project.id } }) }]} title={t("Module")}
       status={<DraftStatus state={project.state} problems={problems.filter((problem) => problem.severity !== "info").length} />} busy={saving}
       history={{ canUndo: !saving && !createdPage && session.canUndo, canRedo: !saving && !createdPage && session.canRedo, undo: session.undo, redo: session.redo }}
       actions={<ResourceControls autosave={!sourceApplied && !templates && !branch} type="build.app" record={canEdit ? project : undefined} dirty={dirty} busy={saving || templateBusy || !!createdPage} invalid={invalid}

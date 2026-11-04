@@ -315,7 +315,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const inspectorValue = selection.kind === "interface" ? "interface" : inspectorTab[inspectorKey.split(":")[0]!];
   const liveValues = Object.entries(variableValues);
   const crumbs: WorkbenchCrumb[] = module ? [
-    { label: t("Files"), onClick: () => open({ view: "projects" }) },
+    { label: t("Files"), onClick: () => open({ view: "files" }) },
     { label: module.project.title || module.project.name, onClick: () => open({ view: "project", params: { id: module.project.id } }) },
     { label: t("Module"), onClick: () => module.openModule() },
   ] : [{ label: t("Pages"), onClick: () => open({ view: "module" }) }];

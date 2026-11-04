@@ -1,7 +1,9 @@
-import type { ResourceKind } from "../projects/resources";
+import { releaseResources, type ReleaseKind } from "../projects/resources";
+
+export type { ReleaseKind } from "../projects/resources";
 
 export type JointChoice = { kind: ReleaseKind; id: string };
-export const ownerDraft = (choice: JointChoice): JointChoice => ({ ...choice, kind: choice.kind === "table" ? "compute" : choice.kind });
+export const ownerDraft = (choice: JointChoice): JointChoice => ({ ...choice, kind: (releaseResources.find(item => item.releaseKind === choice.kind)?.assetKind ?? choice.kind) as ReleaseKind });
 export const jointKey = (choice: JointChoice) => `${ownerDraft(choice).kind}/${choice.id}`;
 export const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] => {
   const seen = new Set<string>();
@@ -22,7 +24,6 @@ export async function applicationDraftSelection(roots: JointChoice[], referenced
   return selection;
 }
 
-export type ReleaseKind = Exclude<ResourceKind, "automation" | "media-set"> | "mediaset" | "app";
 export function releaseSelectionProblem(drafts: readonly JointChoice[]): string | undefined {
   if (drafts.length > 128) return "A joint candidate accepts at most 128 drafts. Select a supported application closure.";
   if (new TextEncoder().encode(JSON.stringify({ drafts: drafts.map(ownerDraft) })).length > releaseCommandBytes) return "The release selection exceeds the original 65536-byte request budget. No drafts were dropped.";

@@ -1,4 +1,4 @@
-import { useRecordInventory, type Host } from "@platform/app";
+import { useReadQuery, type Host } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { t } from "@platform/ui";
 import { useMemo } from "react";
@@ -32,17 +32,17 @@ export async function joinProjectResource(host: Pick<Host, "client" | "decide">,
 }
 
 export function useProjectIndex(): ProjectIndex {
-  const projects = useRecordInventory<ProjectRecord>("build.app");
+  const directory = useReadQuery<Api.ResourceDirectory>("/v1/resources");
   return useMemo(() => {
     const byRef = new Map<string, { id: string; title: string }[]>();
-    for (const p of projects.data?.records ?? []) {
-      if (p.archived) continue;
-      const entry = { id: p.id, title: p.title || p.name || p.id };
-      for (const ref of p.resources ?? []) (byRef.get(refKey(ref)) ?? byRef.set(refKey(ref), []).get(refKey(ref))!).push(entry);
-      for (const name of p.pages ?? []) { const k = refKey({ app: "build", kind: "page", name }); (byRef.get(k) ?? byRef.set(k, []).get(k)!).push(entry); }
+    const resources = directory.data?.resources ?? [];
+    const projects = new Map(resources.filter(resource => resource.ref.kind === "app").map(resource => [resource.project, resource.title || resource.draft || resource.project]));
+    for (const resource of resources) {
+      const entry = { id: resource.project, title: projects.get(resource.project) || resource.project };
+      (byRef.get(refKey(resource.ref)) ?? byRef.set(refKey(resource.ref), []).get(refKey(resource.ref))!).push(entry);
     }
-    return { byRef, loaded: projects.isSuccess, failed: projects.isError };
-  }, [projects.data, projects.isSuccess, projects.isError]);
+    return { byRef, loaded: directory.isSuccess, failed: directory.isError };
+  }, [directory.data, directory.isSuccess, directory.isError]);
 }
 
 export function projectGroup(index: ProjectIndex, ref: Api.AssetRef): { id: string; label: string; order?: number } {

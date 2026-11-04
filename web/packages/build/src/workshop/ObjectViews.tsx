@@ -41,7 +41,7 @@ function ObjectViewCreate({ modules, onBusy, closeGuard, onClose }: { modules: P
   const [moduleID, setModuleID] = useState(""), [objectType, setObjectType] = useState(""), [name, setName] = useState(""), [title, setTitle] = useState("");
   const [pageID] = useState(() => newId("PAGE"));
   const [busy, setBusy] = useState(false), [pending, setPending] = useState(false), [created, setCreated] = useState(false), [error, setError] = useState("");
-  const lock = useRef(false), request = useRef<ReturnType<typeof objectViewDraft> | undefined>(undefined), outcome = useRef<Entry | undefined>(undefined);
+  const lock = useRef(false), request = useRef<(ReturnType<typeof objectViewDraft> & { project?: string }) | undefined>(undefined), outcome = useRef<Entry | undefined>(undefined);
   const { query } = useDraftRecord<Project>("build.app", moduleID, !!moduleID);
   const { markSaved, confirmOwnDiscard } = useUnsavedChanges(!!moduleID || !!name || !!title || !!objectType || pending || created, () => {}, busy);
   closeGuard.current = () => { if (!lock.current) confirmOwnDiscard(onClose); };
@@ -55,7 +55,7 @@ function ObjectViewCreate({ modules, onBusy, closeGuard, onClose }: { modules: P
     lock.current = true; setBusy(true); onBusy(true); setError("");
     try {
       if (!created) {
-        request.current ??= objectViewDraft(object!, name, title.trim(), model.actions.filter(action => action.target === objectType).map(action => action.schema));
+        request.current ??= { ...objectViewDraft(object!, name, title.trim(), model.actions.filter(action => action.target === objectType).map(action => action.schema)), project: moduleID };
         const confirmed = await host.decide("build.page.create", { type: "build.page", id: pageID }, request.current, { expectedRevision: outcome.current?.submission.expectedRevision ?? 0, schemaVersion: outcome.current?.schemaVersion, originalKey: outcome.current?.submission.idempotencyKey, onRefused: setError, onOutcome: entry => {
           outcome.current = entry;
           setPending(["SUBMISSION_STATE_PENDING", "SUBMISSION_STATE_SENDING", "SUBMISSION_STATE_UNKNOWN"].includes(entry.state));

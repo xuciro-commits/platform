@@ -2,6 +2,7 @@ import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useQueryClient } from "@tanstack/react-query";
 import { t } from "@platform/ui";
+import { useApplicationScope } from "../projects/application-scope";
 
 export class BranchFailure extends Error {
   constructor(message: string, readonly status: number, readonly conflicts?: Api.BranchResourceDiff[]) { super(message); }
@@ -25,6 +26,7 @@ export function useBranchDetail(id?: string) {
 
 export function useBranchActions() {
   const { client } = useHost();
+  const project = useApplicationScope();
   const queries = useQueryClient();
   const refresh = async () => {
     client.refreshLiveReads();
@@ -43,7 +45,7 @@ export function useBranchActions() {
     refresh,
     create: (request: Api.BranchCreateRequest) => send<Api.BranchDetail>("POST", "/v1/branches", request),
     close: (id: string) => send<Api.BranchDetail>("POST", branchPath(id, "/close")),
-    save: (id: string, type: string, draft: string, request: Api.BranchSaveRequest) => send<Api.BranchDetail>("PUT", resourcePath(id, type, draft), request),
+    save: (id: string, type: string, draft: string, request: Api.BranchSaveRequest) => send<Api.BranchDetail>("PUT", resourcePath(id, type, draft), project && !request.project ? { ...request, project } : request),
     compile: (id: string, type: string, draft: string) => send<Api.BranchDetail>("POST", `${resourcePath(id, type, draft)}/compile`),
     checks: (id: string, request: Api.BranchCheckRequest = {}) => send<Api.BranchChecks>("POST", branchPath(id, "/checks"), request),
     recheck: (id: string, request: Api.BranchCheckRequest = {}) => send<Api.BranchDetail>("POST", branchPath(id, "/recheck"), request),

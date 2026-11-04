@@ -3,11 +3,10 @@ import { Button, Card, Checkbox, ContextHelp, DataTable, Disclosure, Notice, Pag
 import { Plus, RefreshCw } from "lucide-react";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { matchesResourceKind, refKey, resourceKinds, resourceRef } from "../projects/resources";
+import { matchesResourceKind, refKey, releaseResources, resourceKinds, resourceRef } from "../projects/resources";
 import { branchRefusal } from "../branches/decisions";
 import { useCurrentBranch } from "../branches/current";
 import { diagnose } from "./diagnostics";
-import {ProductExport} from "./product-export";
 import { DraftReview } from "./draft-changes";
 import { useEffect, useRef, useState } from "react";
 
@@ -21,10 +20,7 @@ type ReleaseRequest = { kind: "save"; body: Api.ReleaseSaveRequest }
 type Record = { id: string; title: string; name: string; state: string; evaluation?: unknown[]; roots?: Api.AssetRef[] };
 type EvaluationPlan = { id: string; name?: string; title: string; function?: string; evaluation?: unknown[] };
 type EvaluationReport = { id: string; candidate: string; function: string; state: string; quality: number; costUsd: number; costComplete: boolean; peakLatencyMillis: number; attempts: unknown[] };
-const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
-  ...resourceKinds.filter((item) => item.kind !== "automation").map((item) => ({ kind: (item.kind === "table" ? item.kind : item.ref ?? item.kind) as ReleaseKind, type: item.type, label: item.plural })),
-  { kind: "app", type: "build.app", label: "Applications" },
-];
+const kinds: { kind: ReleaseKind; type: string; label: string }[] = releaseResources.map((item) => ({ kind: item.releaseKind as ReleaseKind, type: item.type, label: item.plural }));
 export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 
 function ReleaseDiagnostic({ diagnostic, application, builder, locked, onAdd }: { diagnostic: string; application?: string; builder: boolean; locked: boolean; onAdd: (choice: JointChoice) => void }) {
@@ -117,7 +113,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
   const plans = useRecordInventory<EvaluationPlan>("build.testplan", 1000, builder);
   const reports = useRecordInventory<EvaluationReport>("build.evaluation", 1000, mayRelease);
-  const resourceKind = resourceKinds.find(item => (item.kind === "table" ? item.kind : item.ref ?? item.kind) === kind);
+  const resourceKind = resourceKinds.find(item => item.releaseKind === kind);
   const records = (query.isError ? [] : query.data?.records ?? []).filter(record => {
     if (resourceKind && kind !== "flow" && !matchesResourceKind(resourceKind, record)) return false;
     if (!scope) return true;
@@ -358,7 +354,6 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     </Card>}
     {review && <Card className="grid gap-3 p-3" aria-live="polite">
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{savedReview ? t("Saved candidate review") : review.diagnostic ? t("Candidate rejected") : (review.drafts?.length ?? 0) > 1 ? t("Joint candidate ready for review") : t("Candidate ready for review")}</span>
-        {savedReview && <ProductExport candidate={savedID} assets={assets} application={applicationName}/>}
         {savedReview && <StatusTag status={activeID === savedID ? "active" : "saved"} registry={{ active: { label: t("Active"), tone: "success" }, saved: { label: t("Saved"), tone: "info" } }} />}
         {savedReview && origin && <StatusTag status="promoted" registry={{ promoted: { label: t("Promoted from {tenant}", { tenant: origin.from }), tone: "info" } }} />}
         {savedReview && promotedTo.map((target) => <StatusTag key={target.tenant} status={target.active ? "live" : "held"} registry={{ live: { label: t("Active in {tenant}", { tenant: target.tenant }), tone: "success" }, held: { label: t("Awaiting review in {tenant}", { tenant: target.tenant }), tone: "warning" } }} />)}

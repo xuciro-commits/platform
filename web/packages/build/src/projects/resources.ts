@@ -1,45 +1,34 @@
 import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
+import { draftResourcePresentations, releaseResourcePresentations, type ReleaseKind as GeneratedReleaseKind, type ResourceKind as GeneratedResourceKind, type ResourceRouteMode } from "../gen/resources";
 
-export type ResourceKind = "object" | "object-type-group" | "action" | "link-type" | "property-type" | "value-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "listener" | "dataset" | "media-set" | "schedule" | "pipeline" | "writeback" | "matching" | "observation" | "definition";
+export type ResourceKind = GeneratedResourceKind | "definition";
+export type ReleaseKind = GeneratedReleaseKind;
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
-  label: string; plural: string;   ref?: string;
+  label: string; plural: string; ref?: string; assetKind?: string;
+  app?: string; qualifiedName?: boolean; route?: ResourceRouteMode;
+  projectView?: string; releaseKind?: string; release?: boolean; listed?: boolean;
 };
 
-export const resourceKinds: ResourceKindInfo[] = [
-  { kind: "action", type: "build.actiontype", view: "action-type", label: "Action type", plural: "Action types", ref: "action" },
- {kind:"sample-set",type:"build.sample-set",view:"sample-set",label:"Sample set",plural:"Sample sets",ref:"sample-set"},
-  { kind: "object", type: "build.object", view: "object-type", label: "Object type", plural: "Object types", ref: "object" },
-  { kind: "object-type-group", type: "build.objecttypegroup", view: "object-type-group", label: "Object type group", plural: "Object type groups", ref: "object-type-group" },
-  { kind: "link-type", type: "build.linktype", view: "link-type", label: "Link type", plural: "Link types", ref: "link-type" },
-  { kind: "property-type", type: "build.propertytype", view: "property-type", label: "Shared property", plural: "Shared properties", ref: "property-type" },
-  { kind: "value-type", type: "build.valuetype", view: "value-type", label: "Value type", plural: "Value types", ref: "value-type" },
-  { kind: "query", type: "build.query", view: "object-set", label: "Object set", plural: "Object sets", ref: "query" },
-  { kind: "page", type: "build.page", view: "module", label: "Page", plural: "Pages", ref: "page" },
-  { kind: "flow", type: "build.process", view: "flow", label: "Logic flow", plural: "Logic flows", ref: "flow" },
-  { kind: "automation", type: "build.process", view: "automation", label: "Automation", plural: "Automations", ref: "flow" },
-  { kind: "function", type: "build.function", view: "function", label: "AI function", plural: "AI functions", ref: "function" },
-  { kind:"evaluation-set",type:"build.testplan",view:"evaluation-set",label:"Evaluation set",plural:"Evaluation sets",ref:"evaluation-set" },
-  { kind: "test-plan", type: "build.testplan", view: "test-plan", label: "Business test plan", plural: "Business test plans", ref: "test-plan" },
-  { kind: "agent", type: "build.agent", view: "agent", label: "Agent", plural: "Agents", ref: "agent" },
-  { kind: "compute", type: "build.code", view: "code", label: "Code function", plural: "Code functions", ref: "compute" },
-  { kind: "table", type: "build.table", view: "decision-table", label: "Decision table", plural: "Decision tables", ref: "compute" },
-  { kind: "connection", type: "build.connection", view: "connection", label: "Connection", plural: "Connections" },
-  { kind: "observation", type: "build.observation", view: "observation-source", label: "Observation source", plural: "Observation sources" },
-  { kind: "source", type: "build.source", view: "data-source", label: "Data source", plural: "Data sources" },
-  { kind: "listener", type: "build.listener", view: "listener", label: "Listener", plural: "Listeners" },
-  { kind: "media-set", type: "build.mediaset", view: "media-set", label: "Media set", plural: "Media sets", ref: "mediaset" },
-  { kind: "schedule", type: "build.schedule", view: "schedule", label: "Schedule", plural: "Schedules" },
-  { kind: "dataset", type: "build.dataset", view: "dataset", label: "Dataset", plural: "Datasets" },
-  { kind: "pipeline", type: "build.pipeline", view: "pipeline", label: "Pipeline", plural: "Pipelines" },
-  { kind: "writeback", type: "build.writeback", view: "writeback", label: "Writeback", plural: "Writebacks" },
-  { kind: "matching", type: "build.match", view: "match", label: "Matching rule", plural: "Matching rules" },
-];
+export const resourceKinds: ResourceKindInfo[] = draftResourcePresentations.map((resource) => ({ ...resource }));
+export const releaseResources: ResourceKindInfo[] = releaseResourcePresentations.map((resource) => ({ ...resource }));
 
-export const kindOfType = (type: string) => resourceKinds.find((kind) => kind.type === type);
+type ResourceVariant = { kind?: string; variant?: string; evaluation?: unknown[]; roots?: Api.AssetRef[] };
+
+export const matchesResourceKind = (kind: ResourceKindInfo, record: ResourceVariant) => {
+  if (kind.kind === "automation") return record.kind === "automation";
+  if (kind.kind === "flow") return record.kind !== "automation";
+  if (kind.kind === "evaluation-set") return record.variant === "evaluation-set" || !record.variant && !!record.evaluation?.length;
+  return kind.kind !== "test-plan" || record.variant === "test-plan" || !record.variant && !record.evaluation?.length && !!record.roots?.length;
+};
+
+export const kindOfType = (type: string, record?: unknown) => {
+  const candidates = resourceKinds.filter(kind => kind.type === type);
+  return record ? candidates.find(kind => matchesResourceKind(kind, record as ResourceVariant)) ?? candidates[0] : candidates[0];
+};
 
 export function systemDefinitionsForType(definitions: readonly WorkspaceDefinition[], type: string) {
   const kind = type === "build.evaluation-set" || type === "build.testplan"
@@ -53,20 +42,15 @@ export function systemDefinitionsForType(definitions: readonly WorkspaceDefiniti
 export const publishedResourceKind: ResourceKindInfo = { kind: "definition", type: "", view: "definition", label: "Published resource", plural: "Published resources" };
 
 export function resourceRef(kind: ResourceKindInfo, name: string): Api.AssetRef {
-  return { app: "build", kind: kind.ref ?? kind.kind, name: ["object", "flow", "automation"].includes(kind.kind) ? `build.${name}` : name };
+  const app = kind.app ?? "build";
+  return { app, kind: kind.ref ?? kind.kind, name: kind.qualifiedName ? `${app}.${name}` : name };
 }
 export const refKey = (ref: Api.AssetRef) => `${ref.app}/${ref.kind}/${ref.name}`;
 
 export function resourceRoute(kind: ResourceKindInfo, id: string, project?: string): Route {
-  if (kind.kind === "page") return { view: "module", params: { ...(project ? { id: project, application: project } : {}), page: id } };
-  if (kind.kind === "test-plan" && project) return { view: "project", params: { id: project, area: "release", plan: id } };
+  if (kind.route === "page") return { view: kind.view, params: { ...(project ? { id: project, application: project } : {}), page: id } };
+  if (kind.route === "release-plan" && project) return { view: kind.projectView ?? "project", params: { id: project, area: "release", plan: id } };
   return { view: kind.view, params: { id, ...(project ? { application: project } : {}) } };
 }
 
-export type ResourceRecord = { id: string; name: string; title: string; state?: string; version?: number; archived?: boolean; object?: string; kind?: string; actions?: { name: string; title?: string }[]; when?: string; manual?: boolean; evaluation?: unknown[]; roots?: Api.AssetRef[]; changed?: { at?: string; by?: string } | string };
-
-export const matchesResourceKind = (kind: ResourceKindInfo, record: { kind?: string; evaluation?: unknown[]; roots?: Api.AssetRef[] }) => {
-  if (kind.kind === "automation") return record.kind === "automation";
-  if (kind.kind === "flow") return record.kind !== "automation";
-  return kind.kind === "evaluation-set" ? !!record.evaluation?.length : kind.kind !== "test-plan" || !record.evaluation?.length && !!record.roots?.length;
-};
+export type ResourceRecord = { id: string; name: string; title: string; state?: string; version?: number; archived?: boolean; object?: string; kind?: string; variant?: string; actions?: { name: string; title?: string }[]; when?: string; manual?: boolean; evaluation?: unknown[]; roots?: Api.AssetRef[]; changed?: { at?: string; by?: string } | string };

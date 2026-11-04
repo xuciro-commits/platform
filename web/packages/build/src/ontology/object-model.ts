@@ -35,6 +35,7 @@ export function objectChanges(draft: Process, saved: Process): Record<string, un
   const changes: Record<string, unknown> = {};
   const keys = new Set([...Object.keys(saved), ...Object.keys(draft)] as (keyof Process)[]);
   for (const key of keys) {
+    if (key === "actions") continue;
     if (JSON.stringify(draft[key]) !== JSON.stringify(saved[key])) changes[key] = draft[key] ?? null;
   }
   return changes;

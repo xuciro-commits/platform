@@ -1,11 +1,15 @@
-import { useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import { useHost } from "@platform/app";
 import { ContextHelp, Button, Checkbox, Select, t, type EntityInfo } from "@platform/ui";
 import { baseField, missingInterfaceFields, type Field, type ObjectRecord, type Process } from "./object-model";
 
 export function useInterfaces() {
-  const apps = useReadQuery<Api.AppInfo[]>("/v1/apps");
-  return (apps.data ?? []).flatMap((app) => (app.interfaces ?? []).map((shape) => ({ ...shape, app: app.id })));
+  const { definitions } = useHost();
+  const shapes = new Map<string, { name: string; title: string; description?: string; fields: { name: string; title: string; type: string }[]; app: string }>();
+  for (const definition of definitions) {
+    const shape = definition.interface;
+    if (shape && !shapes.has(shape.name)) shapes.set(shape.name, { ...shape, app: definition.ref.app });
+  }
+  return [...shapes.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function ShapeEditor({ process, parent, entities, source, onChange }: { process: Process; parent: string; entities: EntityInfo[]; source?: ObjectRecord["extensionSource"]; onChange: (next: Process) => void }) {
@@ -31,7 +35,7 @@ export function ShapeEditor({ process, parent, entities, source, onChange }: { p
           <span className="text-xs text-muted">{shape.fields.map((f) => `${f.name}: ${t(f.type)}`).join(", ")}</span>
           {on && missing.length > 0 && <Button size="sm" onClick={() => complete(missing)}>{t("Add the {n} missing fields", { n: missing.length })}</Button>}
         </div>;
-      }) : <p className="text-xs text-muted">{t("No app declares an interface yet.")}</p>}
+      }) : <p className="text-xs text-muted">{t("No interface is published yet.")}</p>}
     </div>
     <label className="grid gap-1 text-xs">{t("Extends")}
       <Select value={process.extends ?? ""} onChange={(e) => extend(e.target.value)}>

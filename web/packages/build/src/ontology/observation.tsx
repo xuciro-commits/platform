@@ -6,7 +6,7 @@ import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { ObservationRead, SemanticObjectSelect, SemanticPropertySelect, useHost, useProvidedCapabilities, useReadQuery, useTransition } from "@platform/app";
-import { Button, Checkbox, ContentTabs, Input, PageHeader, Panel, Select, Textarea, Toggles, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
+import { Button, Checkbox, Input, PageHeader, Panel, ResourceSections, Select, Textarea, Toggles, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 import { useDraftRecord } from "../branches/draft-record";
 import { DraftStatus, ResourceControls } from "../editor/workbench";
@@ -25,7 +25,7 @@ export function ObservationSources() {
   </div>;
 }
 
-export function ObservationSourceEditor({ id }: { id: string }) {
+export function ObservationSourceEditor({ id, initialSection }: { id: string; initialSection?: string }) {
   const { decide, can, definitions, source, catalog } = useHost(), { open } = useApplicationWorkspace();
   const { query, scope, branch, mainRevision } = useDraftRecord<ObservationDraft>("build.observation", id);
   const connections = useDraftInventory<Api.Connection>("build.connection");
@@ -36,7 +36,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   const authoringHost = useHost(), trial = useActionTrial(), declarationFields = authoringHost.source.entity("build.observation")?.fields ?? [];
   const [draft, setDraft] = useState<ObservationDraft>(empty), [edited, setEdited] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [createID] = useState(() => crypto.randomUUID());
-  const [tab, setTab] = useState("source");
+  const [tab, setTab] = useState(initialSection || "source");
   const inputDrafts = useInputDrafts(), dirty = edited || !!inputDrafts?.dirty;
   const original = useRef<ObservationDraft>(empty()), loaded = useRef(""), lock = useRef(false);
   const load = (value: ObservationDraft) => { original.current = structuredClone({ ...empty(), ...value, requireComplete: value.requireComplete ?? false }); loaded.current = `${value.id}:${value.revision}`; setDraft(original.current); };
@@ -45,6 +45,9 @@ export function ObservationSourceEditor({ id }: { id: string }) {
     if (loadedScope.current === scope) return;
     loadedScope.current = scope; loaded.current = ""; original.current = empty(); setDraft(original.current); setEdited(false); setError("");
   }, [scope]);
+  useEffect(() => {
+    if (initialSection) setTab(initialSection);
+  }, [initialSection]);
   useEffect(() => { const record = query.data?.record; if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record); }, [query.data, dirty, busy]);
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { setDraft(structuredClone(original.current)); setEdited(false); setError(""); }, busy);
   const patch = (change: Partial<ObservationDraft>) => { if (!lock.current) { setDraft(value => ({ ...value, ...change })); setEdited(true); setError(""); } };
@@ -79,7 +82,8 @@ export function ObservationSourceEditor({ id }: { id: string }) {
         operations={draft.state === "published" && can("build.observation.retire") ? [{ id: "retire", label: t("Retire source"), disabled: dirty || !!branch, reason: branch ? t("This runs against main. Merge the branch first, then run it there.") : undefined, run: () => transitions.take("build.observation.retire", { ...draft, created: draft.created ?? {}, changed: draft.changed ?? {} }) }] : []} />
     </>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    <ContentTabs label={t("Stream sections")} value={installed ? tab : "source"} onChange={setTab} items={[{ id: "source", title: t("Source"), content: (
+    <ResourceSections back={{ label: t("Observation sources"), onClick: () => open({ view: "observation-source" }) }} title={draft.title || t("New observation source")} meta={draft.name || undefined} value={installed ? tab : "source"}
+      onChange={next => { setTab(next); open({ view: "observation-source", params: { id, section: next } }); }} items={[{ id: "source", title: t("Source"), content: (
     <StructuredEditor expectedRevision={draft.id ? branch ? mainRevision : draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.observation:${id}:${authoringHost.source.scope}`} readOnly={!editable} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setEdited(true); setError(""); }} onTrial={next => trial(`build.observation.${draft.id ? "edit" : "create"}`, { type: "build.observation", id: draft.id || createID }, next, draft.id ? branch ? mainRevision : draft.revision : 0)}><fieldset disabled={busy || !editable} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Observation source")} className="grid content-start gap-3">
         <label className="grid gap-1 text-xs">{t("Observation name")}<Input value={draft.name} disabled={!!draft.published} onChange={event => patch({ name: event.target.value })} /></label>

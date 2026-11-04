@@ -3,9 +3,11 @@ import { Button, Checkbox, Form, Input, PageHeader, Panel, Select, t, useUnsaved
 import { useEffect, useRef, useState } from "react";
 import { pageTemplates, templateDraft, type TemplateId } from "./templates";
 import { useAuthoringModel } from "../ontology/authoring-model";
+import { useApplicationScope } from "../projects/application-scope";
 
 export function StudioTemplates({ initial, onCreated, onBusy, onClose, closeGuard }: { initial?: string; onCreated?: (target: { type: string; id: string }) => void; onBusy?: (busy: boolean) => void; onClose?: () => void; closeGuard?: { current: (() => void) | undefined } }) {
   const host = useHost();
+  const application = useApplicationScope();
   const model = useAuthoringModel();
   const { open } = useWorkspace();
   const [templateId, setTemplateId] = useState<TemplateId>((pageTemplates.find((item) => item.id === initial) ?? pageTemplates[0]!).id);
@@ -19,7 +21,7 @@ export function StudioTemplates({ initial, onCreated, onBusy, onClose, closeGuar
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const lock = useRef(false);
-  const request = useRef<ReturnType<typeof templateDraft> | undefined>(undefined);
+  const request = useRef<(ReturnType<typeof templateDraft> & { project?: string }) | undefined>(undefined);
   const [pending, setPending] = useState(false), [created, setCreated] = useState(false);
   const locked = busy || pending || created;
   useEffect(() => { onBusy?.(busy); return () => onBusy?.(false); }, [busy, onBusy]);
@@ -46,7 +48,7 @@ export function StudioTemplates({ initial, onCreated, onBusy, onClose, closeGuar
     if (!request.current && object) {
       const description = `${t(template.summary)}
 ${t("Created from template {template} (revision {revision}).", { template: template.id, revision: template.revision })}`;
-      request.current = templateDraft(template.id, { object, name, title: title.trim(), fields: [...fields], actions: [...actions], description, child: child?.entity, relation: child?.relation });
+      request.current = { ...templateDraft(template.id, { object, name, title: title.trim(), fields: [...fields], actions: [...actions], description, child: child?.entity, relation: child?.relation }), ...(application ? { project: application } : {}) };
     }
     const submitted = request.current;
     if (!submitted) return;

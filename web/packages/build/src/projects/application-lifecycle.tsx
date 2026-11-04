@@ -7,7 +7,7 @@ export function useApplicationLifecycle({ project, disabled = false, before = ac
   const published = !!project.published || project.state === "published" || project.state === "withdrawn";
   const withdrawn = project.state === "withdrawn";
   const schema = `build.app.${withdrawn ? "restore" : "withdraw"}`;
-  const leave = () => { open({ view: "projects" }); close({ view: "project", params: { id: project.id } }); };
+  const leave = () => { open({ view: "files" }); close({ view: "project", params: { id: project.id } }); };
   const commands: ContextCommand[] = [
     ...(!published && archive.available ? [{ id: "delete-draft", label: t("Delete application draft…"), danger: true, separatorBefore: true, disabled, reason: t("Reusable assets and history are kept."), run: () => before(() => archive.take(project, leave)) }] : []),
     ...(published && can(schema) ? [{ id: "lifecycle", label: t(withdrawn ? "Restore application entry" : "Withdraw application entry"), danger: !withdrawn, separatorBefore: true, disabled, reason: t("Only the application entry changes. Definitions, business records and independent tasks remain."), run: () => before(() => void decide(schema, { type: "build.app", id: project.id }, {}, { expectedRevision: project.revision })) }] : []),

@@ -4,10 +4,10 @@ import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { CreateObjectFromDataset } from "./dataset-object";
 import { ResourceList } from "../editor/ResourceList";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
 import { CompartmentField, MarkingField } from "./marking";
-import { Button, Checkbox, ContentTabs, DataTable, FilePicker, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef } from "@platform/ui";
+import { Button, Checkbox, DataTable, FilePicker, Input, PageHeader, Panel, ResourceSections, Select, Tag, t, type ColumnDef } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
 type Field = { name: string; type: string };
@@ -30,7 +30,7 @@ export function Datasets() {
   </div>;
 }
 
-export function DatasetEditor({ id }: { id: string }) {
+export function DatasetEditor({ id, initialSection }: { id: string; initialSection?: string }) {
   const { decide, holds } = useHost(), { open } = useApplicationWorkspace();
   const application = useApplicationScope();
   const { draft, structured, query, dirty, busy, error, setError, inputs, patch, perform, save, discardChanges } = useDefinitionDraft<Draft>({
@@ -43,7 +43,10 @@ export function DatasetEditor({ id }: { id: string }) {
   const [loadType, setLoadType] = useState("snapshot");
   const [creating, setCreating] = useState(false);
   const [shown, setShown] = useState(0);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(initialSection || "overview");
+  useEffect(() => {
+    if (initialSection) setTab(initialSection);
+  }, [initialSection]);
   const version = shown || draft.version || 0;
   const versionQuery = useReadQuery<{ record?: Version }>(`/v1/records/build.datasetversion/${encodeURIComponent(`${draft.id}@${version}`)}`, 15000, version > 0);
   const versionsQuery = useReadQuery<{ records: VersionRow[] }>(`/v1/records/build.datasetversion?domain=${encodeURIComponent(JSON.stringify([["dataset", "=", draft.id]]))}&sort=-version&archived=true&limit=200`, 15000, !!draft.id);
@@ -52,13 +55,13 @@ export function DatasetEditor({ id }: { id: string }) {
   const last = draft.last, latest = draft.version ?? 0;
   const rows = versionQuery.data?.record?.data ?? [], columns = draft.schema?.map((f) => f.name) ?? Object.keys(rows[0] ?? {});
   const transactions = versionsQuery.data?.records ?? [];
-  const openVersion = (v: number) => { setShown(v); setTab("preview"); };
+  const openVersion = (v: number) => { setShown(v); setTab("preview"); open({ view: "dataset", params: { id, section: "preview" } }); };
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Datasets"), onClick: () => open({ view: "dataset" }) }]} title={draft.title || t("New dataset")} meta={draft.name ? <span className="font-mono">{draft.name}{draft.version ? ` · v${draft.version}` : ""}</span> : undefined} help={t("Name it, then upload a CSV or point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
       actions={<>
         {query.data?.record && !dirty && <><Select aria-label={t("Transaction type")} value={loadType} onChange={event => setLoadType(event.target.value)}>{["snapshot", "append", "update", "delete"].map(type => <option key={type} value={type}>{transactionLabel(type)}</option>)}</Select><FilePicker accept=".csv,text/csv" disabled={busy} onFile={file => void perform(async () => {
           const record = query.data!.record!;
-          if (await decide("build.dataset.load", { type: "build.dataset", id: record.id }, { type: loadType, csv: await file.text(), producer: `upload:${file.name}` }, { expectedRevision: record.revision, onRefused: setError })) { await query.refetch(); setShown(0); setTab("preview"); }
+          if (await decide("build.dataset.load", { type: "build.dataset", id: record.id }, { type: loadType, csv: await file.text(), producer: `upload:${file.name}` }, { expectedRevision: record.revision, onRefused: setError })) { await query.refetch(); setShown(0); setTab("preview"); open({ view: "dataset", params: { id, section: "preview" } }); }
         })}>{t("Upload CSV")}</FilePicker></>}
         <ResourceControls type="build.dataset" record={draft} dirty={dirty} busy={busy} route={{ view: "dataset", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
           operations={holds("build", "builder") && !!draft.schema?.length ? [{ id: "object", label: t("Create object type"), disabled: dirty || !!inputs?.invalid || !latest, run: () => setCreating(true) }] : []} />
@@ -67,7 +70,8 @@ export function DatasetEditor({ id }: { id: string }) {
     {creating && draft.schema && <CreateObjectFromDataset dataset={{ id: draft.id, name: draft.name, title: draft.title, schema: draft.schema }} application={application}
       onClose={() => setCreating(false)} onCreated={object => { setCreating(false); open({ view: "object-type", params: { id: object } }, { ifCurrent: { view: "dataset", params: { id } } }); }} />}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
-      <ContentTabs label={t("Dataset sections")} value={tab} onChange={setTab} items={[
+      <ResourceSections back={{ label: t("Datasets"), onClick: () => open({ view: "dataset" }) }} title={draft.title || t("New dataset")} meta={draft.name || undefined} value={tab}
+        onChange={next => { setTab(next); open({ view: "dataset", params: { id, section: next } }); }} items={[
         { id: "overview", title: t("Overview"), content: <div className="grid min-w-0 gap-3">
           <Panel title={t("Dataset")} className="grid min-w-0 content-start gap-3">
             <label className={fieldClass}>{t("Dataset name")}<Input disabled={!!draft.producer} value={draft.name} placeholder="sapmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>

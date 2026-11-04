@@ -57,7 +57,11 @@ export function BranchDecisions({ children, project }: { children: ReactNode; pr
       try {
         if (verb === "compile") await actions.compile(branch, type, target.id);
         else if (verb === "archive") await actions.save(branch, type, target.id, { op: "delete" });
-        else if (verb === "create") await actions.save(branch, type, target.id, { op: "create", spec: Object.fromEntries(Object.entries((payload ?? {}) as Record<string, unknown>).filter(([, value]) => value !== null && value !== undefined)) });
+        else if (verb === "create") {
+          const input = (payload ?? {}) as Record<string, unknown>;
+          const { project: supplied, ...spec } = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null && value !== undefined));
+          await actions.save(branch, type, target.id, { op: "create", project: typeof supplied === "string" ? supplied : project, spec });
+        }
         else {
           const answer = await host.client.call<Api.BranchResourceView>("GET", resourcePath(branch, type, target.id));
           if (!answer.ok) throw new BranchFailure(apiErrorMessage(answer.body) ?? t("The branch request was refused."), answer.status);

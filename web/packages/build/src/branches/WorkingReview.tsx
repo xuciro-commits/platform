@@ -36,7 +36,8 @@ export function WorkingReview({ branch, states, onClose, onSaved }: { branch?: s
           for (const [name, value] of Object.entries((edit.payload as { spec: Record<string, unknown> }).spec)) {
             if (value === null || value === undefined) delete spec[name]; else spec[name] = value;
           }
-          await actions.save(branch, state.type, edit.target.id!, { op: edit.expectedRevision ? "update" : "create", spec });
+          const requestProject = (edit.payload as { project?: unknown } | undefined)?.project;
+          await actions.save(branch, state.type, edit.target.id!, { op: edit.expectedRevision ? "update" : "create", ...(typeof requestProject === "string" ? { project: requestProject } : {}), spec });
           if (!await host.decide("build.workingstate.clear", { type: "build.workingstate", id: state.id }, {}, { expectedRevision: state.revision, quiet: true, onRefused: setError })) return;
           setRemoved(old => new Set([...old, state.id]));
         }

@@ -2,7 +2,7 @@ import type { Api } from "@platform/kernel";
 import { t, type EntityInfo } from "@platform/ui";
 import { kindOfType } from "../projects/resources";
 
-export const resourceKindLabel = (type: string) => { const kind = kindOfType(type); return kind ? t(kind.label) : type; };
+export const resourceKindLabel = (type: string, record?: Parameters<typeof kindOfType>[1]) => { const kind = kindOfType(type, record); return kind ? t(kind.label) : type; };
 
 export function resourceTitle(id: string, ...specs: unknown[]): string {
   for (const spec of specs) {

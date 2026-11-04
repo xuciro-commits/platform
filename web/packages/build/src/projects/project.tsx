@@ -1,13 +1,12 @@
 import { sourceFieldInput } from "@platform/app";
-import { useDraftInventory } from "../branches/records";
-import { ContextHelp, PageHeader, ResourceNavigation, StructuredEditor } from "@platform/ui";
+import { ContextHelp, ResourceNavigation, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord } from "@platform/app";
 import { CompositeRefusalError, type Api } from "@platform/kernel";
-import { ActionMenu, Button, Checkbox, DataTable, Dialog, Disclosure, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ColumnDef, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, Checkbox, Dialog, Disclosure, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, ExternalLink, FolderKanban, GitBranch, MoreHorizontal, Plus, Rocket, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePrivateDraft } from "../session/WorkingState";
@@ -30,57 +29,17 @@ import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, 
 import { StudioTemplates } from "../workshop/template-ui";
 import { ProjectOverview } from "./project-overview";
 import { ProjectAccess } from "./project-access";
-import { installedStudioID, installedStudioRef, studioApplications } from "./studio-applications";
+import { installedStudioID, installedStudioRef } from "./studio-applications";
 import { InstalledApplicationHome } from "./InstalledApplicationHome";
 import { ExtensionSettings } from "./ExtensionSettings";
 import { useApplicationLifecycle } from "./application-lifecycle";
 
-export function ProjectsList() {
-  const { me, definitions , holds} = useHost();
-  const { open } = useWorkspace();
-  const projects = useDraftInventory<Project>("build.app", 1000, holds("build", "builder"));
-  const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
-  const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
-  const [search, setSearch] = useState("");
-  const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }), { essential: true });
-  const builder = holds("build", "builder");
-  type Row = ReturnType<typeof studioApplications>[number];
-  const rows = studioApplications([], definitions, projects.data?.records ?? [])
-    .filter(item => !!item.project || item.ref.app === "build" && !!item.definition && item.definition.source !== "code")
-    .filter(item => `${item.title} ${item.ref.name}`.toLowerCase().includes(search.toLowerCase()));
-  const kindOf = (item: Row) => item.project ? t(item.project.extends ? "Application extension" : "Project") : t("Managed project");
-  const columns: ColumnDef<Row>[] = [
-    { id: "title", header: t("Project"), meta: { width: 360, pin: "left" }, accessorFn: item => item.title, cell: ({ row }) => <span className="flex min-w-0 items-center gap-2">
-      <span className="grid size-6 shrink-0 place-items-center rounded-sm bg-row-selected text-primary [&_svg]:size-3.5"><FolderKanban /></span>
-      <span className="grid min-w-0"><span className="truncate font-medium">{row.original.title}</span>{row.original.description && <span className="truncate text-xs text-muted">{row.original.description}</span>}</span>
-    </span> },
-    { id: "kind", header: t("Type"), meta: { width: 170 }, accessorFn: kindOf, cell: ({ row }) => <span className="text-muted">{kindOf(row.original)}</span> },
-    { id: "state", header: t("Status"), meta: { width: 120 }, accessorFn: item => item.project?.state ?? "", cell: ({ row }) => <DraftStatus state={row.original.project?.state} /> },
-    { id: "pages", header: t("Pages"), meta: { width: 80 }, accessorFn: item => (item.project ?? item.definition?.application)?.pages?.length ?? 0, cell: ({ getValue }) => <span className="tabular-nums text-muted">{getValue() as number}</span> },
-    { id: "resources", header: t("Resources"), meta: { width: 100 }, accessorFn: item => (item.project ?? item.definition?.application)?.resources?.length ?? 0, cell: ({ getValue }) => <span className="tabular-nums text-muted">{getValue() as number}</span> },
-  ];
-  return <div className="flex min-h-full flex-col gap-3">
-    <PageHeader title={t("Files")} meta={t("{count} projects", { count: rows.length })} help={t("A project groups the object types, logic, pages and releases of one application. Projects of installed products appear as managed projects and extend through the same branches and releases.")} actions={<>
-        <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="w-56" />
-        {builder && <Button onClick={() => open({ view: "apps" })}>{t("New from template…")}</Button>}
-        {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New project")}</Button>}
-      </>} />
-    {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
-    {projects.isError && <Notice tone="warning" role="alert" message={t("Projects could not be loaded.")} />}
-    <div className="min-h-[24rem] flex-1">
-      <DataTable storageKey="files:projects" data={rows} columns={columns} getRowId={item => refKey(item.ref)} height="100%" searchable={false} loading={projects.isLoading}
-        onRowClick={item => open({ view: "project", params: { id: item.id } })} empty={search ? t("No project matches.") : t("No projects yet. Create one to start building.")} />
-    </div>
-    {create.dialog}
-  </div>;
-}
-
-const editorCreatedKinds = new Set(["table", "alert", "function", "agent", "evaluation-set", "sample-set", "test-plan", "connection", "source", "dataset", "pipeline", "writeback", "matching"]);
+const editorCreatedKinds = new Set(["table", "alert", "function", "agent", "evaluation-set", "sample-set", "test-plan", "interface", "connection", "source", "dataset", "pipeline", "writeback", "matching"]);
 
 function NewResourceMenu({ application, onCreated, children, disabled, area }: { application: string; area?: string; onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
   const { catalog , holds} = useHost();
   const { open } = useWorkspace();
-  const creators = Object.fromEntries(resourceKinds.filter(kind => !editorCreatedKinds.has(kind.kind)).map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target), { essential: true })])) as Record<string, ReturnType<typeof useNewRecord>>;
+  const creators = Object.fromEntries(resourceKinds.filter(kind => !editorCreatedKinds.has(kind.kind)).map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target), { essential: true, fixed: { project: application } })])) as Record<string, ReturnType<typeof useNewRecord>>;
   if (!holds("build", "builder")) return null;
   const sections = [...studioAreas.filter(section => section.id === area), ...studioAreas.filter(section => section.id !== area)];
   const offered = new Set<string>();
@@ -295,14 +254,14 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const dependencies = dependencyQuery.data;
   const header = installed?.application?.pages.find((name) => definitions.some((d) => d.ref.app === "build" && d.ref.kind === "page" && d.ref.name === name));
   return <>
-    <Workbench storageKey="project" crumbs={[{ label: t("Files"), onClick: () => open({ view: "projects" }) }]} title={project.title || project.name}
+    <Workbench storageKey="project" crumbs={[{ label: t("Files"), onClick: () => open({ view: "files" }) }]} title={project.title || project.name}
       status={<DraftStatus state={project.state} problems={problems.length} />} busy={saving}
       actions={<>
         {builder && <SaveStatus dirty={dirty} busy={saving} failed={!!error} />}
         {builder && <NewResourceMenu application={id} area={activeArea} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)} />}
         <ActionMenu label={t("More actions")} icon={<MoreHorizontal />} commands={[
           ...(header ? [{ id: "open-app", label: t("Open published app"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } }) }] : []),
-          ...(builder ? [{ id: "devops", label: t("Release in DevOps…"), icon: <Rocket />, disabled: locked || resourcesUnavailable || !!currentBranch || (!project.pages?.length && !project.resources?.length), run: () => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, applicationName: project.name } }) }] : []),
+          ...(builder ? [{ id: "devops", label: t("Release in DevOps…"), icon: <Rocket />, disabled: locked || resourcesUnavailable || !!currentBranch || (!project.pages?.length && !project.resources?.length), run: () => open({ view: "products", params: { project: project.id } }) }] : []),
           ...(builder ? [{ id: "branches", label: branchCount > 0 ? t("Branches ({count})", { count: branchCount }) : t("Branches"), icon: <GitBranch />, disabled: locked, run: () => open({ view: "changes", params: { application: project.id } }) }] : []),
           ...lifecycle.commands,
         ]} />
@@ -318,7 +277,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         {createdResource && !pendingPatch && (addingResource ? <Notice tone="info" message={t("Adding the resource to this project…")} /> : <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.")} />
           <div className="flex gap-2"><Button disabled={saving || dirty} onClick={() => void addCreated(createdResource.kind, createdResource.target)}>{t("Retry adding created resource")}</Button>
             <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedResource(undefined))}>{t("Keep resource without project membership")}</Button></div></div>)}
-        <ResourceNavigation back={{ label: t("Files"), onClick: () => open({ view: "projects" }) }} title={project.title || project.name} icon={<FolderKanban />} meta={project.name} value={tab} onChange={id => setTab(id as Section)} sections={[
+        <ResourceNavigation back={{ label: t("Files"), onClick: () => open({ view: "files" }) }} title={project.title || project.name} icon={<FolderKanban />} meta={project.name} value={tab} onChange={id => setTab(id as Section)} sections={[
           { id: "overview", label: t("Overview") },
           { id: "resources", label: t("Resources"), group: t("Contents"), badge: owned.length || undefined },
           { id: "concepts", label: t("Business concepts"), group: t("Contents") },

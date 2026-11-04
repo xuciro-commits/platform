@@ -45,10 +45,10 @@ export function CreateObjectFromDataset({ dataset, application, onClose, onCreat
         const fields = chosen.map(column => mapped.get(column.name)!);
         const payload = {
           name, title: title.trim(), description: t("Backed by the dataset {name}.", { name: dataset.title || dataset.name }), fields, display: mapped.get(label)!.name,
-          states: [{ name: "active", title: t("Active"), tone: "success" }], actions: [],
+          states: [{ name: "active", title: t("Active"), tone: "success" }],
           datasources: [{ kind: "dataset", source: dataset.id, key, columns: chosen.map(column => ({ column: column.name, attribute: mapped.get(column.name)!.name })) }],
         };
-        if (!await host.decide("build.object.create", { type: "build.object", id }, payload, { expectedRevision: 0, quiet: true, onRefused: setError })) return;
+        if (!await host.decide("build.object.create", { type: "build.object", id }, { ...payload, ...(application ? { project: application } : {}) }, { expectedRevision: 0, quiet: true, onRefused: setError })) return;
         created.current = true;
       }
       if (application) await joinProjectResource(host, application, { app: "build", kind: "object", name: `build.${name}` });

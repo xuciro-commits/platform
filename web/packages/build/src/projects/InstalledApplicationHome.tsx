@@ -60,7 +60,7 @@ export function InstalledApplicationHome({ id, area, selected }: { id: string; a
     { id: "kind", header: t("Type"), accessorFn: item => t(item.kind.label) },
     { id: "identity", header: t("Identity"), accessorFn: item => refKey(item.ref) },
   ];
-  return <Workbench storageKey="project" title={title} crumbs={[{ label: t("Files"), onClick: () => open({ view: "projects" }) }]}
+  return <Workbench storageKey="project" title={title} crumbs={[{ label: t("Files"), onClick: () => open({ view: "files" }) }]}
     status={<span className="text-xs text-muted">{t(definition?.source === "code" ? "Native code" : "Published application")} · {definition?.version ?? installedApps.data?.find(app => app.id === ref.app)?.version}</span>}
     actions={<>
       <ContextHelp title={title}>{t("Inspect the declared assets and extend them without changing their owner or permissions.")}</ContextHelp>
@@ -94,7 +94,7 @@ export function InstalledApplicationHome({ id, area, selected }: { id: string; a
               <Button disabled={!target || !importedPage || !createPage.available || !!pendingPage} onClick={() => {
                 if (!target || !importedPage) return;
                 pageApplication.current = target.id;
-                createPage.take(undefined, { ...importedPage, name: `${ref.app}${current.ref.name}`.replace(/[^a-z0-9]/g, "") });
+                createPage.take(undefined, { ...importedPage, name: `${ref.app}${current.ref.name}`.replace(/[^a-z0-9]/g, "") }, { project: target.id });
               }}>{t("Create page draft")}</Button>
             </div>
             {!importedPage && <p className="text-xs text-muted">{t("This page contains bindings that cannot be converted without changes. Keep it as a code reference.")}</p>}

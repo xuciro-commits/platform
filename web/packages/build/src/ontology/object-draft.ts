@@ -6,7 +6,7 @@ import { t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
-import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
+import { actionIssues, objectChanges, type Action, type ObjectRecord, type Process } from "./object-model";
 import { useAuthoringModel } from "./authoring-model";
 import { declarationValue } from "../editor/declaration";
 import { useDraftRecord } from "../branches/draft-record";
@@ -20,15 +20,17 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const { open } = useApplicationWorkspace();
   const { query, scope, branch, save: saveToBranch, mainRevision } = useDraftRecord<ObjectRecord>("build.object", id);
   const savedObject = query.data?.record;
-  const object = savedObject && { ...savedObject, actions: savedObject.actionTypes?.length ? savedObject.actionTypes.flatMap(binding => {
+  const derivedActions = savedObject && (savedObject.actionTypes?.length ? savedObject.actionTypes.flatMap(binding => {
     const action = actionTypes.data?.records.find(value => value.name === binding.ref.name && !value.archived);
     return action ? [action.definition] : [];
-  }) : savedObject.actions };
+  }) : savedObject.actions ?? []);
+  const object = savedObject && derivedActions ? { ...savedObject, actions: derivedActions } : savedObject;
   const conversionError = query.data?.valueErrors?.actions;
   const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [], implements: [], extends: "" });
-  const { draft: process, dirty } = session;
+  const { draft: stored, dirty } = session;
+  const process = derivedActions ? { ...stored, actions: derivedActions } : stored;
   const baseline = useRef(process);
-  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false), loadedScope = useRef(scope);
+  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false), loadedScope = useRef(scope), actionQueue = useRef<Promise<unknown>>(Promise.resolve());
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string>();
   const reset = useRef(onReset); reset.current = onReset;
@@ -81,7 +83,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     });
     for(const move of moves)session.inputs.set(move.key);
     for(const move of moves)if(move.next)session.inputs.set(move.next,move.value);
-    session.edit(() => next);
+    session.edit(() => ({ ...next, actions: stored.actions }));
   };
   const save = async () => {
     setRefused(undefined);
@@ -99,7 +101,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
       const confirmed = result.isSuccess && (branch ? !!result.data?.record : result.data?.record?.revision === expectedRevision + 1) ? result.data!.record : undefined;
       baseRevision.current = branch ? confirmed?.revision ?? expectedRevision : expectedRevision + 1; loaded.current = `${id}:${baseRevision.current}`;
       baseline.current = confirmed ? hydrate(confirmed) : process;
-      session.saved(process, confirmed ? baseline.current : undefined); markSaved();
+      session.saved(process, { ...(confirmed ? baseline.current : process), actions: stored.actions }); markSaved();
     }
     return ok;
   };
@@ -108,11 +110,33 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     try { await action(); } catch { setRefused(t("The object request could not be completed. Your draft is still here.")); }
     finally { lock.current = false; setBusy(false); }
   };
+  const queueAction = (task: () => Promise<unknown>) => {
+    actionQueue.current = actionQueue.current.then(async () => {
+      setRefused(undefined);
+      try { await task(); } catch { setRefused(t("The object request could not be completed. Your draft is still here.")); }
+    }).catch(() => undefined);
+  };
+  const editAction = (name: string, update: (action: Action) => Action) => {
+    const record = actionTypes.data?.records.find(value => value.name === `${parent}.${name}` && !value.archived);
+    if (!record) { setRefused(t("This action is still stored in the old object draft. Migrate its action types before editing the lifecycle.")); return; }
+    queueAction(async () => {
+      if (!await decide("build.actiontype.edit", { type: "build.actiontype", id: record.id }, { name: record.name, object: record.object, definition: update(record.definition), commands: record.commands }, { expectedRevision: record.revision, onRefused: setRefused })) return;
+      await actionTypes.refetch();
+    });
+  };
+  const archiveAction = (name: string) => {
+    const record = actionTypes.data?.records.find(value => value.name === `${parent}.${name}` && !value.archived);
+    if (!record) { setRefused(t("This action is still stored in the old object draft. Migrate its action types before editing the lifecycle.")); return; }
+    queueAction(async () => {
+      if (!await decide("build.actiontype.archive", { type: "build.actiontype", id: record.id }, {}, { expectedRevision: record.revision, onRefused: setRefused })) return;
+      await actionTypes.refetch();
+    });
+  };
   const roles = process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none");
   const approverRoles = ["builder", ...(process.access.length ? process.access.map((a) => a.role) : [])];
   const fromSource = (next: Record<string, unknown>): Process => ({ states: [], actions: [], access: [], fields: [], ...next } as Process);
   const trialObject = (next: Process) => trial("build.object.edit", { type: "build.object", id }, objectChanges(next, baseline.current), branch ? mainRevision : baseRevision.current);
   const structured = { expectedRevision: branch ? mainRevision : baseRevision.current, fieldInput: sourceFieldInput, value: { ...process }, onChange: (next: Record<string, unknown>) => change(fromSource(next)), fields, scope: `build.object:${id}:${source.scope}`, disabled: busy || !!conversionError,
     onTrial: (next: Record<string, unknown>) => trialObject(fromSource(next)) };
-  return { object, ready: loaded.current.startsWith(`${id}:`), structured, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
+  return { object, ready: loaded.current.startsWith(`${id}:`), structured, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, editAction, archiveAction, save, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
 }

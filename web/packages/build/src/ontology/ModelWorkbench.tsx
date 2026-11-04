@@ -1,15 +1,13 @@
 import type {PageUI} from "@platform/app";
-import { useCurrentBranch } from "../branches/current";
 import { useDraftInventory } from "../branches/records";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { useStudioApplication } from "../projects/use-studio-application";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
-import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, useHost, type Definition, type SemanticRelation } from "@platform/app";
+import { assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, useHost, type Definition, type SemanticRelation } from "@platform/app";
 import { ContextHelp, Button, Checkbox, DataTable, EmptyState, Form, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, Tag,
   t, type ColumnDef, ResourceSections } from "@platform/ui";
 import type { Api } from "@platform/kernel";
-import { Layers, Link2 } from "lucide-react";
-import { useInterfaces } from "./shape";
+import { Link2 } from "lucide-react";
 import { projectGroup, useProjectIndex } from "../projects/membership";
 import { useMemo, useState } from "react";
 
@@ -47,7 +45,6 @@ export function ModelWorkbench({ initialObject, initialTab }: { initialObject?: 
 
 function ObjectTypes() {
   const host = useHost();
-  const { id: branch } = useCurrentBranch();
   const { open } = useApplicationWorkspace();
   const { resources, model, inventory, application } = useObjectResources();
   const [search, setSearch] = useState("");
@@ -80,7 +77,7 @@ function ObjectTypes() {
         <Input type="search" aria-label={t("Search object types")} placeholder={t("Search object types")} value={search} onChange={(event) => setSearch(event.target.value)} className="w-56" />
         {!application && <SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />}
         {application ? <Button variant="primary" onClick={() => open({ view: "project", params: { id: application } })}>{t("Add object types")}</Button>
-          : <NewActions type="build.object" onCreated={branch ? target => open({ view: "object-type", params: { id: target.id } }) : undefined} />}
+          : <Button variant="primary" onClick={() => open({ view: "files" })}>{t("Choose a project")}</Button>}
       </>} />
     {inventory.isError && <Panel role="alert">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
     <div className="min-h-[24rem] flex-1">
@@ -150,29 +147,9 @@ function ObjectTypeDetail({ name, initialTab }: { name: string; initialTab?: str
   </div>;
 }
 
-export function Interfaces() {
-  const host = useHost();
-  const { open } = useApplicationWorkspace();
-  const { resources } = useObjectResources();
-  const [showSystem, setShowSystem] = useSystemDefinitionsVisibility();
-  const interfaces = useInterfaces().filter(shape => showSystem || host.definitions.find(definition => definition.ref.app === shape.app && definition.ref.kind === "interface" && definition.ref.name === shape.name)?.source !== "code");
-  return <div className="grid min-w-0 gap-3">
-    <PageHeader title={t("Interfaces")} meta={t("{count} interfaces", { count: interfaces.length })} help={t("An interface is a shape several objects share; a page or query written against it works for all of them. Apps declare interfaces; objects implement them.")}
-      actions={<SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />} />
-    <div className="grid gap-2">
-      {interfaces.map((shape) => { const implementers = resources.filter((item) => item.installed?.entity?.implements?.includes(shape.name)); return <div key={shape.name} className="grid gap-1.5 rounded-md border border-border bg-surface p-3">
-        <div className="flex items-center gap-2"><Layers className="size-4 text-primary" /><span className="text-sm font-semibold">{shape.title}</span><span className="font-mono text-xs text-muted">{shape.name}</span><Tag label={shape.app} /></div>
-        {shape.description && <p className="text-xs text-muted">{shape.description}</p>}
-        <p className="text-xs">{shape.fields.map((f) => `${f.name}: ${t(f.type)}`).join(" · ")}</p>
-        <div className="flex flex-wrap items-center gap-1"><span className="text-xs text-muted">{t("Implemented by")}</span>{implementers.map((item) => <Button key={item.ref.name} size="sm" variant="ghost" onClick={() => open({ view: "object-type", params: { object: item.ref.name } })}>{item.title}</Button>)}{!implementers.length && <span className="text-xs text-muted">{t("No installed object implements it yet.")}</span>}</div>
-      </div>; })}
-      {!interfaces.length && <EmptyState title={t("No app declares an interface yet.")} />}
-    </div>
-  </div>;
-}
-
 function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void }) {
   const { definitions, decide, can } = useHost();
+  const application = useApplicationScope();
   const { open } = useApplicationWorkspace();
   const [name, setName] = useState(""), [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -200,7 +177,7 @@ function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void 
       const payload = { name, title: title.trim(), object: seed.object.name, document: lifted.document,
         sections: lifted.sections.map((section) => ({ ...section, object: section.object?.name })),
         selections: relation ? [{ name: "parent", object: seed.object }, { name: "related", object: relation.ref.object }] : [] };
-      if (await decide("build.page.create", { type: "build.page", id }, payload, { expectedRevision: 0, onRefused: setError })) open({ view: "module", params: { page: id } });
+      if (await decide("build.page.create", { type: "build.page", id }, { ...payload, ...(application ? { project: application } : {}) }, { expectedRevision: 0, onRefused: setError })) open({ view: "module", params: { page: id } });
     } catch { setError(t("The page draft could not be created. Your choices are still here.")); }
     finally { setBusy(false); }
   };

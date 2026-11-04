@@ -41,7 +41,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const returnLabel = callInput && typeof callInput === "object" && "returnLabel" in callInput && typeof callInput.returnLabel === "string" ? callInput.returnLabel : t("Return");
   const [chosen, setChosen] = useState<Chosen>();
   const draft = useObjectDraft(id, () => setChosen(undefined));
-  const { object, ready, process, dirty, busy, blocked, refused, change, issues, parent, entities, session, discardChanges, open } = draft;
+  const { object, ready, process, dirty, busy, blocked, refused, change, editAction, archiveAction, issues, parent, entities, session, discardChanges, open } = draft;
   const initiallyChosen = useRef("");
   const [tab, setTab] = useState<Tab>(objectSections.find(section => section.id === initialTab)?.id ?? "overview");
   useEffect(() => {
@@ -81,7 +81,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       onFields={(fields) => change({ ...process, fields })} />}
     {action && chosen && <ActionSummary action={action} states={process.states} issues={draft.issuesOf(action.name).length}
       onOpen={() => void perform(async () => { await working?.persist();open({ view: "action-type", params: { id, action: action.name } }); })}
-      onRemove={() => { change({ ...process, actions: process.actions.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} />}
+      onRemove={() => { archiveAction(action.name); setChosen(undefined); }} />}
     {!chosen && <p className="p-2 text-xs text-muted">{t("Select a property, state, action or role to edit it.")}</p>}
   </div>;
   const main: Record<Tab, ReactNode> = {
@@ -140,7 +140,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     </div>,
     lifecycle: <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Lifecycle")}</h2><Button size="sm" onClick={addState}><Plus />{t("Add a state")}</Button></div>
-      <ProcessGraph key={id} objectId={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
+      <ProcessGraph key={id} objectId={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onEditAction={editAction} onArchiveAction={archiveAction} onAddState={addState} onAddAction={addAction} />
     </div>,
     protocols: <ObjectProtocolsEditor process={process} onChange={change} />,
     versions: <BusinessVersionEditor process={process} entities={entities} onChange={change} />,
@@ -189,9 +189,11 @@ export function EnterpriseReferenceTypes({ value, onChange }: { value: { stereot
   </fieldset>;
 }
 
-function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddState, onAddAction }: {
+function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onEditAction, onArchiveAction, onAddState, onAddAction }: {
   objectId: string;
   process: Process; chosen: Chosen; onChoose: (c: Chosen) => void; onChange: (p: Process) => void;
+  onEditAction: (name: string, update: (action: Action) => Action) => void;
+  onArchiveAction: (name: string) => void;
   onAddState: () => void; onAddAction: () => void;
 }) {
   const catalog: FlowCatalog = [
@@ -229,25 +231,50 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
       onConnect={(c) => {
         if (c.source?.startsWith("state:") && c.target?.startsWith("action:")) {
           const state = c.source.slice(6), name = c.target.slice(7);
-          onChange({ ...process, actions: process.actions.map((a) => a.name === name ? { ...a, from: [...a.from, state] } : a) });
+          onEditAction(name, action => ({ ...action, from: [...new Set([...action.from, state])] }));
         } else if (c.source?.startsWith("action:") && c.target?.startsWith("state:")) {
           const name = c.source.slice(7), state = c.target.slice(6);
-          if(actionStateInput(process.actions.find(a=>a.name===name)!)){notify.info(t("Edit the state input choices to change these derived connections."));return;}
-          onChange({ ...process, actions: process.actions.map((a) => a.name === name ? setActionDestination(a,state,a.transaction!.subject) : a) });
+          const action = process.actions.find(a => a.name === name);
+          if (!action || actionStateInput(action)) { notify.info(t("Edit the state input choices to change these derived connections.")); return; }
+          if (!action.transaction) { notify.info(t("Define the action's transaction before changing where it leaves a record.")); return; }
+          onEditAction(name, current => setActionDestination(current, state, current.transaction!.subject));
         }
       }}
       onDelete={(removedNodes, removedEdges) => {
         if(removedEdges.some(e=>process.actions.some(a=>actionStateInput(a)&&e.source===`action:${a.name}`)))notify.info(t("Edit the state input choices to change these derived connections."));
+        const removedActions = new Set(removedNodes.filter(node => node.id.startsWith("action:")).map(node => node.id.slice(7)));
         const states = process.states.filter((state) => !removedNodes.some((n) => n.id === `state:${state.name}`));
-        const actions = process.actions.filter(action => !removedNodes.some(node => node.id === `action:${action.name}`)).map(action => {
+        onChoose(undefined); onChange({ ...process, states });
+        for (const name of removedActions) onArchiveAction(name);
+        for (const action of process.actions) {
+          if (removedActions.has(action.name)) continue;
           const keep = actionStateInput(action) || actionResultEdges(action).every(name => states.some(state => state.name === name) && !removedEdges.some(edge => edge.source === `action:${action.name}` && edge.target === `state:${name}`));
-          return {...keep?action:setActionDestination(action,undefined,action.transaction!.subject),from:action.from.filter(name=>states.some(state=>state.name===name)&&!removedEdges.some(edge=>edge.source===`state:${name}`&&edge.target===`action:${action.name}`))};
-        });
-        onChoose(undefined); onChange({ ...process, states, actions });
+          const from = action.from.filter(name => states.some(state => state.name === name) && !removedEdges.some(edge => edge.source === `state:${name}` && edge.target === `action:${action.name}`));
+          if (!keep && !action.transaction) { notify.info(t("Define the action's transaction before changing where it leaves a record.")); continue; }
+          if (!keep || from.length !== action.from.length) onEditAction(action.name, current => {
+            const next = actionStateInput(current) || keep ? current : setActionDestination(current, undefined, current.transaction!.subject);
+            return { ...next, from };
+          });
+        }
       }}
       onDisconnect={(removed) => {
         if(removed.some(e=>process.actions.some(a=>actionStateInput(a)&&e.source===`action:${a.name}`)))notify.info(t("Edit the state input choices to change these derived connections."));
-        onChange({...process,actions:process.actions.map(action=>({...actionStateInput(action)||!removed.some(edge=>edge.source===`action:${action.name}`)?action:setActionDestination(action,undefined,action.transaction!.subject),from:action.from.filter(name=>!removed.some(edge=>edge.source===`state:${name}`&&edge.target===`action:${action.name}`))}))});
+        const from = new Map<string, Set<string>>(), destinations = new Set<string>();
+        for (const edge of removed) {
+          if (edge.source?.startsWith("state:") && edge.target?.startsWith("action:")) {
+            const action = edge.target.slice(7), state = edge.source.slice(6);
+            from.set(action, new Set([...(from.get(action) ?? []), state]));
+          } else if (edge.source?.startsWith("action:") && edge.target?.startsWith("state:")) destinations.add(edge.source.slice(7));
+        }
+        for (const action of process.actions) {
+          const sources = from.get(action.name), destination = destinations.has(action.name);
+          if (!sources?.size && !destination || destination && actionStateInput(action)) continue;
+          if (destination && !action.transaction) { notify.info(t("Define the action's transaction before changing where it leaves a record.")); continue; }
+          onEditAction(action.name, current => ({
+            ...(destination ? setActionDestination(current, undefined, current.transaction!.subject) : current),
+            from: current.from.filter(name => !sources?.has(name)),
+          }));
+        }
       }} />
   </div>;
 }

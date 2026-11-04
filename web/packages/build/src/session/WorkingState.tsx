@@ -20,8 +20,11 @@ export const flushWorkingStates = () => Promise.all([...sessions].map(session =>
 
 export function resourceSaveEdit(edit: Api.CompositeEdit, project?: string, specSchema?: Api.SchemaVersion): Api.CompositeEdit {
   const type = edit.target.type;
-  return edit.schema === `${type}.create` || edit.schema === `${type}.edit`
-    ? { ...edit, schema: `${type}.save`, payload: { spec: edit.payload, project, specSchema } } : edit;
+  if (edit.schema !== `${type}.create` && edit.schema !== `${type}.edit`) return edit;
+  const payload = edit.payload && typeof edit.payload === "object" ? edit.payload as Record<string, unknown> : {};
+  const embedded = typeof payload.project === "string" ? payload.project : undefined;
+  const { project: _project, ...spec } = payload;
+  return { ...edit, schema: `${type}.save`, payload: { spec, project: project ?? embedded, specSchema } };
 }
 
 export function WorkingState(props: { type: string; id: string; project?: string; onShared?: (target: string) => void; children: ReactNode }) {

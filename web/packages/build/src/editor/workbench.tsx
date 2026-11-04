@@ -55,7 +55,7 @@ export function ResourceControls({ type, record, dirty = false, busy = false, in
   const application = useApplicationScope();
   const archive = useRecordArchive(type);
   const onBranch = !!useCurrentBranch().id;
-  const home: Route = route ? { view: route.view, ...(application ? { params: { application } } : {}) } : application ? { view: "project", params: { id: application } } : { view: "projects" };
+  const home: Route = route ? { view: route.view, ...(application ? { params: { application } } : {}) } : application ? { view: "project", params: { id: application } } : { view: "files" };
   const tab: Route | undefined = route && application ? { view: route.view, params: { ...(route.params ?? {}), application } } : route;
   const leave = () => { onCancel?.(); open(home); if (tab) close(tab); };
   const saved = !!record?.id;
