@@ -28,7 +28,7 @@ export type Session = {
 
 export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };
 export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };
-export type Rail = { home: Route; applications: Route; files?: Route; notifications?: { route: Route; unread?: number }; assist?: Route };
+export type Rail = { home: Route; applications: Route; files?: Route; notifications?: { route: Route; unread?: number }; assist?: Route; help?: { route: Route }; };
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
 export type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect"; ifCurrent?: Route; from?: string; replace?: boolean };

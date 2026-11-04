@@ -88,7 +88,7 @@ export function usePageEffects(page: PageUI.Page, live: boolean, values: Record<
         if (!alive(context) || execution.current !== started) return;
         switch (effect.kind) {
           case "set": {
-            const source = effect.from ? (context?.values ?? values)[effect.from] : undefined;
+            const source = effect.from ? ((context?.values ?? values) as Record<string, VariableResult>)[effect.from] : undefined;
             const value = effect.from ? (source?.status === "value" ? source.value : undefined) : effect.value;
             if (typeof value === "string" || typeof value === "boolean" || isDecimal(value) || isStringSet(value)) context ? context.set(effect.target ?? "", value) : set(effect.target ?? "", value);
             break;
@@ -103,7 +103,8 @@ export function usePageEffects(page: PageUI.Page, live: boolean, values: Record<
           case "navigate": navigate(effect.navigate, context); return;
           case "return": doReturn(); return;
           case "condition": {
-            const vars = effect.value ? (context?.values ?? values)[effect.value] : undefined;
+            const allValues: Record<string, VariableResult> = context?.values ?? values;
+            const vars = effect.value ? allValues[String(effect.value)] : undefined;
             if (vars?.status === "value" && vars.value === true) {
               const targetVar = effect.target;
               if (targetVar) context ? context.set(targetVar, true) : set(targetVar, true);
@@ -111,11 +112,11 @@ export function usePageEffects(page: PageUI.Page, live: boolean, values: Record<
             break;
           }
           case "toast": {
-            workspace.notify?.(String(effect.value ?? ""), String(effect.target ?? "info"));
+            workspace.notify?.(String(effect.value ?? ""));
             break;
           }
           case "reset": {
-            if (effect.target) context ? context.set(effect.target, undefined) : set(effect.target, undefined);
+            if (effect.target) context ? context.set(effect.target, "") : set(effect.target, "");
             break;
           }
           case "wait": {

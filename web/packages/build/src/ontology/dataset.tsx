@@ -13,6 +13,13 @@ import { DatasetLineage } from "./lineage";
 type Field = { name: string; type: string };
 type Load = { at: string; version: number; rows: number; bytes: number; drift?: string[] };
 type Draft = { id: string; revision: number; name: string; title: string; keep?: number; key?: string; stream?: boolean; marking?: string; compartments?: string[]; producer?: string; schema?: Field[]; version?: number; last?: Load };
+declare namespace Api {
+  interface HistogramBucket { lower: string; upper: string; upperInclusive: boolean; count: number }
+  interface HistogramResult { field: string; requestedBins: number; valid: number; missing: number; minimum: string; maximum: string; buckets: HistogramBucket[] }
+}
+
+
+
 type Version = { id: string; version: number; at: string; rows: number; archived?: boolean; data?: Record<string, unknown>[] };
 type VersionRow = { id: string; dataset: string; version: number; type?: string; at: string; rows: number; archived?: boolean };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "" });
@@ -50,8 +57,15 @@ export function DatasetEditor({ id }: { id: string }) {
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Datasets")} description={query.isError ? t("The dataset could not be loaded.") : t("Loading…")} />;
   const last = draft.last, latest = draft.version ?? 0;
-  if (columns.length && !selectedColumn) setSelectedColumn(columns[0]);
   const rows = versionQuery.data?.record?.data ?? [], columns = draft.schema?.map((f) => f.name) ?? Object.keys(rows[0] ?? {});
+  if (columns.length && !selectedColumn) setSelectedColumn(columns[0]);
+  const transactionColumns: ColumnDef<VersionRow, unknown>[] = [
+    { id: "version", header: t("Version"), accessorFn: (row) => row.version, cell: (context) => <span className="font-mono">v{String(context.getValue())}</span> },
+    { id: "type", header: t("Transaction type"), accessorFn: (row) => row.type, cell: (context) => <Tag label={transactionLabel(context.getValue() as string | undefined)} /> },
+    { id: "at", header: t("Loaded at"), accessorFn: (row) => row.at, cell: (context) => new Date(String(context.getValue())).toLocaleString() },
+    { id: "rows", header: t("Rows"), accessorFn: (row) => row.rows, cell: (context) => <span className="tabular-nums">{String(context.getValue())}</span> },
+    { id: "archived", header: t("Rows kept"), accessorFn: (row) => row.archived, cell: (context) => context.getValue() ? t("No") : t("Yes") },
+  ];
   const transactions = versionsQuery.data?.records ?? [];
   const openVersion = (v: number) => { setShown(v); setTab("preview"); };
   return <div className="grid min-w-0 grid-cols-1 gap-3">
@@ -93,35 +107,35 @@ export function DatasetEditor({ id }: { id: string }) {
           {!latest ? <p className="text-xs text-muted">{t("No rows yet. Upload a CSV, or publish a source or pipeline that writes this dataset.")}</p> :
             versionQuery.data?.record?.archived ? <p className="text-xs text-muted">{t("This version is no longer kept.")}</p> :
             <div className="overflow-auto">
-              <DataTable data={rows} getRowId={(row, index) => String(index)} searchable={false} height={Math.min(420, 40 + rows.length * 28)} columns={columns.map((name): ColumnDef<Record<string, unknown>, unknown> => ({ id: name, header: name, accessorFn: (row) => row[name], cell: (context) => <span className="font-mono">{cell(context.getValue())}</span> }))} />
+              <DataTable data={rows} getRowId={(row) => JSON.stringify(row)} searchable={false} height={Math.min(420, 40 + rows.length * 28)} columns={columns.map((name): ColumnDef<Record<string, unknown>, unknown> => ({ id: name, header: name, accessorFn: (row) => row[name], cell: (context) => <span className="font-mono">{cell(context.getValue())}</span> }))} />
               <p className="px-2 py-1 text-xs text-muted">{t("{rows} rows · full column statistics below", { rows: rows.length })}</p>
             </div>}
         </Panel> },
-          {selectedColumn ? <div className="grid gap-3 border-t border-border pt-3"> : null}
-            <label className={fieldClass}>{t("Column")}<Select value={selectedColumn} onChange={(e) => setSelectedColumn(e.target.value)}>{columns.map((c) => <option key={c} value={c}>{c}</option>)}</Select></label>
-            <div className="grid min-w-0 gap-3">
-              {selectedColumn && columnStats(selectedColumn, rows).kind === "empty" && <p className="text-xs text-muted">{t("No values.")}</p>}
-              {selectedColumn && columnStats(selectedColumn, rows).kind === "numeric" && <div className="grid gap-2">
-                <SummaryStatistics value={columnStats(selectedColumn, rows).value} fieldTitle={selectedColumn} />
-                <Histogram value={columnStats(selectedColumn, rows).histogram} label={t("Value distribution")} />
-              </div>}
-              {selectedColumn && columnStats(selectedColumn, rows).kind === "text" && <div className="grid gap-2">
-                <p className="text-xs text-muted">{t("{count} non-empty values", { count: columnStats(selectedColumn, rows).count })}</p>
-                <TagCounts terms={columnStats(selectedColumn, rows).terms.map((t) => ({ value: t.value, count: t.count }))} label={t("Value distribution")} />
-              </div>}
-            </div>
-          </div>}
+          ...(selectedColumn ? [{
+            id: "stats",
+            title: t("Statistics"),
+            content: <Panel title={t("Statistics")} className="grid min-w-0 content-start gap-2">
+              <div className="grid gap-3 border-t border-border pt-3">
+                <label className={fieldClass}>{t("Column")}<Select value={selectedColumn} onChange={(e) => setSelectedColumn(e.target.value)}>{columns.map((c) => <option key={c} value={c}>{c}</option>)}</Select></label>
+                <div className="grid min-w-0 gap-3">
+                  {selectedColumn && columnStats(selectedColumn, rows).kind === "empty" && <p className="text-xs text-muted">{t("No values.")}</p>}
+                  {selectedColumn && columnStats(selectedColumn, rows).kind === "numeric" && <div className="grid gap-2">
+                    <SummaryStatistics value={columnStats(selectedColumn, rows).value!} fieldTitle={selectedColumn} />
+                    <Histogram value={columnStats(selectedColumn, rows).histogram!} label={t("Value distribution")} />
+                  </div>}
+                  {selectedColumn && columnStats(selectedColumn, rows).kind === "text" && <div className="grid gap-2">
+                    <p className="text-xs text-muted">{t("{count} non-empty values", { count: columnStats(selectedColumn, rows).count! })}</p>
+                    <TagCounts terms={columnStats(selectedColumn, rows).terms!.map((t) => ({ value: t.value, count: t.count }))} label={t("Value distribution")} />
+                  </div>}
+                </div>
+              </div>
+            </Panel>
+          }] : []),
         { id: "transactions", title: t("Transactions"), badge: transactions.length || undefined, content: <Panel title={t("Transactions")} help={t("Each load is a transaction and a new version. Choose one to preview its rows.")} className="grid min-w-0 content-start gap-2">
           {versionsQuery.isError ? <p role="alert" className="text-xs text-danger">{t("Versions are unavailable to you.")}</p> :
           <DataTable data={transactions} getRowId={(row) => row.id} searchable={false} selectedId={version ? `${draft.id}@${version}` : undefined} height={Math.min(480, 80 + transactions.length * 36)}
             empty={versionsQuery.isPending ? t("Loading…") : t("No version yet. Upload a CSV, or publish a source or pipeline that writes this dataset.")}
-            onRowClick={(row) => openVersion(row.version)} columns={[
-              { id: "version", header: t("Version"), accessorFn: (row) => row.version, cell: (context) => <span className="font-mono">v{String(context.getValue())}</span> },
-              { id: "type", header: t("Transaction type"), accessorFn: (row) => row.type, cell: (context) => <Tag label={transactionLabel(context.getValue() as string | undefined)} /> },
-              { id: "at", header: t("Loaded at"), accessorFn: (row) => row.at, cell: (context) => new Date(String(context.getValue())).toLocaleString() },
-              { id: "rows", header: t("Rows"), accessorFn: (row) => row.rows, cell: (context) => <span className="tabular-nums">{String(context.getValue())}</span> },
-              { id: "archived", header: t("Rows kept"), accessorFn: (row) => row.archived, cell: (context) => context.getValue() ? t("No") : t("Yes") },
-            ] as ColumnDef<VersionRow, unknown>[]} />}
+            onRowClick={(row) => openVersion(row.version)} columns={transactionColumns}   />}
         </Panel> },
         { id: "health", title: t("Data health"), content: <Panel title={t("Data health")} className="grid min-w-0 content-start gap-2"><DatasetHealth rows={rows} columns={columns} /></Panel> },
       ]} />
@@ -193,8 +207,8 @@ function DatasetHealth({ rows, columns }: { rows: Record<string, unknown>[]; col
     const nums = nonNull.filter((v) => typeof v === "number");
     if (nums.length > 4) {
       const sorted = [...nums].sort((a, b) => a - b);
-      const q1 = sorted[Math.floor(sorted.length * 0.25)];
-      const q3 = sorted[Math.floor(sorted.length * 0.75)];
+      const q1 = sorted[Math.floor(sorted.length * 0.25)]!;
+      const q3 = sorted[Math.floor(sorted.length * 0.75)]!;
       const iqr = q3 - q1;
       const outliers = nums.filter((v) => v < q1 - 1.5 * iqr || v > q3 + 1.5 * iqr).length;
       if (outliers > 0) {
@@ -211,9 +225,9 @@ function DatasetHealth({ rows, columns }: { rows: Record<string, unknown>[]; col
         <span className="text-xs text-muted">{t("out of 100")}</span>
       </div>
       {issues.length === 0 ? <p className="text-xs text-muted">{t("No data quality issues detected.")}</p> : (
-        <DataTable data={issues} getRowId={(_, i) => String(i)} searchable={false} height={Math.min(420, 40 + issues.length * 36)} columns={[
+        <DataTable data={issues} getRowId={(row) => JSON.stringify(row)} searchable={false} height={Math.min(420, 40 + issues.length * 36)} columns={[
           { id: "column", header: t("Column"), accessorFn: (r) => r.column },
-          { id: "kind", header: t("Issue"), accessorFn: (r) => r.kind, cell: (c) => { const k = c.getValue() as "nulls" | "duplicates" | "outliers"; const tone = k === "outliers" ? "neutral" : "warning"; const label = k === "nulls" ? t("Empty values") : k === "duplicates" ? t("Duplicate values") : t("Outliers"); return <Tag tone={tone}>{label}</Tag>; } },
+          { id: "kind", header: t("Issue"), accessorFn: (r) => r.kind, cell: (c) => { const k = c.getValue() as "nulls" | "duplicates" | "outliers"; const tone = k === "outliers" ? "neutral" : "warning"; const label = k === "nulls" ? t("Empty values") : k === "duplicates" ? t("Duplicate values") : t("Outliers"); return <Tag label={label} tone={tone} />; } },
           { id: "message", header: t("Detail"), accessorFn: (r) => r.message },
           { id: "count", header: t("Count"), accessorFn: (r) => r.count },
         ] as ColumnDef<HealthIssue, unknown>[]} />

@@ -24,7 +24,7 @@ export function CollaborativeNotepadRenderer({
   sessionId,
 }: CollaborativeNotepadProps) {
   const { client, me } = useHost();
-  const notify = useNotify();
+  
   const ydoc = useRef<Y.Doc | null>(null);
   const ytext = useRef<Y.Text | null>(null);
   const ws = useRef<WebSocket | null>(null);
@@ -48,7 +48,7 @@ export function CollaborativeNotepadRenderer({
     ytext.current = ydoc.current.getText("notepad");
 
     // Watch for local Yjs changes and send via WebSocket
-    ytext.current.observe((event) => {
+    ytext.current.observe(() => {
       if (pendingLocal.current) {
         pendingLocal.current = false;
         return;
@@ -91,7 +91,7 @@ export function CollaborativeNotepadRenderer({
         JSON.stringify({
           kind: "presence",
           client: me.principalId,
-          name: me.profile?.name ?? me.principalId,
+          name: me.principalId,
         })
       );
       // Request sync
@@ -136,7 +136,7 @@ export function CollaborativeNotepadRenderer({
           if (yDoc && yText && typeof msg.text === "string") {
             pendingLocal.current = true;
             yDoc.transact(() => {
-              yText.insert(0, msg.text);
+              yText.insert(0, msg.text ?? "");
             });
             setDocText(msg.text);
             onChange?.(msg.text);
@@ -212,9 +212,9 @@ export function CollaborativeNotepadRenderer({
     if (yDoc && yText && connected.current && yText.length === 0 && value.value) {
       pendingLocal.current = true;
       yDoc.transact(() => {
-        yText.insert(0, value.value);
+        yText.insert(0, String(value.value ?? ""));
       });
-      setDocText(value.value);
+      setDocText(String(value.value ?? ""));
     }
   }, [value.value, connected.current]);
 

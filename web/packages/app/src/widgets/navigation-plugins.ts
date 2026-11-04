@@ -2,6 +2,7 @@ import {t} from '@platform/ui';
 import {defineWidgetPlugin} from './plugin';
 import type {WidgetBindingContext} from './bindings';
 import type {BreadcrumbRenderer,StaticImageRenderer} from './ContextViews';
+import type { CollaborativeNotepadRenderer } from './CollaborativeNotepad';
 import type {CollectionTitleRenderer,ButtonGroupRenderer} from './Navigation';
 const define=defineWidgetPlugin<WidgetBindingContext>();
 export const navigationPlugins={

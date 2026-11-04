@@ -366,7 +366,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     { id: "home", label: t("Home"), icon: <HomeIcon />, active: onRailRoute(rail.home), run: () => open(rail.home) },
     { id: "search", label: t("Search"), icon: <Search />, run: () => setPaletteOpen(true) },
     ...(rail.files ? [{ id: "files", label: t("Files"), icon: <FolderTree />, active: onRailRoute(rail.files), run: () => open(rail.files!) }] : []),
-    ...(rail.help ? [{ id: "help", label: t("Help"), icon: <HelpCircle />, active: onRailRoute(rail.help.route), run: () => open(rail.help.route!) }] : []),
+    ...(rail.help ? [{ id: "help", label: t("Help"), icon: <HelpCircle />, active: onRailRoute(rail.help!.route), run: () => open(rail.help!.route!) }] : []),
     { id: "applications", label: t("Applications"), icon: <Grid2x2 />, active: onRailRoute(rail.applications), run: () => open(rail.applications) },
   ] : [];
   const notificationsItem = rail?.notifications && { id: "notifications", label: t("Notifications"), icon: <Bell />, badge: rail.notifications.unread, active: onRailRoute(rail.notifications.route), run: () => open(rail.notifications!.route) };
@@ -403,10 +403,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
             <RailList label={t("Recent")} icon={<Clock />} empty={t("Nothing opened yet.")}
               items={memory.recent.slice(0, 12).map((r) => ({ id: routeKey(r.route), label: r.title, detail: r.app ? applications?.apps.find((a) => a.id === r.app)?.title : undefined, run: () => open(r.route) }))} />
             <RailList label={t("Favorites")} icon={<Star />} empty={t("Pin an application from its sidebar, or a record from its page.")}
-              items={[...pinnedApps.map(app => ({ id: app.id, label: app.title, icon: app.icon, run: () => applications!.onSelect(app.id) })), ...memory.favorites.filter(id => !(applications?.apps ?? []).some((a) => a.id === id)).map(id => { const [type, ...rest] = String(id).split(":"); return { id, label: id, detail: type, icon: undefined, run: () => open({ view: "record", params: { type, id: rest.join(":") } }) }; })]} />
+              items={[...pinnedApps.map(app => ({ id: app.id, label: app.title, icon: app.icon, run: () => applications!.onSelect(app.id) })), ...memory.favorites.filter(id => !(applications?.apps ?? []).some((a) => a.id === id)).map(id => { const [type, ...rest] = String(id).split(":"); return { id, label: id, detail: type ?? undefined, icon: undefined, run: () => open({ view: "record", params: { type: type ?? "", id: rest.join(":") } }) }; })]} />
             <div className="mt-auto flex flex-col items-center gap-1 pt-2">
               {notificationsItem && <RailButton {...notificationsItem} />}
-              {rail.assist && <RailButton id="assist" label={t("AIP Assist")} icon={<Sparkles />} active={onRailRoute(rail.assist) || (!!sideRef.current && routeKey(sideRef.current.route).startsWith("view:assistant"))} run={() => open({ ...rail.assist!, params: { ...(rail.assist!.params ?? {}), about: routeKey(top?.route) } }, { window: "beside" })} />}
+              {rail.assist && <RailButton id="assist" label={t("AIP Assist")} icon={<Sparkles />} active={onRailRoute(rail.assist) || (!!sideRef.current && routeKey(sideRef.current.route).startsWith("view:assistant"))} run={() => open({ ...rail.assist!, params: { ...(rail.assist!.params ?? {}), about: routeKey(top?.route ?? { view: "" }) } }, { window: "beside" })} />}
               {sessionMenu}
             </div>
           </aside>
@@ -531,14 +531,13 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
                   </Command.Group>;
                 })
           )}
-            <Command.Group heading={t("Recent")} className={paletteGroup}>
+          {(<Command.Group heading={t("Recent")} className={paletteGroup}>
               {memory.recent.slice(0, 8).map((entry) => (
                 <Command.Item key={routeKey(entry.route)} value={`recent ${entry.title} ${routeKey(entry.route)}`} className={paletteItem}
                   onSelect={() => { open(entry.route); setPaletteOpen(false); }}><Clock />{entry.title}
                   {entry.app && <span className="ml-auto text-xs text-muted">{applications?.apps.find(app => app.id === entry.app)?.title}</span>}</Command.Item>
               ))}
-            </Command.Group>
-          )}
+            </Command.Group>)}
         </Command.List>
       </Command.Dialog>
       <Dialog open={shortcutsOpen} title={t("Keyboard shortcuts")} onOpenChange={setShortcutsOpen}>

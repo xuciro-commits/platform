@@ -63,7 +63,7 @@ export function AgentBoardroom() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{a.title}</div>
                 <div className="text-xs text-muted truncate">{a.app}</div>
-                <Tag tone="neutral">{t("tools")}: {a.tools.length}</Tag>
+                <Tag label={t("tools") + ": " + a.tools.length} tone="neutral" />
               </div>
             </label>
           ))}

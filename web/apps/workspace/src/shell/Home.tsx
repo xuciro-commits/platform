@@ -102,9 +102,7 @@ export function Home() {
       </div>
       <div className="grid content-start gap-5">
         {proposals.length > 0 && <Panel title={t("Pending review")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "changes" })}>{t("All")}<ArrowRight /></Button>}>
-          <div className="-mx-2 grid">{proposals.map(branch => <Row key={branch.id} icon={<GitBranch />} title={branch.title} detail={t("{n} changes", { n: branch.changes })}
-            meta={<Tag label={t("Pending review")} tone="warning" />}</div>
-            onClick={() => open({ view: "proposal", params: { id: branch.id } })} />)}</div>
+          <div className="-mx-2 grid">{proposals.map(branch => <Row key={branch.id} icon={<GitBranch />} title={branch.title} detail={t("{n} changes", { n: branch.changes })} meta={<Tag label={t("Pending review")} tone="warning" />} onClick={() => open({ view: "proposal", params: { id: branch.id } })} />)}</div>
         </Panel>}
         {pinned.length > 0 && <Panel title={t("Pinned")}><div className="grid gap-2">{pinned.map(app => <AppTile key={app.id} app={app} />)}</div></Panel>}
         {builder && tools.length > 0 && <Panel title={t("Build tools")}><div className="grid gap-2">{tools.filter(app => !favorites.includes(app.id)).map(app => <AppTile key={app.id} app={app} />)}</div></Panel>}

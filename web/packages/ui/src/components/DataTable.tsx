@@ -211,7 +211,7 @@ export function DataTable<T>({
       <div ref={scroller} role="table" aria-rowcount={(totalRows ?? rows.length) + headerRows} aria-colcount={leaf.length} aria-busy={loading || undefined}
         className="overflow-auto rounded-md border border-border bg-surface" style={{ height, scrollbarGutter: "stable" }}
         onPaste={onPaste ? (e) => {
-          const text = (e.clipboardData || window.clipboardData).getData("text");
+          const text = (e.clipboardData || (window as any).clipboardData).getData("text");
           if (!text.trim()) return;
           let startRow = 0, startCol = 0;
           if (editing) {

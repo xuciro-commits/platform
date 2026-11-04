@@ -115,7 +115,7 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
       {info.versioning?.validUntil&&Boolean(r[info.versioning.validUntil])&&<Tag label={t("Valid until: {date}",{date:String(r[info.versioning.validUntil])})} />}
     </>}
     status={loading&&<span role="status" className="text-xs text-muted">{t("Refreshing record…")}</span>}
-    actions={!detailOnly?<fieldset disabled={loading} className="m-0 flex min-w-0 flex-wrap items-center gap-1 border-0 p-0"><HeaderCommands commands={commands} menu={menu?.(r)??[]} disabled={loading}>{actions?.(r)}</HeaderCommands></fieldset><Button size="icon" aria-label={pinned ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={pinned} onClick={() => toggleFavorite(`${type}:${id}`)}><Star fill={pinned ? "currentColor" : "none"} /></Button>:undefined} />;
+    actions={!detailOnly?<><fieldset disabled={loading} className="m-0 flex min-w-0 flex-wrap items-center gap-1 border-0 p-0"><HeaderCommands commands={commands} menu={menu?.(r)??[]} disabled={loading}>{actions?.(r)}</HeaderCommands></fieldset><Button size="icon" aria-label={pinned ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={pinned} onClick={() => toggleFavorite(`${type}:${id}`)}><Star fill={pinned ? "currentColor" : "none"} /></Button></> :undefined} />;
   const shownValue=(name:string,row:EntityRecord=r,target:Entity<EntityRecord>=entity)=>{
     const format=row===r?formats[name]:undefined;
     if(format)return <FormatPill format={format} text={target.fields[name]?.text(valueOf(target,name,row) as never)??""}/>;

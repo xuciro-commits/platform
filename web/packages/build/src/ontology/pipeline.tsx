@@ -123,15 +123,15 @@ export function PipelineEditor({ id }: { id: string }) {
     const indeg = new Array(n).fill(0);
     const nodeOf = (id: string): number | undefined => id.startsWith("s") ? Number(id.slice(1)) : undefined;
     for (const e of allEdges) {
-      const a = nodeOf(e.source), b = nodeOf(e.target);
-      if (a !== undefined && b !== undefined && a >= 0 && a < n && b >= 0 && b < n) { children[a].push(b); indeg[b]++; }
+      const a = nodeOf(e.source); const b = nodeOf(e.target);
+      if (a !== undefined && b !== undefined && a >= 0 && a < n && b >= 0 && b < n) { children[a]!.push(b); indeg[b]++; }
     }
     const queue: number[] = [];
     for (let i = 0; i < n; i++) if (indeg[i] === 0) queue.push(i);
     const order: number[] = [];
-    while (queue.length) { const i = queue.shift()!; order.push(i); for (const j of children[i]) { indeg[j]--; if (indeg[j] === 0) queue.push(j); } }
+    while (queue.length) { const i = queue.shift()!; order.push(i); for (const j of children[i]!) { indeg[j]--; if (indeg[j] === 0) queue.push(j); } }
     if (order.length !== n) return steps;
-    return order.map(i => steps[i]);
+    return order.map(i => steps[i]! as Step);
   };
 
   const canConnect = (connection: any): boolean => {
@@ -149,14 +149,14 @@ export function PipelineEditor({ id }: { id: string }) {
   };
 
   const onDisconnect = (gone: any): void => {
-    setEdges(prev => prev.filter(e => !gone.some(g => g.id === e.id)));
+    setEdges(prev => prev.filter(e => !gone.some((g: { id: string }) => g.id === e.id)));
   };
 
   const onPositionsChange = (positions: Record<string, CanvasPosition>): void => {
     setNodePositions(positions);
     const updates: Record<string, Step> = {};
     for (const [id, pos] of Object.entries(positions)) {
-      if (id.startsWith("s")) { const i = Number(id.slice(1)); if ((draft.steps ?? [])[i]) updates[id] = { ...(draft.steps ?? [])[i], position: pos }; }
+      if (id.startsWith("s")) { const i = Number(id.slice(1)); const step = (draft.steps ?? [])[i]; if (step) updates[id] = { ...step, position: pos }; }
     }
     if (Object.keys(updates).length) setSteps((draft.steps ?? []).map((s, i) => updates[`s${i}`] ?? s));
   };
@@ -173,10 +173,10 @@ export function PipelineEditor({ id }: { id: string }) {
   const allEdges = edges.length ? edges : defaultEdges(draft.steps.length);
   const stepNodes: FlowNode[] = [
     { id: "in", kind: "dataset", label: input?.title || draft.input || t("Input dataset"), detail: t("The dataset this pipeline reads"), position: nodePositions["in"] ?? { x: 0, y: 0 } },
-    ...(draft.steps ?? []).map((s, i) => ({ id: `s${i}`, kind: s.kind, label: `${i + 1}. ${t(s.kind)}`, detail: stepDetail(s, others), position: s.position ?? nodePositions[`s${i}`] ?? { x: 0, y: 0 } })),
+    ...(draft.steps ?? []).map((s, i) => ({ id: `s${i}`, kind: s.kind || "", label: `${i + 1}. ${t(s.kind)}`, detail: stepDetail(s, others), position: s.position ?? nodePositions[`s${i}`] ?? { x: 0, y: 0 } })),
     { id: "out", kind: "output", label: out === "enterprise" ? t("The enterprise model") : out === "object" ? (target?.title ?? draft.outputObject ?? t("An object")) : (datasets.find((d) => d.id === draft.outputDataset)?.title ?? t("A dataset (next version)")),
       detail: out === "object" && draft.key ? `${t("Record id column")} ${draft.key}` : undefined, position: nodePositions["out"] ?? { x: 0, y: 0 },
-      status: last ? (last.error ? "error" : last.quarantined || last.failed ? "warning" : "success") : undefined },
+      status: last ? (last.error ? "error" : last.quarantined || last.failed ? "idle" : "success") : undefined },
   ];
   const stepEdges: FlowEdge[] = allEdges;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
@@ -265,7 +265,7 @@ export function PipelineEditor({ id }: { id: string }) {
               <Button size="sm" variant="ghost" onClick={() => { setSteps((draft.steps ?? []).filter((_, j) => j !== Number(picked.slice(1)))); setPicked(undefined); }}>{t("Remove")}</Button>
             </span>
           </div>
-          <StepFields step={(draft.steps ?? [])[Number(picked.slice(1))]!} datasets={datasets.filter((d) => d.id !== draft.input)} onChange={(change) => setStep(Number(picked.slice(1)), change)} />
+          <StepFields step={(draft.steps ?? [])[Number(picked.slice(1))]!} picked={picked} datasets={datasets.filter((d) => d.id !== draft.input)} onChange={(change) => setStep(Number(picked.slice(1)), change)} />
         </div>}
       </Panel>
       <Panel title={t("Expectations")} className="grid min-w-0 content-start gap-2 lg:col-span-2" help={t("Checked on the final rows. A row that fails is quarantined on the run and not written; the rest still are.")}>
@@ -295,7 +295,7 @@ function PipelineRows({ rows }: { rows: Record<string, unknown>[] }) {
   return <DataTable data={rows} getRowId={row => String(rows.indexOf(row))} searchable={false} height={Math.min(420, 40 + rows.length * 28)} columns={columns.map((name): ColumnDef<Record<string, unknown>, unknown> => ({ id: name, header: name, accessorFn: row => row[name], cell: context => cell(context.getValue()) }))} />;
 }
 
-function StepFields({ step: s, datasets, onChange }: { step: Step; datasets: DatasetRow[]; onChange: (change: Partial<Step>) => void }) {
+function StepFields({ step: s, picked, datasets, onChange }: { step: Step; picked: string | undefined; datasets: DatasetRow[]; onChange: (change: Partial<Step>) => void }) {
   const list = (v?: string[]) => (v ?? []).join(", ");
   const parse = (v: string) => v.split(",").map((x) => x.trim()).filter(Boolean);
   const text = (label: string, key: keyof Step, placeholder = "") => <label className={fieldClass}>{t(label)}<Input value={(s[key] as string | undefined) ?? ""} placeholder={placeholder} onChange={(e) => onChange({ [key]: e.target.value })} /></label>;

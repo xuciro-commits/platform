@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ContextHelp, Form, StructuredEditor } from "@platform/ui";
 import type {Api} from "@platform/kernel";
 import { useDefinitionDraft } from "../session/definition-draft";
@@ -7,7 +7,7 @@ import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { useAuthoringModel } from "../ontology/authoring-model";
 import { useHost, ModelPicker, ModelOptionsEditor, useReadQuery, useRecordInventory, RunView, newId } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, Textarea, Toggles, Workbench, t } from "@platform/ui";
+import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";
 
 type Case = { name: string; goal: string; ref?: string; expect?: string; asks?: boolean; takes?: string[]; avoids?: string[] };

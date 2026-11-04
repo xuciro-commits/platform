@@ -93,7 +93,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
               while (nextRows.length <= tr) nextRows.push({ when: inputs.map(() => ""), then: outputs.map(() => "") });
             }
             for (let mr = 0; mr < matrix.length; mr++) {
-              for (let mc = 0; mc < matrix[mr].length; mc++) {
+              for (let mc = 0; mc < matrix[mr]!.length; mc++) {
                 const tr = startRow + mr;
                 const tc = startCol + mc;
                 if (tc < inputStart) continue;
@@ -101,7 +101,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
                 if (tc < outputStart) { side = "when"; ci = tc - inputStart; }
                 else { side = "then"; ci = tc - outputStart; }
                 if (ci >= (side === "when" ? inputs.length : outputs.length)) continue;
-                nextRows[tr] = { ...nextRows[tr], expressions: undefined, [side]: (nextRows[tr][side] ?? []).map((v, i) => i === ci ? matrix[mr][mc] : v) };
+                nextRows[tr] = { ...(nextRows[tr] ?? { when: [], then: [] }), expressions: undefined, [side]: ((nextRows[tr] ?? { when: [], then: [] })[side] ?? []).map((v, i) => i === ci ? matrix[mr]![mc] : v) };
               }
             }
             patch({ rows: nextRows });
