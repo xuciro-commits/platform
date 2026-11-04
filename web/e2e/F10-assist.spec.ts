@@ -96,6 +96,9 @@ test("F10 an assistant reads only authorized context and writes only after the m
     await signIn(page, "user", `/objects/${encodeURIComponent(`build.${typeName}`)}/${record}`);
     await expect.poll(() => new URL(page.url()).hash).toContain(`build.${typeName}`);
     await page.getByRole("button", { name: "AIP Assist", exact: true }).click();
+    const side = page.locator('[data-ui="side-pane"]');
+    await expect(side).toBeVisible();
+    await expect(side).toHaveAttribute("aria-label", /Assistant/);
     await expect(page.getByText("Current page context", { exact: true })).toBeVisible();
     await expect(page.getByText(`build.${typeName}/${record}`, { exact: true })).toBeVisible();
     await page.getByRole("combobox", { name: "Agent", exact: true }).selectOption(agentID);
@@ -121,6 +124,9 @@ test("F10 an assistant reads only authorized context and writes only after the m
       return `${view.values.state}:${view.values.result}`;
     }, { timeout: 30_000 }).toBe("done:The record was approved after confirmation.");
     expect(requests.join("\n")).not.toContain(secret);
+    await side.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(side).toHaveCount(0);
+    await expect.poll(() => new URL(page.url()).hash).toContain(`/objects/build.${typeName}/${record}`);
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()));
   }

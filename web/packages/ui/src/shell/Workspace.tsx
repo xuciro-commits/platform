@@ -415,7 +415,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               items={pinnedApps.map(app => ({ id: app.id, label: app.title, icon: app.icon, run: () => applications!.onSelect(app.id) }))} />
             <div className="mt-auto flex flex-col items-center gap-1 pt-2">
               {notificationsItem && <RailButton {...notificationsItem} />}
-              {rail.assist && <RailButton id="assist" label={t("AIP Assist")} icon={<Sparkles />} active={onRailRoute(rail.assist)} run={() => open(rail.assist!)} />}
+              {rail.assist && <RailButton id="assist" label={t("AIP Assist")} icon={<Sparkles />} active={side?.route.view === "assistant"} run={() => open(rail.assist!, { window: "beside" })} />}
               {rail.help && <RailButton id="help" label={t("Help")} icon={<CircleHelp />} active={onRailRoute(rail.help)} run={() => open(rail.help!)} />}
               {sessionMenu}
             </div>
@@ -450,7 +450,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               </div>;
             })}
           </main>
-          {side && <aside aria-label={sideTitle} data-density={density} className={cn("relative flex min-h-0 min-w-0 flex-col border-l border-border bg-surface", compact && "fixed inset-x-0 bottom-12 top-10 z-30")}
+          {side && <aside aria-label={sideTitle} data-ui="side-pane" data-density={density} className={cn("relative flex min-h-0 min-w-0 flex-col border-l border-border bg-surface", compact && "fixed inset-x-0 bottom-12 top-10 z-30")}
             onKeyDown={event => { if (event.key === "Escape" && !event.defaultPrevented) { event.stopPropagation(); closeSide(); } }}>
             {!compact && <div role="separator" aria-orientation="vertical" aria-label={t("Resize side window")} aria-valuemin={360} aria-valuemax={720} aria-valuenow={sideWidth} tabIndex={0}
               className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize outline-none hover:bg-ring/30 focus-visible:bg-ring/40"
