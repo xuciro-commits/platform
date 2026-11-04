@@ -9,14 +9,15 @@ import { useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { DeclassificationField, MarkingTag } from "./marking";
-import { Button, Checkbox, DataTable, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
+import { Button, Checkbox, DataTable, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type CanvasPosition, type ColumnDef, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
 
 import { cell } from "./dataset";
+import { ExpressionEditor } from "./editor/ExpressionEditor";
 import { useAuthoringModel } from "./authoring-model";
 import { DeclaredByObject, declaringObject } from "./object-datasources";
 
 type Measure = { fn: string; column?: string; to: string };
-type Step = { kind: string; markings?: string[]; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string;formulaExpr?:import("@platform/kernel").Api.Expr; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[] };
+type Step = { kind: string; markings?: string[]; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string;formulaExpr?:import("@platform/kernel").Api.Expr; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[]; position?: { x: number; y: number } };
 type Expectation = { column: string; rule: string; value?: string };
 type Run = Api.PipelineRun;
 type EnterpriseTarget = { source: string; stereotype: string; id: string; name: string; shortName?: string; kind?: string; parent?: string; root?: string; in?: string; relation?: string; at?: string; atKind?: string; from?: string; until?: string; properties?: string[] };
@@ -32,7 +33,7 @@ const TYPES = ["string", "number", "boolean", "date"];
 const FNS = ["sum", "min", "max", "count", "avg"];
 const RULES = ["notnull", "unique", "in", "matches", "range"];
 const fieldClass = "grid min-w-0 gap-1 text-xs";
-const rows = (label: string, limit = 1) => ({ id: "rows", label, type: "rows", limit, channel: "data" as const });
+const rows = (label: string) => ({ id: "rows", label, type: "rows", channel: "data" as const });
 const stepCatalog = (): FlowCatalog => [
   ...KINDS.map((kind) => ({ id: kind, title: t(kind), description: kindHelp(kind), class: "transform" as const,
     inputs: [rows(t("Rows in"))], outputs: [rows(t("Rows out"))] })),
@@ -85,12 +86,15 @@ export function PipelineEditor({ id }: { id: string }) {
     },
   });
   const [picked, setPicked] = useState<string>();
+  const [edges, setEdges] = useState<FlowEdge[]>([]);
+  const [nodePositions, setNodePositions] = useState<Record<string, CanvasPosition>>({});
   const [preview, setPreview] = useState<{ signature: string; result: Api.PipelinePreview }>();
   const signature = JSON.stringify(draft);
   const previewResult = preview?.signature === signature ? preview.result : undefined;
   const trial = async () => {
     setPreview(undefined);
-    const response = await client.call<Api.PipelinePreview>("POST", "/v1/pipelines/preview", { pipeline: draft });
+    const pipeline = { ...draft, steps: topoSortedSteps() };
+    const response = await client.call<Api.PipelinePreview>("POST", "/v1/pipelines/preview", { pipeline });
     if (!response.ok) throw Error(apiErrorMessage(response.body) ?? t("The pipeline trial could not be completed. Your draft is still here."));
     setPreview({ signature, result: response.body });
   };
@@ -101,6 +105,61 @@ export function PipelineEditor({ id }: { id: string }) {
   const setSteps = (steps: Step[]) => patch({ steps });
   const setStep = (i: number, change: Partial<Step>) => setSteps((draft.steps ?? []).map((s, j) => j === i ? { ...s, ...change } : s));
   const move = (i: number, by: number) => { const steps = [...(draft.steps ?? [])]; const [s] = steps.splice(i, 1); if (s) steps.splice(i + by, 0, s); setSteps(steps); };
+
+  const defaultEdges = (n: number): FlowEdge[] => {
+    const es: FlowEdge[] = [];
+    if (n === 0) { es.push({ id: "in>out", source: "in", sourcePort: "rows", target: "out", targetPort: "rows" }); return es; }
+    es.push({ id: "in>s0", source: "in", sourcePort: "rows", target: "s0", targetPort: "rows" });
+    for (let i = 0; i < n - 1; i++) es.push({ id: `s${i}>s${i + 1}`, source: `s${i}`, sourcePort: "rows", target: `s${i + 1}`, targetPort: "rows" });
+    es.push({ id: `s${n - 1}>out`, source: `s${n - 1}`, sourcePort: "rows", target: "out", targetPort: "rows" });
+    return es;
+  };
+
+  const topoSortedSteps = (): Step[] => {
+    const steps = draft.steps ?? [];
+    const n = steps.length;
+    if (n === 0) return steps;
+    const children = Array.from({ length: n }, () => [] as number[]);
+    const indeg = new Array(n).fill(0);
+    const nodeOf = (id: string): number | undefined => id.startsWith("s") ? Number(id.slice(1)) : undefined;
+    for (const e of allEdges) {
+      const a = nodeOf(e.source), b = nodeOf(e.target);
+      if (a !== undefined && b !== undefined && a >= 0 && a < n && b >= 0 && b < n) { children[a].push(b); indeg[b]++; }
+    }
+    const queue: number[] = [];
+    for (let i = 0; i < n; i++) if (indeg[i] === 0) queue.push(i);
+    const order: number[] = [];
+    while (queue.length) { const i = queue.shift()!; order.push(i); for (const j of children[i]) { indeg[j]--; if (indeg[j] === 0) queue.push(j); } }
+    if (order.length !== n) return steps;
+    return order.map(i => steps[i]);
+  };
+
+  const canConnect = (connection: any): boolean => {
+    if (connection.source === connection.target) return false;
+    if (connection.target === "in") return false;
+    if (connection.source === "out") return false;
+    if (edges.some(e => e.source === connection.source && e.target === connection.target)) return false;
+    return true;
+  };
+
+  const onConnect = (connection: any): void => {
+    if (!canConnect(connection)) return;
+    const edge: FlowEdge = { id: `${connection.source}>${connection.target}`, source: connection.source, sourcePort: connection.sourceHandle ?? "rows", target: connection.target, targetPort: connection.targetHandle ?? "rows" };
+    setEdges(prev => [...prev, edge]);
+  };
+
+  const onDisconnect = (gone: any): void => {
+    setEdges(prev => prev.filter(e => !gone.some(g => g.id === e.id)));
+  };
+
+  const onPositionsChange = (positions: Record<string, CanvasPosition>): void => {
+    setNodePositions(positions);
+    const updates: Record<string, Step> = {};
+    for (const [id, pos] of Object.entries(positions)) {
+      if (id.startsWith("s")) { const i = Number(id.slice(1)); if ((draft.steps ?? [])[i]) updates[id] = { ...(draft.steps ?? [])[i], position: pos }; }
+    }
+    if (Object.keys(updates).length) setSteps((draft.steps ?? []).map((s, i) => updates[`s${i}`] ?? s));
+  };
   const setExpectations = (expectations: Expectation[]) => patch({ expectations });
   const out = draft.outputEnterprise ? "enterprise" : draft.outputObject ? "object" : "dataset";
   const ent = draft.outputEnterprise ?? EMPTY_ENTERPRISE;
@@ -111,13 +170,15 @@ export function PipelineEditor({ id }: { id: string }) {
   const owner = declaringObject(entities, "pipeline", draft.id);
   const targetDraft = owner ? objects.data?.records.find(record => !record.archived && `build.${record.name}` === owner.type) : undefined;
   const others = datasets.filter((d) => d.id !== draft.input);
+  const allEdges = edges.length ? edges : defaultEdges(draft.steps.length);
   const stepNodes: FlowNode[] = [
-    { id: "in", kind: "dataset", label: input?.title || draft.input || t("Input dataset"), detail: t("The dataset this pipeline reads"), position: { x: 0, y: 0 } },
-    ...(draft.steps ?? []).map((s, i) => ({ id: `s${i}`, kind: s.kind, label: `${i + 1}. ${t(s.kind)}`, detail: stepDetail(s, others), position: { x: 0, y: 0 } })),
+    { id: "in", kind: "dataset", label: input?.title || draft.input || t("Input dataset"), detail: t("The dataset this pipeline reads"), position: nodePositions["in"] ?? { x: 0, y: 0 } },
+    ...(draft.steps ?? []).map((s, i) => ({ id: `s${i}`, kind: s.kind, label: `${i + 1}. ${t(s.kind)}`, detail: stepDetail(s, others), position: s.position ?? nodePositions[`s${i}`] ?? { x: 0, y: 0 } })),
     { id: "out", kind: "output", label: out === "enterprise" ? t("The enterprise model") : out === "object" ? (target?.title ?? draft.outputObject ?? t("An object")) : (datasets.find((d) => d.id === draft.outputDataset)?.title ?? t("A dataset (next version)")),
-      detail: out === "object" && draft.key ? `${t("Record id column")} ${draft.key}` : undefined, position: { x: 0, y: 0 } },
-  ].map((node, i) => ({ ...node, position: { x: i * 268, y: 0 } }));
-  const stepEdges: FlowEdge[] = stepNodes.slice(0, -1).map((node, i) => ({ id: `${node.id}>${stepNodes[i + 1]!.id}`, source: node.id, sourcePort: "rows", target: stepNodes[i + 1]!.id, targetPort: "rows" }));
+      detail: out === "object" && draft.key ? `${t("Record id column")} ${draft.key}` : undefined, position: nodePositions["out"] ?? { x: 0, y: 0 },
+      status: last ? (last.error ? "error" : last.quarantined || last.failed ? "warning" : "success") : undefined },
+  ];
+  const stepEdges: FlowEdge[] = allEdges;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Pipelines"), onClick: () => open({ view: "pipeline" }) }]} title={draft.title || t("New pipeline")} status={<><MarkingTag marking={draft.marking} /><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Declare the input, transformations, expectations and output. Publishing saves the declaration; Run now explicitly requests a run with current permissions.")}
       actions={<ResourceControls type="build.pipeline" record={draft} dirty={dirty} busy={busy} route={{ view: "pipeline", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
@@ -188,10 +249,11 @@ export function PipelineEditor({ id }: { id: string }) {
       <Panel title={t("Steps")} className="grid min-w-0 content-start gap-2 lg:col-span-2"
         help={t("Drag a step from the library onto the line, or insert one on the arrow where it belongs. Choose a step to edit its fields below.")}>
         <FlowCanvas catalog={stepCatalog()} nodes={stepNodes} edges={stepEdges} selected={picked} onSelect={setPicked}
-          mode={busy ? "view" : "edit"} direction="right" height={280} label={t("Steps")} storeKey={`pipeline:${id}`}
+          mode={busy ? "view" : "edit"} direction="right" height={420} label={t("Steps")} storeKey={`pipeline:${id}`}
           onAdd={(kind) => { setSteps([...(draft.steps ?? []), { kind }]); setPicked(`s${(draft.steps ?? []).length}`); }}
           onInsert={(edge, kind) => { const at = edge.source === "in" ? 0 : Number(edge.source.slice(1)) + 1; setSteps([...(draft.steps ?? []).slice(0, at), { kind }, ...(draft.steps ?? []).slice(at)]); setPicked(`s${at}`); }}
-          onDelete={(gone) => { const drop = gone.map((n) => Number(n.id.slice(1))).filter((i) => !Number.isNaN(i)).sort((a, b) => b - a); if (drop.length) { setSteps((draft.steps ?? []).filter((_, j) => !drop.includes(j))); setPicked(undefined); } }} />
+          onDelete={(gone) => { const drop = gone.map((n) => Number(n.id.slice(1))).filter((i) => !Number.isNaN(i)).sort((a, b) => b - a); if (drop.length) { setSteps((draft.steps ?? []).filter((_, j) => !drop.includes(j))); setEdges(prev => prev.filter(e => { const s = Number(e.source.slice(1)), t = Number(e.target.slice(1)); return !drop.includes(s) && !drop.includes(t); })); setPicked(undefined); } }}
+          canConnect={canConnect} onConnect={onConnect} onDisconnect={onDisconnect} onPositionsChange={onPositionsChange} />
         {picked && picked.startsWith("s") && (draft.steps ?? [])[Number(picked.slice(1))] && <div className="grid gap-2 rounded border border-border p-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="w-6 text-xs text-muted">{Number(picked.slice(1)) + 1}.</span>
@@ -245,7 +307,7 @@ function StepFields({ step: s, datasets, onChange }: { step: Step; datasets: Dat
     case "rename": return <div className={row}>{text("From", "from", "MaterialNumber")}{text("To", "to", "matnr")}</div>;
     case "cast": return <div className={row}>{text("Column", "column", "qty")}<label className={fieldClass}>{t("Type")}<Select value={s.type ?? ""} onChange={(e) => onChange({ type: e.target.value })}><option value="">{t("Choose a type")}</option>{TYPES.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></label></div>;
     case "filter": return <div className={row}>{text("Column", "column", "plant")}<label className={fieldClass}>{t("Condition")}<Select value={s.op ?? "="} onChange={(e) => onChange({ op: e.target.value })}>{OPS.map((x) => <option key={x} value={x}>{x}</option>)}</Select></label>{s.op !== "empty" && s.op !== "notempty" && text("Value", "value", "1000")}</div>;
-    case "compute": return <div className={row}>{text("New column", "to", "value")}<label className={`${fieldClass} md:col-span-3`}>{t("Formula")}<Input value={s.formula ?? (s.formulaExpr?formulaText(s.formulaExpr):"")} placeholder="qty * price" onChange={(e) => onChange({ formula: e.target.value,formulaExpr:undefined })} /><span className="text-xs text-muted">{t("Arithmetic over number columns: + - * / and parentheses.")}</span></label></div>;
+    case "compute": return <div className={row}>{text("New column", "to", "value")}<label className={`${fieldClass} md:col-span-3`}>{t("Formula")}<ExpressionEditor value={s.formulaExpr ?? ({ op: "literal", args: [] } as any)} onChange={(expr) => onChange({ formulaExpr: expr, formula: formulaText(expr) })} kind="number" draftKey={`pipeline-formula:${picked ?? ""}`} /><span className="text-xs text-muted">{t("Arithmetic over number columns: + - * / and parentheses.")}</span></label></div>;
     case "lookup": case "join": return <div className={row}>{other}{text("Column here", "column", "plant")}{text("Column there", "match", "werks")}{text("Prefix", "as", "plant_")}
       {s.kind === "lookup" ? <label className={`${fieldClass} md:col-span-4`}>{t("Columns to take")}<Input value={list(s.columns)} placeholder="name, region" onChange={(e) => onChange({ columns: parse(e.target.value) })} /></label>
         : <Checkbox checked={!!s.outer} onChange={(outer) => onChange({ outer })}>{t("Keep rows without a match")}</Checkbox>}</div>;
