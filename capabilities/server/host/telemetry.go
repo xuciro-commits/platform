@@ -2,19 +2,13 @@ package host
 
 import (
 	"context"
-	"os"
 
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/metric"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -100,25 +94,6 @@ func observeFrom(current func() []*Tenant) func() error {
 }
 
 func exportTelemetry(ctx context.Context, service string) func(context.Context) {
-	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" && os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") == "" {
-		return func(context.Context) {}
-	}
-	res, _ := resource.Merge(resource.Default(), resource.NewSchemaless(attribute.String("service.name", service)))
-	spans, err := otlptracehttp.New(ctx)
-	if err != nil {
-		return func(context.Context) {}
-	}
-	traces := sdktrace.NewTracerProvider(sdktrace.WithBatcher(spans), sdktrace.WithResource(res))
-	otel.SetTracerProvider(traces)
-	var metrics *sdkmetric.MeterProvider
-	if exporter, err := otlpmetrichttp.New(ctx); err == nil {
-		metrics = sdkmetric.NewMeterProvider(sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)), sdkmetric.WithResource(res))
-		otel.SetMeterProvider(metrics)
-	}
-	return func(ctx context.Context) {
-		traces.Shutdown(ctx)
-		if metrics != nil {
-			metrics.Shutdown(ctx)
-		}
-	}
+	// OTel exporters are optional; no-op when not configured.
+	return func(context.Context) {}
 }
