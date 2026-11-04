@@ -7,7 +7,6 @@ import { useMemo, useState, type ReactNode } from "react";
 const kindLabel = (kind: string) => t(relationNodeClasses[kind]?.title ?? kind);
 const capabilityKey = (item: ProvidedCapability) => `${assetKey(item.ref)}@${item.version}:${item.capability.kind}:${item.capability.name}`;
 const sideLabels: Record<string, string> = { pure: "Read only", effect: "Declare an effect", authoritative: "Change authoritative state" };
-const guarded = (marking?: string) => marking === "confidential" || marking === "restricted";
 const markingTones: Record<string, string> = { internal: "info", confidential: "warning", restricted: "danger" };
 const resourceViews: Record<string, string> = { connection: "connection", source: "data-source", dataset: "dataset", pipeline: "pipeline", writeback: "writeback", object: "object-type" };
 type ColorBy = "kind" | "marking" | "status";
@@ -34,14 +33,16 @@ export function Lineage({ ref: requested, node: requestedNode }: { ref?: string;
   const directory = useReadQuery<Api.ResourceDirectory>("/v1/resources");
   const markings = useReadQuery<Api.Marking[]>("/v1/markings");
   const graph = query.data ?? { nodes: [], edges: [] };
-  const cleared = (marking: string) => !!markings.data?.find(item => item.id === marking)?.cleared;
+  const markingOf = (id?: string) => id ? markings.data?.find(item => item.id === id) : undefined;
+  const cleared = (marking: string) => !!markingOf(marking)?.cleared;
+  const markingTitle = (id: string) => markingOf(id)?.title ?? id;
   const [colorBy, setColorBy] = useState<ColorBy>("kind");
   const [selected, setSelected] = useState<string | undefined>(requestedNode);
   const chosen = graph.nodes.find(node => node.id === selected);
   const connected = useMemo(() => chosen ? reach(chosen.id, graph.edges) : undefined, [chosen, graph.edges]);
   const nodes: RelationNode[] = graph.nodes.map(node => {
     const facts = node.version ? `v${node.version}` : node.state ? t(node.state) : "";
-    const tone = colorBy === "marking" ? markingTones[node.effective ?? ""] ?? "neutral"
+    const tone = colorBy === "marking" ? markingTones[node.effective ?? ""] ?? (markingOf(node.effective)?.classification ? "warning" : "neutral")
       : colorBy === "status" ? node.error ? "danger" : node.stale ? "warning" : node.state === "draft" || node.kind === "dataset" && !node.version ? "neutral" : "success" : undefined;
     return { id: node.id, label: node.title || node.name, class: node.kind, tone, caption: `${kindLabel(node.kind)}${facts ? ` · ${facts}` : ""}`, detail: node.name,
       dim: !!connected && !connected.has(node.id), flag: node.error ? node.error : node.stale ? t("An input changed since the last run.") : undefined };
@@ -78,7 +79,7 @@ export function Lineage({ ref: requested, node: requestedNode }: { ref?: string;
             [t("Marking"), chosen.marking ? t(chosen.marking) : t("None")],
             ...(chosen.effectiveCompartments?.length ? [[t("Compartment markings"), chosen.effectiveCompartments.map(id => markings.data?.find(marking => marking.id === id)?.title ?? id).join(", ")] as [string, ReactNode]] : []),
             ...(chosen.effective && chosen.effective !== chosen.marking ? [[t("Effective marking"), `${t(chosen.effective)} · ${t("inherited from upstream")}`] as [string, ReactNode]] : []),
-            ...(["dataset", "object"].includes(chosen.kind) && (guarded(chosen.effective) || chosen.effectiveCompartments?.length) ? [[t("Your access"), (!guarded(chosen.effective) || cleared(chosen.effective!)) && (chosen.effectiveCompartments ?? []).every(cleared) ? t("Cleared") : t("Needs {marking} clearance", { marking: [guarded(chosen.effective) ? t(chosen.effective!) : "", ...(chosen.effectiveCompartments ?? []).map(id => markings.data?.find(item => item.id === id)?.title ?? id)].filter(Boolean).join(", ") })] as [string, ReactNode]] : []),
+            ...(["dataset", "object"].includes(chosen.kind) && (markingOf(chosen.effective)?.classification || chosen.effectiveCompartments?.length) ? [[t("Your access"), (!markingOf(chosen.effective)?.classification || cleared(chosen.effective!)) && (chosen.effectiveCompartments ?? []).every(cleared) ? t("Cleared") : t("Needs {marking} clearance", { marking: [markingOf(chosen.effective)?.classification ? markingTitle(chosen.effective!) : "", ...(chosen.effectiveCompartments ?? []).map(markingTitle)].filter(Boolean).join(", ") })] as [string, ReactNode]] : []),
             ...(chosen.version ? [[t("Latest version"), String(chosen.version)] as [string, ReactNode]] : []),
             ...(chosen.rows ? [[t("Rows"), String(chosen.rows)] as [string, ReactNode]] : []),
             ...(chosen.at ? [[t("Last activity"), new Date(chosen.at).toLocaleString()] as [string, ReactNode]] : []),

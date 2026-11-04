@@ -1629,6 +1629,7 @@ register("zh-CN", {
   "Restricted": "受限",
   "Opens data marked confidential.": "可打开标记为机密的数据。",
   "Opens data marked confidential or restricted.": "可打开标记为机密或受限的数据。",
+  "Opens data marked {marking}.": "可打开标记为“{marking}”的数据。",
   "Cleared": "已获准",
   "Cleared through a team": "经团队获准",
   "Not cleared": "未获准",
