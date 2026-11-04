@@ -2,12 +2,18 @@ import { withApp, type AppUI, type Host, type Me } from "@platform/app";
 import { memberRoles } from "@platform/app/roles";
 
 type PackageLoad = { default: AppUI; contributions?: AppUI[] };
-export type Package = { serves: string[]; roles?: string[]; public?: boolean; load: () => Promise<PackageLoad> };
+export type Package = { serves: string[]; roles?: string[]; public?: boolean; when?: (held: ReadonlySet<string>, member: Me["profile"]) => boolean; load: () => Promise<PackageLoad> };
 
 const governPackage: Package = { serves: ["platform", "enterprise", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@platform/govern") };
 const buildPackage: Package = { serves: ["build"], roles: ["builder", "integrator", "publisher"], load: () => import("@platform/build") };
+const catalogPackage: Package = {
+  serves: [],
+  when: (held, member) => held.has("build") && memberRoles(member, "build").includes("builder")
+    || held.has("platform") && memberRoles(member, "platform").includes("admin"),
+  load: () => import("@platform/catalog-app/app"),
+};
 export const packages: Package[] = [
-  { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
+  catalogPackage,
   governPackage,
   buildPackage,
 ];
@@ -15,7 +21,7 @@ export const packages: Package[] = [
 export function availablePackages(apps: readonly string[], member: Me["profile"]): Package[] {
   const held = new Set(apps);
   if ((member.grants ?? []).some(grant => grant.app === "build" && grant.role === "builder" && grant.by?.startsWith("project:"))) held.add("build");
-  return packages.filter(p => p.public
+  return packages.filter(p => p.public || p.when?.(held, member)
     || p.serves.some(id => held.has(id) && (!p.roles || memberRoles(member, id).some(role => p.roles!.includes(role))))
     || p === buildPackage && (held.has("platform") && memberRoles(member, "platform").includes("admin") || held.has("agent") && !!member.roles.agent));
 }

@@ -74,4 +74,4 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 
 - 治理资源尚未全面采用同一路由入口。
 - `@platform/kernel` 未改名（路线图“已知漂移”）。
-- Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；尚未测量实际首屏耗时（路线图“已知漂移”）。
+- Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；`catalog` 已改为按需加载，首屏复测与拆包决策见路线图 D4。
