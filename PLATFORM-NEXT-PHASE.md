@@ -276,35 +276,35 @@ Overview 必有：摘要属性、下一步（M13）、最近活动。Usage 必�
 
 | ID | 任务 | 范围（文件） | 依赖 | 验收 | 并行组 |
 |---|---|---|---|---|---|
-| P0-1 | 集成资源页面发布（Publish/Pause） | `ontology/pipeline.tsx`、`data-source.tsx`、`writeback.tsx`、`match.tsx` | 无 | draft 状态出 Publish，published 出 Pause/Run/Pull；Listener 为参照 | G0 |
-| P0-2 | 搜索前缀真实作用域 `@#:` | `ui/src/shell/Workspace.tsx`、`apps/workspace/src/App.tsx` | 无 | `@` 查出成员、`#` 查出项目、`:` 查出对象类型，按分组展示 | G0 |
-| P0-3 | 审批决策上下文 | `apps/workspace/src/chrome.tsx` | 无 | 打开工作项显示关联对象/动作内容/提交条件/意见/确认，再执行 | G0 |
-| P0-4 | “待我审阅”提案队列 | `apps/workspace/src/shell/Home.tsx`、`build/src/branches/api.ts` | 无 | 审阅人仅见自身待办；审批后队列清空；非审阅人不可见 | G0 |
-| P0-5 | 破坏性变更下游影响审阅 | `build/src/branches/diff.tsx` | 无 | 删除属性/改类型时显示已发布下游资源并要求确认 | G0 |
-| P0-6 | 动态标记授权一致 | `govern/src/markings.tsx`、`govern/src/people.tsx` | 无 | 成员页接入动态标记列表，可授予/撤销专项标记 | G0 |
-| P0-7 | 显式 release 回退 | `build/src/releases/release.tsx` | 无 | v2 激活后可回退到 v1；历史数据不丢；审计可见 | G0 |
-| P0-8 | AIP Assist 右侧伴随抽屉 + 当前页面上下文 | `ui/src/shell/Workspace.tsx`、`apps/workspace/src/chrome.tsx`、`app/src/automation/agents.tsx` | 无 | 抽屉不切断当前页面；自动读取当前 URL/RID/选中对象；写入只经 M20 表单且用户确认 | G0 |
-| P0-9 | Files 入口全角色可见 | `apps/workspace/src/App.tsx` | 非构建者也能从导航轨进入 Files | G0 |
-| P0-10 | Favorites 支持资源与对象 | `ui/src/shell/Workspace.tsx`、`apps/workspace/src/shell/Home.tsx` | 收藏状态一致；支持应用/资源/对象 | G0 |
-| P0-11 | Applications 业务组按产品/项目分组 | `apps/workspace/src/shell/Applications.tsx` | 门户四组；业务组内按产品/项目分组 | G0 |
-| P0-12 | Help 导航项 | `ui/src/shell/Navigation.tsx` | Help 项出现在导航轨，打开帮助与快捷键 | G0 |
-| P0-13 | 新增验收用例 F11–F15 | `web/e2e/F11–F15-*.spec.ts` | P0-1…P0-12 完成 | F11–F15 端到端绿 | G1（收束） |
-| P0-14 | 规范与 roadmap 同步 | `docs/roadmap.md`、`docs/3-information.md`、`docs/7-system/web.md`、`docs/6-domain/security.md` | P0-1…P0-13 完成 | 已完成差距删除；新发现差距入表；`git diff --check` 干净 | G1（收束，串行） |
+| P0-1 | 集成资源页面发布（Publish/Pause） ✅已完成 | `ontology/pipeline.tsx`、`data-source.tsx`、`writeback.tsx`、`match.tsx` | 无 | draft 状态出 Publish，published 出 Pause/Run/Pull；Listener 为参照 | G0 |
+| P0-2 | 搜索前缀真实作用域 @#: ✅已完成 | `ui/src/shell/Workspace.tsx`、`apps/workspace/src/App.tsx` | 无 | `@` 查出成员、`#` 查出项目、`:` 查出对象类型，按分组展示 | G0 |
+| P0-3 | 审批决策上下文 ✅已完成 | `apps/workspace/src/chrome.tsx` | 无 | 打开工作项显示关联对象/动作内容/提交条件/意见/确认，再执行 | G0 |
+| P0-4 | “待我审阅”提案队列 ✅已完成 | `apps/workspace/src/shell/Home.tsx`、`build/src/branches/api.ts` | 无 | 审阅人仅见自身待办；审批后队列清空；非审阅人不可见 | G0 |
+| P0-5 | 破坏性变更下游影响审阅 ✅已完成 | `build/src/branches/diff.tsx` | 无 | 删除属性/改类型时显示已发布下游资源并要求确认 | G0 |
+| P0-6 | 动态标记授权一致 ✅已完成 | `govern/src/markings.tsx`、`govern/src/people.tsx` | 无 | 成员页接入动态标记列表，可授予/撤销专项标记 | G0 |
+| P0-7 | 显式 release 回退 ✅已完成 | `build/src/releases/release.tsx` | 无 | v2 激活后可回退到 v1；历史数据不丢；审计可见 | G0 |
+| P0-8 | AIP Assist 右侧伴随抽屉 + 当前页面上下文 ✅已完成 | `ui/src/shell/Workspace.tsx`、`apps/workspace/src/chrome.tsx`、`app/src/automation/agents.tsx` | 无 | 抽屉不切断当前页面；自动读取当前 URL/RID/选中对象；写入只经 M20 表单且用户确认 | G0 |
+| P0-9 | Files 入口全角色可见 ✅已完成 | `apps/workspace/src/App.tsx` | 非构建者也能从导航轨进入 Files | G0 |
+| P0-10 | Favorites 支持资源与对象 ✅已完成 | `ui/src/shell/Workspace.tsx`、`apps/workspace/src/shell/Home.tsx` | 收藏状态一致；支持应用/资源/对象 | G0 |
+| P0-11 | Applications 业务组按产品/项目分组 ✅已完成 | `apps/workspace/src/shell/Applications.tsx` | 门户四组；业务组内按产品/项目分组 | G0 |
+| P0-12 | Help 导航项 ✅已完成 | `ui/src/shell/Navigation.tsx` | Help 项出现在导航轨，打开帮助与快捷键 | G0 |
+| P0-13 | 新增验收用例 F11–F15 ✅已完成 | `web/e2e/F11–F15-*.spec.ts` | P0-1…P0-12 完成 | F11–F15 端到端绿 | G1（收束） |
+| P0-14 | 规范与 roadmap 同步 ✅已完成 | `docs/roadmap.md`、`docs/3-information.md`、`docs/7-system/web.md`、`docs/6-domain/security.md` | P0-1…P0-13 完成 | 已完成差距删除；新发现差距入表；`git diff --check` 干净 | G1（收束，串行） |
 
 并行组说明：
 - **G0（立即并行）**：P0-1…P0-12，独立页面/组件/路由，可同时实施；P0-8 与 P0-2 同改 Workspace.tsx 但分别改 rail 与搜索逻辑，合并时注意冲突（建议同一人或连续提交）。
 - **G1（收束）**：P0-13 各阶段完成后追加 e2e；P0-14 所有代码合并后统一更新规范与 roadmap，串行。
 
 P1 任务（P0 完成后）：
-- P1-1 Pipeline Builder DAG 化（`ontology/pipeline.tsx` + FlowCanvas onConnect/onDisconnect）
-- P1-2 Dataset Preview 虚拟化全量 + 列统计面板（`ontology/dataset.tsx`）
-- P1-3 决策表网格编辑（`ontology/decision-table.tsx`）
-- P1-4 Agent Studio 流式调试沙箱（`functions/agent.tsx`）
-- P1-5 Workshop 组件事件全面开放 + Open app 入口（`workshop/page-editor/` + `ModuleWorkbench.tsx`）
-- P1-6 Object Explorer 侧窗预览（`apps/workspace/src/shell/Explorer.tsx`）
-- P1-7 Monitoring 失败重试/跳过/取消 + Data Connection 拉取失败重试（`govern/src/` Monitoring、`ontology/data-source.tsx`）
+- P1-1 Pipeline Builder DAG 化 ✅已完成（`ontology/pipeline.tsx` + FlowCanvas onConnect/onDisconnect）
+- P1-2 Dataset Preview 虚拟化全量 + 列统计面板 ✅已完成（`ontology/dataset.tsx`）
+- P1-3 决策表网格编辑 ✅已完成（`ontology/decision-table.tsx`）
+- P1-4 Agent Studio 流式调试沙箱 ✅已完成（`functions/agent.tsx`）
+- P1-5 Workshop 组件事件全面开放 + Open app 入口 ✅已完成（`workshop/page-editor/` + `ModuleWorkbench.tsx`）
+- P1-6 Object Explorer 侧窗预览 ✅已完成（`apps/workspace/src/shell/Explorer.tsx`）
+- P1-7 Monitoring 失败重试/跳过/取消 + Data Connection 拉取失败重试 ✅已完成（`govern/src/` Monitoring、`ontology/data-source.tsx`）
 
-P2 任务（P1 完成后，由负责人决定是否进入）：Data Health/Linter、外部 SDK/MCP、代码工作区、第三方组件发布、Notepad/Fusion、深度审计、数据生命周期、多 Agent Boardroom/Evolve（基于现有 `host/a2a.go` A2A 协议基础，不另建协议）。
+P2 任务（P1 完成后，由负责人决定是否进入）：Data Health/Linter ✅已完成、外部 SDK/MCP ✅已完成、代码工作区 ✅已完成、第三方组件发布 ✅已完成、Notepad/Fusion ✅已完成、深度审计 ✅已完成、数据生命周期 ✅已完成、多 Agent Boardroom/Evolve ✅已完成（基于现有 `host/a2a.go` A2A 协议基础，不另建协议）。
 
 **任务完成定义**：代码经 `go build ./... && go vet` / `tsc -p` / `pnpm build` 通过；对应 e2e 验收用例在隔离宿主上运行通过；负责人浏览器走查观感合格；规范差距条目删除或同步更新。
 
