@@ -327,8 +327,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         <SegmentedChoice compact label={t("Editor mode")} value={preview ? "preview" : "edit"} options={[{ value: "edit", label: t("Edit"), icon: <PenLine /> }, { value: "preview", label: t("Preview"), icon: <Play /> }]}
           onChange={(mode) => { setPreview(mode === "preview"); setCompatibilityOpen(false); select({ kind: "page" }); }} />
         <ResourceControls autosave={!sourceApplied && !branch} type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} extra={[
-          { id: "compatibility", label: t("Review page compatibility…"), disabled: busy || preview, run: () => setCompatibilityOpen(true) },
-          ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
+          { id: "open-app", label: page.state === "published" ? t("Open in app") : t("Open app preview"), icon: <ExternalLink />, disabled: busy || preview, run: () => open({ view: page.state === "published" ? "page" : "page-preview", params: { app: "build", kind: "page", name: page.name } }) },
         ]} onSave={() => save()} onCancel={discardChanges} route={canvasRoute} />
       </>}
       onKeyDown={(event) => {

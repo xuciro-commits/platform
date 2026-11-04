@@ -81,7 +81,31 @@ export function DecisionTableEditor({ id }: { id: string }) {
         <SegmentedChoice label={t("Output mode")} value={draft.proposal?"edit-proposal":"results"} onChange={value=>setProposal(value==="edit-proposal")} options={[{value:"results",label:t("Typed results")},{value:"edit-proposal",label:t("Edit proposal")}]} />
       </Panel>
       <Panel title={t("Rules")} className="grid min-w-0 gap-2 overflow-auto">
-        <DataTable data={[...(draft.rows ?? []).map((_, i) => i), -1]} columns={columns} getRowId={r => r < 0 ? "default" : String(r)} height={Math.min(480, 124 + ((draft.rows ?? []).length + 1) * 40)} rowHeight={40} searchable={false} resizable={false} columnChooser={false} />
+        <DataTable data={[...(draft.rows ?? []).map((_, i) => i), -1]} columns={columns} getRowId={r => r < 0 ? "default" : String(r)} height={Math.min(480, 124 + ((draft.rows ?? []).length + 1) * 40)} rowHeight={40} searchable={false} resizable={false} columnChooser={false}
+          onPaste={(matrix, {row: startRow, col: startCol}) => {
+            const inputs = draft.inputs ?? [];
+            const outputs = draft.outputs ?? [];
+            const inputStart = 1; // leaf col 0 is the order column
+            const outputStart = inputStart + inputs.length;
+            let nextRows = [...(draft.rows ?? [])];
+            for (let mr = 0; mr < matrix.length; mr++) {
+              const tr = startRow + mr;
+              while (nextRows.length <= tr) nextRows.push({ when: inputs.map(() => ""), then: outputs.map(() => "") });
+            }
+            for (let mr = 0; mr < matrix.length; mr++) {
+              for (let mc = 0; mc < matrix[mr].length; mc++) {
+                const tr = startRow + mr;
+                const tc = startCol + mc;
+                if (tc < inputStart) continue;
+                let side: "when" | "then", ci: number;
+                if (tc < outputStart) { side = "when"; ci = tc - inputStart; }
+                else { side = "then"; ci = tc - outputStart; }
+                if (ci >= (side === "when" ? inputs.length : outputs.length)) continue;
+                nextRows[tr] = { ...nextRows[tr], expressions: undefined, [side]: (nextRows[tr][side] ?? []).map((v, i) => i === ci ? matrix[mr][mc] : v) };
+              }
+            }
+            patch({ rows: nextRows });
+          }} />
         <div><Button size="sm" onClick={() => patch({ rows: [...(draft.rows ?? []), { when: (draft.inputs ?? []).map(() => ""), then: (draft.outputs ?? []).map(() => "") }] })}>{t("Add row")}</Button></div>
         <p className="text-xs text-muted">{t("Leave the default empty to refuse a call no row matches; fill it to answer anyway.")}</p>
       </Panel>

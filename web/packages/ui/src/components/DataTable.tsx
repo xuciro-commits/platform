@@ -47,6 +47,7 @@ export type DataTableProps<T> = {
   manualSorting?: boolean;
   columnChooser?: boolean;
   onRowContextMenu?: (row: T) => void;
+  onPaste?: (matrix: string[][], start: { row: number; col: number }) => void;
 };
 
 type Session<T> = { rowId: string; columnId: string; row: T; original: unknown; draft: unknown; coord: string };
@@ -69,7 +70,7 @@ function headerTypeIcon(type?: string) {
 
 export function DataTable<T>({
   storageKey, data, columns, getRowId, height = 480, rowHeight, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"),
-  selectedIds,loading = false, loadingText, onCellEdit, cellAccess,resizable = true, virtualColumns = false, totalRows, manualSorting = false, columnChooser = true, onRowContextMenu,
+  selectedIds,loading = false, loadingText, onCellEdit, cellAccess,resizable = true, virtualColumns = false, totalRows, manualSorting = false, columnChooser = true, onRowContextMenu, onPaste,
 }: DataTableProps<T>) {
   const editorPrefix=useId();
   const [editing, setEditing] = useState<Session<T> | null>(null);
@@ -208,7 +209,19 @@ export function DataTable<T>({
         </div>
       )}
       <div ref={scroller} role="table" aria-rowcount={(totalRows ?? rows.length) + headerRows} aria-colcount={leaf.length} aria-busy={loading || undefined}
-        className="overflow-auto rounded-md border border-border bg-surface" style={{ height, scrollbarGutter: "stable" }}>
+        className="overflow-auto rounded-md border border-border bg-surface" style={{ height, scrollbarGutter: "stable" }}
+        onPaste={onPaste ? (e) => {
+          const text = (e.clipboardData || window.clipboardData).getData("text");
+          if (!text.trim()) return;
+          let startRow = 0, startCol = 0;
+          if (editing) {
+            startRow = editing.rowId === "default" ? Math.max(0, rows.length - 1) : Math.max(0, Number(editing.rowId) || 0);
+            startCol = leaf.findIndex(c => c.id === editing.columnId);
+            if (startCol < 0) startCol = 0;
+          }
+          const matrix = text.split("\n").filter(line => line.length > 0).map(line => line.split("\t"));
+          onPaste(matrix, { row: startRow, col: startCol });
+        } : undefined}>
         <div role="rowgroup" className={cn("sticky top-0 z-10 border-b border-border bg-surface", rows.length === 0 && "overflow-hidden")} style={{ minWidth }}>
           {table.getHeaderGroups().map((group, index) => { let columnIndex = 0; return (
             <div role="row" aria-rowindex={index + 1} key={group.id} className="grid" style={{ gridTemplateColumns: template }}>

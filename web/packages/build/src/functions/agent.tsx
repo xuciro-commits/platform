@@ -1,11 +1,12 @@
-import { ContextHelp, StructuredEditor } from "@platform/ui";
+import { useState } from "react";
+import { ContextHelp, Form, StructuredEditor } from "@platform/ui";
 import type {Api} from "@platform/kernel";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { useAuthoringModel } from "../ontology/authoring-model";
-import { useHost, ModelPicker, ModelOptionsEditor, useReadQuery, useRecordInventory } from "@platform/app";
+import { useHost, ModelPicker, ModelOptionsEditor, useReadQuery, useRecordInventory, RunView, newId } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -27,8 +28,18 @@ export function Agents() {
 }
 
 export function AgentEditor({ id }: { id: string }) {
-  const { holds} = useHost(), { open } = useApplicationWorkspace();
+  const { holds, decide, can } = useHost(), { open } = useApplicationWorkspace();
   const model = useAuthoringModel(), queries = useRecordInventory<QueryRecord>("build.query");
+  const [debugGoal, setDebugGoal] = useState("");
+  const [debugRun, setDebugRun] = useState<string>();
+  const runDebug = async () => {
+    if (!debugGoal.trim() || !draft.id) return;
+    const run = newId("RUN");
+    if (await decide("agent.run.start", { type: "agent.run", id: run }, { agent: draft.id, goal: debugGoal })) {
+      setDebugRun(run);
+      setDebugGoal("");
+    }
+  };
   const objects = (model.drafts.data?.records ?? []).filter(object => !object.archived);
   const objectTitles = new Map(objects.map(object => [`build.${object.name}`, object.title]));
   const tools = [
@@ -111,6 +122,22 @@ export function AgentEditor({ id }: { id: string }) {
         <Button size="sm" className="justify-self-start" onClick={() => change({ cases: [...cases, { name: t("Case {n}", { n: cases.length + 1 }), goal: "" }] })}><Plus className="size-3" />{t("Add a case")}</Button>
       </Panel>
     </fieldset></StructuredEditor>
+    <Panel title={t("对话调试")} className="grid content-start gap-2 lg:col-span-2">
+      <ContextHelp title={t("对话调试")}><p className="text-xs text-muted">{t("Run the saved draft against a goal, exactly as it would run installed. Use it to debug instructions and tools before publishing.")}</p></ContextHelp>
+      {!draft.id ? (
+        <p className="text-sm text-muted">{t("Save the agent before debugging.")}</p>
+      ) : (
+        <>
+          <Form className="grid gap-2" onSubmit={runDebug}>
+            <Textarea rows={3} placeholder={t("What should it do?")} value={debugGoal} onChange={(e) => setDebugGoal(e.target.value)} />
+            <div className="flex items-center gap-2">
+              <Button type="submit" variant="primary" disabled={!debugGoal.trim() || busy || !can("agent.run.start")}>{t("Run debug")}</Button>
+            </div>
+          </Form>
+          {debugRun && <RunView key={debugRun} id={debugRun} compact />}
+        </>
+      )}
+    </Panel>
   </div></Workbench>;
 }
 

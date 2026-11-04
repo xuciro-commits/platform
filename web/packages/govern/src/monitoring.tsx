@@ -101,10 +101,16 @@ export function MonitoringRunsView({ type: initialType, status: initialStatus }:
     { accessorKey: "when", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
     { accessorKey: "status", header: t("Status"), meta: { width: 110 }, cell: ({ row: { original: run } }) =>
       <span className="flex items-center gap-1"><StatusTag status={run.status} registry={runStatuses} />{run.ownerStatus && <span className="font-mono text-2xs text-muted">{run.ownerStatus}</span>}</span> },
-    { id: "retry", header: t("Actions"), meta: { width: 120 }, minSize: 120, cell: ({ row: { original: run } }) =>
-      run.status === "failed" && run.retryable && run.retrySchema && run.retryTarget &&
-        <Button size="sm" onClick={async () => { if (await decide(run.retrySchema!, run.retryTarget!, {}, run.retrySchemaVersion ? { schemaVersion: run.retrySchemaVersion } : undefined)) void query.refetch(); }}>
-          {run.retryKind === "rerun" ? t("Run again") : t("Retry")}</Button> },
+    { id: "retry", header: t("Actions"), meta: { width: 170 }, minSize: 170, cell: ({ row: { original: run } }) => {
+      const failed = run.status === "failed";
+      const retry = failed && run.retryable && run.retrySchema && run.retryTarget &&
+        <Button size="sm" onClick={async () => { if (await decide(run.retrySchema!, run.retryTarget!, {}, run.retrySchemaVersion ? { schemaVersion: run.retrySchemaVersion } : undefined)) void query.refetch(); }}>{run.retryKind === "rerun" ? t("Run again") : t("Retry")}</Button>;
+      const skip = failed && run.retryTarget &&
+        <Button size="sm" variant="ghost" onClick={async () => { if (await decide("monitoring.run.skip", run.retryTarget!, {})) void query.refetch(); }}>{t("Skip")}</Button>;
+      const cancel = failed && run.retryTarget &&
+        <Button size="sm" variant="danger" onClick={async () => { if (await decide("monitoring.run.cancel", run.retryTarget!, {})) void query.refetch(); }}>{t("Cancel")}</Button>;
+      return <div className="flex gap-1">{retry}{skip}{cancel}</div>;
+    } },
   ];
   return <>
     <PageHeader title={t("Runs")} help={t("Every run the host knows about — syncs, builds, automations, functions and deliveries — newest first. Retry a failed run, or open the resource it ran for.")}

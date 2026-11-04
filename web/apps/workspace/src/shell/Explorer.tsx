@@ -155,7 +155,7 @@ function ExploreView({ type: requested, savedState }: { type?: string; savedStat
       <PageHeader title={entity?.title ?? chosen} help={entity?.description} description={chosen}
         actions={<><Button size="sm" onClick={() => setSaving(true)}>{t("Save exploration")}</Button><OpenIn type={chosen} exclude={["explorer"]} /></>} />
       <RecordList key={chosen} source={source} type={chosen} initial={initial} height="calc(100dvh - 250px)" selectedId={selected?.id}
-        onOpen={(r) => { setSelected(r); openRecord({ type: chosen, id: r.id }); }} />
+        onOpen={(r) => { setSelected(r); openRecord({ type: chosen, id: r.id }, { window: "beside" }); }} />
     </div>
     <aside aria-label={t("Search around")} className="hidden min-w-0 content-start gap-3 overflow-auto border-l border-border pl-3 lg:grid">
       <div className="flex items-center justify-between gap-2">
