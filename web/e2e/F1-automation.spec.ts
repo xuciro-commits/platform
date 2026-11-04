@@ -5,12 +5,13 @@ test.use({ actionTimeout: 15_000, viewport:{width:1680,height:1050} });
 
 test("F1 a builder creates a notification automation, runs it on an object and pauses and resumes it", async ({ page }) => {
   test.setTimeout(180_000);
-  await signIn(page, "admin", "/automation");
   const api = acceptedClient(page);
   const name = unique("autodata"), objectID = unique("AUTOOBJ"), itemID = unique("AUTOITEM");
-  await api.submit("build.object", objectID, "create", { name, title: "Automation item", plural: "Automation items", fields: [{ name: "note", title: "Note", type: "text" }] });
+  const project = unique("autoproject");
+  await api.submit("build.app", project, "create", { name: project, title: "Automation project" });
+  await api.submit("build.object", objectID, "create", { name, title: "Automation item", plural: "Automation items", project, fields: [{ name: "note", title: "Note", type: "text" }] });
   await api.publish([{ kind: "object", id: objectID }]);
-  await page.reload();
+  await signIn(page, "admin", `/automation?application=${encodeURIComponent(project)}`);
   await page.getByRole("button", { name: "New automation", exact: true }).click();
   await page.getByLabel("Title", { exact: true }).fill("Notify an automation item");
   await page.getByRole("combobox", { name:"Start kind",exact: true }).selectOption("condition");
@@ -27,6 +28,7 @@ test("F1 a builder creates a notification automation, runs it on an object and p
     processID = process?.id ?? "";
     return !!processID;
   }).toBe(true);
+  await expect(page).not.toHaveURL(/id=new/);
   await api.publish([{ kind: "flow", id: processID }]);
   await page.reload();
   await expect(page.getByRole("button", { name: "Run now", exact: true })).toBeEnabled();

@@ -13,9 +13,9 @@ export function Apps({tab="catalog"}:{tab?:string}) {
   const shown=tab==="installed"?all.filter(item=>item.installed?.state!=="retired" && item.installed?.version===item.descriptor.version):tab==="updates"?all.filter(item=>item.update):all.filter(item=>item.source!=="installed");
   return (
     <>
-      <PageHeader title={t(tab==="installed"?"Installed":tab==="updates"?"Updates":"Catalog")} help={t("Install, switch versions or uninstall packages. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
+      <PageHeader title={t(tab==="installed"?"Installed":tab==="updates"?"Updates":"Catalog")} help={t("Install, switch versions or uninstall product versions. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
       {tab==="catalog" && <PackageSources items={all} />}
-      {packages.isError ? <div role="alert"><p>{t("Package inventory could not be loaded.")}</p><Button onClick={() => void packages.refetch()}>{t("Retry")}</Button></div> : packages.isPending ? <p role="status">{t("Loading packages…")}</p> : !packages.data?.length ? <p className="text-sm text-muted">{t("This library is empty. Download a package or import a local file to begin.")}</p> : null}
+      {packages.isError ? <div role="alert"><p>{t("Product version inventory could not be loaded.")}</p><Button onClick={() => void packages.refetch()}>{t("Retry")}</Button></div> : packages.isPending ? <p role="status">{t("Loading product versions…")}</p> : !packages.data?.length ? <p className="text-sm text-muted">{t("No product version is available. Publish one in DevOps, or transfer a product version file.")}</p> : null}
       <PackageList key={tab} items={shown} updates={tab==="updates"} />
       {!packages.isPending && !packages.isError && !shown.length && <p role="status" className="text-sm text-muted">{t(tab==="updates"?"Your installed products are up to date.":tab==="installed"?"No products are installed.":"No products are available.")}</p>}
       {holds("platform", "admin") && <Button variant="link" className="mt-4" onClick={() => open({ view: "matrix" })}>{t("Inspect built-in modules in the capability matrix")}</Button>}
@@ -79,7 +79,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
         const held = available.find(item => item.installed)?.installed;
         const version = versions[packageID] ?? (updates?available.at(-1)?.descriptor.version:held?.version) ?? available.at(-1)?.descriptor.version ?? "";
         const chosen = available.find(item => item.descriptor.version === version);
-        const { descriptor: d, precheck, plan, source, sourceDigest, removal } = chosen ?? available[0]!;
+        const { descriptor: d, precheck, plan, source, sourceDigest, removal, candidate } = chosen ?? available[0]!;
         const id = d.id || held?.id || "";
         const state = held?.state;
         const different = !!held && state !== "retired" && !!d.version && d.version !== held.version;
@@ -101,10 +101,11 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
             {state === "active" && chosen && held?.version === d.version && <p className="text-sm text-muted">{t(d.blueprint ? "Installed. Product resources are read-only; create extensions in your own project." : "Installed. Available features can be opened from Applications.")}</p>}
             <Disclosure summary={t("Technical details")}><dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
               <dt className="text-muted">{t("Namespace")}</dt><dd className="break-all font-mono">{d.namespace || held?.namespace}</dd>
-              <dt className="text-muted">{t("Source")}</dt><dd>{t(source === "installed" ? "Installed record" : source === "imported" ? "Imported package" : "Deployment index")}</dd>
+              <dt className="text-muted">{t("Source")}</dt><dd>{t(source === "installed" ? "Installed record" : source === "imported" ? "Imported product version" : source === "product" ? "DevOps product version" : "Deployment catalog")}</dd>
               <dt className="text-muted">{t("Offered")}</dt><dd>{source === "installed" ? "—" : d.version || "—"}{d.compatibility ? ` · ${t("platform API {v}", { v: d.compatibility })}` : ""}</dd>
               <dt className="text-muted">{t(state === "retired" ? "Last installed" : "Installed")}</dt><dd>{held ? `${held.version}${held.installedAt ? ` · ${when(held.installedAt)}` : ""}` : "—"}</dd>
               <dt className="text-muted">{t("Requires")}</dt><dd>{d.requires?.length ? d.requires.join(", ") : t("nothing")}</dd>
+              {candidate && <><dt className="text-muted">{t("Release candidate")}</dt><dd className="break-all font-mono">{candidate}</dd></>}
               <dt className="text-muted">{t("Contributions")}</dt><dd>{(held?.contributions ?? d.contributions ?? []).map((c) => c.title || c.view).join(", ") || "—"}</dd>
               {held?.artifact && <><dt className="text-muted">{t("Sealed artifact")}</dt><dd className="break-all font-mono">{held.artifact}</dd></>}
               {!!held?.retained?.length && <><dt className="text-muted">{t("Retained")}</dt><dd>{held.retained.map((r) => `${r.version} (${when(r.at)})`).join(", ")}</dd></>}

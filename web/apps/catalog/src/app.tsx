@@ -1,4 +1,4 @@
-import { defineApp } from "@platform/app";
+import { appRegistration, defineApp } from "@platform/app";
 import { BookOpen, Boxes, Terminal } from "lucide-react";
 import { t, type NavSection } from "@platform/ui";
 import { Catalog, catalogTitle } from "./Catalog";
@@ -12,15 +12,9 @@ export function catalogNavigation(): NavSection[] {
 }
 
 export default defineApp({
-  id: "catalog",
-  surface: "developer",
-  category: "developer",
-  portal: false,
-  for: (host) => host.role("build") === "builder" || host.role("platform") === "admin",
+  ...appRegistration("catalog"),
   description: "Reusable UI, App API and patterns, with live examples and a sandbox.",
-  title: "Asset Library",
   icon: <BookOpen />,
-  home: { view: "catalog" },
   nav: () => [
     ...catalogNavigation(),
     { label: t("Data diagnostics"), items: [

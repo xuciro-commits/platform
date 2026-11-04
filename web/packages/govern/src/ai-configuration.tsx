@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { modelOptionLabel, ModelOptionsEditor, ModelPicker, useHost, useReadQuery as useRead, type ModelPurpose } from "@platform/app";
-import { Button, ContentTabs, Dialog, Sheet, Input, PageHeader, Panel, PropertyList, Select, Tag, useWorkspace, t } from "@platform/ui";
+import { Button, Dialog, Sheet, Input, PageHeader, Panel, PropertyList, ResourceSections, Select, Tag, useWorkspace, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import {modelReferenceTitle} from "./shared";
 import { ReadResult } from "./operations";
@@ -17,17 +17,20 @@ export function AIConfiguration({initialSection="defaults",fromPackage,fromVersi
   const [section, setSection] = useState(initialSection);
   const {open}=useWorkspace();
   const {can}=useHost();
+  useEffect(() => { if (initialSection) setSection(initialSection); }, [initialSection]);
   if(!can("ai.provider.add")&&!can("platform.setting.set"))return <PageHeader title={t("AI configuration")} description={t("Ask an administrator to connect services, enable models or change purpose defaults.")} actions={<Button onClick={()=>open({view:"ai-playground"})}>{t("Try available models")}</Button>} />;
-  return <>
+  const change = (next: string) => { setSection(next); open({ view: "ai-configuration", params: { section: next, ...(fromPackage ? { fromPackage, fromVersion: fromVersion ?? "" } : {}) } }); };
+  return <div className="grid gap-4">
     <PageHeader title={t("AI configuration")} actions={fromPackage?<Button onClick={()=>open({view:"package-preparation",params:{id:fromPackage,version:fromVersion??""}})}>{t("Return to package preparation")}</Button>:undefined} help={t("Connect a service, read its models, enable the models people may use, then choose one default for each purpose. Several services and models can be enabled.")} />
     <p className="mb-4 max-w-prose text-sm text-muted">{t("Cloud models are available for authorized design tasks. Production inference and knowledge embeddings require a deployment-approved local or edge service; marking a provider as local does not grant approval.")}</p>
-    <div className="mb-5"><ContentTabs wrap={false} label={t("AI configuration")} value={section} onChange={setSection} items={[["services", "Connect services"], ["models", "Available models"], ["defaults", "Default purposes"], ["usage", "Usage and limits"], ["training", "Training data"]].map(([value, title]) => ({ id: value!, title: t(title!) }))} /></div>
-    {section === "services" && <AIProviders />}
-    {section === "models" && <AvailableModels />}
-    {section === "defaults" && <div className="grid max-w-4xl gap-6">{purposes.map(item => <PurposeDefault key={item.purpose} {...item} />)}</div>}
-    {section === "training" && <AITraining />}
-    {section === "usage" && <><Button className="mb-3" onClick={()=>open({view:"app-settings"})}>{t("Organization default limits")}</Button><AIUsage /></>}
-  </>;
+    <ResourceSections title={t("AI configuration")} value={section} onChange={change} items={[
+      { id: "services", title: t("Connect services"), content: <AIProviders /> },
+      { id: "models", title: t("Available models"), content: <AvailableModels /> },
+      { id: "defaults", title: t("Default purposes"), content: <div className="grid max-w-4xl gap-6">{purposes.map(item => <PurposeDefault key={item.purpose} {...item} />)}</div> },
+      { id: "usage", title: t("Usage and limits"), content: <><Button className="mb-3" onClick={()=>open({view:"app-settings"})}>{t("Organization default limits")}</Button><AIUsage /></> },
+      { id: "training", title: t("Training data"), content: <AITraining /> },
+    ]} />
+  </div>;
 }
 
 function PurposeDefault({ purpose, title, description, ...item }: typeof purposes[number]) {

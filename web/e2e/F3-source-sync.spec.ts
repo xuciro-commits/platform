@@ -91,14 +91,16 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
   let datasetID = "";
   let connectionID = "";
   let sourceID = "";
+  const project = unique("f3project");
 
   try {
     await signIn(page, "admin", "/projects");
+    await submit({ type: "build.app", id: project }, "create", { name: project, title: "F3 project" }, 0);
 
     await test.step("setup: a target dataset exists for the sync to version", async () => {
       datasetID = unique("F3DS");
       await submit({ type: "build.dataset", id: datasetID }, "create", {
-        name: `${tag}dataset`, title: `F3 Dataset ${tag}`, keep: 3, marking: "",
+        name: `${tag}dataset`, title: `F3 Dataset ${tag}`, keep: 3, marking: "", project,
       }, 0);
       await expect.poll(async () => (await read<{ record: { revision: number; version?: number } }>(`/v1/records/build.dataset/${datasetID}`)).record.revision, { timeout: 15_000 }).toBe(1);
       const dataset = await read<{ record: { version?: number } }>(`/v1/records/build.dataset/${datasetID}`);
@@ -108,7 +110,7 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
     const connectionTitle = `F3 Local ${tag}`;
 
     await test.step("1 the integrator opens Data Connection -> Connections, creates a connection to the external system naming a credential reference, and Checks it", async () => {
-      await page.goto("/#/connection?id=new");
+      await page.goto(`/#/connection?id=new&application=${project}`);
       await expect(page.getByRole("heading", { name: "New connection", level: 1 })).toBeVisible({ timeout: 30_000 });
 
       await page.getByRole("textbox", { name: "Connection name", exact: true }).fill(`${tag}conn`);
@@ -149,7 +151,7 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
       // credential is a reference, never a value; clear it so the Check exercises the reachable local
       // system itself. This does not weaken the credential assertion above — it confirms the platform
       // treats the credential as an external reference rather than inlining a value.
-      await page.goto(`/#/connection?id=${connectionID}`);
+      await page.goto(`/#/connection?id=${connectionID}&application=${project}`);
       await expect(page.getByRole("textbox", { name: "Secret name", exact: true })).toHaveValue(secretName);
       const cleared = page.waitForResponse(r => r.url().endsWith("/v1/submissions") && r.request().method() === "POST"
         && r.request().postDataJSON().schema.name === "build.connection.save");
@@ -169,7 +171,7 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
 
       // Reload the ready connection and assert its read-only "Last check" panel reports it reachable
       // without ever rendering the credential value.
-      await page.goto(`/#/connection?id=${connectionID}`);
+      await page.goto(`/#/connection?id=${connectionID}&application=${project}`);
       await expect(page.getByText("Reachable", { exact: true })).toBeVisible({ timeout: 30_000 });
       expect(await page.content(), "the connection page never renders the clear-text credential").not.toContain(secretClearText);
     });
@@ -177,7 +179,7 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
     const sourceTitle = `F3 Sync ${tag}`;
 
     await test.step("2 the integrator creates a data source on that connection, maps rows to the dataset, and Publishes it", async () => {
-      await page.goto("/#/data-source?id=new");
+      await page.goto(`/#/data-source?id=new&application=${project}`);
       await expect(page.getByRole("heading", { name: "New data source", level: 1 })).toBeVisible({ timeout: 30_000 });
 
       await page.getByRole("textbox", { name: "Source name", exact: true }).fill(`${tag}src`);
@@ -212,7 +214,7 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
 
     await test.step("3a the first successful Pull now gives the dataset a version", async () => {
       // Open the published source; "Pull now" is available only in the published state.
-      await page.goto(`/#/data-source?id=${sourceID}`);
+      await page.goto(`/#/data-source?id=${sourceID}&application=${project}`);
       await expect(page.getByRole("heading", { name: sourceTitle, level: 1 })).toBeVisible({ timeout: 30_000 });
       // "Pull now" requests one pull at the next tick; the background PullSources worker (every 5s)
       // fetches the local rows and loads them as the dataset's next version.

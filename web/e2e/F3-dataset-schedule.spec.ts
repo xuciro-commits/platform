@@ -6,18 +6,20 @@ test("F3 an integrator updates keyed rows without changing old versions and sche
   test.setTimeout(180_000);
   const { read, submit, publish } = acceptedClient(page);
   const name = unique("scheduled");
+  const project = unique("f3project");
   const input = unique("INPUT"), output = unique("OUTPUT"), pipeline = unique("PIPELINE");
   let schedule = "";
   const version = async (id: string, number: number) => (await read<{ record: { data: { id: string; note: string }[] } }>(`/v1/records/build.datasetversion/${encodeURIComponent(`${id}@${number}`)}`)).record.data;
   const original = [{ id: "A", note: "original" }, { id: "B", note: "retained" }];
 
   await signIn(page, "admin", "/projects");
-  await submit("build.dataset", input, "create", { name: `${name}input`, title: "Scheduled input", key: "id", keep: 5 });
-  await submit("build.dataset", output, "create", { name: `${name}output`, title: "Scheduled output", keep: 5 });
+  await submit("build.app", project, "create", { name: project, title: "F3 project" });
+  await submit("build.dataset", input, "create", { name: `${name}input`, title: "Scheduled input", key: "id", keep: 5, project });
+  await submit("build.dataset", output, "create", { name: `${name}output`, title: "Scheduled output", keep: 5, project });
   await submit("build.dataset", input, "load", { type: "snapshot", rows: original });
 
   await test.step("update and delete use the dataset key, while the earlier version stays readable", async () => {
-    await page.goto(`/#/dataset?id=${input}`);
+    await page.goto(`/#/dataset?id=${input}&application=${project}`);
     await page.getByRole("combobox", { name: "Transaction type", exact: true }).selectOption("update");
     await page.locator('input[type="file"]').setInputFiles({ name: "updates.csv", mimeType: "text/csv", buffer: Buffer.from("id,note\nA,replaced\nC,inserted\n") });
     await expect.poll(async () => (await read<{ record: { version: number } }>(`/v1/records/build.dataset/${input}`)).record.version).toBe(2);
@@ -31,13 +33,13 @@ test("F3 an integrator updates keyed rows without changing old versions and sche
     expect(await version(input, 1)).toEqual(original);
   });
 
-  await submit("build.pipeline", pipeline, "create", { name: `${name}pipeline`, title: `Pipeline ${name}`, input, outputDataset: output });
+  await submit("build.pipeline", pipeline, "create", { name: `${name}pipeline`, title: `Pipeline ${name}`, input, outputDataset: output, project });
   await submit("build.pipeline", pipeline, "publish", {});
   await submit("build.pipeline", pipeline, "run", {});
   await expect.poll(async () => (await read<{ record: { version?: number } }>(`/v1/records/build.dataset/${output}`)).record.version ?? 0, { timeout: 45_000 }).toBe(1);
 
   await test.step("a schedule is independently created and really builds its published pipeline", async () => {
-    await page.goto("/#/schedule?id=new");
+    await page.goto(`/#/schedule?id=new&application=${project}`);
     await page.getByRole("textbox", { name: "Name", exact: true }).fill(`${name}timer`);
     await page.getByRole("textbox", { name: "Title", exact: true }).fill(`Schedule ${name}`);
     await page.getByRole("combobox", { name: "Pipeline", exact: true }).selectOption(pipeline);
@@ -55,7 +57,7 @@ test("F3 an integrator updates keyed rows without changing old versions and sche
     const built = await read<{ record: { last?: { written: number; error?: string } } }>(`/v1/records/build.pipeline/${pipeline}`);
     expect(built.record.last?.error ?? "").toBe("");
     expect(built.record.last?.written).toBe(2);
-    await page.goto(`/#/schedule?id=${schedule}`);
+    await page.goto(`/#/schedule?id=${schedule}&application=${project}`);
     await page.getByRole("checkbox", { name: "Enabled", exact: true }).uncheck();
     await page.getByRole("button", { name: "Save", exact: true }).first().click();
     const review = page.getByRole("dialog", { name: "Review changes", exact: true });

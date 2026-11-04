@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:804190b953744afb",
+  "revision": "sha256:5cc03009d61318a3",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -985,54 +985,6 @@
       "composed": [
         "app/record-actions",
         "ui/record-form"
-      ]
-    },
-    {
-      "id": "app/knowledge-search",
-      "owner": "@platform/app",
-      "name": "Authorized cross-application search",
-      "summary": "Search records and knowledge through the current member’s original read endpoints.",
-      "layer": 3,
-      "authority": "api",
-      "maturity": "recommended",
-      "scope": "platform",
-      "uses": [
-        "code"
-      ],
-      "tags": [
-        "search",
-        "knowledge",
-        "records"
-      ],
-      "source": "web/packages/app/src/automation/agents.tsx",
-      "exports": [
-        "Search"
-      ],
-      "example": "SearchExample",
-      "constraints": [
-        "Results come from the current member’s host. The offline example searches synthetic records only.",
-        "This search currently has no dedicated error or pending feedback; callers must not claim otherwise."
-      ],
-      "states": [
-        "empty"
-      ],
-      "snippet": "import { Search } from \"@platform/app\";\n<Search initial=\"order\" />",
-      "props": [
-        {
-          "name": "initial",
-          "type": "string",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "\"\""
-        }
-      ],
-      "composed": [
-        "ui/button",
-        "ui/form",
-        "ui/input",
-        "ui/page-header",
-        "ui/panels"
       ]
     },
     {
@@ -12934,7 +12886,6 @@
       "app/application-runs",
       "app/application-sessions",
       "app/external-observations",
-      "app/knowledge-search",
       "app/operation-run",
       "app/page-workspace",
       "app/record-actions",
@@ -13086,8 +13037,7 @@
       "ui/flow"
     ],
     "ui/form": [
-      "app/agent-assistant",
-      "app/knowledge-search"
+      "app/agent-assistant"
     ],
     "ui/indexed-choices": [
       "ui/choice-input"
@@ -13098,7 +13048,6 @@
       "app/application-runs",
       "app/application-sessions",
       "app/external-observations",
-      "app/knowledge-search",
       "app/semantic-selection",
       "app/tenant-references",
       "ui/ai-result",
@@ -13156,7 +13105,6 @@
       "app/application-runs",
       "app/dashboard",
       "app/external-observations",
-      "app/knowledge-search",
       "app/page-workspace",
       "app/record-detail",
       "app/records",
@@ -13167,7 +13115,6 @@
       "app/application-runs",
       "app/application-sessions",
       "app/composed-page",
-      "app/knowledge-search",
       "app/operation-run",
       "app/record-detail",
       "scenario/application-studio",

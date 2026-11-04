@@ -11,7 +11,7 @@ test("F1 builder goes from an empty project to an application a business user ac
   const label = `Orders ${name.slice(6)}`;
   const headers = { authorization: "Bearer builder" };
   const viewName = `${name}view`;
-  let objectID = "", viewID = "";
+  let objectID = "", viewID = "", projectID = "";
   const objectView: ObjectView = { application: { app: "build", kind: "app", name }, page: { app: "build", kind: "page", name: viewName } };
   const read = async <T,>(path: string): Promise<T> => {
     const response = await page.request.get(path, { headers });
@@ -21,6 +21,8 @@ test("F1 builder goes from an empty project to an application a business user ac
 
   const submit = async (type: string, id: string, action: string, payload: unknown, expectedRevision: number) => {
     const identity = await read<{ tenantId: string; principalId: string }>("/v1/me");
+    const resourceCreates = new Set(["build.object", "build.actiontype", "build.page", "build.function", "build.testplan", "build.sample-set", "build.query", "build.agent", "build.connection", "build.source", "build.listener", "build.dataset", "build.pipeline", "build.schedule", "build.writeback", "build.match", "build.observation", "build.propertytype", "build.valuetype", "build.linktype", "build.objecttypegroup"]);
+    if (action === "create" && projectID && resourceCreates.has(type) && payload && typeof payload === "object") payload = { ...payload as Record<string, unknown>, project: projectID };
     const response = await page.request.post("/v1/submissions", {
       headers,
       data: {
@@ -43,7 +45,7 @@ test("F1 builder goes from an empty project to an application a business user ac
   };
 
   await test.step("1 create a project", async () => {
-    await signIn(page, "builder", "/projects");
+    await signIn(page, "builder", "/files");
     const projects = page.getByRole("table");
     await expect(projects).toBeVisible();
     expect(await projects.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -56,6 +58,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await sheet.getByRole("textbox", { name: "What people call it *" }).fill(label);
     await sheet.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Next steps" })).toBeVisible();
+    projectID = (await read<{ records: { id: string; name: string }[] }>("/v1/records/build.app?limit=500")).records.find(record => record.name === name)!.id;
   });
 
   await test.step("2 bring data in as a dataset", async () => {
@@ -67,6 +70,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await expect(page.getByRole("button", { name: "Upload CSV" })).toBeVisible();
     await page.locator('input[type="file"]').setInputFiles({ name: "orders.csv", mimeType: "text/csv", buffer: Buffer.from("Order no,Customer,Amount\nSO-1,Acme,120\nSO-2,Globex,80\n") });
     await expect(page.getByRole("cell", { name: "Globex" })).toBeVisible();
+    await expect(page).toHaveURL(/\/preview$/);
   });
 
   await test.step("3 create an object type from the dataset", async () => {
@@ -81,7 +85,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await expect(page.getByText(`build.${objectName}`, { exact: true })).toBeVisible();
     await page.keyboard.press("ControlOrMeta+K");
     await page.getByRole("combobox").fill(`:${objectName}`);
-    await expect(page.getByRole("group", { name: "Resources" }).getByRole("option").first()).toBeVisible();
+    await expect(page.getByRole("group", { name: "Objects" }).getByRole("option").first()).toBeVisible();
     await page.keyboard.press("Escape");
   });
 
@@ -217,7 +221,9 @@ test("F1 builder goes from an empty project to an application a business user ac
     const portal = user.getByRole("region", { name: "Applications", exact: true });
     await expect(portal.getByRole("button", { name: /^Control Panel/ })).toHaveCount(0);
     await expect(portal.getByRole("button", { name: /^Asset Library/ })).toHaveCount(0);
-    await user.getByRole("region", { name: "Business applications" }).getByRole("button", { name: label, exact: true }).click();
+    const business = user.getByRole("region", { name: "Business applications" });
+    await expect(business.getByRole("heading", { name: label, level: 3 })).toBeVisible();
+    await business.getByRole("button", { name: label, exact: true }).click();
     await expect(user).toHaveURL(/\/#\/page\/ri\./);
     const app = user.getByRole("region", { name: "Orders" });
     await expect(app.getByRole("heading", { name: "Orders", level: 1 })).toBeVisible();
@@ -253,7 +259,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await user.goto(`/#/explorer?type=build.${objectName}`);
     await user.getByRole("main").getByRole("row").filter({ has: user.getByRole("cell", { name: "Acme", exact: true }) }).click();
     await inspect.getByRole("button", { name: "Open record", exact: true }).click();
-    await expect(user).toHaveURL(new RegExp(`/#/record\\?.*id=${acme.id}`));
+    await expect(user).toHaveURL(new RegExp(`/#/objects/build\\.${objectName}/${acme.id}`));
     const acmeView = user.getByRole("main").getByRole("region", { name: "Order object view", exact: true });
     await expect(acmeView.getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
     await expect(inspect).toHaveCount(0);
@@ -445,6 +451,10 @@ test("F1 builder goes from an empty project to an application a business user ac
         evaluation: [{ minQuality: 1, maxCostUsd: 1, maxLatencyMillis: 1000, cases: [{ name: "case", input: { customer: "Acme" }, expected: { answer: "ok" } }] }],
       }, 0);
       created.push({ kind: "evaluation-set", type: "build.testplan", id: planID });
+      const directory = await read<{ resources: { draft?: string; ref: { kind: string }; variant?: string }[] }>("/v1/resources");
+      const planResource = directory.resources.find(resource => resource.draft === planID);
+      expect(planResource?.ref.kind).toBe("evaluation-set");
+      expect(planResource?.variant).toBe("evaluation-set");
       await publish("evaluation-set", planID);
       const installedPlan = await read<{ record: { definitionVersion: number } }>(`/v1/records/build.testplan/${planID}`);
       expect(installedPlan.record.definitionVersion).toBe(1);

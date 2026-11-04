@@ -7,30 +7,34 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   test.setTimeout(180_000);
   const source=acceptedClient(page,"publisher","publisher"), customer=acceptedClient(page);
   const tag=unique("product"), provider=`${tag}provider`, consumer=`${tag}consumer`;
+  const publisherProject=unique("PUBLISHERPROJECT"), customerProject=unique("CUSTOMERPROJECT");
   const providerObject=unique("PROVIDER"), providerApp=unique("PROVIDERAPP"), consumerObject=unique("CONSUMER"), consumerApp=unique("CONSUMERAPP");
   const baseType=`build.${provider}`, customerType=`build.${tag}extension`;
   const providerTitle=`Provider ${tag}`, consumerTitle=`Consumer ${tag}`;
   const ref=(kind:string,name:string)=>({app:"build",kind,name});
+  const products=new Set<string>();
   const fields=[{name:"code",title:"Code",type:"text",required:true}];
   const confirm={name:"confirm",title:"Confirm provider",from:["open"],inputs:[{name:"description",title:"Description",type:"text",required:true}],sets:[{field:"description",from:"description"}]};
-  await source.submit("build.object",providerObject,"create",{name:provider,title:providerTitle,fields:[...fields,{name:"description",title:"Description",type:"text"}],states:[{name:"open",title:"Open"}],actions:[confirm]});
+  await source.submit("build.app",publisherProject,"create",{name:publisherProject,title:"Publisher project"});
+  await customer.submit("build.app",customerProject,"create",{name:customerProject,title:"Customer project"});
+  await source.submit("build.object",providerObject,"create",{name:provider,title:providerTitle,project:publisherProject,fields:[...fields,{name:"description",title:"Description",type:"text"}],states:[{name:"open",title:"Open"}]});
+  await source.submit("build.actiontype",`${baseType}.confirm`,"create",{name:`${baseType}.confirm`,object:baseType,project:publisherProject,definition:confirm});
   await source.submit("build.app",providerApp,"create",{name:`${provider}app`,title:providerTitle,resources:[ref("object",baseType)]});
   const freeze=async(id:string,version:string,object:string,app:string,title:string,requires:string[]=[]):Promise<PackageDescriptor>=>{
+    if(!products.has(id)){
+      await source.submit("build.product",id,"create",{name:id,title,project:app,roots:[ref("app",`${id}app`)],requires});
+      products.add(id);
+    }
     const candidate=await source.publish([{kind:"object",id:object},{kind:"app",id:app}]);
-    const exported=await page.request.post(`/v1/releases/candidates/${candidate}/product`,{headers:source.headers,data:{id,version,title,requires,roots:[ref("app",`${id}app`)]}});
-    expect(exported.ok(),await exported.text()).toBeTruthy();
-    const product=await exported.json() as PackageDescriptor;
-    const inspected=await page.request.post("/v1/packages/inspect",{headers:source.headers,data:{content:product}});
-    expect(inspected.ok(),await inspected.text()).toBeTruthy();
-    const preview=await inspected.json() as PackagePreview;
-    await source.submit("platform.package",id,"import",{id,digest:preview.digest},null);
-    return product;
+    await source.submit("build.productversion",`${id}@${version}`,"create",{product:id,version,candidate});
+    return (await source.read<{record:{descriptor:PackageDescriptor}}>(`/v1/records/build.productversion/${encodeURIComponent(`${id}@${version}`)}`)).record.descriptor;
   };
   const first=await freeze(provider,"1.2.0",providerObject,providerApp,providerTitle);
   await source.submit("build.object",providerObject,"edit",{fields:[...fields,{name:"description",title:"Description",type:"text"}]});
-  await source.submit("build.actiontype",`${baseType}.confirm`,"edit",{definition:{...confirm,title:"Confirm provider now"}});
+  const action=await source.read<{record:{version:number}}>(`/v1/records/build.actiontype/${baseType}.confirm`);
+  await source.submit("build.actiontype",`${baseType}.confirm`,"edit",{name:`${baseType}.confirm`,object:baseType,definition:{...confirm,title:"Confirm provider now"}},action.record.version);
   const latest=await freeze(provider,"1.10.0",providerObject,providerApp,providerTitle);
-  await source.submit("build.object",consumerObject,"create",{name:consumer,title:consumerTitle,fields:[{name:"provider",title:"Provider",type:"reference",ref:baseType}]});
+  await source.submit("build.object",consumerObject,"create",{name:consumer,title:consumerTitle,project:publisherProject,fields:[{name:"provider",title:"Provider",type:"reference",ref:baseType}]});
   await source.submit("build.app",consumerApp,"create",{name:`${consumer}app`,title:consumerTitle,resources:[ref("object",`build.${consumer}`)]});
   const dependent=await freeze(consumer,"1.0.0",consumerObject,consumerApp,consumerTitle,[`${provider}@^1.0.0`]);
   const offer=async(descriptor:PackageDescriptor)=>{
@@ -56,7 +60,7 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   const base=directory.resources.find(resource=>resource.ref.name===baseType && resource.ref.kind==="object")!;
   expect(base.managedBy).toBe(provider);expect(base.project).toBe(`package:${provider}`);expect(base.canEdit).toBe(false);
   const extension=unique("EXTENSION");
-  await customer.submit("build.object",extension,"create",{name:`${tag}extension`,title:"Customer extension",extends:baseType,fields:[{name:"base",title:"Base",type:"reference",ref:baseType,required:true},{name:"note",title:"Note",type:"text"}]});
+  await customer.submit("build.object",extension,"create",{name:`${tag}extension`,title:"Customer extension",project:customerProject,extends:baseType,fields:[{name:"base",title:"Base",type:"reference",ref:baseType,required:true},{name:"note",title:"Note",type:"text"}]});
   await customer.publish([{kind:"object",id:extension}]);
   const baseRecord=unique("BASE"), extensionRecord=unique("LOCAL");
   await customer.submit(baseType,baseRecord,"create",{code:"CUSTOMER"});
@@ -86,7 +90,7 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   const final=await customer.read<ResourceDirectory>("/v1/resources");
   expect(final.resources.filter(resource=>resource.managedBy===consumer).every(resource=>resource.state==="archived")).toBeTruthy();
   const replacement=unique("REPLACEMENT"), replacementType=`${provider}replacement`;
-  await source.submit("build.object",replacement,"create",{name:replacementType,title:"Replacement provider",fields});
+  await source.submit("build.object",replacement,"create",{name:replacementType,title:"Replacement provider",project:publisherProject,fields});
   await source.submit("build.app",providerApp,"edit",{resources:[ref("object",`build.${replacementType}`)]});
   const removedBase=await freeze(provider,"1.12.0",replacement,providerApp,providerTitle);
   await offer(removedBase);

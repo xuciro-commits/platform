@@ -106,10 +106,17 @@ test("F6 an admin invites a member, grants a role, and the member sees only what
     const member = (await read<{ id: string; markings?: string[] }[]>(page, "/v1/members")).find(member => member.id === id)!;
     expect(member.markings).toContain(markingID);
     const identity = await read<{ tenantId: string; principalId: string }>(page, "/v1/me");
+    const project = unique("f6project");
+    const projectResponse = await page.request.post("/v1/submissions", { headers: adminHeaders, data: {
+      tenantId: identity.tenantId, principalId: identity.principalId, authority: "build", target: { type: "build.app", id: project },
+      schema: { name: "build.app.create", version: 1 }, idempotencyKey: unique("f6project"), expectedRevision: 0,
+      payload: Buffer.from(JSON.stringify({ name: project, title: "F6 Marking project" })).toString("base64"),
+    } });
+    expect(projectResponse.ok(), await projectResponse.text()).toBeTruthy();
     const created = await page.request.post("/v1/submissions", { headers: adminHeaders, data: {
       tenantId: identity.tenantId, principalId: identity.principalId, authority: "build", target: { type: "build.dataset", id: unique("marked") },
       schema: { name: "build.dataset.create", version: 1 }, idempotencyKey: unique("marking"), expectedRevision: 0,
-      payload: Buffer.from(JSON.stringify({ name: unique("personal"), title: "F6 Marked dataset", compartments: [markingID] })).toString("base64"),
+      payload: Buffer.from(JSON.stringify({ project, name: unique("personal"), title: "F6 Marked dataset", compartments: [markingID] })).toString("base64"),
     } });
     expect(created.ok(), await created.text()).toBeTruthy();
     expect((await created.json()).error).toBeUndefined();
@@ -139,6 +146,11 @@ test("F6 an admin invites a member, grants a role, and the member sees only what
       // Negative assertion (UI): the member has no platform:admin, so the Control Panel
       // is absent from the application rail (it only shows to admins/auditors).
       await expect(memberPage.getByRole("button", { name: "Control Panel", exact: true })).toHaveCount(0);
+      for (const view of ["members", "ai-providers", "audit"]) {
+        await memberPage.goto(`/#/${view}`);
+        await expect(memberPage.getByText("This address points to a task your current access does not include.", { exact: true }).first()).toBeVisible();
+        await expect(memberPage.getByRole("main").getByRole("heading", { name: "Control Panel", exact: true })).toHaveCount(0);
+      }
 
       // Negative assertion (API): /v1/members returns 403 for a non-admin member.
       const membersResponse = await memberPage.request.get("/v1/members", { headers: { authorization: `Bearer ${subject}` } });

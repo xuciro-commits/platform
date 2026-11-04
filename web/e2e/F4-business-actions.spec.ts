@@ -68,26 +68,30 @@ test("F4 a business user finds an object, runs an action, and sees it in the act
 
   await test.step("setup: a builder defines and publishes an object with actions a business user may take", async () => {
     await signIn(page, "builder", "/projects");
+    const project = unique("project");
+    await submit({ type: "build.app", id: project }, "build", "create", { name: project, title: "Ticket project" }, 0);
     objectID = unique("OBJ");
     await submit({ type: "build.object", id: objectID }, "build", "create", {
       name: objectName, title: "Ticket", plural: "Tickets", display: "subject",
+      project,
       fields: [
         { name: "subject", title: "Subject", type: "text", required: true, search: true },
         { name: "note", title: "Resolution note", type: "text" },
         { name: "priority", title: "Priority", type: "choice", choices: "low,high" },
       ],
       states: [{ name: "open", title: "Open" }],
-      actions: [
-        { name: "resolve", title: "Resolve ticket", description: "Record how the ticket was resolved.", from: ["open"], to: "",
-          inputs: [{ name: "note", title: "Resolution note", type: "text", required: true }], sets: [{ field: "note", from: "note" }] },
-      ],
     }, 0);
     await expect.poll(async () => (await read<{ record: { revision: number } }>(`/v1/records/build.object/${objectID}`)).record.revision).toBe(1);
+    await submit({ type: "build.actiontype", id: `${type}.resolve` }, "build", "create", {
+      name: `${type}.resolve`, object: type, project,
+      definition: { name: "resolve", title: "Resolve ticket", description: "Record how the ticket was resolved.", from: ["open"], to: "",
+        inputs: [{ name: "note", title: "Resolution note", type: "text", required: true }], sets: [{ field: "note", from: "note" }] },
+    }, 0);
     const draft = (await read<{ record: { actions?: unknown[]; actionTypes: { ref: { name: string } }[] } }>(`/v1/records/build.object/${objectID}`)).record;
     expect(draft.actions ?? []).toEqual([]);
     expect(draft.actionTypes).toHaveLength(1);
     await submit({ type: "build.actiontype", id: unique("ACT") }, "build", "create", {
-      name: `${type}.escalate`, object: type,
+      name: `${type}.escalate`, object: type, project,
       definition: { name: "escalate", title: "Escalate ticket", description: "Escalate a high-priority ticket.", from: ["open"], to: "",
         conditions: [{ field: "priority", operator: "=", value: "high", message: "Only high-priority tickets can be escalated." }],
         inputs: [{ name: "reason", title: "Escalation reason", type: "text", required: true }], sets: [{ field: "note", from: "reason" }] },
@@ -119,6 +123,11 @@ test("F4 a business user finds an object, runs an action, and sees it in the act
   });
 
   const user = await (await browser.newContext()).newPage();
+  const sectionRequests: string[] = [];
+  user.on("request", request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.includes("/sections/")) sectionRequests.push(pathname);
+  });
   try {
     await test.step("1 the business user reaches the object within three interactions with ⌘K", async () => {
       await signIn(user, "user");
@@ -129,8 +138,9 @@ test("F4 a business user finds an object, runs an action, and sees it in the act
       const option = palette.getByRole("option", { name: new RegExp(`${title}\\b.*${recordID}`) });
       await expect(option).toBeVisible({ timeout: 30_000 });
       await option.click();
-      await expect(user).toHaveURL(new RegExp(`/#/record\\?.*id=${recordID}`));
+      await expect(user).toHaveURL(new RegExp(`/#/objects/${encodeURIComponent(type)}/${recordID}`));
       await expect(user.getByRole("main").getByRole("heading", { name: title, level: 1 })).toBeVisible({ timeout: 30_000 });
+      expect(sectionRequests).toEqual([]);
     });
 
     await test.step("2 the action bar opens the action form and a button named for the action runs it", async () => {
@@ -157,7 +167,10 @@ test("F4 a business user finds an object, runs an action, and sees it in the act
 
     await test.step("3 the activity shows the edit immediately", async () => {
       const view = user.getByRole("main");
-      await view.getByRole("tab", { name: "History", exact: true }).click();
+      await user.getByRole("navigation", { name: "Ticket", exact: true }).getByRole("button", { name: "Activity", exact: true }).click();
+      await expect.poll(() => sectionRequests.some(path => path.endsWith("/sections/activity"))).toBe(true);
+      await expect.poll(() => sectionRequests.some(path => path.endsWith("/sections/history"))).toBe(true);
+      await expect.poll(() => sectionRequests.some(path => path.endsWith("/sections/comments"))).toBe(true);
       const history = view.getByRole("region", { name: "History", exact: true });
       await expect(history.getByText(`${type}.resolve`, { exact: true })).toBeVisible({ timeout: 30_000 });
       await expect(history.getByText("Closed after a call with the customer.")).toBeVisible();

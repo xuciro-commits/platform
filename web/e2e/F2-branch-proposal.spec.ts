@@ -12,6 +12,7 @@ test("F2 a builder modifies a published object type on a branch and proposes it 
   const newFieldTitle = "Severity";
   const branchTitle = `Add ${newFieldTitle} ${name.slice(7)}`;
   const branchName = unique("severitybranch");
+  const project = unique("ticketproject");
   const headers = { authorization: "Bearer builder" };
   let objectID = "";
   const relatedID = unique("RELATED"), relatedName = `${objectName}details`, relatedTitle = "Ticket details", relatedField = `${newField}details`;
@@ -63,9 +64,10 @@ test("F2 a builder modifies a published object type on a branch and proposes it 
 
   await test.step("setup: a builder defines and publishes a baseline object type on main", async () => {
     await signIn(page, "builder", "/projects");
+    await submit({ type: "build.app", id: project }, "create", { name: project, title: "Ticket project" }, 0);
     objectID = unique("OBJ");
     await submit({ type: "build.object", id: objectID }, "create", {
-      name: objectName, title: objectTitle, plural: "Tickets", display: "subject",
+      name: objectName, title: objectTitle, plural: "Tickets", display: "subject", project,
       fields: [
         { name: "subject", title: "Subject", type: "text", required: true, search: true },
         { name: "note", title: "Resolution note", type: "text" },
@@ -77,7 +79,7 @@ test("F2 a builder modifies a published object type on a branch and proposes it 
     const installed = await read<{ record: { published: string } }>(`/v1/records/build.object/${objectID}`);
     expect(installed.record.published).not.toBe("");
     expect(await objectFields()).toEqual(["subject", "note"]);
-    await submit({ type: "build.object", id: relatedID }, "create", { name: relatedName, title: relatedTitle, fields: [{ name: "subject", title: "Subject", type: "text" }] }, 0);
+    await submit({ type: "build.object", id: relatedID }, "create", { name: relatedName, title: relatedTitle, project, fields: [{ name: "subject", title: "Subject", type: "text" }] }, 0);
     await publish("object", relatedID);
   });
 

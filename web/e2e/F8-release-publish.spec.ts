@@ -8,6 +8,7 @@ test("F8 a publisher reviews a product version, releases it, and the version is 
   const name = unique("tickets");
   const objectName = `${name}ticket`;
   const type = `build.${objectName}`;
+  const project = unique("ticketsproject");
   const headers = { authorization: "Bearer builder" };
   let objectID = "";
 
@@ -39,28 +40,34 @@ test("F8 a publisher reviews a product version, releases it, and the version is 
 
   await test.step("setup: a builder defines a publishable object type with actions and leaves it unpublished", async () => {
     await signIn(page, "builder", "/projects");
+    await submit({ type: "build.app", id: project }, "create", { name: project, title: "Ticket project" }, 0);
     objectID = unique("OBJ");
     await submit({ type: "build.object", id: objectID }, "create", {
       name: objectName, title: "Ticket", plural: "Tickets", display: "subject",
+      project,
       fields: [
         { name: "subject", title: "Subject", type: "text", required: true, search: true },
         { name: "note", title: "Resolution note", type: "text" },
         { name: "priority", title: "Priority", type: "choice", choices: "low,high" },
       ],
       states: [{ name: "open", title: "Open" }],
-      actions: [
-        { name: "resolve", title: "Resolve ticket", description: "Record how the ticket was resolved.", from: ["open"], to: "",
-          inputs: [{ name: "note", title: "Resolution note", type: "text", required: true }], sets: [{ field: "note", from: "note" }] },
-        { name: "escalate", title: "Escalate ticket", description: "Escalate a high-priority ticket.", from: ["open"], to: "",
-          conditions: [{ field: "priority", operator: "=", value: "high", message: "Only high-priority tickets can be escalated." }],
-          inputs: [{ name: "reason", title: "Escalation reason", type: "text", required: true }], sets: [{ field: "note", from: "reason" }] },
-      ],
     }, 0);
     await expect.poll(async () => (await objectRecord()).record.revision).toBe(1);
     const installed = await objectRecord();
     expect(installed.record.published ?? "", "the object is an unpublished draft so F8 exercises the publish action itself").toBe("");
     const working = await read<{ drafts: { kind: string; id: string }[] }>("/v1/releases/drafts/working");
     expect(working.drafts.some(draft => draft.kind === "object" && draft.id === objectID)).toBe(true);
+    await submit({ type: "build.actiontype", id: `${type}.resolve` }, "create", {
+      name: `${type}.resolve`, object: type, project,
+      definition: { name: "resolve", title: "Resolve ticket", description: "Record how the ticket was resolved.", from: ["open"], to: "",
+        inputs: [{ name: "note", title: "Resolution note", type: "text", required: true }], sets: [{ field: "note", from: "note" }] },
+    }, 0);
+    await submit({ type: "build.actiontype", id: `${type}.escalate` }, "create", {
+      name: `${type}.escalate`, object: type, project,
+      definition: { name: "escalate", title: "Escalate ticket", description: "Escalate a high-priority ticket.", from: ["open"], to: "",
+        conditions: [{ field: "priority", operator: "=", value: "high", message: "Only high-priority tickets can be escalated." }],
+        inputs: [{ name: "reason", title: "Escalation reason", type: "text", required: true }], sets: [{ field: "note", from: "reason" }] },
+    }, 0);
   });
 
   await test.step("1 the publisher opens DevOps Releases and starts a new candidate for the draft", async () => {
@@ -86,8 +93,6 @@ test("F8 a publisher reviews a product version, releases it, and the version is 
     expect(objectDraft.issues, "the object has no check problems").toEqual([]);
     expect(review.included.some(ref => ref.app === "build" && ref.kind === "object" && ref.name === `build.${objectName}`), "the contents being published include the object").toBe(true);
 
-    // No standalone DevOps "Products → Contents" dependency-closure view exists in this environment; the release
-    // review's included contents and draft provenance are the dependency closure the publisher confirms before release.
     await expect(page.getByText("Candidate ready for review", { exact: true })).toBeVisible();
     const provenance = page.getByRole("group", { name: "Draft provenance" });
     await expect(provenance.getByText("Object types · Ticket").first()).toBeVisible();
@@ -151,7 +156,7 @@ test("F8 a publisher reviews a product version, releases it, and the version is 
     const created: { type: string; id: string }[] = [];
     try {
       await submit({ type: "build.page", id: badPageID }, "create", {
-        name: badPageName, title: "Release gate page", object: type, list: ["subject"], detail: ["subject"],
+        name: badPageName, title: "Release gate page", project, object: type, list: ["subject"], detail: ["subject"],
       }, 0);
       created.push({ type: "build.page", id: badPageID });
 

@@ -8,6 +8,7 @@ test("F10 an assistant reads only authorized context and writes only after the m
   test.setTimeout(300_000);
   const tag = unique("assist");
   const typeName = tag.toLowerCase();
+  const project = unique("assistproject");
   const agentName = `${typeName}agent`;
   const agentID = `build.${agentName}`;
   const action = `build.${typeName}.approve`;
@@ -58,21 +59,27 @@ test("F10 an assistant reads only authorized context and writes only after the m
 
   try {
     const admin = acceptedClient(page);
+    await admin.submit("build.app", project, "create", { name: project, title: "Assist project" });
     const objectID = unique("OBJECT"), secretObjectID = unique("SECRET");
     await admin.submit("build.object", objectID, "create", {
       name: typeName, title: `Assist ${tag}`,
+      project,
       fields: [{ name: "title", title: "Title", type: "text", required: true }],
       access: [{ role: "user", read: "all" }],
       states: [{ name: "open", title: "Open" }, { name: "approved", title: "Approved" }],
-      actions: [{ name: "approve", title: "Approve", from: ["open"], to: "approved" }],
+    });
+    await admin.submit("build.actiontype", action, "create", {
+      name: action, object: `build.${typeName}`, project,
+      definition: { name: "approve", title: "Approve", from: ["open"], to: "approved" },
     });
     await admin.publish([{ kind: "object", id: objectID }]);
     await admin.submit(`build.${typeName}`, record, "create", { title: `Visible ${tag}` });
 
     await admin.submit("build.object", secretObjectID, "create", {
       name: secretTypeName, title: `Secret ${tag}`,
+      project,
       fields: [{ name: "value", title: "Value", type: "text", required: true }],
-      access: [], states: [{ name: "open", title: "Open" }], actions: [],
+      access: [], states: [{ name: "open", title: "Open" }],
     });
     await admin.publish([{ kind: "object", id: secretObjectID }]);
     await admin.submit(`build.${secretTypeName}`, unique("SECRET"), "create", { value: secret });
@@ -82,11 +89,15 @@ test("F10 an assistant reads only authorized context and writes only after the m
     await admin.submit("build.agent", agentID, "create", {
       name: agentName, title: `Assistant ${tag}`, description: "Review one record and propose the declared approval.",
       instructions: "Search only when needed. Propose the approval only for the visible record. Never claim access to protected data.",
-      model: `${provider}/review`, tools: [action], steps: 6, actions: 1, handoffRole: "user",
+      model: `${provider}/review`, tools: [action], steps: 6, actions: 1, handoffRole: "user", project,
     });
     await admin.submit("build.agent", agentID, "publish", {});
 
-    await signIn(page, "user", "/assistant");
+    await signIn(page, "user", `/objects/${encodeURIComponent(`build.${typeName}`)}/${record}`);
+    await expect.poll(() => new URL(page.url()).hash).toContain(`build.${typeName}`);
+    await page.getByRole("button", { name: "AIP Assist", exact: true }).click();
+    await expect(page.getByText("Current page context", { exact: true })).toBeVisible();
+    await expect(page.getByText(`build.${typeName}/${record}`, { exact: true })).toBeVisible();
     await page.getByRole("combobox", { name: "Agent", exact: true }).selectOption(agentID);
     await page.getByRole("textbox", { name: "Goal", exact: true }).fill(`Approve ${record} after checking its context.`);
     const started = page.waitForResponse(response =>

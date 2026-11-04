@@ -7,13 +7,15 @@ test("F8 a released media set supports object attachments and retains their byte
   test.setTimeout(180_000);
   const { headers, read, submit, publish } = acceptedClient(page);
   const name = unique("documents"), object = unique("OBJECT"), record = unique("RECORD");
+  const project = unique("documentsproject");
   const type = `build.${name}document`;
   const title = `Media ${name}`, filename = "retained-document.txt";
   const bytes = Buffer.from(`Accepted attachment ${name}\nOriginal bytes remain readable.\n`);
   let mediaSet = "", hash = "";
+  await submit("build.app", project, "create", { name: project, title: "Document project" });
 
   await test.step("a publisher creates a media set and uploads the original file through Dataset Preview", async () => {
-    await signIn(page, "admin", "/media-set?id=new");
+    await signIn(page, "admin", `/media-set?id=new&application=${encodeURIComponent(project)}`);
     await page.getByRole("textbox", { name: "Name", exact: true }).fill(name);
     await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
     await page.getByRole("button", { name: "Create", exact: true }).click();
@@ -34,10 +36,13 @@ test("F8 a released media set supports object attachments and retains their byte
   });
 
   await submit("build.object", object, "create", {
-    name: `${name}document`, title: "Document", plural: "Documents", display: "subject",
+    name: `${name}document`, title: "Document", plural: "Documents", display: "subject", project,
     fields: [{ name: "subject", title: "Subject", type: "text", required: true }, { name: "document", title: "Document", type: "attachment" }],
     states: [{ name: "open", title: "Open" }],
-    actions: [{ name: "attach", title: "Attach document", from: ["open"], to: "", inputs: [{ name: "document", title: "Document", type: "attachment", required: true }], sets: [{ field: "document", from: "document" }] }],
+  });
+  await submit("build.actiontype", `${type}.attach`, "create", {
+    name: `${type}.attach`, object: type, project,
+    definition: { name: "attach", title: "Attach document", from: ["open"], to: "", inputs: [{ name: "document", title: "Document", type: "attachment", required: true }], sets: [{ field: "document", from: "document" }] },
   });
   const candidate = await publish([{ kind: "mediaset", id: mediaSet }, { kind: "object", id: object }]);
   await submit(type, record, "create", { subject: `Document ${name}` });

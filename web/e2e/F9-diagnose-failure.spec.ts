@@ -52,13 +52,15 @@ test("F9 a builder diagnoses a failed sync run from the Monitoring overview, rea
 
   await test.step("setup: publish an object type, then a source with a bad URL that will fail at pull time", async () => {
     await signIn(page, "admin", "/projects");
+    const project = unique("f9project");
+    await submit({ type: "build.app", id: project }, "build", "create", { name: project, title: "F9 project" }, 0);
 
     objectID = unique("F9OBJ");
     await submit({ type: "build.object", id: objectID }, "build", "create", {
       name: objectName, title: "F9 Item", plural: "F9 Items", display: "label",
+      project,
       fields: [{ name: "label", title: "Label", type: "text", required: true, search: true }],
       states: [{ name: "active", title: "Active" }],
-      actions: [],
     }, 0);
     await expect.poll(async () => (await read<{ record: { revision: number } }>(`/v1/records/build.object/${objectID}`)).record.revision, { timeout: 15_000 }).toBe(1);
     await publishDraft("object", objectID);
@@ -72,6 +74,7 @@ test("F9 a builder diagnoses a failed sync run from the Monitoring overview, rea
       title: `F9 Source ${name.slice(5)}`,
       url: "http://127.0.0.1:19999/rows",
       allowPrivate: true,
+      project,
       object: `build.${objectName}`,
       key: "id",
       mapping: [{ from: "name", to: "label" }],

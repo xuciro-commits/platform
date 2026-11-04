@@ -3,9 +3,11 @@ import {acceptedClient,expect,signIn,test,unique} from "./kit";
 test.use({actionTimeout:15_000});
 
 test("F5 a member completes work and approves a request from their inbox, and the initiator is notified",async({page,browser})=>{
-  const admin=acceptedClient(page),name=unique("work"),object=unique("OBJECT"),record=unique("RECORD"),task=unique("TASK");
+  const admin=acceptedClient(page),name=unique("work"),project=unique("workproject"),object=unique("OBJECT"),record=unique("RECORD"),task=unique("TASK");
   const type=`build.${name}`,title=`Review ${name}`;
-  await admin.submit("build.object",object,"create",{name,title:"Work subject",display:"subject",fields:[{name:"subject",title:"Subject",type:"text",required:true}],access:[{role:"user",read:"all"}],states:[{name:"open",title:"Open"},{name:"pending",title:"Pending"},{name:"approved",title:"Approved"}],actions:[{name:"release",title:"Release",from:["open"],to:"approved",approval:{pending:"pending",levels:[{title:"Business review",role:"user"}]}}]});
+  await admin.submit("build.app",project,"create",{name:project,title:"Work project"});
+  await admin.submit("build.object",object,"create",{name,title:"Work subject",project,display:"subject",fields:[{name:"subject",title:"Subject",type:"text",required:true}],access:[{role:"user",read:"all"}],states:[{name:"open",title:"Open"},{name:"pending",title:"Pending"},{name:"approved",title:"Approved"}]});
+  await admin.submit("build.actiontype",`${type}.release`,"create",{name:`${type}.release`,object:type,project,definition:{name:"release",title:"Release",from:["open"],to:"approved",approval:{pending:"pending",levels:[{title:"Business review",role:"user"}]}}});
   await admin.publish([{kind:"object",id:object}]);
   await admin.submit(type,record,"create",{subject:`Subject ${name}`});
   await admin.submit("work.task",task,"create",{title,body:"Check the linked subject",ref:`${type}/${record}`,assignee:"user-1"});

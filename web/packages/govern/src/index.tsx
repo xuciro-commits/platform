@@ -1,7 +1,6 @@
 import "./i18n";
-import { defineApp, useHost, type AppUI, type Host } from "@platform/app";
-import { Button, Card, ContentTabs, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
-import type { ReactNode } from "react";
+import { appRegistration, defineApp, useHost, type AppUI, type AppView, type Host } from "@platform/app";
+import { Button, Card, PageHeader, useWorkspace, navigationLinks, type NavSection, t } from "@platform/ui";
 import { MarkingEditor, Markings } from "./markings";
 import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bookmark, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
 import { Members, MemberDetail } from "./people";
@@ -34,20 +33,6 @@ function controlPanelAreas(host: Host): Record<Area, { view: string; title: stri
     ai: shown([["ai-playground", "AI playground", !!host.role("ai")], ["ai-usage", "AI usage", !!host.role("ai")], ["ai-configuration", "AI configuration", host.holds("ai", "admin")], ["ai-providers", "Providers and models", host.holds("ai", "admin")]]),
     settings: shown([["words", "Languages and words", admin(host)], ["app-settings", "App settings", admin(host)], ["credentials", "Credentials", admin(host)], ["integrations", "Connectors", admin(host)], ["self-hosting", "System history", !!host.role("system")]]),
   };
-}
-
-function TabbedArea({ label, tabs, current, children }: { label: string; tabs: { view: string; title: string }[]; current: string; children: ReactNode }) {
-  const { open } = useWorkspace();
-  if (tabs.length < 2) return <>{children}</>;
-  return <div className="grid gap-3">
-    <ContentTabs label={t(label)} items={tabs.map(tab => ({ id: tab.view, title: t(tab.title) }))} value={current} onChange={view => open({ view })} />
-    {children}
-  </div>;
-}
-
-function AreaTabs({ area, current, children }: { area: Area; current: string; children: ReactNode }) {
-  const host = useHost();
-  return <TabbedArea label={area === "ai" ? "AI" : area === "settings" ? "Settings" : "Roles and permissions"} tabs={controlPanelAreas(host)[area]} current={current}>{children}</TabbedArea>;
 }
 
 function controlPanelNavigation(host: Host): NavSection[] {
@@ -90,51 +75,52 @@ function ControlPanelOverview() {
   </>;
 }
 
-const controlPanelViews: View[] = [
-  { id: "self-hosting", title: () => t("System history"), render: () => <AreaTabs area="settings" current="self-hosting"><SystemConsole /></AreaTabs> },
-  { id: "credentials", title: () => t("Credentials"), render: () => <AreaTabs area="settings" current="credentials"><Credentials /></AreaTabs> },
+function controlPanelViewAllowed(view: string, host: Host): boolean {
+  if (view === "account" || view === "control-panel") return true;
+  if (view === "members" || view === "permissions" || view === "markings" || view === "audit") return admin(host) || auditor(host);
+  if (view === "self-hosting") return !!host.role("system");
+  if (view === "ai-playground" || view === "ai-usage") return !!host.role("ai") || host.holds("ai", "admin");
+  if (view === "ai-configuration" || view === "ai-providers") return host.holds("ai", "admin");
+  return admin(host);
+}
+
+const controlPanelViewList: AppView[] = [
+  { id: "self-hosting", title: () => t("System history"), render: () => <SystemConsole /> },
+  { id: "credentials", title: () => t("Credentials"), render: () => <Credentials /> },
   { id: "markings", title: () => t("Markings"), render: () => <Markings /> },
   { id: "marking", title: () => t("Marking"), render: params => <MarkingEditor key={params.id} id={params.id ?? "new"} /> },
-  { id: "integrations", title: () => t("Connectors"), render: () => <AreaTabs area="settings" current="integrations"><Integrations /></AreaTabs> },
+  { id: "integrations", title: () => t("Connectors"), render: () => <Integrations /> },
   { id: "control-panel", title: () => t("Control Panel"), render: () => <ControlPanelOverview /> },
   { id: "account", title: () => t("My account"), render: () => <MyAccount /> },
-  { id: "organisation", title: () => t("Organisation"), render: () => <TabbedArea label="Organization" current="organisation" tabs={[{view:"organisation",title:"Settings"},{view:"enterprise",title:"Organization directory"}]}><Organisation /></TabbedArea> },
- { id:"enterprise",title:()=>t("Organization directory"),render:params=><TabbedArea label="Organization" current="enterprise" tabs={[{view:"organisation",title:"Settings"},{view:"enterprise",title:"Organization directory"}]}><Enterprise element={params.element} section={params.section}/></TabbedArea> },
+  { id: "organisation", title: () => t("Organisation"), render: () => <Organisation /> },
+ { id:"enterprise",title:()=>t("Organization directory"),render:params=><Enterprise element={params.element} section={params.section}/> },
   { id: "members", title: () => t("Members"), render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
-  { id: "permissions", title: () => t("Roles and permissions"), render: () => <AreaTabs area="permissions" current="permissions"><Permissions /></AreaTabs> },
-  { id: "matrix", title: () => t("Capability matrix"), render: () => <AreaTabs area="permissions" current="matrix"><Matrix /></AreaTabs> },
-  { id: "protocols", title: () => t("Protocols"), render: () => <AreaTabs area="permissions" current="protocols"><Protocols /></AreaTabs> },
-  { id: "app-settings", title: () => t("App settings"), render: () => <AreaTabs area="settings" current="app-settings"><AppSettingsView /></AreaTabs> },
-  { id: "words", title: () => t("Languages and words"), render: () => <AreaTabs area="settings" current="words"><Words /></AreaTabs> },
+  { id: "permissions", title: () => t("Roles and permissions"), render: () => <Permissions /> },
+  { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
+  { id: "protocols", title: () => t("Protocols"), render: () => <Protocols /> },
+  { id: "app-settings", title: () => t("App settings"), render: () => <AppSettingsView /> },
+  { id: "words", title: () => t("Languages and words"), render: () => <Words /> },
   { id: "audit", title: () => t("Audit"), render: () => <Audit /> },
-  { id: "ai-playground", title: () => t("AI playground"), render: p => <AreaTabs area="ai" current="ai-playground"><AIPlayground initialModel={p.model} /></AreaTabs> },
-  { id: "ai-usage", title: () => t("AI usage"), render: () => <AreaTabs area="ai" current="ai-usage"><AIUsage /></AreaTabs> },
-  { id: "ai-configuration", title: () => t("AI configuration"), render: p => <AreaTabs area="ai" current="ai-configuration"><AIConfiguration initialSection={p.section} fromPackage={p.fromPackage} fromVersion={p.fromVersion} /></AreaTabs> },
-  { id: "ai-providers", title: () => t("Providers and models"), render: () => <AreaTabs area="ai" current="ai-providers"><AIProviders /></AreaTabs> },
+  { id: "ai-playground", title: () => t("AI playground"), render: p => <AIPlayground initialModel={p.model} /> },
+  { id: "ai-usage", title: () => t("AI usage"), render: () => <AIUsage /> },
+  { id: "ai-configuration", title: () => t("AI configuration"), render: p => <AIConfiguration initialSection={p.section} fromPackage={p.fromPackage} fromVersion={p.fromVersion} /> },
+  { id: "ai-providers", title: () => t("Providers and models"), render: () => <AIProviders /> },
 ];
+const controlPanelViews: AppView[] = controlPanelViewList.map(view => ({ ...view, for: (host: Host) => controlPanelViewAllowed(view.id, host) }));
 
 export const controlPanel = defineApp({
-  id: "platform",
-  serves: ["platform", "ai"],
-  surface: "tenant",
-  category: "govern",
+  ...appRegistration("platform"),
   description: "Members, roles, AI models, settings and the audit trail.",
-  for: () => true,
   portal: host => controlPanelNavigation(host).some(section => navigationLinks(section.items).some(item => item.route.view !== "control-panel")),
-  title: "Control Panel",
   icon: <SlidersHorizontal />,
-  home: { view: "control-panel" },
   views: controlPanelViews,
-  opens: { "platform.marking": "marking" },
   nav: controlPanelNavigation,
 });
 
 export const marketplace = defineApp({
-  id: "marketplace", serves: ["platform"], category: "govern", title: "Marketplace", icon: <Store />,
+  ...appRegistration("marketplace"), icon: <Store />,
   description: "Packaged products available to this tenant: install, upgrade and prepare their applications.",
-  for: (host) => admin(host) || auditor(host) || host.can("build.app.create"),
-  home: { view: "apps" },
   views: [
     { id: "apps", title: () => t("Marketplace"), render: p => <Apps tab={p.tab}/> },
     { id: "package-preparation", title: () => t("Prepare package applications"), render: p => <PackagePreparation key={`${p.id}@${p.version}`} id={p.id ?? ""} version={p.version ?? ""} /> },
@@ -155,10 +141,8 @@ export function createMonitoring(host: Host, integration?: Pick<AppUI, "for" | "
   const runs = monitoringRuns(host);
   const integrating = !!integration && (!integration.for || integration.for(host));
   return defineApp({
-    id: "monitoring", serves: ["platform", "flow", "build"], category: "govern", title: "Monitoring", icon: <Activity />,
+    ...appRegistration("monitoring"), icon: <Activity />,
     description: "Overview, every run the host knows about, and its own health.",
-    for: host => admin(host) || !!host.role("flow") || !!integration && (!integration.for || integration.for(host)),
-    home: { view: runs ? "monitoring-overview" : "integration-health" },
     views: [
       ...(integrating ? integration.views : []),
       ...(runs ? [
@@ -207,9 +191,8 @@ export const agentOperations: Pick<AppUI, "for" | "views" | "nav"> = {
 };
 
 export const hostConsole = defineApp({
-  id: "host-console", serves: [], category: "govern", title: "Host Console", icon: <Server />,
+  ...appRegistration("host-console"), icon: <Server />,
   description: "Every tenant on this host: health, lifecycle, support sessions, promotions and migrations.",
-  home: { view: "host-overview" },
   views: [
  { id: "host-package-help", title: () => t("Package guide"), render: p => <PackageHelp maintenance topic={p.topic ?? "foundations"} /> },
     { id: "host-overview", title: () => t("Host Console"), render: () => <HostOverview /> },
