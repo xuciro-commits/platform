@@ -45,7 +45,7 @@ test("F15 an object selected in Object Explorer is sent to Workshop as a real ob
     const { candidateId } = await preview.json();
     await page.request.post("/v1/releases/candidates", { headers, data: { drafts: [{ kind: "object", id: objectID }], candidateId, key: unique("publish") } });
     await page.request.post("/v1/releases/active", { headers, data: { candidateId, key: unique("publish") } });
-    await submit({ type: `build.${objectName}`, unique("REC") }, "create", { subject: `Record ${tag}` }, 0);
+    await submit({ type: `build.${objectName}`, id: unique("REC") }, "create", { subject: `Record ${tag}` }, 0);
   });
 
   await test.step("1 the builder opens Object Explorer, picks the object type and selects a record", async () => {

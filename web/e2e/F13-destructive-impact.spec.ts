@@ -79,7 +79,7 @@ test("F13 a destructive branch change shows downstream impact before review", as
     const save = page.getByRole("dialog", { name: "Review working state", exact: true });
     await expect(save).toBeVisible();
     await save.getByRole("button", { name: "Create proposal", exact: true }).click();
-    await expect(page).toHaveURL(/\\/#\\/proposal\\?.*id=/);
+    await expect(page).toHaveURL(/\/#\/proposal\?.*id=/);
     const impact = page.getByRole("button", { name: /Review dependencies/ });
     await expect(impact).toBeVisible();
   });
