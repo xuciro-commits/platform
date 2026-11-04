@@ -109,9 +109,10 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const filterName = applicationName ?? scopedApplication?.name;
   const scopeUnresolved = !!scope && !scopedApplication && !applicationName;
   const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20${filterName ? `&application=${encodeURIComponent(filterName)}` : ""}`, undefined, mayRelease && (!scope || !!scopedApplication || !!applicationName));
-  const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess;
-  const activeID = inventory.isError ? "" : inventory.data?.activeId ?? "";
-  const candidates = inventory.isError ? [] : inventory.data?.candidates ?? [];
+    const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess;
+    const activeID = inventory.isError ? "" : inventory.data?.activeId ?? "";
+    const candidates = inventory.isError ? [] : inventory.data?.candidates ?? [];
+    const rollbackTarget = activeID ? candidates.find(candidate => candidate.id !== activeID) : undefined;
   const selected = kinds.find((item) => item.kind === kind)!;
   const query = useRecordInventory<Record>(selected.type, 1000, builder);
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
@@ -441,6 +442,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         {(functionNames.length > 0 || agentNames.length > 0) && !evaluated && <p role="status" className="text-sm text-warning">{t("This candidate is not fully evaluated. Configure models and run evaluations when needed; no quality result is claimed.")}</p>}
         {savedID && !systemScope && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || activeID === savedID || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
+        {activeID === savedID && savedID && rollbackTarget && <Button size="sm" variant="danger" disabled={locked} onClick={() => void send({ kind: "activate", body: { candidateId: rollbackTarget.id, key: crypto.randomUUID() } })}>{t("Rollback to release {id}", { id: rollbackTarget.id.split(":").at(-1)?.slice(0, 10) ?? rollbackTarget.id })}</Button>}
         {activeID === savedID && savedID && !runningMatches && (function () {
           const application = applications.data?.records.find((item) => joint.some((choice) => choice.kind === "app" && choice.id === item.id));
           return application ? <Button size="sm" onClick={() => open({ view: "application-runs", params: { app: "build", name: application.name, application: `build:${application.name}` } })}>{t("Verify as an operator")}</Button>

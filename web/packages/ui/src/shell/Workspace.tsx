@@ -401,11 +401,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
             {railItems.map(item => <RailButton key={item.id} {...item} />)}
             <RailList label={t("Recent")} icon={<Clock />} empty={t("Nothing opened yet.")}
               items={memory.recent.slice(0, 12).map((r) => ({ id: routeKey(r.route), label: r.title, detail: r.app ? applications?.apps.find((a) => a.id === r.app)?.title : undefined, run: () => open(r.route) }))} />
-            <RailList label={t("Favorites")} icon={<Star />} empty={t("Pin an application from its sidebar or from Applications.")}
-              items={pinnedApps.map(app => ({ id: app.id, label: app.title, icon: app.icon, run: () => applications!.onSelect(app.id) }))} />
+            <RailList label={t("Favorites")} icon={<Star />} empty={t("Pin an application from its sidebar, or a record from its page.")}
+              items={[...pinnedApps.map(app => ({ id: app.id, label: app.title, icon: app.icon, run: () => applications!.onSelect(app.id) })), ...memory.favorites.filter(id => !(applications?.apps ?? []).some((a) => a.id === id)).map(id => { const [type, ...rest] = String(id).split(":"); return { id, label: id, detail: type, icon: undefined, run: () => open({ view: "record", params: { type, id: rest.join(":") } }) }; })]} />
             <div className="mt-auto flex flex-col items-center gap-1 pt-2">
               {notificationsItem && <RailButton {...notificationsItem} />}
-              {rail.assist && <RailButton id="assist" label={t("AIP Assist")} icon={<Sparkles />} active={onRailRoute(rail.assist)} run={() => open(rail.assist!)} />}
+              {rail.assist && <RailButton id="assist" label={t("AIP Assist")} icon={<Sparkles />} active={onRailRoute(rail.assist) || (!!sideRef.current && routeKey(sideRef.current.route).startsWith("view:assistant"))} run={() => open({ ...rail.assist!, params: { ...(rail.assist!.params ?? {}), about: routeKey(top?.route) } }, { window: "beside" })} />}
               {sessionMenu}
             </div>
           </aside>

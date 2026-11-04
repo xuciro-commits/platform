@@ -1,6 +1,6 @@
 import { renderingLimits } from "../gen/presentation-limits";
 import type { DetailPresentationOptions, RecordLinkOptions, StatusTrackerOptions } from "../presentation";
-import { Printer } from "lucide-react";
+import { Printer, Star } from "lucide-react";
 import { Barcode } from "./barcode";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useViewVisible } from "../shell/ViewVisibility";
@@ -22,6 +22,7 @@ import type { Api } from "@platform/kernel";
 import {StatusBar, displayOf, entityFrom, listed} from "./RecordEntity";
 import {RecordHistory} from "./RecordHistory";
 import {ApprovalGraph, Approvals, Comments, Files, Processes, Tasks} from "./RecordPanels";
+import { useWorkspace } from "../shell/WorkspaceContext";
 import type {AttachedFile, EntityRecord, RecordSource, RecordView} from "./Records";
 
 export function useRecordView(source: RecordSource, type: string, id?: string, reload = 0) {
@@ -69,6 +70,8 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
   const tabIdentity=JSON.stringify([source.scope,type,id,recordTabs]);
   const [tabState,setTab]=useState<{identity:string;value:string}>();
   const info = source.entity(type);
+  const { favorites, toggleFavorite } = useWorkspace();
+  const pinned = favorites.includes(`${type}:${id}`);
   const { view, error, loading, refresh: load } = useRecordView(source, type, id, reload);
   const entity = useMemo(() => (info ? entityFrom(info,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined) : undefined), [info,source,onOpen]);
   const checkLifecycle = info?.lifecycle, checkState = view && checkLifecycle ? String(view.record[checkLifecycle.field] ?? "") : "";
@@ -112,7 +115,7 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
       {info.versioning?.validUntil&&Boolean(r[info.versioning.validUntil])&&<Tag label={t("Valid until: {date}",{date:String(r[info.versioning.validUntil])})} />}
     </>}
     status={loading&&<span role="status" className="text-xs text-muted">{t("Refreshing record…")}</span>}
-    actions={!detailOnly?<fieldset disabled={loading} className="m-0 flex min-w-0 flex-wrap items-center gap-1 border-0 p-0"><HeaderCommands commands={commands} menu={menu?.(r)??[]} disabled={loading}>{actions?.(r)}</HeaderCommands></fieldset>:undefined} />;
+    actions={!detailOnly?<fieldset disabled={loading} className="m-0 flex min-w-0 flex-wrap items-center gap-1 border-0 p-0"><HeaderCommands commands={commands} menu={menu?.(r)??[]} disabled={loading}>{actions?.(r)}</HeaderCommands></fieldset><Button size="icon" aria-label={pinned ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={pinned} onClick={() => toggleFavorite(`${type}:${id}`)}><Star fill={pinned ? "currentColor" : "none"} /></Button>:undefined} />;
   const shownValue=(name:string,row:EntityRecord=r,target:Entity<EntityRecord>=entity)=>{
     const format=row===r?formats[name]:undefined;
     if(format)return <FormatPill format={format} text={target.fields[name]?.text(valueOf(target,name,row) as never)??""}/>;

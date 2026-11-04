@@ -58,7 +58,9 @@ export function Home() {
   const greeting = hour < 12 ? t("Good morning, {name}", { name }) : hour < 18 ? t("Good afternoon, {name}", { name }) : t("Good evening, {name}", { name });
   const liveProjects = (projects.data?.records ?? []).filter(project => !project.archived)
     .sort((a, b) => (b.changed?.at ?? "").localeCompare(a.changed?.at ?? "")).slice(0, 8);
-  const proposals = (branches.data ?? []).filter(branch => branch.state === "proposed" || branch.state === "open" && branch.changes > 0)
+  const mine = me.principalId;
+  const proposals = (branches.data ?? []).filter(branch =>
+    branch.state === "proposed" && branch.proposal?.reviewers?.includes(mine))
     .sort((a, b) => (b.changed?.at ?? "").localeCompare(a.changed?.at ?? "")).slice(0, 6);
 
   return <div className="mx-auto grid w-full max-w-6xl gap-5 py-2">
@@ -99,11 +101,10 @@ export function Home() {
         </Panel>
       </div>
       <div className="grid content-start gap-5">
-        {builder && <Panel title={t("Branches and proposals")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "changes" })}>{t("All")}<ArrowRight /></Button>}>
-          {!branches.isLoading && !proposals.length && <p className="text-xs text-muted">{t("No open changes. Start a branch from any builder tool.")}</p>}
+        {proposals.length > 0 && <Panel title={t("Pending review")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "changes" })}>{t("All")}<ArrowRight /></Button>}>
           <div className="-mx-2 grid">{proposals.map(branch => <Row key={branch.id} icon={<GitBranch />} title={branch.title} detail={t("{n} changes", { n: branch.changes })}
-            meta={<Tag label={t(branch.state === "proposed" ? "Proposed" : "Editing")} tone={branch.state === "proposed" ? "purple" : "info"} />}
-            onClick={() => open(branch.state === "proposed" ? { view: "proposal", params: { id: branch.id } } : { view: "changes" })} />)}</div>
+            meta={<Tag label={t("Pending review")} tone="warning" />}</div>
+            onClick={() => open({ view: "proposal", params: { id: branch.id } })} />)}</div>
         </Panel>}
         {pinned.length > 0 && <Panel title={t("Pinned")}><div className="grid gap-2">{pinned.map(app => <AppTile key={app.id} app={app} />)}</div></Panel>}
         {builder && tools.length > 0 && <Panel title={t("Build tools")}><div className="grid gap-2">{tools.filter(app => !favorites.includes(app.id)).map(app => <AppTile key={app.id} app={app} />)}</div></Panel>}

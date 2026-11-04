@@ -137,8 +137,8 @@ export function MemberDetail({ id }: { id: string }) {
           onSubmit={async (g) => { if (await decide("platform.member.grant", { type: "platform.member", id: member.id }, g)) setGranting(false); }} />
       </Sheet>}
       {(role("enterprise") || holds("platform", "admin")) && <MemberUnits member={member.id} />}
-      {holds("platform", "admin") && <Panel title={t("Profile")}>
-        <ProfileForm member={member.id} account={account} languages={me.languages} tenant={tenant} self={member.id === me.principalId} />
+      {(self || holds("platform", "admin")) && <Panel title={t("Profile")}>
+        <ProfileForm member={member.id} account={account} languages={me.languages} tenant={tenant} self={self} />
       </Panel>}
     </div>
   );

@@ -29,11 +29,20 @@ function MyInbox() {
   const tasks = useRead<InboxTask[]>("/v1/inbox") ?? [];
   const { decide } = useHost();
   const openRecord = useOpenRecord();
+  const { applications } = useWorkspace();
   const approval = (task: InboxTask) => task.ref?.startsWith("work.approval/") ? task.ref.slice("work.approval/".length) : undefined;
   return (
     <>
       <PageHeader title={t("Tasks and approvals")} help={t("Approvals waiting for you and tasks offered to you, from every app.")} />
       <Inbox tasks={tasks} onOpen={(task) => task.ref && openRecord(task.ref, { window: "tab" })}
+        context={(task) => {
+          const app = applications?.apps.find((a) => a.id === task.app);
+          const chips: ReactNode[] = [];
+          if (app) chips.push(<span key="app" className="text-xs text-muted">{t("Source")}: {app.title}</span>);
+          if (task.ref) chips.push(<span key="ref" className="text-xs text-muted">{t("Decides")}: {task.ref}</span>);
+          if (task.candidates?.length) chips.push(<span key="cand" className="text-xs text-muted">{t("Candidates")}: {task.candidates.join(", ")}</span>);
+          return chips.length ? <div className="grid gap-1">{chips}</div> : null;
+        }}
         actions={(task) => approval(task) ? <>
           <Button size="sm" variant="primary" onClick={() => void decide("work.approval.approve", { type: "work.approval", id: approval(task)! }, {})}>{t("Approve")}</Button>
           <Button size="sm" variant="danger" onClick={() => void decide("work.approval.reject", { type: "work.approval", id: approval(task)! }, {})}>{t("Reject")}</Button>
@@ -289,6 +298,43 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "operation-run", title: (p) => p.id ?? t("Run"), render: (p) => <OperationRunView id={p.id ?? ""} application={p.application} project={p.project} subject={p.subject} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} application={p.application} project={p.project} /> },
-  { id: "assistant", title: (p) => p.about ? `${t("Assistant")}: ${p.about}` : t("Assistant"), render: (p) => <Assistant about={p.about} /> },
+  { id: "assistant", title: () => t("Assistant"), render: (p) => <Assistant about={p.about} /> },
   { id: "search", title: () => t("Search"), render: () => <Search /> },
+  { id: "help", title: () => t("Help"), render: () => <HelpPage /> },
 ];
+
+function HelpRow({ title, meta }: { title: ReactNode; meta?: ReactNode }) {
+  return <div className="flex min-w-0 items-start gap-2 rounded-md border border-border bg-surface p-2 text-left hover:bg-row-hover">
+    <span className="min-w-0 text-sm">{title}</span>
+    {meta && <span className="shrink-0 text-xs text-muted">{meta}</span>}
+  </div>;
+}
+
+function HelpPage() {
+  return <div className="mx-auto grid w-full max-w-4xl gap-4 py-2">
+    <PageHeader title={t("Help")} meta={t("Platform guidance, keyboard shortcuts and where to find each capability.")} />
+    <Panel title={t("Keyboard shortcuts")}>
+      <div className="grid gap-2">
+        <HelpRow title={t("Open search")} meta={<kbd className="border border-border rounded px-1">⌘K</kbd>} />
+        <HelpRow title={t("Go home")} meta={<kbd className="border border-border rounded px-1">⌘H</kbd>} />
+        <HelpRow title={t("Open applications")} meta={<kbd className="border border-border rounded px-1">⌘A</kbd>} />
+        <HelpRow title={t("Toggle navigation")} meta={<kbd className="border border-border rounded px-1">⌘\\</kbd>} />
+      </div>
+    </Panel>
+    <Panel title={t("Workbenches")}>
+      <div className="grid gap-2">
+        <HelpRow title={t("Home — your inbox, requests and pending reviews")} meta={<span className="text-xs text-muted">#/home</span>} />
+        <HelpRow title={t("Applications — every app you may open")} meta={<span className="text-xs text-muted">#/portal</span>} />
+        <HelpRow title={t("Records — every entity type you hold a role in")} meta={<span className="text-xs text-muted">#/records</span>} />
+        <HelpRow title={t("Definitions — published assets and their capabilities")} meta={<span className="text-xs text-muted">#/definitions</span>} />
+        <HelpRow title={t("Object Explorer — saved object lists")} meta={<span className="text-xs text-muted">#/explorer</span>} />
+      </div>
+    </Panel>
+    <Panel title={t("Documentation")}>
+      <div className="grid gap-2">
+        <HelpRow title={t("Platform next phase — target design")} meta={<span className="text-xs text-muted">PLATFORM-NEXT-PHASE.md</span>} />
+        <HelpRow title={t("Roadmap — current batches P0–P2")} meta={<span className="text-xs text-muted">docs/roadmap.md</span>} />
+      </div>
+    </Panel>
+  </div>;
+}

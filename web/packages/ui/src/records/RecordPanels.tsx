@@ -134,8 +134,8 @@ export function Processes({ source, processes, onOpen }: { source: RecordSource;
 
 export type InboxTask = Api.InboxTask;
 
-export function Inbox({ tasks, onOpen, actions, empty = t("Nothing for you") }: {
-  tasks: InboxTask[]; onOpen?: (task: InboxTask) => void; actions?: (task: InboxTask) => ReactNode; empty?: string;
+export function Inbox({ tasks, onOpen, actions, context, empty = t("Nothing for you") }: {
+  tasks: InboxTask[]; onOpen?: (task: InboxTask) => void; actions?: (task: InboxTask) => ReactNode; context?: (task: InboxTask) => ReactNode; empty?: string;
 }) {
   if (tasks.length === 0) return <p className="text-sm text-muted">{empty}</p>;
   const now = Date.now();
@@ -153,6 +153,7 @@ export function Inbox({ tasks, onOpen, actions, empty = t("Nothing for you") }: 
               <span className="ml-auto flex gap-1">{actions?.(task)}</span>
             </div>
             {task.body && <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{task.body}</p>}
+            {context && context(task)}
           </li>
         );
       })}

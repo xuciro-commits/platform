@@ -13,6 +13,7 @@ export function Markings() {
   const host = useHost(), { open } = useWorkspace();
   const query = useReadQuery<Api.Marking[]>("/v1/markings");
   const members = useReadQuery<Member[]>("/v1/members", undefined, host.holds("platform", "admin", "auditor"));
+  const cleared = (host.me?.profile?.markings ?? []).includes;
   return <div className="grid gap-3">
     <PageHeader title={t("Markings")} help={t("Grant classification and compartment clearances to members or teams. Every marking is required, including for administrators.")} actions={host.can("platform.marking.save") && <Button onClick={() => open({ view: "marking", params: { id: "new" } })}>{t("New marking")}</Button>} />
     {query.isError && <Notice tone="danger" message={t("Markings could not be loaded.")} />}
@@ -21,6 +22,7 @@ export function Markings() {
       { id: "kind", header: t("Kind"), cell: ({ row }) => t(row.original.classification ? "Classification" : "Compartment") },
       { id: "members", header: t("Cleared members"), accessorFn: row => (members.data ?? []).filter(member => member.markings?.includes(row.id)).length },
       { id: "teams", header: t("Cleared teams"), accessorFn: row => row.teams?.length ?? 0 },
+      { id: "you", header: t("Your clearance"), accessorFn: row => cleared(row.id) ? t("Cleared") : t("Not cleared"), cell: ({ row }) => cleared(row.original.id) ? <Tag label={t("Cleared")} tone="success" /> : <Tag label={t("Not cleared")} /> },
       { id: "status", header: t("Status"), cell: ({ row }) => <Tag label={t(row.original.archived ? "Archived" : "Active")} /> },
     ]} />
   </div>;

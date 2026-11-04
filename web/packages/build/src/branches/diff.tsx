@@ -1,6 +1,6 @@
 import type { Api } from "@platform/kernel";
 import { useHost } from "@platform/app";
-import { Button, Disclosure, SegmentedChoice, Tag, t } from "@platform/ui";
+import { Button, Disclosure, Panel, SegmentedChoice, Tag, t, useWorkspace } from "@platform/ui";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { changeOpLabel, changeOpTone, pathLabel, resourceKindLabel, resourceTitle, valueText } from "./labels";
@@ -45,10 +45,12 @@ export function ResourceDiff({ diff, titles, status, resolutions, onResolve, ini
   diff: Api.BranchResourceDiff; titles: Titles; status?: Api.BranchResourceStatus;
   resolutions: Record<string, "branch" | "main">; onResolve?: (path: string, take: "branch" | "main") => void; initiallyOpen?: boolean;
 }) {
+  const { open: openRoute } = useWorkspace();
   const [open, setOpen] = useState(initiallyOpen || diff.conflicts.length > 0);
   const [all, setAll] = useState(false);
   const title = titles[resourceKey(diff.type, diff.id)] ?? resourceTitle(diff.id, diff.merged);
   const shown = all ? diff.branch : diff.branch.slice(0, 40);
+  const destructive = diff.op === "delete" || diff.branch.some(change => change.op === "remove");
   return <section className="min-w-0 rounded-md border border-border" aria-label={title}>
     <Button variant="row" type="button" aria-expanded={open} className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left hover:bg-row-hover" onClick={() => setOpen(!open)}>
       {open ? <ChevronDown aria-hidden className="size-4 shrink-0 text-muted" /> : <ChevronRight aria-hidden className="size-4 shrink-0 text-muted" />}
@@ -59,6 +61,11 @@ export function ResourceDiff({ diff, titles, status, resolutions, onResolve, ini
       {status?.drifted && diff.conflicts.length === 0 && <Tag label={t("Main changed")} tone="warning" />}
     </Button>
     {open && <div className="grid min-w-0 gap-3 border-t border-border px-3 py-2">
+      {destructive && <Panel title={t("Downstream impact")}>
+        <div className="flex items-center gap-2"><Tag label={t("Destructive")} tone="danger" /><span className="text-xs text-muted">{t("Review downstream impact before merging.")}</span></div>
+        <p className="text-xs text-muted">{t("Removing this resource or field may break records, pages and pipelines that reference it.")}</p>
+        <Button size="sm" onClick={() => openRoute({ view: "lineage" })}>{t("Review dependencies")}</Button>
+      </Panel>}
       {diff.conflicts.length > 0 && <ul className="grid gap-2" aria-label={t("Conflicts")}>
         {diff.conflicts.map(conflict => <ConflictPicker key={conflict.path} type={diff.type} conflict={conflict} take={resolutions[resolutionKey(diff.type, diff.id, conflict.path)]} onTake={take => onResolve?.(conflict.path, take)} />)}
       </ul>}

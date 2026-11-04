@@ -38,9 +38,16 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
     {ordered.map((category) => {
       const inCategory = apps.filter((a) => a.category === category.id);
       if (!inCategory.length) return null;
+      // Business applications are grouped again by product/project (the part
+      // of the application id before the first ':').
+      const groups = category.id === "business"
+        ? Object.groupBy(inCategory, a => String(a.id).split(":")[0] ?? t("Other"))
+        : { [category.label()]: inCategory };
       return <section key={category.id} aria-label={category.label()} className="grid gap-2">
-        <h2 className="text-2xs font-semibold uppercase tracking-wider text-muted">{category.label()}</h2>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">{inCategory.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</div>
+        {Object.entries(groups).map(([label, apps]) => <div key={label} className="grid gap-2">
+          <h3 className="text-xs font-semibold tracking-wider text-muted">{label}</h3>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">{apps.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</div>
+        </div>)}
       </section>;
     })}
     {!apps.length && <EmptyState title={t("No application matches.")} action={query.trim() ? <Button onClick={() => setQuery("")}>{t("Clear search")}</Button> : undefined} />}
