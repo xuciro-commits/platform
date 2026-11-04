@@ -7,7 +7,7 @@ import { ResourceList } from "../editor/ResourceList";
 import { useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
 import { CompartmentField, MarkingField } from "./marking";
-import { Button, Checkbox, ContentTabs, DataTable, FilePicker, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef } from "@platform/ui";
+import { Button, Checkbox, ContentTabs, DataTable, FilePicker, Histogram, Input, PageHeader, Panel, Select, SummaryStatistics, Tag, TagCounts, t, type ColumnDef, type StatisticsValue } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
 type Field = { name: string; type: string };
@@ -17,7 +17,6 @@ type Version = { id: string; version: number; at: string; rows: number; archived
 type VersionRow = { id: string; dataset: string; version: number; type?: string; at: string; rows: number; archived?: boolean };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "" });
 const fieldClass = "grid min-w-0 gap-1 text-xs";
-const PREVIEW = 50;
 const transactionLabel = (type?: string): string => (({ snapshot: t("Snapshot"), append: t("Append"), update: t("Update"), delete: t("Delete") }) as Record<string, string>)[type || "snapshot"] ?? type ?? "";
 
 export function Datasets() {
@@ -43,6 +42,7 @@ export function DatasetEditor({ id }: { id: string }) {
   const [loadType, setLoadType] = useState("snapshot");
   const [creating, setCreating] = useState(false);
   const [shown, setShown] = useState(0);
+  const [selectedColumn, setSelectedColumn] = useState<string | undefined>(undefined);
   const [tab, setTab] = useState("overview");
   const version = shown || draft.version || 0;
   const versionQuery = useReadQuery<{ record?: Version }>(`/v1/records/build.datasetversion/${encodeURIComponent(`${draft.id}@${version}`)}`, 15000, version > 0);
@@ -50,6 +50,7 @@ export function DatasetEditor({ id }: { id: string }) {
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Datasets")} description={query.isError ? t("The dataset could not be loaded.") : t("Loading…")} />;
   const last = draft.last, latest = draft.version ?? 0;
+  if (columns.length && !selectedColumn) setSelectedColumn(columns[0]);
   const rows = versionQuery.data?.record?.data ?? [], columns = draft.schema?.map((f) => f.name) ?? Object.keys(rows[0] ?? {});
   const transactions = versionsQuery.data?.records ?? [];
   const openVersion = (v: number) => { setShown(v); setTab("preview"); };
@@ -92,10 +93,27 @@ export function DatasetEditor({ id }: { id: string }) {
           {!latest ? <p className="text-xs text-muted">{t("No rows yet. Upload a CSV, or publish a source or pipeline that writes this dataset.")}</p> :
             versionQuery.data?.record?.archived ? <p className="text-xs text-muted">{t("This version is no longer kept.")}</p> :
             <div className="overflow-auto">
-              <DataTable data={rows.slice(0, PREVIEW)} getRowId={(row) => String(rows.indexOf(row))} searchable={false} height={Math.min(420, 40 + rows.length * 28)} columns={columns.map((name): ColumnDef<Record<string, unknown>, unknown> => ({ id: name, header: name, accessorFn: (row) => row[name], cell: (context) => <span className="font-mono">{cell(context.getValue())}</span> }))} />
-              {rows.length > PREVIEW && <p className="px-2 py-1 text-xs text-muted">{t("First {n} of {rows} rows", { n: PREVIEW, rows: rows.length })}</p>}
+              <DataTable data={rows} getRowId={(row, index) => String(index)} searchable={false} height={Math.min(420, 40 + rows.length * 28)} columns={columns.map((name): ColumnDef<Record<string, unknown>, unknown> => ({ id: name, header: name, accessorFn: (row) => row[name], cell: (context) => <span className="font-mono">{cell(context.getValue())}</span> }))} />
+              <p className="px-2 py-1 text-xs text-muted">{t("{rows} rows · full column statistics below", { rows: rows.length })}</p>
             </div>}
         </Panel> },
+          {selectedColumn && <div className="grid gap-3 border-t border-border pt-3">
+            <label className={fieldClass}>{t("Column")}<Select value={selectedColumn} onChange={(e) => setSelectedColumn(e.target.value)}>{columns.map((c) => <option key={c} value={c}>{c}</option>)}</Select></label>
+            <div className="grid min-w-0 gap-3">
+              {(() => {
+                const stats = columnStats(selectedColumn, rows);
+                if (stats.kind === "empty") return <p className="text-xs text-muted">{t("No values.")}</p>;
+                if (stats.kind === "numeric") return <>
+                  <SummaryStatistics value={stats.value} fieldTitle={selectedColumn} />
+                  <Histogram value={stats.histogram} label={t("Value distribution")} />
+                </>;
+                return <>
+                  <p className="text-xs text-muted">{t("{count} non-empty values", { count: stats.count })}</p>
+                  <TagCounts terms={stats.terms.map((t) => ({ value: t.value, count: t.count }))} label={t("Value distribution")} />
+                </>;
+              })()}
+            </div>
+          </div>}
         { id: "transactions", title: t("Transactions"), badge: transactions.length || undefined, content: <Panel title={t("Transactions")} help={t("Each load is a transaction and a new version. Choose one to preview its rows.")} className="grid min-w-0 content-start gap-2">
           {versionsQuery.isError ? <p role="alert" className="text-xs text-danger">{t("Versions are unavailable to you.")}</p> :
           <DataTable data={transactions} getRowId={(row) => row.id} searchable={false} selectedId={version ? `${draft.id}@${version}` : undefined} height={Math.min(480, 80 + transactions.length * 36)}
@@ -117,3 +135,37 @@ export function cell(v: unknown): string {
   if (v === null || v === undefined) return "";
   return typeof v === "object" ? JSON.stringify(v) : String(v);
 }
+
+function columnStats(column: string, rows: Record<string, unknown>[]) {
+  const values = rows.map((r) => r[column]).filter((v) => v !== undefined && v !== null && v !== "");
+  const count = values.length;
+  if (count === 0) return { kind: "empty", count: 0 };
+  const allNum = values.every((v) => typeof v === "number");
+  if (allNum) {
+    const nums = values as number[];
+    const min = Math.min(...nums), max = Math.max(...nums);
+    const sum = nums.reduce((a, b) => a + b, 0);
+    const value: StatisticsValue = { kind: "statistics", count: String(count), min, mean: sum / count, max, sum };
+    const requestedBins = 10;
+    let buckets: Api.HistogramBucket[] = [];
+    const missing = rows.length - count;
+    if (min === max) {
+      buckets = [{ lower: String(min), upper: String(max), upperInclusive: true, count }];
+    } else {
+      const step = (max - min) / requestedBins;
+      for (let i = 0; i < requestedBins; i++) {
+        const lower = min + step * i, upper = min + step * (i + 1);
+        const inclusive = i === requestedBins - 1;
+        const c = nums.filter((v) => v >= lower && (inclusive ? v <= upper : v < upper)).length;
+        buckets.push({ lower: String(lower), upper: String(upper), upperInclusive: inclusive, count: c });
+      }
+    }
+    const histogram: Api.HistogramResult = { field: column, requestedBins, valid: count, missing, minimum: String(min), maximum: String(max), buckets };
+    return { kind: "numeric", value, histogram };
+  }
+  const freq = new Map<string, number>();
+  for (const v of values) freq.set(String(v), (freq.get(String(v)) ?? 0) + 1);
+  const terms = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([value, count]) => ({ value, count }));
+  return { kind: "text", count, terms };
+}
+
