@@ -62,7 +62,7 @@ read-when: 新增导航项、应用、资源类型、页面或路由，调整 Fi
 | 逻辑 | 函数 | Logic | 按项目访问 |
 | 逻辑 | 自动化 | Automate | 按项目访问 |
 | 应用 | 模块、对象视图、模板 | Workshop | 按项目访问；保存到 main 后按使用者的业务角色 |
-| 应用 | 探索、对象列表 | Object Explorer | 个人或按项目共享 |
+| 应用 | 探索、对象列表 | Object Explorer | 个人私有；可发布对象集由项目内 `build.query` 拥有 |
 | AI | 智能体、检索源、评估集 | Agent Studio | 按项目访问 |
 | 交付 | 产品、产品版本、测试计划 | DevOps | 按项目访问 |
 | 交付 | 安装 | Marketplace | 管理员与构建者 |
@@ -133,7 +133,7 @@ read-when: 新增导航项、应用、资源类型、页面或路由，调整 Fi
 
 ## 现存差距
 
-无。
+- Object Explorer 主路径已统一为 ObjectSet；完整 `build.query` 发布合同和结果聚合仍在路线图 D1。
 
 ## 相关
 

@@ -244,9 +244,9 @@ test("F1 builder goes from an empty project to an application a business user ac
     const acme = records.find(record => record.customer === "Acme")!, globex = records.find(record => record.customer === "Globex")!;
     await user.goto(`/#/explorer?type=build.${objectName}`);
     await user.getByRole("main").getByRole("row").filter({ has: user.getByRole("cell", { name: "Acme", exact: true }) }).click();
-    const aroundPanel = user.getByRole("complementary", { name: "Search around", exact: true });
+    const aroundPanel = user.locator('[data-ui="side-pane"]');
     await expect(aroundPanel).toBeVisible();
-    const inspect = user.getByRole("complementary").filter({ has: user.getByRole("button", { name: "Open record", exact: true }) });
+    const inspect = aroundPanel;
     const inspectedView = inspect.getByRole("region", { name: "Order object view", exact: true });
     await expect(inspectedView.getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
     await expect(inspectedView.getByRole("heading", { name: "Globex", exact: true })).toHaveCount(0);

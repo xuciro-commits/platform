@@ -1,20 +1,20 @@
-import { Button, Notice, t, type Route } from "@platform/ui";
+import { Button, Notice, t, useWorkspace, type Route } from "@platform/ui";
 import { useMemo, useState } from "react";
-import { findDefinition, RecordDetail, useHost, useOpenRecord } from "../index";
+import { findDefinition, RecordDetail, useHost } from "../index";
 import { ApplicationPage } from "../runtime/ApplicationRuntime";
 import { ComposedPage, isComposed } from "./sections";
 import { isPageDefinition, PageWorkspace } from "./pages";
 
-type Props = { type: string; id: string; inspect?: boolean; route: Route };
+type Props = { type: string; id: string; inspect?: boolean; route: Route; onOpen?: () => void };
 
 export function ObjectRecordView(props: Props) {
   const { source } = useHost();
   return <ObjectRecordSurface key={JSON.stringify([source.scope, props.type, props.id, source.entity(props.type)?.objectView])} {...props} />;
 }
 
-function ObjectRecordSurface({ type, id, inspect, route }: Props) {
+function ObjectRecordSurface({ type, id, inspect, route, onOpen }: Props) {
   const { source, definitions } = useHost();
-  const openRecord = useOpenRecord();
+  const workspace = useWorkspace();
   const [instance] = useState(() => crypto.randomUUID());
   const [selectedPage, setSelectedPage] = useState<string>();
   const view = source.entity(type)?.objectView;
@@ -25,17 +25,18 @@ function ObjectRecordSurface({ type, id, inspect, route }: Props) {
   const page = definition?.page;
   const currentInput = page?.document?.interface?.inputs?.currentObject;
   const pageCall = useMemo(() => ({ input: { version: page?.document?.interface?.version ?? 0, values: currentInput ? { currentObject: { object: type, id } } : {} } }), [type, id, page?.document?.interface?.version, currentInput]);
+  const from = workspace.activePanel;
+  const openFull = (target = type, record = id) => { onOpen?.(); workspace.open({ view: "record", params: { type: target, id: record } }, { window: "tab", from }); };
   if (!view) {
     return <div className="grid min-w-0 gap-2">
-      {inspect && <div className="flex justify-end"><Button onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open record")}</Button></div>}
-      <RecordDetail type={type} id={id} onOpen={(target, record) => openRecord({ type: target, id: record.id })} />
+      <RecordDetail type={type} id={id} onOpen={(target, record) => openFull(target, record.id)} />
     </div>;
   }
   if (!application || !entry || !page || !pageRef || !application.pages.includes(view.page.name)) return <Notice tone="danger" message={t("This object's Workshop view is unavailable. Ask a builder to check its module and page.")} />;
   const current = entry.document?.interface?.inputs?.currentObject;
   if (entry.object?.name !== type || !current || current.type !== "record" || current.object?.name !== type) return <Notice tone="danger" message={t("This object's Workshop view does not accept its current object. Ask a builder to check the page inputs.")} />;
   return <section aria-label={page.title} className="grid min-w-0 gap-2">
-    {inspect && <div className="flex justify-end"><Button onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open record")}</Button></div>}
+    {inspect && <div className="flex justify-end"><Button onClick={() => openFull()}>{t("Open record")}</Button></div>}
     <ApplicationPage pageRef={pageRef} applicationRef={view.application} instance={instance} onPage={setSelectedPage} route={route}>
       {isComposed(page) ? <ComposedPage page={page} definitionKey={JSON.stringify([source.scope, type, id, definition?.version])} pageCall={pageCall} /> : definition && isPageDefinition(definition) && <PageWorkspace definition={definition} />}
     </ApplicationPage>

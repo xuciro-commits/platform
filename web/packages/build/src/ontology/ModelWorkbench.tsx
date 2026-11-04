@@ -108,6 +108,7 @@ function ObjectTypeDetail({ name, initialTab }: { name: string; initialTab?: str
       meta={<span className="font-mono">{resource.ref.name}</span>}
       status={<Tag label={t(resource.source === "code" ? "Native code" : "Tenant definition")} />}
       actions={<>
+        {resource.installed && <Button onClick={() => open({ view: "explorer", params: { type: resource.ref.name } })}>{t("Explore records")}</Button>}
         {resource.installed && <Button onClick={() => setSeed({ object: resource.ref })}>{t("Create page from model")}</Button>}
         {resource.draft && <Button variant="primary" disabled={!host.can("build.object.edit")} onClick={() => edit()}>{t("Edit object type")}</Button>}
       </>} />

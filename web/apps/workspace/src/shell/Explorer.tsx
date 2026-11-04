@@ -1,33 +1,13 @@
-import { ExplorationRenderer, newId, useHost, useOpenRecord, useRead, OpenIn, type Definition, type PageUI, type SavedView } from "@platform/app";
+import { newId, objectSetResultType, SetBuilder, useHost, useOpenRecord, useRead, OpenIn, type SavedView } from "@platform/app";
 import { Button, Dialog, EmptyState, Form, Input, PageHeader, Panel, RecordList, Select, cn, useWorkspace, t, type EntityRecord, type ListState } from "@platform/ui";
+import type { Api } from "@platform/kernel";
 import { Compass } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-type ExplorationState = { kind: "exploration"; entity: string; current?: string; recordId?: string; filters?: Record<string, string[]> };
+type ExplorationState = { version?: 1; kind: "exploration"; entity: string; current?: string; recordId?: string; selectedType?: string; filters?: Record<string, string[]>; set?: Api.ObjectSet };
 type ListViewState = ListState & { kind?: "list" };
-const same = (a: { app: string; kind: string; name: string }, b: { app: string; kind: string; name: string }) => a.app === b.app && a.kind === b.kind && a.name === b.name;
 
-function explorationGraph(definitions: readonly Definition[], root: string, entityApp: (type: string) => string | undefined): PageUI.PageGraphExplorer | undefined {
-  const rootApp = entityApp(root);
-  if (!rootApp) return undefined;
-  const rootObject = { app: rootApp, kind: "object", name: root };
-  const objects = new Map<string, PageUI.PageGraphObject>([[`${rootApp}/${root}`, { object: rootObject, labelField: "id" }]]);
-  const relations: PageUI.PageGraphRelation[] = [];
-  for (const d of definitions) {
-    if (!d.linkType) continue;
-    const link = d.linkType;
-    if (!same(link.parent, rootObject) && !same(link.child, rootObject)) continue;
-    const target = same(link.parent, rootObject) ? link.child : link.parent;
-    if (target.kind !== "object" || !entityApp(target.name)) continue;
-    if (objects.size >= 8 || relations.length >= 12) break;
-    objects.set(`${target.app}/${target.name}`, { object: target, labelField: "id" });
-    relations.push({ id: `${d.ref.app}/${d.ref.name}`, binding: { ref: d.ref, sourceVersion: d.version } });
-  }
-  if (relations.length === 0) return undefined;
-  return { objects: [...objects.values()], relations };
-}
-
-function SaveExplorationDialog({ entity, current, recordId, filters, onClose }: { entity: string; current?: string; recordId?: string; filters?: Record<string, string[]>; onClose: () => void }) {
+function SaveExplorationDialog({ entity, current, recordId, selectedType, set, onClose }: { entity: string; current?: string; recordId?: string; selectedType?: string; set?: Api.ObjectSet; onClose: () => void }) {
   const { decide } = useHost(), { open } = useWorkspace();
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
@@ -36,7 +16,7 @@ function SaveExplorationDialog({ entity, current, recordId, filters, onClose }: 
     setBusy(true);
     try {
       const id = newId("VIEW");
-      const state: ExplorationState = { kind: "exploration", entity, current: current ?? entity, recordId, filters };
+      const state: ExplorationState = { version: 1, kind: "exploration", entity, current: current ?? entity, recordId, selectedType, set };
       if (await decide("work.view.save", { type: "work.view", id }, { title, entity, state: JSON.stringify(state) })) {
         onClose();
         open({ view: "explorer", params: { saved: id } });
@@ -81,45 +61,42 @@ function SaveListDialog({ entity, state, onClose }: { entity: string; state: Lis
   </Dialog>;
 }
 
-function SearchAroundPanel({ root, type, filters }: { root?: EntityRecord; type: string; filters?: Record<string, string[]> }) {
-  const { source, definitions, entities } = useHost();
-  const entityApp = (object: string) => entities.find((e) => e.type === object)?.app;
-  const config = useMemo(() => explorationGraph(definitions, type, entityApp), [definitions, type, entities]);
-  if (!root) return <Panel role="status" className="text-sm text-muted">{t("Select an object to explore its relationships.")}</Panel>;
-  if (!config) return <Panel role="status" className="text-sm text-muted">{t("This object type has no related types to explore.")}</Panel>;
-  const rootApp = entityApp(type)!;
-  return <ExplorationRenderer kind="graph-explorer" config={config} root={root} rootObject={{ app: rootApp, kind: "object", name: type }}
-    status="value" source={source} definitions={definitions} identity={JSON.stringify([type, root.id, filters])} isActive={() => true}
-    label={t("Search around")} />;
-}
-
 function ExploreView({ type: requested, savedState }: { type?: string; savedState?: ExplorationState }) {
-  const { source, entities } = useHost();
+  const { source, entities, definitions } = useHost();
   const openRecord = useOpenRecord();
   const [filter, setFilter] = useState("");
   const [picked, setPicked] = useState<string>();
   const [selected, setSelected] = useState<EntityRecord>();
+  const [set, setSet] = useState<Api.ObjectSet>(() => savedState?.set ?? { object: savedState?.set?.object ?? savedState?.entity ?? requested ?? entities[0]?.type ?? "" });
   const [saving, setSaving] = useState(false);
-  const chosen = picked ?? savedState?.entity ?? requested ?? entities[0]?.type ?? "";
-  const entity = entities.find((e) => e.type === chosen);
+  const links = useMemo(() => definitions.filter(d => d.linkType).map(d => ({ ref: d.ref, version: d.version, linkType: d.linkType })), [definitions]);
+  const chosen = set.object ?? picked ?? savedState?.entity ?? requested ?? entities[0]?.type ?? "";
+  const resultType = objectSetResultType(set, links) ?? chosen;
+  const entity = entities.find((e) => e.type === resultType);
   const shown = entities.filter((e) => !filter || `${e.title} ${e.type}`.toLowerCase().includes(filter.toLowerCase()))
     .sort((a, b) => a.type.localeCompare(b.type));
   const groups = new Map<string, typeof shown>();
   for (const e of shown) { const app = e.type.split(".")[0] ?? ""; groups.set(app, [...(groups.get(app) ?? []), e]); }
-  const initial = useMemo<ListState>(() => (savedState?.filters ? { filters: savedState.filters } : {}), [savedState]);
+  const restoreSelected = savedState?.recordId;
+  useEffect(() => {
+    if (!restoreSelected || !resultType) return;
+    let active = true;
+    void source.get(savedState?.selectedType ?? resultType, restoreSelected).then((view) => { if (active) setSelected(view.record); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [resultType, restoreSelected, savedState?.selectedType, source]);
   if (entities.length === 0) return <>
     <PageHeader title={t("Object Explorer")} />
     <p className="text-sm text-muted">{t("No entity types in apps you hold a role in.")}</p>
   </>;
-  return <div className="grid h-[calc(100dvh-120px)] grid-cols-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)_minmax(0,0.9fr)]">
+  return <div className="grid h-[calc(100dvh-120px)] grid-cols-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
     <aside aria-label={t("Object types")} className="hidden content-start gap-2 overflow-hidden border-r border-border pr-3 md:grid">
       <div className="flex items-center gap-2 text-sm font-semibold"><Compass className="size-4" />{t("Object types")}<span className="ml-auto text-xs font-normal text-muted">{entities.length}</span></div>
       <Input type="search" aria-label={t("Filter object types")} placeholder={t("Filter…")} value={filter} onChange={(e) => setFilter(e.target.value)} />
       <nav aria-label={t("Object types")} className="grid gap-2 overflow-auto">
         {[...groups.entries()].map(([app, list]) => <div key={app} className="grid gap-0.5">
           <div className="px-2 pt-1 text-xs font-medium uppercase tracking-wide text-muted">{app}</div>
-          {list.map((e) => <Button key={e.type} variant="row" aria-current={e.type === chosen ? "true" : undefined}
-            className={cn("grid", e.type === chosen && "bg-row-selected font-medium")} onClick={() => { setPicked(e.type); setSelected(undefined); }}>
+          {list.map((e) => <Button key={e.type} variant="row" aria-current={e.type === resultType ? "true" : undefined}
+            className={cn("grid", e.type === resultType && "bg-row-selected font-medium")} onClick={() => { setPicked(e.type); setSelected(undefined); setSet({ object: e.type }); }}>
             <span className="truncate">{e.title}</span><span className="truncate font-mono text-xs text-muted">{e.type}</span>
           </Button>)}
         </div>)}
@@ -127,20 +104,18 @@ function ExploreView({ type: requested, savedState }: { type?: string; savedStat
     </aside>
     <div className="min-w-0">
       <label className="mb-3 grid gap-1 text-xs md:hidden">{t("Object type")}
-        <Select value={chosen} onChange={(event) => { setPicked(event.target.value); setSelected(undefined); }}>
+        <Select value={chosen} onChange={(event) => { setPicked(event.target.value); setSelected(undefined); setSet({ object: event.target.value }); }}>
           {[...groups.entries()].map(([app, list]) => <optgroup key={app} label={app}>{list.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</optgroup>)}
         </Select>
       </label>
-      <PageHeader title={entity?.title ?? chosen} help={entity?.description} description={chosen}
+      <PageHeader title={entity?.title ?? resultType} help={entity?.description} description={resultType}
         actions={<><Button size="sm" onClick={() => setSaving(true)}>{t("Save exploration")}</Button><OpenIn type={chosen} exclude={["explorer"]} /></>} />
-      <RecordList key={chosen} source={source} type={chosen} initial={initial} height="calc(100dvh - 250px)" selectedId={selected?.id}
-        onOpen={(r) => { setSelected(r); openRecord({ type: chosen, id: r.id }); }} />
+      <Panel title={t("Object set")} className="grid min-w-0 gap-2">
+        <SetBuilder value={set} onChange={setSet} selectedId={selected?.id} previewRows={20}
+          onRowOpen={(record) => { if (!resultType) return; setSelected(record); openRecord({ type: resultType, id: record.id }); }} />
+      </Panel>
     </div>
-    <aside aria-label={t("Search around")} className="hidden min-w-0 content-start gap-3 overflow-auto border-l border-border pl-3 lg:grid">
-      <div className="text-2xs font-semibold uppercase tracking-wider text-muted">{t("Search around")}</div>
-      <SearchAroundPanel root={selected} type={chosen} filters={savedState?.filters} />
-    </aside>
-    {saving && <SaveExplorationDialog entity={chosen} current={chosen} recordId={selected?.id} filters={savedState?.filters} onClose={() => setSaving(false)} />}
+    {saving && <SaveExplorationDialog entity={chosen} current={chosen} recordId={selected?.id} selectedType={selected ? resultType : undefined} set={set} onClose={() => setSaving(false)} />}
   </div>;
 }
 

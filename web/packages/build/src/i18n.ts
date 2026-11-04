@@ -3456,6 +3456,7 @@ register("zh-CN", {
   "Object, field and action access is enforced by the original owner.": "对象、字段和动作访问由原所有者执行校验。",
   "Edit access": "编辑访问权限",
   "Create page from model": "从模型创建页面",
+  "Explore records": "探索记录",
   "This creates a controlled page draft. Review its bindings before releasing it.": "此操作创建受控页面草稿；发布前请检查绑定。",
   "Create page draft": "创建页面草稿",
   "The page draft could not be created. Your choices are still here.": "无法创建页面草稿，已选内容仍保留。",
