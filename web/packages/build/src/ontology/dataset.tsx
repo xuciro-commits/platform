@@ -126,6 +126,7 @@ export function DatasetEditor({ id }: { id: string }) {
               { id: "archived", header: t("Rows kept"), accessorFn: (row) => row.archived, cell: (context) => context.getValue() ? t("No") : t("Yes") },
             ] as ColumnDef<VersionRow, unknown>[]} />}
         </Panel> },
+        { id: "health", title: t("Data health"), content: <Panel title={t("Data health")} className="grid min-w-0 content-start gap-2"><DatasetHealth rows={rows} columns={columns} /></Panel> },
       ]} />
     </fieldset></StructuredEditor>
   </div>;
@@ -167,5 +168,60 @@ function columnStats(column: string, rows: Record<string, unknown>[]) {
   for (const v of values) freq.set(String(v), (freq.get(String(v)) ?? 0) + 1);
   const terms = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([value, count]) => ({ value, count }));
   return { kind: "text", count, terms };
+}
+
+type HealthIssue = { column: string; kind: "nulls" | "duplicates" | "outliers"; message: string; count: number };
+
+function DatasetHealth({ rows, columns }: { rows: Record<string, unknown>[]; columns: string[] }) {
+  const totalRows = rows.length;
+  const issues: HealthIssue[] = [];
+  let score = 100;
+  if (totalRows === 0) return <p className="text-xs text-muted">{t("No data to assess.")}</p>;
+  for (const column of columns) {
+    const values = rows.map((r) => r[column]);
+    const nulls = values.filter((v) => v === undefined || v === null || v === "").length;
+    const nullRate = nulls / totalRows;
+    if (nullRate > 0) {
+      issues.push({ column, kind: "nulls", message: t("{pct}% empty", { pct: Math.round(nullRate * 100) }), count: nulls });
+      score -= nullRate * 30;
+    }
+    const nonNull = values.filter((v) => v !== undefined && v !== null && v !== "");
+    const freq = new Map<string, number>();
+    for (const v of nonNull) freq.set(String(v), (freq.get(String(v)) ?? 0) + 1);
+    const dupes = nonNull.length - freq.size;
+    if (dupes > 0 && dupes / nonNull.length > 0.1) {
+      issues.push({ column, kind: "duplicates", message: t("{count} duplicate values", { count: dupes }), count: dupes });
+      score -= (dupes / nonNull.length) * 20;
+    }
+    const nums = nonNull.filter((v) => typeof v === "number");
+    if (nums.length > 4) {
+      const sorted = [...nums].sort((a, b) => a - b);
+      const q1 = sorted[Math.floor(sorted.length * 0.25)];
+      const q3 = sorted[Math.floor(sorted.length * 0.75)];
+      const iqr = q3 - q1;
+      const outliers = nums.filter((v) => v < q1 - 1.5 * iqr || v > q3 + 1.5 * iqr).length;
+      if (outliers > 0) {
+        issues.push({ column, kind: "outliers", message: t("{count} statistical outliers", { count: outliers }), count: outliers });
+        score -= (outliers / nums.length) * 10;
+      }
+    }
+  }
+  const finalScore = Math.max(0, Math.min(100, Math.round(score)));
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center gap-3">
+        <div className="text-2xl font-bold">{finalScore}</div>
+        <span className="text-xs text-muted">{t("out of 100")}</span>
+      </div>
+      {issues.length === 0 ? <p className="text-xs text-muted">{t("No data quality issues detected.")}</p> : (
+        <DataTable data={issues} getRowId={(_, i) => String(i)} searchable={false} height={Math.min(420, 40 + issues.length * 36)} columns={[
+          { id: "column", header: t("Column"), accessorFn: (r) => r.column },
+          { id: "kind", header: t("Issue"), accessorFn: (r) => r.kind, cell: (c) => { const k = c.getValue() as "nulls" | "duplicates" | "outliers"; const tone = k === "outliers" ? "neutral" : "warning"; const label = k === "nulls" ? t("Empty values") : k === "duplicates" ? t("Duplicate values") : t("Outliers"); return <Tag tone={tone}>{label}</Tag>; } },
+          { id: "message", header: t("Detail"), accessorFn: (r) => r.message },
+          { id: "count", header: t("Count"), accessorFn: (r) => r.count },
+        ] as ColumnDef<HealthIssue, unknown>[]} />
+      )}
+    </div>
+  );
 }
 
