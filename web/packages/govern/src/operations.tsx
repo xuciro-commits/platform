@@ -3,7 +3,7 @@ import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, DataTable, Sheet, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, humanizeKernelError, useWorkspace } from "@platform/ui";
 import { type UseQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { when, type AppSettings, type AuditEntry, type Connector, type EndpointView, type ProtocolInfo, type SettingValue } from "./shared";
 
 export function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; children: (data: T) => ReactNode }) {
@@ -214,7 +214,16 @@ export function Audit() {
   const { catalog, me } = useHost();
   const titles = new Map<string, string>(catalog.map((a) => [a.schema, a.title]));
   const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
+  const [query, setQuery] = useState("");
   const personalQuery = useRead<Api.PersonalRead[]>("/v1/personal-reads");
+  const rows = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    const list = audit ?? [];
+    if (!text) return [...list].reverse();
+    return [...list].filter((r) =>
+      `${r.member ?? ""} ${r.app ?? ""} ${r.action ?? ""} ${r.target ?? ""}`.toLowerCase().includes(text)
+    ).reverse();
+  }, [audit, query]);
   const personalColumns: ColumnDef<Api.PersonalRead, any>[] = [
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
@@ -232,7 +241,11 @@ export function Audit() {
   return (
     <>
       <PageHeader title={t("Audit")} help={t("Accepted inputs of this tenant, newest first, rebuilt from the journal.")} />
-      <ReadResult query={audit}>{(rows) => <DataTable storageKey="monitoring:audit" data={[...rows].reverse()} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 460px)" />}</ReadResult>
+      <div className="grid gap-2">
+        <Input type="search" aria-label={t("Search audit")} placeholder={t("Search member, app, action or target")} value={query} onChange={(e) => setQuery(e.target.value)} className="w-80" />
+        <p className="text-xs text-muted">{t("{n} entries", { n: rows.length })}</p>
+      </div>
+      <ReadResult query={audit}>{() => <DataTable storageKey="monitoring:audit" data={rows} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 460px)" searchable={false} />}</ReadResult>
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Reads of personal data")}</h2>
       <ReadResult query={personalQuery}>{(rows) => <DataTable storageKey="monitoring:personal-data-reads" data={rows} columns={personalColumns} getRowId={(r) => `${r.at}${r.member}${r.type}${r.ids.join()}`} height={240} empty={t("Nobody read personal data yet")} />}</ReadResult>
     </>
