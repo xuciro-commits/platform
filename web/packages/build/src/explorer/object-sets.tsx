@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, useOpenRecord, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
 import { Button, Input, PageHeader, Panel, Select, Textarea, RecordLookup, InterfaceRecordLookup, t, type InterfaceRecordIdentity, type InterfaceRecordPageData, type RecordPageData, type RecordSource } from "@platform/ui";
-import { ObjectSetEditor } from "../editor/ObjectSetEditor";
+import { SetBuilder } from "@platform/app";
 import { DraftStatus, ResourceControls as AssetControls } from "../editor/workbench";
 
 type Term = [string,string,string|number|boolean];
@@ -27,7 +27,7 @@ export function SavedObjectSetEditor({id}:{id:string}) {
  const editor=useDefinitionDraft<Draft>({
   id,type:"build.query",view:"object-set",empty:empty,normalize:hydrate,joinApplication:false,
   failure:t("The object set could not be saved or loaded. Your draft is still here."),
-  payload:draft=>{const {name,title,description,object,interface:interfaceName,by,domain,filter,sort,limit}=draft;return {name,title,description,object:object??"",interface:interfaceName??"",by:by??"",domain,filter,sort,limit};},
+  payload:draft=>{const {name,title,description,object,interface:interfaceName,by,domain,filter,sort,limit}=draft;return {name,title,description,object:object??"",interface:interfaceName??"",by:by??"",...(domain?.length?{domain}:{}),filter,sort,limit};},
  });
  const {draft,query,dirty,busy,error,perform,save,discardChanges,confirmDiscard}=editor;
  const object={app:"build",kind:"object" as const,name:draft.object??""},info=definitions.find((d)=>d.ref.kind==="object"&&d.ref.name===draft.object)?.entity;
@@ -51,7 +51,7 @@ export function SavedObjectSetEditor({id}:{id:string}) {
  <label className="grid min-w-0 gap-1 text-xs">{t("Object set sort")}<Select value={draft.sort?.[0]??"id"} onChange={(e)=>patch({sort:[e.target.value]})}><option value="id">{t("ID")}</option>{fields?.filter((f)=>supported.includes(f.type)).flatMap((f)=>[f.name,`-${f.name}`].map((name)=><option key={name} value={name}>{f.title} {name.startsWith("-")?"↓":"↑"}</option>))}</Select></label>
  </Panel>
  <Panel title={t("Object set filter")} className="grid min-w-0 content-start gap-3">
- <ObjectSetEditor locked search={false} combine={false} around={false} draftKey="query-conditions" interfaces={draft.interfaceShape?[draft.interfaceShape]:undefined} value={draft.interface?{interface:draft.interface,domain:draft.domain??[],filter:draft.filter}:{object:draft.object??"",domain:draft.domain??[],filter:draft.filter}} onChange={next=>patch({domain:(next.domain as Term[]|undefined)??[],filter:next.filter})}/>
+ <SetBuilder locked search={false} combine={false} around={false} draftKey="query-conditions" interfaces={draft.interfaceShape?[draft.interfaceShape]:undefined} value={draft.interface?{interface:draft.interface,domain:draft.domain??[],filter:draft.filter}:{object:draft.object??"",domain:draft.domain??[],filter:draft.filter}} onChange={next=>patch({domain:(next.domain as Term[]|undefined)??[],filter:next.filter})}/>
  <p className="text-xs text-muted">{t("Conditions run with the reader's object and field permissions.")}</p>
  </Panel>
  </fieldset></StructuredEditor>

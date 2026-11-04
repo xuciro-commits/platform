@@ -1,7 +1,7 @@
 import type { Api } from "@platform/kernel";
 import { Button, Checkbox, Input, InputDraftProvider, Panel, Select, Textarea, Toggles, t } from "@platform/ui";
 import { nameOf, type Process } from "./object-model";
-import { ExpressionEditor, observationContextChoices } from "../editor/ExpressionEditor";
+import { ExpressionEditor, observationContextChoices } from "@platform/app";
 import { authoringObject, useAuthoringModel } from "./authoring-model";
 import { RuleCollectionsEditor } from "./RuleCollectionsEditor";
 

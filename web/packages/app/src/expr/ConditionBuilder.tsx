@@ -1,7 +1,6 @@
 import type { Api } from "@platform/kernel";
 import type { RuleSchema } from "@platform/app/rules";
 import { Button, Input, Select, Tag, t, type EntityInfo } from "@platform/ui";
-import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { ExpressionNode, LiteralValue, kindOf, literalExpression, numericKinds, type Collections, type ExpressionChoice } from "./expression-node";
 
@@ -140,7 +139,7 @@ function Row({ value, context, onChange, onRemove }: { value: Api.Expr; context:
         {operators.map(op => <option key={op} value={op}>{opLabel(op, kind)}</option>)}
       </Select>
       {right && <Operand row={value} kind={textOperand ? "text" : kind} op={value.op} context={context} onChange={next => onChange({ ...value, args: [left, next] })} />}
-      <Button size="sm" variant="ghost" aria-label={t("Remove condition")} onClick={onRemove}><Trash2 /></Button>
+      <Button size="sm" variant="ghost" aria-label={t("Remove condition")} onClick={onRemove}><span aria-hidden="true">×</span></Button>
     </div>
     {!choice && <p className="flex items-center gap-1 text-xs text-danger"><Tag label={t("Missing")} tone="danger" />{t("This field no longer exists. Choose another or remove the condition.")}</p>}
     {choice && mismatch && <p role="alert" className="text-xs text-danger">{t("The value is {right}, but {field} is {left}.", { right: t(rightKind), field: choice.label, left: t(kind) })}</p>}
@@ -179,9 +178,9 @@ function GroupView({ group: derived, context, depth, onChange: write, onRemove }
       })}
     </ul>
     <div className="flex flex-wrap gap-1">
-      <Button size="sm" disabled={!context.choices.length} title={t("Add condition (⌘Enter)")} onClick={add}><Plus />{t("Add condition")}</Button>
-      <Button size="sm" variant="ghost" onClick={() => onChange({ ...group, items: [...group.items, { op: "not-empty", kind: "boolean", args: [literalExpression("text")] }] })}><Plus />{t("Add expression")}</Button>
-      {depth < 4 && <Button size="sm" variant="ghost" disabled={!context.choices.length} onClick={() => onChange({ ...group, items: [...group.items, fromGroup({ mode: group.mode === "all" ? "any" : "all", items: [newRow(context.choices[0]), newRow(context.choices[0])] })] })}><Plus />{t("Add group")}</Button>}
+      <Button size="sm" disabled={!context.choices.length} title={t("Add condition (⌘Enter)")} onClick={add}><span aria-hidden="true">+</span>{t("Add condition")}</Button>
+      <Button size="sm" variant="ghost" onClick={() => onChange({ ...group, items: [...group.items, { op: "not-empty", kind: "boolean", args: [literalExpression("text")] }] })}><span aria-hidden="true">+</span>{t("Add expression")}</Button>
+      {depth < 4 && <Button size="sm" variant="ghost" disabled={!context.choices.length} onClick={() => onChange({ ...group, items: [...group.items, fromGroup({ mode: group.mode === "all" ? "any" : "all", items: [newRow(context.choices[0]), newRow(context.choices[0])] })] })}><span aria-hidden="true">+</span>{t("Add group")}</Button>}
     </div>
   </div>;
 }

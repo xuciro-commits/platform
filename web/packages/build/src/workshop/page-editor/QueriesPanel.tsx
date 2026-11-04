@@ -5,7 +5,7 @@ import type { Api } from "@platform/kernel";
 import { parsePageDecimal,isPageDecimalDraft,SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, useProvidedCapabilities, type PageVariableValue } from "@platform/app";
 import { ContextHelp, Button, Card, Checkbox, Input, PropertyList, Select, t } from "@platform/ui";
 import type { EntityInfo } from "@platform/ui";
-import { ExpressionEditor, type ExpressionChoice } from "../../editor/ExpressionEditor";
+import { ExpressionEditor, type ExpressionChoice } from "@platform/app";
 import { overlayOwner } from "../page-layout";
 import { layoutID } from "../page-layout";
 

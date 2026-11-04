@@ -4,7 +4,7 @@ import { useHost, useReadQuery, useProvidedCapabilities, useRecordInventory } fr
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { ContextHelp, Button, Checkbox, Input, InputDraftProvider, Panel, Select, Textarea, t, useInputDrafts, type EntityInfo , AdvancedJson } from "@platform/ui";
 import { useState } from "react";
-import { ExpressionEditor, literalExpression, observationContextChoices, type ExpressionChoice } from "../editor/ExpressionEditor";
+import { ExpressionEditor, literalExpression, observationContextChoices, type ExpressionChoice } from "@platform/app";
 import { nameOf, type Input_, type Process } from "./object-model";
 import { recordPaths } from "./record-paths";
 import { authoringObject, useAuthoringModel } from "./authoring-model";

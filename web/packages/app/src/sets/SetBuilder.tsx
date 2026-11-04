@@ -2,44 +2,33 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { objectSetPath, type Api } from "@platform/kernel";
 import { Button, Checkbox, DataTable, Input, Select, Textarea, columnsFor, entityFrom, humanizeKernelError, t, useDraftInput, type EntityInfo, type EntityRecord } from "@platform/ui";
 import { useHost, useReadQuery } from "../index";
+import { ObjectSetFilter, type ObjectSetFilterProps } from "./ObjectSetFilter";
 
-type Term = [string, string, string | number | boolean];
-type FieldLike = { name: string; title: string; type: string };
 type Mode = "object" | "interface" | "around" | "union" | "intersect" | "subtract";
-type LinkDefinition = { ref: Api.AssetRef; version: string; linkType?: Api.LinkType };
+export type LinkDefinition = { ref: Api.AssetRef; version: string; linkType?: Api.LinkType };
 type LinkChoice = { binding: Api.AssetBinding; direction: string; object: string; name: string };
-
-export type SetFilterSlot = (props: {
-  draftKey: string;
-  object?: string;
-  fields: Api.FieldInfo[];
-  parameters?: Record<string, Api.Value>;
-  lookup: (type: string) => EntityInfo | undefined;
-  value?: Api.Expr;
-  onChange: (value?: Api.Expr) => void;
-}) => ReactNode;
 
 export type SetBuilderProps = {
   value: Api.ObjectSet;
   onChange: (set: Api.ObjectSet) => void;
-  filter?: SetFilterSlot;
+  filter?: (props: ObjectSetFilterProps) => ReactNode;
   search?: boolean;
   combine?: boolean;
   around?: boolean;
   locked?: boolean;
   count?: boolean;
   preview?: boolean;
+  previewRows?: number;
+  selectedId?: string;
+  onRowOpen?: (record: EntityRecord) => void;
   interfaces?: Api.Interface[];
   draftKey?: string;
 };
 
-const supported = ["text", "choice", "reference", "boolean", "integer", "decimal", "date", "datetime"];
-const maxTerms = 16;
 const maxOperands = 16;
 const maxDepth = 4;
 const combinators = ["union", "intersect", "subtract"] as const;
 const parameterKinds = ["text", "boolean", "integer", "decimal", "date", "datetime"];
-const operators = (type?: string) => type && ["boolean", "reference"].includes(type) ? ["=", "!="] : ["=", "!=", "<", "<=", ">", ">=", ...(type === "text" || type === "choice" ? ["like"] : [])];
 
 const modeOf = (set: Api.ObjectSet): Mode => set.around ? "around" : set.union ? "union" : set.intersect ? "intersect" : set.subtract ? "subtract" : set.interface !== undefined ? "interface" : "object";
 const operandsOf = (set: Api.ObjectSet) => set.union ?? set.intersect ?? set.subtract ?? [];
@@ -52,16 +41,6 @@ export function objectSetComplete(set: Api.ObjectSet): boolean {
   const operands = operandsOf(set);
   return operands.length >= 2 && operands.every(objectSetComplete);
 }
-
-const terms = (set: Api.ObjectSet): Term[] | undefined => {
-  if (set.domain === undefined) return [];
-  return Array.isArray(set.domain) && set.domain.every(term => Array.isArray(term) && term.length === 3 && typeof term[0] === "string" && typeof term[1] === "string") ? set.domain as Term[] : undefined;
-};
-
-const withTerms = (set: Api.ObjectSet, next: Term[]): Api.ObjectSet => {
-  const { domain: _, ...rest } = set;
-  return next.length ? { ...rest, domain: next } : rest;
-};
 
 function useSetContext(extra?: Api.Interface[]) {
   const { entities, definitions, source } = useHost();
@@ -92,16 +71,16 @@ export function LinkTypePicker({ links, entities, from, value, direction, onChan
   </label>;
 }
 
-export function SetBuilder({ value, onChange, filter, search = true, combine = true, around = true, locked = false, count = true, preview = count, interfaces, draftKey = "set" }: SetBuilderProps) {
+export function SetBuilder({ value, onChange, filter = ObjectSetFilter, search = true, combine = true, around = true, locked = false, count = true, preview = count, previewRows = 20, selectedId, onRowOpen, interfaces, draftKey = "set" }: SetBuilderProps) {
   const context = useSetContext(interfaces);
   return <div className="grid min-w-0 gap-2 text-xs" aria-label={t("Object set builder")}>
     <SetNode value={value} onChange={onChange} depth={0} path={draftKey} context={context} filter={filter} search={search} combine={combine} around={around} locked={locked} />
-    {count && <SetResult set={value} preview={preview} />}
+    {count && <SetResult set={value} links={context.links} preview={preview} previewRows={previewRows} selectedId={selectedId} onRowOpen={onRowOpen} />}
   </div>;
 }
 
 type Context = ReturnType<typeof useSetContext>;
-type NodeProps = { value: Api.ObjectSet; onChange: (set: Api.ObjectSet) => void; depth: number; path: string; context: Context; filter?: SetFilterSlot; search: boolean; combine: boolean; around: boolean; locked: boolean };
+type NodeProps = { value: Api.ObjectSet; onChange: (set: Api.ObjectSet) => void; depth: number; path: string; context: Context; filter?: (props: ObjectSetFilterProps) => ReactNode; search: boolean; combine: boolean; around: boolean; locked: boolean };
 
 function SetNode({ value, onChange, depth, path, context, filter, search, combine, around, locked }: NodeProps) {
   const mode = modeOf(value);
@@ -147,13 +126,9 @@ function BaseSet({ value, onChange, path, context, filter, search, locked }: Pic
   const idsDraft = useDraftInput(`${path}:ids`, (value.ids ?? []).join("\n"), false, 2570000);
   const entity = isInterface ? undefined : context.entities.find(item => item.type === value.object);
   const shape = isInterface ? context.interfaces.find(item => item.name === value.interface) : undefined;
-  const fields: FieldLike[] = isInterface ? shape?.fields ?? [] : entity?.fields.map(field => ({ name: field.name, title: field.title, type: field.type })) ?? [];
-  const list = terms(value);
-  const setTerm = (index: number, term: Term) => onChange(withTerms(value, list!.map((entry, at) => at === index ? term : entry)));
-  const chooseField = (index: number, name: string) => {
-    const type = fields.find(field => field.name === name)?.type;
-    setTerm(index, [name, "=", type === "boolean" ? false : type === "integer" || type === "decimal" ? 0 : ""]);
-  };
+  const fields: Api.FieldInfo[] = isInterface
+    ? (shape?.fields ?? []).map(field => ({ name: field.name, title: field.title, type: field.type as Api.FieldInfo["type"] }))
+    : entity?.fields ?? [];
   const parameters = Object.entries(value.parameters ?? {});
   const writeParameter = (name: string, next?: Api.Value, rename?: string) => {
     const entries = parameters.flatMap(([key, entry]) => key === name ? next ? [[rename ?? key, next] as const] : [] : [[key, entry] as const]);
@@ -179,35 +154,12 @@ function BaseSet({ value, onChange, path, context, filter, search, locked }: Pic
         </Select></label>)}
     {(value.object || value.interface) && <>
       {!locked && <label className="grid gap-1"><span className="font-medium">{t("Record IDs, one per line")}</span><Textarea aria-label={t("Record IDs, one per line")} data-draft-key={idsDraft.path} value={idsDraft.text} onChange={event => { const raw = event.target.value; idsDraft.write(raw); const { ids: _, ...rest } = value; const ids = raw.split(/\r?\n/).filter(id => id !== ""); onChange(ids.length ? { ...rest, ids } : rest); }} onBlur={idsDraft.clear} rows={3} /></label>}
-      <div className="grid gap-1">
-        <span className="font-medium">{t("Conditions")}</span>
-        {list === undefined
-          ? <p className="text-muted">{t("These conditions use logical operators and stay as they are.")}</p>
-          : <>
-            {list.map((term, index) => {
-              const field = fields.find(item => item.name === term[0]);
-              return <div key={index} role="group" aria-label={t("Condition {n}", { n: index + 1 })} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-1">
-                <Select aria-label={t("Query condition field")} value={term[0]} onChange={event => chooseField(index, event.target.value)}>
-                  <option value="">{t("Choose a field")}</option>
-                  {fields.filter(item => supported.includes(item.type)).map(item => <option key={item.name} value={item.name}>{item.title}</option>)}
-                </Select>
-                <Select aria-label={t("Query condition operator")} value={term[1]} onChange={event => setTerm(index, [term[0], event.target.value, term[2]])}>
-                  {operators(field?.type).map(op => <option key={op}>{op}</option>)}
-                </Select>
-                {typeof term[2] === "boolean"
-                  ? <Checkbox checked={term[2]} onChange={checked => setTerm(index, [term[0], term[1], checked])}>{t("Query literal value")}</Checkbox>
-                  : <Input aria-label={t("Query literal value")} draftKey={`${path}:term:${index}`} type={typeof term[2] === "number" ? "number" : "text"} value={String(term[2])} onChange={event => setTerm(index, [term[0], term[1], typeof term[2] === "number" ? Number(event.target.value) : event.target.value])} />}
-                <Button size="sm" variant="ghost" aria-label={t("Remove query condition")} onClick={() => onChange(withTerms(value, list.filter((_, at) => at !== index)))}>{t("Remove")}</Button>
-              </div>;
-            })}
-            <div><Button size="sm" disabled={!fields.length || list.length >= maxTerms} onClick={() => onChange(withTerms(value, [...list, ["", "=", ""]]))}>{t("Add query condition")}</Button></div>
-          </>}
-      </div>
       {search && <label className="grid gap-1"><span className="font-medium">{t("Search text")}</span>
         <Input aria-label={t("Search text")} draftKey={`${path}:search`} value={value.search ?? ""} onChange={event => { const { search: _, ...rest } = value; onChange(event.target.value ? { ...rest, search: event.target.value } : rest); }} />
       </label>}
-      {filter && !isInterface && value.object && <div className="grid gap-1"><span className="font-medium">{t("Filter expression")}</span>
-        {filter({ draftKey: `${path}:filter`, object: value.object, fields: entity?.fields ?? [], parameters: value.parameters, lookup: context.lookup, value: value.filter as Api.Expr | undefined, onChange: next => { const { filter: _, ...rest } = value; onChange(next ? { ...rest, filter: next } : rest); } })}
+      {Array.isArray(value.domain) && value.domain.length > 0 && <p className="text-warning">{t("Legacy conditions remain fixed; add an Expr filter for new conditions.")}</p>}
+      {filter && (value.object || value.interface) && <div className="grid gap-1"><span className="font-medium">{t("Filter expression")}</span>
+        {filter({ draftKey: `${path}:filter`, object: value.object, fields, parameters: value.parameters, lookup: context.lookup, value: value.filter as Api.Expr | undefined, onChange: next => { const { filter: _, ...rest } = value; onChange(next ? { ...rest, filter: next } : rest); } })}
       </div>}
       {!locked && <div className="grid gap-2"><span className="font-medium">{t("Root parameters")}</span>
         {parameters.map(([name, entry], index) => <div key={index} className="grid gap-2 rounded-sm border border-border p-2">
@@ -254,26 +206,34 @@ function CombinedSet({ mode, value, onChange, depth, path, context, filter, sear
   </div>;
 }
 
-const previewRows = 20;
-const resultType = (set: Api.ObjectSet): string | undefined => set.object || (set.union ?? set.intersect ?? set.subtract ?? []).map(resultType).find(Boolean);
+export function objectSetResultType(set: Api.ObjectSet, links: readonly LinkDefinition[]): string | undefined {
+  if (set.object) return set.object;
+  if (set.around) {
+    const link = links.find(item => item.ref.app === set.around!.link.ref.app && item.ref.name === set.around!.link.ref.name && item.version === set.around!.link.sourceVersion)?.linkType;
+    return link ? set.around.direction === "forward" ? link.child.name : link.parent.name : undefined;
+  }
+  return (set.union ?? set.intersect ?? set.subtract ?? []).map(operand => objectSetResultType(operand, links)).find(Boolean);
+}
 
-function SetResult({ set, preview }: { set: Api.ObjectSet; preview: boolean }) {
+function SetResult({ set, links, preview, previewRows, selectedId, onRowOpen }: { set: Api.ObjectSet; links: readonly LinkDefinition[]; preview: boolean; previewRows: number; selectedId?: string; onRowOpen?: (record: EntityRecord) => void }) {
   const { client, source } = useHost();
   const key = JSON.stringify(set), complete = objectSetComplete(set);
   const [answer, setAnswer] = useState<{ key: string; scope: unknown; count?: number; partial?: boolean; page?: Api.RecordPage; error?: string }>();
+  const [offset, setOffset] = useState(0);
+  useEffect(() => { setOffset(0); }, [key]);
   useEffect(() => {
     if (!complete) return;
     let active = true;
     const handle = setTimeout(() => {
-      const page = preview ? client.get<Api.RecordPage>(objectSetPath("load", { set, limit: previewRows }), true).catch(() => undefined) : Promise.resolve(undefined);
+      const page = preview ? client.get<Api.RecordPage>(objectSetPath("load", { set, offset, limit: previewRows }), true).catch(() => undefined) : Promise.resolve(undefined);
       Promise.all([client.objectSetCount(set), page]).then(
         ([result, rows]) => { if (active) setAnswer({ key, scope: source.scope, count: result.count, partial: result.partial, page: rows }); },
         error => { if (active) setAnswer({ key, scope: source.scope, error: humanizeKernelError(error instanceof Error ? error.message : String(error)) }); },
       );
     }, 300);
     return () => { active = false; clearTimeout(handle); };
-  }, [key, complete, preview, source.scope]);
-  const type = resultType(set), info = type ? source.entity(type) : undefined;
+  }, [key, complete, preview, previewRows, offset, source.scope]);
+  const type = objectSetResultType(set, links), info = type ? source.entity(type) : undefined;
   const columns = useMemo(() => {
     const entity = info ? entityFrom(info, {}, source) : undefined;
     return [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 110 } }, ...(entity && info ? columnsFor(entity, info.fields.filter(field => !field.readOnly).slice(0, 3).map(field => field.name)) : [])];
@@ -286,7 +246,10 @@ function SetResult({ set, preview }: { set: Api.ObjectSet; preview: boolean }) {
   return <div className="grid min-w-0 gap-1" role="region" aria-label={t("Set result")}>
     <p role="status" className="tabular-nums text-muted">{current.partial ? t("At least {count} records", { count: current.count!.toLocaleString() }) : t("{count} records", { count: current.count!.toLocaleString() })}</p>
     {current.partial && <p className="text-warning">{t("Some records are hidden by markings or row policies.")}</p>}
-    {preview && <DataTable storageKey={type ? `set-preview:${type}` : undefined} totalRows={current.page?.total ?? (current.partial ? undefined : current.count)} manualSorting data={rows} columns={columns as never} getRowId={(row: EntityRecord) => row.id} height={Math.min(320, 40 + rows.length * 28)} searchable={false} empty={t("No records match this set.")} />}
-    {preview && !current.partial && current.count! > rows.length && <p className="text-muted">{t("Showing the first {shown} of {total} records.", { shown: rows.length, total: current.count!.toLocaleString() })}</p>}
+    {preview && <DataTable storageKey={type ? `set-preview:${type}` : undefined} totalRows={current.page?.total ?? (current.partial ? undefined : current.count)} manualSorting data={rows} columns={columns as never} getRowId={(row: EntityRecord) => row.id} selectedId={selectedId} onRowClick={onRowOpen ? row => onRowOpen(row) : undefined} height={Math.min(320, 40 + rows.length * 28)} searchable={false} empty={t("No records match this set.")} />}
+    {preview && <div className="flex items-center justify-between gap-2 text-xs text-muted">
+      <span>{t("{shown} of {total} records", { shown: rows.length, total: (current.page?.total ?? current.count ?? 0).toLocaleString() })}</span>
+      <div className="flex gap-1"><Button size="sm" variant="ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - previewRows))}>{t("Previous page")}</Button><Button size="sm" variant="ghost" disabled={offset + previewRows >= (current.page?.total ?? current.count ?? 0)} onClick={() => setOffset(offset + previewRows)}>{t("Next page")}</Button></div>
+    </div>}
   </div>;
 }

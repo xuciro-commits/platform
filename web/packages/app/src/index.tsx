@@ -181,7 +181,7 @@ export function resourceEntryRoute(resource: Api.ResourceEntry, opens: ReadonlyM
     : { view: "definition", params: { ...resource.ref, id: resource.id } };
 }
 
-export function useOpenRecord(): (ref: string | { type: string; id: string; resource?: Api.ResourceEntry }, options?: { window: "tab" | "beside" | "popout" | "inspect" }) => void {
+export function useOpenRecord(): (ref: string | { type: string; id: string; resource?: Api.ResourceEntry }, options?: { window: "tab" | "beside" | "popout" | "inspect"; from?: string }) => void {
   const { opens } = useHost();
   const { open } = useWorkspace();
   return (ref, options) => {
@@ -493,7 +493,9 @@ export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(
 
 export { Assistant, ChainGraph, RunView, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./automation/agents";
 
-export { SetBuilder, LinkTypePicker, objectSetComplete, type SetBuilderProps, type SetFilterSlot } from "./sets/SetBuilder";
+export { SetBuilder, LinkTypePicker, objectSetComplete, objectSetResultType, type SetBuilderProps } from "./sets/SetBuilder";
+export { ExpressionEditor, literalExpression, observationContextChoices, type ExpressionChoice } from "./expr/ExpressionEditor";
+export { ModelFieldPicker } from "./expr/ModelFieldPicker";
 export { NewActions, PayloadFields, DeclaredActionForm, DeclaredActionDialog, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions/actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages/pages";
 export { ComposedPage, SectionView, isComposed } from "./pages/sections";

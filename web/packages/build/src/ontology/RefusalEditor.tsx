@@ -2,7 +2,7 @@ import type {Api} from "@platform/kernel";
 import {useHost} from "@platform/app";
 import {Button,Checkbox,Input,Panel,Select,t,type EntityInfo} from "@platform/ui";
 import {useState} from "react";
-import {ExpressionEditor,type ExpressionChoice} from "../editor/ExpressionEditor";
+import {ExpressionEditor,type ExpressionChoice} from "@platform/app";
 import {nameOf} from "./object-model";
 import {Assignments} from "./TransactionEditor";
 

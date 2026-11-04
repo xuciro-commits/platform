@@ -1,6 +1,6 @@
 import type {PageUI} from "@platform/app";
 import {pageRuleKind, ruleDependencies} from "@platform/app/rules";
-import {ExpressionEditor, literalExpression, type ExpressionChoice} from "../../editor/ExpressionEditor";
+import {ExpressionEditor, literalExpression, type ExpressionChoice} from "@platform/app";
 import {originalRecordObject} from "./record-binding";
 import type { Api } from "@platform/kernel";
 import { parsePageDecimal,SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";

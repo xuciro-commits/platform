@@ -1,7 +1,7 @@
 import type { Api } from "@platform/kernel";
 import { useHost, useRecordInventory } from "@platform/app";
 import { Button, Checkbox, Disclosure, Input, Panel, Select, Tag, t } from "@platform/ui";
-import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
+import { ExpressionEditor, literalExpression, type ExpressionChoice } from "@platform/app";
 import { nameOf, type Field } from "./object-model";
 
 type Named = { id: string; name: string; title: string; state: string; object?: string; on?: string; kind?: string; archived?: boolean };

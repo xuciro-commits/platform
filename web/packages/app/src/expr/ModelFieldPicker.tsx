@@ -1,5 +1,5 @@
 import {Button,Select,t,type EntityInfo} from '@platform/ui';
-import {modelBindingContract,modelField} from '@platform/app/model';
+import {modelBindingContract,modelField} from '../runtime/model-bindings';
 
 export function ModelFieldPicker({type,value=[],lookup,onChange}:{type:string;value?:string[];lookup:(type:string)=>EntityInfo|undefined;onChange:(path:string[])=>void}){
  const levels:{type:string;index:number}[]=[];let current=type;

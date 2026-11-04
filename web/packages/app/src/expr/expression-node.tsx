@@ -1,7 +1,7 @@
 import type { Api } from "@platform/kernel";
 import type { RuleSchema } from "@platform/app/rules";
 import { Button, Checkbox, Input, Select, t, type EntityInfo } from "@platform/ui";
-import { ModelFieldPicker } from "../model-editor/ModelFieldPicker";
+import { ModelFieldPicker } from "./ModelFieldPicker";
 
 export type ExpressionChoice = { value: string; label: string; type: string; ref?: string };
 export type Collections = Record<string, {object:string;policy:string}>;

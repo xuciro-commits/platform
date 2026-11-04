@@ -4,8 +4,7 @@ import type {Api} from '@platform/kernel';
 import {widgetContract,type Definition} from '@platform/app';
 import {Button,Checkbox,Input,Select,t,type EntityInfo} from '@platform/ui';
 import {ModelBindingInspector} from './ModelBindingInspector';
-import {ModelFieldPicker} from '../../model-editor/ModelFieldPicker';
-import {ExpressionEditor,literalExpression} from '../../editor/ExpressionEditor';
+import {ModelFieldPicker,ExpressionEditor,literalExpression} from '@platform/app';
 import type {AuthoringSection} from './draft';
 
 type Port={id:string;required?:boolean;roles:Record<string,{kinds:readonly string[];required?:boolean;target?:string}>};

@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Check, Plus, Trash2 } from "lucide-react";
 import type { Api } from "@platform/kernel";
 import { Button, IconPicker, Input, Notice, ObjectIcon, Select, Tag, cn, t, toneNames, type EntityInfo, type Tone , Tooltip } from "@platform/ui";
 import { SemanticValueTypeSelect } from "@platform/app";
-import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
+import { ExpressionEditor, literalExpression, type ExpressionChoice } from "@platform/app";
 import type { Field, Process } from "./object-model";
 import { ObjectViewSelect } from "./ObjectViewSelect";
 

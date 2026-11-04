@@ -23,7 +23,7 @@ import { ObjectDataSourcesEditor } from "./object-datasources";
 import { ObjectProtocolsEditor } from "./object-protocols";
 import { BusinessVersionEditor } from "./business-version";
 import { authoringObject, useAuthoringModel } from "./authoring-model";
-import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
+import { ExpressionEditor, literalExpression, type ExpressionChoice } from "@platform/app";
 import { FieldFormatEditor, PresentationPanel, ValueTypeBinding } from "./presentation";
 
 const objectGroups = [

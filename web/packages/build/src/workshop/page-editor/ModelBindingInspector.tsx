@@ -4,8 +4,7 @@ import type {Api} from '@platform/kernel';
 import {apiErrorMessage} from '@platform/kernel';
 import {SemanticObjectSelect,useHost,useReadQuery,type Definition} from '@platform/app';
 import {Button,Checkbox,Select,t,type EntityInfo} from '@platform/ui';
-import {ModelFieldPicker} from '../../model-editor/ModelFieldPicker';
-import {ExpressionEditor,literalExpression} from '../../editor/ExpressionEditor';
+import {ModelFieldPicker,ExpressionEditor,literalExpression} from '@platform/app';
 import type {AuthoringSection} from './draft';
 import {useAuthoringModel} from '../../ontology/authoring-model';
 

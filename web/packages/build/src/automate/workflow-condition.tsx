@@ -1,7 +1,7 @@
 import { useHost } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { t } from "@platform/ui";
-import { ExpressionEditor, type ExpressionChoice } from "../editor/ExpressionEditor";
+import { ExpressionEditor, type ExpressionChoice } from "@platform/app";
 import { conditionRef, conditionSlots } from "./workflow-edit";
 export { alwaysCondition } from "./workflow-edit";
 import { commonSchemaProperties, outputSchema, type Capability, type ValueSchema, type WorkflowStep } from "./workflow-model";

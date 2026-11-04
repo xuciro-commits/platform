@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { ObservationRead, SemanticObjectSelect, SemanticPropertySelect, useHost, useProvidedCapabilities, useReadQuery, useTransition } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, ResourceSections, Select, Textarea, Toggles, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
-import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
+import { ExpressionEditor, literalExpression, type ExpressionChoice } from "@platform/app";
 import { useDraftRecord } from "../branches/draft-record";
 import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { ResourceList } from "../editor/ResourceList";
