@@ -1,6 +1,6 @@
 ---
 level: 7 系统架构
-covers: [capabilities/server/host/**, capabilities/server/kernel/**, capabilities/server/kernel/store/**, capabilities/server/host/composition/**, capabilities/server/cmd/**, contract/**]
+covers: [capabilities/server/host/**, capabilities/server/kernel/**, capabilities/server/kernel/store/**, capabilities/server/host/composition/**, capabilities/server/services/apps/**, capabilities/server/cmd/**, contract/**]
 read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果格式、重放与快照、租户装配、后台任务、协议与 API 类型
 ---
 
@@ -40,7 +40,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `services/functions` | 函数制品、受控编译、隔离执行 | `platform` |
 | `services/data` | 连接、数据源、观测源、数据集、管道、调度、回写、匹配规则、血缘与标记推导 | `platform`、resources |
 | `services/automate` | 自动化与其运行 | `platform`、actions |
-| `services/apps` | Workshop 模块与页面运行 | `platform`、objects、actions |
+| `services/apps` | Workshop 模块与页面运行；页面与应用 authoring | `platform`、objects、actions、ontology、resources/publication |
 | `services/work` | 工作项、通知与投递 | `platform`、actions |
 | `services/devops` | 产品、版本、安装、升级 | `platform`、resources |
 | `services/security` | 成员、团队、组织单元、业务角色、标记；授权上下文构造与唯一决定函数 | `platform` |
@@ -75,7 +75,9 @@ POST /v1/submissions
 
 - 协调读取：每次记录读取持有租户车道，并在 SQL 状态上开启固定到“已应用位置”的可重复读只读事务；位置不一致即隔离。启动时的资源目录扫描及其接受结果提交也在同一租户车道内完成。
 - 命名读取：`GET /v1/{read}` → 入口授权 → 拥有者 Read → 行与字段收窄。
+- 单条对象：`GET /v1/records/{type}/{id}` 只读取对象本身、可见属性值与字段访问结果；对象视图的 `links`、`activity`、`files`、`work`、`history`、`comments` 分区经 `/sections/{section}` 分别读取并分别授权，基础读取不预取任何分区。
 - ObjectSet：编译为计划 → 能下推的条件下推到索引列 → 可见性（行策略 + 标记）→ 字段视图。
+- Page Model：模型条件、动作规则、搜索、排序、偏移、分页与字段投影编译进同一次 ObjectSet 窗口；`total` 与 `partial` 来自同一可见性扫描，不先落内存全量记录。
 - 授权：一条决定路径，构造上下文（租户、主体、动词、项目、标记、行、字段、派生）后交给唯一的决定函数；集合读取与单条读取同路径。
 
 ## 7.5 运行机制
@@ -93,16 +95,23 @@ POST /v1/submissions
 
 ## 7.5.1 发布路径
 
-候选构建经 `Build.PrepareReleaseAssets` 产出安装计划，现分四族：
+候选构建经 `Build.PrepareReleaseAssets` 产出安装计划，现分七族：
+
+产品链路只保留一条事实源：`build.product` 保存项目 Contents 与依赖，候选仍由现有 release preview/save 冻结；`build.productversion` 保存候选引用、内容哈希与 `PackageDescriptor` 版本字节。Marketplace 的目录从这些版本合并，导入文件也只接受产品版本；安装继续使用既有受管项目接受结果。`PackageDescriptor` 格式不变，它不是第二个产品定义。
 
 | 族 | 入口 | 资源类型 | 形态 |
 |---|---|---|---|
-| record/page | `build_artifacts.go` 的 `prepareReleasePublications` | object、action（随 object）、page、app、flow | 一个 switch，逐类型手写冻结与版本规则 |
-| definition | `build_kinds.go` 的 `definitionKinds` + `prepareDefinitionPublications` | query、property-type、value-type、link-type、function、object-type-group | 表驱动泛型，新增类型只加一条 |
-| integration | `build_release_integration_registry.go` 的注册表 + `PrepareReleaseAssets` | connection、listener、source、dataset、mediaset、schedule、pipeline、writeback、observation、matching | 类型、元数据与记录访问已表驱动；发布状态迁移与安装校验仍是逐类型 switch |
-| versioned | `prepareAgentReleasePublications`、`prepareTestPlanPublications`、`PrepareCodeReleasePublications`、`prepareTablePublications`、`prepareAlertPublications`、`prepareSampleSetInstallations` | agent、evaluation-set、test-plan、compute、sample-set、alert | 五个函数骨架相同（盘库存、找草稿、保留字节校验、版本推进），保留与冻结规则各异 |
+| record | `build_artifacts.go` 的 `prepareReleasePublications` | object、action-type（独立版本，随 object 选择） | 一个 switch，逐类型手写冻结与版本规则 |
+| definition | `build_kinds.go` 的 `definitionKinds` + `prepareDefinitionPublications` | query、property-type、value-type、link-type、interface、object-type-group | 表驱动泛型，新增类型只加一条 |
+| apps | `services/apps/authoring` 的 owner；Build 的 `prepareReleasePublications` 只编排并委托 | page、app | 页面与应用实体、校验、发布字节、历史与安装契约都在 owner；Build 保留跨资源编排与兼容公共类型 |
+| function | `services/functions/authoring` 的 owner；Build 的 `prepareReleasePublications` 只编排并委托 | function | 函数实体、校验、发布版本与安装契约在 owner；Build 保留跨资源编排与兼容公共类型 |
+| integration | `services/data/release_registry.go` 的注册表；Build 的 `PrepareReleaseAssets` 只编排并委托 data owner | connection、listener、source、dataset、mediaset、schedule、pipeline、writeback、observation、matching | data owner 持有实体、校验、提交、发布与安装契约；Build 保留跨族编排与兼容公共类型 |
+| automation | `services/automate/authoring` 的 owner；Build 的 `prepareReleasePublications` 只编排并委托 | flow、alert | Process 与旧告警的实体、校验、提交、迁移、发布字节与安装契约都在 owner；Build 保留跨资源编排与兼容公共类型 |
+| versioned | `prepareAgentReleasePublications`、`prepareTestPlanPublications`、`PrepareCodeReleasePublications`、`prepareTablePublications`、`prepareSampleSetInstallations` | agent、evaluation-set、test-plan、compute、sample-set | 函数骨架相同（盘库存、找草稿、保留字节校验、版本推进），保留与冻结规则各异 |
 
-integration 的发布步骤已并入注册表。versioned 族的保留规则各异（agent 版本表、evaluation/test-plan 版本前缀、compute 构建摘要、sample-set、alert 冻结），共用回调框架会比五个显式函数更难读，故保留现状；新增类型在 `prepareReleasePublications` 的调用列表加一项。Confirmation 有补偿与状态，Dispatch 是单向派发，二者语义不同，保持各自状态机。
+资源类型、asset kind、发布 schema、安装记录、release 可选性与前端 route/view/label/resource kind 由 `build_resource_metadata.go` 的 descriptor 表统一描述；`AssetKinds`、`draftAssetRef`、`AcceptedPublicationSchemas` 与安装解码从该表派生。`cmd/page-contract` 经 `ResourceMetadata` 生成 `web/packages/build/src/gen/resources.ts`，并校验应用登记的 `opens` 与 descriptor 的 view 一致。
+
+apps、function、integration 与 automation 的发布步骤已并入各自 owner。versioned 族的保留规则各异（agent 版本表、evaluation/test-plan 版本前缀、compute 构建摘要、sample-set），共用回调框架会比这些显式函数更难读，故保留现状；新增 versioned 类型在 `prepareReleasePublications` 的调用列表加一项。Confirmation 有补偿与状态，Dispatch 是单向派发，二者语义不同，保持各自状态机。
 
 ## 7.6 协议与版本
 

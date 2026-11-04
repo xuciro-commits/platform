@@ -37,10 +37,13 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 ## 应用注册
 
+- 内置应用只登记在 `capabilities/server/platform/app_registry.json`。后端 Manifest 标题从 `platform.BuiltinManifestTitle` 读取；`make contract` 生成 `web/packages/app/src/gen/apps.ts`，前端 `appRegistration()` 从该契约取得应用 ID、标题、Manifest、`serves`、角色条件、首页和 `opens`。`defineApp` 不再另写这些字段。
+- 一个前端应用可服务多个后端 Manifest：`manifest` 是主要产品归属，`serves` 是它可解析的资源所有者；同一资源类型只能由一个应用 `opens`。
 - 每个应用 ID 只有一个定义。跨包页面由 workspace 按成员显式装配到拥有者，禁止按重复 ID 隐式合并；应用可供路由使用而不进入门户，个人账户与开发目录沿此边界开放。
 - `category` 决定门户分组与密度（4-interaction §4.10）。
 - `nav` 返回带标题段落的导航项，≤ 8 项；资源页用 `ResourceNavigation` 接管侧栏。
 - `opens` 把资源类型映射到视图；任何地方打开一个资源都经 `opens` 解析。
+- workspace 启动时校验已加载应用的首页与 `opens` 视图存在、资源类型没有第二个打开者、前端 Manifest 归属与生成契约一致；不一致即报错，不以未注册路由继续运行。
 
 ## 路由
 
@@ -48,6 +51,8 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 - 侧窗与 transfer 的状态不进入可分享的 URL。
 
 资源入口共享资源目录的 RID、位置和原生记录身份；Search、Files 与依赖图复用拥有者注册的打开路由。依赖图不再逐种读取所有草稿来猜编辑器。业务门户与扩展页面使用已授权发布定义的 RID。
+
+Search 页与 Command Palette 消费同一个 workspace Search provider。Provider 组合命令、当前应用导航、应用与最近记录，以及后端提供的资源、对象、成员和知识结果；两个入口只按同一合同分组和打开，不各自请求或拼接。
 
 ## 数据与状态
 
@@ -58,7 +63,7 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 | 视图状态 | 组件本地；表格列宽、侧栏收起、面板宽度按键写入 localStorage |
 | 外壳记忆 | 最近、固定、外观、语言 |
 
-对象视图沿用页面输入与模块运行时，每个对象打开实例分别持有模块会话；完整窗口与侧窗走同一个对象入口，Workshop 内的记录组件直接使用基础详情，避免递归替换。
+对象视图沿用页面输入与模块运行时，每个对象打开实例分别持有模块会话；完整窗口与侧窗走同一个 M21 对象视图组件，Overview、Links、Activity、Files、Work 只在进入分区时读取各自的 section 合同。Workshop 内的记录组件直接使用基础详情，避免递归替换。对象类型选择了 Workshop 对象视图模块时，该模块覆盖默认 M21 视图；`RecordPage` 只服务明确非对象的记录。
 
 ## 构建与生成
 
@@ -67,6 +72,6 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 ## 现存差距
 
-- 资源 URL 已使用 RID；治理资源与容器尚未全面采用同一路由入口。
+- 治理资源尚未全面采用同一路由入口。
 - `@platform/kernel` 未改名（路线图“已知漂移”）。
 - Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；尚未测量实际首屏耗时（路线图“已知漂移”）。

@@ -11,10 +11,10 @@ LITE_HOST ?= 127.0.0.1
 GOPROXY ?= https://goproxy.cn,direct
 export GOPROXY
 
-.PHONY: help bootstrap setup local docker infra infra-down build-compute dev dev-light web host lite build contract local-update verify
+.PHONY: help bootstrap setup local docker infra infra-down build-compute dev dev-light web host lite build contract local-update verify verify-sql
 
 help:
-	@printf '%s\n' 'make setup        安装 Web 依赖和 Air' 'make local        启动热更新环境，入口 8495' 'make docker       切到容器运行' 'make lite         无 Docker 持久化运行' 'make host         编译运行宿主，ARGS 传入部署参数' 'make build        构建工作区与宿主' 'make contract     重新生成宿主类型与页面安全契约' 'make verify       静态检查、内核不变量与黄金路径验收' 'make infra-down   停止容器并保留数据' 'make local-update 更新已提交版本并核对运行状态'
+	@printf '%s\n' 'make setup        安装 Web 依赖和 Air' 'make local        启动热更新环境，入口 8495' 'make docker       切到容器运行' 'make lite         无 Docker 持久化运行' 'make host         编译运行宿主，ARGS 传入部署参数' 'make build        构建工作区与宿主' 'make contract     重新生成宿主类型、页面安全、应用登记与资源契约' 'make verify       静态检查、内核不变量与黄金路径验收' 'make verify-sql   在隔离临时 PostgreSQL 库验证接受写入与重启恢复' 'make infra-down   停止容器并保留数据' 'make local-update 更新已提交版本并核对运行状态'
 
 bootstrap:
 	python3 deploy/local/bootstrap.py
@@ -76,15 +76,24 @@ verify:
 	@cp web/packages/kernel/src/gen/host.ts .build/contract/host.ts
 	@cp web/packages/kernel/src/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts
 	@cp web/packages/app/src/pageui/safety.ts .build/contract/safety.ts
+	@cp web/packages/app/src/gen/apps.ts .build/contract/apps.ts
+	@cp web/packages/build/src/gen/resources.ts .build/contract/resources.ts
 	@cp capabilities/server/platform/page_compat.json .build/contract/page_compat.json
 	$(MAKE) contract
 	@cmp .build/contract/host.ts web/packages/kernel/src/gen/host.ts
 	@cmp .build/contract/enterprise-sdk.ts web/packages/kernel/src/gen/enterprise-sdk.ts
 	@cmp .build/contract/safety.ts web/packages/app/src/pageui/safety.ts
+	@cmp .build/contract/apps.ts web/packages/app/src/gen/apps.ts
+	@cmp .build/contract/resources.ts web/packages/build/src/gen/resources.ts
 	@cmp .build/contract/page_compat.json capabilities/server/platform/page_compat.json
 	cd web && $(PNPM) typecheck && $(PNPM) build
 	git diff --check
 	cd web/e2e && $(PNPM) exec playwright test
+
+verify-sql:
+	mkdir -p .build/host
+	cd capabilities/server && $(GO) build -o ../../.build/host/platform-server ./cmd/platform-server
+	deploy/dev/sql-smoke.sh
 
 local-update: bootstrap
 	deploy/local/update.sh

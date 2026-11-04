@@ -102,7 +102,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 - 侧栏：Explore、Saved explorations、Lists。
 - 探索页：顶部搜索与起点类型 → 左侧分面筛选（按属性）→ 中部结果（表格、卡片、图表三种呈现，切换不改变 URL 层级）→ 选中对象在侧窗 inspect。
-- “Search around”沿关系转到相关类型；结果可保存为探索或对象列表，可发送到 Workshop 变量。
+- “Search around”沿关系转到相关类型；结果可保存为当前成员私有的探索或对象列表。Workshop、函数和动作复用项目内 `build.query` 对象集，不从探索页伪造“发送到 Workshop”。
 
 ## Agent Studio
 
@@ -118,8 +118,8 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 ## DevOps
 
 - 侧栏：Products、Releases、Test plans。
-- 产品页面：Contents（从项目选资源，显示依赖闭包）→ Versions（候选与已发布）→ Test plans。
-- Releases：候选表（原型 A）；选中候选打开发布审阅（M18：内容差异、检查、测试计划结果）；“New candidate”在页内组合。保存的候选可选择应用根资源、产品名、语义版本与依赖范围，创建产品版本并下载或加入 Marketplace。
+- 产品页面：Contents（从项目选资源，显示依赖闭包）→ 保存的候选 → Versions（从候选冻结语义版本）→ Test plans。
+- Releases：候选表（原型 A）；选中候选打开发布审阅（M18：内容差异、检查、测试计划结果）；“New candidate”在页内组合。保存的候选在 Products 中按 Contents 与依赖冻结为语义版本；Marketplace 只消费这些产品版本。
 
 ## Marketplace
 
@@ -165,4 +165,4 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 ## 现存差距
 
-无。
+- Object Explorer 仍以对象列表和 Search Around 为主，尚未把 M10 的完整对象集构建器作为业务用户的主探索路径。

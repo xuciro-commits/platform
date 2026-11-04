@@ -53,6 +53,7 @@
 | Web 检查 | 改动的包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 空白 | `git diff --check` |
 | 全部检查 | `make verify`（静态检查、内核不变量、黄金路径验收；验收自带隔离宿主） |
+| SQL 模式 | `make verify-sql`（隔离临时 PostgreSQL 库：写入、重启、读取） |
 
 长命令一律加超时（如 `perl -e 'alarm 400; exec @ARGV' go build ./...`）。
 
