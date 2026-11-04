@@ -190,6 +190,10 @@ func (h *Host) Handler() http.Handler {
 	h.routesCredentials(rt)
 	h.routesIntegration(rt)
 	h.routes = append(h.routes, namedReads...)
+
+	// WebSocket collaboration (real-time notepad / fusion editing)
+	collab := newCollaboration(h)
+	collab.RegisterRoutes(mux)
 	rt.metadata(transport.Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, h.OpenAPI(t, &m))
 	})
@@ -243,6 +247,18 @@ func (h *Host) Handler() http.Handler {
 		h.stats = transport.NewStats()
 	}
 	return transport.Edge(mux, h.stats, h.limiter, TenantHeader, SchemaVersionHeader)
+}
+
+// authenticateWS authenticates a WebSocket connection via bearer token.
+func (h *Host) authenticateWS(token string) (platform.Member, *Tenant, bool) {
+	for _, t := range h.currentTenants() {
+		if d := consoleOf(t); d != nil {
+			if m, ok := d.MemberByToken(token, h.Now()); ok {
+				return m, t, true
+			}
+		}
+	}
+	return platform.Member{}, nil, false
 }
 
 func (h *Host) scrapeAllowed(r *http.Request) bool {
