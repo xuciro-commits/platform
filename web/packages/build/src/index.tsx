@@ -46,7 +46,7 @@ import { ToolContext } from "./projects/tool-context";
 import { studioApplicationID, studioAreaForRoute } from "./projects/studio-model";
 import { FunctionCatalog } from "./functions/catalog";
 import { Interfaces } from "./ontology/ModelWorkbench";
-import { Activity, Bot, Boxes, Braces, CalendarClock, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Users, Workflow, Zap } from "lucide-react";
+import { Activity, Bot, Boxes, Braces, CalendarClock, Code, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Users, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.holds("build", "builder");
 const integrator = (host: Host) => host.holds("build", "integrator");
@@ -243,6 +243,7 @@ const logic = defineApp({
   navigation,
   nav: (_host, route) => [section(t("Logic"), route, [
     { label: t("Functions"), icon: <Braces />, view: "functions" },
+    { label: t("Code"), icon: <Code />, view: "code" },
   ])],
 });
 
