@@ -20,7 +20,7 @@ func (t *Tenant) listenerInput(ctx context.Context, m platform.Member, path, sec
 		if refusal != nil {
 			return nil, refusal
 		}
-		owner := t.app(build.ID).(build.IntegrationDefinitions)
+		owner := t.dataOwner()
 		var matches []build.Listener
 		for _, live := range rows {
 			if !live.Enabled || live.State != "published" {

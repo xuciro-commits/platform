@@ -41,8 +41,8 @@ func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (
 	if json.Unmarshal(raw, &connection) != nil {
 		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The connection settings are not readable")
 	}
-	owner, ok := t.app(build.ID).(build.IntegrationDefinitions)
-	if !ok {
+	owner := t.dataOwner()
+	if owner == nil {
 		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The connection owner is unavailable")
 	}
 	fixed, err := owner.ExecutionConnection(connection)

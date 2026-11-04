@@ -28,7 +28,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	source, ok := view.Record.(build.Source)
 	if ok {
 		var err error
-		source, err = t.app(build.ID).(build.IntegrationDefinitions).ExecutionSource(source)
+		source, err = t.dataOwner().ExecutionSource(source)
 		if err != nil {
 			ok = false
 		}
@@ -43,7 +43,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	connection, ok := view.Record.(build.Connection)
 	if ok {
 		var err error
-		connection, err = t.app(build.ID).(build.IntegrationDefinitions).ExecutionConnection(connection)
+		connection, err = t.dataOwner().ExecutionConnection(connection)
 		if err != nil {
 			ok = false
 		}
@@ -339,7 +339,7 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 					source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
 					if exists {
 						var err error
-						source, err = t.app(build.ID).(build.IntegrationDefinitions).ExecutionSource(source)
+						source, err = t.dataOwner().ExecutionSource(source)
 						if err != nil {
 							exists = false
 						}

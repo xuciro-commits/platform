@@ -29,7 +29,7 @@ func (t *Tenant) RunPipelines(now time.Time) {
 	pipelines, _, _ := platform.Find[build.Pipeline](c, query)
 	versions := map[string]int{}
 	changed := map[string]bool{}
-	owner := t.app(build.ID).(build.IntegrationDefinitions)
+	owner := t.dataOwner()
 	var fixed []build.Pipeline
 	for _, p := range pipelines {
 		p, err := owner.ExecutionPipeline(p)
@@ -119,7 +119,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 			}
 			inputs[id], data[id] = version, rows
 			if ds, ok := platform.Get[build.Dataset](c, id); ok {
-				fixed, err := t.app(build.ID).(build.IntegrationDefinitions).ExecutionDataset(ds)
+				fixed, err := t.dataOwner().ExecutionDataset(ds)
 				if err != nil {
 					inputErr = err
 					break

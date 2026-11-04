@@ -106,7 +106,7 @@ func TestInvariantK1K2K4AutomationNotificationsAndOwner(t *testing.T) {
 	}
 	want := live.recordImage(t)
 	for range 2 {
-		restored := newInvariantTenantWithApps(t, live.ID, []platform.App{automation.New(live.ID)}, seat)
+		restored := newInvariantTenantReplayWithApps(t, live.ID, []platform.App{automation.New(live.ID)}, seat)
 		if err := restored.recoverEntries(live.entries); err != nil {
 			t.Fatal(err)
 		}

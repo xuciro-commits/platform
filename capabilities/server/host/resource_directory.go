@@ -99,16 +99,20 @@ func (t *Tenant) resourcePermission(store *records.Store, m platform.Member, typ
 	case build.FolderType:
 		if row := store.Type(typ).Rows().Get(id); row != nil {
 			project = row.Value.Interface().(build.Folder).Project
+		} else {
+			return true, false
 		}
 	case build.ResourceType:
 		if row := store.Type(typ).Rows().Get(id); row != nil {
 			project = row.Value.Interface().(build.Resource).Project
+		} else {
+			return true, false
 		}
 	default:
 		if resources := store.Type(build.ResourceType); resources != nil {
 			for _, row := range resources.Rows().All() {
 				resource := row.Value.Interface().(build.Resource)
-				if resource.Type == typ && resource.Draft == id || resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == typ {
+				if resource.Type == typ && resource.Draft == id || !definition && resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == typ {
 					project = resource.Project
 					break
 				}
@@ -116,7 +120,7 @@ func (t *Tenant) resourcePermission(store *records.Store, m platform.Member, typ
 		}
 	}
 	if project == "" {
-		return !definition, false
+		return definition, false
 	}
 	role := t.resourceRole(m, project)
 	allowed := role != "" && role != platform.ProjectDiscovererRole
@@ -203,6 +207,7 @@ func (t *Tenant) initializeResources(now time.Time) error {
 				Title      string            `json:"title"`
 				Published  string            `json:"published"`
 				Kind       string            `json:"kind"`
+				Variant    string            `json:"variant"`
 				Evaluation []json.RawMessage `json:"evaluation"`
 			}
 			if err := json.Unmarshal(raw, &meta); err != nil {
@@ -214,7 +219,7 @@ func (t *Tenant) initializeResources(now time.Time) error {
 				t.records.Unlock()
 				return err
 			}
-			if info.Type == build.TestPlanType && len(meta.Evaluation) > 0 {
+			if info.Type == build.TestPlanType && (meta.Variant == "evaluation-set" || meta.Variant == "" && len(meta.Evaluation) > 0) {
 				ref.Kind = platform.AssetEvaluation
 			}
 			rid := platform.ResourceID(t.ID, ref)
@@ -226,7 +231,15 @@ func (t *Tenant) initializeResources(now time.Time) error {
 			if meta.Archived {
 				state = "archived"
 			}
-			directory[rid] = build.Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: info.Type, Draft: id, Title: meta.Title, Variant: meta.Kind, Project: project, State: state, Version: meta.Revision}
+			variant := meta.Kind
+			if info.Type == build.TestPlanType {
+				if ref.Kind == platform.AssetEvaluation {
+					variant = "evaluation-set"
+				} else {
+					variant = "test-plan"
+				}
+			}
+			directory[rid] = build.Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: info.Type, Draft: id, Title: meta.Title, Variant: variant, Project: project, State: state, Version: meta.Revision}
 		}
 	}
 	if existing := t.records.Type(build.ResourceType); existing != nil {
@@ -262,6 +275,9 @@ func (t *Tenant) initializeResources(now time.Time) error {
 			return refusal
 		}
 	}
+	if err := t.migrateLegacyResourceProjects(owner, now); err != nil {
+		return err
+	}
 	for _, id := range legacyObjects {
 		submission := &pb.Submission{TenantId: t.ID, Authority: build.ID, IdempotencyKey: "action-types-v1:" + id, Schema: &pb.SchemaRef{Name: build.SchemaExtractActions, Version: 1}, Target: &pb.EntityRef{Type: build.ObjectType, Id: id}, Payload: platform.Raw(map[string]any{})}
 		if refusal := t.submitAutomated(owner, t.automation(build.ID, false), submission, now); refusal != nil {
@@ -269,6 +285,70 @@ func (t *Tenant) initializeResources(now time.Time) error {
 		}
 	}
 	return nil
+}
+
+type legacyResourceProject struct {
+	ID      string `json:"id"`
+	Project string `json:"project"`
+}
+
+func (t *Tenant) migrateLegacyResourceProjects(owner platform.App, now time.Time) error {
+	referenced := map[platform.AssetRef][]string{}
+	projects := map[string]bool{}
+	t.records.Lock()
+	if apps := t.records.Type(build.AppType); apps != nil {
+		for _, row := range apps.Rows().All() {
+			app := row.Value.Interface().(build.Application)
+			if app.Archived {
+				continue
+			}
+			projects[app.ID] = true
+			for _, ref := range app.Resources {
+				referenced[ref] = appendUnique(referenced[ref], app.ID)
+			}
+			for _, page := range app.Pages {
+				ref := platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: page}
+				referenced[ref] = appendUnique(referenced[ref], app.ID)
+			}
+		}
+	}
+	assignments := []legacyResourceProject{}
+	if resources := t.records.Type(build.ResourceType); resources != nil {
+		for _, row := range resources.Rows().All() {
+			resource := row.Value.Interface().(build.Resource)
+			if resource.Project != build.WorkspaceProject || resource.ManagedBy != "" || resource.Ref.Kind == platform.AssetApp {
+				continue
+			}
+			owners := referenced[resource.Ref]
+			if len(owners) != 1 || !projects[owners[0]] || owners[0] == build.WorkspaceProject {
+				continue
+			}
+			assignments = append(assignments, legacyResourceProject{ID: resource.ID, Project: owners[0]})
+		}
+	}
+	t.records.Unlock()
+	if len(assignments) == 0 {
+		return nil
+	}
+	slices.SortFunc(assignments, func(a, b legacyResourceProject) int { return strings.Compare(a.ID, b.ID) })
+	digest, err := platform.CanonicalDigest(assignments)
+	if err != nil {
+		return err
+	}
+	submission := &pb.Submission{TenantId: t.ID, Authority: build.ID, IdempotencyKey: "resource-projects-v1:" + digest,
+		Schema: &pb.SchemaRef{Name: build.SchemaResourceMigrateProjects, Version: 1}, Target: &pb.EntityRef{Type: build.ResourceType, Id: "migrate-projects-v1"},
+		Payload: platform.Raw(map[string]any{"assignments": assignments})}
+	if refusal := t.submitAutomated(owner, t.automation(build.ID, false), submission, now); refusal != nil {
+		return refusal
+	}
+	return nil
+}
+
+func appendUnique(values []string, value string) []string {
+	if slices.Contains(values, value) {
+		return values
+	}
+	return append(values, value)
 }
 
 type BranchReviewers struct {

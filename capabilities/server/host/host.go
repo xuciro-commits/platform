@@ -278,21 +278,17 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
+	if err := t.registerDefinitions(); err != nil {
+		return nil, fmt.Errorf("tenant %s: %v", id, err)
+	}
 	{
-		manifests := make([]platform.Manifest, len(apps))
 		infos := map[string]platform.EntityInfo{}
-		for k, a := range apps {
-			manifests[k] = a.Manifest()
-		}
 		for _, et := range t.records.SortedTypes() {
 			infos[et.Info().Type] = et.Info()
 		}
-		if err := platform.CheckInterfaces(manifests, infos); err != nil {
+		if err := platform.CheckInterfaceRegistry((hostView{t: t}).Interfaces(), infos); err != nil {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
-	}
-	if err := t.registerDefinitions(); err != nil {
-		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
 	for _, et := range t.records.SortedTypes() {
 		if err := t.checkRecordSetDeclarations(et.Info()); err != nil {

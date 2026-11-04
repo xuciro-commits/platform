@@ -60,7 +60,11 @@ func (t *Tenant) BranchCompile(m platform.Member, id, typ, draft string, now tim
 	if refusal != nil {
 		return BranchDetail{}, refusal
 	}
-	return t.appendBranchSave(m, branch, current, typ, draft, "update", raw, now)
+	project := t.resourceProject(typ, draft)
+	if latestChange, found := branch.Latest(typ, draft); found && latestChange.Project != "" {
+		project = latestChange.Project
+	}
+	return t.appendBranchSave(m, branch, current, typ, draft, "update", project, raw, now)
 }
 
 func (t *Tenant) branchCodeSource(m platform.Member, branch build.Branch, draft string, now time.Time) (platform.CodeBuildRequest, build.CodeArtifact, json.RawMessage, *kernel.Error) {

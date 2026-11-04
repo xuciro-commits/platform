@@ -18,6 +18,7 @@ import (
 	"platformserver/services/resources/authoring"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 )
 
 const observationResponseBytes = 1 << 20
@@ -53,7 +54,7 @@ type observationReadPlan struct {
 	info       ObservationInfo
 	entity     platform.EntityInfo
 	record     json.RawMessage
-	connection build.Connection
+	connection dataowner.Connection
 	header     string
 	device     string
 	stamp      string
@@ -158,7 +159,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if json.Unmarshal(plan.record, &values) != nil || json.Unmarshal(values[definition.DeviceField], &plan.device) != nil || strings.TrimSpace(plan.device) == "" || len(plan.device) > 256 {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The original record needs a readable observation device identifier")
 	}
-	connections, _, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Limit: 500})
+	connections, _, refusal := platform.Find[dataowner.Connection](t.automation(build.ID, false), platform.Query{Limit: 500})
 	if refusal != nil {
 		return plan, refusal
 	}
@@ -173,8 +174,8 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if plan.connection.ID == "" || plan.connection.State != "ready" {
 		return plan, observationUnavailable(fmt.Errorf("observation connection is not ready"))
 	}
-	owner, ok := t.app(definition.Connection.App).(build.IntegrationDefinitions)
-	if !ok {
+	owner := t.dataOwner()
+	if owner == nil {
 		return plan, observationUnavailable(fmt.Errorf("observation connection has no original owner"))
 	}
 	plan.connection, err = owner.ExecutionConnection(plan.connection)

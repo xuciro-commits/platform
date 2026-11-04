@@ -127,6 +127,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 		live.entries = append(live.entries, entry)
 		return entry.Body, nil
 	}
+	seedInvariantProject(tb, live)
 	return live
 }
 

@@ -496,6 +496,7 @@ type ConsoleHost interface {
 	PutPackageArtifact(key string, raw []byte) error
 	GetPackageArtifact(key string) ([]byte, error)
 	BaseModules() []CapabilityModule
+	ProductVersions() []ProductVersionView
 }
 
 type ConsoleAttached interface{ AttachConsole(ConsoleHost) }

@@ -16,13 +16,13 @@ import (
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/objects"
-	"platformserver/services/resources/authoring"
 )
 
 type sourceSubmission struct {
 	binding *platform.DataSourceBinding
-	row     build.SourceRow
+	row     dataowner.SourceRow
 	deleted bool
 }
 
@@ -34,74 +34,14 @@ type preparedSourceClaim struct {
 
 type RecordFieldProvenance = objects.RecordFieldProvenance
 
-type RecordProvenance struct {
-	Fields map[string]RecordFieldProvenance `json:"fields"`
-}
+type RecordProvenance = objects.RecordProvenance
 
 func (t *Tenant) recordProvenance(m platform.Member, typ, id string, now time.Time) (RecordProvenance, *kernel.Error) {
-	m = t.authorizationMember(m)
-	caller := platform.NewCaller(runtime{t}, m, "", false, false)
-	if _, refusal := t.readRecordFrom(t.records, caller, typ, id, now); refusal != nil {
-		return RecordProvenance{}, refusal
-	}
-	t.records.Lock()
-	et := t.records.Type(typ)
-	row := et.Rows().Get(id)
-	history := row.RecordHistory()
-	info := et.Info()
-	t.records.Unlock()
-	answer := RecordProvenance{Fields: map[string]RecordFieldProvenance{}}
-	for _, field := range info.Fields {
-		if field.Name == "" || field.Name == "id" {
-			continue
-		}
-		decision := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: typ, Record: id, Fields: []string{field.Name}}, now, false)
-		if !decision.Allow || len(decision.Withheld) > 0 {
-			continue
-		}
-		if selected := t.selectedSourceValue(typ, id, field.Name, history, nil); selected.Kind != "" {
-			answer.Fields[field.Name] = selected
-		}
-	}
-	return answer, nil
+	return t.objectOwner(t.records).RecordProvenance(m, typ, id, now)
 }
 
 func (t *Tenant) selectedSourceValue(typ, id, attribute string, history []records.RecordChange, incoming *acceptedformat.SourceClaim) RecordFieldProvenance {
-	ref := &pb.EntityRef{Type: typ, Id: id}
-	sources := []RecordFieldProvenance{}
-	absent := map[string]bool{}
-	for _, record := range t.claims.CurrentClaims(t.ID, ref, "$record") {
-		fact := record.GetFact()
-		absent[fact.GetProvenance().GetConnectorId()] = string(fact.GetPayload()) == "false"
-	}
-	for _, record := range t.claims.CurrentClaims(t.ID, ref, attribute) {
-		fact := record.GetFact()
-		connector := fact.GetProvenance().GetConnectorId()
-		if absent[connector] || incoming != nil && connector == incoming.Connector {
-			continue
-		}
-		at := fact.GetProvenance().GetSourceTime().AsTime()
-		sources = append(sources, RecordFieldProvenance{Value: fact.GetPayload(), Kind: "source", Connector: fact.GetProvenance().GetConnectorId(), SourceTime: &at})
-	}
-	if incoming != nil && incoming.Attribute == attribute {
-		at := incoming.SourceTime
-		sources = append(sources, RecordFieldProvenance{Value: incoming.Payload, Kind: "source", Connector: incoming.Connector, SourceTime: &at})
-	}
-	var edit RecordFieldProvenance
-	for i := len(history) - 1; i >= 0 && edit.Kind == ""; i-- {
-		change := history[i]
-		if t.claims.Accepted(t.ID, typ+"/"+id+"/"+change.Change+"/"+attribute) != nil {
-			continue
-		}
-		for _, field := range change.Fields {
-			if field.Field == attribute {
-				at := change.At
-				edit = RecordFieldProvenance{Value: field.After, Kind: "edit", At: &at, By: change.By}
-				break
-			}
-		}
-	}
-	return objects.MergeAttribute(sources, edit)
+	return t.objectOwner(t.records).SelectedSourceValue(typ, id, attribute, history, incoming)
 }
 
 func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, source *sourceSubmission, now time.Time) (*pb.Submission, *preparedSourceClaim, *kernel.Error) {
@@ -145,19 +85,17 @@ func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, 
 	t.records.Lock()
 	et := t.records.Type(sub.GetTarget().GetType())
 	var history []records.RecordChange
-	restore := false
+	archived := false
+	change := ""
 	if et != nil {
 		if row := et.Rows().Get(sub.GetTarget().GetId()); row != nil {
 			history = row.RecordHistory()
 			header := records.Header(row.Value)
-			if header.Archived {
-				if claim := t.claims.Accepted(t.ID, sub.GetTarget().GetType()+"/"+sub.GetTarget().GetId()+"/"+header.Changed.Change+"/$record"); claim != nil {
-					restore = string(claim.GetFact().GetPayload()) == "false"
-				}
-			}
+			archived, change = header.Archived, header.Changed.Change
 		}
 	}
 	t.records.Unlock()
+	restore := archived && t.objectOwner(t.records).SourceRestores(sub.GetTarget().GetType(), sub.GetTarget().GetId(), change)
 	claims := make([]acceptedformat.SourceClaim, 0, len(attributes))
 	payload := map[string]json.RawMessage{}
 	for _, attribute := range attributes {
@@ -248,49 +186,13 @@ func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmiss
 	t.records.Lock()
 	et := t.records.Type(typ)
 	row := et.Rows().Get(id)
-	created := records.Header(row.Value).Created.Change
 	history := row.RecordHistory()
 	fields := et.Info().Fields
-	bindings := et.Info().DataSources
 	t.records.Unlock()
 	connector := source.binding.Kind + ":" + source.binding.Source
-	createdByAction := true
-	for _, field := range fields {
-		if t.claims.Accepted(t.ID, typ+"/"+id+"/"+created+"/"+field.Name) != nil {
-			createdByAction = false
-			break
-		}
-	}
-	if t.claims.Accepted(t.ID, typ+"/"+id+"/"+created+"/$record") != nil {
-		createdByAction = false
-	}
-	presence := map[string]bool{}
-	for _, claim := range t.claims.CurrentClaims(t.ID, sub.GetTarget(), "$record") {
-		presence[claim.GetFact().GetProvenance().GetConnectorId()] = string(claim.GetFact().GetPayload()) == "true"
-	}
-	otherPresent := false
-	for other, live := range presence {
-		otherPresent = otherPresent || other != connector && live
-	}
-	for _, binding := range bindings {
-		other := binding.Kind + ":" + binding.Source
-		if other == connector {
-			continue
-		}
-		live, known := presence[other]
-		if !known {
-			for _, field := range fields {
-				if slices.ContainsFunc(t.claims.CurrentClaims(t.ID, sub.GetTarget(), field.Name), func(claim *pb.FactRecord) bool { return claim.GetFact().GetProvenance().GetConnectorId() == other }) {
-					live = true
-					break
-				}
-			}
-		}
-		otherPresent = otherPresent || live
-	}
 	copy := proto.Clone(sub).(*pb.Submission)
 	verb := "edit"
-	if objects.SourceDeletionRemovesObject(createdByAction, otherPresent) {
+	if t.objectOwner(t.records).SourceDeletionRemoves(typ, id, connector) {
 		verb = "archive"
 	}
 	copy.Schema = &pb.SchemaRef{Name: typ + "." + verb, Version: 1}
@@ -314,8 +216,8 @@ func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmiss
 	return copy, &preparedSourceClaim{claims: claims}, nil
 }
 
-func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBinding, current []build.SourceRow, now time.Time) ([]build.SourceRow, *kernel.Error) {
-	return recordRead(t, context.Background(), func() ([]build.SourceRow, *kernel.Error) {
+func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBinding, current []dataowner.SourceRow, now time.Time) ([]dataowner.SourceRow, *kernel.Error) {
+	return recordRead(t, context.Background(), func() ([]dataowner.SourceRow, *kernel.Error) {
 		present := map[string]bool{}
 		for _, row := range current {
 			if row.Error != "" {
@@ -324,7 +226,7 @@ func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBin
 			present[row.ID] = true
 		}
 		connector := binding.Kind + ":" + binding.Source
-		var removed []build.SourceRow
+		var removed []dataowner.SourceRow
 		t.records.Lock()
 		defer t.records.Unlock()
 		et := t.records.Type(object)
@@ -350,10 +252,10 @@ func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBin
 				}
 			}
 			if live {
-				removed = append(removed, build.SourceRow{ID: id, Verb: ".edit", Payload: json.RawMessage("{}"), Key: "delete:" + id, At: &now, Deleted: true})
+				removed = append(removed, dataowner.SourceRow{ID: id, Verb: ".edit", Payload: json.RawMessage("{}"), Key: "delete:" + id, At: &now, Deleted: true})
 			}
 		}
-		slices.SortFunc(removed, func(a, b build.SourceRow) int { return strings.Compare(a.ID, b.ID) })
+		slices.SortFunc(removed, func(a, b dataowner.SourceRow) int { return strings.Compare(a.ID, b.ID) })
 		return removed, nil
 	})
 }

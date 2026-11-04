@@ -172,16 +172,7 @@ func (t *Tenant) ownedRelations(store *records.Store, c platform.Caller, entity 
 			}}}}
 		}
 		set := platform.ObjectSet{Object: et.Info().Type, Filter: &filter}
-		reader := &setRead{t: t, store: store, c: c, now: at, types: map[string]*typeRead{et.Info().Type: {entity: et, view: et}}}
-		node, err := reader.prepare(set, false, nil)
-		if err != nil {
-			continue
-		}
-		compiled, err := reader.compile(node)
-		if err != nil {
-			continue
-		}
-		store.VisitPlan(et, compiled.plans[0], nil, func(value reflect.Value) {
+		if err := t.objectOwner(store).VisitRawSet(store, c, set, at, func(value reflect.Value) {
 			image := relationImage(&records.Row{Value: value})
 			if !t.readableIn(store, c.Member, image.Parent, at) || !t.readableIn(store, c.Member, image.Child, at) {
 				return
@@ -191,7 +182,9 @@ func (t *Tenant) ownedRelations(store *records.Store, c platform.Caller, entity 
 				by, at = image.Legacy[0].By, image.Legacy[0].At
 			}
 			out = append(out, platform.RelationLink{From: image.Parent, To: image.Child, By: by, At: at})
-		})
+		}); err != nil {
+			continue
+		}
 	}
 	slices.SortFunc(out, func(a, b platform.RelationLink) int {
 		if order := strings.Compare(a.From, b.From); order != 0 {

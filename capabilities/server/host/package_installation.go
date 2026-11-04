@@ -105,7 +105,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 	if impacts := h.t.packageRemovalImpacts(removed, refs); len(impacts) > 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before upgrading the product", impacts[0].Resource.String(), impacts[0].Consumer.String())
 	}
-	context := platform.AssetReleaseContext{Member: c.Member, At: d.at, ManagedBy: descriptor.ID, ManagedAssets: refs, Upgrade: true}
+	context := platform.AssetReleaseContext{Member: c.Member, At: d.at, ManagedBy: descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: true}
 	_, _, err = h.t.bootstrapOwnerDraftsLocked(candidate, context, false, nil, d)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())

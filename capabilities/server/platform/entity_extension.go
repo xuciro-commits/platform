@@ -2,9 +2,11 @@ package platform
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
+	"strings"
 )
 
 type ExtensionSource struct {
@@ -75,7 +77,7 @@ type InterfaceField struct {
 var interfaceName = regexp.MustCompile(`^[a-z][a-z0-9]*\.[a-z][a-z0-9]*$`)
 
 func (i Interface) Check(app string) error {
-	if !interfaceName.MatchString(i.Name) || i.Name[:len(app)+1] != app+"." {
+	if !interfaceName.MatchString(i.Name) || app == "" || !strings.HasPrefix(i.Name, app+".") {
 		return fmt.Errorf("interface %q: not <%s>.<name> in lower-case letters and digits", i.Name, app)
 	}
 	if i.Title == "" || i.Description == "" || len(i.Fields) == 0 {
@@ -102,57 +104,33 @@ func (i Interface) Implements(info EntityInfo) error {
 	return nil
 }
 
-func CheckInterfaces(manifests []Manifest, infos map[string]EntityInfo) error {
+func CheckInterfaceRegistry(interfaces []Interface, infos map[string]EntityInfo) error {
 	declared := map[string]Interface{}
-	for _, m := range manifests {
-		for _, i := range m.Interfaces {
-			if err := i.Check(m.ID); err != nil {
-				return err
-			}
-			if _, dup := declared[i.Name]; dup {
-				return fmt.Errorf("interface %s is declared twice", i.Name)
-			}
-			declared[i.Name] = i
+	for _, i := range interfaces {
+		app, _, _ := strings.Cut(i.Name, ".")
+		if err := i.Check(app); err != nil {
+			return err
 		}
+		if _, dup := declared[i.Name]; dup {
+			return fmt.Errorf("interface %s is declared twice", i.Name)
+		}
+		declared[i.Name] = i
 	}
-	for _, m := range manifests {
-		for _, e := range m.Entities {
-			for k, name := range e.Implements {
-				i, ok := declared[name]
-				if !ok {
-					return fmt.Errorf("%s implements %s, which no app declares", e.Type, name)
-				}
-				if slices.Contains(e.Implements[:k], name) {
-					return fmt.Errorf("%s implements %s twice", e.Type, name)
-				}
-				info, ok := infos[e.Type]
-				if !ok {
-					return fmt.Errorf("%s implements %s but was not described", e.Type, name)
-				}
-				if err := i.Implements(info); err != nil {
-					return err
-				}
+	types := slices.Sorted(maps.Keys(infos))
+	for _, typ := range types {
+		info := infos[typ]
+		for k, name := range info.Implements {
+			if slices.Contains(info.Implements[:k], name) {
+				return fmt.Errorf("%s implements %s twice", typ, name)
+			}
+			i, ok := declared[name]
+			if !ok {
+				return fmt.Errorf("%s implements %s, which is not in the interface registry", typ, name)
+			}
+			if err := i.Implements(info); err != nil {
+				return err
 			}
 		}
 	}
 	return nil
-}
-
-func Interfaces(manifests []Manifest) []Interface {
-	var out []Interface
-	for _, m := range manifests {
-		out = append(out, m.Interfaces...)
-	}
-	slices.SortFunc(out, func(a, b Interface) int { return compareStrings(a.Name, b.Name) })
-	return out
-}
-
-func compareStrings(a, b string) int {
-	switch {
-	case a < b:
-		return -1
-	case a > b:
-		return 1
-	}
-	return 0
 }

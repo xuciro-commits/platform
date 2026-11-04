@@ -148,6 +148,10 @@ func (t *Tenant) DraftRestore(m platform.Member, kind platform.AssetKind, id str
 	}
 	fields := map[string]json.RawMessage{}
 	_ = json.Unmarshal(payload, &fields)
+	if typ == build.ObjectType {
+		delete(fields, "actions")
+		delete(fields, "actionTypes")
+	}
 	for _, field := range info.Fields {
 		if _, ok := fields[field.Name]; !ok && !field.ReadOnly && !field.Aside {
 			fields[field.Name] = json.RawMessage("null")

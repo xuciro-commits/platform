@@ -61,7 +61,7 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 	}) {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record is outside this application")
 	}
-	view, refusal := t.RecordOf(m, typ, id, now)
+	view, refusal := t.recordDetail(m, typ, id, now, RecordSectionHistory)
 	if refusal != nil {
 		return out, refusal
 	}

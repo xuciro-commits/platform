@@ -66,6 +66,18 @@ func (t *Tenant) registerDefinitions() error {
 	}
 	for _, app := range t.apps {
 		manifest := app.Manifest()
+		for _, shape := range manifest.Interfaces {
+			shape := shape
+			if err := shape.Check(manifest.ID); err != nil {
+				return err
+			}
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetInterface, Name: shape.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Interface: &shape}); err != nil {
+				return err
+			}
+		}
+	}
+	for _, app := range t.apps {
+		manifest := app.Manifest()
 		for _, action := range manifest.Actions.All() {
 			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetAction, Name: action.Schema}
 			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
@@ -160,12 +172,6 @@ func (t *Tenant) registerDefinitions() error {
 		for _, observation := range manifest.Observations {
 			observation := observation
 			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetObservation, Name: observation.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Observation: &observation}); err != nil {
-				return err
-			}
-		}
-		for _, shape := range manifest.Interfaces {
-			shape := shape
-			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetInterface, Name: shape.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Interface: &shape}); err != nil {
 				return err
 			}
 		}

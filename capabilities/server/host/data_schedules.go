@@ -29,7 +29,12 @@ func (t *Tenant) runSchedules(pipelines []build.Pipeline, now time.Time) {
 			return ok, nil
 		})
 		if !exists {
-			edits := []platform.CompositeEdit{{Schema: platform.ScheduleType + ".create", Target: &pb.EntityRef{Type: platform.ScheduleType, Id: id}, Payload: platform.Raw(map[string]any{"name": "schedule" + pipeline.Name, "title": pipeline.Title, "pipeline": pipeline.ID, "every": pipeline.Every, "enabled": true})}}
+			project := t.resourceProject(build.PipelineType, pipeline.ID)
+			if project == "" {
+				log.Printf("schedule migration refused: pipeline %s has no project", pipeline.ID)
+				continue
+			}
+			edits := []platform.CompositeEdit{{Schema: platform.ScheduleType + ".create", Target: &pb.EntityRef{Type: platform.ScheduleType, Id: id}, Payload: platform.Raw(map[string]any{"name": "schedule" + pipeline.Name, "title": pipeline.Title, "pipeline": pipeline.ID, "every": pipeline.Every, "enabled": true, "project": project})}}
 			if pipeline.Last != nil {
 				edits = append(edits, platform.CompositeEdit{Schema: platform.SchemaScheduleRan, Target: &pb.EntityRef{Type: platform.ScheduleType, Id: id}, Payload: platform.Raw(map[string]any{"at": pipeline.Last.At})})
 			}
@@ -43,7 +48,7 @@ func (t *Tenant) runSchedules(pipelines []build.Pipeline, now time.Time) {
 		if err != nil {
 			return nil, err
 		}
-		owner := t.app(build.ID).(build.IntegrationDefinitions)
+		owner := t.dataOwner()
 		out := make([]platform.Schedule, 0, len(rows))
 		for _, row := range rows {
 			fixed, err := owner.ExecutionSchedule(row)

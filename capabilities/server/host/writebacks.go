@@ -72,7 +72,7 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 		return nil, refusal
 	}
 	var planned []platform.Effect
-	owner := t.app(build.ID).(build.IntegrationDefinitions)
+	owner := t.dataOwner()
 	for _, w := range writebacks {
 		eventSchema, on := w.Schema(), w.On
 		if w.Published != "" {

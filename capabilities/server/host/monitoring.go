@@ -172,7 +172,7 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter MonitoringRunFilter, n
 		}
 		if !source.Archived && source.State == "published" && !source.Stream {
 			retry(&run, build.SourceType+".pull", build.SourceType, source.ID, "rerun")
-			fixed, fixedErr := t.app(build.ID).(build.IntegrationDefinitions).ExecutionSource(source)
+			fixed, fixedErr := t.dataOwner().ExecutionSource(source)
 			if fixedErr != nil {
 				coverage.Limitation = "definition-unavailable"
 			} else if every, parseErr := time.ParseDuration(fixed.Every); parseErr == nil && every > 0 && source.Last != nil && now.After(source.Last.At.Add(every)) {

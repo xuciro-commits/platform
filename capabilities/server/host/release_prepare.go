@@ -176,6 +176,14 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 			if err != nil {
 				return nil, nil, err
 			}
+			if context.Project != "" && build.BranchDraftType(draft.Type) && draft.Type != build.AppType {
+				var payload map[string]json.RawMessage
+				if json.Unmarshal(raw, &payload) != nil {
+					return nil, nil, fmt.Errorf("asset draft %s/%s is unreadable", draft.Type, draft.Name)
+				}
+				payload["project"] = platform.Raw(context.Project)
+				raw, _ = json.Marshal(payload)
+			}
 			key := "release-bootstrap:" + candidate.ID + ":" + context.Member.ID + ":" + draft.Type + "/" + draft.Name
 			if request != nil {
 				key = request.Key + "#" + strconv.Itoa(ordinal)
@@ -188,7 +196,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 					return nil, nil, refusal
 				}
 			}
-			answer, rejected := platform.Decide(platform.NewCaller(decision, context.Member, et.Info().App, context.ManagedBy != "", false), app, submission, context.At)
+			answer, rejected := platform.Decide(platform.NewCaller(decision, context.Member, et.Info().App, false, context.ManagedBy != ""), app, submission, context.At)
 			if rejected != nil {
 				if rejected.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 					action, _ := app.Manifest().Actions.Action(draft.Schema)
@@ -250,6 +258,42 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 type releaseInstallationRuntime struct{ t *Tenant }
 
 func (r releaseInstallationRuntime) HasAgentRuntime() bool { return r.t.agents != nil }
+
+func (r releaseInstallationRuntime) ReleaseProject(candidate platform.ReleaseCandidate) string {
+	r.t.records.Lock()
+	defer r.t.records.Unlock()
+	resources := r.t.records.Type(build.ResourceType)
+	if resources == nil {
+		return ""
+	}
+	projects := func(apps bool) []string {
+		out := []string{}
+		for _, asset := range candidate.Assets {
+			if apps != (asset.Ref.Kind == platform.AssetApp) {
+				continue
+			}
+			for _, row := range resources.Rows().All() {
+				resource := row.Value.Interface().(build.Resource)
+				if resource.Ref == asset.Ref && resource.Project != "" && !slices.Contains(out, resource.Project) {
+					out = append(out, resource.Project)
+				}
+			}
+		}
+		return out
+	}
+	if found := projects(true); len(found) > 0 {
+		if len(found) == 1 {
+			return found[0]
+		}
+		return ""
+	}
+	found := projects(false)
+	if len(found) == 1 {
+		return found[0]
+	}
+	return ""
+}
+
 func (r releaseInstallationRuntime) Registry() (*platform.AssetRegistry, error) {
 	return r.t.assetRegistryLocked()
 }

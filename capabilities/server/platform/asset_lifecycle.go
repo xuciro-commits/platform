@@ -30,6 +30,7 @@ type AssetReleaseContext struct {
 	ManagedBy     string
 	DraftsOnly    bool
 	DraftIDs      map[AssetRef]string
+	Project       string
 	Member        Member
 	At            time.Time
 	Upgrade       bool

@@ -1,0 +1,834 @@
+{
+  "format": 1,
+  "manifests": [
+    {
+      "id": "agent",
+      "title": "Agent Studio"
+    },
+    {
+      "id": "ai",
+      "title": "AI"
+    },
+    {
+      "id": "build",
+      "title": "Files"
+    },
+    {
+      "id": "core",
+      "title": "Legacy core records"
+    },
+    {
+      "id": "enterprise",
+      "title": "Organisation"
+    },
+    {
+      "id": "files",
+      "title": "Files"
+    },
+    {
+      "id": "flow",
+      "title": "Automate"
+    },
+    {
+      "id": "knowledge",
+      "title": "Knowledge"
+    },
+    {
+      "id": "monitoring",
+      "title": "Monitoring"
+    },
+    {
+      "id": "platform",
+      "title": "Control Panel"
+    },
+    {
+      "id": "relations",
+      "title": "Relations"
+    },
+    {
+      "id": "system",
+      "title": "Platform"
+    },
+    {
+      "id": "work",
+      "title": "Work"
+    }
+  ],
+  "applications": [
+    {
+      "id": "build",
+      "manifest": "build",
+      "serves": [
+        "build"
+      ],
+      "category": "build",
+      "portal": false,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder",
+            "viewer",
+            "discoverer"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "files"
+          },
+          "shell": true
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.app",
+          "view": "project"
+        }
+      ]
+    },
+    {
+      "id": "ontology",
+      "title": "Ontology Manager",
+      "serves": [
+        "build"
+      ],
+      "surface": "studio",
+      "category": "build",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "object-type"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.actiontype",
+          "view": "action-type"
+        },
+        {
+          "type": "build.object",
+          "view": "object-type"
+        },
+        {
+          "type": "build.linktype",
+          "view": "link-type"
+        },
+        {
+          "type": "build.interface",
+          "view": "interfaces"
+        },
+        {
+          "type": "build.propertytype",
+          "view": "property-type"
+        },
+        {
+          "type": "build.valuetype",
+          "view": "value-type"
+        },
+        {
+          "type": "build.objecttypegroup",
+          "view": "object-type-group"
+        }
+      ]
+    },
+    {
+      "id": "data-connection",
+      "title": "Data Connection",
+      "serves": [
+        "build",
+        "platform"
+      ],
+      "category": "build",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        },
+        {
+          "app": "build",
+          "roles": [
+            "integrator"
+          ]
+        },
+        {
+          "app": "platform",
+          "roles": [
+            "admin"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "connection"
+          },
+          "when": [
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            },
+            {
+              "app": "build",
+              "roles": [
+                "integrator"
+              ]
+            }
+          ]
+        },
+        {
+          "route": {
+            "view": "endpoints"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.connection",
+          "view": "connection",
+          "when": [
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            },
+            {
+              "app": "build",
+              "roles": [
+                "integrator"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "build.source",
+          "view": "data-source",
+          "when": [
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            },
+            {
+              "app": "build",
+              "roles": [
+                "integrator"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "build.observation",
+          "view": "observation-source",
+          "when": [
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            },
+            {
+              "app": "build",
+              "roles": [
+                "integrator"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "build.listener",
+          "view": "listener",
+          "when": [
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            },
+            {
+              "app": "build",
+              "roles": [
+                "integrator"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "build.writeback",
+          "view": "writeback",
+          "when": [
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            },
+            {
+              "app": "build",
+              "roles": [
+                "integrator"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pipeline-builder",
+      "title": "Pipeline Builder",
+      "serves": [
+        "build"
+      ],
+      "category": "build",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "pipeline"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.pipeline",
+          "view": "pipeline"
+        },
+        {
+          "type": "build.schedule",
+          "view": "schedule"
+        },
+        {
+          "type": "build.match",
+          "view": "match"
+        }
+      ]
+    },
+    {
+      "id": "dataset-preview",
+      "title": "Dataset Preview",
+      "serves": [
+        "build"
+      ],
+      "category": "build",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "dataset"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.dataset",
+          "view": "dataset"
+        },
+        {
+          "type": "build.mediaset",
+          "view": "media-set"
+        }
+      ]
+    },
+    {
+      "id": "logic",
+      "title": "Logic",
+      "serves": [
+        "build"
+      ],
+      "category": "build",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "functions"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.table",
+          "view": "decision-table"
+        },
+        {
+          "type": "build.process",
+          "view": "flow"
+        },
+        {
+          "type": "build.function",
+          "view": "function"
+        },
+        {
+          "type": "build.code",
+          "view": "code"
+        }
+      ]
+    },
+    {
+      "id": "automate",
+      "manifest": "flow",
+      "serves": [
+        "build",
+        "flow"
+      ],
+      "category": "build",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "automation"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.process/automation",
+          "view": "automation"
+        },
+        {
+          "type": "build.alertrule",
+          "view": "alert"
+        }
+      ]
+    },
+    {
+      "id": "workshop",
+      "title": "Workshop",
+      "serves": [
+        "build"
+      ],
+      "category": "build",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "module"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.page",
+          "view": "module"
+        }
+      ]
+    },
+    {
+      "id": "devops",
+      "title": "DevOps",
+      "serves": [
+        "build"
+      ],
+      "category": "govern",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        },
+        {
+          "app": "build",
+          "roles": [
+            "publisher"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "release-review"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.testplan",
+          "view": "test-plan"
+        },
+        {
+          "type": "build.testplan/evaluation-set",
+          "view": "evaluation-set"
+        },
+        {
+          "type": "build.sample-set",
+          "view": "sample-set"
+        }
+      ]
+    },
+    {
+      "id": "agents",
+      "manifest": "agent",
+      "serves": [
+        "build",
+        "agent",
+        "knowledge"
+      ],
+      "category": "build",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        },
+        {
+          "app": "agent"
+        },
+        {
+          "app": "knowledge"
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "agents"
+          },
+          "when": [
+            {
+              "app": "agent"
+            }
+          ]
+        },
+        {
+          "route": {
+            "view": "agent"
+          },
+          "when": [
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            }
+          ]
+        },
+        {
+          "route": {
+            "view": "knowledge"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.agent",
+          "view": "agent",
+          "when": [
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "platform",
+      "manifest": "platform",
+      "serves": [
+        "platform",
+        "ai"
+      ],
+      "surface": "tenant",
+      "category": "govern",
+      "portal": true,
+      "access": [
+        {
+          "all": true
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "control-panel"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "platform.marking",
+          "view": "marking"
+        }
+      ]
+    },
+    {
+      "id": "marketplace",
+      "title": "Marketplace",
+      "serves": [
+        "platform"
+      ],
+      "category": "govern",
+      "portal": true,
+      "access": [
+        {
+          "app": "platform",
+          "roles": [
+            "admin",
+            "auditor"
+          ]
+        },
+        {
+          "schema": "build.app.create"
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "apps"
+          }
+        }
+      ],
+      "opens": []
+    },
+    {
+      "id": "monitoring",
+      "manifest": "monitoring",
+      "serves": [
+        "platform",
+        "build"
+      ],
+      "category": "govern",
+      "portal": true,
+      "access": [
+        {
+          "app": "platform",
+          "roles": [
+            "admin"
+          ]
+        },
+        {
+          "app": "flow"
+        },
+        {
+          "app": "build",
+          "roles": [
+            "builder",
+            "integrator"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "monitoring-overview"
+          },
+          "when": [
+            {
+              "app": "platform",
+              "roles": [
+                "admin"
+              ]
+            },
+            {
+              "app": "flow"
+            },
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            }
+          ]
+        },
+        {
+          "route": {
+            "view": "integration-health"
+          }
+        }
+      ],
+      "opens": []
+    },
+    {
+      "id": "host-console",
+      "title": "Host Console",
+      "serves": [],
+      "category": "govern",
+      "portal": true,
+      "access": [
+        {
+          "all": true
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "host-overview"
+          }
+        }
+      ],
+      "opens": []
+    },
+    {
+      "id": "my-work",
+      "title": "Notifications",
+      "serves": [],
+      "category": "govern",
+      "portal": false,
+      "access": [
+        {
+          "all": true
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "notifications"
+          }
+        }
+      ],
+      "opens": []
+    },
+    {
+      "id": "object-explorer",
+      "title": "Object Explorer",
+      "serves": [
+        "build"
+      ],
+      "category": "analyze",
+      "portal": true,
+      "access": [
+        {
+          "entities": true
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "explorer"
+          }
+        }
+      ],
+      "opens": [
+        {
+          "type": "build.query",
+          "view": "object-set",
+          "when": [
+            {
+              "app": "build",
+              "roles": [
+                "builder"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "data-lineage",
+      "title": "Data Lineage",
+      "serves": [],
+      "category": "govern",
+      "portal": true,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder",
+            "integrator"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "lineage"
+          }
+        }
+      ],
+      "opens": []
+    },
+    {
+      "id": "catalog",
+      "title": "Asset Library",
+      "serves": [
+        "catalog"
+      ],
+      "surface": "developer",
+      "category": "developer",
+      "portal": false,
+      "access": [
+        {
+          "app": "build",
+          "roles": [
+            "builder"
+          ]
+        },
+        {
+          "app": "platform",
+          "roles": [
+            "admin"
+          ]
+        }
+      ],
+      "home": [
+        {
+          "route": {
+            "view": "catalog"
+          }
+        }
+      ],
+      "opens": []
+    }
+  ]
+}

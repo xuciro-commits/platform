@@ -13,11 +13,16 @@ import (
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/objects"
 )
 
 type constraintWrite struct {
 	caller platform.Caller
 	before *records.Row
+}
+
+func constraintValues(info platform.EntityInfo, value reflect.Value) map[string]any {
+	return objects.ConstraintValues(info, value)
 }
 
 func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.FieldIssue, at time.Time) []platform.FieldIssue {
@@ -49,7 +54,7 @@ func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.F
 			continue
 		}
 		if current := et.Rows().Get(id); current != nil && et.Info().HasReadSources() {
-			narrowed, _ := t.narrowerIn(t.records, member, at, true).derive(et, current.Value)
+			narrowed, _ := t.narrowerIn(t.records, member, at, true).Derive(et, current.Value)
 			for _, derivation := range et.Info().Derived {
 				paths := derivation.Fields
 				if len(derivation.List) > 0 {
@@ -93,14 +98,6 @@ func (d *stagedDecision) constraintLookup(typ string) (platform.EntityInfo, bool
 		return platform.EntityInfo{}, false
 	}
 	return platform.ConstraintEntity(et.Info()), true
-}
-
-func constraintValues(info platform.EntityInfo, value reflect.Value) map[string]any {
-	values := map[string]any{"id": records.Header(value).ID, "archived": records.Header(value).Archived}
-	for _, field := range info.Fields {
-		values[field.Name] = value.FieldByIndex(field.Index).Interface()
-	}
-	return values
 }
 
 func constraintLocked(info platform.EntityInfo, before *records.Row) bool {

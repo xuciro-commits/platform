@@ -353,11 +353,32 @@ func (h hostView) EntitySource(typ string) (platform.AssetBinding, bool) {
 func (h hostView) Declares(name string) bool { return h.t.declares(name) }
 
 func (h hostView) Interfaces() []platform.Interface {
-	manifests := make([]platform.Manifest, len(h.t.apps))
-	for k, a := range h.t.apps {
-		manifests[k] = a.Manifest()
+	return h.t.interfaces()
+}
+
+func (t *Tenant) interfaces() []platform.Interface {
+	seen := map[platform.AssetRef]bool{}
+	out := []platform.Interface{}
+	for _, definition := range t.definitions {
+		if definition.Interface == nil || seen[definition.Ref] {
+			continue
+		}
+		seen[definition.Ref] = true
+		out = append(out, *definition.Interface)
 	}
-	return platform.Interfaces(manifests)
+	for _, app := range t.apps {
+		manifest := app.Manifest()
+		for _, shape := range manifest.Interfaces {
+			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetInterface, Name: shape.Name}
+			if seen[ref] {
+				continue
+			}
+			seen[ref] = true
+			out = append(out, shape)
+		}
+	}
+	slices.SortFunc(out, func(a, b platform.Interface) int { return strings.Compare(a.Name, b.Name) })
+	return out
 }
 
 func (h hostView) BindInterfaceQuery(q platform.NamedQuery, drafts ...platform.EntityInfo) (platform.NamedQuery, error) {

@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
 
 	"platformserver/platform"
@@ -17,7 +18,7 @@ const pipelinePreviewSample = 100
 const pipelinePreviewRows = 1000
 
 type PipelinePreviewRequest struct {
-	Pipeline build.Pipeline `json:"pipeline"`
+	Pipeline dataowner.Pipeline `json:"pipeline"`
 }
 
 type PipelinePreview struct {
@@ -52,7 +53,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		t.mu.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Pipeline trial accepts at most 64 steps, 64 expectations and 1 MiB of definition")
 	}
-	p = build.Pipeline{}
+	p = dataowner.Pipeline{}
 	_ = json.Unmarshal(raw, &p)
 	if err := p.NormalizeFormulaRules(); err != nil {
 		t.mu.Unlock()
@@ -64,29 +65,29 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		if _, exists := inputs[id]; exists {
 			continue
 		}
-		data, problem := caller.ReadRecord(build.DatasetType, id, at)
+		data, problem := caller.ReadRecord(dataowner.DatasetType, id, at)
 		if problem != nil {
 			t.mu.Unlock()
 			return out, problem
 		}
-		var dataset build.Dataset
+		var dataset dataowner.Dataset
 		if json.Unmarshal(data, &dataset) != nil || dataset.Version < 1 {
 			t.mu.Unlock()
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The input dataset has no rows yet")
 		}
-		versionID := build.VersionID(id, dataset.Version)
-		data, problem = caller.ReadRecord(build.DatasetVersionType, versionID, at)
+		versionID := dataowner.VersionID(id, dataset.Version)
+		data, problem = caller.ReadRecord(dataowner.DatasetVersionType, versionID, at)
 		if problem != nil {
 			t.mu.Unlock()
 			return out, problem
 		}
-		var version build.DatasetVersion
+		var version dataowner.DatasetVersion
 		var rows []map[string]any
 		if json.Unmarshal(data, &version) != nil || version.Archived || json.Unmarshal(version.Data, &rows) != nil {
 			t.mu.Unlock()
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The input dataset version is unavailable")
 		}
-		sources = append(sources, build.DatasetType+"/"+id, build.DatasetVersionType+"/"+versionID+"#data")
+		sources = append(sources, dataowner.DatasetType+"/"+id, dataowner.DatasetVersionType+"/"+versionID+"#data")
 		out.Marking = platform.HigherMarking(out.Marking, dataset.Marking)
 		out.Compartments = platform.JoinCompartments(out.Compartments, dataset.Compartments)
 		if id == p.Input {
@@ -97,7 +98,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		}
 		inputs[id] = rows
 	}
-	problem := t.app(build.ID).(build.ConstructionDrafts).CheckPipeline(caller, p)
+	problem := t.dataOwner().CheckPipeline(caller, p)
 	t.mu.Unlock()
 	if problem != nil {
 		return out, problem

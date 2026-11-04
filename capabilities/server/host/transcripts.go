@@ -80,5 +80,5 @@ func (t *Tenant) withheld(m platform.Member, run string, now time.Time) bool {
 	if !known {
 		return true
 	}
-	return !t.narrower(m, now, false).readable(r.SourceRefs())
+	return !t.narrower(m, now, false).Readable(r.SourceRefs())
 }

@@ -56,7 +56,7 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 		return ContextView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	m := *reader
-	view, err := t.recordOf(m, typ, id, now)
+	view, err := t.recordDetail(m, typ, id, now, RecordSectionHistory, RecordSectionLinks)
 	if err != nil {
 		return ContextView{}, err
 	}
@@ -174,7 +174,9 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 			continue
 		}
 		group := "object"
-		if resources[info.Type] || info.App != build.ID {
+		if info.Type == controlowner.MemberType {
+			group = "member"
+		} else if resources[info.Type] || info.App != build.ID {
 			group = "resource"
 		}
 		for _, r := range page.Records {

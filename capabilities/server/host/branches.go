@@ -14,6 +14,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 	trialowner "platformserver/services/devops/trials"
+	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/merge"
 )
@@ -53,6 +54,7 @@ type BranchChangeEntry struct {
 	By      string          `json:"by"`
 	Type    string          `json:"type"`
 	ID      string          `json:"id"`
+	Project string          `json:"project,omitempty"`
 	RID     string          `json:"rid,omitempty"`
 	Op      string          `json:"op" enum:"create,update,delete"`
 	Rebased bool            `json:"rebased,omitempty"`
@@ -61,13 +63,14 @@ type BranchChangeEntry struct {
 }
 
 type BranchResourceView struct {
-	Type   string          `json:"type"`
-	ID     string          `json:"id"`
-	RID    string          `json:"rid,omitempty"`
-	Op     string          `json:"op,omitempty" enum:"create,update,delete"`
-	Base   json.RawMessage `json:"base,omitempty"`
-	Main   json.RawMessage `json:"main,omitempty"`
-	Branch json.RawMessage `json:"branch,omitempty"`
+	Type    string          `json:"type"`
+	ID      string          `json:"id"`
+	Project string          `json:"project,omitempty"`
+	RID     string          `json:"rid,omitempty"`
+	Op      string          `json:"op,omitempty" enum:"create,update,delete"`
+	Base    json.RawMessage `json:"base,omitempty"`
+	Main    json.RawMessage `json:"main,omitempty"`
+	Branch  json.RawMessage `json:"branch,omitempty"`
 }
 
 type BranchResourceDiff struct {
@@ -152,8 +155,9 @@ type BranchCreateRequest struct {
 }
 
 type BranchSaveRequest struct {
-	Op   string          `json:"op,omitempty" enum:"create,update,delete"`
-	Spec json.RawMessage `json:"spec,omitempty"`
+	Op      string          `json:"op,omitempty" enum:"create,update,delete"`
+	Project string          `json:"project,omitempty"`
+	Spec    json.RawMessage `json:"spec,omitempty"`
 }
 
 type BranchResolveRequest struct {
@@ -229,6 +233,40 @@ type mainDraft struct {
 	RID       string
 	Module    string
 	BuildHash string
+}
+
+func (t *Tenant) resourceProject(typ, draft string) string {
+	t.records.Lock()
+	defer t.records.Unlock()
+	resources := t.records.Type(build.ResourceType)
+	if resources == nil {
+		return ""
+	}
+	for _, row := range resources.Rows().All() {
+		resource := row.Value.Interface().(build.Resource)
+		if resource.Type == typ && resource.Draft == draft {
+			return resource.Project
+		}
+	}
+	return ""
+}
+
+func (t *Tenant) canEditProjectResource(m platform.Member, project string) bool {
+	t.records.Lock()
+	apps := t.records.Type(build.AppType)
+	exists := false
+	if apps != nil {
+		if row := apps.Rows().Get(project); row != nil {
+			app := row.Value.Interface().(build.Application)
+			exists = !app.Archived
+		}
+	}
+	t.records.Unlock()
+	if !exists {
+		return false
+	}
+	role := t.resourceRole(m, project)
+	return role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole
 }
 
 func (t *Tenant) draftFields(typ string) (map[string]bool, *kernel.Error) {
@@ -392,7 +430,7 @@ func (t *Tenant) submitBranch(m platform.Member, key, schema, id string, payload
 }
 
 func (t *Tenant) CreateBranch(m platform.Member, request BranchCreateRequest, now time.Time) (BranchDetail, *kernel.Error) {
-	if !build.Named(request.Name) {
+	if !ontology.Named(request.Name) {
 		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch name is lower-case letters and digits")
 	}
 	if refusal := t.submitBranch(m, "branch:"+request.Name+":create", build.BranchType+".create", request.Name, map[string]any{"name": request.Name, "title": request.Title, "description": request.Description}, now); refusal != nil {
@@ -416,7 +454,7 @@ func (t *Tenant) BranchChanges(m platform.Member, id string, specs bool, now tim
 	}
 	out := make([]BranchChangeEntry, 0, len(branch.Changes))
 	for _, change := range branch.Changes {
-		entry := BranchChangeEntry{Seq: change.Seq, At: change.At, By: change.By, Type: change.Type, ID: change.ID, Op: change.Op, Rebased: change.Rebased, RID: t.branchRID(change.Type, change.ID, nil)}
+		entry := BranchChangeEntry{Seq: change.Seq, At: change.At, By: change.By, Type: change.Type, ID: change.ID, Project: change.Project, Op: change.Op, Rebased: change.Rebased, RID: t.branchRID(change.Type, change.ID, nil)}
 		if specs {
 			entry.Base, entry.Spec = change.Base, change.Spec
 		}
@@ -486,7 +524,38 @@ func (t *Tenant) SaveBranchResource(m platform.Member, id, typ, draft string, re
 			request.Spec, _ = json.Marshal(spec)
 		}
 	}
-	return t.appendBranchSave(m, branch, current, typ, draft, op, request.Spec, now)
+	project := request.Project
+	if op == "create" {
+		if typ == build.AppType {
+			project = draft
+		}
+	} else {
+		authoritative := t.resourceProject(typ, draft)
+		if authoritative == "" {
+			authoritative = previous.Project
+		}
+		if authoritative == "" {
+			return BranchDetail{}, branchRefuse("The resource has no authoritative project")
+		}
+		if project != "" && project != authoritative {
+			return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A resource stays in the project where it is registered")
+		}
+		project = authoritative
+	}
+	if project == "" {
+		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the project that owns this resource")
+	}
+	if previousProject := previous.Project; touched && previousProject != "" && previousProject != project {
+		return BranchDetail{}, branchRefuse("A resource keeps the project recorded by its first branch change")
+	}
+	if op == "create" && typ == build.AppType {
+		if !m.Holds("platform", "admin") && !holdsIndependentBuildRole(m, build.Builder) {
+			return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Creating a project needs an independent builder")
+		}
+	} else if !t.canEditProjectResource(m, project) {
+		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Editing this resource requires its project")
+	}
+	return t.appendBranchSave(m, branch, current, typ, draft, op, project, request.Spec, now)
 }
 
 const codeBuildKey = "build"
@@ -507,12 +576,12 @@ func keptCodeBuild(previous build.BranchChange, touched bool, spec map[string]js
 	return earlier[codeBuildKey]
 }
 
-func (t *Tenant) appendBranchSave(m platform.Member, branch build.Branch, current mainDraft, typ, draft, op string, spec json.RawMessage, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) appendBranchSave(m platform.Member, branch build.Branch, current mainDraft, typ, draft, op, project string, spec json.RawMessage, now time.Time) (BranchDetail, *kernel.Error) {
 	previous, touched := branch.Latest(typ, draft)
 	if touched && previous.Op == op && !previous.Rebased && sameJSON(previous.Spec, spec) {
 		return t.branchDetail(m, branch, now)
 	}
-	payload := map[string]any{"type": typ, "id": draft, "op": op}
+	payload := map[string]any{"type": typ, "id": draft, "op": op, "project": project}
 	if op != "delete" {
 		payload["spec"] = spec
 	}
@@ -550,16 +619,21 @@ func (t *Tenant) BranchResource(m platform.Member, id, typ, draft string, now ti
 		return BranchResourceView{}, refusal
 	}
 	if !touched {
-		return BranchResourceView{Type: typ, ID: draft, RID: current.RID, Main: current.Spec, Branch: current.Spec}, nil
+		return BranchResourceView{Type: typ, ID: draft, Project: t.resourceProject(typ, draft), RID: current.RID, Main: current.Spec, Branch: current.Spec}, nil
 	}
 	base, _ := branch.Base(typ, draft)
 	spec, _ := effectiveSpec(branch, typ, draft)
-	return BranchResourceView{Type: typ, ID: draft, RID: current.RID, Op: latest.Op, Base: base, Main: current.Spec, Branch: spec}, nil
+	project := latest.Project
+	if project == "" {
+		project = t.resourceProject(typ, draft)
+	}
+	return BranchResourceView{Type: typ, ID: draft, Project: project, RID: current.RID, Op: latest.Op, Base: base, Main: current.Spec, Branch: spec}, nil
 }
 
 type resourcePlan struct {
 	Type, ID string
 	RID      string
+	Project  string
 	Op       string
 	Base     json.RawMessage
 	Main     mainDraft
@@ -610,7 +684,11 @@ func (t *Tenant) planBranchLocked(m platform.Member, branch build.Branch, resolu
 		if conflicts == nil {
 			conflicts = []branches.PathConflict{}
 		}
-		plans = append(plans, resourcePlan{Type: typ, ID: id, RID: current.RID, Op: latest.Op, Base: base, Main: current, Branch: spec, Merged: merged,
+		project := latest.Project
+		if project == "" {
+			project = t.resourceProject(typ, id)
+		}
+		plans = append(plans, resourcePlan{Type: typ, ID: id, RID: current.RID, Project: project, Op: latest.Op, Base: base, Main: current, Branch: spec, Merged: merged,
 			Diff: BranchResourceDiff{Type: typ, ID: id, RID: current.RID, Op: latest.Op, Branch: branchChanges, Main: mainChanges, Conflicts: conflicts, Merged: merged}})
 	}
 	return plans, nil
@@ -685,10 +763,14 @@ func (t *Tenant) branchActions(plans []resourcePlan) ([]branchAction, *kernel.Er
 			item.action, item.schema = "archive", plan.Type+".archive"
 			item.payload = map[string]json.RawMessage{}
 		case merged != nil && !plan.Main.Exists:
+			if plan.Project == "" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The branch has no project for {resource}", plan.Type+"/"+plan.ID)
+			}
 			item.action, item.schema = "create", plan.Type+".create"
 			if json.Unmarshal(merged, &item.payload) != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The merged spec is unreadable")
 			}
+			item.payload["project"] = platform.Raw(plan.Project)
 		case merged != nil:
 			var current map[string]json.RawMessage
 			var mergedFields map[string]json.RawMessage

@@ -86,6 +86,29 @@ func TestInvariantAutomationPauseGatesNewTriggersNotRunning(t *testing.T) {
 		if !found {
 			t.Fatal("the release candidate omits the paused process")
 		}
+		releaseOwner, ok := live.app(build.ID).(platform.AssetLifecycleOwner)
+		if !ok {
+			t.Fatal("the construction owner cannot prepare releases")
+		}
+		plans, err := releaseOwner.PrepareReleaseAssets(candidate.Assets, platform.AssetReleaseContext{Member: live.member(t), At: invariantClock})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, plan := range plans {
+			if plan.Ref != ref {
+				continue
+			}
+			if plan.Record != build.ProcessType+"/PROCESS" {
+				t.Fatalf("the process installation changed its accepted record identity: %s", plan.Record)
+			}
+		}
+		plan, err := releaseOwner.DecodeAssetInstallation(build.SchemaProcess, platform.Raw(process))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan.Record != build.ProcessType+"/PROCESS" || plan.Ref != ref {
+			t.Fatalf("the process installation changed its accepted identity: %+v", plan)
+		}
 		pausedAt := invariantClock.Add(time.Minute)
 		live.Work(pausedAt)
 		if got := live.records.Type(platform.FlowInstanceType).Rows().Len(); got != 1 {

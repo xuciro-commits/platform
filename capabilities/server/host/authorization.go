@@ -36,6 +36,18 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 		return nil
 	}
 	d, _ := t.app(controlowner.PlatformApp).(platform.ProjectAccess)
+	if build.IsResourceCreate(s) {
+		var payload struct {
+			Project string `json:"project"`
+		}
+		if d == nil || json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Project == "" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the project that owns this resource")
+		}
+		if role := d.ProjectRole(m.ID, payload.Project); role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
+			return nil
+		}
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project roles cover only the resources of projects where you are an owner or editor; {action} on {target} is outside them", s.GetSchema().GetName(), target(s))
+	}
 	ref, ok := delegatedAsset(s)
 	names := []string{ref.Name}
 	if name := t.draftName(s); name != "" {

@@ -104,7 +104,7 @@ func TestInvariantK1K2K4MediaProductDeliveryRetainsVersionsAndBytes(t *testing.T
 		if err := target.files().Delete(context.Background(), target.ID+"/"+hash); err != nil {
 			t.Fatal(err)
 		}
-		restored := newInvariantTenant(t, target.ID, seat)
+		restored := newInvariantTenantReplayWithApps(t, target.ID, nil, seat)
 		restored.Files = target.files()
 		if err := restored.recoverEntries(target.entries); err != nil {
 			t.Fatal(err)

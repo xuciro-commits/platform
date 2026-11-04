@@ -30,8 +30,8 @@ func TestInvariantK1ReplayIsByteIdentical(t *testing.T) {
 	if _, refusal := live.Submit(live.member(t), stale, invariantClock); refusal == nil {
 		t.Fatal("the stale submission was accepted")
 	}
-	if len(live.entries) != 7 {
-		t.Fatalf("the journal holds %d entries; want 6 accepted results and 1 sealed refusal", len(live.entries))
+	if len(live.entries) != 8 {
+		t.Fatalf("the journal holds %d entries; want the project fixture, 6 accepted results and 1 sealed refusal", len(live.entries))
 	}
 	want := live.recordImage(t)
 	for _, typ := range []string{build.ObjectType, "build.alpha"} {
@@ -193,14 +193,15 @@ func TestInvariantK1ObjectViewReleaseReplayPreservesHistory(t *testing.T) {
 func TestInvariantK2SameKeyReturnsSameAnswer(t *testing.T) {
 	t.Run("accepted", func(t *testing.T) {
 		tn := newInvariantTenant(t, "invariant-k2-accepted")
+		baseline := len(tn.entries)
 		request := tn.submission("build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
 		again := proto.Clone(request).(*pb.Submission)
 		first, refusal := tn.Submit(tn.member(t), request, invariantClock)
 		if refusal != nil {
 			t.Fatalf("first submission: %s: %s", refusal.Code, refusal.Message)
 		}
-		if len(tn.entries) != 1 {
-			t.Fatalf("first submission sealed %d results; want 1", len(tn.entries))
+		if len(tn.entries) != baseline+1 {
+			t.Fatalf("first submission sealed %d results; want 1", len(tn.entries)-baseline)
 		}
 		second, refusal := tn.Submit(tn.member(t), again, invariantClock.Add(time.Hour))
 		if refusal != nil {
@@ -209,13 +210,14 @@ func TestInvariantK2SameKeyReturnsSameAnswer(t *testing.T) {
 		if !proto.Equal(first, second) {
 			t.Fatalf("repeated submission answered differently:\nfirst:  %v\nsecond: %v", first, second)
 		}
-		if len(tn.entries) != 1 {
-			t.Fatalf("the journal holds %d accepted results after the repeat; want 1", len(tn.entries))
+		if len(tn.entries) != baseline+1 {
+			t.Fatalf("the journal holds %d accepted results after the repeat; want 1", len(tn.entries)-baseline)
 		}
 	})
 	t.Run("refused", func(t *testing.T) {
 		tn := newInvariantTenant(t, "invariant-k2-refused")
 		tn.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
+		baseline := len(tn.entries)
 		request := tn.submission("build.object.edit", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha, stale"))
 		zero := uint32(0)
 		request.ExpectedRevision = &zero
@@ -224,15 +226,15 @@ func TestInvariantK2SameKeyReturnsSameAnswer(t *testing.T) {
 		if first == nil {
 			t.Fatal("the stale submission was accepted")
 		}
-		if len(tn.entries) != 2 {
-			t.Fatalf("the journal holds %d results after the refusal; want 2", len(tn.entries))
+		if len(tn.entries) != baseline+1 {
+			t.Fatalf("the journal holds %d results after the refusal; want 1", len(tn.entries)-baseline)
 		}
 		_, second := tn.Submit(tn.member(t), again, invariantClock.Add(time.Hour))
 		if !reflect.DeepEqual(first, second) {
 			t.Fatalf("repeated refusal answered differently:\nfirst:  %+v\nsecond: %+v", first, second)
 		}
-		if len(tn.entries) != 2 {
-			t.Fatalf("the journal holds %d results after the repeat; want 2", len(tn.entries))
+		if len(tn.entries) != baseline+1 {
+			t.Fatalf("the journal holds %d results after the repeat; want 1", len(tn.entries)-baseline)
 		}
 	})
 }
@@ -371,8 +373,8 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 		}
 	})
 	t.Run("discovery exposes resource identity without granting definition access", func(t *testing.T) {
-		sub := tn.submission(platform.SchemaProjectSave, platform.ProjectType, build.WorkspaceProject, map[string]any{
-			"title": "Workspace", "members": []platform.ProjectMember{{Member: uncleared.ID, Role: platform.ProjectOwnerRole}, {Member: unprivileged.ID, Role: platform.ProjectDiscovererRole}},
+		sub := tn.submission(platform.SchemaProjectSave, platform.ProjectType, invariantProject, map[string]any{
+			"title": "Invariant project", "members": []platform.ProjectMember{{Member: uncleared.ID, Role: platform.ProjectOwnerRole}, {Member: unprivileged.ID, Role: platform.ProjectDiscovererRole}},
 		})
 		sub.Authority = "platform"
 		if _, refusal := tn.Submit(uncleared, sub, invariantClock); refusal != nil {
@@ -384,7 +386,7 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 				t.Fatalf("%s resource discovery: %+v", reader.ID, hits)
 			}
 			resource := hits[0].Resource
-			if resource.ID != platform.ResourceID(tn.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetDataset, Name: "guarded"}) || resource.Project != build.WorkspaceProject || resource.CanOpen != (reader.ID == uncleared.ID) {
+			if resource.ID != platform.ResourceID(tn.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetDataset, Name: "guarded"}) || resource.Project != invariantProject || resource.CanOpen != (reader.ID == uncleared.ID) {
 				t.Fatalf("%s discovered wrong identity or permission: %+v", reader.ID, resource)
 			}
 		}
@@ -580,5 +582,53 @@ func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
 		if !ok || current.Title != object.title+", branched" || current.Revision != 2 {
 			t.Fatalf("main object %s after merge: %+v; want the branch title at revision 2", object.id, view.Record)
 		}
+	}
+}
+
+func TestInvariantBranchSaveRejectsSpoofedProject(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-branch-project")
+	member := live.member(t)
+	live.accept(t, "build.app.create", build.AppType, "other-project", map[string]any{"name": "otherproject", "title": "Other project"})
+	live.accept(t, "build.object.create", build.ObjectType, "OBJ", invariantObject("alpha", "Alpha"))
+	branch, refusal := live.CreateBranch(member, BranchCreateRequest{Name: "projectguard", Title: "Project guard"}, invariantClock)
+	if refusal != nil {
+		t.Fatalf("create branch: %v", refusal)
+	}
+	_, refusal = live.SaveBranchResource(member, branch.ID, build.ObjectType, "OBJ", BranchSaveRequest{
+		Project: "other-project",
+		Spec:    platform.Raw(invariantObject("alpha", "Alpha changed")),
+	}, invariantClock)
+	if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+		t.Fatalf("spoofed branch project was not refused: %v", refusal)
+	}
+	_, refusal = live.SaveBranchResource(member, branch.ID, build.ObjectType, "OBJ", BranchSaveRequest{
+		Spec: platform.Raw(invariantObject("alpha", "Alpha changed")),
+	}, invariantClock)
+	if refusal != nil || live.resourceProject(build.ObjectType, "OBJ") != invariantProject {
+		t.Fatalf("authoritative branch project was not retained: project=%q refusal=%v", live.resourceProject(build.ObjectType, "OBJ"), refusal)
+	}
+}
+
+func TestInvariantResourceDirectoryTracksAcceptedSaveOnce(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-resource-directory-version")
+	live.accept(t, "build.object.create", build.ObjectType, "OBJ", invariantObject("alpha", "Alpha"))
+	rid := platform.ResourceID(live.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"})
+	resource := func() build.Resource {
+		t.Helper()
+		row := live.records.Type(build.ResourceType).Rows().Get(rid)
+		if row == nil {
+			t.Fatal("the accepted object is absent from the resource directory")
+		}
+		return row.Value.Interface().(build.Resource)
+	}
+	if version := resource().Version; version != 1 {
+		t.Fatalf("create recorded resource version %d; want 1", version)
+	}
+	live.accept(t, "build.object.save", build.ObjectType, "OBJ", map[string]any{
+		"project": invariantProject,
+		"spec":    invariantObject("alpha", "Alpha, saved"),
+	})
+	if version := resource().Version; version != 2 {
+		t.Fatalf("one accepted save recorded resource version %d; want 2", version)
 	}
 }

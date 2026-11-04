@@ -1,23 +1,18 @@
 package host
 
 import (
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
-	"reflect"
 	"slices"
 	"strings"
 	"time"
 )
 
 func viewOf(m platform.Member, et *records.Type) (*records.Type, []platform.FieldInfo) {
-	info, hidden := records.FieldView(m, et.Info())
-	if len(hidden) == 0 {
-		return et, nil
-	}
-	return records.NewTypeView(info, et.Rows(), et.RetainedProjection()), hidden
+	return objects.ViewOf(m, et)
 }
 
 func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
@@ -83,8 +78,4 @@ func (t *Tenant) readable(m platform.Member, ref string, now time.Time) bool {
 	t.records.Lock()
 	defer t.records.Unlock()
 	return t.readableLocked(m, ref, now)
-}
-
-func (t *Tenant) visible(m platform.Member, et *records.Type, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
-	return t.visibleIn(t.records, m, et, now)
 }

@@ -5,17 +5,11 @@ import (
 	"slices"
 
 	"platformserver/platform"
+	"platformserver/services/objects"
 )
 
-type InterfaceRecord struct {
-	Type   string         `json:"type"`
-	ID     string         `json:"id"`
-	Record map[string]any `json:"record"`
-}
-type InterfaceRecordPage struct {
-	Records []InterfaceRecord `json:"records"`
-	Total   int               `json:"total"`
-}
+type InterfaceRecord = objects.InterfaceRecord
+type InterfaceRecordPage = objects.InterfaceRecordPage
 
 func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.EntityInfo) (platform.NamedQuery, error) {
 	overlay := map[string]platform.EntityInfo{}
@@ -73,8 +67,12 @@ func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.En
 
 func checkInterfaceQueryFields(q platform.NamedQuery) error {
 	info := platform.EntityInfo{}
-	for _, f := range q.InterfaceShape.Fields {
-		info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type})
+	for _, field := range q.InterfaceShape.Fields {
+		info.Fields = append(info.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type})
 	}
 	return checkQueryFields(q, info)
+}
+
+func (t *Tenant) checkInterfaceQueryFields(q platform.NamedQuery) error {
+	return checkInterfaceQueryFields(q)
 }

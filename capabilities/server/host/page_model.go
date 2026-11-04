@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	pageowner "platformserver/services/apps/pages"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -92,6 +94,72 @@ func (t *Tenant) modelVisibleLookup(member platform.Member) func(string) (platfo
 		value, ok := entities[typ]
 		return platform.ConstraintEntity(value), ok
 	}
+}
+
+type pageModelRowsResult struct {
+	records       []map[string]any
+	total         int
+	partial       bool
+	authorization *platform.AuthzCollection
+	sort          []string
+	sortLocked    bool
+}
+
+type pageModelFilter struct {
+	caller   platform.Caller
+	model    *platform.ModelBinding
+	criteria *platform.RuleCriteria
+	inputs   map[string]any
+	lookup   func(string) (platform.EntityInfo, bool)
+	at       time.Time
+	partial  bool
+	err      *kernel.Error
+}
+
+func (f *pageModelFilter) match(value reflect.Value) bool {
+	if f.err != nil {
+		return false
+	}
+	record := value.Interface()
+	if f.criteria != nil {
+		matched, _, refusal := f.criteria.Evaluate(f.caller, record, f.inputs, f.at, f.lookup)
+		if refusal != nil {
+			if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+				f.partial = true
+				return false
+			}
+			f.err = refusal
+			return false
+		}
+		if !matched {
+			return false
+		}
+	}
+	for _, predicate := range f.model.Where {
+		value, refusal := platform.EvaluateRule(predicate, platform.RuleReadSpec{Object: f.model.Type}, f.caller, record, nil, f.at, f.lookup)
+		if refusal != nil {
+			if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+				f.partial = true
+				return false
+			}
+			f.err = refusal
+			return false
+		}
+		if string(value.Value.Data) != "true" {
+			return false
+		}
+	}
+	return true
+}
+
+type pageModelRuntime struct{ runtime }
+
+func (r pageModelRuntime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) platform.AuthzDecision {
+	return r.t.authorizeDepth(r.t.records, c, q, at, true, 0, newAuthorizationWalk())
+}
+
+func (r pageModelRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *kernel.Error) {
+	return r.t.readRecordPathHeld(c, typ, id, path, at)
 }
 
 func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
@@ -226,43 +294,6 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 		result.LabelField = "$modelLabel"
 		result.Fields = append(result.Fields, platform.FieldInfo{Name: result.LabelField, Title: "Model label", Type: "text", ReadOnly: true})
 	}
-	rows, partial, authorization, err := t.pageModelRows(caller, page, section, request, at)
-	if err != nil {
-		return result, err
-	}
-	result.Partial, result.Authorization = partial, authorization
-	result.Sort = slices.Clone(request.Sort)
-	set := model.Set
-	if model.Options != nil && model.Options.Set != nil {
-		set = model.Options.Set
-	}
-	if set != nil && set.Query != nil {
-		if named := pageowner.QuerySourceDefinition(t.definitions, set.Query); named != nil && named.Query != nil && len(named.Query.Sort) > 0 {
-			result.Sort = slices.Clone(named.Query.Sort)
-			result.SortLocked = true
-		}
-	}
-	if set != nil && set.Name != "" {
-		root, _ := t.entity(page.RecordResourceObject(set.RecordVariable).Name)
-		for _, declared := range root.Sets {
-			if declared.Name != set.Name {
-				continue
-			}
-			result.SortLocked = true
-			result.Sort = nil
-			for _, order := range declared.Order {
-				if order.Expr.Op != "" || order.Expr.Ref == "" {
-					result.Sort = nil
-					break
-				}
-				name := order.Expr.Ref
-				if order.Desc {
-					name = "-" + name
-				}
-				result.Sort = append(result.Sort, name)
-			}
-		}
-	}
 	var criteria *platform.RuleCriteria
 	inputs := map[string]any{}
 	if model.Options != nil && model.Options.Rule != nil {
@@ -292,46 +323,29 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 			}
 		}
 	}
-	selected := []map[string]any{}
-	for _, row := range rows {
-		id := fmt.Sprint(row["id"])
-		ruleRecord := t.pageModelRuleRecord(model.Type, id, row)
-		if criteria != nil {
-			matched, _, refusal := criteria.Evaluate(caller, ruleRecord, inputs, at, t.entity)
-			if refusal != nil {
-				if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-					result.Partial = true
-					continue
-				}
-				return result, refusal
-			}
-			if !matched {
-				continue
-			}
-		}
-		keep := true
-		for _, predicate := range model.Where {
-			value, refusal := platform.EvaluateRule(predicate, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, t.entity)
-			if refusal != nil {
-				if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-					result.Partial = true
-					keep = false
-					break
-				}
-				return result, refusal
-			}
-			if string(value.Value.Data) != "true" {
-				keep = false
-				break
-			}
-		}
-		if !keep {
+	projection := []string{}
+	for _, field := range projected.Fields {
+		if len(fieldRefs) > 0 && !slices.ContainsFunc(fieldRefs, func(ref platform.FieldRef) bool { return ref.Key() == field.Name }) {
 			continue
 		}
-		projectedRow := map[string]any{}
-		for key, value := range row {
-			projectedRow[key] = value
+		if !strings.Contains(field.Name, ".") {
+			projection = append(projection, field.Name)
 		}
+	}
+	window, err := t.pageModelRows(caller, page, section, request, projection, criteria, inputs, at)
+	if err != nil {
+		return result, err
+	}
+	result.Partial, result.Authorization = window.partial, window.authorization
+	result.Sort, result.SortLocked = window.sort, window.sortLocked
+	result.Total = window.total
+	selected := make([]map[string]any, 0, len(window.records))
+	for _, row := range window.records {
+		id, _ := row["id"].(string)
+		if id == "" {
+			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Model source row has no identity")
+		}
+		ruleRecord := t.pageModelRuleRecord(model.Type, id, row)
 		access := map[string]platform.AuthzDecision{}
 		for _, field := range fieldRefs {
 			if field.Key() == "id" {
@@ -339,7 +353,7 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 			}
 			if _, err := platform.RecordPathField(model.Type, field.Segments(), visibleLookup); err != nil {
 				result.Partial = true
-				delete(projectedRow, field.Key())
+				delete(row, field.Key())
 				continue
 			}
 			if len(field.Segments()) > 1 {
@@ -347,15 +361,20 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 				value, _, refusal := caller.ReadRecordPath(model.Type, id, field.Segments(), at)
 				if refusal != nil {
 					result.Partial = true
-					delete(projectedRow, field.Key())
+					delete(row, field.Key())
 					continue
 				}
 				decoded, decodeErr := platform.DecodeValue(value, 64<<10)
 				if decodeErr != nil {
 					return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, decodeErr.Error())
 				}
-				projectedRow[field.Key()] = decoded
+				row[field.Key()] = decoded
 			} else {
+				read := caller.Authorize(platform.AuthzRequest{Principal: member.ID, Tenant: t.ID, Kind: "read", Type: model.Type, Record: id, Fields: []string{field.Name}}, at)
+				if !read.Allow || len(read.Withheld) > 0 {
+					result.Partial = true
+					delete(row, field.Key())
+				}
 				decision := caller.Authorize(platform.AuthzRequest{Principal: member.ID, Tenant: t.ID, Kind: "write", Type: model.Type, Record: id, Fields: []string{field.Name}}, at)
 				if f, ok := visibleInfo.Field(field.Name); ok && f.ReadOnly {
 					decision.Allow = false
@@ -367,58 +386,21 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 		if model.Label != nil {
 			value, refusal := platform.EvaluateRule(*model.Label, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, t.entity)
 			if refusal != nil {
-				result.Partial = true
-				continue
-			}
-			var label string
-			_ = json.Unmarshal(value.Value.Data, &label)
-			projectedRow[result.LabelField] = label
-		}
-		if request.Search != "" {
-			text := string(platform.Raw(projectedRow))
-			if !strings.Contains(strings.ToLower(text), strings.ToLower(request.Search)) {
-				continue
+				if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+					result.Partial = true
+				} else {
+					return result, refusal
+				}
+			} else {
+				var label string
+				_ = json.Unmarshal(value.Value.Data, &label)
+				row[result.LabelField] = label
 			}
 		}
 		result.Access[id] = access
-		selected = append(selected, projectedRow)
+		selected = append(selected, row)
 	}
-	if len(request.Sort) > 0 && !result.SortLocked {
-		var sortErr error
-		slices.SortStableFunc(selected, func(left, right map[string]any) int {
-			for _, key := range request.Sort {
-				name := strings.TrimPrefix(key, "-")
-				field, found := projected.Field(name)
-				if !found && name != "id" {
-					sortErr = fmt.Errorf("model sort field is unavailable")
-					return 0
-				}
-				kind := platform.RuleFieldKind(field.Type)
-				if name == "id" {
-					kind = "text"
-				}
-				comparison, err := t.services.Rules.CompareExprValues(platform.ExprPresent(kind, left[name]), platform.ExprPresent(kind, right[name]))
-				if err != nil {
-					sortErr = err
-					return 0
-				}
-				if key != name {
-					comparison = -comparison
-				}
-				if comparison != 0 {
-					return comparison
-				}
-			}
-			return strings.Compare(fmt.Sprint(left["id"]), fmt.Sprint(right["id"]))
-		})
-		if sortErr != nil {
-			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, sortErr.Error())
-		}
-	}
-	result.Total = len(selected)
-	start := min(request.Offset, len(selected))
-	end := min(start+request.Limit, len(selected))
-	result.Records = selected[start:end]
+	result.Records = selected
 	windowAccess := map[string]map[string]platform.AuthzDecision{}
 	for _, row := range result.Records {
 		id := fmt.Sprint(row["id"])
@@ -437,96 +419,277 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 	return result, nil
 }
 
-func (t *Tenant) pageModelRows(c platform.Caller, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) ([]map[string]any, bool, *platform.AuthzCollection, *kernel.Error) {
+func (t *Tenant) pageModelRows(c platform.Caller, page platform.Page, section platform.PageDataBinding, request PageModelRead, projection []string, criteria *platform.RuleCriteria, inputs map[string]any, at time.Time) (pageModelRowsResult, *kernel.Error) {
 	model := section.Model
-	set := model.Set
+	result := pageModelRowsResult{records: []map[string]any{}, sort: slices.Clone(request.Sort)}
+	collection := model.Set
 	if model.Options != nil && model.Options.Set != nil {
-		set = model.Options.Set
+		collection = model.Options.Set
 	}
-	var source []json.RawMessage
-	partial := false
-	var authorization *platform.AuthzCollection
-	if set != nil && set.Name != "" {
-		reference := request.Records[set.RecordVariable]
+	var set platform.ObjectSet
+	var bound []platform.NamedQuery
+	switch {
+	case collection != nil && collection.Name != "":
+		reference := request.Records[collection.RecordVariable]
 		if reference.ID == "" {
-			return nil, false, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Select the declared collection's source record")
+			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Select the declared collection's source record")
 		}
-		value, refusal := c.ReadRecordSet(reference.Object, reference.ID, set.Name, at)
+		value, refusal := c.ReadRecordSet(reference.Object, reference.ID, collection.Name, at)
 		if refusal != nil {
-			return nil, false, nil, refusal
+			return result, refusal
 		}
 		if value.Object != model.Type {
-			return nil, false, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Declared collection object changed")
+			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Declared collection object changed")
 		}
-		source, partial, authorization = value.Records, value.Partial, value.Authorization
-	} else if reference := request.Records["$record"]; reference.ID != "" && section.Kind == "record" {
-		value, refusal := c.ReadRecord(reference.Object, reference.ID, at)
-		if refusal != nil {
-			return nil, false, nil, refusal
+		result.partial, result.authorization = value.Partial, value.Authorization
+		if len(value.Records) == 0 {
+			return result, nil
 		}
-		source = []json.RawMessage{value}
-	} else {
-		domain := []any{}
+		ids := make([]string, 0, len(value.Records))
+		for _, raw := range value.Records {
+			var identity struct {
+				ID string `json:"id"`
+			}
+			if json.Unmarshal(raw, &identity) != nil || identity.ID == "" {
+				return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Declared collection contains an unreadable record")
+			}
+			ids = append(ids, identity.ID)
+		}
+		set = platform.ObjectSet{Object: model.Type, IDs: ids}
+		if root, ok := t.entity(page.RecordResourceObject(collection.RecordVariable).Name); ok {
+			for _, declared := range root.Sets {
+				if declared.Name != collection.Name {
+					continue
+				}
+				result.sortLocked = true
+				result.sort = nil
+				for _, order := range declared.Order {
+					if order.Expr.Op != "" || order.Expr.Ref == "" {
+						result.sort = nil
+						break
+					}
+					name := order.Expr.Ref
+					if order.Desc {
+						name = "-" + name
+					}
+					result.sort = append(result.sort, name)
+				}
+			}
+		}
+	case collection != nil && collection.Query != nil:
+		reference := request.Records[collection.RecordVariable]
+		if reference.ID == "" && collection.Query.Ref.Kind == platform.AssetQuery {
+			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Select the query binding's source record")
+		}
+		query, ok := t.pageModelQuery(c.Member, collection)
+		if !ok {
+			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Model query is unavailable")
+		}
+		set = query.ObjectSet(reference.ID)
+		bound = append(bound, query)
+		if len(query.Sort) > 0 {
+			result.sort = slices.Clone(query.Sort)
+			result.sortLocked = true
+		}
+	default:
+		set = platform.ObjectSet{Object: model.Type}
+		if request.Query != nil {
+			set = request.Query.ObjectSet(model.Type, nil)
+		}
 		if relation := model.Relation; relation != nil {
 			reference := request.Records["$parent"]
 			if reference.ID == "" {
-				return nil, false, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Select a parent record for this model binding")
+				return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Select a parent record for this model binding")
 			}
-			domain = append(domain, []any{relation.Field, "=", reference.ID})
+			domain, _ := json.Marshal([]any{[]any{relation.Field, "=", reference.ID}})
+			set = platform.ObjectSet{Intersect: []platform.ObjectSet{set, {Object: model.Type, Domain: domain}}}
 		}
-		for offset := 0; ; {
-			query := platform.Query{Domain: platform.Raw(domain), Offset: offset, Limit: 200, Sort: []string{"id"}}
-			if request.Query != nil && set == nil {
-				query = *request.Query
-				query.Offset = offset
-				query.Limit = 200
-				query.Sort = []string{"id"}
-				query.Search = ""
-				if len(domain) > 0 {
-					var terms []any
-					_ = json.Unmarshal(query.Domain, &terms)
-					terms = append(terms, domain...)
-					query.Domain = platform.Raw(terms)
+		if section.Kind == "record" {
+			if reference := request.Records["$record"]; reference.ID != "" {
+				set = platform.ObjectSet{Intersect: []platform.ObjectSet{set, {Object: model.Type, IDs: []string{reference.ID}}}}
+			}
+		}
+	}
+	set.Search = request.Search
+	if !result.sortLocked {
+		result.sort = slices.Clone(request.Sort)
+	}
+	if set.Check() != nil {
+		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Model source is not one bounded object set")
+	}
+	allEntities := t.ruleEntitySnapshot()
+	var filter *pageModelFilter
+	if criteria != nil || len(model.Where) > 0 {
+		filter = &pageModelFilter{
+			caller: platform.NewCaller(pageModelRuntime{runtime{t}}, c.Member, c.App, c.Replaying, c.Automation),
+			model:  model, criteria: criteria, inputs: inputs, at: at,
+			lookup: func(typ string) (platform.EntityInfo, bool) {
+				info, ok := allEntities[typ]
+				return platform.ConstraintEntity(info), ok
+			},
+		}
+	}
+	var projectedErr *kernel.Error
+	window := objectWindow{
+		Sort: result.sort, Offset: request.Offset, Limit: request.Limit, Bounded: true,
+		Project: func(_ platform.EntityInfo, _ reflect.Value, record any) any {
+			if projectedErr != nil {
+				return nil
+			}
+			value, err := platform.DecodeValue(platform.Raw(record), 1<<20)
+			if err != nil {
+				projectedErr = platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				return nil
+			}
+			row, ok := value.(map[string]any)
+			if !ok {
+				projectedErr = platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Model source must contain records")
+				return nil
+			}
+			out := map[string]any{}
+			for _, name := range []string{"id", "revision", "created", "changed", "archived"} {
+				if item, exists := row[name]; exists {
+					out[name] = item
 				}
 			}
-			var rows RecordPage
-			var refusal *kernel.Error
-			if set != nil && set.Query != nil {
-				of := request.Records[set.RecordVariable].ID
-				rows, refusal = t.queryWindowRead(c.Member, set.Query.Ref.App, set.Query.Ref.Name, of, set.Query.SourceVersion, query, at)
-			} else {
-				rows, refusal = t.recordsRead(c.Member, model.Type, query, at)
+			for _, name := range projection {
+				if item, exists := row[name]; exists {
+					out[name] = item
+				}
 			}
-			if refusal != nil {
-				return nil, false, nil, refusal
-			}
-			partial = partial || rows.Partial
-			if rows.Total > platform.RecordSetMaxRows {
-				return nil, false, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Model collection exceeds 10000 visible records")
-			}
-			for _, row := range rows.Records {
-				source = append(source, platform.Raw(row))
-			}
-			if len(source) >= rows.Total {
-				break
-			}
-			if len(rows.Records) == 0 {
-				return nil, false, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Model collection source is incomplete")
-			}
-			offset += len(rows.Records)
+			return out
+		},
+	}
+	if filter != nil {
+		window.Match = filter.match
+	}
+	loaded, object, err := t.loadObjectSet(t.records, c, set, window, at, bound...)
+	if err != nil {
+		return result, err
+	}
+	if object != model.Type {
+		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Model source object changed")
+	}
+	if filter != nil {
+		result.partial = result.partial || filter.partial
+		if filter.err != nil {
+			return result, filter.err
 		}
 	}
-	rows := make([]map[string]any, 0, len(source))
-	for _, raw := range source {
-		value, err := platform.DecodeValue(raw, 1<<20)
-		if err != nil {
-			return nil, false, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		row, ok := value.(map[string]any)
+	if projectedErr != nil {
+		return result, projectedErr
+	}
+	result.total, result.partial = loaded.Total, result.partial || loaded.Partial
+	for _, record := range loaded.Records {
+		row, ok := record.(map[string]any)
 		if !ok {
-			return nil, false, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Model source must contain records")
+			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Model projection lost its record shape")
 		}
-		rows = append(rows, row)
+		result.records = append(result.records, row)
 	}
-	return rows, partial, authorization, nil
+	return result, nil
+}
+
+func (t *Tenant) pageModelQuery(member platform.Member, collection *platform.ModelRecordSet) (platform.NamedQuery, bool) {
+	for _, definition := range t.Definitions(member) {
+		if definition.Ref != collection.Query.Ref {
+			continue
+		}
+		if definition.Query == nil {
+			return platform.NamedQuery{}, false
+		}
+		if collection.Query.SourceVersion == "" {
+			return *definition.Query, true
+		}
+		if retained := definition.QueryVersion(collection.Query.SourceVersion); retained != nil && retained.Query != nil {
+			return *retained.Query, true
+		}
+		return platform.NamedQuery{}, false
+	}
+	return platform.NamedQuery{}, false
+}
+
+func (t *Tenant) ruleEntitySnapshot() map[string]platform.EntityInfo {
+	t.records.Lock()
+	defer t.records.Unlock()
+	out := map[string]platform.EntityInfo{}
+	for _, entity := range t.records.Types() {
+		out[entity.Info().Type] = entity.Info()
+	}
+	return out
+}
+
+func (t *Tenant) readRecordPathHeld(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *kernel.Error) {
+	if len(path) == 0 || len(path) > 16 {
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record paths need 1–16 fields")
+	}
+	var sources []string
+	for i, name := range path {
+		raw, refusal := t.heldRecordJSON(c, typ, id, at)
+		if refusal != nil {
+			return nil, nil, refusal
+		}
+		entity := t.records.Type(typ)
+		if entity == nil {
+			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Record path object is unavailable")
+		}
+		info := entity.Info()
+		field, declared := info.Field(name)
+		var fields map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &fields)
+		value, visible := fields[name]
+		if !declared || !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
+			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record input is unavailable to this member")
+		}
+		permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id, Fields: []string{name}}, at)
+		if !permission.Allow || len(permission.Withheld) > 0 {
+			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record input is unavailable to this member")
+		}
+		ref := typ + "/" + id
+		sources = append(sources, ref, ref+"#"+name)
+		if !visible {
+			return nil, sources, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input has no value")
+		}
+		if i == len(path)-1 {
+			return value, sources, nil
+		}
+		if field.Type != "reference" || field.Ref == "" {
+			result, err := (platform.Binding{Source: "subject", Path: path[i+1:]}).Resolve(&platform.Run{}, value)
+			if err != nil {
+				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			return result, sources, nil
+		}
+		if json.Unmarshal(value, &id) != nil || id == "" {
+			return nil, sources, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input reference is empty")
+		}
+		typ = field.Ref
+	}
+	return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input is unavailable")
+}
+
+func (t *Tenant) heldRecordJSON(c platform.Caller, typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
+	entity := t.records.Type(typ)
+	if entity == nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Record path object is unavailable")
+	}
+	visible, refusal := t.visibleForCallerIn(t.records, c, entity, at)
+	if refusal != nil {
+		return nil, refusal
+	}
+	row := entity.Rows().Get(id)
+	if row == nil || visible != nil && !visible(row.Value) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Record path record is unavailable")
+	}
+	_, hidden := viewOf(c.Member, entity)
+	record := records.Mask(entity.Info(), row.Value, hidden)
+	if entity.Info().HasReadSources() || len(entity.Info().VersionPins) > 0 {
+		narrowed, _ := t.narrowerIn(t.records, c.Member, at, true).Derive(entity, reflect.ValueOf(record))
+		record = narrowed.Interface()
+	}
+	raw, err := json.Marshal(record)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	return raw, nil
 }

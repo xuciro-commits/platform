@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/functions/authoring"
-	"reflect"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -97,57 +96,6 @@ func (t *Tenant) readDeclaredQueryFrom(store *records.Store, c platform.Caller, 
 	}{page.Records, page.Total, sources})
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	return raw, nil
-}
-
-func (t *Tenant) readRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
-	domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
-	page, refusal := t.recordSelectionForCallerFrom(store, c, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now)
-	if refusal != nil {
-		return nil, refusal
-	}
-	if len(page.Records) != 1 {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The record is not available")
-	}
-	raw, err := json.Marshal(page.Records[0])
-	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	store.Lock()
-	et := store.Type(typ)
-	store.Unlock()
-	value := reflect.ValueOf(page.Records[0])
-	if et != nil && value.Type() == et.Info().Go {
-		var fields map[string]json.RawMessage
-		changed := false
-		for _, field := range et.Info().Fields {
-			if len(field.Index) == 0 || field.Index[0] == 0 || field.Aside {
-				continue
-			}
-			original := value.FieldByIndex(field.Index)
-			switch original.Kind() {
-			case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-				reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
-				if !original.IsZero() {
-					continue
-				}
-				if fields == nil {
-					_ = json.Unmarshal(raw, &fields)
-				}
-				if _, present := fields[field.Name]; present {
-					continue
-				}
-				decision := t.authorizeFrom(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id, Fields: []string{field.Name}}, now, false)
-				if decision.Allow && len(decision.Withheld) == 0 {
-					fields[field.Name], _ = json.Marshal(original.Interface())
-					changed = true
-				}
-			}
-		}
-		if changed {
-			raw, _ = json.Marshal(fields)
-		}
 	}
 	return raw, nil
 }

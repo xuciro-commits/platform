@@ -147,15 +147,10 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetAlert {
-			var d platform.AlertRule
-			if json.Unmarshal(asset.Body, &d) != nil || d.Check() != nil {
-				return nil, fmt.Errorf("invalid candidate alert rule")
+			alert, _, err := b.AcceptedAlert(asset)
+			if err != nil {
+				return nil, err
 			}
-			var version int
-			if _, err := fmt.Sscanf(asset.SourceVersion, b.Manifest().Version+".alert-%d", &version); err != nil || version < 1 || version > 64 || asset.SourceVersion != fmt.Sprintf("%s.alert-%d", b.Manifest().Version, version) {
-				return nil, fmt.Errorf("invalid candidate alert version")
-			}
-			alert := build.Alert{Record: platform.Record{ID: asset.Ref.Name}, Name: d.Name, Title: d.Title, Object: d.Object.Name, Field: d.Field, Operator: d.Operator, Value: d.Value, Message: d.Message, Role: d.Role, Every: d.Every, Active: d.Active, State: "published", Version: version, DefinitionVersion: version, Published: string(platform.Raw(asset))}
 			definitions[build.AlertType] = append(definitions[build.AlertType], records.StoredState{Value: platform.Raw(alert)})
 			continue
 		}

@@ -88,7 +88,7 @@ func branchContent(plans []resourcePlan) string {
 	slices.SortFunc(ordered, func(a, b resourcePlan) int { return strings.Compare(a.Type+"/"+a.ID, b.Type+"/"+b.ID) })
 	sum := sha256.New()
 	for _, plan := range ordered {
-		sum.Write([]byte(plan.Type + "\x00" + plan.ID + "\x00" + plan.Op + "\x00"))
+		sum.Write([]byte(plan.Type + "\x00" + plan.ID + "\x00" + plan.Op + "\x00" + plan.Project + "\x00"))
 		sum.Write(plan.Merged)
 		sum.Write([]byte("\x00"))
 	}

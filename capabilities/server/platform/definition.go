@@ -39,6 +39,7 @@ const (
 	AssetInterface       AssetKind = "interface"
 	AssetObservation     AssetKind = "observation"
 	AssetAlert           AssetKind = "alert"
+	AssetProduct         AssetKind = "product"
 )
 
 type NamedQuery struct {
@@ -66,7 +67,7 @@ func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + 
 
 func (r AssetRef) Check() error {
 	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetValueType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
-		AssetConnection, AssetSource, AssetListener, AssetDataset, AssetMediaSet, AssetSchedule, AssetPipeline, AssetWriteback, AssetMatching, AssetAgent, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation, AssetAlert, AssetObjectTypeGroup}, r.Kind) {
+		AssetConnection, AssetSource, AssetListener, AssetDataset, AssetMediaSet, AssetSchedule, AssetPipeline, AssetWriteback, AssetMatching, AssetAgent, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation, AssetAlert, AssetObjectTypeGroup, AssetProduct}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -211,39 +212,42 @@ func IconName(s string) bool {
 }
 
 type Definition struct {
-	ObjectTypeGroup  *ObjectTypeGroup           `json:"objectTypeGroup,omitempty"`
-	Alert            *AlertRule                 `json:"alert,omitempty"`
-	Observation      *ObservationDefinition     `json:"observation,omitempty"`
-	SampleSet        *SampleSet                 `json:"sampleSet,omitempty"`
-	Interface        *Interface                 `json:"interface,omitempty"`
-	Protocol         *ProtocolReleaseDescriptor `json:"protocol,omitempty"`
-	OwnerRecord      string                     `json:"-"`
-	ContentVersion   string                     `json:"contentVersion,omitempty"`
-	PropertyType     *PropertyType              `json:"propertyType,omitempty"`
-	PropertyVersions map[string]PropertyType    `json:"propertyVersions,omitempty"`
-	ValueType        *ValueType                 `json:"valueType,omitempty"`
-	ValueVersions    map[string]ValueType       `json:"valueVersions,omitempty"`
-	LinkType         *LinkType                  `json:"linkType,omitempty"`
-	LinkVersions     map[string]LinkType        `json:"linkVersions,omitempty"`
-	Ref              AssetRef                   `json:"ref"`
-	RID              string                     `json:"rid,omitempty"`
-	Source           string                     `json:"source"`
-	Version          string                     `json:"version"`
-	ContractVersion  int                        `json:"contractVersion"`
-	Requires         []AssetRef                 `json:"requires"`
-	Provides         []Capability               `json:"provides"`
-	Entity           *EntityInfo                `json:"entity,omitempty"`
-	Action           *Action                    `json:"action,omitempty"`
-	Page             *Page                      `json:"page,omitempty"`
-	Application      *Application               `json:"application,omitempty"`
-	Query            *NamedQuery                `json:"query,omitempty"`
-	QueryVersions    map[string]NamedQuery      `json:"queryVersions,omitempty"`
-	Flow             *FlowDefinition            `json:"flow,omitempty"`
-	Function         *AIFunction                `json:"function,omitempty"`
-	Evaluation       *EvaluationSetDescriptor   `json:"evaluation,omitempty"`
-	TestPlan         *TestPlanDescriptor        `json:"testPlan,omitempty"`
-	Agent            *AgentReleaseDescriptor    `json:"agent,omitempty"`
-	Operation        *Operation                 `json:"operation,omitempty"`
+	ObjectTypeGroup    *ObjectTypeGroup           `json:"objectTypeGroup,omitempty"`
+	Alert              *AlertRule                 `json:"alert,omitempty"`
+	Observation        *ObservationDefinition     `json:"observation,omitempty"`
+	SampleSet          *SampleSet                 `json:"sampleSet,omitempty"`
+	Interface          *Interface                 `json:"interface,omitempty"`
+	Protocol           *ProtocolReleaseDescriptor `json:"protocol,omitempty"`
+	OwnerRecord        string                     `json:"-"`
+	ContentVersion     string                     `json:"contentVersion,omitempty"`
+	PropertyType       *PropertyType              `json:"propertyType,omitempty"`
+	PropertyVersions   map[string]PropertyType    `json:"propertyVersions,omitempty"`
+	ValueType          *ValueType                 `json:"valueType,omitempty"`
+	ValueVersions      map[string]ValueType       `json:"valueVersions,omitempty"`
+	LinkType           *LinkType                  `json:"linkType,omitempty"`
+	LinkVersions       map[string]LinkType        `json:"linkVersions,omitempty"`
+	Ref                AssetRef                   `json:"ref"`
+	RID                string                     `json:"rid,omitempty"`
+	OwningProject      string                     `json:"owningProject,omitempty"`
+	OwningProjectTitle string                     `json:"owningProjectTitle,omitempty"`
+	ManagedBy          string                     `json:"managedBy,omitempty"`
+	Source             string                     `json:"source"`
+	Version            string                     `json:"version"`
+	ContractVersion    int                        `json:"contractVersion"`
+	Requires           []AssetRef                 `json:"requires"`
+	Provides           []Capability               `json:"provides"`
+	Entity             *EntityInfo                `json:"entity,omitempty"`
+	Action             *Action                    `json:"action,omitempty"`
+	Page               *Page                      `json:"page,omitempty"`
+	Application        *Application               `json:"application,omitempty"`
+	Query              *NamedQuery                `json:"query,omitempty"`
+	QueryVersions      map[string]NamedQuery      `json:"queryVersions,omitempty"`
+	Flow               *FlowDefinition            `json:"flow,omitempty"`
+	Function           *AIFunction                `json:"function,omitempty"`
+	Evaluation         *EvaluationSetDescriptor   `json:"evaluation,omitempty"`
+	TestPlan           *TestPlanDescriptor        `json:"testPlan,omitempty"`
+	Agent              *AgentReleaseDescriptor    `json:"agent,omitempty"`
+	Operation          *Operation                 `json:"operation,omitempty"`
 }
 
 type ApplicationVisibility interface{ VisibleApplications(Caller) []AssetRef }

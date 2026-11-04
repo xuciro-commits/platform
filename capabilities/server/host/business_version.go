@@ -12,19 +12,11 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/objects"
 )
 
 func businessQuery(info platform.EntityInfo, q platform.Query, member platform.Member, at time.Time) platform.Query {
-	if info.Versioning == nil || q.BusinessTime != nil && (q.BusinessTime.All || q.BusinessTime.At != "") {
-		return q
-	}
-	field, _ := info.Field(info.Versioning.ValidFrom)
-	point := member.Today(at)
-	if field.Type == "datetime" {
-		point = at.UTC().Format(time.RFC3339Nano)
-	}
-	q.BusinessTime = &platform.BusinessTime{At: point}
-	return q
+	return objects.BusinessQuery(info, q, member, at)
 }
 
 func (d *stagedDecision) PrepareBusinessVersions(c platform.Caller, record any, at time.Time) *kernel.Error {

@@ -2,40 +2,19 @@ package host
 
 import (
 	"fmt"
-	"platformserver/kernel/records"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
+	"platformserver/services/objects"
 	"slices"
 	"strconv"
 )
 
 func checkNamedQuery(q platform.NamedQuery, info platform.EntityInfo) error {
-	if err := q.Check(); err != nil {
-		return err
-	}
-	if q.Object != info.Type {
-		return fmt.Errorf("query source object is unavailable")
-	}
-	return checkQueryFields(q, info)
+	return objects.CheckNamedQuery(q, info)
 }
 
 func checkQueryFields(q platform.NamedQuery, info platform.EntityInfo) error {
-	if _, err := records.CompileDomain(info, q.Domain); err != nil {
-		return err
-	}
-	if q.Filter != nil {
-		if _, err := records.CompilePlan(info, *q.Filter, ""); err != nil {
-			return err
-		}
-	}
-	if q.By != "" {
-		f, ok := info.Field(q.By)
-		if !ok || f.Type != "reference" && f.SourceType != "record" {
-			return fmt.Errorf("query parent input needs a readable reference or record source")
-		}
-	}
-	_, err := records.CompileOrder(info, q.Sort)
-	return err
+	return objects.CheckQueryFields(q, info)
 }
 
 func (h hostView) ValidateInstallQuery(q platform.NamedQuery) error {

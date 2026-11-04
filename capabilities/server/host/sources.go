@@ -18,6 +18,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
 )
 
@@ -25,13 +26,13 @@ func (t *Tenant) PullSources(now time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) {
 		return
 	}
-	sources, refusal := coordinatedRecordRead(t, context.Background(), func() ([]build.Source, *kernel.Error) {
-		found, _, err := platform.Find[build.Source](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	sources, refusal := coordinatedRecordRead(t, context.Background(), func() ([]dataowner.Source, *kernel.Error) {
+		found, _, err := platform.Find[dataowner.Source](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 		if err != nil {
 			return nil, err
 		}
-		owner := t.app(build.ID).(build.IntegrationDefinitions)
-		var fixed []build.Source
+		owner := t.dataOwner()
+		var fixed []dataowner.Source
 		for _, source := range found {
 			source, err := owner.ExecutionSource(source)
 			if err != nil {
@@ -60,19 +61,19 @@ type integrationPreparation struct {
 	Transaction  string                      `json:"transaction,omitempty"`
 	Type         string                      `json:"type"`
 	ID           string                      `json:"id"`
-	Rows         []build.SourceRow           `json:"rows,omitempty"`
+	Rows         []dataowner.SourceRow       `json:"rows,omitempty"`
 	Data         []map[string]any            `json:"data"`
 	Object       string                      `json:"object,omitempty"`
 	Binding      *platform.DataSourceBinding `json:"binding,omitempty"`
 	Dataset      string                      `json:"dataset,omitempty"`
-	Enterprise   *build.EnterpriseTarget     `json:"enterprise,omitempty"`
+	Enterprise   *dataowner.EnterpriseTarget `json:"enterprise,omitempty"`
 	Producer     string                      `json:"producer"`
 	Marking      string                      `json:"marking,omitempty"`
 	Compartments []string                    `json:"compartments,omitempty"`
 	Declassified []string                    `json:"declassified,omitempty"`
 }
 
-func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now time.Time, plan integrationPreparation) (*build.IntegrationExecution, error) {
+func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now time.Time, plan integrationPreparation) (*dataowner.IntegrationExecution, error) {
 	raw, err := json.Marshal(plan)
 	if err != nil {
 		return nil, err
@@ -85,23 +86,23 @@ func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now
 		return nil, err
 	}
 	identity := sha256.Sum256(platform.Raw([]any{t.ID, plan.Type, plan.ID, revision, now.UTC()}))
-	return &build.IntegrationExecution{ID: fmt.Sprintf("%x", identity), Member: member.ID, Scopes: slices.Clone(member.Scopes), Pending: true, Snapshot: digest}, nil
+	return &dataowner.IntegrationExecution{ID: fmt.Sprintf("%x", identity), Member: member.ID, Scopes: slices.Clone(member.Scopes), Pending: true, Snapshot: digest}, nil
 }
 
-func (t *Tenant) integrationPending(typ, id string, execution *build.IntegrationExecution) bool {
+func (t *Tenant) integrationPending(typ, id string, execution *dataowner.IntegrationExecution) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	c := t.automation(build.ID, false)
-	var current *build.IntegrationExecution
+	var current *dataowner.IntegrationExecution
 	switch typ {
-	case build.SourceType:
-		source, ok := platform.Get[build.Source](c, id)
+	case dataowner.SourceType:
+		source, ok := platform.Get[dataowner.Source](c, id)
 		if !ok || source.Archived || source.State != "published" || source.Last == nil {
 			return false
 		}
 		current = source.Last.Execution
-	case build.PipelineType:
-		pipeline, ok := platform.Get[build.Pipeline](c, id)
+	case dataowner.PipelineType:
+		pipeline, ok := platform.Get[dataowner.Pipeline](c, id)
 		if !ok || pipeline.Archived || pipeline.State != "published" || pipeline.Last == nil {
 			return false
 		}
@@ -110,7 +111,7 @@ func (t *Tenant) integrationPending(typ, id string, execution *build.Integration
 	return current != nil && current.Pending && current.ID == execution.ID && current.Snapshot == execution.Snapshot && current.Member == execution.Member && slices.Equal(current.Scopes, execution.Scopes)
 }
 
-func (t *Tenant) integrationPreparation(execution *build.IntegrationExecution) (integrationPreparation, error) {
+func (t *Tenant) integrationPreparation(execution *dataowner.IntegrationExecution) (integrationPreparation, error) {
 	var plan integrationPreparation
 	digest, err := hex.DecodeString(execution.Snapshot)
 	if err != nil || len(digest) != sha256.Size {
@@ -417,7 +418,7 @@ func (t *Tenant) connectionMarkings(connection string) platform.MarkingSet {
 		return platform.MarkingSet{}
 	}
 	conn, _ := platform.Get[build.Connection](t.automation(build.ID, false), connection)
-	fixed, err := t.app(build.ID).(build.IntegrationDefinitions).ExecutionConnection(conn)
+	fixed, err := t.dataOwner().ExecutionConnection(conn)
 	if err != nil {
 		return platform.MarkingSet{Level: "restricted"}
 	}
@@ -426,7 +427,7 @@ func (t *Tenant) connectionMarkings(connection string) platform.MarkingSet {
 
 func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
 	rules, _, _ := platform.Find[build.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
-	owner := t.app(build.ID).(build.IntegrationDefinitions)
+	owner := t.dataOwner()
 	var fixed []build.Match
 	for _, rule := range rules {
 		execution, err := owner.ExecutionMatching(rule)
@@ -478,7 +479,7 @@ func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 		c, ok := platform.Get[build.Connection](t.automation(build.ID, false), s.Connection)
 		if ok {
 			var err error
-			c, err = t.app(build.ID).(build.IntegrationDefinitions).ExecutionConnection(c)
+			c, err = t.dataOwner().ExecutionConnection(c)
 			if err != nil {
 				ok = false
 			}

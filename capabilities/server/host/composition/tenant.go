@@ -27,6 +27,10 @@ func NewTenantWithSourceAndCapabilities(id string, source *platform.SystemSource
 	services.BindOwner = bindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
 	services.NewTransactionExecutor = business.NewRuntime
+	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, source, seats...)...)
+}
+
+func BuiltinApps(id string, source *platform.SystemSource, seats ...platform.Seat) []platform.App {
 	apps := []platform.App{
 		NewConsole(id, seats...),
 		enterprise.New(id, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id), ai.New(id), work.New(id), monitoring.New(id), automation.New(id), knowledge.New(id),
@@ -35,7 +39,7 @@ func NewTenantWithSourceAndCapabilities(id string, source *platform.SystemSource
 	if id == systemscope.Tenant {
 		apps = append(apps, system.New(id, source))
 	}
-	return platformserver.NewTenantWithCapabilities(id, services, apps...)
+	return apps
 }
 
 func NewConsole(tenant string, seats ...platform.Seat) *controlowner.Console {

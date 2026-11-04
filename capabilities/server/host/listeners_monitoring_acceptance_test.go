@@ -76,6 +76,9 @@ func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
 	fresh := func() *invariantTenant {
 		return newInvariantTenantWithApps(t, tenant, []platform.App{monitoring.New(tenant), newListenerProbe(tenant)}, seats...)
 	}
+	replay := func() *invariantTenant {
+		return newInvariantTenantReplayWithApps(t, tenant, []platform.App{monitoring.New(tenant), newListenerProbe(tenant)}, seats...)
+	}
 	live := fresh()
 	live.Secrets = func(name string) ([]byte, bool) { return []byte("shared-value"), name == "listener-secret" }
 	live.accept(t, build.ListenerType+".create", build.ListenerType, "LISTENER", map[string]any{"name": "incoming", "title": "Incoming", "connector": "listenerprobe", "path": "incoming-token", "secret": "listener-secret"})
@@ -239,7 +242,7 @@ func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
 	if response := request(http.MethodGet, "/v1/monitoring/views", "other", "", nil); response.Code != http.StatusOK || response.Body.String() != "[]\n" {
 		t.Fatalf("removed view still visible: %s", response.Body)
 	}
-	restored := fresh()
+	restored := replay()
 	if err := restored.recoverEntries(live.entries); err != nil {
 		t.Fatal(err)
 	}

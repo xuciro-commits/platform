@@ -110,6 +110,8 @@ type PackageView struct {
 	Plan         PackageInstallPlan `json:"plan"`
 	Update       bool               `json:"update,omitempty"`
 	Origin       string             `json:"origin,omitempty"`
+	Product      string             `json:"product,omitempty"`
+	Candidate    string             `json:"candidate,omitempty"`
 	SourceDigest string             `json:"sourceDigest,omitempty"`
 	Removal      *PackageRemoval    `json:"removal,omitempty"`
 	Descriptor   PackageDescriptor  `json:"descriptor"`
@@ -289,6 +291,7 @@ type PackageHost interface {
 	PutPackageArtifact(string, []byte) error
 	GetPackageArtifact(string) ([]byte, error)
 	BaseModules() []CapabilityModule
+	ProductVersions() []ProductVersionView
 }
 
 type ConsolePackages interface {

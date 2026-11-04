@@ -35,7 +35,7 @@ func TestInvariantK1AlertMigrationRetainsHistoryAndRunsAsAutomation(t *testing.T
 	baseline.Records[build.AlertType] = []records.StoredState{{Value: platform.Raw(legacy)}, {Value: platform.Raw(draft)}}
 	baseline.Checkpoint = nil
 	snapshot := platform.Raw(baseline)
-	live = newInvariantTenantWithApps(t, live.ID, []platform.App{automation.New(live.ID)})
+	live = newInvariantTenantReplayWithApps(t, live.ID, []platform.App{automation.New(live.ID)})
 	if err := live.Restore(snapshot); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestInvariantK1AlertMigrationRetainsHistoryAndRunsAsAutomation(t *testing.T
 	live.accept(t, build.SchemaProcessPause, build.ProcessType, convertedDraft.ID, map[string]any{})
 	want := live.recordImage(t)
 	for range 2 {
-		restored := newInvariantTenantWithApps(t, live.ID, []platform.App{automation.New(live.ID)})
+		restored := newInvariantTenantReplayWithApps(t, live.ID, []platform.App{automation.New(live.ID)})
 		if err := restored.Restore(snapshot); err != nil {
 			t.Fatal(err)
 		}

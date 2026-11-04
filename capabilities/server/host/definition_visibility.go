@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"platformserver/platform"
+	appsauthoring "platformserver/services/apps/authoring"
 	"platformserver/services/resources/authoring"
 )
 
@@ -310,7 +311,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 		}
 	}
-	applications := build.ApplicationProjection{Member: m, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
+	applications := appsauthoring.ApplicationProjection{Member: m, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
 	for _, registered := range registeredDefinitions {
 		if !t.ownerActive(registered.Ref.App) {
 			continue
@@ -318,7 +319,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		if t.applicationEntryWithdrawn(registered.Ref) {
 			continue
 		}
-		if def, ok := build.ProjectApplication(registered, applications); ok {
+		if def, ok := appsauthoring.ProjectApplication(registered, applications); ok {
 			out = append(out, def)
 		}
 	}
@@ -335,8 +336,33 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		}
 		out[i].Provides = t.visibleProvides(out[i], m, entities)
 		out[i].RID = platform.ResourceID(t.ID, out[i].Ref)
+		out[i].OwningProject, out[i].OwningProjectTitle, out[i].ManagedBy = t.definitionOwner(out[i])
 	}
 	return out
+}
+
+func (t *Tenant) definitionOwner(def platform.Definition) (string, string, string) {
+	if def.Application == nil || def.Source == "code" {
+		return "", "", ""
+	}
+	t.records.Lock()
+	defer t.records.Unlock()
+	resources := t.records.Type(build.ResourceType)
+	if resources == nil {
+		return "", "", ""
+	}
+	row := resources.Rows().Get(platform.ResourceID(t.ID, def.Ref))
+	if row == nil {
+		return "", "", ""
+	}
+	resource := row.Value.Interface().(build.Resource)
+	title := ""
+	if apps := t.records.Type(build.AppType); apps != nil {
+		if project := apps.Rows().Get(resource.Project); project != nil {
+			title = project.Value.Interface().(build.Application).Title
+		}
+	}
+	return resource.Project, title, resource.ManagedBy
 }
 
 func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {

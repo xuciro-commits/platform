@@ -25,8 +25,11 @@ var invariantKeys atomic.Int64
 
 var invariantClock = time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
 
+const invariantProject = "invariant-project"
+
 type invariantTenant struct {
 	*Tenant
+	project string
 	entries []Entry
 }
 
@@ -64,6 +67,26 @@ func newInvariantTenant(tb testing.TB, id string, seats ...platform.Seat) *invar
 
 func newInvariantTenantWithApps(tb testing.TB, id string, apps []platform.App, seats ...platform.Seat) *invariantTenant {
 	tb.Helper()
+	live := newInvariantTenantSetup(tb, id, apps, seats...)
+	seedInvariantProject(tb, live)
+	return live
+}
+
+func newInvariantTenantReplayWithApps(tb testing.TB, id string, apps []platform.App, seats ...platform.Seat) *invariantTenant {
+	tb.Helper()
+	live := newInvariantTenantSetup(tb, id, apps, seats...)
+	live.project = invariantProject
+	return live
+}
+
+func seedInvariantProject(tb testing.TB, live *invariantTenant) {
+	tb.Helper()
+	live.project = invariantProject
+	live.accept(tb, build.AppType+".create", build.AppType, invariantProject, map[string]any{"name": "invariantproject", "title": "Invariant project"})
+}
+
+func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seats ...platform.Seat) *invariantTenant {
+	tb.Helper()
 	services := platform.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = invariantBindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
@@ -96,6 +119,16 @@ func (t *invariantTenant) member(tb testing.TB) platform.Member {
 }
 
 func (t *invariantTenant) submission(schema, typ, id string, payload any) *pb.Submission {
+	if t.project != "" && typ != build.AppType && build.BranchDraftType(typ) && schema == typ+".create" {
+		raw, _ := json.Marshal(payload)
+		var object map[string]any
+		if json.Unmarshal(raw, &object) == nil {
+			if _, exists := object["project"]; !exists {
+				object["project"] = t.project
+			}
+			payload = object
+		}
+	}
 	return &pb.Submission{TenantId: t.ID, PrincipalId: "builder", Authority: build.ID,
 		IdempotencyKey: fmt.Sprintf("invariant-%d", invariantKeys.Add(1)),
 		Target:         &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
@@ -122,7 +155,8 @@ func (t *invariantTenant) restore(tb testing.TB, entries []Entry, seats ...platf
 			tb.Fatal(err)
 		}
 	}
-	fresh := newInvariantTenant(tb, t.ID, seats...)
+	fresh := newInvariantTenantSetup(tb, t.ID, nil, seats...)
+	fresh.project = invariantProject
 	fresh.Outbound = func(*http.Request, bool) (*http.Response, error) {
 		tb.Fatal("replay made an outbound call")
 		return nil, nil

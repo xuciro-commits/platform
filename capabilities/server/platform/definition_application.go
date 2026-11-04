@@ -28,6 +28,7 @@ type BuildHost interface {
 	Install(c Caller, e Entity, actions []Action, pages ...Page) error
 	InstallApplication(c Caller, a Application) error
 	InstallFunction(c Caller, f AIFunction, version int) error
+	InstallInterface(c Caller, i Interface, version int) error
 	InstallLinkType(c Caller, l LinkType, version int) error
 	InstallOperation(c Caller, o Operation, version int) error
 	InstallPage(c Caller, p Page) error
@@ -47,6 +48,7 @@ type BuildHost interface {
 	ValidateInstallApplication(a Application) error
 	ValidateInstallDependents(c Caller, e Entity, actions []Action, generatedPage string, pages ...Page) error
 	ValidateInstallFunction(f AIFunction) error
+	ValidateInstallInterface(i Interface) error
 	ValidateInstallLinkType(l LinkType) error
 	ValidateInstallOperation(c Caller, o Operation) error
 	ValidateInstallPage(p Page) error
@@ -56,6 +58,7 @@ type BuildHost interface {
 	ValidateObjectPresentation(info EntityInfo) error
 	ValidateInstallQuery(q NamedQuery) error
 	ValidateCodeAsset(ReleaseAsset) error
+	ProductVersion(ProductVersionRequest) (FrozenProductVersion, error)
 }
 
 type RecordSetHost interface {

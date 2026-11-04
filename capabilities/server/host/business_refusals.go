@@ -188,7 +188,7 @@ func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefu
 		return f
 	}
 	if info.HasReadSources() || len(info.VersionPins) > 0 {
-		narrowed, _ := t.narrower(m, at, true).derive(et, historical)
+		narrowed, _ := t.narrower(m, at, true).Derive(et, historical)
 		var rawBefore, rawAfter map[string]json.RawMessage
 		_ = json.Unmarshal(platform.Raw(historical.Interface()), &rawBefore)
 		_ = json.Unmarshal(platform.Raw(narrowed.Interface()), &rawAfter)

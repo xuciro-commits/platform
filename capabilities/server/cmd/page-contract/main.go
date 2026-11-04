@@ -6,7 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
+
+	resourceauthoring "platformserver/services/resources/authoring"
 )
 
 const manifestPrefix = "export const pageUIManifest = "
@@ -87,12 +91,89 @@ type retainedContract struct {
 	Runtime           json.RawMessage `json:"runtime"`
 }
 
+type applicationRegistry struct {
+	Format    int                     `json:"format"`
+	Manifests []registeredManifest    `json:"manifests"`
+	Apps      []registeredApplication `json:"applications"`
+}
+
+type registeredManifest struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+type registeredAccess struct {
+	App      string   `json:"app,omitempty"`
+	Roles    []string `json:"roles,omitempty"`
+	Schema   string   `json:"schema,omitempty"`
+	Entities bool     `json:"entities,omitempty"`
+	All      bool     `json:"all,omitempty"`
+}
+
+type registeredRoute struct {
+	View string `json:"view"`
+}
+
+type registeredHome struct {
+	Route registeredRoute    `json:"route"`
+	When  []registeredAccess `json:"when,omitempty"`
+	Shell bool               `json:"shell,omitempty"`
+}
+
+type registeredOpen struct {
+	Type string             `json:"type"`
+	View string             `json:"view"`
+	When []registeredAccess `json:"when,omitempty"`
+}
+
+type registeredApplication struct {
+	ID       string             `json:"id"`
+	Title    string             `json:"title"`
+	Manifest string             `json:"manifest,omitempty"`
+	Serves   []string           `json:"serves"`
+	Surface  string             `json:"surface,omitempty"`
+	Category string             `json:"category"`
+	Portal   bool               `json:"portal"`
+	Access   []registeredAccess `json:"access"`
+	Home     []registeredHome   `json:"home"`
+	Opens    []registeredOpen   `json:"opens"`
+}
+
+type applicationContract struct {
+	Manifests map[string]registeredManifest    `json:"manifests"`
+	Apps      map[string]registeredApplication `json:"applications"`
+}
+
+type resourceContract struct {
+	Format    int                                       `json:"format"`
+	Resources []resourceauthoring.ResourceMetadataEntry `json:"resources"`
+}
+
 func main() {
 	manifestPath := flag.String("manifest", "../../web/packages/app/src/pageui/manifest.ts", "the page UI manifest")
 	rulesPath := flag.String("rules", "platform/page_compat_rules.json", "the server-only page contract rules")
 	compatPath := flag.String("compat", "platform/page_compat.json", "the generated server page contract")
 	safetyPath := flag.String("safety", "../../web/packages/app/src/pageui/safety.ts", "the generated page safety contract")
+	appRegistryPath := flag.String("app-registry", "platform/app_registry.json", "the application registry")
+	appContractPath := flag.String("app-contract", "../../web/packages/app/src/gen/apps.ts", "the generated frontend application registry")
+	resourceContractPath := flag.String("resource-contract", "../../web/packages/build/src/gen/resources.ts", "the generated frontend resource contract")
 	flag.Parse()
+
+	resources, err := resourceauthoring.ResourceMetadata()
+	if err != nil {
+		fail(err)
+	}
+	if err := writeResourceContract(*resourceContractPath, resources); err != nil {
+		fail(err)
+	}
+
+	appRegistry, err := readApplicationRegistry(*appRegistryPath, resources)
+	if err != nil {
+		fail(err)
+	}
+	if err := writeApplicationContract(*appContractPath, appRegistry); err != nil {
+		fail(err)
+	}
 
 	manifest, err := readManifest(*manifestPath)
 	if err != nil {
@@ -161,6 +242,203 @@ func main() {
 	if err := os.WriteFile(*safetyPath, safety, 0o644); err != nil {
 		fail(err)
 	}
+}
+
+func readApplicationRegistry(path string, resources []resourceauthoring.ResourceMetadataEntry) (applicationContract, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return applicationContract{}, err
+	}
+	var source applicationRegistry
+	if err := json.Unmarshal(raw, &source); err != nil {
+		return applicationContract{}, fmt.Errorf("%s: %w", path, err)
+	}
+	if source.Format != 1 {
+		return applicationContract{}, fmt.Errorf("%s: unsupported format %d", path, source.Format)
+	}
+	out := applicationContract{Manifests: map[string]registeredManifest{}, Apps: map[string]registeredApplication{}}
+	for _, manifest := range source.Manifests {
+		if manifest.ID == "" || manifest.Title == "" {
+			return applicationContract{}, fmt.Errorf("%s: every manifest needs an ID and title", path)
+		}
+		if _, exists := out.Manifests[manifest.ID]; exists {
+			return applicationContract{}, fmt.Errorf("%s: manifest %q is repeated", path, manifest.ID)
+		}
+		out.Manifests[manifest.ID] = manifest
+	}
+	primaryManifests, appTitles, openTypes := map[string]string{}, map[string]string{}, map[string]string{}
+	for _, app := range source.Apps {
+		if app.ID == "" || app.Category == "" || len(app.Access) == 0 || len(app.Home) == 0 {
+			return applicationContract{}, fmt.Errorf("%s: application %q needs an ID, category, access and home", path, app.ID)
+		}
+		if _, exists := out.Apps[app.ID]; exists {
+			return applicationContract{}, fmt.Errorf("%s: application %q is repeated", path, app.ID)
+		}
+		if app.Manifest != "" {
+			manifest, exists := out.Manifests[app.Manifest]
+			if !exists {
+				return applicationContract{}, fmt.Errorf("%s: application %q names unknown manifest %q", path, app.ID, app.Manifest)
+			}
+			if app.Title == "" {
+				app.Title = manifest.Title
+			} else if app.Title != manifest.Title {
+				return applicationContract{}, fmt.Errorf("%s: application %q title %q differs from manifest %q title %q", path, app.ID, app.Title, app.Manifest, manifest.Title)
+			}
+			if other, exists := primaryManifests[app.Manifest]; exists {
+				return applicationContract{}, fmt.Errorf("%s: manifest %q is the primary manifest of both %q and %q", path, app.Manifest, other, app.ID)
+			}
+			primaryManifests[app.Manifest] = app.ID
+		} else if app.Title == "" {
+			return applicationContract{}, fmt.Errorf("%s: application %q needs a title when it has no primary manifest", path, app.ID)
+		}
+		if other, exists := appTitles[app.Title]; exists {
+			return applicationContract{}, fmt.Errorf("%s: applications %q and %q share title %q", path, other, app.ID, app.Title)
+		}
+		appTitles[app.Title] = app.ID
+		for _, serve := range app.Serves {
+			if serve == "" {
+				return applicationContract{}, fmt.Errorf("%s: application %q has an empty served owner", path, app.ID)
+			}
+		}
+		for _, rule := range app.Access {
+			if err := validateApplicationAccess(path, app.ID, rule, out.Manifests); err != nil {
+				return applicationContract{}, err
+			}
+		}
+		if app.Home[len(app.Home)-1].When != nil {
+			return applicationContract{}, fmt.Errorf("%s: application %q needs a home without a condition", path, app.ID)
+		}
+		for _, home := range app.Home {
+			if home.Route.View == "" {
+				return applicationContract{}, fmt.Errorf("%s: application %q has a home without a view", path, app.ID)
+			}
+			for _, rule := range home.When {
+				if err := validateApplicationAccess(path, app.ID, rule, out.Manifests); err != nil {
+					return applicationContract{}, err
+				}
+			}
+		}
+		for _, open := range app.Opens {
+			if open.Type == "" || open.View == "" {
+				return applicationContract{}, fmt.Errorf("%s: application %q has an open without a resource type or view", path, app.ID)
+			}
+			if err := validateResourceOpen(path, app.ID, open, resources); err != nil {
+				return applicationContract{}, err
+			}
+			owner, _, found := strings.Cut(open.Type, ".")
+			if !found || !slices.Contains(app.Serves, owner) {
+				return applicationContract{}, fmt.Errorf("%s: application %q opens %q but does not serve owner %q", path, app.ID, open.Type, owner)
+			}
+			if other, exists := openTypes[open.Type]; exists {
+				return applicationContract{}, fmt.Errorf("%s: resource type %q is opened by both %q and %q", path, open.Type, other, app.ID)
+			}
+			openTypes[open.Type] = app.ID
+			for _, rule := range open.When {
+				if err := validateApplicationAccess(path, app.ID, rule, out.Manifests); err != nil {
+					return applicationContract{}, err
+				}
+			}
+		}
+		out.Apps[app.ID] = app
+	}
+	return out, nil
+}
+
+func validateResourceOpen(path, app string, open registeredOpen, resources []resourceauthoring.ResourceMetadataEntry) error {
+	owner, _, found := strings.Cut(open.Type, ".")
+	if !found || !slices.ContainsFunc(resources, func(resource resourceauthoring.ResourceMetadataEntry) bool {
+		return resource.App == owner
+	}) {
+		return nil
+	}
+	typ, _, _ := strings.Cut(open.Type, "/")
+	if slices.ContainsFunc(resources, func(resource resourceauthoring.ResourceMetadataEntry) bool {
+		return resource.Type == typ && resource.View == open.View
+	}) {
+		return nil
+	}
+	return fmt.Errorf("%s: application %q opens %q in view %q, but the resource contract has no such route", path, app, open.Type, open.View)
+}
+
+func validateApplicationAccess(path, app string, rule registeredAccess, manifests map[string]registeredManifest) error {
+	declared := 0
+	if rule.App != "" {
+		declared++
+	}
+	if rule.Schema != "" {
+		declared++
+	}
+	if rule.Entities {
+		declared++
+	}
+	if rule.All {
+		declared++
+	}
+	if declared != 1 {
+		return fmt.Errorf("%s: application %q access rule needs exactly one of app, schema, entities or all", path, app)
+	}
+	for _, role := range rule.Roles {
+		if role == "" {
+			return fmt.Errorf("%s: application %q access rule has an empty role", path, app)
+		}
+	}
+	if rule.Roles != nil && rule.App == "" {
+		return fmt.Errorf("%s: application %q restricts roles without naming an app", path, app)
+	}
+	if rule.App != "" {
+		if _, exists := manifests[rule.App]; !exists {
+			return fmt.Errorf("%s: application %q names unknown access owner %q", path, app, rule.App)
+		}
+	}
+	return nil
+}
+
+func writeApplicationContract(path string, registry applicationContract) error {
+	manifests, err := applicationContractValue(registry.Manifests)
+	if err != nil {
+		return err
+	}
+	applications, err := applicationContractValue(registry.Apps)
+	if err != nil {
+		return err
+	}
+	body := "export const registeredManifests = " + manifests + " as const;\n" +
+		"export const registeredApplications = " + applications + " as const;\n" +
+		"export type RegisteredManifestID = keyof typeof registeredManifests;\n" +
+		"export type RegisteredApplicationID = keyof typeof registeredApplications;\n"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(body), 0o644)
+}
+
+func writeResourceContract(path string, resources []resourceauthoring.ResourceMetadataEntry) error {
+	body, err := applicationContractValue(resourceContract{Format: 1, Resources: resources})
+	if err != nil {
+		return err
+	}
+	generated := "export const resourceContract = " + body + " as const;\n" +
+		"export const resourcePresentations = resourceContract.resources;\n" +
+		"export const draftResourcePresentations = resourcePresentations.filter(resource => resource.listed);\n" +
+		"export const releaseResourcePresentations = resourcePresentations.filter(resource => resource.release);\n" +
+		"export type ResourceKind = (typeof resourcePresentations)[number][\"kind\"] | \"definition\";\n" +
+		"export type ReleaseKind = Extract<(typeof resourcePresentations)[number], { release: true }>[\"releaseKind\"];\n" +
+		"export type ResourceRouteMode = (typeof resourcePresentations)[number][\"route\"];\n"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(generated), 0o644)
+}
+
+func applicationContractValue(value any) (string, error) {
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(value); err != nil {
+		return "", err
+	}
+	return strings.TrimRight(out.String(), "\n"), nil
 }
 
 func projectRuntime(raw json.RawMessage) (json.RawMessage, error) {

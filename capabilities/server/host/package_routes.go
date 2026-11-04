@@ -16,7 +16,6 @@ import (
 )
 
 func (h *Host) routesPackages(rt *routes) {
-	h.routesProductExport(rt)
 	h.routesPackagePreparation(rt)
 	h.routesPackageSources(rt)
 	h.routesComposition(rt)

@@ -81,7 +81,7 @@ func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]an
 	}
 	url := fmt.Sprintf("%s://%s/a2a/%s/%s", scheme, r.Host, t.ID, agent)
 	security := map[string]any{"bearer": map[string]any{"httpAuthSecurityScheme": map[string]any{"scheme": "bearer",
-		"description": "A token of a member of the tenant; the agent acts within their grants."}}}
+		"description": "A token of a member of the tenant; the agent works within their grants. Writes are proposed for confirmation in the workspace."}}}
 	name := "bearer"
 	if h.Issuer != "" {
 		name = "oidc"
@@ -229,7 +229,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 		} else {
 			sum := sha256.Sum256([]byte(m.ID + "\x00" + p.Message.MessageID))
 			id = "A2A-" + strings.ToUpper(hex.EncodeToString(sum[:6]))
-			if err := decide(platform.SchemaRunStart, platform.RunType, id, "a2a:"+p.Message.MessageID, map[string]any{"agent": agent, "goal": p.Message.text(), "act": true}); err != nil &&
+			if err := decide(platform.SchemaRunStart, platform.RunType, id, "a2a:"+p.Message.MessageID, map[string]any{"agent": agent, "goal": p.Message.text()}); err != nil &&
 				!strings.Contains(err.Error(), "CONFLICT") {
 				reply(nil, -32603, err.Error())
 				return

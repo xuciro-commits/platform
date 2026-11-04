@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/security"
 )
@@ -106,14 +106,7 @@ func (d *stagedDecision) authorizeNative(c platform.Caller, permission, kind str
 }
 
 func authorizationRefusal(decision platform.AuthzDecision) *kernel.Error {
-	if decision.Allow {
-		return nil
-	}
-	layer := "verb"
-	if len(decision.Layers) > 0 {
-		layer = decision.Layers[len(decision.Layers)-1].Name
-	}
-	return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", layer, decision.Reason)
+	return objects.AuthorizationRefusal(decision)
 }
 
 func (t *Tenant) authorizeEntry(m platform.Member, app, permission, kind string, at time.Time) platform.AuthzDecision {
@@ -210,11 +203,11 @@ func (m securityMarkings) Compartments(typ string, row *records.Row) []string {
 func (m securityMarkings) Highest(typ string) string { return m.highest(typ) }
 
 func (t *Tenant) sourceWithheld(store *records.Store, c platform.Caller, et *records.Type, value reflect.Value, fields []string, at time.Time, depth int, walk *authorizationWalk) []string {
-	w := narrower{store: store, m: c.Member, held: true}
+	w := t.objectOwner(store).NarrowerIn(store, c.Member, at, true)
 	all := []string{}
 	for _, d := range et.Info().Derived {
 		if !d.All {
-			all = append(all, w.sources(value, d)...)
+			all = append(all, w.Sources(value, d)...)
 		}
 	}
 	withheld := []string{}
@@ -242,7 +235,7 @@ func (t *Tenant) sourceWithheld(store *records.Store, c platform.Caller, et *rec
 		}
 		refs := all
 		if !d.All {
-			refs = w.sources(value, d)
+			refs = w.Sources(value, d)
 		}
 		denied := len(refs) == 0 && slices.ContainsFunc(names, func(name string) bool {
 			field, known := et.Info().Field(name)

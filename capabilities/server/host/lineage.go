@@ -8,6 +8,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
 )
 
@@ -65,22 +66,22 @@ func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
 	}
 	c := t.caller(m, t.app(build.ID), false)
 	return lineageGraph(lineageInputs{
-		connections: lineageRecords[build.Connection](c),
-		datasets:    lineageRecords[build.Dataset](c),
+		connections: lineageRecords[dataowner.Connection](c),
+		datasets:    lineageRecords[dataowner.Dataset](c),
 		objects:     lineageRecords[build.Object](c),
-		sources:     lineageRecords[build.Source](c),
-		pipelines:   lineageRecords[build.Pipeline](c),
-		writebacks:  lineageRecords[build.Writeback](c),
+		sources:     lineageRecords[dataowner.Source](c),
+		pipelines:   lineageRecords[dataowner.Pipeline](c),
+		writebacks:  lineageRecords[dataowner.Writeback](c),
 	}), nil
 }
 
 type lineageInputs struct {
-	connections []build.Connection
-	datasets    []build.Dataset
+	connections []dataowner.Connection
+	datasets    []dataowner.Dataset
 	objects     []build.Object
-	sources     []build.Source
-	pipelines   []build.Pipeline
-	writebacks  []build.Writeback
+	sources     []dataowner.Source
+	pipelines   []dataowner.Pipeline
+	writebacks  []dataowner.Writeback
 }
 
 func lineageGraph(in lineageInputs) Lineage {
