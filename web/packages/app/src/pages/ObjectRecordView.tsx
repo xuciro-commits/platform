@@ -1,7 +1,6 @@
-import { Button, Notice, RecordPage, t, type Route } from "@platform/ui";
+import { Button, Notice, t, type Route } from "@platform/ui";
 import { useMemo, useState } from "react";
 import { findDefinition, RecordDetail, useHost, useOpenRecord } from "../index";
-import { RecordObservations } from "../observations/Observations";
 import { ApplicationPage } from "../runtime/ApplicationRuntime";
 import { ComposedPage, isComposed } from "./sections";
 import { isPageDefinition, PageWorkspace } from "./pages";
@@ -27,10 +26,10 @@ function ObjectRecordSurface({ type, id, inspect, route }: Props) {
   const currentInput = page?.document?.interface?.inputs?.currentObject;
   const pageCall = useMemo(() => ({ input: { version: page?.document?.interface?.version ?? 0, values: currentInput ? { currentObject: { object: type, id } } : {} } }), [type, id, page?.document?.interface?.version, currentInput]);
   if (!view) {
-    if (!inspect) return <RecordDetail type={type} id={id} />;
-    return <RecordPage source={source} type={type} id={id} recordTabs={["properties", "links", "history"]}
-      onOpen={(target, record) => openRecord({ type: target, id: record.id })}
-      actions={() => <><Button onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open record")}</Button><RecordObservations type={type} id={id} /></>} />;
+    return <div className="grid min-w-0 gap-2">
+      {inspect && <div className="flex justify-end"><Button onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open record")}</Button></div>}
+      <RecordDetail type={type} id={id} onOpen={(target, record) => openRecord({ type: target, id: record.id })} />
+    </div>;
   }
   if (!application || !entry || !page || !pageRef || !application.pages.includes(view.page.name)) return <Notice tone="danger" message={t("This object's Workshop view is unavailable. Ask a builder to check its module and page.")} />;
   const current = entry.document?.interface?.inputs?.currentObject;

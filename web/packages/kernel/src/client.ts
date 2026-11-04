@@ -359,6 +359,10 @@ export class EdgeClient {
     return this.get<T>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
   }
 
+  recordSection<T = unknown>(type: string, id: string, section: string): Promise<T> {
+    return this.get<T>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}/sections/${encodeURIComponent(section)}`);
+  }
+
   async refreshDeclarations(): Promise<void> {
     this.authorities.refresh(await this.get("/v1/declarations"));
   }

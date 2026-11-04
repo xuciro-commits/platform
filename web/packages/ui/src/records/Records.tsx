@@ -37,7 +37,7 @@ export type AttachedFile = EntityRecord & { name: string; size: number; contentT
 
 export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };
 
-export type RecordView = Omit<Api.RecordView, "record" | "related" | "linked" | "activity" | "processes" | "approvals" | "tasks" | "files" | "comments"> & {
+export type RecordView = Omit<Api.RecordView, "record" | "related" | "linked" | "activity" | "processes" | "approvals" | "tasks" | "files" | "comments" | "following" | "history" | "deliveries"> & {
   tasks: Api.InboxTask[];
   approvals: Api.ApprovalRequest[];
   files: AttachedFile[];
@@ -45,7 +45,25 @@ export type RecordView = Omit<Api.RecordView, "record" | "related" | "linked" | 
   record: EntityRecord; related: RelatedRecords[];
   linked: RelatedRecords[];
   activity: Api.Note[];
+  history: RecordChange[];
+  deliveries: Api.RecordDelivery[];
+  following: boolean;
   processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];
+};
+export type RecordSection = "overview" | "links" | "activity" | "files" | "work";
+export type RecordDataSection = Exclude<RecordSection, "overview"> | "history" | "comments";
+export type RecordSectionView = Omit<Api.RecordSectionView, "related" | "linked" | "activity" | "processes" | "approvals" | "tasks" | "files" | "comments" | "following" | "history" | "deliveries"> & {
+  history: RecordChange[];
+  related: RelatedRecords[];
+  linked: RelatedRecords[];
+  activity: Api.Note[];
+  processes: RecordView["processes"];
+  approvals: Api.ApprovalRequest[];
+  tasks: Api.InboxTask[];
+  files: AttachedFile[];
+  comments: RecordComment[];
+  following: boolean;
+  deliveries: Api.RecordDelivery[];
 };
 type RelatedRecords = Omit<Api.Related, "records"> & { records: EntityRecord[] };
 export type Money = { amount: number; currency: string };
@@ -62,6 +80,7 @@ export type RecordSource = {
   exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;
   importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;
   get: (type: string, id: string) => Promise<RecordView>;
+  section?: (type: string, id: string, section: RecordDataSection) => Promise<RecordSectionView>;
   provenance?: (type: string, id: string) => Promise<Api.RecordProvenance>;
   checkAction?: (schema: string, target: { type: string; id: string }, inputs?: unknown) => Promise<Api.ActionCheckResult>;
   aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
@@ -72,8 +91,25 @@ export type RecordSource = {
   revision?: number;
   watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;
   watchRecord?: (type: string, id: string, changed: () => void) => () => void;
+  watchSection?: (type: string, id: string, section: RecordDataSection, changed: () => void) => () => void;
   watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;
 };
+
+export function emptyRecordView(view: Api.RecordView): RecordView {
+  const record = view.record as EntityRecord;
+  return {...view, record,
+    history: view.history ?? [], related: (view.related ?? []) as RelatedRecords[], linked: (view.linked ?? []) as RelatedRecords[],
+    activity: (view.activity ?? []) as Api.Note[], processes: (view.processes ?? []) as RecordView["processes"],
+    approvals: (view.approvals ?? []) as Api.ApprovalRequest[], tasks: (view.tasks ?? []) as Api.InboxTask[], files: (view.files ?? []) as AttachedFile[],
+    comments: (view.comments ?? []) as RecordComment[], deliveries: view.deliveries ?? [], following: view.following ?? false};
+}
+
+export function emptyRecordSectionView(view: Api.RecordSectionView): RecordSectionView {
+  return {...view, history: view.history ?? [], related: (view.related ?? []) as RelatedRecords[], linked: (view.linked ?? []) as RelatedRecords[],
+    activity: (view.activity ?? []) as Api.Note[], processes: (view.processes ?? []) as RecordView["processes"],
+    approvals: (view.approvals ?? []) as Api.ApprovalRequest[], tasks: (view.tasks ?? []) as Api.InboxTask[], files: (view.files ?? []) as AttachedFile[],
+    comments: (view.comments ?? []) as RecordComment[], following: view.following ?? false, deliveries: view.deliveries ?? []};
+}
 
 type ListView = "list" | "kanban" | "pivot" | "chart";
 export type ListState = {
@@ -392,5 +428,5 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
 
 export {choiceTone, setCurrency, entityFrom, StatusBar, groupable, measurable, type Options} from "./RecordEntity";
 export {RecordHistory, type RecordHistoryProps} from "./RecordHistory";
-export {useRecordView, RecordPage, RecordDeliveries, RecordLinks, RecordStatus} from "./RecordPage";
+export {useRecordView, useRecordSection, RecordPage, RecordDeliveries, RecordLinks, RecordStatus} from "./RecordPage";
 export {Tasks, Inbox, type InboxTask} from "./RecordPanels";

@@ -146,7 +146,7 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  },[entry?.state,entry?.submission.idempotencyKey,submitting]);
  const generatedInputs=(next:Record<string,unknown>)=>{
   const inputs={...next,...fixed},model=source.entity(target.type)?.fields??[];
-  const allowed=new Set([...declared.payload.map(field=>field.name),...model.filter(field=>!field.readOnly&&(field.aside||Object.hasOwn(startingValues,field.name))).map(field=>field.name)]);
+  const allowed=new Set([...declared.payload.map(field=>field.name),...Object.keys(fixed),...model.filter(field=>!field.readOnly&&(field.aside||Object.hasOwn(startingValues,field.name))).map(field=>field.name)]);
   return Object.fromEntries(Object.entries(inputs).filter(([name])=>allowed.has(name)&&!model.some(field=>field.name===name&&field.readOnly)));
  };
  const kept=essential?startingValues:{};
@@ -186,7 +186,7 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  </Form>;
 }
 
-function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome, essential, frame }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry; essential?:boolean;
+function ActionDialog({ declared, type, record, onClose, onCompleted, initial={}, fixed, originalOutcome, essential, frame }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>; fixed?:Record<string,unknown>; originalOutcome?:Entry; essential?:boolean;
  frame?: "modal"|"drawer" }) {
  const host=useHost(),{source}=host,info=source.entity(type);
  const [baseline]=useState(record);
@@ -201,7 +201,7 @@ function ActionDialog({ declared, type, record, onClose, onCompleted, initial={}
  <div className="grid gap-3">
  {local.error&&<p role="alert" className="text-sm text-danger">{t(local.error)}</p>}
  {!record&&local.drafts.length>1&&<div className="grid gap-2"><p className="text-xs text-muted">{t("Choose a local draft to continue its original record.")}</p>{local.drafts.map(draft=><Button key={draft.key} size="sm" disabled={submitting||pending} onClick={()=>{setId(draft.target.id);setRound(value=>value+1);}}>{t("Resume draft {id}",{id:draft.target.id})}</Button>)}</div>}
- <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onCompleted?.(confirmed);onClose();}} onBusy={setSubmitting} initial={initial} originalOutcome={recovered} generated={generated} essential={essential} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
+ <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onCompleted?.(confirmed);onClose();}} onBusy={setSubmitting} initial={initial} fixed={fixed} originalOutcome={recovered} generated={generated} essential={essential} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
  </div></OverlayFrame>;
 }
 export {ActionDialog as DeclaredActionDialog};
@@ -225,8 +225,8 @@ function InlineActionRound({type,record,declared,info,live,reset,defaults,ready}
  return <DeclaredActionForm declared={declared} target={{type,id:baseline?.id??""}} revision={baseline?.revision??0} preview={!live} initial={initial} enabled={ready} onCancel={reset} onCompleted={()=>setSubmitted(true)}/>;
 }
 
-export function NewActions({ type, covers = [], allowed, disabled = false, onCreated }: { type: string; covers?: string[]; allowed?: string[]; disabled?: boolean; onCreated?: (target: { type: string; id: string }) => void }) {
-  const create = useNewRecord(type, onCreated);
+export function NewActions({ type, covers = [], allowed, disabled = false, onCreated, project }: { type: string; covers?: string[]; allowed?: string[]; disabled?: boolean; onCreated?: (target: { type: string; id: string }) => void; project?: string }) {
+  const create = useNewRecord(type, onCreated, { fixed: project ? { project } : undefined });
   const offered = create.offered.filter((a) => !covers.includes(a.schema) && (!allowed || allowed.includes(a.schema)));
   return <>
     {offered.map((a, index) => <Button key={a.schema} variant={index === 0 ? "primary" : "default"} disabled={disabled} onClick={() => create.take(a.schema)}><span aria-hidden="true">+</span> {a.title}</Button>)}
@@ -234,14 +234,14 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
   </>;
 }
 
-export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void, { essential = false }: { essential?: boolean } = {}) {
+export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void, { essential = false, fixed }: { essential?: boolean; fixed?: Record<string, unknown> } = {}) {
   const { catalog } = useHost();
-  const [taking, setTaking] = useState<{ declared: ActionDeclaration; initial?: Record<string, unknown> }>();
+  const [taking, setTaking] = useState<{ declared: ActionDeclaration; initial?: Record<string, unknown>; fixed?: Record<string, unknown> }>();
   const offered = catalog.filter((a) => a.target === type && a.new);
-  const dialog = taking ? <ActionDialog frame="drawer" declared={taking.declared} initial={taking.initial} type={type} essential={essential} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
-  return { offered, available: offered.length > 0, take: (schema?: string, initial?: Record<string, unknown>) => {
+  const dialog = taking ? <ActionDialog frame="drawer" declared={taking.declared} initial={taking.initial} fixed={taking.fixed} type={type} essential={essential} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
+  return { offered, available: offered.length > 0, take: (schema?: string, initial?: Record<string, unknown>, at?: Record<string, unknown>) => {
     const declared = schema ? offered.find(action => action.schema === schema) : offered[0];
-    setTaking(declared ? { declared, initial: initial && structuredClone(initial) } : undefined);
+    setTaking(declared ? { declared, initial: initial && structuredClone(initial), fixed: at ?? fixed } : undefined);
   }, dialog };
 }
 

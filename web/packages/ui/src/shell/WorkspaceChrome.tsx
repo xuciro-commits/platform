@@ -9,7 +9,6 @@ import { NavigationItems, navigationLinks, routeCovers, type NavSection } from "
 import { Tooltip } from "../primitives/tooltip";
 import type {PlatformApplication, Session} from "./WorkspaceContext";
 
-export const paletteScopes = [">", "@", "#", ":"];
 
 export const shortcutList: [string, string][] = [
   ["⌘K", "Command palette and search"], ["⌘\\", "Collapse or expand the app sidebar"], ["⌘,", "Open my account"], ["⌘S", "Save now to your working state"], ["⌘⇧S", "Open Review and save"],

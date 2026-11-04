@@ -16,7 +16,6 @@ export type Passage = Api.Passage;
 export type Memory = Api.Memory;
 type Transcript = Api.Transcript;
 export type AgentInfo = Api.AgentInfo;
-type Hit = Api.Hit;
 
 export const runStates = defineStatuses({ running: { label: "Working", tone: "info" }, waiting: { label: "Waiting for you", tone: "warning" },
   done: { label: "Done", tone: "success" }, stopped: { label: "Stopped", tone: "danger" } });
@@ -52,7 +51,6 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
     </Card>
   );
 }
-
 export function RunView({ id, compact, application, project }: { id: string; compact?: boolean; application?: string; project?: string }) {
   const { me, can , holds} = useHost();
   const control = useRunControl("agent.run", id);
@@ -208,6 +206,7 @@ function Transcripts({ run }: { run: string }) {
 
 export function Assistant({ about }: { about?: string }) {
   const { me, decide, can } = useHost();
+  const { open } = useWorkspace();
   const agents = (useRead<AgentInfo[]>("/v1/agents") ?? []).filter((a) => me.apps.some((x) => x.id === a.app));
   const runs = useRead<AgentRun[]>("/v1/runs") ?? [];
   const type = about?.split("/")[0] ?? "";
@@ -224,7 +223,9 @@ export function Assistant({ about }: { about?: string }) {
   return (
     <div className="grid max-w-3xl gap-3">
       <PageHeader title={t("Assistant")} help={t("Ask one of your apps' agents. It works on your behalf, within what you may do; you confirm what it drafts.")} />
-      {about&&<PropertyList items={[[t("Related record"),<code className="break-all">{about}</code>]]}/>}
+      {about&&<Panel title={t("Current page context")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "assistant" }, { replace: true })}>{t("Clear")}</Button>}>
+        <PropertyList items={[[t("Related resource"),<code className="break-all">{about}</code>]]}/>
+      </Panel>}
 
       {agents.length === 0 ? <p className="text-sm text-muted">{t("None of your apps declares an agent.")}</p> : (
         <Form className="grid gap-2" onSubmit={() => { if (goal.trim()) return start(); }}>
@@ -265,51 +266,6 @@ function Remembered() {
           {(m.state === "proposed" || m.expires) && <Button size="sm" onClick={() => act(m, "keep")}>{t("Keep")}</Button>}
           <Button size="sm" variant="ghost" onClick={() => act(m, "forget")}>{t("Forget")}</Button>
         </Card>
-      ))}
-    </div>
-  );
-}
-
-export function Search({ initial = "" }: { initial?: string }) {
-  const { client, entities } = useHost();
-  const openRecord = useOpenRecord();
-  const [q, setQ] = useState(initial);
-  const [hits, setHits] = useState<Hit[]>();
-  const [passages, setPassages] = useState<Passage[]>([]);
-  const run = async (text: string) => {
-    const q = encodeURIComponent(text);
-    setHits(text.trim() ? await client.get<Hit[]>(`/v1/search?q=${q}`) : undefined);
-    setPassages(text.trim() ? await client.get<Passage[]>(`/v1/knowledge?q=${q}`) : []);
-  };
-  const title = (type: string) => entities.find((e) => e.type === type)?.title ?? type;
-  return (
-    <div className="grid max-w-3xl gap-3">
-      <PageHeader title={t("Search")} help={t("Records of every app you work in, and the knowledge you may read, by text, within what you may see.")} />
-      <Form onSubmit={() => run(q)}>
-        <Input aria-label={t("Search")} autoFocus placeholder={t("Search records")} value={q} onChange={(e) => setQ(e.target.value)} />
-      </Form>
-      {passages.length > 0 && (
-        <div className="grid gap-2">
-          <div className="text-xs text-muted">{t("Knowledge")}</div>
-          {passages.map((p) => (
-            <Card key={`${p.document}#${p.chunk}`} className="p-3 text-sm">
-              <Button variant="link" className="font-medium" onClick={() => openRecord(p.document.split("#")[0]!)}>{p.title}</Button>
-              <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-muted">{p.text}</p>
-            </Card>
-          ))}
-        </div>
-      )}
-      {hits && (hits.length === 0 ? <p className="text-sm text-muted">{t("No records found.")}</p> : (
-        <ul className="grid gap-1">
-          {hits.map((h) => (
-            <li key={`${h.type}/${h.id}`}>
-              <Button variant="row" onClick={() => openRecord(h)}>
-                <span className="w-40 shrink-0 truncate text-xs text-muted">{h.typeTitle || title(h.type)}</span>
-                <span className="min-w-0 flex-1 truncate">{h.title}{h.resource && <span className="ml-2 text-xs text-muted">{h.resource.path.join(" / ")}</span>}</span><span className="font-mono text-xs text-muted">{h.id}</span>
-              </Button>
-            </li>
-          ))}
-        </ul>
       ))}
     </div>
   );

@@ -1,5 +1,5 @@
 import "./i18n";
-import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, PagePreview, PageWorkspace, ObjectRecordView, Records, RunView, Search, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, PagePreview, PageWorkspace, ObjectRecordView, Records, RunView, appRegistration, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Disclosure, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -12,8 +12,10 @@ import type { Projection } from "./shell/registry";
 import { Bell, ClipboardList, Compass, Inbox as InboxIcon, Network, Send } from "lucide-react";
 
 import { Home } from "./shell/Home";
+import { Files } from "./shell/Files";
 import { ObjectExplorer } from "./shell/Explorer";
 import { Lineage } from "./shell/Lineage";
+import { Search } from "./shell/Search";
 
 type Notification = Api.Notification;
 type Request = Api.ApprovalRequest;
@@ -45,6 +47,13 @@ function MyInbox() {
         </>} />
     </>
   );
+}
+
+function HelpPage({ title, text, from }: { title?: string; text?: string; from?: string }) {
+  return <div className="mx-auto grid w-full max-w-3xl gap-4">
+    <PageHeader title={title || t("Help")} description={t("Help for the page you came from.")} actions={from ? <Button onClick={() => { location.hash = from; }}>{t("Back to page")}</Button> : undefined} />
+    <Panel title={t("On this page")} className="grid gap-3 text-sm text-muted"><p>{text || t("Use Search to find a resource, object or application. Press ? for keyboard shortcuts.")}</p></Panel>
+  </div>;
 }
 
 function MyRequests() {
@@ -237,9 +246,8 @@ function Saved({ id }: { id: string }) {
 }
 
 export const personalWork = defineApp({
-  id: "my-work", serves: [], category: "govern", portal: false, title: "Notifications", icon: <Bell />,
+  ...appRegistration("my-work"), icon: <Bell />,
   description: "Your notifications, tasks, requests and pending decisions across applications.",
-  home: { view: "notifications" },
   views: [
     { id: "inbox", title: () => t("Inbox"), render: () => <MyInbox /> },
     { id: "requests", title: () => t("My requests"), render: () => <MyRequests /> },
@@ -255,29 +263,26 @@ export const personalWork = defineApp({
 });
 
 export const explorerApplication = defineApp({
-  id: "object-explorer", serves: [], category: "analyze", title: "Object Explorer", icon: <Compass />,
+  ...appRegistration("object-explorer"), icon: <Compass />,
   description: "Search, filter and open objects of every type you may read.",
-  for: host => host.entities.length > 0,
-  home: { view: "explorer" },
   views: [{ id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} saved={p.saved} /> }],
   nav: () => [{ label: t("Explore"), items: [{ label: t("Explore"), icon: <Compass />, route: { view: "explorer" } }] }],
 });
 
 export const lineageApplication = defineApp({
-  id: "data-lineage", serves: [], category: "govern", title: "Data Lineage", icon: <Network />,
+  ...appRegistration("data-lineage"), icon: <Network />,
   description: "How resources depend on each other, and what a change reaches.",
-  for: host => host.holds("build", "builder", "integrator"),
-  home: { view: "lineage" },
   views: [{ id: "lineage", title: () => t("Data Lineage"), render: (p) => <Lineage ref={p.ref} node={p.node} /> }],
   nav: () => [{ label: t("Data Lineage"), items: [{ label: t("Lineage"), icon: <Network />, route: { view: "lineage" } }] }],
 });
 
 export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[] = () => []): View[] => [
+  { id: "files", title: () => t("Files"), help: () => t("Every project and the resources it owns. Open a project to edit its resources, or use the folder tree to move them."), render: (p) => <Files project={p.id} folder={p.folder} /> },
   { id: "saved", title: () => t("Saved view"), render: (p) => <Saved id={p.id ?? ""} /> },
   { id: "dashboard", title: (p) => apps().find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? t("Dashboard"),
     render: (p) => { const d = apps().find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
-  { id: "home", title: () => t("Home"), render: () => <Home /> },
-  { id: "portal", title: () => t("Applications"), render: (p) => <ApplicationsPortal projection={(p.workspace as Projection | undefined) ?? projectionOfSurface(p.surface)} /> },
+  { id: "home", title: () => t("Home"), help: () => t("Your work, projects, proposals and recently opened applications. Use Search or the command palette when you know what you need."), render: () => <Home /> },
+  { id: "portal", title: () => t("Applications"), help: () => t("Every application you may open. Business applications are grouped by their owning project or product."), render: (p) => <ApplicationsPortal projection={(p.workspace as Projection | undefined) ?? projectionOfSurface(p.surface)} /> },
   { id: "observations", title: () => t("Observations"), render: p => <Observations app={p.app} name={p.name} record={p.record} /> },
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
@@ -290,5 +295,6 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "operation-run", title: (p) => p.id ?? t("Run"), render: (p) => <OperationRunView id={p.id ?? ""} application={p.application} project={p.project} subject={p.subject} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} application={p.application} project={p.project} /> },
   { id: "assistant", title: (p) => p.about ? `${t("Assistant")}: ${p.about}` : t("Assistant"), render: (p) => <Assistant about={p.about} /> },
-  { id: "search", title: () => t("Search"), render: () => <Search /> },
+  { id: "search", title: () => t("Search"), help: () => t("Search resources, objects, applications and knowledge, or use command, member and object prefixes to narrow the result."), render: p => <Search initial={p.q} /> },
+  { id: "help", title: p => p.title || t("Help"), render: p => <HelpPage title={p.title} text={p.text} from={p.from} /> },
 ];

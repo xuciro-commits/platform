@@ -1,6 +1,6 @@
 import {pageUIManifest} from "../pageui/manifest";
 import {
-  Button, Dialog, PageHeader, Panel, RecordPage, RecordWorkspace, type EntityInfo, type EntityRecord, type FieldInfo,
+  Button, Dialog, ObjectView, PageHeader, Panel, RecordWorkspace, type EntityInfo, type EntityRecord, type FieldInfo,
   type RecordPageData, type RecordSource, type RecordView, t,
 } from "@platform/ui";
 import { useMemo, useState } from "react";
@@ -84,7 +84,7 @@ function previewSource(info: EntityInfo): RecordSource {
     get: async (_type, id): Promise<RecordView> => {
       const record = records.find((r) => r.id === id);
       if (!record) throw new Error(t("Preview record is unavailable."));
-      return { record, history: [], related: [], linked: [], activity: [], processes: [], approvals: [], tasks: [], files: [], comments: [], following: false };
+      return { record, history: [], related: [], linked: [], activity: [], processes: [], approvals: [], tasks: [], files: [], comments: [], following: false, deliveries: [] };
     },
   };
 }
@@ -114,7 +114,7 @@ export function PagePreview({ definition, definitions }: { definition: PageDefin
       selected={selected} onSelect={setSelected}
       notice={<Panel role="status" className="mb-3 text-xs text-muted">{t("Preview uses sample data. Actions do not run.")}</Panel>}
       actions={<div className="flex flex-wrap gap-1">{actions.map((a) => <Button key={assetKey(a.ref)} size="sm" onClick={() => { setValues({}); setAction(a); }}>{a.action!.title}</Button>)}</div>}
-      detail={(id) => <RecordPage source={source} type={info.type} id={id} fields={page.detailFields} />} />
+      detail={(id) => <ObjectView source={source} type={info.type} id={id} fields={page.detailFields} sections={["overview"]} />} />
     <Dialog open={!!action} onOpenChange={(open) => !open && setAction(undefined)} title={action?.action?.title ?? t("Action preview")}>
       {action?.action && <div className="grid gap-3">
         <p className="text-xs text-muted">{assetKey(action.ref)} · {t("Preview only")}</p>

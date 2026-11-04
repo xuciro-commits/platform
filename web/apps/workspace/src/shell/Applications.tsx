@@ -1,8 +1,9 @@
-import { useHost } from "@platform/app";
+import { useHost, useReadQuery } from "@platform/app";
+import type { Api } from "@platform/kernel";
 import { Button, EmptyState, Input, PageHeader, useWorkspace, t, type PlatformApplication } from "@platform/ui";
 import { Star } from "lucide-react";
 import { useMemo, useState } from "react";
-import { categories, projections, type Projection } from "./registry";
+import { applicationGroup, categories, projections, type Projection } from "./registry";
 
 function ApplicationTile({ app, role }: { app: PlatformApplication; role?: string }) {
   const { applications, favorites, toggleFavorite } = useWorkspace();
@@ -23,6 +24,7 @@ function ApplicationTile({ app, role }: { app: PlatformApplication; role?: strin
 export function ApplicationsPortal({ projection }: { projection?: Projection }) {
   const { applications } = useWorkspace();
   const { me } = useHost();
+  const directory = useReadQuery<Api.ResourceDirectory>("/v1/resources");
   const [query, setQuery] = useState("");
   const lead = projections.find((p) => p.id === projection)?.categories;
   const apps = useMemo(() => {
@@ -38,9 +40,22 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
     {ordered.map((category) => {
       const inCategory = apps.filter((a) => a.category === category.id);
       if (!inCategory.length) return null;
+      const groups = new Map<string, { label: string; apps: PlatformApplication[] }>();
+      if (category.id === "business") {
+        for (const app of inCategory) {
+          const group = applicationGroup(app, directory.data?.resources ?? []) ?? { id: "_other", label: t("Other applications") };
+          const held = groups.get(group.id) ?? { label: group.label, apps: [] };
+          held.apps.push(app);
+          groups.set(group.id, held);
+        }
+      }
       return <section key={category.id} aria-label={category.label()} className="grid gap-2">
         <h2 className="text-2xs font-semibold uppercase tracking-wider text-muted">{category.label()}</h2>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">{inCategory.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</div>
+        {category.id === "business" ? <div className="grid gap-3">{[...groups.entries()].sort(([, a], [, b]) => a.label.localeCompare(b.label)).map(([id, group]) => <section key={id} aria-label={group.label} className="grid gap-2">
+          <h3 className="text-xs font-medium">{group.label}</h3>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">{group.apps.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</div>
+        </section>)}</div>
+          : <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">{inCategory.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</div>}
       </section>;
     })}
     {!apps.length && <EmptyState title={t("No application matches.")} action={query.trim() ? <Button onClick={() => setQuery("")}>{t("Clear search")}</Button> : undefined} />}

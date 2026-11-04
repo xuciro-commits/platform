@@ -16,7 +16,7 @@ export const sampleRecords: EntityRecord[] = [
   { id: "SAMPLE-001", title: "Incoming order", state: "draft", quantity: 12, revision: 1, created: stamp, changed: stamp },
   { id: "SAMPLE-002", title: "Replenishment request", state: "ready", quantity: 8, revision: 1, created: stamp, changed: stamp },
 ];
-const view = (record: EntityRecord): RecordView => ({ record, history: [], related: [], linked: [], activity: [], processes: [], approvals: [], tasks: [], files: [], comments: [], following: false });
+const view = (record: EntityRecord): RecordView => ({ record, history: [], related: [], linked: [], activity: [], processes: [], approvals: [], tasks: [], files: [], comments: [], following: false, deliveries: [] });
 export const sampleSource: RecordSource = {
   entity: (type) => type === sampleObject.type ? sampleObject : undefined,
   list: async (_type, query) => {

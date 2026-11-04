@@ -1,7 +1,7 @@
 import type { Route } from "@platform/ui";
 
 const sharedOwners: Record<string, string> = {
-  saved: "object-explorer", observations: "data-connection", assistant: "agents",
+  saved: "object-explorer", observations: "data-connection", assistant: "agents", record: "object-explorer",
 };
 
 export function sharedViewApplication(route: Route): string | undefined {

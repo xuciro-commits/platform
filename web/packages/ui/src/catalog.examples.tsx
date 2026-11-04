@@ -106,7 +106,7 @@ export const demoSource: RecordSource = {
   get: async (_type, id): Promise<RecordView> => {
     const record = demoRows.find((row) => row.id === id);
     if (!record) throw new Error("The record was not found or is outside your scope.");
-    return { record, history, related: [], linked: [], activity: [], processes: [], approvals: [], tasks: [], files: [], comments: [], following: false };
+    return { record, history, related: [], linked: [], activity: [], processes: [], approvals: [], tasks: [], files: [], comments: [], following: false, deliveries: [] };
   },
 };
 const demoEntity = () => defineEntity<{ id: string; name: string; quantity: number }>({ name: "demo", primary: "name", fields: {

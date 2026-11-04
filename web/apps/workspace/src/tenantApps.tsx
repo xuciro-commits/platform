@@ -35,6 +35,10 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
     ];
     return [{
       id,
+      rid: definition.rid,
+      owningProject: definition.owningProject,
+      owningProjectTitle: definition.owningProjectTitle,
+      managedBy: definition.managedBy,
       title: application.title,
       description: application.description,
       category: held.length ? "business" : "govern",

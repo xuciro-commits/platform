@@ -172,8 +172,10 @@ export class PageSessionStore {
       this.readAdapter = {
         get ruleIdentity(){return session.source.ruleIdentity;},entity: (type) => session.source.entity(type), list: (type, query) => session.source.list(type, query),
         get: (type, id) => session.readReference(type, id),
+        section: (type, id, section) => session.source.section ? session.source.section(type, id, section) : Promise.reject(Error("Record sections are unavailable")),
         watchList: (type, query, changed) => session.source.watchList?.(type, query, changed) ?? (() => {}),
         watchRecord: (type, id, changed) => session.watchReference(type, id, changed),
+        watchSection: (type, id, section, changed) => session.source.watchSection?.(type, id, section, changed) ?? (() => {}),
         watchAggregate: (type, query, changed) => session.source.watchAggregate?.(type, query, changed) ?? (() => {}),
         interfaceList: (name, query) => session.source.interfaceList ? session.source.interfaceList(name, query) : Promise.reject(Error("Interface record read is unavailable")),
         watchInterfaceList: (name, query, changed) => session.source.watchInterfaceList?.(name, query, changed) ?? (() => {}),
@@ -396,9 +398,11 @@ export class PageSessionStore {
       const session = this;
       source = {
         entity: (object) => session.source.entity(object), get: (object, id) => session.source.get(object, id),
+        section: (object, id, section) => session.source.section?.(object, id, section) ?? Promise.reject(Error("Record sections are unavailable")),
         list: (object, query) => session.query<RecordPageData>(key, object, query),
         watchList: (object, query, changed) => session.watchQuery(key, object, query, changed),
         watchRecord: (object, id, changed) => session.watchReference(object, id, changed),
+        watchSection: (object, id, section, changed) => session.source.watchSection?.(object, id, section, changed) ?? (() => {}),
         watchAggregate: (object, query, changed) => session.source.watchAggregate?.(object, query, changed) ?? (() => {}),
         interfaceList: (name, query) => session.source.interfaceList ? session.source.interfaceList(name, query) : Promise.reject(Error("Interface record read is unavailable")),
         watchInterfaceList: (name, query, changed) => session.source.watchInterfaceList?.(name, query, changed) ?? (() => {}),

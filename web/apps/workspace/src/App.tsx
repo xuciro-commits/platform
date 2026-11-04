@@ -1,7 +1,7 @@
 import "./i18n";
-import { ApplicationSessionsProvider, HostContext, resourceEntryRoute, withApp, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
+import { ApplicationSessionsProvider, HostContext, resourceEntryRoute, withApp, type AppUI, type AppView, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, OfflineReadError, accounts, forgetAccount, keepFresh, signIn, signOut, switchAccount, type Api, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
+import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, type SearchResult, type SearchScope, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Layers } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -15,7 +15,7 @@ import { resolveLegacyRoute, shellViews } from "./shell/legacy";
 import { categories, portalEntry } from "./shell/registry";
 import { pageApplication, tenantApps } from "./tenantApps";
 import { routeApplication, sharedViewApplication } from "./shell/navigation";
-import { extendApplications, resolveApplicationRoute } from "./host/applications";
+import { assertApplicationRegistry, extendApplications, resolveApplicationRoute } from "./host/applications";
 import { OfflinePreparation } from "./offline/Preparation";
 
 function explorerSavedSections(saved: SavedView[]): NavSection[] {
@@ -143,14 +143,93 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       .map(app => withApp(app, { home: typeof app.home === "function" && host ? app.home(host) : app.home }));
     return [...extendApplications(native, definitions, host?.applications ?? [], context), ...tenantApps(definitions, context)];
   }, [activeContributions, definitions, host, activeRoute?.params?.application, activeRoute?.params?.instance]);
+  if (host) assertApplicationRegistry(all, host, shellViews);
   const entries = useRef(all);
   entries.current = all;
   const registry = useRef(definitions);
   registry.current = definitions;
   const recordRoutes = useRef(host?.opens); recordRoutes.current = host?.opens;
-  const searchRecords = useCallback(async (text: string) => (await client.get<Api.Hit[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
-    .map((hit) => ({ id: `${hit.type}/${hit.id}`, label: hit.title || hit.id, detail: hit.resource ? hit.resource.path.join(" / ") : `${hit.typeTitle ?? hit.type} · ${hit.id}`, group: hit.group === "object" ? "object" as const : "resource" as const,
-      open: () => { const opens = recordRoutes.current!; const view = opens.get(hit.type); location.hash = routeToHash(hit.resource ? resourceEntryRoute(hit.resource, opens) : view ? { view, params: { id: hit.id } } : { view: "record", params: { type: hit.type, id: hit.id } }); } })), [client, identityScope, host?.source.scope]);
+  const searchBackend = useCallback(async (term: string, scope?: SearchScope): Promise<SearchResult[]> => {
+    const needsDirectory = scope === "#" || scope === ":";
+    const memberRequest = (!scope || scope === "@") && host?.holds("platform", "admin")
+      ? client.get<Api.MemberView[]>("/v1/members") : Promise.resolve([]);
+    const directoryRequest = needsDirectory
+      ? client.get<Api.ResourceDirectory>("/v1/resources") : Promise.resolve(undefined);
+    const hitRequest = scope === "@" || scope === "#" || scope === ":"
+      ? Promise.resolve([]) : client.get<Api.Hit[]>(`/v1/search?q=${encodeURIComponent(term)}`);
+    const [hits, members, directory] = await Promise.all([hitRequest, memberRequest, directoryRequest]);
+    const resourceResult = (resource: Api.ResourceEntry, kind: "resource" | "object"): SearchResult => ({
+      kind,
+      id: `${kind}:${resource.id}`,
+      label: resource.title || resource.draft || resource.ref.name,
+      detail: [resource.type, resource.path.filter(Boolean).join(" / "), resource.draft].filter(Boolean).join(" · "),
+      route: resourceEntryRoute(resource, recordRoutes.current ?? new Map()),
+      disabled: resource.canOpen ? undefined : t("Request project access to open this resource."),
+    });
+    const resources = hits.map((hit): SearchResult => {
+      const label = hit.title || hit.id;
+      if (hit.type === "platform.member" || hit.group === "member") return {
+        kind: "member",
+        id: `member:${hit.id}`,
+        label,
+        detail: hit.typeTitle ?? hit.type,
+        route: { view: recordRoutes.current?.get(hit.type) ?? "member", params: { id: hit.id } },
+      };
+      if (hit.resource) return {
+        kind: "resource",
+        id: `resource:${hit.resource.id}`,
+        label,
+        detail: [hit.typeTitle ?? hit.type, hit.resource.path.join(" / "), hit.id].filter(Boolean).join(" · "),
+        route: resourceEntryRoute(hit.resource, recordRoutes.current ?? new Map()),
+        disabled: hit.resource.canOpen ? undefined : t("Request project access to open this resource."),
+      };
+      return {
+        kind: "object",
+        id: `object:${hit.type}/${hit.id}`,
+        label,
+        detail: `${hit.typeTitle ?? hit.type} · ${hit.id}`,
+        route: { view: "record", params: { type: hit.type, id: hit.id } },
+      };
+    });
+    const filtered = (directory?.resources ?? []).filter(resource =>
+      scope === "#" ? resource.ref.kind === "app" : resource.ref.kind === "object"
+    ).filter(resource => {
+      const needle = term.toLocaleLowerCase();
+      return [resource.title, resource.ref.name, resource.type, resource.project, ...resource.path]
+        .some(value => value?.toLocaleLowerCase().includes(needle));
+    }).map(resource => resourceResult(resource, scope === ":" ? "object" : "resource"));
+    const memberHits = members.filter(member => {
+      const needle = term.toLocaleLowerCase();
+      return [member.id, member.profile?.displayName, member.profile?.email, member.profile?.title, ...(member.subjects ?? [])]
+        .some(value => value?.toLocaleLowerCase().includes(needle));
+    }).map((member): SearchResult => ({
+      kind: "member",
+      id: `member:${member.id}`,
+      label: member.profile?.displayName || member.id,
+      detail: member.profile?.displayName ? member.id : member.subjects.join(", "),
+      route: { view: recordRoutes.current?.get("platform.member") ?? "member", params: { id: member.id } },
+    }));
+    return [...filtered, ...resources, ...memberHits];
+  }, [client, identityScope, host?.holds, host?.opens, host?.source.scope]);
+  const searchKnowledge = useCallback(async (text: string): Promise<SearchResult[]> => {
+    const passages = await client.get<Api.Passage[]>(`/v1/knowledge?q=${encodeURIComponent(text)}`);
+    return passages.flatMap((passage): SearchResult[] => {
+      const document = passage.document.split("#")[0]!;
+      const slash = document.indexOf("/");
+      if (slash < 1) return [];
+      const type = document.slice(0, slash), id = document.slice(slash + 1);
+      const view = recordRoutes.current?.get(type);
+      return [{
+        kind: "knowledge",
+        id: `knowledge:${document}#${passage.chunk}`,
+        label: passage.title,
+        detail: passage.text,
+        route: type === "platform.member"
+          ? { view: recordRoutes.current?.get(type) ?? "member", params: { id } }
+          : view ? { view, params: { id } } : { view: "record", params: { type, id } },
+      }];
+    });
+  }, [client, identityScope, host?.opens, host?.source.scope]);
   const app = all.find((a) => a.id === current);
   const preparedApplication=activeRoute?.params?.application&&all.some(entry=>entry.id===activeRoute.params!.application)?activeRoute.params.application:app?.id;
   useEffect(()=>{
@@ -162,6 +241,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     }catch{setOfflineOpen(true);}
   },[client,preparedApplication,online]);
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
+  const filesVisible = !!me;
   const applicationOf = useCallback((route: Route, choice?: string) => {
     const sharedOwner = owner.get(route.view) ?? sharedViewApplication(route);
     if (shellViews.includes(route.view) && !sharedOwner) return undefined;
@@ -212,9 +292,35 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       read: (type, id) => client.record(type, id),
     });
     const take = (resolved: Route) => resolveApplicationRoute(resolved, definitions, host?.applications ?? [], layout ?? selectedEntry.current);
-    return resolved instanceof Promise ? resolved.then(take) : take(resolved);
-  }, [client, definitions, host?.applications, owner]);
-  const views = useMemo(() => {
+    const canonical = (resolved: Route): Route | Promise<Route> => {
+      const params = resolved.params;
+      const native = params?.page || params?.id;
+      const opens = host?.opens;
+      if (!params || !native || native === "new" || !opens) return resolved;
+      if (![...opens.values()].includes(resolved.view)) return resolved;
+      const identity = params.page?.startsWith("ri.") ? params.page : native;
+      const isRid = identity.startsWith("ri.");
+      if (isRid && !params.application && !params.page) return resolved;
+      if (isRid) {
+        const { application: _application, page: _page, ...rest } = params;
+        return { view: resolved.view, params: { ...rest, id: identity } };
+      }
+      const canonicalFrom = (directory: Api.ResourceDirectory): Route => {
+        const viewOf = (resource: Api.ResourceEntry) => opens.get(`${resource.type}/${resource.variant || resource.ref.kind}`) ?? opens.get(resource.type ?? "");
+        const resource = directory.resources.find((entry) => entry.draft === native && viewOf(entry) === resolved.view);
+        if (!resource) return resolved;
+        const { application: _application, page: _page, ...rest } = params;
+        return { view: resolved.view, params: { ...rest, id: resource.id } };
+      };
+      const key = [client.connection.token, client.connection.tenant, "/v1/resources", host?.source.scope];
+      const directory = queries.getQueryData<Api.ResourceDirectory>(key);
+      return directory ? canonicalFrom(directory)
+        : queries.fetchQuery<Api.ResourceDirectory>({ queryKey: key, queryFn: () => client.get<Api.ResourceDirectory>("/v1/resources"), staleTime: 15_000 }).then((loaded) => canonicalFrom(loaded!));
+    };
+    const settle = (value: Route) => { const next = canonical(value); return next instanceof Promise ? next.then(take) : take(next); };
+    return resolved instanceof Promise ? resolved.then(settle) : settle(resolved);
+  }, [client, definitions, host?.applications, host?.opens, host?.source.scope, owner, queries]);
+  const views = useMemo<AppView[]>(() => {
     const views = [...chromeViews(() => entries.current, () => registry.current), ...activeContributions.flatMap((a) => a.views)];
     const seen = new Set<string>();
     for (const v of views) {
@@ -223,6 +329,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     }
     return views;
   }, [activeContributions]);
+  const permittedViews = useMemo(() => views.filter(view => !view.for || !!host && view.for(host)), [views, host]);
 
   if (maintenanceRequested && hostAdminQuery.isPending) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
   if (maintenanceRequested && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
@@ -275,16 +382,29 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const decide = host.decide;
   let preparedAt:string|undefined;
   try{preparedAt=client.prepared?.current()?.at;}catch{ }
+  const assistantRoute: Route = activeRoute?.view === "record" && activeRoute.params?.type && activeRoute.params.id
+    ? { view: "assistant", params: { about: `${activeRoute.params.type}/${activeRoute.params.id}` } }
+    : activeRoute?.params?.id?.startsWith("ri.")
+      ? { view: "assistant", params: { about: activeRoute.params.id } }
+      : { view: "assistant" };
+  const activePageView = activeRoute ? permittedViews.find(view => view.id === activeRoute.view) : undefined;
+  const activeParams = activeRoute?.params ?? {};
+  const helpRoute: Route = { view: "help", params: {
+    title: activePageView?.title(activeParams) ?? app?.title ?? t("Help"),
+    text: activePageView?.help?.(activeParams) ?? app?.description ?? t("Use Search to find a resource, object or application."),
+    ...(activeRoute ? { from: routeToHash(activeRoute) } : {}),
+  } };
 
   return (
     <HostContext.Provider value={host}>
       <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}:${spoken}`} product={t("Platform")}
         storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         layoutScope={app?.id} scopeOf={applicationOf}
-        views={views} resolveRoute={resolveRoute} home={{ view: "home" }}
+        views={permittedViews} resolveRoute={resolveRoute} home={{ view: "home" }}
         rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "notifications" }, unread },
-          ...(host.holds("build", "builder") ? { files: { view: "projects" } } : {}),
-          ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
+          ...(filesVisible ? { files: { view: "files" } } : {}),
+          ...(host.can("agent.run.start") ? { assist: assistantRoute } : {}),
+          help: helpRoute }}
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute}
@@ -306,7 +426,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
             { id: "records", label: t("Browse all records"), run: () => { location.hash = "#/records"; } },
             { id: "definitions", label: t("Browse definitions"), run: () => { location.hash = "#/definitions"; } },
           ] : []), ...(app?.commands?.(host) ?? [])]}
-        search={searchRecords}
+        searchBackend={searchBackend}
+        searchKnowledge={searchKnowledge}
         status={<div className="grid gap-0.5 text-2xs text-muted">
           {connectionUnavailable && <span role="status" className="px-2 text-[var(--tone-warning)]">{t("Live updates unavailable")}</span>}
           <button type="button" aria-label={t("Last activated release")} title={!releaseUnavailable ? release.data?.id : undefined} onClick={() => setReleaseOpen(true)} className="truncate rounded-sm px-2 py-0.5 text-left hover:bg-row-hover hover:text-foreground">

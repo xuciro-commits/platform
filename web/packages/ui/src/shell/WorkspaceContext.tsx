@@ -6,13 +6,12 @@ import type { Route } from "./route";
 export type View = {
   id: string;
   title: (params: Record<string, string>) => string;
+  help?: (params: Record<string, string>) => string;
   icon?: ReactNode;
   render: (params: Record<string, string>) => ReactNode;
   documentKey?: (params: Record<string, string>) => string;
 };
 export type ShellCommand = { id: string; label: string; group?: string; shortcut?: string; run: () => void };
-export type SearchHit = { id: string; label: string; detail?: string; group?: "resource" | "object"; open: () => void };
-export type RecordSearch = (text: string) => Promise<SearchHit[]>;
 export type Session = {
   tenant: string; principal: string; detail?: string;
   name?: string;
@@ -26,9 +25,9 @@ export type Session = {
   onSignOut?: () => void;
 };
 
-export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };
+export type PlatformApplication = { id: string; rid?: string; owningProject?: string; owningProjectTitle?: string; managedBy?: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };
 export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };
-export type Rail = { home: Route; applications: Route; files?: Route; notifications?: { route: Route; unread?: number }; assist?: Route };
+export type Rail = { home: Route; applications: Route; files?: Route; notifications?: { route: Route; unread?: number }; assist?: Route; help?: Route };
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
 export type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect"; ifCurrent?: Route; from?: string; replace?: boolean };

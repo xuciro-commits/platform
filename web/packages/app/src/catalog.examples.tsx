@@ -19,7 +19,7 @@ export function TenantReferencesExample() {
     <MemberSelect value={member} onChange={setMember} />
   </div></CatalogFixture>;
 }
-import { ObservationWindowResult, DependencyGraph, ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
+import { ObservationWindowResult, DependencyGraph, ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
 import type {Api} from "@platform/kernel";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 import {ObservationStatistics,type EntityInfo} from "@platform/ui";
@@ -79,7 +79,6 @@ export const ComposedPageExample = () => <CatalogFixture><ComposedPage live={fal
 ] }} /></CatalogFixture>;
 export const AssistantExample = () => <CatalogFixture><Assistant about="catalog.sample/SAMPLE-001" /></CatalogFixture>;
 export const AgentRunExample = () => <CatalogFixture><RunView id="RUN-SAMPLE" /></CatalogFixture>;
-export const SearchExample = () => <CatalogFixture><Search initial="order" /></CatalogFixture>;
 export const ComputeExample = () => <CatalogFixture><ComputeCall recordType={sampleObject.type} live={false}
   binding={{ ref: { app: "build", kind: "compute", name: "sample" }, sourceVersion: "fixture.compute-1" }} /></CatalogFixture>;
 

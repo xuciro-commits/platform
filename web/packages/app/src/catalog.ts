@@ -76,11 +76,6 @@ export const entries: CatalogEntry[] = [
     tags: ["agent", "trace", "chain"], source: "web/packages/app/src/automation/agents.tsx", states: ["running", "waiting", "done", "stopped", "withheld"],
     snippet: 'import { RunView } from "@platform/app";\n<RunView id={runID} />',
   }),
-  asset("knowledge-search", "Authorized cross-application search", "Search records and knowledge through the current member’s original read endpoints.", ["Search"], "SearchExample", {
-    tags: ["search", "knowledge", "records"], source: "web/packages/app/src/automation/agents.tsx", states: ["empty"],
-    snippet: 'import { Search } from "@platform/app";\n<Search initial="order" />',
-    constraints: ["Results come from the current member’s host. The offline example searches synthetic records only.", "This search currently has no dedicated error or pending feedback; callers must not claim otherwise."],
-  }),
   asset("compute-call", "Published code function call", "Bind a published Go/Wasm operation to a page using its original owner contract.", ["ComputeCall"], "ComputeExample", {
     tags: ["wasm", "compute", "binding"], uses: ["code", "widget"], widgets: ["compute"], source: "web/packages/app/src/automation/capability.tsx",
     states: ["pending", "error", "unavailable"], snippet: 'import { ComputeCall } from "@platform/app";\n<ComputeCall binding={publishedOperation} bindings={inputs} record={selected} recordType="your.object" />',

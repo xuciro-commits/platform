@@ -760,6 +760,7 @@ export type BranchChangeEntry = {
   by: string;
   type: string;
   id: string;
+  project?: string;
   rid?: string;
   op: "create" | "update" | "delete";
   rebased?: boolean;
@@ -920,6 +921,7 @@ export type BranchResourceStatus = {
 export type BranchResourceView = {
   type: string;
   id: string;
+  project?: string;
   rid?: string;
   op?: "create" | "update" | "delete";
   base?: unknown;
@@ -946,6 +948,7 @@ export type BranchReviewers = {
 
 export type BranchSaveRequest = {
   op?: "create" | "update" | "delete";
+  project?: string;
   spec?: unknown;
 };
 
@@ -1614,6 +1617,9 @@ export type Definition = {
   linkVersions?: Record<string, LinkType>;
   ref: AssetRef;
   rid?: string;
+  owningProject?: string;
+  owningProjectTitle?: string;
+  managedBy?: string;
   source: string;
   version: string;
   contractVersion: number;
@@ -3431,6 +3437,8 @@ export type PackageView = {
   plan: PackageInstallPlan;
   update?: boolean;
   origin?: string;
+  product?: string;
+  candidate?: string;
   sourceDigest?: string;
   removal?: PackageRemoval;
   descriptor: PackageDescriptor;
@@ -3983,15 +3991,6 @@ export type ProcessStep = {
   flowVersion?: number;
 };
 
-export type ProductExportRequest = {
-  id: string;
-  version: string;
-  title: string;
-  namespace: string;
-  roots: AssetRef[];
-  requires?: string[];
-};
-
 export type Profile = {
   member: string;
   displayName?: string;
@@ -4213,6 +4212,22 @@ export type RecordProvenance = {
   fields: Record<string, RecordFieldProvenance>;
 };
 
+export type RecordSectionView = {
+  section: string;
+  partial?: boolean;
+  history?: RecordChange[];
+  related?: Related[];
+  processes?: unknown[];
+  approvals?: unknown[];
+  tasks?: unknown[];
+  files?: unknown[];
+  comments?: unknown[];
+  following?: boolean;
+  linked?: Related[];
+  activity?: unknown[];
+  deliveries?: RecordDelivery[];
+};
+
 export type RecordSet = {
   businessTime?: BusinessTime;
   name: string;
@@ -4267,17 +4282,18 @@ export type RecordView = {
   values?: Record<string, unknown>;
   formats?: Record<string, FieldFormat>;
   valueErrors?: Record<string, string>;
+  restricted?: string[];
   record: unknown;
-  history: RecordChange[];
-  related: Related[];
-  processes: unknown[];
-  approvals: unknown[];
-  tasks: unknown[];
-  files: unknown[];
-  comments: unknown[];
-  following: boolean;
-  linked: Related[];
-  activity: unknown[];
+  history?: RecordChange[];
+  related?: Related[];
+  processes?: unknown[];
+  approvals?: unknown[];
+  tasks?: unknown[];
+  files?: unknown[];
+  comments?: unknown[];
+  following?: boolean;
+  linked?: Related[];
+  activity?: unknown[];
   deliveries?: RecordDelivery[];
 };
 

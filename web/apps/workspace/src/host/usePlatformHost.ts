@@ -1,6 +1,6 @@
 import { memberRoles, decodeDefinitions, confirmedDecision, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { OfflineReadError, queryElements, resolveElements, type EnterpriseStereotype, type EdgeClient, type ActionDeclaration, type Entry, type Api } from "@platform/kernel";
-import { humanizeKernelError, notify, type AggregateData, type EntityInfo, type RecordPageData, type InterfaceRecordPageData, type RecordSource, type RecordView, t } from "@platform/ui";
+import { humanizeKernelError, notify, type AggregateData, type EntityInfo, type RecordPageData, type InterfaceRecordPageData, type RecordSectionView, type RecordSource, type RecordView, t } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applicationUIInfo } from "./applications";
@@ -165,11 +165,13 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       namedInterfaceList: (binding,q) => client.get<InterfaceRecordPageData>(client.namedQueryPath(binding,q)),
       watchNamedInterfaceList: (binding,q,changed) => client.subscribeRead(client.namedQueryPath(binding,q),changed),
       get: (type, id) => client.record<RecordView>(type, id),
+      section: (type, id, section) => client.recordSection<RecordSectionView>(type, id, section),
       checkAction: (schema, target, inputs) => client.actionCheck(schema, target, inputs),
       provenance: (type, id) => client.provenance(type, id),
       aggregate: (type, q) => client.aggregate<AggregateData>(type, q),
       watchList: (type, q, changed) => client.subscribeRead(client.recordsPath(type, q), changed),
       watchRecord: (type, id, changed) => client.subscribeRead(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, changed),
+      watchSection: (type, id, section, changed) => client.subscribeRead(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}/sections/${encodeURIComponent(section)}`, changed),
       watchAggregate: (type, q, changed) => client.subscribeRead(client.aggregatePath(type, q), changed),
       revision,
     };
@@ -180,8 +182,8 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "runs"]]);
     const host: Host = {
       client, me, entities, definitions, source, opens, outbox, decide, refresh,
-      role: (app) => me.apps.some(enabled => enabled.id === app) ? me.profile.roles[app] || undefined : undefined,
-      holds: (app, ...roles) => me.apps.some(enabled => enabled.id === app) && memberRoles(me.profile, app).some(role => roles.includes(role)),
+      role: (app) => me.apps.some(enabled => enabled.id === app) || app === "build" && memberRoles(me.profile, app).includes("builder") ? memberRoles(me.profile, app)[0] : undefined,
+      holds: (app, ...roles) => (me.apps.some(enabled => enabled.id === app) || app === "build" && memberRoles(me.profile, app).includes("builder")) && memberRoles(me.profile, app).some(role => roles.includes(role)),
       can: (schema) => !!actions?.some((a) => a.schema === schema),
       action: (schema) => actions?.find((a) => a.schema === schema),
       catalog: actions ?? [],
@@ -194,7 +196,8 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     const applications = apps?.(host) ?? [];
     for (const app of applications) {
       if (app.for && !app.for(host)) continue;
-      for (const [type, view] of Object.entries(app.opens ?? {})) {
+      const declared = typeof app.opens === "function" ? app.opens(host) : app.opens ?? {};
+      for (const [type, view] of Object.entries(declared)) {
         const own = (app.serves ?? [app.id]).some((id) => type.startsWith(`${id}.`));
         if (own || protocols.some((p) => p.id.startsWith(`${type}/`) && p.bound === app.id)) opens.set(type, view);
       }

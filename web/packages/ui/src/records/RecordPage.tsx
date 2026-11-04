@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useViewVisible } from "../shell/ViewVisibility";
 import { StructuredEditor } from "../components/StructuredEditor";
 import { DataTable } from "../components/DataTable";
-import { ContentTabs } from "../layout/ContentTabs";
 import { useActionAvailability } from "./ActionAvailability";
 import { FormatPill, HeaderCommands, ObjectHeader, toneOf, type HeaderPill } from "./ObjectView";
 import type { ContextCommand } from "../components/CommandMenu";
@@ -22,7 +21,8 @@ import type { Api } from "@platform/kernel";
 import {StatusBar, displayOf, entityFrom, listed} from "./RecordEntity";
 import {RecordHistory} from "./RecordHistory";
 import {ApprovalGraph, Approvals, Comments, Files, Processes, Tasks} from "./RecordPanels";
-import type {AttachedFile, EntityRecord, RecordSource, RecordView} from "./Records";
+import { ResourceSections } from "../shell/ResourceNavigation";
+import {emptyRecordSectionView, emptyRecordView, type AttachedFile, type EntityRecord, type RecordDataSection, type RecordSectionView, type RecordSource, type RecordView} from "./Records";
 
 export function useRecordView(source: RecordSource, type: string, id?: string, reload = 0) {
   const identity = JSON.stringify([source.scope, type, id]);
@@ -38,7 +38,7 @@ export function useRecordView(source: RecordSource, type: string, id?: string, r
     setResult(previous => ({ source: sourceIdentity, identity, key, view: previous?.source === sourceIdentity && previous.identity === identity ? previous.view : undefined, loading: true }));
     source.get(type, id).then(view => {
       if (view.record.id !== id) throw new Error("Record identity mismatch");
-      if (request.current === epoch && source.scope === scope) setResult({ source: sourceIdentity, identity, key, view, loading: false });
+      if (request.current === epoch && source.scope === scope) setResult({ source: sourceIdentity, identity, key, view: emptyRecordView(view), loading: false });
     }).catch(error => {
       if (request.current === epoch && source.scope === scope) setResult({ source: sourceIdentity, identity, key, error: error instanceof Error ? error.message : String(error), loading: false });
     });
@@ -52,6 +52,37 @@ export function useRecordView(source: RecordSource, type: string, id?: string, r
   }, [refresh, visible, type, id]);
   const current = result?.source === sourceIdentity && result.identity === identity ? result : undefined;
   return { view: current?.view, error: current?.key === key ? current.error : undefined, loading: !!id && (current?.key !== key || current.loading), refresh };
+}
+
+export function useRecordSection(source: RecordSource, type: string, id: string, section: RecordDataSection | undefined, reload = 0) {
+  const identity = JSON.stringify([source.scope, type, id, section]);
+  const key = JSON.stringify([identity, source.revision, reload]);
+  const from = useRef(source); from.current = source;
+  const sourceIdentity = source.scope ?? source;
+  const [result, setResult] = useState<{source:typeof sourceIdentity;identity:string;key:string;view?:RecordSectionView;error?:string;loading:boolean}>();
+  const request = useRef(0);
+  const refresh = useCallback(() => {
+    if (!section || !source.section) return;
+    const epoch = ++request.current, current = from.current, scope = current.scope;
+    const readSection = current.section;
+    if (!readSection) return;
+    setResult(previous => ({source:sourceIdentity,identity,key,view:previous?.source===sourceIdentity&&previous.identity===identity?previous.view:undefined,loading:true}));
+    readSection.call(current,type,id,section).then(view => {
+      if (view.section !== section) throw new Error("Record section identity mismatch");
+      if (request.current === epoch && current.scope === scope) setResult({source:sourceIdentity,identity,key,view:emptyRecordSectionView(view),loading:false});
+    }).catch(error => {
+      if (request.current === epoch && current.scope === scope) setResult({source:sourceIdentity,identity,key,error:error instanceof Error?error.message:String(error),loading:false});
+    });
+  }, [sourceIdentity,type,id,section,identity,key]);
+  const visible = useViewVisible();
+  useEffect(() => {
+    if (!visible || !section || !source.section) return;
+    refresh();
+    const stop = from.current.watchSection?.(type,id,section,refresh) ?? from.current.watchRecord?.(type,id,refresh);
+    return () => { request.current++; stop?.(); };
+  }, [refresh,visible,type,id,section]);
+  const current = result?.source===sourceIdentity&&result.identity===identity?result:undefined;
+  return {view:current?.view,error:current?.key===key?current.error:undefined,loading:!!section&&(current?.key!==key||current.loading),refresh};
 }
 
 export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs,recordLinks,linksOnly=false,statusTracker,statusOnly=false }: {
@@ -69,7 +100,22 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
   const tabIdentity=JSON.stringify([source.scope,type,id,recordTabs]);
   const [tabState,setTab]=useState<{identity:string;value:string}>();
   const info = source.entity(type);
-  const { view, error, loading, refresh: load } = useRecordView(source, type, id, reload);
+  const { view: baseView, error, loading, refresh: load } = useRecordView(source, type, id, reload);
+  const loadSections = !detailOnly && !statusOnly;
+  const linkData = useRecordSection(source, type, id, loadSections ? "links" : undefined, reload);
+  const activityData = useRecordSection(source, type, id, loadSections ? "activity" : undefined, reload);
+  const historyData = useRecordSection(source, type, id, loadSections ? "history" : undefined, reload);
+  const commentData = useRecordSection(source, type, id, loadSections ? "comments" : undefined, reload);
+  const fileData = useRecordSection(source, type, id, loadSections ? "files" : undefined, reload);
+  const workData = useRecordSection(source, type, id, loadSections ? "work" : undefined, reload);
+  const view = baseView ? {...baseView,
+    related: linkData.view?.related ?? baseView.related, linked: linkData.view?.linked ?? baseView.linked,
+    activity: activityData.view?.activity ?? baseView.activity, deliveries: activityData.view?.deliveries ?? baseView.deliveries,
+    history: historyData.view?.history ?? baseView.history,
+    comments: commentData.view?.comments ?? baseView.comments, following: commentData.view?.following ?? baseView.following,
+    files: fileData.view?.files ?? baseView.files,
+    processes: workData.view?.processes ?? baseView.processes, tasks: workData.view?.tasks ?? baseView.tasks, approvals: workData.view?.approvals ?? baseView.approvals,
+  } : undefined;
   const entity = useMemo(() => (info ? entityFrom(info,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined) : undefined), [info,source,onOpen]);
   const checkLifecycle = info?.lifecycle, checkState = view && checkLifecycle ? String(view.record[checkLifecycle.field] ?? "") : "";
   const availability = useActionAvailability(source, view && onTransition && checkLifecycle && !detailOnly && !recordTabs ? { type, id, revision: view.record.revision } : undefined,
@@ -149,7 +195,10 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
     const titles:Record<string,string>={overview:t("Overview"),properties:t("Properties"),links:t("Links"),history:t("History")};
     const overview=<div className="grid gap-3">{info.lifecycle&&<StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field]??"")}/>}<PropertyList columns={2} items={info.fields.filter(f=>fields?.includes(f.name)&&["integer","decimal"].includes(f.type)).slice(0,4).map(f=>[f.title,entity.fields[f.name]!.display(r[f.name],r)])}/><PropertyList items={[...view.related,...(view.linked??[])].flatMap(rel=>{const target=source.entity(rel.type);return target?[[target.plural,String(rel.total)] as [string,ReactNode]]:[];})}/></div>;
     const panels:Record<string,ReactNode>={overview,properties,links:related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>,history:<><RecordDeliveries deliveries={view.deliveries} onOpen={onOpen}/><RecordHistory info={info} history={view.history}/></>};
-    return currentRecord(<div className="grid min-w-0 gap-3">{header}<ContentTabs key={tabIdentity} label={t("Record view")} value={tabState?.identity===tabIdentity?tabState.value:tabs[0]} onChange={value=>setTab({identity:tabIdentity,value})} items={tabs.map(id=>({id,title:titles[id]!,content:panels[id]}))}/></div>);
+    return currentRecord(<div className="grid min-w-0 gap-3">{header}{tabs.map(id => <section key={id} className="grid min-w-0 gap-2">
+      <h2 className="text-sm font-semibold">{titles[id]}</h2>
+      <div className="min-w-0">{panels[id]}</div>
+    </section>)}</div>);
   }
   if(detailOnly)return currentRecord(<div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-4">{header}{properties}</div>);
   const count=(title:string,n:number)=><>{title}{n>0&&<span className="rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{n}</span>}</>;
@@ -177,8 +226,9 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
   return currentRecord(
     <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-3">
       {header}
-      <ContentTabs compact key={tabIdentity} label={t("Record view")} value={tabState?.identity===tabIdentity?tabState.value:view.tasks.length>0?"tasks":undefined} onChange={value=>setTab({identity:tabIdentity,value})}
-        items={panes.map(pane=>({...pane,content:<div className="pt-3">{pane.content}</div>}))} />
+      <ResourceSections title={info.title} meta={r.id} value={tabState?.identity===tabIdentity?tabState.value:view.tasks.length>0?"tasks":panes[0]!.id}
+        onChange={value=>setTab({identity:tabIdentity,value})}
+        items={panes.map(pane=>({id:pane.id,title:pane.title,content:<div className="pt-3">{pane.content}</div>}))} />
     </div>
   );
 }

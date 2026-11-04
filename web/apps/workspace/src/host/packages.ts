@@ -14,6 +14,7 @@ export const packages: Package[] = [
 
 export function availablePackages(apps: readonly string[], member: Me["profile"]): Package[] {
   const held = new Set(apps);
+  if ((member.grants ?? []).some(grant => grant.app === "build" && grant.role === "builder" && grant.by?.startsWith("project:"))) held.add("build");
   return packages.filter(p => p.public
     || p.serves.some(id => held.has(id) && (!p.roles || memberRoles(member, id).some(role => p.roles!.includes(role))))
     || p === buildPackage && (held.has("platform") && memberRoles(member, "platform").includes("admin") || held.has("agent") && !!member.roles.agent));

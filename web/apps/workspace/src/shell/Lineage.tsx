@@ -1,4 +1,4 @@
-import { assetKey, definitionPresentation, DependencyGraph, useDependencies, useDefinitions, useProvidedCapabilities, useReadQuery, type AssetRef, type ProvidedCapability } from "@platform/app";
+import { assetKey, definitionPresentation, DependencyGraph, resourceEntryRoute, useDependencies, useDefinitions, useHost, useProvidedCapabilities, useReadQuery, type AssetRef, type ProvidedCapability } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, DataTable, Disclosure, PageHeader, Panel, PropertyList, RelationCanvas, relationNodeClasses, SegmentedChoice, Select, useWorkspace, t, type RelationEdge, type RelationNode } from "@platform/ui";
 import { RefreshCw } from "lucide-react";
@@ -29,7 +29,9 @@ function reach(start: string, edges: Api.LineageEdge[]) {
 
 export function Lineage({ ref: requested, node: requestedNode }: { ref?: string; node?: string }) {
   const { open } = useWorkspace();
+  const { opens } = useHost();
   const query = useReadQuery<Api.Lineage>("/v1/lineage", 15000);
+  const directory = useReadQuery<Api.ResourceDirectory>("/v1/resources");
   const markings = useReadQuery<Api.Marking[]>("/v1/markings");
   const graph = query.data ?? { nodes: [], edges: [] };
   const cleared = (marking: string) => !!markings.data?.find(item => item.id === marking)?.cleared;
@@ -45,7 +47,12 @@ export function Lineage({ ref: requested, node: requestedNode }: { ref?: string;
       dim: !!connected && !connected.has(node.id), flag: node.error ? node.error : node.stale ? t("An input changed since the last run.") : undefined };
   });
   const edges: RelationEdge[] = graph.edges.map(edge => ({ id: `${edge.from}>${edge.to}`, source: edge.from, target: edge.to, directed: true, dashed: edge.stale, tone: edge.stale ? "warning" : undefined, label: edge.version ? `v${edge.version}` : undefined }));
-  const openNode = (node: Api.LineageNode) => resourceViews[node.kind] && node.record && open({ view: resourceViews[node.kind]!, params: { id: node.record } });
+  const openNode = (node: Api.LineageNode) => {
+    if (!resourceViews[node.kind] || !node.record) return;
+    const resource = directory.data?.resources.find(item => item.draft === node.record && item.ref.kind === node.kind && item.state !== "archived");
+    if (resource?.canOpen) return open(resourceEntryRoute(resource, opens));
+    open({ view: resourceViews[node.kind]!, params: { id: node.record } });
+  };
   const upstream = chosen ? graph.edges.filter(edge => edge.to === chosen.id) : [];
   const title = (id: string) => { const node = graph.nodes.find(item => item.id === id); return node ? node.title || node.name : id; };
   return <div className="grid min-w-0 gap-4">

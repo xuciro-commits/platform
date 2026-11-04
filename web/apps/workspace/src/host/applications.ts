@@ -1,4 +1,4 @@
-import { withApp, type ApplicationUIInfo, type AppUI, type Definition, type Host } from "@platform/app";
+import { registeredApplications, withApp, type ApplicationUIInfo, type AppUI, type Definition, type Host } from "@platform/app";
 import type { NavSection, Route } from "@platform/ui";
 
 type ApplicationDefinition = Definition & { application: NonNullable<Definition["application"]> };
@@ -98,7 +98,28 @@ export function extendApplications(entries: readonly AppUI[], definitions: reado
 
 export function applicationUIInfo(contributions: readonly AppUI[], host: Host): ApplicationUIInfo[] {
   return contributions.filter(app => !app.for || app.for(host)).map(app => ({
-    id: app.id, title: app.title, serves: app.serves ?? [app.id], home: typeof app.home === "function" ? app.home(host) : app.home, sections: app.nav(host),
-    views: app.views.map(view => ({ id: view.id, title: view.title({}) })), opens: { ...app.opens },
+    id: app.id, manifest: app.manifest, title: app.title, serves: app.serves ?? [app.id], home: typeof app.home === "function" ? app.home(host) : app.home, sections: app.nav(host),
+    views: app.views.map(view => ({ id: view.id, title: view.title({}) })), opens: typeof app.opens === "function" ? app.opens(host) : { ...app.opens },
   }));
+}
+
+export function assertApplicationRegistry(applications: readonly AppUI[], host: Host, shellViews: readonly string[]): void {
+  const ids = new Set<string>(), openOwners = new Map<string, string>();
+  for (const app of applications) {
+    if (ids.has(app.id)) throw new Error(`application ${app.id} is declared more than once`);
+    ids.add(app.id);
+    const registration = (registeredApplications as Record<string, { manifest?: string; title: string }>)[app.id];
+    if (!registration) continue;
+    if ((app.manifest ?? "") !== (registration.manifest ?? "")) throw new Error(`application ${app.id} manifest ${app.manifest ?? "(none)"} differs from the registry`);
+    const views = new Set(app.views.map(view => view.id));
+    const home = typeof app.home === "function" ? app.home(host) : app.home;
+    if (!views.has(home.view) && !shellViews.includes(home.view)) throw new Error(`application ${app.id} home ${home.view} is not an application or shell view`);
+    const opens = typeof app.opens === "function" ? app.opens(host) : app.opens ?? {};
+    for (const [type, view] of Object.entries(opens)) {
+      if (!views.has(view)) throw new Error(`application ${app.id} opens ${type} in missing view ${view}`);
+      const owner = openOwners.get(type);
+      if (owner && owner !== app.id) throw new Error(`resource type ${type} is opened by both ${owner} and ${app.id}`);
+      openOwners.set(type, app.id);
+    }
+  }
 }

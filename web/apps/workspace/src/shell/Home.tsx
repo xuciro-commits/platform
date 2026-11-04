@@ -1,10 +1,9 @@
-import { useHost, useRead, useReadQuery, useRecordInventory } from "@platform/app";
+import { useHost, useRead, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, EmptyState, Panel, Tag, routeKey, t, useWorkspace, type InboxTask, type PlatformApplication } from "@platform/ui";
 import { ArrowRight, Bell, ClipboardList, FolderKanban, GitBranch, Inbox, Search } from "lucide-react";
 import type { ReactNode } from "react";
-
-type ProjectRow = { id: string; name: string; title?: string; description?: string; state?: string; archived?: boolean; changed?: Api.Stamp };
+import { applicationGroup } from "./registry";
 
 const when = (at?: string | number) => {
   if (!at) return "";
@@ -40,6 +39,20 @@ function AppTile({ app }: { app: PlatformApplication }) {
   </button>;
 }
 
+function BusinessAppTiles({ apps, resources }: { apps: PlatformApplication[]; resources: readonly Api.ResourceEntry[] }) {
+  const groups = new Map<string, { label: string; apps: PlatformApplication[] }>();
+  for (const app of apps) {
+    const group = applicationGroup(app, resources) ?? { id: "_other", label: t("Other applications") };
+    const held = groups.get(group.id) ?? { label: group.label, apps: [] };
+    held.apps.push(app);
+    groups.set(group.id, held);
+  }
+  return <div className="grid gap-3">{[...groups.entries()].sort(([, a], [, b]) => a.label.localeCompare(b.label)).map(([id, group]) => <section key={id} aria-label={group.label} className="grid gap-1">
+    <h3 className="text-2xs font-medium uppercase tracking-wider text-muted">{group.label}</h3>
+    <div className="grid gap-2 sm:grid-cols-2">{group.apps.map(app => <AppTile key={app.id} app={app} />)}</div>
+  </section>)}</div>;
+}
+
 export function Home() {
   const { me, holds } = useHost();
   const { open, recent, favorites, applications, palette } = useWorkspace();
@@ -47,8 +60,8 @@ export function Home() {
   const inbox = useRead<InboxTask[]>("/v1/inbox");
   const requests = useRead<Api.ApprovalRequest[]>("/v1/requests");
   const notifications = useRead<Api.Notification[]>("/v1/notifications");
-  const projects = useRecordInventory<ProjectRow>("build.app", 1000, builder);
-  const branches = useReadQuery<Api.BranchDetail[]>("/v1/branches", undefined, builder);
+  const projects = useReadQuery<Api.ResourceDirectory>("/v1/resources");
+  const branches = useReadQuery<Api.BranchDetail[]>("/v1/branches");
   const apps = applications?.apps ?? [];
   const pinned = apps.filter(app => favorites.includes(app.id));
   const business = apps.filter(app => app.category === "business");
@@ -56,7 +69,7 @@ export function Home() {
   const hour = new Date().getHours();
   const name = me.account?.displayName || me.principalId;
   const greeting = hour < 12 ? t("Good morning, {name}", { name }) : hour < 18 ? t("Good afternoon, {name}", { name }) : t("Good evening, {name}", { name });
-  const liveProjects = (projects.data?.records ?? []).filter(project => !project.archived)
+  const liveProjects = (projects.data?.resources ?? []).filter(project => project.ref.kind === "app" && project.state !== "archived")
     .sort((a, b) => (b.changed?.at ?? "").localeCompare(a.changed?.at ?? "")).slice(0, 8);
   const proposals = (branches.data ?? []).filter(branch => branch.state === "proposed" || branch.state === "open" && branch.changes > 0)
     .sort((a, b) => (b.changed?.at ?? "").localeCompare(a.changed?.at ?? "")).slice(0, 6);
@@ -76,22 +89,22 @@ export function Home() {
       <Stat icon={<Inbox />} label={t("Tasks waiting for you")} value={inbox?.length} onClick={() => open({ view: "inbox" })} />
       <Stat icon={<ClipboardList />} label={t("Requests in progress")} value={requests?.filter(request => request.state === "pending").length} onClick={() => open({ view: "requests" })} />
       <Stat icon={<Bell />} label={t("Unread notifications")} value={notifications?.filter(notification => !notification.read).length} onClick={() => open({ view: "notifications" })} />
-      {builder ? <Stat icon={<GitBranch />} label={t("Open proposals")} value={branches.data?.filter(branch => branch.state === "proposed").length} onClick={() => open({ view: "changes" })} />
+      {builder || branches.data?.some(branch => branch.state === "proposed") ? <Stat icon={<GitBranch />} label={t("Open proposals")} value={branches.data?.filter(branch => branch.state === "proposed").length} onClick={() => open({ view: "changes" })} />
         : <Stat icon={<FolderKanban />} label={t("Applications")} value={apps.length} onClick={() => open({ view: "portal" })} />}
     </div>
 
     <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <div className="grid content-start gap-5">
-        {builder && <Panel title={t("Projects")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "projects" })}>{t("All projects")}<ArrowRight /></Button>}>
+        {builder && <Panel title={t("Projects")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "files" })}>{t("All projects")}<ArrowRight /></Button>}>
           {projects.isError && <p role="alert" className="text-xs text-danger">{t("Projects could not be loaded.")}</p>}
           {!projects.isLoading && !liveProjects.length && <EmptyState title={t("No projects yet")} hint={t("A project holds the object types, logic, pages and releases of one application.")}
-            action={<Button variant="primary" onClick={() => open({ view: "projects" })}>{t("Create a project")}</Button>} />}
-          <div className="-mx-2 grid">{liveProjects.map(project => <Row key={project.id} icon={<FolderKanban />} title={project.title || project.name} detail={project.description}
+            action={<Button variant="primary" onClick={() => open({ view: "files" })}>{t("Create a project")}</Button>} />}
+          <div className="-mx-2 grid">{liveProjects.map(project => <Row key={project.id} icon={<FolderKanban />} title={project.title || project.ref.name}
             meta={<span className="flex items-center gap-2">{project.state && project.state !== "published" && <Tag label={t("Draft")} />}{when(project.changed?.at)}</span>}
             onClick={() => open({ view: "project", params: { id: project.id } })} />)}</div>
         </Panel>}
         {!builder && business.length > 0 && <Panel title={t("Business applications")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "portal" })}>{t("All applications")}<ArrowRight /></Button>}>
-          <div className="grid gap-2 sm:grid-cols-2">{business.map(app => <AppTile key={app.id} app={app} />)}</div>
+          <BusinessAppTiles apps={business} resources={projects.data?.resources ?? []} />
         </Panel>}
         <Panel title={t("Recent")}>
           {!recent.length && <p className="text-xs text-muted">{t("Nothing opened yet.")}</p>}
@@ -99,7 +112,7 @@ export function Home() {
         </Panel>
       </div>
       <div className="grid content-start gap-5">
-        {builder && <Panel title={t("Branches and proposals")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "changes" })}>{t("All")}<ArrowRight /></Button>}>
+        {(builder || proposals.length > 0) && <Panel title={t("Branches and proposals")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "changes" })}>{t("All")}<ArrowRight /></Button>}>
           {!branches.isLoading && !proposals.length && <p className="text-xs text-muted">{t("No open changes. Start a branch from any builder tool.")}</p>}
           <div className="-mx-2 grid">{proposals.map(branch => <Row key={branch.id} icon={<GitBranch />} title={branch.title} detail={t("{n} changes", { n: branch.changes })}
             meta={<Tag label={t(branch.state === "proposed" ? "Proposed" : "Editing")} tone={branch.state === "proposed" ? "purple" : "info"} />}
@@ -107,7 +120,7 @@ export function Home() {
         </Panel>}
         {pinned.length > 0 && <Panel title={t("Pinned")}><div className="grid gap-2">{pinned.map(app => <AppTile key={app.id} app={app} />)}</div></Panel>}
         {builder && tools.length > 0 && <Panel title={t("Build tools")}><div className="grid gap-2">{tools.filter(app => !favorites.includes(app.id)).map(app => <AppTile key={app.id} app={app} />)}</div></Panel>}
-        {builder && business.length > 0 && <Panel title={t("Business applications")}><div className="grid gap-2">{business.slice(0, 6).map(app => <AppTile key={app.id} app={app} />)}</div></Panel>}
+        {builder && business.length > 0 && <Panel title={t("Business applications")}><BusinessAppTiles apps={business.slice(0, 6)} resources={projects.data?.resources ?? []} /></Panel>}
       </div>
     </div>
   </div>;

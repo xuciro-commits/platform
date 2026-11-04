@@ -1,5 +1,5 @@
 import { ExplorationRenderer, newId, useHost, useOpenRecord, useRead, OpenIn, type Definition, type PageUI, type SavedView } from "@platform/app";
-import { Button, Dialog, EmptyState, Form, Input, PageHeader, Panel, RecordList, Select, cn, notify, useWorkspace, t, type EntityRecord, type ListState } from "@platform/ui";
+import { Button, Dialog, EmptyState, Form, Input, PageHeader, Panel, RecordList, Select, cn, useWorkspace, t, type EntityRecord, type ListState } from "@platform/ui";
 import { Compass } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -81,7 +81,7 @@ function SaveListDialog({ entity, state, onClose }: { entity: string; state: Lis
   </Dialog>;
 }
 
-function SearchAroundPanel({ root, type, filters, onSendToWorkshop }: { root?: EntityRecord; type: string; filters?: Record<string, string[]>; onSendToWorkshop?: (object: string, record: EntityRecord) => Promise<boolean> }) {
+function SearchAroundPanel({ root, type, filters }: { root?: EntityRecord; type: string; filters?: Record<string, string[]> }) {
   const { source, definitions, entities } = useHost();
   const entityApp = (object: string) => entities.find((e) => e.type === object)?.app;
   const config = useMemo(() => explorationGraph(definitions, type, entityApp), [definitions, type, entities]);
@@ -90,19 +90,16 @@ function SearchAroundPanel({ root, type, filters, onSendToWorkshop }: { root?: E
   const rootApp = entityApp(type)!;
   return <ExplorationRenderer kind="graph-explorer" config={config} root={root} rootObject={{ app: rootApp, kind: "object", name: type }}
     status="value" source={source} definitions={definitions} identity={JSON.stringify([type, root.id, filters])} isActive={() => true}
-    onOutput={onSendToWorkshop} label={t("Search around")} />;
+    label={t("Search around")} />;
 }
 
 function ExploreView({ type: requested, savedState }: { type?: string; savedState?: ExplorationState }) {
-  const { source, entities, decide } = useHost();
-  const { open } = useWorkspace();
+  const { source, entities } = useHost();
   const openRecord = useOpenRecord();
   const [filter, setFilter] = useState("");
   const [picked, setPicked] = useState<string>();
   const [selected, setSelected] = useState<EntityRecord>();
   const [saving, setSaving] = useState(false);
-  const [sent, setSent] = useState<{ object: string; ids: string[] }>();
-  const [sending, setSending] = useState(false);
   const chosen = picked ?? savedState?.entity ?? requested ?? entities[0]?.type ?? "";
   const entity = entities.find((e) => e.type === chosen);
   const shown = entities.filter((e) => !filter || `${e.title} ${e.type}`.toLowerCase().includes(filter.toLowerCase()))
@@ -110,24 +107,6 @@ function ExploreView({ type: requested, savedState }: { type?: string; savedStat
   const groups = new Map<string, typeof shown>();
   for (const e of shown) { const app = e.type.split(".")[0] ?? ""; groups.set(app, [...(groups.get(app) ?? []), e]); }
   const initial = useMemo<ListState>(() => (savedState?.filters ? { filters: savedState.filters } : {}), [savedState]);
-  const onSendToWorkshop = async (object: string, record: EntityRecord) => {
-    setSent((prior) => prior?.object === object
-      ? { object, ids: [...new Set([...prior.ids, record.id])] }
-      : { object, ids: [record.id] });
-    notify.success(t("Added {id} to the object set.", { id: `${object}/${record.id}` }));
-    return true;
-  };
-  const sendToWorkshop = async () => {
-    if (!sent || sent.ids.length === 0 || sending) return;
-    setSending(true);
-    try {
-      const id = newId("VIEW");
-      const state: ListViewState = { kind: "list", baseQuery: { domain: [["id", "in", sent.ids]] } };
-      if (await decide("work.view.save", { type: "work.view", id }, { title: t("Object set from {type}", { type: chosen }), entity: sent.object, state: JSON.stringify(state) })) {
-        open({ view: "explorer", params: { saved: id } });
-      }
-    } finally { setSending(false); }
-  };
   if (entities.length === 0) return <>
     <PageHeader title={t("Object Explorer")} />
     <p className="text-sm text-muted">{t("No entity types in apps you hold a role in.")}</p>
@@ -158,11 +137,8 @@ function ExploreView({ type: requested, savedState }: { type?: string; savedStat
         onOpen={(r) => { setSelected(r); openRecord({ type: chosen, id: r.id }); }} />
     </div>
     <aside aria-label={t("Search around")} className="hidden min-w-0 content-start gap-3 overflow-auto border-l border-border pl-3 lg:grid">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-2xs font-semibold uppercase tracking-wider text-muted">{t("Search around")}</div>
-        {sent && sent.ids.length > 0 && <Button size="sm" variant="ghost" loading={sending} onClick={() => void sendToWorkshop()}>{t("Send to Workshop")}</Button>}
-      </div>
-      <SearchAroundPanel root={selected} type={chosen} filters={savedState?.filters} onSendToWorkshop={onSendToWorkshop} />
+      <div className="text-2xs font-semibold uppercase tracking-wider text-muted">{t("Search around")}</div>
+      <SearchAroundPanel root={selected} type={chosen} filters={savedState?.filters} />
     </aside>
     {saving && <SaveExplorationDialog entity={chosen} current={chosen} recordId={selected?.id} filters={savedState?.filters} onClose={() => setSaving(false)} />}
   </div>;

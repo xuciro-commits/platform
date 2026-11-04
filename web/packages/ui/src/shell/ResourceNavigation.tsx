@@ -4,7 +4,7 @@ import { useContext, useLayoutEffect, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import {PanelContext, WorkspaceContext} from "./WorkspaceContext";
 
-export type ResourceSection = { id: string; label: string; icon?: ReactNode; badge?: ReactNode; group?: string };
+export type ResourceSection = { id: string; label: ReactNode; icon?: ReactNode; badge?: ReactNode; group?: string };
 
 export function ResourceNavigation({ back, title, icon, meta, sections, value, onChange }: {
   back?: { label: string; onClick: () => void }; title: string; icon?: ReactNode; meta?: ReactNode;
@@ -41,7 +41,7 @@ export function ResourceNavigation({ back, title, icon, meta, sections, value, o
 }
 
 export function ResourceSections({ items, value, onChange, ...navigation }: Omit<Parameters<typeof ResourceNavigation>[0], "sections"> & {
-  items: (Omit<ResourceSection, "label"> & { title: string; content: ReactNode })[];
+  items: (Omit<ResourceSection, "label"> & { title: ReactNode; content: ReactNode })[];
 }) {
   const active = items.find(item => item.id === value) ?? items[0];
   return <>

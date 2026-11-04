@@ -1,5 +1,7 @@
 import {decodeDefinitions} from "./pageui/wire";
 export {decodeDefinitions} from "./pageui/wire";
+import {registeredApplications, registeredManifests, type RegisteredApplicationID, type RegisteredManifestID} from "./gen/apps";
+export {registeredApplications, registeredManifests, type RegisteredApplicationID, type RegisteredManifestID};
 import {pageUIManifest} from "./pageui/manifest";
 import {ConfirmationProgress} from "./widgets/ConfirmationProgress";
 import { DispatchProgress } from "./widgets/DispatchProgress";
@@ -23,8 +25,8 @@ export {searchInputObjects} from "./widgets/search-input";
 import "./i18n";
 import {apiErrorMessage, OfflineReadError, type ActionDeclaration, type Api, type EdgeClient, type Entry} from "@platform/kernel";
 import {
-  Button, Chart, Disclosure, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
-  type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
+  Button, Chart, Disclosure, ObjectView, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
+  type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 export {boundQueryDefinition} from "./runtime/query-plans";
@@ -59,6 +61,7 @@ export type Decision = {
 
 export type ApplicationUIInfo = {
   id: string;
+  manifest?: string;
   title: string;
   serves: string[];
   home: Route;
@@ -174,8 +177,8 @@ export function definitionPresentation(definition: Definition): { title: string;
 
 export function resourceEntryRoute(resource: Api.ResourceEntry, opens: ReadonlyMap<string, string>): Route {
   const view = opens.get(`${resource.type}/${resource.variant || resource.ref.kind}`) ?? opens.get(resource.type ?? "");
-  return view ? { view, params: { id: resource.id, application: resource.project } }
-    : { view: "definition", params: { ...resource.ref } };
+  return view ? { view, params: { id: resource.id } }
+    : { view: "definition", params: { ...resource.ref, id: resource.id } };
 }
 
 export function useOpenRecord(): (ref: string | { type: string; id: string; resource?: Api.ResourceEntry }, options?: { window: "tab" | "beside" | "popout" | "inspect" }) => void {
@@ -207,8 +210,14 @@ export type PlatformAppCategory = "business" | "build" | "analyze" | "govern" | 
 export const categoryOf = (app: Pick<AppUI, "category" | "surface">): PlatformAppCategory =>
   app.category ?? ({ studio: "build", tenant: "govern", developer: "developer" } as Record<string, PlatformAppCategory>)[app.surface ?? "work"] ?? "business";
 
+export type AppView = View & { for?: (host: Host) => boolean };
 export type AppUI = {
   id: string;
+  manifest?: string;
+  rid?: string;
+  owningProject?: string;
+  owningProjectTitle?: string;
+  managedBy?: string;
   surface?: WorkspaceSurface;
   category?: PlatformAppCategory;
   portal?: boolean | ((host: Host) => boolean);
@@ -217,15 +226,38 @@ export type AppUI = {
   for?: (host: Host) => boolean;
   title: string;
   icon: ReactNode;
-  views: View[];
+  views: AppView[];
   nav: (host: Host, route?: Route) => NavSection[];
   navigation?: (route?: Route) => ReactNode;
   referenceContext?: (route: Route, children: ReactNode) => ReactNode;
   home: Route | ((host: Host) => Route);
-  opens?: Record<string, string>;
+  opens?: Record<string, string> | ((host: Host) => Record<string, string>);
   commands?: (host: Host) => ShellCommand[];
   dashboards?: Dashboard[];
 };
+
+type RegisteredAccess = { app?: string; roles?: readonly string[]; schema?: string; entities?: boolean; all?: boolean };
+type RegisteredHome = { route: Route; when?: readonly RegisteredAccess[]; shell?: boolean };
+type RegisteredOpen = { type: string; view: string; when?: readonly RegisteredAccess[] };
+export type RegisteredApplication = {
+  id: string;
+  title: string;
+  manifest?: string;
+  serves: readonly string[];
+  surface?: WorkspaceSurface;
+  category: PlatformAppCategory;
+  portal: boolean;
+  access: readonly RegisteredAccess[];
+  home: readonly RegisteredHome[];
+  opens: readonly RegisteredOpen[];
+};
+type AccessHost = Pick<Host, "role" | "holds" | "can" | "entities">;
+
+const registered = (id: string) => (registeredApplications as unknown as Record<string, RegisteredApplication>)[id];
+
+const accessMatches = (rules: readonly RegisteredAccess[], host: AccessHost): boolean => rules.some(rule =>
+  rule.all || rule.entities && host.entities.length > 0 || rule.schema !== undefined && host.can(rule.schema)
+  || rule.app !== undefined && (rule.roles?.length ? host.holds(rule.app, ...rule.roles) : !!host.role(rule.app)));
 
 function AppInputView({scope,children}:{scope:string;children:ReactNode}) {
   const host=useContext(HostContext);
@@ -238,7 +270,32 @@ function AppInputBody({children}:{children:ReactNode}) {
 }
 export const withApp = <T extends AppUI>(app: T, patch: Partial<T> & object): T =>
   Object.defineProperties({} as T, { ...Object.getOwnPropertyDescriptors(app), ...Object.getOwnPropertyDescriptors(patch) });
+export function appRegistration<Id extends RegisteredApplicationID>(id: Id): Pick<AppUI, "id" | "manifest" | "serves" | "surface" | "category" | "portal" | "for" | "title" | "home" | "opens"> {
+  const registration = registered(id)!;
+  return {
+    id: registration.id,
+    ...(registration.manifest ? { manifest: registration.manifest } : {}),
+    serves: [...registration.serves],
+    ...(registration.surface ? { surface: registration.surface } : {}),
+    category: registration.category,
+    portal: registration.portal,
+    title: registration.title,
+    for: host => accessMatches(registration.access, host),
+    home: host => {
+      const rule = registration.home.find(item => !item.when || accessMatches(item.when, host));
+      if (!rule) throw new Error(`application ${registration.id} has no home for this member`);
+      return rule.route;
+    },
+    opens: host => Object.fromEntries(registration.opens.filter(item => !item.when || accessMatches(item.when, host)).map(item => [item.type, item.view])),
+  };
+}
 export const defineApp = (app: AppUI): AppUI => {
+  const registration = registered(app.id);
+  if (!registration) throw new Error(`application ${app.id} is not in the application registry`);
+  if (app.title !== registration.title) throw new Error(`application ${app.id} title ${app.title} differs from the registry title ${registration.title}`);
+  if ((app.manifest ?? "") !== (registration.manifest ?? "")) throw new Error(`application ${app.id} manifest ${app.manifest ?? "(none)"} differs from the registry manifest ${registration.manifest ?? "(none)"}`);
+  const viewIDs = app.views.map(view => view.id);
+  if (new Set(viewIDs).size !== viewIDs.length) throw new Error(`application ${app.id} declares a view more than once`);
   const { title, description } = app;
   return { ...app, get title() { return t(title); }, get description() { return description === undefined ? undefined : t(description); },
     views: app.views.map(view => ({ ...view, render: params => <AppInputView scope={`${app.id}/${view.id}/${params.id ?? ""}/${params.page ?? ""}`}>{view.render(params)}</AppInputView> })) };
@@ -363,9 +420,14 @@ export function RecordDetail({ type, id, fields, allowed, advice, source: record
       <RecordPage source={source} type={type} id={id} fields={fields} recordTabs={["properties", "history"]} onOpen={(target, record) => openRecord({ type: target, id: record.id })} />
     </Disclosure>
   </div>;
+  const sections: RecordSection[] | undefined = recordTabs && [...new Set<RecordSection>([
+    "overview",
+    ...(recordTabs.includes("links") ? ["links" as const] : []),
+    ...(recordTabs.includes("history") ? ["activity" as const] : []),
+  ])];
   return (
     <>
-      <RecordPage source={source} type={type} id={id} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields} recordTabs={recordTabs}
+      <ObjectView source={source} type={type} id={id} sections={sections} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
         work={view => {
           const dispatchTask = type === "work.task" && typeof view.record.ref === "string" && view.record.ref.startsWith("build.dispatch/") ? view.record.ref.slice("build.dispatch/".length) : undefined;
           const call = type === "build.function-call" ? view.record : undefined;
@@ -387,7 +449,7 @@ export function RecordDetail({ type, id, fields, allowed, advice, source: record
             {type === "build.function-call" ? <ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={() => void refresh?.()} /> : advice && <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} />}
           </>;
         }} onOpen={onOpen ?? ((t, r) => openRecord({ type: t, id: r.id }))}
-        can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
+        can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={recordTabs === undefined ? transition.take : undefined} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); }, actions: task => task.ref?.startsWith("build.dispatch/") ? <Button size="sm" onClick={() => openRecord(task.ref!, { window: "tab" })}>{t("Review dispatch")}</Button> : null } : undefined}
         actions={(r) => <>
@@ -429,7 +491,7 @@ function RecordAdvice({ type, record, action, fields }: { type: string; record: 
 
 export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 
-export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./automation/agents";
+export { Assistant, ChainGraph, RunView, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./automation/agents";
 
 export { SetBuilder, LinkTypePicker, objectSetComplete, type SetBuilderProps, type SetFilterSlot } from "./sets/SetBuilder";
 export { NewActions, PayloadFields, DeclaredActionForm, DeclaredActionDialog, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions/actions";

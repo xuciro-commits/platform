@@ -1,7 +1,7 @@
 import type { Route } from "@platform/ui";
 import type { Projection } from "./registry";
 
-export const shellViews = ["home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "observations"];
+export const shellViews = ["home", "portal", "files", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "observations"];
 
 type Params = Record<string, string>;
 const keep = (params: Params | undefined, ...names: string[]): Params => Object.fromEntries(names.flatMap((name) => params?.[name] ? [[name, params[name]!]] : []));
@@ -10,9 +10,10 @@ const retired: Record<string, Route | ((params?: Params) => Route)> = {
   query: params => ({ view: "object-set", params }),
   "tenant-overview": { view: "portal", params: { workspace: "admin" } },
   launcher: { view: "portal" },
-  applications: (params) => params?.surface === "studio" || !params?.surface ? { view: "projects", params: keep(params, "surface") } : { view: "portal" },
+  projects: { view: "files" },
+  applications: (params) => params?.surface === "studio" || !params?.surface ? { view: "files", params: keep(params, "surface") } : { view: "portal" },
   application: (params) => ({ view: "project", params: keep(params, "id", "surface") }),
-  studio: { view: "projects" },
+  studio: { view: "files" },
   pages: { view: "module" },
   compose: (params) => ({ view: "module", params: { ...keep(params, "application"), ...(params?.id ? { page: params.id } : {}) } }),
   model: (params) => ({ view: "object-type", params: keep(params, "object", "tab", "application") }),

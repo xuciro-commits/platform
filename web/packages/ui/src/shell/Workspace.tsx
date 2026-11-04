@@ -1,6 +1,6 @@
 import { useTheme } from "../themes/theme";
 import { Command, defaultFilter } from "cmdk";
-import { Bell, Clock, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
+import { Bell, CircleHelp, Clock, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
@@ -10,14 +10,15 @@ import { Dialog } from "../primitives/dialog";
 import { Button } from "../primitives/button";
 import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
-import { navigationLinks, type NavSection } from "./Navigation";
-import {RailButton, RailList, SessionMenu, Sidebar, ViewBoundary, paletteGroup, paletteItem, paletteScopes, shortcutList} from "./WorkspaceChrome";
+import type { NavSection } from "./Navigation";
+import {RailButton, RailList, SessionMenu, Sidebar, ViewBoundary, paletteGroup, paletteItem, shortcutList} from "./WorkspaceChrome";
 import {PanelContext, ViewCallContext, WorkspaceContext, entryId} from "./WorkspaceContext";
-import type {Applications, Entry, Memory, OpenOptions, Pending, Rail, RecordSearch, SearchHit, Session, ShellCommand, Unsaved, View, WorkspaceApi} from "./WorkspaceContext";
+import type {Applications, Entry, Memory, OpenOptions, Pending, Rail, Session, ShellCommand, Unsaved, View, WorkspaceApi} from "./WorkspaceContext";
+import {SearchContext, searchScopes, useSearchController, type SearchAnswer, type SearchSource, type SearchWindow} from "./search";
 
 export type { NavSection } from "./Navigation";
 
-export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, commands = [], session, status, applications: appEntries, rail, onActiveRoute, onLanguage, search }: {
+export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, commands = [], session, status, applications: appEntries, rail, onActiveRoute, onLanguage, searchBackend, searchKnowledge }: {
   product: string; productIcon?: ReactNode; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
   navigation?: ReactNode;
   layoutScope?: string;
@@ -25,7 +26,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   resolveRoute?: (route: Route, layout?: string) => Route | Promise<Route>;
   commands?: ShellCommand[]; session?: Session; status?: ReactNode;
   applications?: Applications; rail?: Rail; onActiveRoute?: (route: Route) => void;
-  search?: (text: string) => Promise<{ id: string; label: string; detail?: string; open: () => void }[]>;
+  searchBackend?: SearchSource;
+  searchKnowledge?: SearchSource;
   onLanguage?: (id: string) => unknown;
 }) {
   const appearance = useTheme();
@@ -159,9 +161,9 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       if (options.link) { if (stackRef.current.length) restoreHash(); else showMain(home, { replace: true }); }
       return;
     }
-    const source = options.from ? routeOf(options.from) : undefined;
+    const source = options.from ? routeOf(options.from) : options.ifCurrent ? stackRef.current.at(-1)?.route : undefined;
     if (options.from && !source) return;
-    if (options.ifCurrent && (!source || keyOf(source) !== keyOf(options.ifCurrent))) return;
+    if (options.ifCurrent && (!source || keyOf(source) !== keyOf(options.ifCurrent) && (!!registry.current.get(source.view)?.documentKey || source.view !== options.ifCurrent.view))) return;
     if (options.window === "popout") { window.open(`${location.pathname}${location.search}${routeToHash(route)}`, "_blank", "noopener"); return; }
     if (options.window === "inspect" || options.window === "beside") { showSide(route); return; }
     if (options.from && options.from === sideRef.current?.id && !route.params?.call) { forget([options.from]); setSide(undefined); }
@@ -312,6 +314,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     try { return JSON.parse(localStorage.getItem(`${storageKey}:sidebar`) ?? "{}") as Record<string, boolean>; } catch { return {}; }
   });
   const pageScope = top ? (scopeOf ? scopeOf(top.route) : layoutScope ?? "") : undefined;
+  const currentApp = applications?.apps.find(app => app.id === (pageScope ?? applications.current));
   const sidebarScope = pageScope ?? "";
   const sidebarCollapsed = !!collapsed[sidebarScope];
   const toggleSidebar = useCallback(() => {
@@ -323,23 +326,36 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     });
   }, [compact, sidebarScope, storageKey]);
   const hasNavigation = pageScope !== undefined && (nav.length > 0 || !!navigation);
+  const builtInCommands: ShellCommand[] = [
+    ...(hasNavigation ? [{ id: "shell:navigation", label: sidebarCollapsed ? t("Show navigation") : t("Hide navigation"), group: t("View"), shortcut: "⌘\\", run: toggleSidebar }] : []),
+    ...([["light", t("Light")], ["dark", t("Dark")], ["system", t("Follow system")]] as const).map(([scheme, label]) => ({ id: `shell:appearance:${scheme}`, label: `${t("Appearance")}: ${label}`, group: t("View"), run: () => appearance.setScheme(scheme) })),
+  ];
+  const search = useSearchController({
+    commands: [...commands, ...builtInCommands],
+    currentApp: currentApp?.title,
+    nav,
+    applications,
+    recent: memory.recent,
+    backend: searchBackend,
+    knowledge: searchKnowledge,
+    open,
+  });
 
   const [typed, setTyped] = useState("");
+  const paletteWindow = useRef<SearchWindow | undefined>(undefined);
   const [searchAttempt, setSearchAttempt] = useState(0);
-  const [recordSearch, setRecordSearch] = useState<{ source: RecordSearch; text: string; attempt: number; hits?: SearchHit[]; error?: string }>();
-  const prefix = paletteScopes.find(scope => typed.trimStart().startsWith(scope)), scoped = !!prefix, commandsOnly = prefix === ">";
-  const searching = paletteOpen && !!search && !commandsOnly && (scoped ? typed.trim().length >= 1 : typed.trim().length >= 2);
-  const answer = searching && recordSearch?.source === search && recordSearch.text === typed && recordSearch.attempt === searchAttempt ? recordSearch : undefined;
-  const found = answer?.hits ?? [];
-  const searchPending = searching && answer?.hits === undefined && answer?.error === undefined;
+  const [searchResult, setSearchResult] = useState<{ text: string; attempt: number; answer?: SearchAnswer }>();
+  const searching = paletteOpen && (typed.trim() === "" || search.ready(typed));
+  const answer = searching && searchResult?.text === typed && searchResult.attempt === searchAttempt ? searchResult.answer : undefined;
+  const searchPending = searching && answer === undefined;
   useEffect(() => {
-    if (!searching || !search) { setRecordSearch(undefined); return; }
+    if (!searching) { setSearchResult(undefined); return; }
     let live = true;
-    setRecordSearch(undefined);
+    setSearchResult(undefined);
     const wait = setTimeout(() => {
-      void search(typed).then((hits) => { if (live) setRecordSearch({ source: search, text: typed, attempt: searchAttempt, hits }); })
-        .catch((error) => { if (live) setRecordSearch({ source: search, text: typed, attempt: searchAttempt, error: error instanceof Error ? error.message : String(error) }); });
-    }, 200);
+      void search.search(typed).then((next) => { if (live) setSearchResult({ text: typed, attempt: searchAttempt, answer: next }); })
+        .catch((error) => { if (live) setSearchResult({ text: typed, attempt: searchAttempt, answer: { groups: [], errors: [error instanceof Error ? error.message : String(error)] } }); });
+    }, typed.trim() ? 200 : 0);
     return () => { live = false; clearTimeout(wait); };
   }, [search, typed, searching, searchAttempt]);
 
@@ -357,7 +373,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   const leave = useCallback((run: () => void) => guard(allPanels(), run), [guard, allPanels]);
   const activeKey = top ? routeKey(top.route) : undefined;
-  const currentApp = applications?.apps.find(app => app.id === pageScope);
   const pinnedApps = (applications?.apps ?? []).filter((a) => memory.favorites.includes(a.id));
   const onRailRoute = (route?: Route) => !!route && !!top && routeKey(route) === routeKey(top.route);
   type RailItem = { id: string; label: string; icon: ReactNode; badge?: number; active?: boolean; run: () => void };
@@ -377,11 +392,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const sideView = side ? byId.get(side.route.view) : undefined;
   const sideTitle = side ? titles[side.id] ?? sideView?.title(side.route.params ?? {}) ?? t("Details") : "";
   const fullRoute = (route: Route): Route => { const { inspect: _inspect, ...params } = route.params ?? {}; return Object.keys(params).length ? { ...route, params } : { view: route.view }; };
-  const builtInCommands: ShellCommand[] = [
-    ...(hasNavigation ? [{ id: "shell:navigation", label: sidebarCollapsed ? t("Show navigation") : t("Hide navigation"), group: t("View"), shortcut: "⌘\\", run: toggleSidebar }] : []),
-    ...([["light", t("Light")], ["dark", t("Dark")], ["system", t("Follow system")]] as const).map(([scheme, label]) => ({ id: `shell:appearance:${scheme}`, label: `${t("Appearance")}: ${label}`, group: t("View"), run: () => appearance.setScheme(scheme) })),
-  ];
-
   const sidebar = hasNavigation && (
     <Sidebar app={currentApp} product={product} productIcon={productIcon} nav={nav} navigation={navigation} active={activeKey}
       resource={!!top && claims.includes(top.id)} slot={setSidebarSlot}
@@ -393,6 +403,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   return (
     <WorkspaceContext.Provider value={workspace}>
+      <SearchContext.Provider value={search}>
       <div className={cn("grid h-dvh w-full min-w-0 max-w-full overflow-hidden bg-background text-foreground",
         compact ? rail ? "grid-rows-[40px_minmax(0,1fr)_48px]" : "grid-rows-[40px_minmax(0,1fr)]" : rail ? "grid-cols-[var(--rail-width)_auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)]")}>
         {!compact && rail && (
@@ -405,6 +416,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
             <div className="mt-auto flex flex-col items-center gap-1 pt-2">
               {notificationsItem && <RailButton {...notificationsItem} />}
               {rail.assist && <RailButton id="assist" label={t("AIP Assist")} icon={<Sparkles />} active={onRailRoute(rail.assist)} run={() => open(rail.assist!)} />}
+              {rail.help && <RailButton id="help" label={t("Help")} icon={<CircleHelp />} active={onRailRoute(rail.help)} run={() => open(rail.help!)} />}
               {sessionMenu}
             </div>
           </aside>
@@ -472,63 +484,28 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </nav>
         )}
       </div>
-      <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")} filter={(value, search, keywords) => defaultFilter(value, paletteScopes.some(scope => search.startsWith(scope)) ? search.slice(1).trim() : search, keywords)}
+      <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")} filter={(value, search, keywords) => defaultFilter(value, searchScopes.some(scope => search.startsWith(scope)) ? search.slice(1).trim() : search, keywords)}
         overlayClassName="fixed inset-0 z-40 bg-overlay"
         contentClassName="fixed left-1/2 top-[14%] z-50 w-[min(600px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-surface text-foreground shadow-lg">
         <div className="flex items-center gap-2 border-b border-border px-3"><Search className="size-4 shrink-0 text-muted" />
-          <Command.Input value={typed} onValueChange={setTyped} placeholder={t("Search, or type > commands, @ members, # projects, : object types")} className="h-11 w-full bg-transparent text-base outline-none" /></div>
+          <Command.Input value={typed} onValueChange={setTyped} onKeyDown={event => { if (event.key === "Enter") paletteWindow.current = event.metaKey || event.ctrlKey ? "beside" : undefined; }} placeholder={t("Search, or type > commands, @ members, # projects, : object types")} className="h-11 w-full bg-transparent text-base outline-none" /></div>
         {searchPending && <p role="status" className="px-3 py-2 text-sm text-muted">{t("Searching records…")}</p>}
-        {answer?.error !== undefined && <div role="alert" className="grid gap-1 border-b border-border px-3 py-2 text-sm">
-          <p className="text-danger">{t("Record search failed.")} {answer.error}</p>
+        {!!answer?.errors.length && <div role="alert" className="grid gap-1 border-b border-border px-3 py-2 text-sm">
+          <p className="text-danger">{t("Search failed.")} {answer.errors.join(" ")}</p>
           <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => setSearchAttempt(attempt => attempt + 1)}>{t("Retry")}</Button>
         </div>}
         <Command.List className="max-h-[min(420px,60dvh)] overflow-auto p-1">
-          {!searchPending && answer?.error === undefined && <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>}
-          {[...commands, ...builtInCommands].length > 0 && (!scoped || commandsOnly) && (
-            <Command.Group heading={t("Commands")} className={paletteGroup}>
-              {[...commands, ...builtInCommands].map((c) => (
-                <Command.Item key={c.id} value={`${c.group ?? ""} ${c.label}`} className={paletteItem}
-                  onSelect={() => { setPaletteOpen(false); c.run(); }}>
-                  {c.label}{(c.shortcut || c.group) && <span className="ml-auto text-xs text-muted">{c.shortcut ?? c.group}</span>}
+          {!searchPending && answer && answer.groups.length === 0 && <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>}
+          {answer?.groups.map(group => (
+            <Command.Group key={group.kind} heading={group.label} className={paletteGroup}>
+              {group.items.map(result => (
+                <Command.Item key={result.id} value={`${group.kind} ${typed} ${result.label} ${result.detail ?? ""} ${result.id}`} className={paletteItem} disabled={!!result.disabled} title={result.disabled}
+                  onSelect={() => { const window = paletteWindow.current; paletteWindow.current = undefined; setPaletteOpen(false); search.open(result, window); }}>
+                  {result.icon}{result.label}{result.detail && <span className="ml-auto truncate pl-3 text-xs text-muted">{result.detail}</span>}
                 </Command.Item>
               ))}
             </Command.Group>
-          )}
-          {nav.length > 0 && pageScope && !scoped && nav.map((section) => (
-            <Command.Group key={section.label} heading={currentApp ? `${currentApp.title} · ${section.label}` : section.label} className={paletteGroup}>
-              {navigationLinks(section.items).map((item) => (
-                <Command.Item key={routeKey(item.route)} value={`${section.label} ${item.label}`} className={paletteItem}
-                  onSelect={() => { open(item.route); setPaletteOpen(false); }}>{item.icon}{item.label}</Command.Item>
-              ))}
-            </Command.Group>
           ))}
-          {applications && applications.apps.length > 0 && !scoped && (
-            <Command.Group heading={t("Applications")} className={paletteGroup}>
-              {applications.apps.map((a) => (
-                <Command.Item key={a.id} value={`app ${a.title} ${applications.categories.find((c) => c.id === a.category)?.label ?? ""}`} className={paletteItem}
-                  onSelect={() => { applications.onSelect(a.id); setPaletteOpen(false); }}>{a.icon}{a.title}
-                  <span className="ml-auto text-xs text-muted">{applications.categories.find((c) => c.id === a.category)?.label}</span></Command.Item>
-              ))}
-            </Command.Group>
-          )}
-          {(["resource", "object"] as const).map(group => {
-            const hits = found.filter(hit => (hit.group ?? "resource") === group);
-            return hits.length > 0 && !commandsOnly && <Command.Group key={group} heading={group === "object" ? t("Objects") : t("Resources")} className={paletteGroup}>
-              {hits.map((hit) => (
-                <Command.Item key={hit.id} value={`record ${answer!.text} ${hit.label} ${hit.id}`} className={paletteItem}
-                  onSelect={() => { hit.open(); setPaletteOpen(false); }}>{hit.label}{hit.detail && <span className="ml-auto font-mono text-xs text-muted">{hit.detail}</span>}</Command.Item>
-              ))}
-            </Command.Group>;
-          })}
-          {memory.recent.length > 0 && !typed.trim() && (
-            <Command.Group heading={t("Recent")} className={paletteGroup}>
-              {memory.recent.slice(0, 8).map((entry) => (
-                <Command.Item key={routeKey(entry.route)} value={`recent ${entry.title} ${routeKey(entry.route)}`} className={paletteItem}
-                  onSelect={() => { open(entry.route); setPaletteOpen(false); }}><Clock />{entry.title}
-                  {entry.app && <span className="ml-auto text-xs text-muted">{applications?.apps.find(app => app.id === entry.app)?.title}</span>}</Command.Item>
-              ))}
-            </Command.Group>
-          )}
         </Command.List>
       </Command.Dialog>
       <Dialog open={shortcutsOpen} title={t("Keyboard shortcuts")} onOpenChange={setShortcutsOpen}>
@@ -554,6 +531,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         </div>
       </Dialog>
       <Toaster position="bottom-right" toastOptions={{ className: "!rounded-md !border-border !bg-surface !text-foreground !text-sm !shadow-md" }} />
+      </SearchContext.Provider>
     </WorkspaceContext.Provider>
   );
 }
