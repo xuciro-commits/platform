@@ -23,6 +23,9 @@ func DecodeContent(raw []byte) (platform.PackageDescriptor, error) {
 	if descriptor.ID == "" && descriptor.Version == "" && descriptor.Namespace == "" {
 		return platform.PackageDescriptor{}, fmt.Errorf("The package file does not describe a platform package")
 	}
+	if descriptor.Blueprint == nil {
+		return platform.PackageDescriptor{}, fmt.Errorf("Marketplace consumes product versions only; create a version from a saved release candidate")
+	}
 	return descriptor, nil
 }
 
@@ -82,6 +85,25 @@ func (d *Owner) decidePackageSource(_ platform.Caller, s *pb.Submission) (func(*
 
 func (d *Owner) sourceIndex(index *platform.PackageIndex) (*platform.PackageIndex, error) {
 	out := &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+	appendDescriptor := func(descriptor platform.PackageDescriptor) error {
+		if prior, found := out.Find(descriptor.ID, descriptor.Version); found {
+			a, _ := json.Marshal(prior)
+			b, _ := json.Marshal(descriptor)
+			if !bytes.Equal(a, b) {
+				return fmt.Errorf("product %s@%s has conflicting contents", descriptor.ID, descriptor.Version)
+			}
+			return nil
+		}
+		out.Packages = append(out.Packages, descriptor)
+		return nil
+	}
+	if d.host != nil {
+		for _, version := range d.host.ProductVersions() {
+			if err := appendDescriptor(version.Descriptor); err != nil {
+				return index, err
+			}
+		}
+	}
 	d.mu.Lock()
 	sources := make([]platform.PackageSource, 0, len(d.packageSources))
 	for _, source := range d.packageSources {
@@ -94,15 +116,9 @@ func (d *Owner) sourceIndex(index *platform.PackageIndex) (*platform.PackageInde
 		if err != nil {
 			return index, err
 		}
-		if prior, found := out.Find(source.ID, source.Version); found {
-			a, _ := json.Marshal(prior)
-			b, _ := json.Marshal(offer.Descriptor)
-			if !bytes.Equal(a, b) {
-				return index, fmt.Errorf("package %s@%s has conflicting contents", source.ID, source.Version)
-			}
-			continue
+		if err := appendDescriptor(offer.Descriptor); err != nil {
+			return index, err
 		}
-		out.Packages = append(out.Packages, offer.Descriptor)
 	}
 	slices.SortFunc(out.Packages, func(a, b platform.PackageDescriptor) int {
 		if a.ID != b.ID {

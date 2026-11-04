@@ -9,12 +9,14 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
+	ontology "platformserver/services/ontology"
 )
 
 func (b *Build) dispatchEntity() platform.Entity {
 	return platform.Entity{Type: platform.DispatchType, Title: "Device dispatch", Plural: "Device dispatches", Model: platform.DispatchRun{}, Display: "subject",
 		Description: "Declared commands, durable delivery attempts, status reads and authorized human intervention. Control loops and safety interlocks remain local to the equipment.",
-		Scope: integrationScopeWithParticipants(func(value any) []string {
+		Scope: dataowner.ScopeWithParticipants(func(value any) []string {
 			run := value.(platform.DispatchRun)
 			return append([]string{run.Member}, b.host.(platform.ConfirmationHost).Holding(ID, run.Definition.ReviewerRole)...)
 		}), Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"reason", "input", "request", "source", "connection", "observation", "device", "attempts", "readback", "definition", "assets", "compensationCommand", "compensationRequest"}}}}
@@ -68,7 +70,7 @@ func (b *Build) checkDispatch(spec *platform.Dispatch, object Object, action Act
 	used := map[string]bool{}
 	scope := ruleSpec(object, action, action.Transaction.Reads)
 	for _, set := range spec.Payload {
-		if !Named(set.Field) || used[set.Field] || set.Field == "id" || set.Field == "key" {
+		if !ontology.Named(set.Field) || used[set.Field] || set.Field == "id" || set.Field == "key" {
 			return fmt.Errorf("Dispatch parameters must have distinct declared names")
 		}
 		used[set.Field] = true
@@ -124,20 +126,20 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		return out, fmt.Errorf("Dispatch command is not declared")
 	}
 	writeback := func(id string) (platform.AssetRef, error) {
-		prospective, selected, err := b.prospectiveIntegration(platform.AssetWriteback, id)
+		prospective, selected, err := b.data.Prospective(platform.AssetWriteback, id, b.jointDeclarations)
 		if err != nil {
 			return platform.AssetRef{}, err
 		}
-		var fixed Writeback
+		var fixed dataowner.Writeback
 		if selected {
-			fixed = prospective.(Writeback)
+			fixed = prospective.(dataowner.Writeback)
 		} else {
-			record, known := b.host.Record(WritebackType + "/" + id)
-			w, valid := record.(Writeback)
+			record, known := b.host.Record(dataowner.WritebackType + "/" + id)
+			w, valid := record.(dataowner.Writeback)
 			if !known || !valid {
 				return platform.AssetRef{}, fmt.Errorf("Dispatch writeback is unavailable")
 			}
-			fixed, err = b.ExecutionWriteback(w)
+			fixed, err = b.data.ExecutionWriteback(w)
 			if err != nil {
 				return platform.AssetRef{}, err
 			}
@@ -174,12 +176,12 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		}
 		out.CompensateWriteback = &ref
 	}
-	record, known := b.host.Record(ConnectionType + "/" + spec.Target)
-	connection, valid := record.(Connection)
+	record, known := b.host.Record(dataowner.ConnectionType + "/" + spec.Target)
+	connection, valid := record.(dataowner.Connection)
 	if !known || !valid {
 		return out, fmt.Errorf("Dispatch target connection is unavailable")
 	}
-	connection, err = b.ConnectionConfiguration(connection)
+	connection, err = b.data.ConnectionConfiguration(connection)
 	if err != nil {
 		return out, err
 	}
@@ -188,21 +190,21 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 	}
 	out.Target = platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: connection.Name}
 	if spec.Readback.Source != "" {
-		prospective, selected, err := b.prospectiveIntegration(platform.AssetSource, spec.Readback.Source)
+		prospective, selected, err := b.data.Prospective(platform.AssetSource, spec.Readback.Source, b.jointDeclarations)
 		if err != nil {
 			return out, err
 		}
-		var source Source
+		var source dataowner.Source
 		if selected {
-			source = prospective.(Source)
+			source = prospective.(dataowner.Source)
 		} else {
-			record, known := b.host.Record(SourceType + "/" + spec.Readback.Source)
+			record, known := b.host.Record(dataowner.SourceType + "/" + spec.Readback.Source)
 			var valid bool
-			source, valid = record.(Source)
+			source, valid = record.(dataowner.Source)
 			if !known || !valid {
 				return out, fmt.Errorf("Dispatch status source is unavailable")
 			}
-			source, err = b.ExecutionSource(source)
+			source, err = b.data.ExecutionSource(source)
 			if err != nil {
 				return out, err
 			}
@@ -217,20 +219,20 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		out.Source = &platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: source.Name}
 	}
 	if spec.Readback.Observation != "" {
-		prospective, selected, err := b.prospectiveIntegration(platform.AssetObservation, spec.Readback.Observation)
+		prospective, selected, err := b.data.Prospective(platform.AssetObservation, spec.Readback.Observation, b.jointDeclarations)
 		if err != nil {
 			return out, err
 		}
 		var definition platform.ObservationDefinition
 		if selected {
-			definition, err = b.observationDefinition(prospective.(Observation))
+			definition, err = b.data.ObservationDefinition(prospective.(dataowner.Observation))
 		} else {
-			record, known := b.host.Record(ObservationType + "/" + spec.Readback.Observation)
-			observation, valid := record.(Observation)
+			record, known := b.host.Record(dataowner.ObservationType + "/" + spec.Readback.Observation)
+			observation, valid := record.(dataowner.Observation)
 			if !known || !valid {
 				return out, fmt.Errorf("Dispatch observation is unavailable")
 			}
-			definition, err = b.ExecutionObservation(observation)
+			definition, err = b.data.ExecutionObservation(observation)
 		}
 		if err != nil {
 			return out, err
@@ -287,7 +289,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 			}
 		}
 		if objectHasIntegrations(object) {
-			if err := mapDispatchIntegrations(&object, b.integrationName); err != nil {
+			if err := mapDispatchIntegrations(&object, b.data.IntegrationName); err != nil {
 				return nil, err
 			}
 			var err error
@@ -395,7 +397,7 @@ func (b *Build) txnEffectBindings(txn *platform.BusinessTxn) (map[string]platfor
 		if failure != nil || step.Effect == nil {
 			return
 		}
-		name, err := b.integrationName(platform.AssetWriteback, step.Effect.Writeback)
+		name, err := b.data.IntegrationName(platform.AssetWriteback, step.Effect.Writeback)
 		if err != nil {
 			failure = err
 			return
@@ -413,7 +415,7 @@ func (b *Build) dispatchSchemaObject(object Object) (Object, error) {
 	if err := json.Unmarshal(platform.Raw(object), &portable); err != nil {
 		return object, err
 	}
-	if err := mapDispatchIntegrations(&portable, b.integrationName); err != nil {
+	if err := mapDispatchIntegrations(&portable, b.data.IntegrationName); err != nil {
 		return object, err
 	}
 	return portable, nil

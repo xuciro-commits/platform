@@ -11,6 +11,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	ontology "platformserver/services/ontology"
 )
 
 func (b *Build) checkCreates(o Object) error {
@@ -77,7 +78,7 @@ func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, pare
 	}
 	v := reflect.New(reflect.TypeOf(related.Model)).Elem()
 	v.Field(0).Set(reflect.ValueOf(platform.Record{ID: id}))
-	if err := assign(v.FieldByName(GoName(cr.Via)), parent); err != nil {
+	if err := assign(v.FieldByName(ontology.GoName(cr.Via)), parent); err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	for _, set := range cr.Sets {
@@ -99,7 +100,7 @@ func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, pare
 			}
 			x = given
 		}
-		if err := assign(v.FieldByName(GoName(set.Field)), x); err != nil {
+		if err := assign(v.FieldByName(ontology.GoName(set.Field)), x); err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{object} cannot set {field}: {why}", cr.Object, set.Field, err.Error())
 		}
 	}
@@ -265,16 +266,16 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	if err := b.checkValueTypeFields(o.Fields); err != nil {
 		return err
 	}
-	if err := CheckFields(o.Fields, b.fieldKnown); err != nil {
+	if err := ontology.CheckFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
-	if err := checkDataSources(o); err != nil {
+	if err := ontology.CheckDataSources(o); err != nil {
 		return err
 	}
-	if err := CheckEnterpriseUse(o); err != nil {
+	if err := ontology.CheckEnterpriseUse(o); err != nil {
 		return err
 	}
-	if err := checkProcess(o, b.conditionLookup); err != nil {
+	if err := ontology.CheckProcess(o, ID, TypeOf(o.Name), Builder, User, FunctionCallType, b.conditionLookup); err != nil {
 		return err
 	}
 	if err := b.checkObjectRules(o, engines...); err != nil {
@@ -289,10 +290,10 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	if err := b.checkVersioning(o); err != nil {
 		return err
 	}
-	if err := checkFormulas(o.Fields); err != nil {
+	if err := ontology.CheckFormulas(o.Fields); err != nil {
 		return err
 	}
-	if err := checkScope(o); err != nil {
+	if err := ontology.CheckScope(o); err != nil {
 		return err
 	}
 	if err := b.checkTransactions(o, engines...); err != nil {
@@ -301,7 +302,7 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	if err := b.checkCreates(o); err != nil {
 		return err
 	}
-	if err := b.checkActionPosts(o); err != nil {
+	if err := ontology.CheckActionPosts(o); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	if err := b.checkPosts(o); err != nil {
@@ -313,48 +314,19 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	if err := b.checkPresentation(o); err != nil {
 		return err
 	}
-	return checkAccess(o)
-}
-
-func checkDataSources(o Object) error {
-	seen := map[string]bool{}
-	fields := map[string]bool{}
-	for _, field := range o.Fields {
-		fields[field.Name] = !field.ReadOnly && field.AliasOf == "" && field.Formula == "" && field.FormulaExpr == nil
-	}
-	for _, source := range o.DataSources {
-		identity := source.Kind + "/" + source.Source
-		if !slices.Contains([]string{"source", "pipeline", "dataset"}, source.Kind) || source.Source == "" || source.Key == "" || len(source.Columns) == 0 || seen[identity] {
-			return fmt.Errorf("data source needs a unique dataset, source or pipeline, key column, and mapped columns")
-		}
-		seen[identity] = true
-		columns := map[string]bool{}
-		attributes := map[string]bool{}
-		for _, column := range source.Columns {
-			if column.Column == "" || column.Attribute == "" || !fields[column.Attribute] || columns[column.Column] || attributes[column.Attribute] ||
-				column.Attribute == "id" {
-				return fmt.Errorf("data source %s has an unknown, repeated or invalid column mapping", identity)
-			}
-			columns[column.Column] = true
-			attributes[column.Attribute] = true
-		}
-	}
-	return nil
+	return ontology.CheckAccess(o, Builder, User)
 }
 
 func (b *Build) checkShape(o Object) error {
 	if len(o.Implements) == 0 && o.Extends == "" {
 		return nil
 	}
-	var declared []platform.Interface
-	if len(o.Implements) > 0 && b.host != nil {
-		declared = b.host.Interfaces()
-	}
-	return CheckObjectShape(o, Entity(o), declared, b.fieldKnown, b.lookupEntity)
+	declared := b.declaredInterfaces()
+	return ontology.CheckObjectShape(o, ID, TypeOf(o.Name), Entity(o), declared, b.fieldKnown, b.lookupEntity)
 }
 
 func (b *Build) checkName(name, id string) error {
-	if !Named(name) {
+	if !ontology.Named(name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", name)
 	}
 	other, taken, err := b.taken(name, id)
@@ -451,13 +423,12 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	if creation == nil && o.Numbering != nil {
 		creation, creationError = compileLegacyNumbering(o)
 	}
-	entity := CompileObjectShape(o)
+	entity := ontology.CompileObjectShape(o, ID, Builder)
 	entity.DataSources = slices.Clone(o.DataSources)
 	model := entity.Model
-	std, scope, roles := access(o)
+	std, scope, roles := ontology.CompileAccess(o, Builder, User)
 	entity.Standard, entity.Scope = std, scope
 	entity.Lifecycle = lifecycle(o, roles, creates, lookup)
-	entity.PropertyBindings = propertyBindings(o.Fields)
 	entity.ComputeAt = computeRulesOf(o, lookup)
 	entity.Validate = validateOf(o, model, lookup)
 	entity.ValidateAt = numberingOf(o, model)

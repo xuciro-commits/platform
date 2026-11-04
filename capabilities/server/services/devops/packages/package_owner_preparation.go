@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
 )
 
@@ -118,11 +119,11 @@ func Preparation(id, version string, blueprint platform.PackageBlueprint, instal
 		}
 		switch asset.Ref.Kind {
 		case platform.AssetConnection:
-			var def build.ConnectionDefinition
-			if err := json.Unmarshal(asset.Body, &def); err != nil {
+			var def dataowner.ConnectionDefinition
+			if err := dataowner.DecodeDescriptor(asset.Body, &def); err != nil {
 				return PackagePreparation{}, err
 			}
-			state, err := source.Find(build.ConnectionType, asset.Ref.Name)
+			state, err := source.Find(dataowner.ConnectionType, asset.Ref.Name)
 			if err != nil {
 				return PackagePreparation{}, err
 			}

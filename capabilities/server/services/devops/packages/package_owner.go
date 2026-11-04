@@ -223,6 +223,11 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 		out.OK, out.Problems = false, []string{err.Error()}
 		return out
 	}
+	if p.Blueprint == nil {
+		out.OK = false
+		out.Problems = append(out.Problems, "Marketplace installs product versions only; create a version from a saved release candidate")
+		return out
+	}
 	if p.Blueprint != nil {
 		var owner build.ConstructionDrafts
 		for _, app := range d.host.Apps() {
@@ -492,14 +497,26 @@ func (d *Owner) PackageViews() []platform.PackageView {
 	out := []platform.PackageView{}
 	index, indexErr := d.packageIndex()
 	installed := d.packagesOf()
+	products := map[string]platform.ProductVersionView{}
+	if d.host != nil {
+		for _, version := range d.host.ProductVersions() {
+			products[version.Product+"@"+version.Version] = version
+		}
+	}
 	listed := map[string]bool{}
 	for _, descriptor := range index.Packages {
+		if descriptor.Blueprint == nil {
+			continue
+		}
 		pre := d.precheck(descriptor, index)
 		if indexErr != nil {
 			pre.OK = false
 			pre.Problems = append(pre.Problems, indexErr.Error())
 		}
 		view := platform.PackageView{Descriptor: descriptor, Precheck: pre, Plan: d.installationPlan(descriptor, index), Source: "index"}
+		if product, found := products[descriptor.ID+"@"+descriptor.Version]; found {
+			view.Source, view.Product, view.Candidate = "product", product.Product, product.Candidate
+		}
 		d.mu.Lock()
 		for digest, source := range d.packageSources {
 			if source.ID == descriptor.ID && source.Version == descriptor.Version {

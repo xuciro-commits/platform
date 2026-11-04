@@ -139,7 +139,7 @@ func (e *Enterprise) Restore(raw json.RawMessage) error {
 }
 
 func (e *Enterprise) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "Organisation", Version: "1", Actions: platform.NewCatalog(directoryActions()...),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: platform.NewCatalog(directoryActions()...),
 		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished}, Everyone: []string{ReadModel, ReadMetamodel},
 		ReadSources: map[string]string{ReadOrganization: "record", ReadModel: "record", ReadMetamodel: "record", ReadPublished: "record"}}
 }

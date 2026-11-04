@@ -10,6 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 )
 
 type releaseExecution struct {
@@ -52,6 +53,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	bound := app.(*Build)
 	bound.installed = map[string]platform.Entity{}
 	bound.queries = map[string]Query{}
+	bound.interfaces = map[string]InterfaceRecord{}
 	bound.jointEntities = map[string]platform.EntityInfo{}
 	bound.jointMode = true
 	for _, asset := range assets {
@@ -61,6 +63,13 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 				return nil, err
 			}
 			bound.queries[query.Name] = query
+		}
+		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetInterface {
+			shape, err := interfaceKind.fromAsset(bound, asset)
+			if err != nil {
+				return nil, err
+			}
+			bound.interfaces[shape.Name] = shape
 		}
 		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetAgent {
 			agent, err := decodeAgentAsset(asset)
@@ -109,7 +118,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			if err := json.Unmarshal(asset.Body, &object); err != nil {
 				return nil, err
 			}
-			if err := mapDispatchIntegrations(&object, b.integrationID); err != nil {
+			if err := mapDispatchIntegrations(&object, b.data.IntegrationID); err != nil {
 				return nil, err
 			}
 			entity := bound.entity(object)
@@ -161,7 +170,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 	if err != nil {
 		return nil, err
 	}
-	processes, err := b.processInventory()
+	processes, err := b.automation.Inventory()
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +257,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 					rowKind = testPlanKind(row.(TestPlan))
 				}
 				add(rowKind, head.ID, head.Name)
-				if ValueIntegrationKind(rowKind) {
+				if dataowner.IsIntegration(rowKind) {
 					integrations[JointDraftRef{Kind: rowKind, ID: head.ID}] = row
 				}
 			}
@@ -297,25 +306,22 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 				i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == draft.ID })
 				o := objects[i]
 				o.Published = published(o)
-				assets, err = releaseAssets([]Object{o}, nil, nil, nil, b.Manifest().Version)
+				assets, err = b.releaseAssets([]Object{o}, nil, nil, nil, b.Manifest().Version)
 			case platform.AssetPage:
 				i := slices.IndexFunc(pages, func(p Page) bool { return p.ID == draft.ID })
 				p := pages[i]
 				p.Published = published(p)
-				assets, err = releaseAssets(nil, []Page{p}, nil, nil, b.Manifest().Version)
+				assets, err = b.releaseAssets(nil, []Page{p}, nil, nil, b.Manifest().Version)
 			case platform.AssetApp:
 				i := slices.IndexFunc(apps, func(a Application) bool { return a.ID == draft.ID })
 				a := apps[i]
 				a.Published = published(a)
-				assets, err = releaseAssets(nil, nil, []Application{a}, nil, b.Manifest().Version)
+				assets, err = b.releaseAssets(nil, nil, []Application{a}, nil, b.Manifest().Version)
 			case platform.AssetFlow:
 				i := slices.IndexFunc(processes, func(p Process) bool { return p.ID == draft.ID })
 				p := processes[i]
-				p.Version++
-				p.Published = published(p)
-				p.Versions = append(slices.Clone(p.Versions), p.Published)
-				p.State = "published"
-				assets, err = releaseAssets(nil, nil, nil, []Process{p}, b.Manifest().Version)
+				asset, problem := b.automation.DraftAsset(p, b.Manifest().Version)
+				assets, err = []platform.ReleaseAsset{asset}, problem
 			case platform.AssetAgent:
 				agent, found := platform.Get[Agent](caller, draft.ID)
 				if !found || agent.Archived {
@@ -326,8 +332,8 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 				assets, err = []platform.ReleaseAsset{asset}, problem
 			default:
 				if record, ok := integrations[draft]; ok {
-					_, version, _, _ := integrationMetadata(record)
-					asset, problem := b.integrationAsset(draft.Kind, record, version+1)
+					_, version, _, _ := dataowner.IntegrationMetadata(record)
+					asset, problem := b.data.Asset(draft.Kind, record, version+1)
 					assets, err = []platform.ReleaseAsset{asset}, problem
 					break
 				}
@@ -337,7 +343,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 					if !found || plan.Archived {
 						return nil, fmt.Errorf("saved evaluation plan is unavailable")
 					}
-					_, functions, _, functionRef, _, problem := functionKind.draftAssets(b, string(plan.Function))
+					_, functions, _, functionRef, _, problem := b.functions.DraftAssets(string(plan.Function))
 					if problem != nil {
 						return nil, problem
 					}

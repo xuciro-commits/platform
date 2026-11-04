@@ -9,6 +9,8 @@ import (
 	"platformkernel/kernel"
 
 	"platformserver/platform"
+	functionauthoring "platformserver/services/functions/authoring"
+	ontology "platformserver/services/ontology"
 	"reflect"
 	"slices"
 	"strings"
@@ -31,7 +33,7 @@ func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platfo
 			objects = append(objects, object)
 		}
 	}
-	generated, err := releaseAssets(objects, nil, nil, nil, b.Manifest().Version)
+	generated, err := b.releaseAssets(objects, nil, nil, nil, b.Manifest().Version)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +55,7 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 	if err != nil {
 		return nil, err
 	}
-	processes, err := b.processInventory()
+	processes, err := b.automation.Inventory()
 	if err != nil {
 		return nil, err
 	}
@@ -108,45 +110,10 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 	return out, nil
 }
 
-func portableConnectionDraft(asset platform.ReleaseAsset) (Connection, error) {
-	var definition ConnectionDefinition
-	if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
-		return Connection{}, err
-	}
-	return Connection{Name: definition.Name, Title: definition.Title, Kind: definition.Kind, Marking: definition.Marking, State: "draft"}, nil
-}
-
-const SchemaProposalReview = FunctionCallType + ".review"
-
 type proposalConsumption struct {
 	run        FunctionRun
 	binding    platform.ProposalAdoption
 	amendments json.RawMessage
-}
-
-func checkActionAdoption(a Action) error {
-	if a.Adoption == nil {
-		return nil
-	}
-	if a.Transaction == nil {
-		return fmt.Errorf("Proposal adoption needs the original business transaction")
-	}
-	if err := a.Adoption.Check(); err != nil {
-		return err
-	}
-	if a.Adoption.Function.App != "" && a.Adoption.Function.App != ID {
-		return fmt.Errorf("Proposal adoption cannot cross record authorities")
-	}
-	input := slices.IndexFunc(a.Inputs, func(in Input) bool { return in.Name == a.Adoption.Input })
-	if input < 0 || a.Inputs[input].Type != "reference" || a.Inputs[input].Ref != FunctionCallType || !a.Inputs[input].Required {
-		return fmt.Errorf("Adoption needs a required reference input to the retained function call")
-	}
-	for _, mapping := range a.Adoption.Mapping {
-		if !slices.ContainsFunc(a.Inputs, func(in Input) bool { return in.Name == mapping.Input }) {
-			return fmt.Errorf("Proposal mapping names an undeclared action input")
-		}
-	}
-	return nil
 }
 
 func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (*proposalConsumption, *kernel.Error) {
@@ -210,7 +177,7 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 		return fail("The retained proposal output is invalid")
 	}
 	policy := run.Contract.Proposal
-	if proposalNeedsHandover(run) && !c.Holds(ID, policy.HandoffRole) {
+	if functionauthoring.NeedsHandover(run) && !c.Holds(ID, policy.HandoffRole) {
 		checkpoint := action.Approval != nil && slices.ContainsFunc(action.Approval.Levels, func(level platform.ApprovalLevel) bool { return level.AppRole == policy.HandoffRole })
 		if !checkpoint {
 			return fail("This proposal needs its designated reviewer or approval checkpoint")
@@ -226,18 +193,6 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 		}
 	}
 	return &proposalConsumption{run: run, binding: binding, amendments: platform.Raw(amendments)}, nil
-}
-func proposalNeedsHandover(run FunctionRun) bool {
-	p := run.Contract.Proposal
-	if p == nil || p.HandoffRole == "" {
-		return false
-	}
-	if p.ConfidenceField == "" {
-		return true
-	}
-	var values map[string]json.RawMessage
-	var confidence float64
-	return json.Unmarshal([]byte(run.Output), &values) != nil || json.Unmarshal(values[p.ConfidenceField], &confidence) != nil || confidence < p.MinimumConfidence
 }
 func (b *Build) finishProposal(c platform.Caller, r *pb.ChangeRecord, p *proposalConsumption, now time.Time) *kernel.Error {
 	if p == nil {
@@ -271,7 +226,7 @@ func (b *Build) finishProposal(c platform.Caller, r *pb.ChangeRecord, p *proposa
 	}
 
 	run.Amendments = p.amendments
-	if proposalNeedsHandover(run) {
+	if functionauthoring.NeedsHandover(run) {
 		if err := c.Assign(r, platform.Assignment{Key: "proposal:" + run.ID, Close: true}); err != nil {
 			return err
 		}
@@ -310,7 +265,7 @@ func proposalEntity(e platform.Entity, info platform.EntityInfo, changed map[str
 		slices.Sort(sources)
 		sources = slices.Compact(sources)
 		for field := range changed {
-			destination := rv.FieldByName("AISources" + GoName(field))
+			destination := rv.FieldByName("AISources" + ontology.GoName(field))
 			if destination.IsValid() && destination.CanSet() {
 				destination.Set(reflect.ValueOf(sources))
 			}
@@ -318,100 +273,6 @@ func proposalEntity(e platform.Entity, info platform.EntityInfo, changed map[str
 		return nil
 	}
 	return e, payload
-}
-
-func (b *Build) submitProposalReview(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		raw, err := c.ReadRecord(FunctionCallType, s.GetTarget().GetId(), now)
-		var visible FunctionRun
-		run, ok := platform.Get[FunctionRun](c, s.GetTarget().GetId())
-		if err != nil || json.Unmarshal(raw, &visible) != nil || visible.Withheld || !ok || run.Contract.Proposal == nil || run.State != "ready" || run.Decision != "pending" || c.ID != run.Member && !c.Holds(ID, run.Contract.Proposal.HandoffRole) && !c.Holds(ID, Builder) {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The pending proposal is not available for review")
-		}
-		var input struct {
-			Decision string `json:"decision"`
-		}
-		if json.Unmarshal(s.GetPayload(), &input) != nil || input.Decision != "rejected" && input.Decision != "expired" || input.Decision == "expired" && (run.ExpiresAt.IsZero() || now.Before(run.ExpiresAt)) {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose rejection, or expiry after the proposal deadline")
-		}
-		return func(r *pb.ChangeRecord) {
-			if input.Decision == "rejected" {
-				fact := platform.BusinessRefusalFact{Level: "rejected", Code: "AI_PROPOSAL_REJECTED", Message: "The reviewer rejected the AI proposal", Translations: map[string]string{"zh-CN": "审核人驳回了 AI 提议"}, Subject: FunctionCallType + "/" + run.ID, Action: s.GetSchema().GetName(), Member: c.ID, At: now.UTC(), Original: raw, Inputs: map[string]json.RawMessage{"decision": platform.Raw(input.Decision)}, Record: FunctionCallType + "/" + run.ID}
-				if err := c.CaptureBusinessRefusal(r, fact); err != nil {
-					c.FailDecision(err)
-					return
-				}
-			}
-			run.Decision = input.Decision
-			run.DecidedBy = c.ID
-			run.DecidedAt = now
-			if proposalNeedsHandover(run) {
-				if err := c.Assign(r, platform.Assignment{Key: "proposal:" + run.ID, Close: true}); err != nil {
-					return
-				}
-			}
-			c.Put(r, run)
-		}, nil
-	})
-}
-
-func checkAdoptionSources(o Object, a Action, lookup func(string) (platform.EntityInfo, bool)) error {
-	if a.Adoption == nil || a.Transaction == nil {
-		return nil
-	}
-	mapped := map[string]bool{}
-	for _, m := range a.Adoption.Mapping {
-		mapped[m.Input] = true
-	}
-	taintedSteps := map[string]bool{}
-	consumesRef := func(ref string) bool {
-		if strings.HasPrefix(ref, "input.") {
-			return mapped[strings.TrimPrefix(ref, "input.")]
-		}
-		if step, ok := strings.CutPrefix(ref, "step."); ok {
-			name, _, _ := strings.Cut(step, ".")
-			return taintedSteps[name]
-		}
-		return mapped[ref]
-	}
-	var consumes func(platform.Expr) bool
-	consumes = func(e platform.Expr) bool {
-		if consumesRef(e.Ref) {
-			return true
-		}
-		for _, arg := range e.Args {
-			if consumes(arg) {
-				return true
-			}
-		}
-		return e.In != nil && consumes(*e.In)
-	}
-	var problem error
-	platform.WalkBusinessTxn(a.Transaction, func(step platform.TxnStep) {
-		for _, change := range step.Changes {
-			if !consumesRef(change.From) && (change.Expr == nil || !consumes(*change.Expr)) {
-				continue
-			}
-			taintedSteps[step.Name] = true
-			source := ""
-			if step.Target.Type == TypeOf(o.Name) {
-				for _, field := range o.Fields {
-					if field.Name == change.Field {
-						source = field.SourceType
-						break
-					}
-				}
-			} else if info, ok := lookup(step.Target.Type); ok {
-				if field, ok := info.Field(change.Field); ok {
-					source = field.SourceType
-				}
-			}
-			if source != "generated" {
-				problem = fmt.Errorf("AI proposal destinations must declare generated provenance")
-			}
-		}
-	})
-	return problem
 }
 
 type CodeDeclarations struct {

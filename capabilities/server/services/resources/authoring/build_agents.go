@@ -7,6 +7,8 @@ import (
 	"platformkernel/kernel"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
+	ontology "platformserver/services/ontology"
 	"slices"
 	"strconv"
 	"strings"
@@ -129,7 +131,7 @@ func (b *Build) checkAgent(a Agent) error {
 }
 
 func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []string) error {
-	if !Named(a.Name) {
+	if !ontology.Named(a.Name) {
 		return fmt.Errorf("The agent name %s must be lower-case letters and digits", a.Name)
 	}
 	if strings.TrimSpace(a.Instructions) == "" || strings.TrimSpace(a.Description) == "" {
@@ -426,7 +428,7 @@ func (b *Build) prepareAgentReleasePublications(assets []platform.ReleaseAsset) 
 		record := rows[index]
 		if frozen.Version <= record.Version {
 			retained, err := b.retainedAgentAsset(asset.Ref, asset.SourceVersion)
-			if err != nil || !equalIntegrationAsset(retained, asset) {
+			if err != nil || !dataowner.EqualAsset(retained, asset) {
 				return nil, fmt.Errorf("retained agent bytes differ")
 			}
 		} else if record.Version != 0 && frozen.Version != record.Version+1 {

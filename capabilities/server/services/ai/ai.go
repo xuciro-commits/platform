@@ -142,7 +142,7 @@ func (a *AI) Restore(raw json.RawMessage) error {
 }
 
 func (a *AI) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits", "ai-training"},
+	return platform.Manifest{Languages: languages, ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits", "ai-training"},
 		ReadSources: map[string]string{"ai-providers": "record", "ai-models": "record", "ai-usage": "record", "ai-limits": "record", "ai-training": "record"},
 		Everyone:    []string{"ai-models", "ai-usage"}, Roles: []string{User},
 		Settings: []platform.Setting{

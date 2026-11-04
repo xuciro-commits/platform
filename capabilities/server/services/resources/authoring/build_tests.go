@@ -9,6 +9,7 @@ import (
 	"platformkernel/kernel"
 
 	"platformserver/platform"
+	ontology "platformserver/services/ontology"
 	"reflect"
 	"slices"
 	"strconv"
@@ -17,7 +18,6 @@ import (
 )
 
 const SampleSetType = "build.sample-set"
-const SchemaSampleSet = SampleSetType + ".publish"
 
 type SampleSetRecord struct {
 	platform.Record
@@ -65,7 +65,7 @@ func (b *Build) sampleSetInventory() ([]SampleSetRecord, error) {
 }
 
 func (b *Build) checkSampleSet(m SampleSetRecord) error {
-	if !Named(m.Name) {
+	if !ontology.Named(m.Name) {
 		return fmt.Errorf("The sample set name must use lower-case letters and digits")
 	}
 	if err := m.descriptor().Check(); err != nil {
@@ -172,6 +172,7 @@ func (b *Build) prepareSampleSetInstallations(assets []platform.ReleaseAsset) ([
 		return nil, err
 	}
 	out := []platform.AssetInstallation{}
+	descriptor, _ := resourceDescriptorOfType(SampleSetType)
 	for _, a := range assets {
 		if a.Ref.Kind != platform.AssetSampleSet || a.Ref.App != ID {
 			continue
@@ -201,7 +202,7 @@ func (b *Build) prepareSampleSetInstallations(assets []platform.ReleaseAsset) ([
 		m.Published = string(raw)
 		m.Versions = append(slices.Clone(m.Versions), m.Published)
 		image, _ := json.Marshal(m)
-		out = append(out, platform.AssetInstallation{Ref: a.Ref, Schema: SchemaSampleSet, Record: SampleSetType + "/" + m.ID, Image: image})
+		out = append(out, platform.AssetInstallation{Ref: a.Ref, Schema: descriptor.publication(), Record: descriptor.record(m.ID), Image: image})
 	}
 	return out, nil
 }
@@ -212,7 +213,7 @@ func equalSampleAssets(a, b platform.ReleaseAsset) bool {
 }
 
 func sampleSetInstallation(image json.RawMessage) (platform.AssetInstallation, error) {
-	return portableDefinitionInstallation[SampleSetRecord](image, SampleSetType, SchemaSampleSet, "sample", decodeSampleAsset)
+	return portableDefinitionInstallation[SampleSetRecord](image, SampleSetType, "sample", decodeSampleAsset)
 }
 
 func (*Build) testPlanEntity() platform.Entity {
@@ -279,6 +280,20 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 	if previous.Published != "" && testPlanKind(previous) != testPlanKind(plan) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published test plan keeps its kind; create another plan")
 	}
+	variant := strings.ToLower(strings.TrimSpace(plan.Variant))
+	switch variant {
+	case "":
+	case "test-plan":
+		if len(plan.Evaluation) > 0 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A business test plan cannot carry function evaluation thresholds")
+		}
+	case "evaluation-set":
+		if len(plan.Evaluation) == 0 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An evaluation set needs function evaluation thresholds")
+		}
+	default:
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a business test plan or an evaluation set")
+	}
 	if plan.Name != "" {
 		rows, err := readDefinitionInventory[TestPlan](b.host.Automation(c, ID))
 		if err != nil {
@@ -308,7 +323,7 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 		}
 		return nil
 	}
-	if (roots != 1 && !(roots == 0 && plan.CandidateID != "")) || plan.CandidateID != "" && (plan.Object != "" || plan.Process != "" || plan.Function != "") || len(plan.Actors) > 3 || len(plan.Sample) > 64 || len(plan.Actors) > 0 && plan.As != "" || len(plan.Model) > 256 || plan.FunctionVersion < 0 || plan.FunctionVersion > 64 || plan.Name != "" && !Named(plan.Name) {
+	if (roots != 1 && !(roots == 0 && plan.CandidateID != "")) || plan.CandidateID != "" && (plan.Object != "" || plan.Process != "" || plan.Function != "") || len(plan.Actors) > 3 || len(plan.Sample) > 64 || len(plan.Actors) > 0 && plan.As != "" || len(plan.Model) > 256 || plan.FunctionVersion < 0 || plan.FunctionVersion > 64 || plan.Name != "" && !ontology.Named(plan.Name) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose exactly one saved object, workflow or function draft for the test plan")
 	}
 	if len(plan.Evaluation) != 0 {
@@ -326,6 +341,7 @@ const TestPlanType = "build.testplan"
 
 type TestPlan struct {
 	platform.Record
+	Variant           string                      `json:"variant,omitempty" title:"Kind"`
 	Organization      *platform.OrgSeed           `json:"organization,omitempty" type:"json" field:"aside" title:"Synthetic organization"`
 	Roots             []platform.AssetRef         `json:"roots,omitempty" type:"json" title:"Portable definition roots"`
 	Application       string                      `json:"application,omitempty" ref:"build.app" title:"Saved application draft"`

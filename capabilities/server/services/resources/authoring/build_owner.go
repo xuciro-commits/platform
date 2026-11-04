@@ -9,7 +9,11 @@ import (
 
 	"platformserver/kernel/systemscope"
 	"platformserver/platform"
+	appsauthoring "platformserver/services/apps/authoring"
+	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
+	functionauthoring "platformserver/services/functions/authoring"
+	ontology "platformserver/services/ontology"
 	"slices"
 	"strings"
 	"time"
@@ -34,9 +38,9 @@ func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error)
 
 type Build struct {
 	installationCatalog *platform.Catalog
-	releaseDraftIDs     map[platform.AssetRef]string
 	host                platform.BuildHost
-	files               platform.FileHost
+	data                *dataowner.Owner
+	automation          *automationauthoring.Owner
 	ledger              *platform.Ledger
 	installed           map[string]platform.Entity
 	jointEntities       map[string]platform.EntityInfo
@@ -48,66 +52,59 @@ type Build struct {
 	valueTypes          map[string]ValueType
 	objectTypeGroups    map[string]ObjectTypeGroup
 	queries             map[string]Query
-	functions           map[string]Function
+	interfaces          map[string]InterfaceRecord
+	functions           *functionauthoring.Owner
+	apps                *appsauthoring.Owner
 	agents              map[string]Agent
 	codes               map[string]Code
 	tables              map[string]Table
 }
 
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
-func (b *Build) AttachFiles(h platform.FileHost)  { b.files = h }
+func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
 func New(tenant string) *Build {
-	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, valueTypes: map[string]ValueType{}, objectTypeGroups: map[string]ObjectTypeGroup{}, queries: map[string]Query{}, functions: map[string]Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
-	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
+	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, valueTypes: map[string]ValueType{}, objectTypeGroups: map[string]ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
+	b.data = dataowner.New(buildDataHost{b})
+	b.automation = automationauthoring.New(automationEnvironment{b})
+	b.functions = functionauthoring.NewOwner(functionEnvironment{b})
+	b.apps = appsauthoring.NewOwner(appEnvironment{b})
+	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.apps.PageEntity())...)
 	actions = append(actions, platform.EntityActions(b.actionTypeEntity())...)
 	actions = append(actions, platform.Action{Schema: SchemaExtractActions, Target: ObjectType, Title: "Extract action types", Description: "Move current inline action drafts into independent retained resources.", Automation: true, Payload: []platform.Field{}})
-	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
+	actions = append(actions, platform.EntityActions(b.apps.ApplicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
-	actions = append(actions, platform.EntityActions(b.processEntity())...)
-	actions = append(actions, platform.EntityActions(functionKind.entity(b))...)
+	actions = append(actions, b.automation.ProcessActions()...)
+	actions = append(actions, b.functions.Actions()...)
 	actions = append(actions, platform.EntityActions(linkKind.entity(b))...)
 	actions = append(actions, platform.Action{Schema: LinkTypeType + ".migrate", Target: LinkTypeType, Title: "Migrate relationships", Description: "Move historical links into the endpoint owner's accepted records", Capability: LinkTypeType, Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = append(actions, platform.EntityActions(propertyKind.entity(b))...)
 	actions = append(actions, platform.EntityActions(valueKind.entity(b))...)
 	actions = append(actions, platform.EntityActions(b.objectTypeGroupEntity())...)
 	actions = append(actions, platform.EntityActions(queryKind.entity(b))...)
-	actions = append(actions, functionCallActions([]string{Builder, User})...)
+	actions = append(actions, platform.EntityActions(interfaceKind.entity(b))...)
 	actions = append(actions, evaluationActions()...)
 	actions = append(actions, platform.EntityActions(b.codeEntity())...)
-	actions = append(actions, platform.EntityActions(b.sourceEntity())...)
-	actions = append(actions, platform.EntityActions(b.listenerEntity())...)
-	actions = append(actions, platform.EntityActions(b.connectionEntity())...)
-	actions = append(actions, platform.EntityActions(b.scheduleEntity())...)
-	actions = append(actions, platform.EntityActions(b.datasetEntity())...)
-	actions = append(actions, platform.EntityActions(b.datasetVersionEntity())...)
-	actions = append(actions, platform.EntityActions(b.pipelineEntity())...)
-	actions = append(actions, platform.EntityActions(b.writebackEntity())...)
-	actions = append(actions, platform.EntityActions(b.matchEntity())...)
+	actions = append(actions, b.data.Actions()...)
 	actions = append(actions, platform.EntityActions(b.branchEntity())...)
 	for _, entity := range b.resourceEntities() {
 		actions = append(actions, platform.EntityActions(entity)...)
 	}
 	actions = append(actions, workingStateActions()...)
-	actions = append(actions, writebackActions()...)
 	actions = append(actions, confirmationActions()...)
 	actions = append(actions, dispatchActions()...)
-	actions = append(actions, datasetActions()...)
-	actions = append(actions, dataowner.MediaSetActions()...)
-	actions = append(actions, dataowner.ScheduleActions()...)
-	actions = append(actions, pipelineActions()...)
 	actions = append(actions, platform.EntityActions(b.tableEntity())...)
 	actions = append(actions, platform.EntityActions(b.agentEntity())...)
-	actions = append(actions, platform.Action{Schema: schemaAlertDraftMigrate, Target: ProcessType, Title: "Migrate alert draft", Description: "Retain an unpublished alert as an editable automation draft.", Automation: true, Payload: []platform.Field{{Name: "alert", Type: "string", Required: true}}})
-	actions = append(actions, platform.Action{Schema: schemaAlertMigrate, Target: ProcessType, Title: "Migrate alert to automation", Description: "Retain an existing alert as a normal automation with a notification effect.", Automation: true, Payload: []platform.Field{{Name: "alert", Type: "string", Required: true}}})
-	actions = append(actions, sourceActions()...)
+	actions = append(actions, b.automation.MigrationActions()...)
 	actions = append(actions, platform.EntityActions(b.sampleSetEntity())...)
-	actions = append(actions, platform.EntityActions(b.observationEntity())...)
-	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
+	actions = append(actions, platform.EntityActions(b.productEntity())...)
+	actions = append(actions, productVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
-	actions = append(actions, resourceActions(actions)...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, ActionTypeType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ListenerType, ConnectionType, DatasetType, DatasetVersionType, platform.ScheduleType, platform.MediaSetType, platform.MediaSetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, SampleSetType, ObservationType, BranchType, ResourceType, FolderType, WorkingStateType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType)
+	actions = resourceActions(actions)
+	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionCallType, EvaluationType, CodeType, TableType, AgentType, automationauthoring.AlertType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
+	classes = append(classes, b.data.Types()...)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), classes...)
 	return b
 }
 
@@ -135,7 +132,8 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.scheduleEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), b.agentEntity(), b.automation.AlertEntity(), b.codeEntity(), b.tableEntity(), b.sampleSetEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
 	for i := range entities {
@@ -146,12 +144,11 @@ func (b *Build) Manifest() platform.Manifest {
 			entities[i].Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
 		}
 	}
-	entities = append(entities, dataowner.MediaSetEntities()...)
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
 	provisions, reads := b.objectProtocols()
-	return platform.Manifest{ID: ID, Title: "Builder", Version: ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: b.manifestRoles(), Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: definitionDeclarations(b.queries), Functions: definitionDeclarations(b.functions), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: b.manifestRoles(), Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: definitionDeclarations(b.queries), Functions: b.functions.Declarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -190,16 +187,12 @@ const (
 	ProfileDevelopment = "development"
 )
 
-var directInstallSchemas = []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess,
-	SchemaPropertyType, SchemaValueType, SchemaObjectTypeGroup, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
-	SchemaTablePublish, SchemaAlertPublish, SchemaAgentPublish,
-	SourceType + ".publish", ListenerType + ".publish", PipelineType + ".publish", WritebackType + ".publish", MatchType + ".publish"}
-
 func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Error {
-	if c.Tenant == systemscope.Tenant && slices.Contains(directInstallSchemas, schema) {
+	directInstall := directInstallSchemas()
+	if c.Tenant == systemscope.Tenant && slices.Contains(directInstall, schema) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "System definitions are published through an approved Platform change")
 	}
-	if c.Setting(SettingReleaseProfile) != ProfileProduction || !slices.Contains(directInstallSchemas, schema) {
+	if c.Setting(SettingReleaseProfile) != ProfileProduction || !slices.Contains(directInstall, schema) {
 		return nil
 	}
 	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: fmt.Sprintf(
@@ -230,7 +223,7 @@ type ReleaseProfile struct {
 }
 
 func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kernel.Error {
-	if !c.Holds(c.App, Builder) && !(typ == ObservationType && c.Holds(c.App, Integrator)) {
+	if !c.Holds(c.App, Builder) && !(typ == dataowner.ObservationType && c.Holds(c.App, Integrator)) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	published := false
@@ -243,9 +236,6 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 		published = record.Published != ""
 	case AppType:
 		record, _ := platform.Get[Application](c, id)
-		published = record.Published != ""
-	case ProcessType:
-		record, _ := platform.Get[Process](c, id)
 		published = record.Published != ""
 	case PropertyTypeType:
 		record, _ := platform.Get[PropertyType](c, id)
@@ -262,20 +252,20 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 	case QueryType:
 		record, _ := platform.Get[Query](c, id)
 		published = record.Published != ""
+	case InterfaceType:
+		record, _ := platform.Get[InterfaceRecord](c, id)
+		published = record.Published != ""
 	case FunctionType:
 		record, _ := platform.Get[Function](c, id)
 		published = record.Published != ""
 	case TableType:
 		record, _ := platform.Get[Table](c, id)
 		published = record.Published != ""
-	case AlertType:
-		record, _ := platform.Get[Alert](c, id)
-		published = record.Published != "" || legacyAlert(record)
 	case AgentType:
 		record, _ := platform.Get[Agent](c, id)
 		published = record.Published != ""
-	case ObservationType:
-		record, _ := platform.Get[Observation](c, id)
+	case dataowner.ObservationType:
+		record, _ := platform.Get[dataowner.Observation](c, id)
 		published = record.Published != ""
 	case SampleSetType:
 		record, _ := platform.Get[SampleSetRecord](c, id)
@@ -288,6 +278,15 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 		published = record.Published != ""
 		if record.State == "compiling" {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A compiling code function cannot be archived; wait for its build result")
+		}
+	case ProductType:
+		versions, err := readDefinitionInventory[ProductVersion](c)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Product versions could not be read")
+		}
+		record, _ := platform.Get[Product](c, id)
+		if slices.ContainsFunc(versions, func(version ProductVersion) bool { return version.Product == record.Name }) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A product with published versions cannot be archived")
 		}
 	}
 	if !published {
@@ -322,19 +321,13 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetTarget().GetType() == WorkingStateType {
 		return b.submitWorkingState(c, s, now)
 	}
-	if s.GetTarget().GetType() == ResourceType || IsResourceSave(s) {
+	if s.GetTarget().GetType() == ResourceType || IsResourceSave(s) || IsResourceCreate(s) {
 		return b.submitResource(c, s, now)
 	}
 	if !c.Replaying && !c.Automation {
 		if err := b.checkSystemDefinitionWrite(s); err != nil {
 			return nil, err
 		}
-	}
-	if s.GetSchema().GetName() == schemaAlertMigrate || s.GetSchema().GetName() == schemaAlertDraftMigrate {
-		return b.migrateAlert(c, s, now)
-	}
-	if s.GetTarget().GetType() == AlertType && !c.Replaying {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Create an automation with a notification effect instead of an alert rule")
 	}
 	if s.GetSchema().GetName() == LinkTypeType+".migrate" {
 		return b.migrateLinkType(c, s, now)
@@ -343,6 +336,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		if err := b.checkReleaseProfile(c, s.GetSchema().GetName()); err != nil {
 			return nil, err
 		}
+	}
+	if record, err, handled := b.automation.Decide(b.ledger, c, s, now); handled {
+		return record, err
 	}
 	if s.GetSchema().GetName() == SchemaCodeCompile {
 		return b.submitCodeCompile(c, s, now)
@@ -353,32 +349,8 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaCodeAttach {
 		return b.submitCodeAttach(c, s, now)
 	}
-	if s.GetSchema().GetName() == SchemaSourcePulled {
-		return b.submitSourcePulled(c, s, now)
-	}
-	if s.GetSchema().GetName() == SchemaConnectionChecked {
-		return b.submitConnectionChecked(c, s, now)
-	}
-	if s.GetSchema().GetName() == ConnectionType+".configure" {
-		return b.configureConnection(c, s, now)
-	}
-	if name := s.GetSchema().GetName(); name == platform.SchemaMediaSetAdd || name == platform.SchemaMediaSetRemove {
-		return dataowner.SubmitMediaSet(b.ledger, b.files, c, s, now)
-	}
-	if s.GetSchema().GetName() == platform.SchemaScheduleRan {
-		return dataowner.SubmitScheduleRan(b.ledger, c, s, now)
-	}
-	if s.GetSchema().GetName() == SchemaDatasetLoad {
-		return b.submitDatasetLoad(c, s, now)
-	}
-	if s.GetSchema().GetName() == SchemaPipelineRan {
-		return b.submitPipelineRan(c, s, now)
-	}
-	if s.GetSchema().GetName() == SchemaDatasetProjected {
-		return b.submitDatasetProjected(c, s, now)
-	}
-	if s.GetSchema().GetName() == SchemaWritebackAnswered {
-		return b.submitWritebackAnswered(c, s, now)
+	if record, err, handled := b.data.Decide(b.ledger, c, s, now); handled {
+		return record, err
 	}
 	if slices.Contains([]string{confirmationAnswer, confirmationReview, confirmationTick}, s.GetSchema().GetName()) {
 		return b.updateConfirmation(c, s, now)
@@ -386,19 +358,19 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if slices.Contains([]string{platform.DispatchAnswerSchema, platform.DispatchReviewSchema, platform.DispatchTickSchema}, s.GetSchema().GetName()) {
 		return b.updateDispatch(c, s, now)
 	}
-	if s.GetSchema().GetName() == SchemaProposalReview {
-		return b.submitProposalReview(c, s, now)
-	}
-	if name := s.GetSchema().GetName(); name == SchemaFunctionCall || name == SchemaFunctionAnswer {
-		return b.submitFunctionCall(c, s, now)
+	if name := s.GetSchema().GetName(); name == SchemaProposalReview || name == SchemaFunctionCall || name == SchemaFunctionAnswer {
+		return b.functions.Submit(c, s, now)
 	}
 	if s.GetSchema().GetName() == SchemaEvaluationSetPublish {
 		return b.submitTestPlan(c, s, now)
 	}
+	if s.GetSchema().GetName() == SchemaProductVersion {
+		return b.submitProductVersion(c, s, now)
+	}
 	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, FunctionType, CodeType, TableType, AlertType, AgentType, TestPlanType, SampleSetType, ObservationType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionType, CodeType, TableType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}
@@ -424,7 +396,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 					err = b.checkValueTypeFields(*p.Fields)
 				}
 				if err == nil {
-					err = CheckFields(*p.Fields, b.fieldKnown)
+					err = ontology.CheckFields(*p.Fields, b.fieldKnown)
 				}
 			}
 			if err != nil {
@@ -435,7 +407,11 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); (name == PageType+".create" || name == PageType+".edit") && !c.Replaying {
 		var p Page
 		if json.Unmarshal(s.GetPayload(), &p) == nil && p.Object != "" {
-			if !b.fieldKnown(p.Object) {
+			known, err := b.apps.CheckPageObject(c, p.Object)
+			if err != nil {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+			}
+			if !known {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: fmt.Sprintf("this tenant has no object %q", p.Object)}
 			}
 		}
@@ -443,15 +419,16 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if !c.Replaying && (s.GetTarget().GetType() == ObjectType || s.GetTarget().GetType() == ActionTypeType) && (s.GetSchema().GetName() == s.GetTarget().GetType()+".create" || s.GetSchema().GetName() == s.GetTarget().GetType()+".edit") {
 		return b.submitOntologyWrite(c, s, now)
 	}
-	pageEntity := b.pageEntity()
+	pageEntity := b.apps.PageEntity()
 	if name := s.GetSchema().GetName(); name == PageType+".create" || name == PageType+".edit" {
-		pageEntity = b.pageDraftEntity()
+		pageEntity = b.apps.PageDraftEntity()
 	}
 	agentEntity := b.agentEntity()
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agentDraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.listenerEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.scheduleEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), agentEntity, b.codeEntity(), b.tableEntity(), b.sampleSetEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
 	for i := range entities {
@@ -462,7 +439,6 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			entities[i].Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
 		}
 	}
-	entities = append(entities, dataowner.MediaSetEntities()...)
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -493,12 +469,26 @@ func (b *Build) ForkDecision() (platform.App, error) {
 	if catalog != nil {
 		catalog = platform.NewCatalog(catalog.All()...)
 	}
-	return &Build{host: b.host, files: b.files, ledger: b.ledger,
-		installationCatalog: catalog,
-		releaseDraftIDs:     maps.Clone(b.releaseDraftIDs), installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointAssets: maps.Clone(b.jointAssets), jointDeclarations: maps.Clone(b.jointDeclarations), jointMode: b.jointMode,
-		linkTypes: maps.Clone(b.linkTypes), propertyTypes: maps.Clone(b.propertyTypes), valueTypes: maps.Clone(b.valueTypes), objectTypeGroups: maps.Clone(b.objectTypeGroups),
-		queries: maps.Clone(b.queries), functions: maps.Clone(b.functions), agents: maps.Clone(b.agents),
-		codes: maps.Clone(b.codes), tables: maps.Clone(b.tables)}, nil
+	fork := *b
+	fork.installationCatalog = catalog
+	fork.installed = maps.Clone(b.installed)
+	fork.jointEntities = maps.Clone(b.jointEntities)
+	fork.jointAssets = maps.Clone(b.jointAssets)
+	fork.jointDeclarations = maps.Clone(b.jointDeclarations)
+	fork.linkTypes = maps.Clone(b.linkTypes)
+	fork.propertyTypes = maps.Clone(b.propertyTypes)
+	fork.valueTypes = maps.Clone(b.valueTypes)
+	fork.objectTypeGroups = maps.Clone(b.objectTypeGroups)
+	fork.queries = maps.Clone(b.queries)
+	fork.interfaces = maps.Clone(b.interfaces)
+	fork.agents = maps.Clone(b.agents)
+	fork.codes = maps.Clone(b.codes)
+	fork.tables = maps.Clone(b.tables)
+	fork.functions = b.functions.Fork(functionEnvironment{&fork})
+	fork.apps = b.apps.Fork(appEnvironment{&fork})
+	fork.data = b.data.Fork(buildDataHost{&fork})
+	fork.automation = b.automation.Fork(automationEnvironment{&fork})
+	return &fork, nil
 }
 
 var _ platform.DecisionForkApp = (*Build)(nil)
@@ -526,91 +516,17 @@ func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action
 }
 
 var _ ConstructionDrafts = (*Build)(nil)
-var _ IntegrationDefinitions = (*Build)(nil)
 var _ ConstructionSandbox = (*Build)(nil)
 
 const (
-	ID                     = "build"
+	ID                     = ontology.AppID
 	ValueDefinitionVersion = "1"
-	ObjectType             = "build.object"
-	Builder                = "builder"
+	Builder                = ontology.BuilderRole
 	Publisher              = "publisher"
-	User                   = "user"
-	SchemaPublish          = ObjectType + ".publish"
+	User                   = ontology.UserRole
 )
 
-type Object struct {
-	platform.Record
-	Name              string                       `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
-	Title             string                       `json:"title" field:"required,search" title:"What people call it" example:"Visit"`
-	Plural            string                       `json:"plural,omitempty" title:"What people call several" example:"Visits"`
-	Icon              string                       `json:"icon,omitempty" title:"Icon" help:"An icon name, lower-case with hyphens" example:"calendar"`
-	Color             string                       `json:"color,omitempty" title:"Color" choices:"neutral,info,success,warning,danger,purple,pink,teal,orange"`
-	Display           string                       `json:"display,omitempty" title:"Title field" help:"The text field that names one record; empty: the first searchable field" example:"name"`
-	ObjectView        *platform.ObjectView         `json:"objectView,omitempty" type:"json" title:"Object view"`
-	Description       string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
-	Fields            []Field                      `json:"fields" title:"Fields"`
-	DataSources       []platform.DataSourceBinding `json:"datasources,omitempty" type:"json" field:"aside" title:"Data sources"`
-	Protocols         []platform.ProtocolBinding   `json:"protocols,omitempty" type:"json" field:"aside" title:"Protocol bindings"`
-	Reads             *platform.RuleReadSpec       `json:"reads,omitempty" type:"json" field:"aside"`
-	Constraints       []platform.Constraint        `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`
-	Sets              []platform.RecordSet         `json:"sets,omitempty" type:"json" field:"aside" title:"Declared record sets"`
-	DispatchCommands  []platform.DispatchCommand   `json:"dispatchCommands,omitempty" type:"json" field:"aside" title:"Device commands"`
-	CreateTransaction *platform.BusinessTxn        `json:"createTransaction,omitempty" type:"json" field:"aside" title:"Creation transaction"`
-	Versioning        *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
-	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
-	EnterpriseUse     *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Current enterprise use"`
-	States            []State                      `json:"states,omitempty" field:"aside" title:"States"`
-	ActionTypes       []platform.AssetBinding      `json:"actionTypes,omitempty" field:"aside" type:"json" title:"Action types"`
-	Actions           []Action                     `json:"actions,omitempty" field:"aside" title:"Actions"`
-	Access            []Access                     `json:"access,omitempty" field:"aside" title:"Access"`
-	Scope             *ObjectScope                 `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
-	Implements        []string                     `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
-	Extends           string                       `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
-	ExtensionSource   *platform.ExtensionSource    `json:"extensionSource,omitempty" field:"readonly,aside" type:"json" title:"Extension source" help:"The original base package version and field shape captured at publication"`
-	SchemaVersions    []platform.SchemaVersion     `json:"schemaVersions,omitempty" field:"readonly,aside" type:"json" title:"Schema versions" help:"Retained content versions and compatible schema families captured at publication"`
-	Numbering         *Numbering                   `json:"numbering,omitempty" field:"aside" type:"json" title:"Document numbering"`
-	State             string                       `json:"state" field:"readonly" choices:"draft,published"`
-	Installed         string                       `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
-	Published         string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-}
-
-type Field struct {
-	AIInput     *bool                  `json:"aiInput,omitempty" title:"Allow AI context"`
-	SourceType  string                 `json:"sourceType,omitempty" choices:"record,user-input,external-input,generated" title:"Text source type"`
-	Property    *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
-	ValueType   *platform.AssetBinding `json:"valueType,omitempty" type:"json" field:"aside"`
-	Format      []platform.FormatRule  `json:"format,omitempty" type:"json" field:"aside"`
-	Name        string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
-	Title       string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
-	Type        string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,attachment" example:"date"`
-	Choices     string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
-	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"core.partner"`
-	Stereotype  string                 `json:"stereotype,omitempty" title:"Enterprise element type"`
-	Stereotypes []string               `json:"stereotypes,omitempty" title:"Enterprise element types"`
-	Inverse     string                 `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
-	Required    bool                   `json:"required,omitempty"`
-	Search      bool                   `json:"search,omitempty" title:"Searchable"`
-	ReadOnly    bool                   `json:"readOnly,omitempty" title:"Read only"`
-	AliasOf     string                 `json:"aliasOf,omitempty" title:"Read alias of" help:"The retained old name reads this field; it cannot be written directly"`
-	When        string                 `json:"when,omitempty" title:"Only when" help:"field=value,value — another choice or boolean field of this object and the values that make this field apply" example:"kind=refund,return"`
-	FormulaExpr *platform.Expr         `json:"formulaExpr,omitempty" type:"json" field:"aside"`
-	Formula     string                 `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
-	Read        []string               `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
-	Write       []string               `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`
-}
-
 func TypeOf(name string) string { return ID + "." + name }
-
-func ValueChoices(s string) []string {
-	var out []string
-	for _, c := range strings.Split(s, ",") {
-		if c = strings.TrimSpace(c); c != "" {
-			out = append(out, c)
-		}
-	}
-	return out
-}
 
 type ConstructionDrafts interface {
 	platform.App
@@ -624,24 +540,11 @@ type ConstructionDrafts interface {
 	SavedObjectActions(platform.Caller) ([]platform.Action, error)
 	DraftReleaseAssetsMulti([]JointDraftRef, platform.Member, bool) (JointDraftAssets, error)
 	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)
-	CheckProcess(platform.Caller, Process) *kernel.Error
-	CheckPipeline(platform.Caller, Pipeline) *kernel.Error
+	CheckProcess(platform.Caller, automationauthoring.Process) *kernel.Error
 }
 
 type ConstructionDraftReader interface {
 	CanonicalObject(Object) (Object, error)
-}
-
-type IntegrationDefinitions interface {
-	ConnectionConfiguration(Connection) (Connection, error)
-	ExecutionSource(Source) (Source, error)
-	ExecutionListener(Listener) (Listener, error)
-	ExecutionConnection(Connection) (Connection, error)
-	ExecutionDataset(Dataset) (Dataset, error)
-	ExecutionPipeline(Pipeline) (Pipeline, error)
-	ExecutionSchedule(platform.Schedule) (platform.Schedule, error)
-	ExecutionWriteback(Writeback) (Writeback, error)
-	ExecutionMatching(Match) (Match, error)
 }
 
 type ConstructionSandbox interface {
@@ -649,13 +552,10 @@ type ConstructionSandbox interface {
 	platform.AssetDefinitionReader
 	Reinstall() error
 	BeginAssetBootstrap([]platform.ReleaseAsset) (func(), error)
-	ProcessFromAsset(platform.ReleaseAsset) (Process, error)
+	AcceptedAlert(platform.ReleaseAsset) (automationauthoring.Alert, int, error)
+	ProcessFromAsset(platform.ReleaseAsset) (automationauthoring.Process, error)
 	InstallDefinitionAsset(platform.ReleaseAsset) error
 	InstallFunctionAsset(platform.ReleaseAsset) error
 	InstallAgentAsset(platform.ReleaseAsset) error
 	InstallOperationAsset(platform.ReleaseAsset) error
-}
-
-type ObservationDefinitions interface {
-	ExecutionObservation(Observation) (platform.ObservationDefinition, error)
 }

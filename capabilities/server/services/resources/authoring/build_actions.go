@@ -6,6 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	ontology "platformserver/services/ontology"
 	"reflect"
 	"slices"
 	"strconv"
@@ -17,191 +18,6 @@ type creator interface {
 	create(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error)
 	post(c platform.Caller, p Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error)
 	businessRuntime() platform.TransactionExecutor
-}
-
-var Operators = []string{"=", "!=", "<", "<=", ">", ">=", "empty", "not empty"}
-
-func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) error {
-	if len(o.States) == 0 && len(o.Actions) > 0 {
-		return fmt.Errorf("an object needs states before it has actions")
-	}
-	states := map[string]bool{}
-	for _, s := range o.States {
-		switch {
-		case !Named(s.Name):
-			return fmt.Errorf("the state name %q is not lower-case letters and digits", s.Name)
-		case states[s.Name]:
-			return fmt.Errorf("the state %q is declared twice", s.Name)
-		case s.Title == "":
-			return fmt.Errorf("the state %q has no title", s.Name)
-		}
-		states[s.Name] = true
-	}
-	fields := map[string]Field{}
-	for _, f := range o.Fields {
-		fields[f.Name] = f
-	}
-	seen := map[string]bool{}
-	for _, a := range o.Actions {
-		if err := checkActionAdoption(a); err != nil {
-			return err
-		}
-		if err := checkAdoptionSources(o, a, lookup); err != nil {
-			return err
-		}
-		where := fmt.Sprintf("the action %q", a.Name)
-		switch {
-		case !Named(a.Name):
-			return fmt.Errorf("the action name %q is not lower-case letters and digits", a.Name)
-		case seen[a.Name]:
-			return fmt.Errorf("%s is declared twice", where)
-		case slices.Contains([]string{"create", "edit", "archive", "publish"}, a.Name):
-			return fmt.Errorf("%s is the platform's own", where)
-		case a.Title == "":
-			return fmt.Errorf("%s has no title", where)
-		case len(a.From) == 0:
-			return fmt.Errorf("%s says no state it is taken from", where)
-		case a.ToInput != "" && (a.To != "" || a.Approval != nil):
-			return fmt.Errorf("%s cannot combine input-selected state with a fixed state or approval", where)
-		case a.To != "" && !states[a.To]:
-			return fmt.Errorf("%s leaves records in %q, which is not a state of the object", where, a.To)
-		}
-		seen[a.Name] = true
-		for _, s := range a.From {
-			if !states[s] {
-				return fmt.Errorf("%s is taken from %q, which is not a state of the object", where, s)
-			}
-		}
-		if approval := a.Approval; approval != nil {
-			switch {
-			case len(a.From) != 1:
-				return fmt.Errorf("%s waiting for approval needs exactly one starting state", where)
-			case !(a.Transaction != nil && approval.Pending == "") && (!states[approval.Pending] || approval.Pending == a.From[0] || approval.Pending == a.To):
-				return fmt.Errorf("%s waits in %q, which must be a separate state of the object", where, approval.Pending)
-			case approval.Rejected != "" && (a.Transaction != nil && approval.Pending == "" || !states[approval.Rejected] || approval.Rejected == approval.Pending):
-				return fmt.Errorf("%s rejects into %q, which must be a state other than pending", where, approval.Rejected)
-			case len(approval.Levels) == 0:
-				return fmt.Errorf("%s waiting for approval needs an approver level", where)
-			}
-			for i, level := range approval.Levels {
-				if strings.TrimSpace(level.Title) == "" || level.Role == "" {
-					return fmt.Errorf("%s approval level %d needs a title and role", where, i+1)
-				}
-				if level.Role != Builder && (len(o.Access) == 0 && level.Role != User || len(o.Access) > 0 && !slices.ContainsFunc(o.Access, func(x Access) bool { return x.Role == level.Role && x.Read == "all" })) {
-					return fmt.Errorf("%s approval level %d names %q, which cannot read every record of this object", where, i+1, level.Role)
-				}
-			}
-		}
-		if a.To == "" && len(a.From) == 0 {
-			return fmt.Errorf("%s leaves nothing to stay in", where)
-		}
-		inputs := map[string]Input{}
-		for _, in := range a.Inputs {
-			switch {
-			case !Named(in.Name):
-				return fmt.Errorf("%s: the input name %q is not lower-case letters and digits", where, in.Name)
-			case inputs[in.Name].Name != "":
-				return fmt.Errorf("%s: the input %q is declared twice", where, in.Name)
-			case in.Title == "":
-				return fmt.Errorf("%s: the input %q has no label", where, in.Name)
-			case ValueInputTypes[in.Type] == "":
-				return fmt.Errorf("%s: the input %q has no type %q", where, in.Name, in.Type)
-			case in.Type == "choice" && len(ValueChoices(in.Choices)) == 0:
-				return fmt.Errorf("%s: the choice input %q has no values", where, in.Name)
-			}
-			if in.Type == "reference" {
-				app, _, ok := strings.Cut(in.Ref, ".")
-				if !ok || in.Choices != "" || (platform.AssetRef{App: app, Kind: platform.AssetObject, Name: in.Ref}).Check() != nil {
-					return fmt.Errorf("%s needs a declared reference object for %s", where, in.Name)
-				}
-				if lookup != nil && in.Ref != "enterprise.element" {
-					info, known := lookup(in.Ref)
-					if !known || info.App != app || info.Type != in.Ref {
-						return fmt.Errorf("%s reference object %s is unavailable", where, in.Ref)
-					}
-				}
-			} else if in.Ref != "" {
-				return fmt.Errorf("%s non-reference input cannot name a reference object", where)
-			}
-			if err := CheckEnterpriseReference(in.Type, in.Ref, in.Stereotype, in.Stereotypes); err != nil {
-				return fmt.Errorf("%s: %w", where, err)
-			}
-			if in.MinLength != nil && (!slices.Contains([]string{"text", "longtext"}, in.Type) || *in.MinLength < 0 || *in.MinLength > 4096) {
-				return fmt.Errorf("%s input minimum length is not supported", where)
-			}
-			inputs[in.Name] = in
-		}
-		declarations := make([]platform.Field, 0, len(a.Inputs))
-		for _, in := range a.Inputs {
-			declarations = append(declarations, in.Field())
-		}
-		if err := platform.CheckInputs(declarations); err != nil {
-			return fmt.Errorf("%s: %w", where, err)
-		}
-		if a.ToInput != "" {
-			in := inputs[a.ToInput]
-			if in.Type != "choice" || !in.Required || len(ValueChoices(in.Choices)) == 0 {
-				return fmt.Errorf("%s needs a required state choice input", where)
-			}
-			for _, state := range ValueChoices(in.Choices) {
-				if !states[state] {
-					return fmt.Errorf("%s input chooses an undeclared state", where)
-				}
-			}
-		}
-		for _, set := range a.Sets {
-			if set.Expr != nil {
-				continue
-			}
-			f, ok := fields[set.Field]
-			if !ok {
-				return fmt.Errorf("%s sets %q, which is not a field of the object", where, set.Field)
-			}
-			switch {
-			case set.From == "$me":
-				if f.Type != "text" {
-					return fmt.Errorf("%s sets %q to the person taking it, but it is a %s field", where, f.Name, f.Type)
-				}
-			case set.From == "$now":
-				if f.Type != "date" && f.Type != "datetime" {
-					return fmt.Errorf("%s sets %q to now, but it is a %s field", where, f.Name, f.Type)
-				}
-			case strings.HasPrefix(set.From, "="):
-				if _, err := platform.Literal(f.Type, strings.TrimPrefix(set.From, "=")); err != nil {
-					return fmt.Errorf("%s sets %q to %q: %v", where, f.Name, strings.TrimPrefix(set.From, "="), err)
-				}
-			default:
-				in := inputs[set.From]
-				if in.Name == "" {
-					return fmt.Errorf("%s sets %q from %q, which is not one of its inputs, $me, $now or =<value>", where, f.Name, set.From)
-				}
-				if !inputFits(in.Type, f.Type) || in.Type == "reference" && in.Ref != f.Ref {
-					return fmt.Errorf("%s sets %q (%s) from %q (%s), which does not fit", where, f.Name, f.Type, in.Name, in.Type)
-				}
-				if f.Type == "choice" {
-					for _, option := range ValueChoices(in.Choices) {
-						if !slices.Contains(ValueChoices(f.Choices), option) {
-							return fmt.Errorf("%s sets %q from %q, whose value %q is not one of the field's choices", where, f.Name, in.Name, option)
-						}
-					}
-				}
-			}
-		}
-		for _, cond := range a.Conditions {
-			if cond.When != nil {
-				if cond.When.When != nil {
-					return fmt.Errorf("nested condition guards are unsupported")
-				}
-				if err := checkActionCondition(o, a, *cond.When, lookup, false); err != nil {
-					return err
-				}
-			}
-			if err := checkActionCondition(o, a, cond, lookup, true); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func lifecycle(o Object, roles []string, creates creator, lookup func(string) (platform.EntityInfo, bool)) *platform.Lifecycle {
@@ -224,7 +40,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 		if a.ToInput != "" {
 			for _, in := range a.Inputs {
 				if in.Name == a.ToInput {
-					reach = ValueChoices(in.Choices)
+					reach = ontology.ValueChoices(in.Choices)
 				}
 			}
 		}
@@ -332,7 +148,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		state, ok := inputs[a.ToInput].(string)
 		allowed := false
 		for _, in := range a.Inputs {
-			if in.Name == a.ToInput && slices.Contains(ValueChoices(in.Choices), state) {
+			if in.Name == a.ToInput && slices.Contains(ontology.ValueChoices(in.Choices), state) {
 				allowed = true
 			}
 		}
@@ -356,7 +172,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 			return refusal
 		}
 
-		if err := assign(v.FieldByName(GoName(set.Field)), x); err != nil {
+		if err := assign(v.FieldByName(ontology.GoName(set.Field)), x); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} cannot set {field}: {why}", a.Title, set.Field, err.Error())
 		}
 	}
@@ -396,148 +212,6 @@ func assign(f reflect.Value, x any) error {
 	return nil
 }
 
-type State struct {
-	Name        string `json:"name" field:"required" help:"Lower-case letters and digits" example:"found"`
-	Title       string `json:"title" field:"required" title:"What people call it" example:"Found"`
-	Tone        string `json:"tone,omitempty" choices:"info,success,warning,danger,neutral"`
-	Description string `json:"description,omitempty" help:"What a record in this state means"`
-}
-
-type Action struct {
-	ConfirmationOnly bool                       `json:"confirmationOnly,omitempty" title:"Require original confirmation receipt"`
-	Adoption         *platform.ProposalAdoption `json:"adoption,omitempty" type:"json" field:"aside"`
-	Name             string                     `json:"name" field:"required" help:"Lower-case letters and digits" example:"return"`
-	Title            string                     `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
-	Description      string                     `json:"description,omitempty" help:"What it does, for people and agents"`
-	From             []string                   `json:"from" title:"Taken from" help:"The states it takes a record from"`
-	ToInput          string                     `json:"toInput,omitempty" title:"State from input"`
-	To               string                     `json:"to,omitempty" title:"Leaves it in" help:"The state it leaves the record in; empty: where it was"`
-	Inputs           []Input                    `json:"inputs,omitempty" title:"What people give"`
-	Transaction      *platform.BusinessTxn      `json:"transaction,omitempty"`
-	Reads            *platform.RuleReadSpec     `json:"reads,omitempty" type:"json" field:"aside"`
-	Sets             []Set                      `json:"sets,omitempty" title:"What it sets"`
-	Conditions       []Condition                `json:"conditions,omitempty" title:"What it needs"`
-	Roles            []string                   `json:"roles,omitempty" title:"Taken by"`
-	Approval         *ActionApproval            `json:"approval,omitempty" title:"Approval"`
-	Creates          []Create                   `json:"creates,omitempty" title:"What it creates"`
-	Posts            []Post                     `json:"posts,omitempty" title:"What it posts"`
-	Journal          *JournalPost               `json:"journal,omitempty" title:"What it books"`
-	Reverses         string                     `json:"reverses,omitempty" title:"Reverses action"`
-}
-
-type JournalPost struct {
-	ClosedPeriod string            `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
-	Date         string            `json:"date,omitempty" example:"record.receivedOn"`
-	Text         string            `json:"text,omitempty" help:"A literal or a source for the entry's text"`
-	Lines        []JournalPostLine `json:"lines" title:"Lines"`
-}
-
-type JournalPostLine struct {
-	Account string `json:"account" help:"=<account code> or a source holding one" example:"=1403"`
-	Debit   string `json:"debit,omitempty" example:"amount"`
-	Credit  string `json:"credit,omitempty" example:"amount"`
-	Text    string `json:"text,omitempty"`
-	Object  string `json:"object,omitempty" help:"What the line is about, e.g. record.material"`
-	Partner string `json:"partner,omitempty" example:"record.supplier"`
-}
-
-type Create struct {
-	Object string `json:"object" field:"required" help:"A defined object of this builder whose reference points at this one" example:"build.followup"`
-	Via    string `json:"via" field:"required" help:"That object's reference field to this record" example:"visit"`
-	Sets   []Set  `json:"sets,omitempty" title:"What it sets"`
-}
-
-type ActionApproval struct {
-	Pending  string          `json:"pending" title:"While it waits"`
-	Rejected string          `json:"rejected,omitempty" title:"If rejected"`
-	Levels   []ApproverLevel `json:"levels" title:"Approver levels"`
-}
-
-type ApproverLevel struct {
-	Title string `json:"title" title:"What this level is called"`
-	Role  string `json:"role" title:"Approver role"`
-	All   bool   `json:"all,omitempty" title:"Everyone in the role must approve"`
-}
-
-type Input struct {
-	Constraints *platform.InputConstraints `json:"constraints,omitempty"`
-	Range       *platform.DateRange        `json:"range,omitempty"`
-	Group       string                     `json:"group,omitempty"`
-	Ref         string                     `json:"ref,omitempty" title:"Reference object"`
-	Stereotype  string                     `json:"stereotype,omitempty" title:"Enterprise element type"`
-	Stereotypes []string                   `json:"stereotypes,omitempty" title:"Enterprise element types"`
-	MinLength   *int                       `json:"minLength,omitempty" title:"Minimum length"`
-	Name        string                     `json:"name" field:"required" example:"to"`
-	Title       string                     `json:"title" field:"required" title:"Label" example:"Handed to"`
-	Type        string                     `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean,choice,reference,attachment"`
-	Choices     string                     `json:"choices,omitempty" help:"For a choice: the values, comma-separated"`
-	Required    bool                       `json:"required,omitempty"`
-}
-
-func (in Input) Field() platform.Field {
-	c := platform.InputConstraints{}
-	if in.Constraints != nil {
-		c = *in.Constraints
-	}
-	if in.MinLength != nil {
-		c.MinLength = in.MinLength
-	}
-	return platform.Field{Name: in.Name, Type: ValueInputTypes[in.Type], Ref: in.Ref, Stereotype: in.Stereotype, Stereotypes: in.Stereotypes, Required: in.Required, Description: in.Title, Choices: ValueChoices(in.Choices), Constraints: &c, Range: in.Range, Group: in.Group}
-}
-
-type Set = platform.TxnSet
-
-type Condition struct {
-	Expr       *platform.Expr `json:"expr,omitempty" type:"json" field:"aside"`
-	When       *Condition     `json:"when,omitempty" title:"Only when"`
-	Field      string         `json:"field,omitempty" help:"A declared record path through references, or input.<name>"`
-	Operator   string         `json:"operator,omitempty" choices:"=,!=,<,<=,>,>=,empty,not empty"`
-	Value      string         `json:"value,omitempty" help:"What it is compared with; $me is the person taking the action"`
-	ValueField string         `json:"valueField,omitempty" help:"Compare with another declared record path or input; excludes value"`
-	Message    string         `json:"message" field:"required" help:"What a person reads when it does not hold"`
-}
-
-var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string", "attachment": "attachment"}
-
-type Access struct {
-	Role    string `json:"role" field:"required" help:"A role of the builder app, lower-case letters and digits" example:"desk"`
-	Read    string `json:"read" field:"required" choices:"all,below,unit,own,none" help:"all: every record; below: those of the member's units and the units under them; unit: those of the member's own units; own: their own; none: not the object at all"`
-	Create  bool   `json:"create,omitempty"`
-	Edit    bool   `json:"edit,omitempty"`
-	Archive bool   `json:"archive,omitempty"`
-}
-
-type ObjectScope struct {
-	Owner     string `json:"owner,omitempty" help:"The field holding the member a record belongs to; empty: whoever created it"`
-	Unit      string `json:"unit,omitempty" help:"The field holding the record's organisation (a reference to enterprise.element, or its id)"`
-	Structure string `json:"structure,omitempty" help:"The relationship kind \"below\" follows in the enterprise model, e.g. management"`
-}
-
-func (b *Build) checkActionPosts(o Object) error {
-	if o.Numbering != nil {
-		if err := o.Numbering.Check(o); err != nil {
-			return err
-		}
-	}
-	for _, a := range o.Actions {
-		if a.Reverses != "" {
-			j := -1
-			for k, other := range o.Actions {
-				if other.Name == a.Reverses {
-					j = k
-				}
-			}
-			switch {
-			case j < 0 || a.Reverses == a.Name:
-				return fmt.Errorf("the action %q reverses %q, which is not another action of this object", a.Name, a.Reverses)
-			case len(a.Posts) > 0:
-				return fmt.Errorf("the action %q reverses %q and so posts nothing of its own", a.Name, a.Reverses)
-			}
-		}
-	}
-	return nil
-}
-
 func numberingOf(o Object, model any) func(c platform.Caller, record any, now time.Time) *kernel.Error {
 	if o.Numbering == nil {
 		return nil
@@ -545,7 +219,7 @@ func numberingOf(o Object, model any) func(c platform.Caller, record any, now ti
 	n, typ := *o.Numbering, reflect.TypeOf(model)
 	return func(c platform.Caller, record any, now time.Time) *kernel.Error {
 		v := reflect.ValueOf(record).Elem()
-		field := v.FieldByName(GoName(n.Field))
+		field := v.FieldByName(ontology.GoName(n.Field))
 		if !field.IsValid() || field.Kind() != reflect.String || field.String() != "" || v.Field(0).Interface().(platform.Record).Revision > 0 {
 			return nil
 		}
@@ -560,7 +234,7 @@ func numberingOf(o Object, model any) func(c platform.Caller, record any, now ti
 			all, _, _ := c.FindOf(typ, platform.Query{Limit: 100000, Archived: true})
 			seq = 1
 			for _, r := range all {
-				if strings.HasPrefix(reflect.ValueOf(r).FieldByName(GoName(n.Field)).String(), prefix) {
+				if strings.HasPrefix(reflect.ValueOf(r).FieldByName(ontology.GoName(n.Field)).String(), prefix) {
 					seq++
 				}
 			}

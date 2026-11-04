@@ -12,6 +12,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 )
 
 func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, scope platform.RuleReadSpec, subject map[string]any, values map[string]any, at time.Time) *kernel.Error {
@@ -39,7 +40,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 			break
 		}
 	}
-	if err := mapDispatchIntegrations(&object, b.integrationID); err != nil {
+	if err := mapDispatchIntegrations(&object, b.data.IntegrationID); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
 	command, known := dispatchCommand(object, spec.Command)
@@ -76,19 +77,19 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 	payload["key"] = key
 	run := platform.DispatchRun{Record: platform.Record{ID: id}, Subject: txn.Subject + "/" + receipt.GetSubmission().GetTarget().GetId(), Action: receipt.GetSubmission().GetSchema().GetName(), Member: c.ID, Command: command, Definition: spec, Target: spec.Target, Key: key, State: "pending", StartedAt: at, StateAt: at, Deadline: at.Add(time.Duration(spec.DeadlineSeconds) * time.Second), ReadDue: at, Release: release, Assets: assets, Input: platform.Raw(payload), Readback: []platform.DispatchReading{}, Attempts: []platform.DispatchAttempt{}, Reviewers: []string{}}
 	run.Reviewers = append(run.Reviewers, b.host.(platform.ConfirmationHost).Holding(ID, spec.ReviewerRole)...)
-	connection := func(id string) (Connection, error) {
-		conn, found := platform.Get[Connection](c, id)
+	connection := func(id string) (dataowner.Connection, error) {
+		conn, found := platform.Get[dataowner.Connection](c, id)
 		if !found {
-			return Connection{}, fmt.Errorf("Dispatch connection is unavailable")
+			return dataowner.Connection{}, fmt.Errorf("Dispatch connection is unavailable")
 		}
-		return b.ExecutionConnection(conn)
+		return b.data.ExecutionConnection(conn)
 	}
 	prepare := func(command platform.DispatchCommand) (json.RawMessage, error) {
-		w, found := platform.Get[Writeback](c, command.Writeback)
+		w, found := platform.Get[dataowner.Writeback](c, command.Writeback)
 		if !found {
 			return nil, fmt.Errorf("Dispatch writeback is unavailable")
 		}
-		w, err = b.ExecutionWriteback(w)
+		w, err = b.data.ExecutionWriteback(w)
 		if err != nil {
 			return nil, err
 		}
@@ -125,11 +126,11 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 		}
 	}
 	if spec.Readback.Source != "" {
-		source, found := platform.Get[Source](c, spec.Readback.Source)
+		source, found := platform.Get[dataowner.Source](c, spec.Readback.Source)
 		if !found {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch status source is unavailable")
 		}
-		source, err = b.ExecutionSource(source)
+		source, err = b.data.ExecutionSource(source)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
@@ -141,11 +142,11 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 		run.Source, run.Connection = platform.Raw(source), platform.Raw(conn)
 	}
 	if spec.Readback.Observation != "" {
-		observation, found := platform.Get[Observation](c, spec.Readback.Observation)
+		observation, found := platform.Get[dataowner.Observation](c, spec.Readback.Observation)
 		if !found {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch observation is unavailable")
 		}
-		definition, err := b.ExecutionObservation(observation)
+		definition, err := b.data.ExecutionObservation(observation)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
@@ -170,7 +171,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 
 func (b *Build) queueDispatch(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *kernel.Error {
 	run.Attempt++
-	run.Intent = fmt.Sprintf("%s:%s:dispatch:%s:%d:%s%s", c.Tenant, ID, run.ID, run.Attempt, WritebackEndpoint, run.Target)
+	run.Intent = fmt.Sprintf("%s:%s:dispatch:%s:%d:%s%s", c.Tenant, ID, run.ID, run.Attempt, dataowner.WritebackEndpoint, run.Target)
 	run.Attempts = append(run.Attempts, platform.DispatchAttempt{Number: run.Attempt, Intent: run.Intent, Target: run.Target, State: "pending", At: at, Compensation: run.Compensating})
 	if len(run.Attempts) > 20 {
 		run.Attempts = run.Attempts[len(run.Attempts)-20:]
@@ -299,7 +300,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 					if i >= 0 {
 						answer := in.Answer
 						if len(answer) > 4096 {
-							answer = platform.Raw(clipAnswer(answer))
+							answer = platform.Raw(dataowner.ClipAnswer(answer))
 						}
 						run.Attempts[i].State, run.Attempts[i].Reason, run.Attempts[i].Answer = in.Outcome, in.Reason, answer
 					}

@@ -197,7 +197,7 @@ func entity(typ, title string, model any, display string) platform.Entity {
 }
 
 func (s *System) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: "Platform", Version: "1", Actions: s.ledger.Catalog,
+	return platform.Manifest{Languages: languages, ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: s.ledger.Catalog,
 		Entities: []platform.Entity{
 			entity(BlobType, "Blob", Blob{}, "digest"),
 			entity(FileType, "File", File{}, "path"), entity(ChangeType, "System change", Change{}, "title"),

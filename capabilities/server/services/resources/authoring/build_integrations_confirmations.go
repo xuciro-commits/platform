@@ -10,6 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 )
 
 const confirmationType = platform.ConfirmationType
@@ -23,7 +24,7 @@ const confirmationTick = confirmationType + ".tick"
 func (b *Build) confirmationEntity() platform.Entity {
 	return platform.Entity{Type: confirmationType, Title: "Business confirmation", Plural: "Business confirmations", Model: platform.ConfirmationRun{}, Display: "subject",
 		Description: "Independent party receipts, unknown outcomes, source reconciliation and declared compensation.",
-		Scope: integrationScopeWithParticipants(func(value any) []string {
+		Scope: dataowner.ScopeWithParticipants(func(value any) []string {
 			r := value.(platform.ConfirmationRun)
 			return append([]string{r.Member}, b.host.(platform.ConfirmationHost).Holding(ID, r.Definition.ReviewerRole)...)
 		}),
@@ -120,17 +121,17 @@ func (b *Build) bindConfirmation(spec *platform.Confirmation, subject string) (c
 			if item.id == "" {
 				continue
 			}
-			prospective, selected, err := b.prospectiveIntegration(platform.AssetWriteback, item.id)
+			prospective, selected, err := b.data.Prospective(platform.AssetWriteback, item.id, b.jointDeclarations)
 			if err != nil {
 				return out, err
 			}
-			var w Writeback
+			var w dataowner.Writeback
 			if selected {
-				w = prospective.(Writeback)
+				w = prospective.(dataowner.Writeback)
 			} else {
-				record, ok := b.host.Record(WritebackType + "/" + item.id)
+				record, ok := b.host.Record(dataowner.WritebackType + "/" + item.id)
 				var valid bool
-				w, valid = record.(Writeback)
+				w, valid = record.(dataowner.Writeback)
 				if !ok || !valid {
 					return out, fmt.Errorf("Confirmation writeback is unavailable")
 				}
@@ -138,17 +139,17 @@ func (b *Build) bindConfirmation(spec *platform.Confirmation, subject string) (c
 			*item.ref = &platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: w.Name}
 		}
 		if party.Reconcile != nil {
-			prospective, selected, err := b.prospectiveIntegration(platform.AssetSource, party.Reconcile.Source)
+			prospective, selected, err := b.data.Prospective(platform.AssetSource, party.Reconcile.Source, b.jointDeclarations)
 			if err != nil {
 				return out, err
 			}
-			var s Source
+			var s dataowner.Source
 			if selected {
-				s = prospective.(Source)
+				s = prospective.(dataowner.Source)
 			} else {
-				record, ok := b.host.Record(SourceType + "/" + party.Reconcile.Source)
+				record, ok := b.host.Record(dataowner.SourceType + "/" + party.Reconcile.Source)
 				var valid bool
-				s, valid = record.(Source)
+				s, valid = record.(dataowner.Source)
 				if !ok || !valid {
 					return out, fmt.Errorf("Reconciliation source is unavailable")
 				}
@@ -289,22 +290,22 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 			if writeback == "" {
 				return nil, 0, nil
 			}
-			w, known := platform.Get[Writeback](c, writeback)
+			w, known := platform.Get[dataowner.Writeback](c, writeback)
 			if !known {
 				return nil, 0, fmt.Errorf("Confirmation writeback is unavailable")
 			}
-			w, err = b.ExecutionWriteback(w)
+			w, err = b.data.ExecutionWriteback(w)
 			if err != nil {
 				return nil, 0, err
 			}
 			if w.State != "published" || w.Object != txn.Subject {
 				return nil, 0, fmt.Errorf("Confirmation writeback must be published")
 			}
-			conn, known := platform.Get[Connection](c, w.Connection)
+			conn, known := platform.Get[dataowner.Connection](c, w.Connection)
 			if !known {
 				return nil, 0, fmt.Errorf("Confirmation connection is unavailable")
 			}
-			conn, err = b.ExecutionConnection(conn)
+			conn, err = b.data.ExecutionConnection(conn)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -328,22 +329,22 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
 		if party.Reconcile != nil {
-			s, known := platform.Get[Source](c, party.Reconcile.Source)
+			s, known := platform.Get[dataowner.Source](c, party.Reconcile.Source)
 			if !known {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Reconciliation source is unavailable")
 			}
-			s, err = b.ExecutionSource(s)
+			s, err = b.data.ExecutionSource(s)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 			}
 			if s.Header != "" || s.Connection == "" {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Reconciliation needs a controlled connection and named credentials")
 			}
-			conn, known := platform.Get[Connection](c, s.Connection)
+			conn, known := platform.Get[dataowner.Connection](c, s.Connection)
 			if !known {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Reconciliation connection is unavailable")
 			}
-			conn, err = b.ExecutionConnection(conn)
+			conn, err = b.data.ExecutionConnection(conn)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 			}
@@ -535,9 +536,9 @@ func confirmationIntent(tenant, key string, request json.RawMessage, protocol *p
 	if protocol != nil {
 		endpoint = "protocol:" + protocol.Provider
 	} else {
-		var req WritebackRequest
+		var req dataowner.WritebackRequest
 		_ = json.Unmarshal(request, &req)
-		endpoint = WritebackEndpoint + req.Connection
+		endpoint = dataowner.WritebackEndpoint + req.Connection
 	}
 	return tenant + ":" + ID + ":confirmation:" + key + ":" + endpoint
 }

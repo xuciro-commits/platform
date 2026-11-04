@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"platformserver/platform"
+	ontology "platformserver/services/ontology"
 	"reflect"
 )
 
@@ -52,7 +53,7 @@ func validateQuery(b *Build, f Query) (Query, error) {
 		}
 		f.InterfaceShape, f.Implementations = bound.InterfaceShape, bound.Implementations
 	}
-	if !Named(f.Name) {
+	if !ontology.Named(f.Name) {
 		return f, fmt.Errorf("The query name %s must be lower-case letters and digits", f.Name)
 	}
 	shape, selected := b.jointEntities[f.Object]
@@ -72,7 +73,7 @@ func validateQuery(b *Build, f Query) (Query, error) {
 }
 
 var queryKind = resourceKind[Query, platform.NamedQuery]{
-	asset: platform.AssetQuery, typ: QueryType, prefix: "query", noun: "query", title: "Object set", plural: "Object sets", capability: "queries", joint: true,
+	typ: QueryType, prefix: "query", noun: "query", title: "Object set", plural: "Object sets", capability: "queries", joint: true,
 	description: "A saved object set over a published object or interface; reads use the shared ObjectSet executor and the caller’s permissions.",
 	transition:  "Publish this object set as its next retained version.",
 	immutable:   "A published query keeps its name and source object",

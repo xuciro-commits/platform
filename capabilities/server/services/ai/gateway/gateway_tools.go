@@ -179,5 +179,5 @@ func (g Tools) Call(m platform.Member, name string, args map[string]any) map[str
 	if err != nil {
 		return text(map[string]string{"error": cmp.Or(err.Message, err.Error())}, true)
 	}
-	return text(map[string]any{"proposal": id, "state": "awaiting-confirmation", "simulation": "accepted", "confirmation": "#/agent-run?id=" + id}, false)
+	return text(map[string]any{"proposal": id, "state": "awaiting-confirmation", "simulation": "accepted", "confirmation": "#/run?id=" + id}, false)
 }

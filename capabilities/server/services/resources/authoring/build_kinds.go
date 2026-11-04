@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 )
 
 type definitionKind interface {
@@ -30,7 +31,6 @@ type definitionKind interface {
 }
 
 type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] struct {
-	asset           platform.AssetKind
 	typ             string
 	prefix          string
 	noun            string
@@ -57,7 +57,7 @@ type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] s
 	candidate       func(platform.ReleaseAsset) error
 }
 
-var definitionKinds = []definitionKind{&queryKind, &propertyKind, &valueKind, &linkKind, &functionKind, &objectTypeGroupKind}
+var definitionKinds = []definitionKind{&queryKind, &propertyKind, &valueKind, &linkKind, &interfaceKind, &objectTypeGroupKind}
 
 func definitionKindOf(kind platform.AssetKind) definitionKind {
 	for _, k := range definitionKinds {
@@ -82,6 +82,9 @@ func (b *Build) kindAssets(k definitionKind) func() ([]platform.ReleaseAsset, er
 }
 
 func (b *Build) InstallDefinitionAsset(asset platform.ReleaseAsset) error {
+	if asset.Ref.Kind == platform.AssetFunction {
+		return b.functions.InstallAsset(asset)
+	}
 	k := definitionKindOf(asset.Ref.Kind)
 	if k == nil {
 		return fmt.Errorf("asset %s has no definition kind", asset.Ref)
@@ -89,9 +92,17 @@ func (b *Build) InstallDefinitionAsset(asset platform.ReleaseAsset) error {
 	return k.installAsset(b, asset)
 }
 
-func (k *resourceKind[T, D]) assetKind() platform.AssetKind { return k.asset }
+func (k *resourceKind[T, D]) descriptor() resourceDescriptor {
+	descriptor, ok := resourceDescriptorOfType(k.typ)
+	if !ok {
+		panic("unknown resource type " + k.typ)
+	}
+	return descriptor
+}
 
-func (k *resourceKind[T, D]) schema() string { return k.typ + ".publish" }
+func (k *resourceKind[T, D]) assetKind() platform.AssetKind { return k.descriptor().kind }
+
+func (k *resourceKind[T, D]) schema() string { return k.descriptor().publication() }
 
 func (k *resourceKind[T, D]) label() string { return strings.ToLower(k.title) }
 
@@ -180,8 +191,8 @@ func (k *resourceKind[T, D]) contractOf(d D) int {
 
 func (k *resourceKind[T, D]) definition(b *Build, name string, version int) (D, int, bool) {
 	if k.joint {
-		if asset, selected := b.jointDeclarations[platform.AssetRef{App: ID, Kind: k.asset, Name: name}]; selected {
-			ordinal := b.definitionAssetVersion(asset, k.asset, k.prefix)
+		if asset, selected := b.jointDeclarations[platform.AssetRef{App: ID, Kind: k.assetKind(), Name: name}]; selected {
+			ordinal := b.definitionAssetVersion(asset, k.assetKind(), k.prefix)
 			if ordinal == version && version > 0 {
 				var d D
 				valid := json.Unmarshal(asset.Body, &d) == nil && asset.ContractVersion == k.contractOf(d) && definitionFamilyOf(k.fromDeclaration(d)).Name == name && d.Check() == nil
@@ -194,11 +205,11 @@ func (k *resourceKind[T, D]) definition(b *Build, name string, version int) (D, 
 
 func (k *resourceKind[T, D]) releaseAsset(b *Build, f T) (platform.ReleaseAsset, error) {
 	family := definitionFamilyOf(f)
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: k.asset, Name: family.Name}, b.Manifest().Version+"."+k.prefix+"-"+strconv.Itoa(family.Version), f.Definition())
+	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: k.assetKind(), Name: family.Name}, b.Manifest().Version+"."+k.prefix+"-"+strconv.Itoa(family.Version), f.Definition())
 }
 
 func (k *resourceKind[T, D]) resolve(b *Build, name, sourceVersion string) (platform.ReleaseAsset, error) {
-	return retainedDefinitionAsset(b.Manifest().Version, k.prefix, k.label(), k.asset, name, sourceVersion, func(name string, version int) (D, int, bool) { return k.definition(b, name, version) })
+	return retainedDefinitionAsset(b.Manifest().Version, k.prefix, k.label(), k.assetKind(), name, sourceVersion, func(name string, version int) (D, int, bool) { return k.definition(b, name, version) })
 }
 
 func (k *resourceKind[T, D]) assets(b *Build) ([]platform.ReleaseAsset, error) {
@@ -207,7 +218,7 @@ func (k *resourceKind[T, D]) assets(b *Build) ([]platform.ReleaseAsset, error) {
 
 func (k *resourceKind[T, D]) fromAsset(b *Build, asset platform.ReleaseAsset) (T, error) {
 	var zero T
-	version := b.definitionAssetVersion(asset, k.asset, k.prefix)
+	version := b.definitionAssetVersion(asset, k.assetKind(), k.prefix)
 	var d D
 	if version == 0 || json.Unmarshal(asset.Body, &d) != nil || asset.ContractVersion != k.contractOf(d) || d.Check() != nil || definitionFamilyOf(k.fromDeclaration(d)).Name != asset.Ref.Name || k.admit != nil && !k.admit(d) {
 		return zero, fmt.Errorf("invalid builder %s asset %s", k.label(), asset.Ref)
@@ -231,7 +242,7 @@ func (k *resourceKind[T, D]) installAsset(b *Build, asset platform.ReleaseAsset)
 }
 
 func (k *resourceKind[T, D]) draftAssets(b *Build, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	return draftDefinitionAssets(b, id, k.asset, k.label(), func() ([]T, error) { return k.inventory(b) }, func(record T) (T, error) {
+	return draftDefinitionAssets(b, id, k.assetKind(), k.label(), func() ([]T, error) { return k.inventory(b) }, func(record T) (T, error) {
 		return k.check(b, record)
 	}, func(record T) (platform.ReleaseAsset, error) {
 		family := definitionFamilyOf(record)
@@ -242,7 +253,7 @@ func (k *resourceKind[T, D]) draftAssets(b *Build, id string) (before, after []p
 }
 
 func (k *resourceKind[T, D]) prepare(b *Build, assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
-	return prepareDefinitionPublications(b, assets, func() ([]T, error) { return k.inventory(b) }, k.asset, k.prefix, k.schema(), k.label(), func(name, version string) (platform.ReleaseAsset, error) { return k.resolve(b, name, version) }, func(record T, asset platform.ReleaseAsset, version int) (T, error) {
+	return prepareDefinitionPublications(b, assets, func() ([]T, error) { return k.inventory(b) }, k.assetKind(), k.prefix, k.schema(), k.label(), func(name, version string) (platform.ReleaseAsset, error) { return k.resolve(b, name, version) }, func(record T, asset platform.ReleaseAsset, version int) (T, error) {
 		family := definitionFamilyOf(record)
 		prior, retained := ReadPublication[T](family.Published)
 		var d D
@@ -273,7 +284,7 @@ func (k *resourceKind[T, D]) prepare(b *Build, assets []platform.ReleaseAsset) (
 
 func (k *resourceKind[T, D]) draft(asset platform.ReleaseAsset) (string, any, error) {
 	var d D
-	if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
+	if err := dataowner.DecodeDescriptor(asset.Body, &d); err != nil {
 		return "", nil, err
 	}
 	return k.typ, k.fromDeclaration(d), nil

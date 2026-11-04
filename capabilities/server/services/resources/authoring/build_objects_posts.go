@@ -2,7 +2,6 @@ package build
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"reflect"
 	"strings"
@@ -11,69 +10,15 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	ontology "platformserver/services/ontology"
 )
 
 func (b *Build) checkPosts(o Object) error {
-	for _, a := range o.Actions {
-		for _, p := range a.Posts {
-			where := fmt.Sprintf("the action %q posts to %q", a.Name, p.Object)
-			if !strings.HasPrefix(p.Object, ID+".") {
-				return fmt.Errorf("%s, which is another app's object; change it through that app's actions", where)
-			}
-			if p.Object == TypeOf(o.Name) {
-				return fmt.Errorf("%s, which is this object itself", where)
-			}
-			if len(p.Match) == 0 {
-				return fmt.Errorf("%s without a field that identifies the balance", where)
-			}
-			for _, m := range p.Match {
-				if err := checkSource(o, a, m.From); err != nil {
-					return fmt.Errorf("%s, match %q: %w", where, m.Field, err)
-				}
-			}
-			if err := checkSource(o, a, p.Amount); err != nil {
-				return fmt.Errorf("%s, amount: %w", where, err)
-			}
-			if b.host == nil {
-				continue
-			}
-			info, known := b.lookupEntity(p.Object)
-			if !known {
-				return fmt.Errorf("%s, which this tenant has not published", where)
-			}
-			for _, m := range p.Match {
-				if _, ok := info.Field(m.Field); !ok {
-					return fmt.Errorf("%s and matches %q, which it has no field for", where, m.Field)
-				}
-			}
-			f, ok := info.Field(p.Field)
-			if !ok || f.Type != "integer" && f.Type != "decimal" && f.Type != "money" {
-				return fmt.Errorf("%s into %q, which is not an integer, decimal or money field of it", where, p.Field)
-			}
-		}
+	var lookup func(string) (platform.EntityInfo, bool)
+	if b.host != nil {
+		lookup = b.lookupEntity
 	}
-	return nil
-}
-
-func checkSource(o Object, a Action, from string) error {
-	switch {
-	case from == "$me", strings.HasPrefix(from, "="):
-		return nil
-	case strings.HasPrefix(from, "record."):
-		name := strings.TrimPrefix(from, "record.")
-		for _, f := range o.Fields {
-			if f.Name == name {
-				return nil
-			}
-		}
-		return fmt.Errorf("%q is not a field of this object", name)
-	}
-	for _, in := range a.Inputs {
-		if in.Name == from {
-			return nil
-		}
-	}
-	return fmt.Errorf("%q is not an input of the action", from)
+	return ontology.CheckActionPostings(o, ID, lookup)
 }
 
 func (b *Build) post(c platform.Caller, p Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error) {
@@ -122,7 +67,7 @@ func (b *Build) post(c platform.Caller, p Post, inputs map[string]any, record an
 		if s, isText := x.(string); isText && strings.HasPrefix(m.From, "=") {
 			x, _ = platform.Literal(f.Type, s)
 		}
-		if err := assign(v.FieldByName(GoName(m.Field)), x); err != nil {
+		if err := assign(v.FieldByName(ontology.GoName(m.Field)), x); err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The posting cannot match {field}: {why}", m.Field, err.Error())
 		}
 	}
@@ -134,7 +79,7 @@ func (b *Build) post(c platform.Caller, p Post, inputs map[string]any, record an
 		amount = -amount
 	}
 	f, _ := info.Field(p.Field)
-	target := v.FieldByName(GoName(p.Field))
+	target := v.FieldByName(ontology.GoName(p.Field))
 	if !target.IsValid() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The balance has no field {field}", p.Field)
 	}
@@ -192,7 +137,7 @@ func validateOf(o Object, model any, lookup func(string) (platform.EntityInfo, b
 			}
 		}
 		v := reflect.ValueOf(record).Elem()
-		base := v.FieldByName(GoName(BaseField))
+		base := v.FieldByName(ontology.GoName(BaseField))
 		if !base.IsValid() || base.String() == "" {
 			return nil
 		}

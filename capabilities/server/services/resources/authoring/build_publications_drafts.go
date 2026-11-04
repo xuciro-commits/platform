@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 )
 
 func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string) ([]DraftChange, error) {
@@ -203,14 +204,14 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 			if !compiled {
 				switch r := record.(type) {
 				case Alert:
-					asset, err = alertReleaseAsset(r, max(1, r.DefinitionVersion))
+					asset, err = b.automation.AlertAsset(r, max(1, r.DefinitionVersion))
 				case SampleSetRecord:
 					asset, err = sampleSetAsset(r, max(1, r.DefinitionVersion))
 				case TestPlan:
 					asset, err = b.testPlanAsset(r, max(1, r.DefinitionVersion))
 				default:
-					_, ordinal, _, _ := integrationMetadata(record)
-					asset, err = b.integrationAsset(frozen.Ref.Kind, record, max(1, ordinal))
+					_, ordinal, _, _ := dataowner.IntegrationMetadata(record)
+					asset, err = b.data.Asset(frozen.Ref.Kind, record, max(1, ordinal))
 				}
 			}
 			current = asset.Body

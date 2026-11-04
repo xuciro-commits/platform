@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 
 	"platformserver/platform"
+	ontology "platformserver/services/ontology"
 )
 
 const BranchType = "build.branch"
@@ -61,6 +63,7 @@ type BranchChange struct {
 	By      string          `json:"by"`
 	Type    string          `json:"type"`
 	ID      string          `json:"id"`
+	Project string          `json:"project,omitempty"`
 	Op      string          `json:"op" enum:"create,update,delete"`
 	HasBase bool            `json:"hasBase,omitempty"`
 	Base    json.RawMessage `json:"base,omitempty"`
@@ -138,7 +141,7 @@ func (b *Build) branchEntity() platform.Entity {
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: builder, Capability: "branches"},
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			branch := record.(*Branch)
-			if !Named(branch.Name) || len(branch.Name) > 64 || len(branch.Title) > 200 || len(branch.Description) > 4096 {
+			if !ontology.Named(branch.Name) || len(branch.Name) > 64 || len(branch.Title) > 200 || len(branch.Description) > 4096 {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch name is lower-case letters and digits, 64 at most")
 			}
 			return nil
@@ -182,6 +185,9 @@ func saveBranchChange(c platform.Caller, record any, payload json.RawMessage, at
 	var change BranchChange
 	if json.Unmarshal(payload, &raw) != nil || json.Unmarshal(payload, &change) != nil {
 		return branchInvalid("A branch change is one JSON object")
+	}
+	if change.Op == "create" && change.Project == "" {
+		return branchInvalid("A new resource names the project that owns it")
 	}
 	_, change.HasBase = raw["base"]
 	if !BranchDraftType(change.Type) || change.ID == "" || len(change.ID) > 256 || !slices.Contains([]string{"create", "update", "delete"}, change.Op) {
@@ -349,10 +355,17 @@ func (b *Build) BranchReviewRequirement(c platform.Caller, branch Branch) ([]str
 	if err != nil {
 		return nil, 0, err
 	}
-	for _, resource := range resources {
-		if slices.ContainsFunc(branch.Changes, func(change BranchChange) bool { return change.Type == resource.Type && change.ID == resource.Draft }) && !slices.Contains(projects, resource.Project) {
-			projects = append(projects, resource.Project)
-			required = max(required, b.host.ProjectApprovals(resource.Project))
+	for _, key := range branch.Resources() {
+		typ, id, _ := strings.Cut(key, "/")
+		project := ""
+		if index := slices.IndexFunc(resources, func(resource Resource) bool { return resource.Type == typ && resource.Draft == id }); index >= 0 {
+			project = resources[index].Project
+		} else if change, found := branch.Latest(typ, id); found {
+			project = change.Project
+		}
+		if project != "" && !slices.Contains(projects, project) {
+			projects = append(projects, project)
+			required = max(required, b.host.ProjectApprovals(project))
 		}
 	}
 	return projects, required, nil

@@ -58,7 +58,7 @@ func entities() []platform.Entity {
 }
 
 func (f *Files) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "Files", Version: "1", Actions: f.ledger.Catalog, Entities: entities(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: f.ledger.Catalog, Entities: entities(),
 		Settings: []platform.Setting{{Name: SettingMax, Title: "Largest file, MB", Type: "integer", Default: "25",
 			Description: "Uploads larger than this are refused."}}}
 }

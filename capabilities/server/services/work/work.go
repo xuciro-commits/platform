@@ -172,7 +172,7 @@ func (w *Work) Snapshot() (json.RawMessage, error) { return w.ledger.Snapshot() 
 func (w *Work) Restore(raw json.RawMessage) error { return w.ledger.Restore(raw) }
 
 func (w *Work) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "Work", Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
 		Reads: []string{"inbox", "requests", "views"}, Everyone: []string{"inbox", "requests", "views"},
 		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}, {Name: "redirects", Title: "Start redirected approvals after release activation", Every: time.Second}, {Name: "refusals", Title: "Escalate repeated business refusals", Every: time.Second}}}
 }

@@ -9,42 +9,35 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	automationauthoring "platformserver/services/automate/authoring"
+	dataowner "platformserver/services/data"
 )
 
 func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
-	if schema == SchemaSampleSet {
-		return sampleSetInstallation(image)
-	}
-	typ, _, _ := strings.Cut(schema, ".publish")
-	if schema != typ+".publish" {
+	descriptor, known := resourceDescriptorOfSchema(schema)
+	if !known {
 		return platform.AssetInstallation{}, fmt.Errorf("invalid publication schema")
 	}
-	if kind := integrationKindOf(typ); kind != "" {
-		record, err := integrationInstallationRecord(kind, image)
-		if err != nil {
-			return platform.AssetInstallation{}, err
-		}
-		name, version, raw, _ := integrationMetadata(record)
-		var asset platform.ReleaseAsset
-		if integrationRecord(record).ID == "" || version < 1 || ValueDecodeIntegration([]byte(raw), &asset) != nil || asset.Ref != (platform.AssetRef{App: ID, Kind: kind, Name: name}) {
-			return platform.AssetInstallation{}, fmt.Errorf("invalid integration installation")
-		}
-		if err := validateIntegrationFamily(record, asset); err != nil {
-			return platform.AssetInstallation{}, err
-		}
-		if err := ValueValidateIntegrationDescriptor(asset); err != nil {
-			return platform.AssetInstallation{}, err
-		}
-		return platform.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: typ + "/" + integrationRecord(record).ID, Image: slices.Clone(image)}, nil
+	if descriptor.family == integrationResources {
+		return b.data.DecodeInstallation(schema, image)
+	}
+	if descriptor.kind == platform.AssetSampleSet {
+		return sampleSetInstallation(image)
+	}
+	if descriptor.typ == automationauthoring.ProcessType || descriptor.typ == automationauthoring.AlertType {
+		return b.automation.DecodeInstallation(schema, image)
+	}
+	if b.apps.HandlesPublication(schema) {
+		return b.apps.DecodeInstallation(schema, image)
 	}
 	var record struct {
 		platform.Record
 		Name string `json:"name"`
 	}
-	if !slices.Contains(b.AcceptedPublicationSchemas(), schema) || json.Unmarshal(image, &record) != nil || record.ID == "" {
+	if !descriptor.acceptedPublication || json.Unmarshal(image, &record) != nil || record.ID == "" {
 		return platform.AssetInstallation{}, fmt.Errorf("invalid release publication row")
 	}
-	ref, err := draftAssetRef(typ, record.Name)
+	ref, err := draftAssetRef(descriptor.typ, record.Name)
 	if err != nil {
 		return platform.AssetInstallation{}, err
 	}
@@ -61,14 +54,8 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 			return platform.AssetInstallation{}, err
 		}
 		ref = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: r.Name}
-	case SchemaAlertPublish:
-		_, asset, err := alertImage(image)
-		if err != nil {
-			return platform.AssetInstallation{}, err
-		}
-		ref = asset.Ref
 	}
-	return platform.AssetInstallation{Ref: ref, Schema: schema, Record: typ + "/" + record.ID, Image: slices.Clone(image)}, nil
+	return platform.AssetInstallation{Ref: ref, Schema: schema, Record: descriptor.record(record.ID), Image: slices.Clone(image)}, nil
 }
 
 func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error {
@@ -82,125 +69,17 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 	if plan.Ref.Kind == platform.AssetSampleSet {
 		return nil
 	}
-	if !ValueIntegrationKind(plan.Ref.Kind) {
+	if !dataowner.ValueIntegrationKind(plan.Ref.Kind) {
 		return b.ValidateAcceptedPublication(plan.Schema, plan.Image)
 	}
-	record, err := integrationInstallationRecord(plan.Ref.Kind, plan.Image)
-	if err != nil {
-		return err
-	}
-	c := b.host.Automation(platform.Caller{}, ID)
-	switch r := record.(type) {
-	case Connection:
-		_, err = b.ConnectionConfiguration(r)
-	case platform.MediaSet:
-		_, err = b.acceptedIntegration(r, platform.AssetMediaSet)
-	case platform.Schedule:
-		fixed, e := b.ExecutionSchedule(r)
-		if e != nil {
-			return e
-		}
-		if e := b.scheduleEntity().Validate(c, &fixed); e != nil {
-			return e
-		}
-	case Dataset:
-		_, err = b.ExecutionDataset(r)
-	case Listener:
-		_, err = b.ExecutionListener(r)
-	case Source:
-		fixed, e := b.ExecutionSource(r)
-		if e != nil {
-			return e
-		}
-		if e := b.checkSource(c, fixed); e != nil {
-			return e
-		}
-	case Pipeline:
-		fixed, e := b.ExecutionPipeline(r)
-		if e != nil {
-			return e
-		}
-		if e := b.checkPipeline(c, fixed); e != nil {
-			return e
-		}
-	case Writeback:
-		fixed, e := b.ExecutionWriteback(r)
-		if e != nil {
-			return e
-		}
-		if e := b.checkWriteback(c, fixed); e != nil {
-			return e
-		}
-
-	case Observation:
-		if _, e := b.ExecutionObservation(r); e != nil {
-			return e
-		}
-		configuration, e := b.acceptedIntegration(r, platform.AssetObservation)
-		if e != nil {
-			return e
-		}
-		fixed := configuration.(Observation)
-		fixed.Record, fixed.State, fixed.Publisher = r.Record, r.State, r.Publisher
-		fixed.PublisherScopes = r.PublisherScopes
-		fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
-		err = b.checkObservation(c, fixed)
-	case Match:
-		fixed, e := b.ExecutionMatching(r)
-		if e != nil {
-			return e
-		}
-		if e := b.checkMatch(c, fixed); e != nil {
-			return e
-		}
-	}
-	return err
-}
-
-func integrationInstallationRecord(kind platform.AssetKind, raw []byte) (any, error) {
-	typ := integrationRecordType(kind)
-	if typ == nil {
-		return nil, fmt.Errorf("unknown integration kind")
-	}
-	ptr := reflect.New(typ)
-	if err := ValueDecodeIntegration(raw, ptr.Interface()); err != nil {
-		return nil, err
-	}
-	return ptr.Elem().Interface(), nil
+	return b.data.ValidateInstallation(plan)
 }
 
 func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx platform.AssetApplyContext) error {
-	if ctx.Validate {
-		if ctx.Upgrade {
-			if err := b.validateIntegrationUpgrade(plan); err != nil {
-				return err
-			}
-		}
+	if dataowner.ValueIntegrationKind(plan.Ref.Kind) {
+		return b.data.ApplyInstallation(plan, ctx)
 	}
-	if plan.Ref.Kind == platform.AssetMediaSet {
-		var set platform.MediaSet
-		var asset platform.ReleaseAsset
-		var definition MediaSetDefinition
-		if err := json.Unmarshal(plan.Image, &set); err != nil {
-			return err
-		}
-		if err := ValueDecodeIntegration([]byte(set.Published), &asset); err != nil {
-			return err
-		}
-		if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
-			return err
-		}
-		files, ok := b.files.(platform.MediaFiles)
-		if !ok {
-			return fmt.Errorf("Media content storage is unavailable")
-		}
-		for hash, raw := range definition.Blobs {
-			if err := files.StoreMedia(hash, "application/octet-stream", raw); err != nil {
-				return err
-			}
-		}
-	}
-	if ValueIntegrationKind(plan.Ref.Kind) || plan.Ref.Kind == platform.AssetSampleSet {
+	if plan.Ref.Kind == platform.AssetSampleSet {
 		_, err := b.DecodeAssetInstallation(plan.Schema, plan.Image)
 		return err
 	}
@@ -211,57 +90,6 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 		defer func() { b.ledger = saved }()
 	}
 	return b.ApplyAcceptedPublication(plan.Schema, plan.Image)
-}
-
-func (b *Build) validateIntegrationUpgrade(plan platform.AssetInstallation) error {
-	if !ValueIntegrationKind(plan.Ref.Kind) {
-		return nil
-	}
-	proposed, err := integrationInstallationRecord(plan.Ref.Kind, plan.Image)
-	if err != nil {
-		return err
-	}
-	rows, err := b.integrationInventory(plan.Ref.Kind)
-	if err != nil {
-		return err
-	}
-	var current any
-	for _, r := range rows {
-		if integrationRecord(r).ID == integrationRecord(proposed).ID {
-			current = r
-			break
-		}
-	}
-	if current == nil {
-		return nil
-	}
-	switch old := current.(type) {
-	case Source:
-		next, e := b.ExecutionSource(proposed.(Source))
-		if e != nil {
-			return e
-		}
-		prior, e := b.ExecutionSource(old)
-		if e != nil {
-			return e
-		}
-		if (old.Cursor != "" || old.Last != nil) && (prior.Connection != next.Connection || prior.Profile != next.Profile || prior.URL != next.URL || prior.Filter != next.Filter || prior.Path != next.Path || prior.Stream != next.Stream || prior.Entity != next.Entity || prior.Since != next.Since || prior.Dataset != next.Dataset || prior.Object != next.Object || prior.Key != next.Key || !reflect.DeepEqual(prior.Mapping, next.Mapping)) {
-			return fmt.Errorf("source with accepted data or cursor needs an explicit migration before changing its target or identity mapping")
-		}
-	case Pipeline:
-		next, e := b.ExecutionPipeline(proposed.(Pipeline))
-		if e != nil {
-			return e
-		}
-		prior, e := b.ExecutionPipeline(old)
-		if e != nil {
-			return e
-		}
-		if old.Last != nil && (prior.Input != next.Input || prior.OutputDataset != next.OutputDataset || prior.OutputObject != next.OutputObject || prior.Key != next.Key) {
-			return fmt.Errorf("pipeline with accepted data needs an explicit migration before changing its input or output identity")
-		}
-	}
-	return nil
 }
 
 var _ platform.AssetLifecycleOwner = (*Build)(nil)
@@ -312,25 +140,22 @@ func orderOwnerInstallations(assets []platform.ReleaseAsset, plans []platform.As
 }
 
 func draftAssetRef(typ, name string) (platform.AssetRef, error) {
-	kinds := map[string]platform.AssetKind{ObjectType: platform.AssetObject, ActionTypeType: platform.AssetAction, PageType: platform.AssetPage, AppType: platform.AssetApp, ProcessType: platform.AssetFlow, SampleSetType: platform.AssetSampleSet,
-		PropertyTypeType: platform.AssetPropertyType, ValueTypeType: platform.AssetValueType, ObjectTypeGroupType: platform.AssetObjectTypeGroup, LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, FunctionType: platform.AssetFunction, AgentType: platform.AssetAgent,
-		CodeType: platform.AssetCompute, TableType: platform.AssetCompute, AlertType: platform.AssetAlert, TestPlanType: platform.AssetTestPlan}
-	kind := kinds[typ]
-	if kind == "" {
-		kind = integrationKindOf(typ)
-	}
-	if kind == "" {
+	descriptor, ok := resourceDescriptorOfType(typ)
+	if !ok {
 		return platform.AssetRef{}, fmt.Errorf("unknown native release draft %s", typ)
 	}
-	if kind == platform.AssetObject || kind == platform.AssetFlow {
+	if descriptor.qualifiedName {
 		name = TypeOf(name)
 	}
-	return platform.AssetRef{App: ID, Kind: kind, Name: name}, nil
+	return platform.AssetRef{App: descriptor.app, Kind: descriptor.kind, Name: name}, nil
 }
 
 func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, any, error) {
 	if k := definitionKindOf(asset.Ref.Kind); k != nil {
 		return k.draft(asset)
+	}
+	if asset.Ref.Kind == platform.AssetFunction {
+		return b.functions.Draft(asset)
 	}
 	switch asset.Ref.Kind {
 	case platform.AssetSampleSet:
@@ -364,9 +189,11 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 		}
 		return "", nil, fmt.Errorf("compute %s needs its original compiled target owner; a module descriptor does not carry source or compilation evidence", asset.Ref)
 	case platform.AssetAlert:
-		alert, _, err := alertFromAsset(asset)
-		alert.State = "draft"
-		return AlertType, alert, err
+		typ, record, handled, err := b.automation.Draft(asset)
+		if !handled {
+			return "", nil, fmt.Errorf("alert asset has no automation owner")
+		}
+		return typ, record, err
 	}
 	return "", nil, nil
 }
@@ -408,7 +235,7 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 	for _, asset := range assets {
 		b.jointDeclarations[asset.Ref] = asset
 	}
-	restoreTargets, err := b.integrationTargets(assets, platform.AssetReleaseContext{})
+	restoreTargets, err := b.data.BeginTargets(assets, platform.AssetReleaseContext{})
 	if err != nil {
 		b.jointEntities, b.jointMode, b.jointAssets, b.jointDeclarations = saved, savedMode, savedAssets, savedDeclarations
 		return nil, err

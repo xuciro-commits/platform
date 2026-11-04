@@ -15,7 +15,7 @@ func (b *Build) Run(c platform.Caller, job string, at time.Time) *kernel.Error {
 	if job != "confirmations" {
 		return nil
 	}
-	if err := b.runAutomations(c, at); err != nil {
+	if err := b.automation.Run(c, at); err != nil {
 		return err
 	}
 	runs, err := platform.PendingConfirmations(c)

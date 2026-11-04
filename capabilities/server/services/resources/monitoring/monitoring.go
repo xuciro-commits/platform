@@ -35,7 +35,7 @@ func New(tenant string) *Monitoring {
 }
 
 func (m *Monitoring) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "Monitoring", Version: "1", Actions: m.ledger.Catalog,
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: m.ledger.Catalog,
 		Entities: []platform.Entity{{Type: ViewType, Title: "Monitoring view", Model: SavedView{}, Display: "title",
 			Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "owner", Participants: func(value any) []string { return []string{value.(SavedView).Owner} }}}},
 		Reads: []string{ReadViews}, Everyone: []string{ReadViews}}

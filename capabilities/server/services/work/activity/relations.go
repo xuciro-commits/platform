@@ -103,7 +103,7 @@ func (r *Relations) LegacyRelations() []platform.RelationLink {
 }
 
 func (r *Relations) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "Relations", Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"},
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"},
 		Entities: entities()}
 }
 

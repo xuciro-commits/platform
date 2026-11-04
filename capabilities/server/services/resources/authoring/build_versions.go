@@ -169,19 +169,11 @@ func compatibleObjectSchema(previous, next Object) bool {
 		object.ObjectView = nil
 		object.State, object.Installed, object.Published = "", "", ""
 		object.ExtensionSource, object.SchemaVersions = nil, nil
-		object.ActionTypes = nil
+		object.ActionTypes, object.Actions = nil, nil
 		object.Fields = nil
 		object.States = slices.Clone(object.States)
 		for index := range object.States {
 			object.States[index].Title, object.States[index].Description, object.States[index].Tone = "", "", ""
-		}
-		object.Actions = slices.Clone(object.Actions)
-		for index := range object.Actions {
-			object.Actions[index].Title, object.Actions[index].Description = "", ""
-			object.Actions[index].Inputs = slices.Clone(object.Actions[index].Inputs)
-			for input := range object.Actions[index].Inputs {
-				object.Actions[index].Inputs[input].Title, object.Actions[index].Inputs[input].Group = "", ""
-			}
 		}
 		return object
 	}

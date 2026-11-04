@@ -5,95 +5,68 @@ import (
 	"fmt"
 
 	"platformserver/platform"
+	ontology "platformserver/services/ontology"
 )
 
-func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaActionType, schemaAlertMigrate, SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaValueType, SchemaObjectTypeGroup, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
+func (b *Build) AcceptedPublicationSchemas() []string {
+	return append(acceptedPublicationSchemas(), b.automation.AcceptedPublicationSchemas()...)
 }
 
-func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
+func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, error) {
 	switch schema {
 	case SchemaEvaluationSetPublish:
 		_, _, err := b.testPlanImage(image)
-		return b.testPlanEntity(), nil, nil, nil, err
+		return b.testPlanEntity(), nil, nil, err
 	case SchemaAgentPublish:
 		var record Agent
 		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return platform.Entity{}, nil, nil, err
 		}
 		if _, ok := ReadPublication[Agent](record.Published); !ok {
-			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted agent has no published definition")
+			return platform.Entity{}, nil, nil, fmt.Errorf("accepted agent has no published definition")
 		}
-		return b.agentEntity(), nil, nil, nil, nil
+		return b.agentEntity(), nil, nil, nil
 	case SchemaPublish:
 		var record Object
 		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return platform.Entity{}, nil, nil, err
 		}
 		published, ok := ReadPublication[Object](record.Published)
 		if !ok || record.State != "published" || record.ID != published.ID ||
 			record.Name != published.Name || record.Installed != TypeOf(published.Name) {
-			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted object has no matching published definition")
+			return platform.Entity{}, nil, nil, fmt.Errorf("accepted object has no matching published definition")
 		}
 		if published.ExtensionSource != nil {
 			if err := published.ExtensionSource.Check(published.Extends); err != nil {
-				return platform.Entity{}, nil, nil, nil, err
+				return platform.Entity{}, nil, nil, err
 			}
 		}
 		entity := b.entity(published)
 		portable, err := b.dispatchSchemaObject(published)
 		if err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return platform.Entity{}, nil, nil, err
 		}
 		if err := checkObjectSchemas(portable); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return platform.Entity{}, nil, nil, err
 		}
 		actions := objectActions(published, entity)
-		return entity, actions, []platform.Page{CompileObjectPage(published)}, nil, nil
-	case SchemaRelease:
-		var record Page
-		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
-		}
-		published, ok := ReadPublication[Page](record.Published)
-		if !ok || record.State != "published" || record.ID != published.ID ||
-			record.Name != published.Name {
-			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted page has no published definition")
-		}
-		return platform.Entity{}, nil, []platform.Page{descriptor(published)}, nil, nil
-	case SchemaHandOver:
-		var record Application
-		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
-		}
-		published, ok := ReadPublication[Application](record.Published)
-		if !ok || record.State != "published" || record.ID != published.ID ||
-			record.Name != published.Name {
-			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted application has no published definition")
-		}
-		app := applicationDescriptor(published)
-		return platform.Entity{}, nil, nil, &app, nil
+		return entity, actions, []platform.Page{ontology.CompileObjectPage(published, ID)}, nil
 	}
-	return platform.Entity{}, nil, nil, nil, fmt.Errorf("not an accepted builder publication: %s", schema)
+	return platform.Entity{}, nil, nil, fmt.Errorf("not an accepted builder publication: %s", schema)
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if b.apps.HandlesPublication(schema) {
+		return b.apps.ValidateImage(schema, image)
+	}
+	if schema == SchemaFunction {
+		return b.functions.ValidateImage(image)
+	}
 	if schema == SchemaActionType {
 		return actionTypeImage(image)
 	}
-	if schema == schemaAlertMigrate {
-		schema = SchemaProcess
-	}
-	if schema == SchemaAlertPublish {
-		_, asset, err := alertImage(image)
-		if err != nil {
-			return err
-		}
-		alert, _, err := alertFromAsset(asset)
-		if err != nil {
-			return err
-		}
-		return b.checkAlert(alert)
+	if b.automation.HandlesPublication(schema) {
+		return b.automation.ValidateImage(schema, image)
 	}
 	if schema == SchemaEvaluationSetPublish {
 		_, _, err := b.testPlanImage(image)
@@ -128,17 +101,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.ValidateInstallOperation(platform.Caller{Replaying: true}, code.Definition())
 	}
-	if schema == SchemaProcess {
-		p, err := ReadProcessImage(image)
-		if err != nil {
-			return err
-		}
-		if b.host.BuildProcesses() == nil {
-			return fmt.Errorf("tenant has no flow runtime")
-		}
-		return b.host.BuildProcesses().Validate(b, b.flowOf(p))
-	}
-	_, _, pages, app, err := b.publicationImage(schema, image)
+	_, _, _, err := b.publicationImage(schema, image)
 	if err != nil {
 		return err
 	}
@@ -153,24 +116,22 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 			return fmt.Errorf("accepted object has no published definition")
 		}
 		return b.validateObjectInstallation(platform.Caller{Replaying: true}, published)
-	case SchemaRelease:
-		return b.host.ValidateInstallPage(pages[0])
-	case SchemaHandOver:
-		return b.host.ValidateInstallApplication(*app)
 	}
 	return fmt.Errorf("unknown builder publication: %s", schema)
 }
 
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if b.apps.HandlesPublication(schema) {
+		return b.apps.ApplyImage(schema, image)
+	}
+	if schema == SchemaFunction {
+		return b.functions.ApplyImage(image)
+	}
 	if schema == SchemaActionType {
 		return actionTypeImage(image)
 	}
-	if schema == schemaAlertMigrate {
-		schema = SchemaProcess
-	}
-	if schema == SchemaAlertPublish {
-		_, _, err := alertImage(image)
-		return err
+	if b.automation.HandlesPublication(schema) {
+		return b.automation.ApplyImage(schema, image)
 	}
 	if schema == SchemaEvaluationSetPublish {
 		_, _, err := b.testPlanImage(image)
@@ -211,17 +172,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.installCode(platform.Caller{Replaying: true}, code)
 	}
-	if schema == SchemaProcess {
-		p, err := ReadProcessImage(image)
-		if err != nil {
-			return err
-		}
-		if b.host.BuildProcesses() == nil {
-			return fmt.Errorf("tenant has no flow runtime")
-		}
-		return b.host.BuildProcesses().Install(b, b.flowOf(p))
-	}
-	entity, actions, pages, app, err := b.publicationImage(schema, image)
+	entity, actions, pages, err := b.publicationImage(schema, image)
 	if err != nil {
 		return err
 	}
@@ -247,14 +198,6 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 			return fmt.Errorf("install accepted object: %w", err)
 		}
 		b.installed[entity.Type] = entity
-	case SchemaRelease:
-		if err := b.host.InstallPage(platform.Caller{Replaying: true}, pages[0]); err != nil {
-			return fmt.Errorf("install accepted page: %w", err)
-		}
-	case SchemaHandOver:
-		if err := b.host.InstallApplication(platform.Caller{Replaying: true}, *app); err != nil {
-			return fmt.Errorf("install accepted application: %w", err)
-		}
 	}
 	return nil
 }
@@ -262,13 +205,6 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 func published[T any](definition T) string {
 	switch value := any(definition).(type) {
 	case Object:
-		value.Published = ""
-		definition = any(value).(T)
-	case Page:
-		value.Published = ""
-		value.Versions = nil
-		definition = any(value).(T)
-	case Application:
 		value.Published = ""
 		definition = any(value).(T)
 	case PropertyType:
@@ -299,12 +235,6 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
-	case Process:
-		value.Paused = false
-		value.PauseReason = ""
-		value.Published = ""
-		value.Versions = nil
-		definition = any(value).(T)
 	}
 	raw, _ := json.Marshal(definition)
 	return string(raw)
@@ -317,8 +247,11 @@ func (b *Build) Reinstall() error {
 	if err := valueKind.restore(b); err != nil {
 		return err
 	}
+	if err := interfaceKind.restore(b); err != nil {
+		return err
+	}
 
-	objects, pages, applications, err := b.releaseInventory()
+	objects, _, _, err := b.releaseInventory()
 	if err != nil {
 		return err
 	}
@@ -344,7 +277,7 @@ func (b *Build) Reinstall() error {
 	if err := queryKind.restore(b); err != nil {
 		return err
 	}
-	if err := functionKind.restore(b); err != nil {
+	if err := b.functions.Restore(); err != nil {
 		return err
 	}
 
@@ -374,38 +307,17 @@ func (b *Build) Reinstall() error {
 			return err
 		}
 	}
-	for _, p := range pages {
-		was, ok := ReadPublication[Page](p.Published)
-		if !ok || p.Archived {
-			continue
-		}
-		if err := b.release(platform.Caller{Replaying: true}, was); err != nil {
-			return fmt.Errorf("page %s: %v", p.Name, err)
-		}
+	if err := b.apps.RestorePages(); err != nil {
+		return err
 	}
-	for _, p := range pages {
-		was, ok := ReadPublication[Page](p.Published)
-		if !ok || p.Archived {
-			continue
-		}
-		if err := b.host.ValidateInstallPage(descriptor(was)); err != nil {
-			return fmt.Errorf("page %s navigation: %w", p.Name, err)
-		}
-	}
-	if err := b.installProcesses(); err != nil {
+	if err := b.automation.Restore(); err != nil {
 		return err
 	}
 	if err := b.installTables(); err != nil {
 		return err
 	}
-	for _, a := range applications {
-		was, ok := ReadPublication[Application](a.Published)
-		if !ok || a.Archived {
-			continue
-		}
-		if err := b.hand(platform.Caller{Replaying: true}, was); err != nil {
-			return fmt.Errorf("application %s: %v", a.Name, err)
-		}
+	if err := b.apps.RestoreApplications(); err != nil {
+		return err
 	}
 	return nil
 }

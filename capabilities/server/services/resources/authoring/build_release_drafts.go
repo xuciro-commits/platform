@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 )
 
 func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.Member, review bool) (result JointDraftAssets, err error) {
@@ -39,7 +40,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	if err != nil {
 		return result, err
 	}
-	processes, err := b.processInventory()
+	processes, err := b.automation.Inventory()
 	if err != nil {
 		return result, err
 	}
@@ -149,7 +150,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	if len(problems) > 0 {
 		return result, errors.Join(problems...)
 	}
-	recordAssets, err := releaseAssets(inv.objects, inv.pages, inv.apps, inv.processes, b.Manifest().Version)
+	recordAssets, err := b.releaseAssets(inv.objects, inv.pages, inv.apps, inv.processes, b.Manifest().Version)
 	if err == nil {
 		recordAssets, err = b.bindConfirmationAssets(recordAssets)
 	}
@@ -217,11 +218,6 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			return prior, next, false, fmt.Errorf("draft process %q not found", id)
 		}
 		record := inv.processes[i]
-		if was, ok := ReadPublication[Process](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
-			hadPrior = true
-		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(record.Name)}
 		source := b.installed[record.Object]
 		models := []platform.Entity{}
 		for _, object := range inv.objects {
@@ -234,28 +230,10 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 				source = model
 			}
 		}
-		if problem := b.checkFlow(record, source, models); problem != nil {
-			err = fmt.Errorf("%s", problem.Message)
-		} else if record.Version >= 64 {
-			err = fmt.Errorf("a process may retain at most 64 published versions")
-		} else if b.host.BuildProcesses() == nil {
-			err = fmt.Errorf("this tenant runs no processes")
-		} else {
-			record.Version++
-			if !record.Manual {
-				record.Scheduler = member.ID
-			} else {
-				record.Scheduler = ""
-			}
-			if !joint {
-				err = b.host.BuildProcesses().Validate(b, b.flowOf(record))
-			}
-			if err == nil {
-				record.Published = published(record)
-				record.Versions = append(slices.Clone(record.Versions), record.Published)
-				record.State = "published"
-				inv.processes[i] = record
-			}
+		var prepared Process
+		prepared, prior, next, hadPrior, err = b.automation.CheckDraft(platform.Caller{}, record, source, models, member, !joint)
+		if err == nil {
+			inv.processes[i] = prepared
 		}
 	case platform.AssetAction:
 		action, found := platform.Get[ActionType](b.host.Automation(platform.Caller{}, ID), id)
@@ -310,17 +288,9 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft page %q not found", id)
 		}
-		record := inv.pages[i]
-		if was, ok := ReadPublication[Page](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: was.Name}
-			hadPrior = true
-		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: record.Name}
-		if err = b.checkPage(record); err == nil && !joint {
-			err = b.host.ValidateInstallPage(descriptor(record))
-		}
+		var record Page
+		record, prior, next, hadPrior, err = b.apps.CheckPageDraft(inv.pages[i], !joint)
 		if err == nil {
-			err = retainPagePublication(&record)
 			inv.pages[i] = record
 		}
 	case platform.AssetApp:
@@ -328,17 +298,10 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft application %q not found", id)
 		}
-		record := inv.apps[i]
-		if was, ok := ReadPublication[Application](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: was.Name}
-			hadPrior = true
-		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: record.Name}
-		if err = b.checkApplication(record); err == nil && !joint {
-			err = b.host.ValidateInstallApplication(applicationDescriptor(record))
-		}
+		var record Application
+		record, prior, next, hadPrior, err = b.apps.CheckApplicationDraft(inv.apps[i], !joint)
 		if err == nil {
-			inv.apps[i].Published = published(record)
+			inv.apps[i] = record
 		}
 	default:
 		err = fmt.Errorf("draft kind %q cannot be previewed", kind)
@@ -347,8 +310,13 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 }
 
 func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	if ValueIntegrationKind(kind) {
-		return b.integrationDraftAssets(kind, id)
+	if dataowner.IsIntegration(kind) {
+		before, err = b.ReleaseAssets()
+		if err != nil {
+			return
+		}
+		after, prior, next, hadPrior, err = b.data.DraftAssets(before, kind, id)
+		return
 	}
 	if kind == platform.AssetEvaluation || kind == platform.AssetTestPlan {
 		return b.testPlanDraftAssets(id)
@@ -366,10 +334,15 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 		return b.CodeDraftAssets(id)
 	}
 	if kind == platform.AssetAlert {
-		return b.alertDraftAssets(id)
+		before, err = b.ReleaseAssets()
+		if err != nil {
+			return
+		}
+		after, prior, next, hadPrior, err = b.automation.AlertDraftAssets(before, id)
+		return
 	}
 	if kind == platform.AssetFunction {
-		return functionKind.draftAssets(b, id)
+		return b.functions.DraftAssets(id)
 	}
 	if kind == platform.AssetAgent {
 		return b.agentDraftAssets(id)
@@ -394,6 +367,9 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 	if id == "" {
 		return nil, fmt.Errorf("a saved draft is required")
 	}
+	if kind == platform.AssetInterface {
+		return nil, nil
+	}
 	if kind == platform.AssetApp {
 		changes, err := b.SavedDraftChanges(b.host.Automation(platform.Caller{}, ID), "", "", "")
 		if err != nil {
@@ -415,7 +391,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 	if err != nil {
 		return nil, err
 	}
-	processes, err := b.processInventory()
+	processes, err := b.automation.Inventory()
 	if err != nil {
 		return nil, err
 	}
@@ -629,12 +605,6 @@ func CompatibleObjectExpansion(previous, next Object) bool {
 	for _, field := range previous.Fields {
 		index := slices.IndexFunc(next.Fields, func(other Field) bool { return other.Name == field.Name })
 		if index < 0 || !equal(field, next.Fields[index]) {
-			return false
-		}
-	}
-	for _, action := range previous.Actions {
-		index := slices.IndexFunc(next.Actions, func(other Action) bool { return other.Name == action.Name })
-		if index < 0 || !equal(action, next.Actions[index]) {
 			return false
 		}
 	}

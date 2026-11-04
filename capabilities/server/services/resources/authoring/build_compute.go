@@ -10,6 +10,7 @@ import (
 	"platformkernel/kernel"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"slices"
 	"strconv"
 	"strings"
@@ -193,7 +194,7 @@ func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time
 	})
 }
 func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *kernel.Error {
-	if strings.HasPrefix(effect.Endpoint, WritebackEndpoint) {
+	if strings.HasPrefix(effect.Endpoint, dataowner.WritebackEndpoint) {
 		return b.answered(c, effect, out, now)
 	}
 	if effect.Endpoint != "operation" || !strings.HasPrefix(effect.Target, CodeType+"/") {
@@ -437,7 +438,7 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		}
 		if ordinal <= record.Version {
 			retained, err := b.OperationReleaseAsset(asset.Ref.Name, asset.SourceVersion)
-			if err != nil || !equalIntegrationAsset(retained, asset) {
+			if err != nil || !dataowner.EqualAsset(retained, asset) {
 				return nil, fmt.Errorf("retained compute bytes differ")
 			}
 			if len(record.Versions) != record.Version {

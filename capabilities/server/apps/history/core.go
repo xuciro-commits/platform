@@ -235,7 +235,7 @@ func New(tenant string) *Core {
 }
 
 func (c *Core) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "Legacy core records", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(), Interfaces: Interfaces()}
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: c.ledger.Catalog, Entities: Entities(), Interfaces: Interfaces()}
 }
 
 func (c *Core) AcceptedLedger() *platform.Ledger         { return c.ledger }

@@ -27,15 +27,12 @@ func MediaSetEntities() []platform.Entity {
 }
 
 func MediaSetActions() []platform.Action {
-	var actions []platform.Action
-	for _, entity := range MediaSetEntities() {
-		actions = append(actions, platform.EntityActions(entity)...)
-	}
-	return append(actions,
+	return []platform.Action{
 		platform.Action{Schema: platform.SchemaMediaSetAdd, Target: platform.MediaSetType, Title: "Add media item", Description: "Add an uploaded item as the next retained media set version.", Capability: "integrations", Roles: []string{"builder", "integrator"},
 			Payload: []platform.Field{{Name: "hash", Type: "string", Required: true}, {Name: "name", Type: "string", Required: true}, {Name: "contentType", Type: "string", Required: true}, {Name: "size", Type: "integer", Required: true}}},
 		platform.Action{Schema: platform.SchemaMediaSetRemove, Target: platform.MediaSetType, Title: "Remove media item", Description: "Remove an item from the latest version while retaining its earlier snapshots.", Capability: "integrations", Roles: []string{"builder", "integrator"},
-			Payload: []platform.Field{{Name: "hash", Type: "string", Required: true}}})
+			Payload: []platform.Field{{Name: "hash", Type: "string", Required: true}}},
+	}
 }
 
 func SubmitMediaSet(ledger *platform.Ledger, files platform.FileHost, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {

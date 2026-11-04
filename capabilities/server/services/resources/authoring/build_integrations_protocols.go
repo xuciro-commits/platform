@@ -9,6 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	ontology "platformserver/services/ontology"
 )
 
 func protocolReadName(typ, name string) string { return "protocol:" + typ + ":" + name }
@@ -63,7 +64,7 @@ func (b *Build) checkObjectProtocols(object Object) error {
 	if len(object.Protocols) > 16 {
 		return fmt.Errorf("An object supports at most 16 protocol bindings")
 	}
-	if err := checkProcess(object, b.conditionLookup); err != nil {
+	if err := ontology.CheckProcess(object, ID, TypeOf(object.Name), Builder, User, FunctionCallType, b.conditionLookup); err != nil {
 		return err
 	}
 	draft := object
@@ -90,14 +91,14 @@ func (b *Build) checkObjectProtocols(object Object) error {
 		for _, bindings := range []map[string]string{declaration.Actions, declaration.Events} {
 			for verb, action := range bindings {
 				_, exists := catalog.Action(entity.Type + "." + action)
-				if !Named(verb) || !exists {
+				if !ontology.Named(verb) || !exists {
 					return fmt.Errorf("Protocol %s maps %s to an undeclared object action", id, verb)
 				}
 			}
 		}
 		reads := map[string]bool{}
 		for _, read := range declaration.Reads {
-			if !Named(read) || reads[read] {
+			if !ontology.Named(read) || reads[read] {
 				return fmt.Errorf("Protocol reads must be unique named record projections")
 			}
 			reads[read] = true

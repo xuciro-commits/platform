@@ -12,22 +12,23 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 )
 
 func (*Build) DefinitionMetadataKind(kind platform.AssetKind) bool {
-	return integrationEntryOfKind(kind) != nil || slices.Contains([]platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetAlert}, kind)
+	return dataowner.IsIntegration(kind) || slices.Contains([]platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetAlert}, kind)
 }
 
-func (*Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Definition, error) {
+func (b *Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Definition, error) {
 	definition := platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides)}
 	var err error
 	switch asset.Ref.Kind {
 	case platform.AssetAlert:
-		var alert platform.AlertRule
-		if json.Unmarshal(asset.Body, &alert) != nil || alert.Check() != nil {
-			return definition, fmt.Errorf("invalid accepted alert rule")
+		alert, handled, err := b.automation.Definition(asset)
+		if !handled || err != nil {
+			return definition, err
 		}
-		definition.Alert = &alert
+		definition.Alert = alert
 	case platform.AssetObservation:
 		var observation platform.ObservationDefinition
 		if err = json.Unmarshal(asset.Body, &observation); err == nil {
@@ -162,7 +163,11 @@ func pinnedDefinitionAsset[T, D any](inventory func() ([]T, error), decode func(
 	return platform.ReleaseAsset{}, fmt.Errorf("The %s version is not retained", label)
 }
 
-func portableDefinitionInstallation[T, D any](image json.RawMessage, typ, schema, label string, decode func(platform.ReleaseAsset) (D, int, error)) (platform.AssetInstallation, error) {
+func portableDefinitionInstallation[T, D any](image json.RawMessage, typ, label string, decode func(platform.ReleaseAsset) (D, int, error)) (platform.AssetInstallation, error) {
+	descriptor, ok := resourceDescriptorOfType(typ)
+	if !ok {
+		return platform.AssetInstallation{}, fmt.Errorf("unknown %s installation", label)
+	}
 	var record T
 	var asset platform.ReleaseAsset
 	if json.Unmarshal(image, &record) != nil {
@@ -185,7 +190,7 @@ func portableDefinitionInstallation[T, D any](image json.RawMessage, typ, schema
 			return platform.AssetInstallation{}, fmt.Errorf("Invalid %s version history", label)
 		}
 	}
-	return platform.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: typ + "/" + family.ID, Image: slices.Clone(image)}, nil
+	return platform.AssetInstallation{Ref: asset.Ref, Schema: descriptor.publication(), Record: descriptor.record(family.ID), Image: slices.Clone(image)}, nil
 }
 
 func publishRetainedDefinition[T any](c platform.Caller, record *T, limitMessage string, install func(platform.Caller, T) error) *kernel.Error {
@@ -336,7 +341,7 @@ func prepareDefinitionPublications[T any](b *Build, assets []platform.ReleaseAss
 			same := err == nil
 			if same {
 				if kind == platform.AssetFunction {
-					same = equalIntegrationAsset(prior, asset)
+					same = dataowner.EqualAsset(prior, asset)
 				} else {
 					var retained, candidate any
 					same = json.Unmarshal(prior.Body, &retained) == nil && json.Unmarshal(asset.Body, &candidate) == nil && reflect.DeepEqual(retained, candidate)
