@@ -250,6 +250,9 @@ test("F1 builder goes from an empty project to an application a business user ac
     const inspectedView = inspect.getByRole("region", { name: "Order object view", exact: true });
     await expect(inspectedView.getByRole("heading", { name: "Acme", exact: true })).toBeVisible();
     await expect(inspectedView.getByRole("heading", { name: "Globex", exact: true })).toHaveCount(0);
+    await user.getByRole("combobox", { name: "Group by", exact: true }).selectOption("customer");
+    const summary = user.getByRole("region", { name: "Set result", exact: true }).getByRole("table").last();
+    await expect(summary.getByRole("row").filter({ hasText: "Acme" })).toBeVisible();
     await user.getByRole("button", { name: "Save exploration", exact: true }).click();
     const saveDialog = user.getByRole("dialog", { name: "Save exploration", exact: true });
     await saveDialog.getByRole("textbox", { name: "Name", exact: true }).fill(`Acme around ${name.slice(6)}`);

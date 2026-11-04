@@ -111,7 +111,7 @@ function ExploreView({ type: requested, savedState }: { type?: string; savedStat
       <PageHeader title={entity?.title ?? resultType} help={entity?.description} description={resultType}
         actions={<><Button size="sm" onClick={() => setSaving(true)}>{t("Save exploration")}</Button><OpenIn type={chosen} exclude={["explorer"]} /></>} />
       <Panel title={t("Object set")} className="grid min-w-0 gap-2">
-        <SetBuilder value={set} onChange={setSet} selectedId={selected?.id} previewRows={20}
+        <SetBuilder value={set} onChange={setSet} selectedId={selected?.id} previewRows={20} aggregate
           onRowOpen={(record) => { if (!resultType) return; setSelected(record); openRecord({ type: resultType, id: record.id }); }} />
       </Panel>
     </div>

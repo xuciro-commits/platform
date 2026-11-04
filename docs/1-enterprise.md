@@ -144,7 +144,7 @@ read-when: 判断一项工作是否属于平台、调整终局或阶段、引入
 
 ## 现存差距
 
-- Object Explorer 主路径已统一为 ObjectSet；完整 `build.query` 发布合同与结果聚合仍在路线图 D1。
+- Object Explorer 主路径已统一为 ObjectSet，并支持分页与按字段计数；`work.view` 版本化状态和完整 `build.query` 发布合同仍在路线图 D1。
 
 ## 相关
 

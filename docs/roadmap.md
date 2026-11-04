@@ -16,7 +16,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 本轮只保留未完成、需要继续验收的能力；完成项由 git 历史追溯，不建立第二份完成清单。发布四族与旧页面格式的保留理由仍写在 `docs/7-system/README.md`。
 
-- [ ] D1 补全 Object Explorer 的结果聚合与 `work.view` 版本化状态，并决定/实现 `build.query` 承载完整 ObjectSet 的版本化发布合同；在 Workshop 或对象页绑定同一已发布版本，禁止语义缩水。
+- [ ] D1 为 `work.view` 定义版本化状态，并决定/实现 `build.query` 承载完整 ObjectSet 的版本化发布合同；在 Workshop 或对象页绑定同一已发布版本，禁止语义缩水。
 - [ ] D2 把授权上下文来源与构造收进 `services/security` 的窄端口，host 只保留协调读和租户适配；先保持 K4 与读作用域不变。
 - [ ] D4 用真实宿主、冷缓存和代表性身份复测首屏；只消除仍在关键路径上的静态依赖，不为 500 kB 告警机械拆包。
 - [ ] D5 补资源 route、release kind、TestPlan/EvaluationSet 入口的专门验收，避免只靠生成契约推断。

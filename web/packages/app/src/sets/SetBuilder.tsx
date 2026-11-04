@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { objectSetPath, type Api } from "@platform/kernel";
-import { Button, Checkbox, DataTable, Input, Select, Textarea, columnsFor, entityFrom, humanizeKernelError, t, useDraftInput, type EntityInfo, type EntityRecord } from "@platform/ui";
+import { Button, Checkbox, DataTable, Input, Select, Textarea, columnsFor, entityFrom, humanizeKernelError, t, useDraftInput, type AggregateData, type EntityInfo, type EntityRecord } from "@platform/ui";
 import { useHost, useReadQuery } from "../index";
 import { ObjectSetFilter, type ObjectSetFilterProps } from "./ObjectSetFilter";
 
@@ -17,6 +17,7 @@ export type SetBuilderProps = {
   around?: boolean;
   locked?: boolean;
   count?: boolean;
+  aggregate?: boolean;
   preview?: boolean;
   previewRows?: number;
   selectedId?: string;
@@ -71,11 +72,11 @@ export function LinkTypePicker({ links, entities, from, value, direction, onChan
   </label>;
 }
 
-export function SetBuilder({ value, onChange, filter = ObjectSetFilter, search = true, combine = true, around = true, locked = false, count = true, preview = count, previewRows = 20, selectedId, onRowOpen, interfaces, draftKey = "set" }: SetBuilderProps) {
+export function SetBuilder({ value, onChange, filter = ObjectSetFilter, search = true, combine = true, around = true, locked = false, count = true, aggregate = false, preview = count, previewRows = 20, selectedId, onRowOpen, interfaces, draftKey = "set" }: SetBuilderProps) {
   const context = useSetContext(interfaces);
   return <div className="grid min-w-0 gap-2 text-xs" aria-label={t("Object set builder")}>
     <SetNode value={value} onChange={onChange} depth={0} path={draftKey} context={context} filter={filter} search={search} combine={combine} around={around} locked={locked} />
-    {count && <SetResult set={value} links={context.links} preview={preview} previewRows={previewRows} selectedId={selectedId} onRowOpen={onRowOpen} />}
+    {count && <SetResult set={value} links={context.links} preview={preview} previewRows={previewRows} selectedId={selectedId} onRowOpen={onRowOpen} aggregate={aggregate} />}
   </div>;
 }
 
@@ -215,12 +216,15 @@ export function objectSetResultType(set: Api.ObjectSet, links: readonly LinkDefi
   return (set.union ?? set.intersect ?? set.subtract ?? []).map(operand => objectSetResultType(operand, links)).find(Boolean);
 }
 
-function SetResult({ set, links, preview, previewRows, selectedId, onRowOpen }: { set: Api.ObjectSet; links: readonly LinkDefinition[]; preview: boolean; previewRows: number; selectedId?: string; onRowOpen?: (record: EntityRecord) => void }) {
+function SetResult({ set, links, preview, previewRows, selectedId, onRowOpen, aggregate }: { set: Api.ObjectSet; links: readonly LinkDefinition[]; preview: boolean; previewRows: number; selectedId?: string; onRowOpen?: (record: EntityRecord) => void; aggregate: boolean }) {
   const { client, source } = useHost();
   const key = JSON.stringify(set), complete = objectSetComplete(set);
   const [answer, setAnswer] = useState<{ key: string; scope: unknown; count?: number; partial?: boolean; page?: Api.RecordPage; error?: string }>();
   const [offset, setOffset] = useState(0);
+  const [groupBy, setGroupBy] = useState("");
+  const [summary, setSummary] = useState<{ key: string; groupBy: string; data?: AggregateData; error?: string }>();
   useEffect(() => { setOffset(0); }, [key]);
+  useEffect(() => { setGroupBy(""); }, [key]);
   useEffect(() => {
     if (!complete) return;
     let active = true;
@@ -238,6 +242,16 @@ function SetResult({ set, links, preview, previewRows, selectedId, onRowOpen }: 
     const entity = info ? entityFrom(info, {}, source) : undefined;
     return [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 110 } }, ...(entity && info ? columnsFor(entity, info.fields.filter(field => !field.readOnly).slice(0, 3).map(field => field.name)) : [])];
   }, [info, source]);
+  const groupFields = info?.fields.filter(field => ["text", "choice", "reference", "boolean", "date", "datetime"].includes(field.type)) ?? [];
+  useEffect(() => {
+    if (!aggregate || !type || !groupBy) { setSummary(undefined); return; }
+    let active = true;
+    void client.get<AggregateData>(objectSetPath("aggregate", { set, groups: [groupBy], measures: ["count"], maxRows: 64 }), true).then(
+      data => { if (active) setSummary({ key, groupBy, data }); },
+      error => { if (active) setSummary({ key, groupBy, error: humanizeKernelError(error instanceof Error ? error.message : String(error)) }); },
+    );
+    return () => { active = false; };
+  }, [aggregate, client, groupBy, key, set, type]);
   if (!complete) return <p role="status" className="text-muted">{t("Complete the set to count its records.")}</p>;
   const current = answer?.key === key && answer.scope === source.scope ? answer : undefined;
   if (!current) return <p role="status" className="text-muted">{t("Counting…")}</p>;
@@ -250,6 +264,13 @@ function SetResult({ set, links, preview, previewRows, selectedId, onRowOpen }: 
     {preview && <div className="flex items-center justify-between gap-2 text-xs text-muted">
       <span>{t("{shown} of {total} records", { shown: rows.length, total: (current.page?.total ?? current.count ?? 0).toLocaleString() })}</span>
       <div className="flex gap-1"><Button size="sm" variant="ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - previewRows))}>{t("Previous page")}</Button><Button size="sm" variant="ghost" disabled={offset + previewRows >= (current.page?.total ?? current.count ?? 0)} onClick={() => setOffset(offset + previewRows)}>{t("Next page")}</Button></div>
+    </div>}
+    {aggregate && type && <div className="grid gap-1 border-t border-border pt-2 text-xs">
+      <label className="grid max-w-xs gap-1"><span className="font-medium">{t("Group by")}</span><Select aria-label={t("Group by")} value={groupBy} onChange={event => setGroupBy(event.target.value)}><option value="">{t("No grouping")}</option>{groupFields.map(field => <option key={field.name} value={field.name}>{field.title}</option>)}</Select></label>
+      {summary?.error && <p role="alert" className="text-danger">{summary.error}</p>}
+      {summary?.data && summary.key === key && summary.groupBy === groupBy && (summary.data.rows.length
+        ? <table className="w-full border-collapse text-left"><thead><tr className="border-b border-border text-muted"><th className="py-1">{groupFields.find(field => field.name === groupBy)?.title ?? groupBy}</th><th className="py-1 text-right">{t("Count")}</th></tr></thead><tbody>{summary.data.rows.map((row, index) => <tr key={index} className="border-b border-border/60"><td className="py-1">{String(row[groupBy] ?? "")}</td><td className="py-1 text-right tabular-nums">{String(row.count ?? "")}</td></tr>)}</tbody></table>
+        : <p className="text-muted">{t("No summary rows.")}</p>)}
     </div>}
   </div>;
 }
