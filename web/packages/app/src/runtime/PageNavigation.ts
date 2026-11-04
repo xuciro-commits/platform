@@ -102,6 +102,27 @@ export function usePageEffects(page: PageUI.Page, live: boolean, values: Record<
           }
           case "navigate": navigate(effect.navigate, context); return;
           case "return": doReturn(); return;
+          case "condition": {
+            const vars = effect.value ? (context?.values ?? values)[effect.value] : undefined;
+            if (vars?.status === "value" && vars.value === true) {
+              const targetVar = effect.target;
+              if (targetVar) context ? context.set(targetVar, true) : set(targetVar, true);
+            }
+            break;
+          }
+          case "toast": {
+            workspace.notify?.(String(effect.value ?? ""), String(effect.target ?? "info"));
+            break;
+          }
+          case "reset": {
+            if (effect.target) context ? context.set(effect.target, undefined) : set(effect.target, undefined);
+            break;
+          }
+          case "wait": {
+            const ms = Number(effect.value ?? 0);
+            if (ms > 0) await new Promise(r => setTimeout(r, ms));
+            break;
+          }
         }
       }
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Page navigation failed."); }

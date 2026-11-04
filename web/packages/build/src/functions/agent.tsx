@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ContextHelp, Form, StructuredEditor } from "@platform/ui";
 import type {Api} from "@platform/kernel";
 import { useDefinitionDraft } from "../session/definition-draft";
@@ -7,7 +7,7 @@ import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { useAuthoringModel } from "../ontology/authoring-model";
 import { useHost, ModelPicker, ModelOptionsEditor, useReadQuery, useRecordInventory, RunView, newId } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t } from "@platform/ui";
+import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, Textarea, Toggles, Workbench, t } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";
 
 type Case = { name: string; goal: string; ref?: string; expect?: string; asks?: boolean; takes?: string[]; avoids?: string[] };
@@ -32,12 +32,32 @@ export function AgentEditor({ id }: { id: string }) {
   const model = useAuthoringModel(), queries = useRecordInventory<QueryRecord>("build.query");
   const [debugGoal, setDebugGoal] = useState("");
   const [debugRun, setDebugRun] = useState<string>();
+  const [debugTrace, setDebugTrace] = useState<{ at: string; step: string; what: string; detail: string }[]>([]);
+  const [debugPoll, setDebugPoll] = useState<ReturnType<typeof setInterval>>();
   const runDebug = async () => {
     if (!debugGoal.trim() || !draft.id) return;
     const run = newId("RUN");
     if (await decide("agent.run.start", { type: "agent.run", id: run }, { agent: draft.id, goal: debugGoal })) {
       setDebugRun(run);
       setDebugGoal("");
+      setDebugTrace([]);
+      if (debugPoll) clearInterval(debugPoll);
+      const poll = setInterval(async () => {
+        try {
+          const res = await fetch(`/v1/runs/${encodeURIComponent(run)}`);
+          if (res.ok) {
+            const data = await res.json();
+            const trace = (data.trace ?? []).map((line: any) => ({
+              at: line.at, step: line.step, what: line.what, detail: line.detail
+            }));
+            setDebugTrace(trace);
+            if (data.state === "done" || data.state === "failed" || data.state === "cancelled") {
+              clearInterval(poll);
+            }
+          }
+        } catch { /* ignore poll errors */ }
+      }, 1000);
+      setDebugPoll(poll);
     }
   };
   const objects = (model.drafts.data?.records ?? []).filter(object => !object.archived);
@@ -135,6 +155,17 @@ export function AgentEditor({ id }: { id: string }) {
             </div>
           </Form>
           {debugRun && <RunView key={debugRun} id={debugRun} compact />}
+          {debugTrace.length > 0 && <Panel title={t("流式工具轨迹")} className="grid gap-2 max-h-64 overflow-auto">
+            <ul className="grid gap-1 text-xs font-mono">
+              {debugTrace.map((line, i) => <li key={i} className="flex gap-1 p-1 rounded bg-surface border-b border-border">
+                <span className="w-16 text-2xs text-muted">{line.at}</span>
+                <span className="w-20 truncate">{line.step}</span>
+                <span className="w-24 truncate text-muted">{line.what}</span>
+                <span className="truncate">{line.detail}</span>
+              </li>)}
+            </ul>
+          </Panel>}
+          {debugRun && debugTrace.length === 0 && <p className="text-xs text-muted">{t("Running… waiting for tool events.")}</p>}
         </>
       )}
     </Panel>

@@ -12,7 +12,7 @@ import { DeclassificationField, MarkingTag } from "./marking";
 import { Button, Checkbox, DataTable, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type CanvasPosition, type ColumnDef, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
 
 import { cell } from "./dataset";
-import { ExpressionEditor } from "./editor/ExpressionEditor";
+import { ExpressionEditor } from "../editor/ExpressionEditor";
 import { useAuthoringModel } from "./authoring-model";
 import { DeclaredByObject, declaringObject } from "./object-datasources";
 

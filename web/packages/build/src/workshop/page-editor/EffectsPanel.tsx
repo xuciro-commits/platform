@@ -5,11 +5,11 @@ import { useHost, pageUIProfile, assetKey } from "@platform/app";
 import { Button, Card, Checkbox, Input, Select, t } from "@platform/ui";
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 
-type Kind = "set" | "overlay" | "action" | "navigate" | "return";
+type Kind = "set" | "overlay" | "action" | "navigate" | "return" | "condition" | "toast" | "reset" | "wait";
 type Allowed = { readonly kinds: readonly Kind[]; readonly selection?: boolean };
-export const clickEffects: Allowed = { kinds: ["set", "overlay", "action", "navigate", "return"] };
-export const groupEffects: Allowed = { kinds: ["set", "overlay", "action"] };
-export const selectEffects: Allowed = { kinds: ["set"], selection: true };
+export const clickEffects: Allowed = { kinds: ["set", "overlay", "action", "navigate", "return", "condition", "toast", "reset", "wait"] };
+export const groupEffects: Allowed = { kinds: ["set", "overlay", "action", "condition", "toast", "reset", "wait"] };
+export const selectEffects: Allowed = { kinds: ["set", "condition", "toast", "reset", "wait"], selection: true };
 
 export function EventEffects({ document, section, control, eventName, owner, overlay, onChange, allowed, title }: {
   document: PageUI.PageDocument; section: string; control?: string; eventName: string; owner?: string; overlay?: string;
@@ -36,11 +36,15 @@ export function EventEffects({ document, section, control, eventName, owner, ove
       case "action": { const declared = catalog.find((a) => !a.new) ?? catalog[0]; return { kind: "action", action: { ref: { app: declared?.schema.split(".")[0] ?? "build", kind: "action", name: declared?.schema ?? "" }, recordVariable: declared?.new ? undefined : records[0]?.[0] } }; }
       case "navigate": { const page = pages[0]; return { kind: "navigate", navigate: { page: page?.ref ?? { app: "", kind: "page", name: "" }, interfaceVersion: page?.page?.document?.interface?.version ?? 0 } }; }
       case "return": return { kind: "return" };
+      case "condition": return { kind: "condition", target: "", value: "" };
+      case "toast": return { kind: "toast", target: "", value: "" };
+      case "reset": return { kind: "reset", target: "" };
+      case "wait": return { kind: "wait", target: "", value: 0 };
     }
   };
   const terminal = (e: Api.PageEffect) => e.kind === "navigate" || e.kind === "return";
   const ended = effects.some(terminal), full = effects.length >= 8;
-  const labels: Record<Kind, string> = { set: t("Set page state"), overlay: t("Open or close an overlay"), action: t("Take an action"), navigate: t("Open another page"), return: t("Return to caller") };
+  const labels: Record<Kind, string> = { set: t("Set page state"), overlay: t("Open or close an overlay"), action: t("Take an action"), navigate: t("Open another page"), return: t("Return to caller"), condition: t("Condition branch"), toast: t("Show toast"), reset: t("Reset form"), wait: t("Wait / delay") };
   const kinds = allowed.kinds.filter((k) => k !== "overlay" || overlays.length) .filter((k) => k !== "return" || document.interface);
   return <Card className="grid gap-3 p-3">
     <strong className="text-xs">{title ?? t(allowed.selection ? "On record selection" : "On click")}</strong>
@@ -64,6 +68,10 @@ export function EventEffects({ document, section, control, eventName, owner, ove
         {kind === "action" && <ActionEffect effect={effect} records={records} variables={variables} document={document} onChange={(next) => replace(at, next)} />}
         {kind === "navigate" && effect.navigate && <NavigateEffect navigation={effect.navigate} variables={variables} onChange={(navigate) => replace(at, { kind: "navigate", navigate })} />}
         {kind === "return" && <p className="text-xs text-muted">{t("Returns this page's interface outputs to the page that opened it.")}</p>}
+        {kind === "condition" && <ConditionEffect effect={effect} variables={variables} onChange={(next) => replace(at, next)} />}
+        {kind === "toast" && <ToastEffect effect={effect} onChange={(next) => replace(at, next)} />}
+        {kind === "reset" && <ResetEffect effect={effect} writable={writable} onChange={(next) => replace(at, next)} />}
+        {kind === "wait" && <WaitEffect effect={effect} onChange={(next) => replace(at, next)} />}
       </li>;
     })}</ol>
     <div className="flex flex-wrap items-center gap-2">
@@ -136,5 +144,38 @@ function NavigateEffect({ navigation, variables, onChange }: { navigation: PageU
       </div>;
     })}
     {Object.entries(target?.page?.document?.interface?.outputs ?? {}).map(([id, port]) => <label key={id} className="grid gap-1 text-xs">{t("Return {name} to state", { name: id })}<Select value={navigation.results?.[id] ?? ""} onChange={(e) => { const results = { ...navigation.results }; if (e.target.value) results[id] = e.target.value; else delete results[id]; onChange({ ...navigation, results }); }}><option value="">{t("Ignore output")}</option>{variables.filter(([, v]) => (v.mode === "state" || v.mode === "shared" && v.writable) && v.type === port.type).map(([key, v]) => <option key={key} value={key}>{v.title || key}</option>)}</Select></label>)}
+  </>;
+}
+
+function ConditionEffect({ effect, variables, onChange }: { effect: Api.PageEffect; variables: [string, Api.PageVariable][]; onChange: (next: Api.PageEffect) => void }) {
+  return <>
+    <label className="grid gap-1 text-xs">{t("Condition")}<Input value={String(effect.target ?? "")} placeholder="a > 10" onChange={(e) => onChange({ ...effect, target: e.target.value })} /></label>
+    <label className="grid gap-1 text-xs">{t("Then set variable")}<Select value={String(effect.value ?? "")} onChange={(e) => onChange({ ...effect, value: e.target.value })}>
+      <option value="">{t("Choose a variable")}</option>{variables.map(([id, v]) => <option key={id} value={id}>{v.title || id}</option>)}</Select></label>
+    <p className="text-xs text-muted">{t("If condition holds, set the chosen variable to true; otherwise skip.")}</p>
+  </>;
+}
+
+function ToastEffect({ effect, onChange }: { effect: Api.PageEffect; onChange: (next: Api.PageEffect) => void }) {
+  return <>
+    <label className="grid gap-1 text-xs">{t("Message")}<Input value={String(effect.value ?? "")} placeholder="Operation completed" onChange={(e) => onChange({ ...effect, value: e.target.value })} /></label>
+    <label className="grid gap-1 text-xs">{t("Type")}<Select value={String(effect.target ?? "info")} onChange={(e) => onChange({ ...effect, target: e.target.value })}>
+      <option value="info">{t("Info")}</option><option value="success">{t("Success")}</option><option value="warning">{t("Warning")}</option><option value="danger">{t("Error")}</option>
+    </Select></label>
+  </>;
+}
+
+function ResetEffect({ effect, writable, onChange }: { effect: Api.PageEffect; writable: [string, Api.PageVariable][]; onChange: (next: Api.PageEffect) => void }) {
+  return <>
+    <label className="grid gap-1 text-xs">{t("Reset variables")}<Select value={String(effect.target ?? "")} onChange={(e) => onChange({ ...effect, target: e.target.value })}>
+      <option value="">{t("Choose a variable")}</option>{writable.map(([id, v]) => <option key={id} value={id}>{v.title || id}</option>)}</Select></label>
+    <p className="text-xs text-muted">{t("Resets the chosen variable to its initial value.")}</p>
+  </>;
+}
+
+function WaitEffect({ effect, onChange }: { effect: Api.PageEffect; onChange: (next: Api.PageEffect) => void }) {
+  return <>
+    <label className="grid gap-1 text-xs">{t("Delay (ms)")}<Input type="number" value={String(effect.value ?? 0)} onChange={(e) => onChange({ ...effect, value: Number(e.target.value) || 0 })} /></label>
+    <p className="text-xs text-muted">{t("Pauses the effect chain before continuing to the next effect.")}</p>
   </>;
 }

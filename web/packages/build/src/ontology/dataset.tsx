@@ -97,21 +97,18 @@ export function DatasetEditor({ id }: { id: string }) {
               <p className="px-2 py-1 text-xs text-muted">{t("{rows} rows · full column statistics below", { rows: rows.length })}</p>
             </div>}
         </Panel> },
-          {selectedColumn && <div className="grid gap-3 border-t border-border pt-3">
+          {selectedColumn ? <div className="grid gap-3 border-t border-border pt-3"> : null}
             <label className={fieldClass}>{t("Column")}<Select value={selectedColumn} onChange={(e) => setSelectedColumn(e.target.value)}>{columns.map((c) => <option key={c} value={c}>{c}</option>)}</Select></label>
             <div className="grid min-w-0 gap-3">
-              {(() => {
-                const stats = columnStats(selectedColumn, rows);
-                if (stats.kind === "empty") return <p className="text-xs text-muted">{t("No values.")}</p>;
-                if (stats.kind === "numeric") return <>
-                  <SummaryStatistics value={stats.value} fieldTitle={selectedColumn} />
-                  <Histogram value={stats.histogram} label={t("Value distribution")} />
-                </>;
-                return <>
-                  <p className="text-xs text-muted">{t("{count} non-empty values", { count: stats.count })}</p>
-                  <TagCounts terms={stats.terms.map((t) => ({ value: t.value, count: t.count }))} label={t("Value distribution")} />
-                </>;
-              })()}
+              {selectedColumn && columnStats(selectedColumn, rows).kind === "empty" && <p className="text-xs text-muted">{t("No values.")}</p>}
+              {selectedColumn && columnStats(selectedColumn, rows).kind === "numeric" && <div className="grid gap-2">
+                <SummaryStatistics value={columnStats(selectedColumn, rows).value} fieldTitle={selectedColumn} />
+                <Histogram value={columnStats(selectedColumn, rows).histogram} label={t("Value distribution")} />
+              </div>}
+              {selectedColumn && columnStats(selectedColumn, rows).kind === "text" && <div className="grid gap-2">
+                <p className="text-xs text-muted">{t("{count} non-empty values", { count: columnStats(selectedColumn, rows).count })}</p>
+                <TagCounts terms={columnStats(selectedColumn, rows).terms.map((t) => ({ value: t.value, count: t.count }))} label={t("Value distribution")} />
+              </div>}
             </div>
           </div>}
         { id: "transactions", title: t("Transactions"), badge: transactions.length || undefined, content: <Panel title={t("Transactions")} help={t("Each load is a transaction and a new version. Choose one to preview its rows.")} className="grid min-w-0 content-start gap-2">
