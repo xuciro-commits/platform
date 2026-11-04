@@ -30,7 +30,7 @@ P0 修通用户“当场卡住”的断点与入口纠偏；每条都有端到�
 | P0-12 | Help 导航项（帮助与快捷键） | 导航轨出现 Help 项 |
 | P0-13 | 新增验收用例 F11–F15 | F11 页面发布、F12 待我审阅、F13 破坏性变更下游影响、F14 显式回退、F15 对象→Workshop 真实交付 |
 
-P0 全批（P0-1…P0-14）已完成，全部差距已消除或入表；进入 P1。
+P0 全批（P0-1…P0-14）已完成：P0-1 Publish/Pause（pipeline/data-source/writeback/match）、P0-2 搜索前缀 @#:、P0-3 审批决策上下文（chrome.tsx MyInbox）、P0-4 待我审阅队列（Home.tsx proposals）、P0-5 破坏性变更下游影响（diff.tsx Downstream impact）、P0-6 动态标记（markings/people）、P0-7 release 回退（release.tsx Rollback 按钮）、P0-8 AIP Assist 右侧伴随抽屉（App.tsx Sheet+Assistant）、P0-9 Files 全角色可见（App.tsx rail files 无角色限制）、P0-10 Favorites 资源/对象（Workspace.tsx favorites 项）、P0-11 Applications 业务组分组（Applications.tsx Object.groupBy）、P0-12 Help 导航项、P0-13 F11–F15 e2e、P0-14 规范与 roadmap 同步（本文档）。
 
 ## 下一批次（P1：核心工作台专业度升级，P0 完成后进入）
 

@@ -1,7 +1,7 @@
 import "./i18n";
 import { ApplicationSessionsProvider, HostContext, resourceEntryRoute, withApp, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, OfflineReadError, accounts, forgetAccount, keepFresh, signIn, signOut, switchAccount, type Api, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
+import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, t, language, setLanguage, setCurrency, useLanguage, Sheet } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Layers } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -127,6 +127,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const apps = useMemo(() => loadedApps && host ? loadedApps(host).filter(app => !app.for || app.for(host)) : undefined, [loadedApps, host]);
   const releaseUnavailable = release.isError || release.fetchStatus === "paused";
   const [releaseOpen, setReleaseOpen] = useState(false);
+  const [assistOpen, setAssistOpen] = useState(false);
   const definitions = host?.definitions ?? [];
 
   const selectionScope = me ? `workspace:selection:${me.tenantId}:${me.principalId}` : undefined;
@@ -292,7 +293,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         views={views} resolveRoute={resolveRoute} home={{ view: "home" }}
         rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "notifications" }, unread },
           files: { view: "projects" }, help: { route: { view: "help" } },
-          ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
+          ...(host.can("agent.run.start") ? { assist: { view: "assistant", run: () => setAssistOpen(true) } } : {}) }}
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute}
@@ -331,6 +332,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           onSignOut: signedIn ? () => void leaveSession() : undefined,
           onAccount: all.some((a) => a.id === "platform") ? () => { chosen.current = { id: "platform", from: activeRoute && routeToHash(activeRoute) }; select("platform"); location.hash = routeToHash({ view: "account" }); } : undefined }} />
       <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} />
+      <Sheet isolated open={assistOpen} onOpenChange={setAssistOpen} title={t("AIP Assist")}>
+        <Assistant about={activeRoute ? routeToHash(activeRoute) : undefined} />
+      </Sheet>
       <OfflinePreparation application={preparedApplication} release={release.data?.id} open={offlineOpen} onOpenChange={setOfflineOpen}/></ApplicationSessionsProvider>
     </HostContext.Provider>
   );

@@ -27,19 +27,33 @@ const requestStates = defineStatuses({ pending: { label: "Pending", tone: "warni
 
 function MyInbox() {
   const tasks = useRead<InboxTask[]>("/v1/inbox") ?? [];
+  const requests = useRead<Request[]>("/v1/requests") ?? [];
   const { decide } = useHost();
   const openRecord = useOpenRecord();
   const { applications } = useWorkspace();
   const approval = (task: InboxTask) => task.ref?.startsWith("work.approval/") ? task.ref.slice("work.approval/".length) : undefined;
+  const requestFor = (task: InboxTask) => {
+    const id = approval(task);
+    return id ? requests.find((r) => r.id === id) : undefined;
+  };
   return (
     <>
       <PageHeader title={t("Tasks and approvals")} help={t("Approvals waiting for you and tasks offered to you, from every app.")} />
       <Inbox tasks={tasks} onOpen={(task) => task.ref && openRecord(task.ref, { window: "tab" })}
         context={(task) => {
           const app = applications?.apps.find((a) => a.id === task.app);
+          const req = requestFor(task);
           const chips: ReactNode[] = [];
           if (app) chips.push(<span key="app" className="text-xs text-muted">{t("Source")}: {app.title}</span>);
-          if (task.ref) chips.push(<span key="ref" className="text-xs text-muted">{t("Decides")}: {task.ref}</span>);
+          if (req) {
+            chips.push(<span key="action" className="text-xs text-muted">{t("Action")}: {req.action}</span>);
+            chips.push(<span key="target" className="text-xs text-muted">{t("Target")}: {req.target}</span>);
+            chips.push(<span key="requester" className="text-xs text-muted">{t("Requester")}: {req.requester}</span>);
+            if (req.levels?.[req.level]) chips.push(<span key="level" className="text-xs text-muted">{t("Awaiting")}: {req.levels[req.level].title}</span>);
+            if (req.outcome) chips.push(<span key="outcome" className="text-xs text-muted">{t("Outcome")}: {req.outcome}</span>);
+          } else if (task.ref) {
+            chips.push(<span key="ref" className="text-xs text-muted">{t("Decides")}: {task.ref}</span>);
+          }
           if (task.candidates?.length) chips.push(<span key="cand" className="text-xs text-muted">{t("Candidates")}: {task.candidates.join(", ")}</span>);
           return chips.length ? <div className="grid gap-1">{chips}</div> : null;
         }}
