@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { modelOptionLabel, ModelOptionsEditor, ModelPicker, useHost, useReadQuery as useRead, type ModelPurpose } from "@platform/app";
-import { Button, Dialog, Sheet, Input, PageHeader, Panel, PropertyList, Select, Tag, useWorkspace, t , SegmentedChoice } from "@platform/ui";
+import { Button, ContentTabs, Dialog, Sheet, Input, PageHeader, Panel, PropertyList, Select, Tag, useWorkspace, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import {modelReferenceTitle} from "./shared";
 import { ReadResult } from "./operations";
@@ -21,7 +21,7 @@ export function AIConfiguration({initialSection="defaults",fromPackage,fromVersi
   return <>
     <PageHeader title={t("AI configuration")} actions={fromPackage?<Button onClick={()=>open({view:"package-preparation",params:{id:fromPackage,version:fromVersion??""}})}>{t("Return to package preparation")}</Button>:undefined} help={t("Connect a service, read its models, enable the models people may use, then choose one default for each purpose. Several services and models can be enabled.")} />
     <p className="mb-4 max-w-prose text-sm text-muted">{t("Cloud models are available for authorized design tasks. Production inference and knowledge embeddings require a deployment-approved local or edge service; marking a provider as local does not grant approval.")}</p>
-    <div className="mb-5"><SegmentedChoice label={t("AI configuration")} value={section} onChange={setSection} options={[["services", "Connect services"], ["models", "Available models"], ["defaults", "Default purposes"], ["usage", "Usage and limits"], ["training", "Training data"]].map(([value, title]) => ({ value: value!, label: t(title!) }))} /></div>
+    <div className="mb-5"><ContentTabs wrap={false} label={t("AI configuration")} value={section} onChange={setSection} items={[["services", "Connect services"], ["models", "Available models"], ["defaults", "Default purposes"], ["usage", "Usage and limits"], ["training", "Training data"]].map(([value, title]) => ({ id: value!, title: t(title!) }))} /></div>
     {section === "services" && <AIProviders />}
     {section === "models" && <AvailableModels />}
     {section === "defaults" && <div className="grid max-w-4xl gap-6">{purposes.map(item => <PurposeDefault key={item.purpose} {...item} />)}</div>}

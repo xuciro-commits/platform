@@ -119,7 +119,7 @@ export function CodeEditor({ id }: { id: string }) {
   let published: CodeDraft | undefined;
   try { published = draft.published ? JSON.parse(draft.published) as CodeDraft : undefined; } catch {   }
   return <Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "functions" }) }]} title={draft.title || t("New code function")}
-    status={<DraftStatus state={draft.module ? "published" : "draft"} />} busy={busy}
+    status={<DraftStatus state={draft.version ? "published" : "draft"} />} busy={busy}
     actions={<>
         <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid} onSave={() => perform(save)}
           operations={[{ id: "compile", label: t("Compile function"), disabled: invalid || !draft.id || draft.state === "compiling", run: () => void perform(compile) }]} onCancel={discardChanges} route={{ view: "code", params: { id } }} />

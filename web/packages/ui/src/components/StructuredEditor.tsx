@@ -7,7 +7,7 @@ import { formatStructuredSource, parseStructuredSource, structuredExample, struc
 import { t } from '../i18n';
 import {ContextHelp} from './ContextHelp';
 import {Disclosure} from '../primitives/controls';
-import {SegmentedChoice} from './SegmentedChoice';
+import {ContentTabs} from '../layout/ContentTabs';
 
 export function StructuredEditor({value,onChange,children,scope,fields,fieldInput,validate,onTrial,expectedRevision,readOnly=false,disabled=false,context,initialMode='visual'}: {
   value: StructuredValue; onChange?: (value: StructuredValue) => void; children?: ReactNode; scope: string; fields?: Api.FieldInfo[];
@@ -56,15 +56,14 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
       {!path&&fieldInput&&<fieldset disabled={disabled||running||!sourceValue} className="min-w-0">{fieldInput(field,sourceValue?.[field.name],next=>writeField(field,next))}</fieldset>}
     </dd>
   </div>)}</dl>;
-  return <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" data-structured-editor={scope}>
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-      <SegmentedChoice label={t('Editing mode')} disabled={disabled||running} value={mode} onChange={next=>switchMode(next as 'visual'|'source')} options={[...(children?[{value:'visual',label:t('Visual')}]:[]),{value:'source',label:t('Source editor')}]}/>
-      {mode==='source'&&<div className="flex flex-wrap items-center gap-2">
+  return <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 pt-2" data-structured-editor={scope}>
+    <ContentTabs className="shrink-0" label={t('Editing mode')} disabled={disabled||running} value={mode} onChange={next=>switchMode(next as 'visual'|'source')}
+      items={[...(children?[{id:'visual',title:t('Visual')}]:[]),{id:'source',title:t('Source editor')}]}
+      actions={mode==='source'&&<div className="flex flex-wrap items-center gap-2">
         <Select aria-label={t('Source format')} value={format} disabled={disabled||running||!!input.problem&&input.problem!==t('Apply source before saving.')} onChange={event=>{const next=event.target.value as SourceFormat;try{const parsed=parseStructuredSource(input.text,format);setFormat(next);input.clear();if(JSON.stringify(parsed)!==JSON.stringify(value)&&!readOnly)input.write(formatStructuredSource(parsed,next),t('Apply source before saving.'));setMessage('');}catch(error){setMessage(String(error));}}}><option value="json">JSON</option><option value="yaml">YAML</option></Select>
         <Button size="sm" disabled={disabled||running} onClick={()=>{try{const parsed=parseStructuredSource(input.text,format);if(JSON.stringify(parsed)===JSON.stringify(value)||readOnly)input.clear();else input.write(formatStructuredSource(parsed,format),t('Apply source before saving.'));setMessage('');}catch(error){setMessage(String(error));}}}>{t('Format')}</Button>
         <Button size="sm" onClick={async()=>{try{await navigator.clipboard.writeText(input.text);setMessage(t('Copied.'));}catch{setMessage(t('Copy failed. Select and copy the source.'));}}}>{t('Copy')}</Button>
-      </div>}
-    </div>
+      </div>} />
     {context&&<Disclosure className="shrink-0 text-xs text-muted" summary={t('Operation details')}><div className="py-2 break-words">{context}</div></Disclosure>}
     {mode==='visual'?<div className="flex min-h-0 flex-1 flex-col overflow-auto">{children}</div>:<div className="grid gap-2">
       {!readOnly&&!!fields?.length&&<details className="min-w-0 rounded-md border border-border p-3" open={!Object.values(value).some(item=>item!==undefined)||undefined}>

@@ -229,7 +229,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await expect(resizer).toHaveAttribute("aria-valuenow", width!);
     await app.getByRole("button", { name: "Create order", exact: true }).click();
     const form = user.getByRole("dialog", { name: "Create order" });
-    await expect(form.getByRole("button", { name: "Source editor" })).toHaveCount(0);
+    await expect(form.getByRole("tab", { name: "Source editor" })).toHaveCount(0);
     await form.getByRole("textbox", { name: /^Order no/ }).fill("SO-3");
     await form.getByRole("textbox", { name: /^Customer/ }).fill("Initech");
     await form.getByRole("button", { name: "Create", exact: true }).click();

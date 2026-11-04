@@ -161,6 +161,7 @@ export default {
  "Inspect original raster bytes and edit normalized, revision-bound region proposals.": "查看原栅格图片并编辑绑定版本的归一化区域草稿。",
  "The original attachment and author permissions belong to Files. The caller confirms saves at the captured file revision; refused drafts remain local and view retirement never cancels accepted decisions.": "原附件和作者权限归文件服务。调用方按捕获的文件版本确认保存；拒绝保留本地草稿，视图退役不取消已接受的决定。",
  "3D scene": "3D 场景",
+ "Scene details": "场景明细",
  "Inspect authorized self-contained GLB geometry, model parts, layers and actual typed field mappings.": "查看受权自包含GLB几何、模型部件、图层和实际类型化字段映射。",
  "WebGL2 is required. The caller supplies a confirmed asset and attachment; sample mappings require the actual asset reference. No simulation, default asset or external model resource is used.": "需要WebGL2。调用方提供确认资产和附件；样本映射需要实际资产引用。不使用模拟数据、默认资产或外部模型资源。",
  "Map fields or record coordinates are unavailable or incompatible.": "地图字段或记录坐标不可用或不兼容。",

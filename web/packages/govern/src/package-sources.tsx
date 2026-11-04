@@ -1,6 +1,6 @@
 import { useHost } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Disclosure, Input, Panel, PropertyList, Select, t, useWorkspace , SegmentedChoice } from "@platform/ui";
+import { Button, ContentTabs, Disclosure, Input, Panel, PropertyList, Select, t, useWorkspace } from "@platform/ui";
 import { BookOpen, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -78,7 +78,7 @@ export function PackageHelp({ topic = "start", maintenance = false }: { topic?: 
   return <div className="grid max-w-3xl gap-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><h1 className="text-xl font-semibold">{t("Package guide")}</h1>{!maintenance && <Button onClick={() => open({ view: "apps" })}>{t("Open Packages")}</Button>}</div>
     <p className="text-sm text-muted">{t("Add, use and remove packages without losing your application data.")}</p>
-    <SegmentedChoice label={t("Guide topics")} value={ids[selected]!} onChange={(topic) => open({ view: maintenance ? "host-package-help" : "package-help", params: { topic } })} options={topics.map(([title], index) => ({ value: ids[index]!, label: t(title!) }))} />
+    <ContentTabs wrap={false} label={t("Guide topics")} value={ids[selected]!} onChange={(topic) => open({ view: maintenance ? "host-package-help" : "package-help", params: { topic } })} items={topics.map(([title], index) => ({ id: ids[index]!, title: t(title!) }))} />
     <Panel title={t(topics[selected]![0]!)}><p className="text-sm leading-relaxed">{t(topics[selected]![1]!)}</p></Panel>
     <div className="flex flex-wrap gap-2">{!maintenance && <><Button onClick={() => open({ view: "credentials" })}>{t("Credentials")}</Button><Button onClick={() => open({ view: "matrix" })}>{t("Capability matrix")}</Button></>}<Button onClick={() => open({ view: "host-overview" })}>{t("Host Console")}</Button></div>
   </div>;
