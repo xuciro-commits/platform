@@ -31,6 +31,7 @@ import { SavedObjectSetEditor, SavedObjectSets } from "./explorer/object-sets";
 import { FunctionEditor } from "./functions/function";
 import { CodeEditor } from "./functions/code";
 import { AgentEditor, Agents } from "./functions/agent";
+import { AgentBoardroom } from "./functions/agent-boardroom";
 import { ReleaseReview, releaseDraftsSelection, releaseKinds, type ReleaseKind } from "./releases/release";
 import { Branches } from "./branches/Branches";
 import { ProposalScreen } from "./branches/Proposal";
@@ -45,7 +46,7 @@ import { ToolContext } from "./projects/tool-context";
 import { studioApplicationID, studioAreaForRoute } from "./projects/studio-model";
 import { FunctionCatalog } from "./functions/catalog";
 import { Interfaces } from "./ontology/ModelWorkbench";
-import { Activity, Bot, Boxes, Braces, CalendarClock, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Workflow, Zap } from "lucide-react";
+import { Activity, Bot, Boxes, Braces, CalendarClock, ClipboardCheck, Database, FolderTree, GitBranch, GitMerge, Layers, LayoutTemplate, Link2, Network, PanelsTopLeft, Plug, Radio, Rocket, Ruler, Search, Shapes, Tags, TableProperties, Users, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.holds("build", "builder");
 const integrator = (host: Host) => host.holds("build", "integrator");
@@ -119,6 +120,7 @@ const releaseViews: View[] = [
 ];
 const agentViews: View[] = [
   view("agent", () => t("Agent definitions"), p => p.id ? <AgentEditor key={p.id} id={p.id} /> : <Agents />),
+  view("boardroom", () => t("Agent boardroom"), () => <AgentBoardroom />),
 ];
 
 function referenceContext(route: Route, children: ReactNode) {
@@ -302,7 +304,7 @@ export function createAgentStudio(host: Host, operations: Pick<AppUI, "for" | "v
     nav: (host, route) => [
       ...(operating ? operations.nav(host, route) : []),
  ...(host.role("knowledge") ? [section(t("Retrieval"),route,[{label:t("Retrieval sources"),icon:<Database/>,view:"knowledge"},{label:t("Glossary"),icon:<Tags/>,view:"glossary"}])]:[]),
-      ...(authoring ? [section(t("Build"), route, [{ label: t("Agent definitions"), icon: <Shapes />, view: "agent" }])] : []),
+      ...(authoring ? [section(t("Build"), route, [{ label: t("Agent definitions"), icon: <Shapes />, view: "agent" }, { label: t("Agent boardroom"), icon: <Users />, view: "boardroom" }])] : []),
     ],
   });
 }
