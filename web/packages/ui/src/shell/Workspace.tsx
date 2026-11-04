@@ -1,6 +1,6 @@
 import { useTheme } from "../themes/theme";
 import { Command, defaultFilter } from "cmdk";
-import { Bell, Clock, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
+import { Bell, Clock, FolderTree, Grid2x2, HelpCircle, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
@@ -366,6 +366,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     { id: "home", label: t("Home"), icon: <HomeIcon />, active: onRailRoute(rail.home), run: () => open(rail.home) },
     { id: "search", label: t("Search"), icon: <Search />, run: () => setPaletteOpen(true) },
     ...(rail.files ? [{ id: "files", label: t("Files"), icon: <FolderTree />, active: onRailRoute(rail.files), run: () => open(rail.files!) }] : []),
+    ...(rail.help ? [{ id: "help", label: t("Help"), icon: <HelpCircle />, active: onRailRoute(rail.help.route), run: () => open(rail.help.route!) }] : []),
     { id: "applications", label: t("Applications"), icon: <Grid2x2 />, active: onRailRoute(rail.applications), run: () => open(rail.applications) },
   ] : [];
   const notificationsItem = rail?.notifications && { id: "notifications", label: t("Notifications"), icon: <Bell />, badge: rail.notifications.unread, active: onRailRoute(rail.notifications.route), run: () => open(rail.notifications!.route) };

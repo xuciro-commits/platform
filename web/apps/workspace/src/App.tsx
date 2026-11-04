@@ -148,9 +148,17 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const registry = useRef(definitions);
   registry.current = definitions;
   const recordRoutes = useRef(host?.opens); recordRoutes.current = host?.opens;
-  const searchRecords = useCallback(async (text: string) => (await client.get<Api.Hit[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
-    .map((hit) => ({ id: `${hit.type}/${hit.id}`, label: hit.title || hit.id, detail: hit.resource ? hit.resource.path.join(" / ") : `${hit.typeTitle ?? hit.type} · ${hit.id}`, group: hit.group === "object" ? "object" as const : "resource" as const,
-      open: () => { const opens = recordRoutes.current!; const view = opens.get(hit.type); location.hash = routeToHash(hit.resource ? resourceEntryRoute(hit.resource, opens) : view ? { view, params: { id: hit.id } } : { view: "record", params: { type: hit.type, id: hit.id } }); } })), [client, identityScope, host?.source.scope]);
+  const searchRecords = useCallback(async (text: string) => {
+    let scope = "";
+    let q = text.trim();
+    if (q.startsWith("@")) { scope = "member"; q = q.slice(1).trim(); }
+    else if (q.startsWith("#")) { scope = "type"; q = q.slice(1).trim(); }
+    else if (q.startsWith(":")) { scope = "app"; q = q.slice(1).trim(); }
+    const url = scope ? `/v1/search?q=${encodeURIComponent(q)}&scope=${encodeURIComponent(scope)}` : `/v1/search?q=${encodeURIComponent(text)}`;
+    const hits = (await client.get<Api.Hit[]>(url)).slice(0, 12);
+    return hits.map((hit) => ({ id: `${hit.type}/${hit.id}`, label: hit.title || hit.id, detail: hit.resource ? hit.resource.path.join(" / ") : `${hit.typeTitle ?? hit.type} · ${hit.id}`, group: hit.group === "object" ? "object" as const : "resource" as const,
+      open: () => { const opens = recordRoutes.current!; const view = opens.get(hit.type); location.hash = routeToHash(hit.resource ? resourceEntryRoute(hit.resource, opens) : view ? { view, params: { id: hit.id } } : { view: "record", params: { type: hit.type, id: hit.id } }); } }));
+  }, [client, identityScope, host?.source.scope]);
   const app = all.find((a) => a.id === current);
   const preparedApplication=activeRoute?.params?.application&&all.some(entry=>entry.id===activeRoute.params!.application)?activeRoute.params.application:app?.id;
   useEffect(()=>{
@@ -283,7 +291,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         layoutScope={app?.id} scopeOf={applicationOf}
         views={views} resolveRoute={resolveRoute} home={{ view: "home" }}
         rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "notifications" }, unread },
-          files: { view: "projects" },
+          files: { view: "projects" }, help: { route: { view: "help" } },
           ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}

@@ -4,9 +4,10 @@ import type { Api } from "@platform/kernel";
 import { Button, DataTable, Input, Notice, PageHeader, Panel, Tag, Toggles, t, useWorkspace } from "@platform/ui";
 import type { Member } from "./shared";
 
-export const markings = ["confidential", "restricted"];
 export const markingLabels: Record<string, string> = { confidential: "Confidential", restricted: "Restricted" };
 export const markingHelp: Record<string, string> = { confidential: "Opens data marked confidential.", restricted: "Opens data marked confidential or restricted." };
+export const markingLabel = (id: string) => markingLabels[id] ?? id;
+export const markingHelpText = (id: string) => markingHelp[id] ?? t("Marked data carries the {id} marking.", { id });
 
 
 export function Markings() {
