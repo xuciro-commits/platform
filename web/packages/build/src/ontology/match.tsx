@@ -50,7 +50,10 @@ export function MatchEditor({ id }: { id: string }) {
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader crumbs={[{ label: t("Matching rules"), onClick: () => open({ view: "match" }) }]} title={draft.title || t("New matching rule")} status={<><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Object → keys that mean the same thing → whose value wins per field. Publish applies it to every row landing in the object from then on.")}
       actions={<ResourceControls type="build.match" record={draft} dirty={dirty} busy={busy} route={{ view: "match", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
-        operations={draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []} />} />
+        operations={[
+          ...(draft.state === "draft" ? [{ id: "publish", label: t("Publish"), disabled: dirty, run: () => void perform(() => transition("publish")) }] : []),
+          ...(draft.state === "published" ? [{ id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []),
+        ]} />} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     {(pipelineQuery.isError || sourceQuery.isError) && <Panel role="alert" className="text-danger">{t("The pipelines or data sources could not be loaded.")}</Panel>}
     {holds("build", "builder") && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}

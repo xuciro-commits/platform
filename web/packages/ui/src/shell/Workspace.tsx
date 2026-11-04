@@ -328,6 +328,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [recordSearch, setRecordSearch] = useState<{ source: RecordSearch; text: string; attempt: number; hits?: SearchHit[]; error?: string }>();
   const prefix = paletteScopes.find(scope => typed.trimStart().startsWith(scope)), scoped = !!prefix, commandsOnly = prefix === ">";
+  const scopeLabel = scoped ? (() => { switch (prefix) { case "@": return t("Members"); case "#": return t("Projects"); case ":": return t("Object types"); default: return t("Resources"); } })() : undefined;
   const searching = paletteOpen && !!search && !commandsOnly && (scoped ? typed.trim().length >= 1 : typed.trim().length >= 2);
   const answer = searching && recordSearch?.source === search && recordSearch.text === typed && recordSearch.attempt === searchAttempt ? recordSearch : undefined;
   const found = answer?.hits ?? [];
@@ -511,16 +512,24 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               ))}
             </Command.Group>
           )}
-          {(["resource", "object"] as const).map(group => {
-            const hits = found.filter(hit => (hit.group ?? "resource") === group);
-            return hits.length > 0 && !commandsOnly && <Command.Group key={group} heading={group === "object" ? t("Objects") : t("Resources")} className={paletteGroup}>
-              {hits.map((hit) => (
-                <Command.Item key={hit.id} value={`record ${answer!.text} ${hit.label} ${hit.id}`} className={paletteItem}
-                  onSelect={() => { hit.open(); setPaletteOpen(false); }}>{hit.label}{hit.detail && <span className="ml-auto font-mono text-xs text-muted">{hit.detail}</span>}</Command.Item>
-              ))}
-            </Command.Group>;
-          })}
-          {memory.recent.length > 0 && !typed.trim() && (
+          {!commandsOnly && found.length > 0 && (
+            scoped
+              ? <Command.Group key="search-scoped" heading={scopeLabel ?? t("Resources")} className={paletteGroup}>
+                  {found.map((hit) => (
+                    <Command.Item key={hit.id} value={`record ${answer!.text} ${hit.label} ${hit.id}`} className={paletteItem}
+                      onSelect={() => { hit.open(); setPaletteOpen(false); }}>{hit.label}{hit.detail && <span className="ml-auto font-mono text-xs text-muted">{hit.detail}</span>}</Command.Item>
+                  ))}
+                </Command.Group>
+              : (["object", "resource"] as const).map(group => {
+                  const hits = found.filter(hit => (hit.group ?? "resource") === group);
+                  return hits.length > 0 && <Command.Group key={group} heading={group === "object" ? t("Objects") : t("Resources")} className={paletteGroup}>
+                    {hits.map((hit) => (
+                      <Command.Item key={hit.id} value={`record ${answer!.text} ${hit.label} ${hit.id}`} className={paletteItem}
+                        onSelect={() => { hit.open(); setPaletteOpen(false); }}>{hit.label}{hit.detail && <span className="ml-auto font-mono text-xs text-muted">{hit.detail}</span>}</Command.Item>
+                    ))}
+                  </Command.Group>;
+                })
+          )}
             <Command.Group heading={t("Recent")} className={paletteGroup}>
               {memory.recent.slice(0, 8).map((entry) => (
                 <Command.Item key={routeKey(entry.route)} value={`recent ${entry.title} ${routeKey(entry.route)}`} className={paletteItem}

@@ -122,6 +122,7 @@ export function PipelineEditor({ id }: { id: string }) {
     <PageHeader crumbs={[{ label: t("Pipelines"), onClick: () => open({ view: "pipeline" }) }]} title={draft.title || t("New pipeline")} status={<><MarkingTag marking={draft.marking} /><DraftStatus state={draft.state} /></>} meta={draft.name ? <span className="font-mono">{draft.name}</span> : undefined} help={t("Declare the input, transformations, expectations and output. Publishing saves the declaration; Run now explicitly requests a run with current permissions.")}
       actions={<ResourceControls type="build.pipeline" record={draft} dirty={dirty} busy={busy} route={{ view: "pipeline", params: { id } }} onCancel={discardChanges} onSave={() => perform(save)}
         operations={[
+          ...(draft.state === "draft" ? [{ id: "publish", label: t("Publish"), disabled: dirty, run: () => void perform(() => transition("publish")) }] : []),
           { id: "trial", label: t("Trial pipeline"), disabled: !!inputs?.invalid || !draft.input, run: () => void perform(trial) },
           ...(draft.state === "published" ? [{ id: "run", label: draft.requested ? t("Run requested…") : t("Run now"), disabled: dirty || !!draft.requested, run: () => void perform(() => transition("run")) },
             { id: "pause", label: t("Pause"), disabled: dirty, run: () => void perform(() => transition("pause")) }] : []),
