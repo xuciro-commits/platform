@@ -429,9 +429,7 @@ func ruleCellLiteral(raw, kind string) (any, error) {
 		return platform.CastCell(raw, kind)
 	}
 	text := strings.TrimSpace(raw)
-	e := platform.ExprLiteralValue("number", text)
-	_, err := platform.CompileExpr(e, platform.ExprSchema{})
-	if err != nil {
+	if _, err := platform.ParseDecimal(text); err != nil {
 		return nil, err
 	}
 	return text, nil

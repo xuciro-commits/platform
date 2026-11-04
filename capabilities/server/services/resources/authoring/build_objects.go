@@ -256,7 +256,7 @@ func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
 	return b.lookupEntity(typ)
 }
 
-func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error {
+func (b *Build) Check(o Object, id string, engine platform.RuleEngine) error {
 	if err := b.checkName(o.Name, id); err != nil {
 		return err
 	}
@@ -272,19 +272,19 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	if err := ontology.CheckDataSources(o); err != nil {
 		return err
 	}
-	if err := ontology.CheckEnterpriseUse(o); err != nil {
+	if err := ontology.CheckEnterpriseUse(o, engine); err != nil {
 		return err
 	}
 	if err := ontology.CheckProcess(o, ID, TypeOf(o.Name), Builder, User, FunctionCallType, b.conditionLookup); err != nil {
 		return err
 	}
-	if err := b.checkObjectRules(o, engines...); err != nil {
+	if err := b.checkObjectRules(o, engine); err != nil {
 		return err
 	}
-	if err := b.checkConstraints(o, engines...); err != nil {
+	if err := b.checkConstraints(o, engine); err != nil {
 		return err
 	}
-	if err := b.checkRecordSets(o, engines...); err != nil {
+	if err := b.checkRecordSets(o, engine); err != nil {
 		return err
 	}
 	if err := b.checkVersioning(o); err != nil {
@@ -296,7 +296,7 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	if err := ontology.CheckScope(o); err != nil {
 		return err
 	}
-	if err := b.checkTransactions(o, engines...); err != nil {
+	if err := b.checkTransactions(o, engine); err != nil {
 		return err
 	}
 	if err := b.checkCreates(o); err != nil {

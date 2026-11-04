@@ -26,7 +26,10 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		actions[action.Schema] = action
 	}
 	sources := retainedPageDefinitionSources{tenant: t}
-	pages := pageowner.DefinitionProjection{Member: m, Entities: entities, Actions: actions, Definitions: registeredDefinitions, Criteria: t.modelCriteria, Function: sources.function, Operation: sources.operation, CheckQuery: checkNamedQuery}
+	pages := pageowner.DefinitionProjection{Member: m, Entities: entities, Actions: actions, Definitions: registeredDefinitions, Criteria: t.modelCriteria, Function: sources.function, Operation: sources.operation,
+		CheckQuery: func(q platform.NamedQuery, info platform.EntityInfo) error {
+			return checkNamedQuery(q, info, t.services.Rules)
+		}}
 	out := []platform.Definition{}
 	for _, registered := range registeredDefinitions {
 		if !t.ownerActive(registered.Ref.App) {
@@ -150,11 +153,11 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 			def.QueryVersions = maps.Clone(def.QueryVersions)
 			for version, query := range def.QueryVersions {
-				if checkNamedQuery(query, info) != nil {
+				if checkNamedQuery(query, info, t.services.Rules) != nil {
 					delete(def.QueryVersions, version)
 				}
 			}
-			if checkNamedQuery(*def.Query, info) != nil {
+			if checkNamedQuery(*def.Query, info, t.services.Rules) != nil {
 				def.Query = nil
 				if len(def.QueryVersions) == 0 {
 					continue

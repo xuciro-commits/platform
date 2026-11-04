@@ -9,12 +9,12 @@ import (
 	"strconv"
 )
 
-func checkNamedQuery(q platform.NamedQuery, info platform.EntityInfo) error {
-	return objects.CheckNamedQuery(q, info)
+func checkNamedQuery(q platform.NamedQuery, info platform.EntityInfo, engine platform.RuleEngine) error {
+	return objects.CheckNamedQuery(q, info, engine)
 }
 
-func checkQueryFields(q platform.NamedQuery, info platform.EntityInfo) error {
-	return objects.CheckQueryFields(q, info)
+func checkQueryFields(q platform.NamedQuery, info platform.EntityInfo, engine platform.RuleEngine) error {
+	return objects.CheckQueryFields(q, info, engine)
 }
 
 func (h hostView) ValidateInstallQuery(q platform.NamedQuery) error {
@@ -26,7 +26,7 @@ func (h hostView) ValidateInstallQuery(q platform.NamedQuery) error {
 	if !ok || info.App != h.app.Manifest().ID {
 		return fmt.Errorf("query needs its owner's published object")
 	}
-	return checkNamedQuery(q, info)
+	return checkNamedQuery(q, info, h.t.services.Rules)
 }
 
 func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version int) error {

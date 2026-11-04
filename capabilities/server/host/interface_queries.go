@@ -59,20 +59,20 @@ func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.En
 			return q, fmt.Errorf("interface %s needs its published implementation %s", q.Interface, typ)
 		}
 	}
-	if err := checkInterfaceQueryFields(q); err != nil {
+	if err := checkInterfaceQueryFields(q, t.services.Rules); err != nil {
 		return q, err
 	}
 	return q, nil
 }
 
-func checkInterfaceQueryFields(q platform.NamedQuery) error {
+func checkInterfaceQueryFields(q platform.NamedQuery, engine platform.RuleEngine) error {
 	info := platform.EntityInfo{}
 	for _, field := range q.InterfaceShape.Fields {
 		info.Fields = append(info.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type})
 	}
-	return checkQueryFields(q, info)
+	return checkQueryFields(q, info, engine)
 }
 
 func (t *Tenant) checkInterfaceQueryFields(q platform.NamedQuery) error {
-	return checkInterfaceQueryFields(q)
+	return checkInterfaceQueryFields(q, t.services.Rules)
 }

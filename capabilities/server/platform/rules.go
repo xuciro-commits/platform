@@ -272,10 +272,6 @@ const ExprMaxSet = ruleexpr.MaxSet
 
 const ExprMaxContextBytes = ruleexpr.MaxContextBytes
 
-func CompileExpr(expr Expr, schema ExprSchema) (ExprProgram, error) {
-	return ruleexpr.Compile(expr, schema)
-}
-
 func LowerFormula(text string, fields map[string]string) (Expr, error) {
 	kinds := make(map[string]string, len(fields))
 	for name, kind := range fields {

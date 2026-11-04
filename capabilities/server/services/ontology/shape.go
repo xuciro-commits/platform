@@ -14,7 +14,7 @@ const BaseField = "base"
 
 var fieldTypes = []string{"text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "attachment"}
 
-func CheckEnterpriseUse(o Object) error {
+func CheckEnterpriseUse(o Object, engine platform.RuleEngine) error {
 	if o.EnterpriseUse == nil {
 		return nil
 	}
@@ -29,7 +29,7 @@ func CheckEnterpriseUse(o Object) error {
 		refs["state"] = platform.ExprType{Kind: "choice"}
 	}
 	refs["archived"] = platform.ExprType{Kind: "boolean"}
-	_, err := platform.CompileExpr(*o.EnterpriseUse, platform.ExprSchema{Refs: refs})
+	_, err := engine.CompileExpr(*o.EnterpriseUse, platform.ExprSchema{Refs: refs})
 	return err
 }
 
