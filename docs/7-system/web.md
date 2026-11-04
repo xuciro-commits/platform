@@ -67,6 +67,6 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 ## 现存差距
 
-- 资源 URL 已使用 RID；治理资源与容器尚未全面采用同一路由入口。
-- `@platform/kernel` 未改名（路线图“已知漂移”）。
-- Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；尚未测量实际首屏耗时（路线图“已知漂移”）。
+- 治理资源与容器同一路由入口（P0-2/P0-5 路由部分，已纳入 P0，代码端待补齐）。
+- `@platform/kernel` 未改名（ADR-07 决定保留为代码歧义说明，不作为改动项）。
+- Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；先测量实际加载成本，再决定拆包（ADR-08）。
