@@ -8,20 +8,54 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 终局的三段与判断标准见 [1-enterprise §1.1](1-enterprise.md)。条目完成即删除；编号不复用。每批是一个独立可用的薄切片，跨层推进，不在一层深挖。
 
-平台基础阶段 P1–P5 已完成；当前只保留未完成项。
+平台基础阶段 P1–P5 已完成；当前只保留未完成项。下一阶段产品完善与开发的完整目标设计见 `PLATFORM-NEXT-PHASE.md`，按用户价值与依赖分为 P0（主链断点修通）、P1（核心工作台专业度升级）、P2（平台广度扩展，由负责人决定是否进入）。
 
-## 当前批次
+## 当前批次（P0：主链断点修通，优先级最高）
 
-无排期项。发布四族与旧页面格式的保留理由写在 `docs/7-system/README.md`。
+P0 修通用户“当场卡住”的断点与入口纠偏；每条都有端到端验收用例（F1–F15，对应 `web/e2e/F*.spec.ts`）。
+
+| 任务 | 名称 | 验收 |
+|---|---|---|
+| P0-1 | 集成资源页面发布（源/管道/回写/匹配规则 出 Publish/Pause） | draft 状态显示 Publish，published 显示 Pause/Run/Pull；Listener 作参照 |
+| P0-2 | 搜索前缀真实作用域 `@` 成员、`#` 项目、`:` 对象类型 | 四类前缀都有真实作用域结果，按专用分组展示 |
+| P0-3 | 审批决策上下文（工作项打开后显示对象/动作/提交条件/意见/确认） | 从通知到完成不超过三次点击 |
+| P0-4 | “待我审阅”提案队列（reviewer 过滤） | 非审阅人不可见；审阅人审批后队列清空 |
+| P0-5 | 破坏性变更下游影响审阅（删除属性/改类型显示已发布下游资源） | 显示下游并要求确认，不确认不得进入审阅 |
+| P0-6 | 动态标记与成员授权一致（成员页接入动态标记列表） | 新建动态标记后可在成员页授予和撤销 |
+| P0-7 | 租户 release 显式回退（前驱版本、回退影响审阅、Rollback 动作、回退审计） | v2 激活后可回退到 v1，历史数据不丢，审计可见 |
+| P0-8 | AIP Assist 重构为右侧常驻伴随抽屉，读取当前页面上下文 | 不切断当前页面；写入只经 M20 动作表单且用户确认 |
+| P0-9 | Files 入口对全部角色可见（移除 `build.builder` 限制） | 非构建者可从导航轨进入 Files |
+| P0-10 | Favorites 支持资源与对象收藏 | 收藏状态一致；支持应用/资源/对象 |
+| P0-11 | Applications 业务组按产品/项目分组 | 门户四组；业务组内按产品或项目分组；无产品显示空状态 |
+| P0-12 | Help 导航项（帮助与快捷键） | 导航轨出现 Help 项 |
+| P0-13 | 新增验收用例 F11–F15 | F11 页面发布、F12 待我审阅、F13 破坏性变更下游影响、F14 显式回退、F15 对象→Workshop 真实交付 |
+| P0-14 | 规范与 roadmap 同步（消除已完成差距，新发现差距入表） | `git diff --check` 干净 |
+
+## 下一批次（P1：核心工作台专业度升级，P0 完成后进入）
+
+| 任务 | 名称 |
+|---|---|
+| P1-1 | Pipeline Builder 升级为真实 DAG 工作台（连线、步骤重排、ExpressionEditor、节点输出预览、Builds 历史） |
+| P1-2 | Dataset Preview 移除 50 行截断，启用全量虚拟化与列统计面板 |
+| P1-3 | 决策表接入专业网格编辑（方向键、Tab 流转、行内修改、Excel 矩形粘贴） |
+| P1-4 | Agent Studio 编辑器内即时对话调试沙箱与流式工具轨迹 |
+| P1-5 | Workshop 组件事件全面开放 + “Open app”运行入口；效果增加条件分支、Toast、重置表单、异步等待 |
+| P1-6 | Object Explorer 侧窗预览对象；Send to Workshop 真实写入对象集变量 |
+| P1-7 | Monitoring 失败运行重试/跳过/取消；Data Connection 拉取失败重试 |
+
+## 后续批次（P2：平台广度扩展，由负责人决定是否进入，不与 P0/P1 混批）
+
+Data Health / Linter、外部 SDK / MCP、代码工作区、第三方组件发布、Notepad / Fusion 协作工具、深度审计、数据生命周期、多 Agent Boardroom / Evolve（基于现有 `host/a2a.go` A2A 协议基础，不另建协议）。
+
+发布四族与旧页面格式的保留理由写在 `docs/7-system/README.md`。
 
 ## 已知漂移
 
-代码中与规范冲突、尚未排期的小项；顺手修掉即删除。
+代码中与规范冲突、尚未排期的小项；顺手修掉即删除。以下已由 `PLATFORM-NEXT-PHASE.md` 纳入当前批次并删除：门户业务组分组（P0-11）、治理资源与容器同一路由入口（P0-2/P0-5 路由部分）、授权上下文下沉 `services/security`（P0-6 相关授权统一）、搜索前缀 `@#:` 不生效（P0-2）。
 
-- “kernel”一词指三处：`capabilities/server/kernel`、`contract/go/kernel`、`web/packages/kernel`。
-- Workspace 构建仍有大于 500 kB 的分块与三处无效动态导入告警；先测量实际加载成本，再决定拆包。
-- 门户的业务组未按产品或项目分组（`3-information` §3.3）。
-- 治理资源与容器尚未采用同一路由入口（`7-system/web`）。
-- 授权上下文在宿主根包构造，未进入 `services/security`（`6-domain/security`）。
+其余尚未排期：
+
+- “kernel”一词指三处：`capabilities/server/kernel`、`contract/go/kernel`、`web/packages/kernel`（ADR-07 决定不改名 `web/packages/kernel`，本条保留为代码歧义说明，不作为改动项）。
+- Workspace 构建仍有大于 500 kB 的分块与三处无效动态导入告警；先测量实际加载成本，再决定拆包（ADR-08）。
 - 少数位置直接编译 Expr，绕过可注入的规则引擎（`6-domain`）。
 - `SetBuilder` 的 `domain` 条件行仍由命名查询依赖（`4-interaction/patterns` M10）。
