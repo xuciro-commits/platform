@@ -17,6 +17,7 @@ import { SystemHealth, Integrations, Endpoints, AppSettingsView, Audit } from ".
 import { MonitoringOverviewView, MonitoringRunsView, MonitoringViewsView } from "./monitoring";
 import { AIConfiguration } from "./ai-configuration";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
+import { MCPClient } from "./mcp";
 import { Credentials } from "./credentials";
 import { Agents, AgentRuns, AgentMemories, Evaluations } from "./processes";
 import { HostMigrations, HostOverview, HostPromotions, HostTenant } from "./host";
@@ -31,7 +32,7 @@ function controlPanelAreas(host: Host): Record<Area, { view: string; title: stri
   const shown = (entries: [string, string, boolean][]) => entries.filter(([, , on]) => on).map(([view, title]) => ({ view, title }));
   return {
     permissions: shown([["permissions", "Roles and permissions", admin(host) || auditor(host)], ["matrix", "Capability matrix", admin(host)], ["protocols", "Protocols", admin(host)]]),
-    ai: shown([["ai-playground", "AI playground", !!host.role("ai")], ["ai-usage", "AI usage", !!host.role("ai")], ["ai-configuration", "AI configuration", host.holds("ai", "admin")], ["ai-providers", "Providers and models", host.holds("ai", "admin")]]),
+    ai: shown([["ai-playground", "AI playground", !!host.role("ai")], ["ai-usage", "AI usage", !!host.role("ai")], ["ai-configuration", "AI configuration", host.holds("ai", "admin")], ["ai-providers", "Providers and models", host.holds("ai", "admin")], ["mcp", "MCP client", !!host.role("ai")]]),
     settings: shown([["words", "Languages and words", admin(host)], ["app-settings", "App settings", admin(host)], ["credentials", "Credentials", admin(host)], ["integrations", "Connectors", admin(host)], ["self-hosting", "System history", !!host.role("system")]]),
   };
 }
@@ -112,6 +113,7 @@ const controlPanelViews: View[] = [
   { id: "ai-usage", title: () => t("AI usage"), render: () => <AreaTabs area="ai" current="ai-usage"><AIUsage /></AreaTabs> },
   { id: "ai-configuration", title: () => t("AI configuration"), render: p => <AreaTabs area="ai" current="ai-configuration"><AIConfiguration initialSection={p.section} fromPackage={p.fromPackage} fromVersion={p.fromVersion} /></AreaTabs> },
   { id: "ai-providers", title: () => t("Providers and models"), render: () => <AreaTabs area="ai" current="ai-providers"><AIProviders /></AreaTabs> },
+  { id: "mcp", title: () => t("MCP client"), render: () => <AreaTabs area="ai" current="mcp"><MCPClient /></AreaTabs> },
 ];
 
 export const controlPanel = defineApp({
