@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,9 @@ type File struct {
 
 	observationMu  sync.Mutex
 	observationIDs map[string]map[string]struct{}
+	auditMu        sync.Mutex
+	personalMu     sync.Mutex
+	runMu          sync.Mutex
 }
 
 type fileLine struct {
@@ -84,6 +88,18 @@ func (j *File) entriesPath() string { return filepath.Join(j.dir, "journal.jsonl
 
 func (j *File) observationsPath() string {
 	return filepath.Join(j.dir, "derived", "observations.jsonl")
+}
+
+func (j *File) auditPath() string {
+	return filepath.Join(j.dir, "derived", "audit.jsonl")
+}
+
+func (j *File) personalReadsPath() string {
+	return filepath.Join(j.dir, "derived", "personal-reads.jsonl")
+}
+
+func (j *File) runIndexPath() string {
+	return filepath.Join(j.dir, "derived", "run-index.jsonl")
 }
 
 func (j *File) loadEntries() error {
@@ -721,4 +737,383 @@ func (j *File) PurgeObservations(tenant string, before time.Time) (int, error) {
 	}
 	j.observationIDs = ids
 	return removed, nil
+}
+
+func (j *File) ObservationUsage(tenant string, from time.Time) (int64, error) {
+	j.observationMu.Lock()
+	events, err := j.readObservations()
+	j.observationMu.Unlock()
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, event := range events {
+		if event.Tenant != tenant || event.At.Before(from) {
+			continue
+		}
+		raw, err := json.Marshal(event)
+		if err != nil {
+			return 0, err
+		}
+		total += int64(len(raw))
+	}
+	return total, nil
+}
+
+func (j *File) SummarizeObservations(tenant, member string, from, to time.Time) (platform.ObservationSummary, error) {
+	j.observationMu.Lock()
+	events, err := j.readObservations()
+	j.observationMu.Unlock()
+	if err != nil {
+		return platform.ObservationSummary{}, err
+	}
+	out := platform.ObservationSummary{From: from.UTC(), To: to.UTC()}
+	var total int64
+	for _, event := range events {
+		if event.Tenant != tenant || event.At.Before(from) || !event.At.Before(to) || member != "" && event.Member != member {
+			continue
+		}
+		switch event.Level {
+		case "error":
+			out.Errors++
+		case "warn":
+			out.Warnings++
+		}
+		if event.Source != "request" {
+			continue
+		}
+		out.Requests++
+		if value, err := strconv.ParseInt(event.Attributes["durationMs"], 10, 64); err == nil {
+			total += value
+			out.MaxMillis = max(out.MaxMillis, value)
+		}
+	}
+	if out.Requests > 0 {
+		out.AverageMillis = float64(total) / float64(out.Requests)
+	}
+	return out, nil
+}
+
+type auditLine struct {
+	Tenant string              `json:"tenant"`
+	Entry  platform.AuditEntry `json:"entry"`
+}
+
+func (j *File) readAuditEntries() ([]auditLine, error) {
+	file, err := os.Open(j.auditPath())
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("audit: %w", err)
+	}
+	defer file.Close()
+	lines := bufio.NewScanner(file)
+	lines.Buffer(make([]byte, 0, 1<<20), 16<<20)
+	number := 0
+	var entries []auditLine
+	seen := map[string]struct{}{}
+	for lines.Scan() {
+		number++
+		if len(lines.Bytes()) == 0 {
+			continue
+		}
+		var line auditLine
+		if err := json.Unmarshal(lines.Bytes(), &line); err != nil {
+			return nil, fmt.Errorf("audit: %s line %d: %v", j.auditPath(), number, err)
+		}
+		key := line.Tenant + "\x00" + line.Entry.ID
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		line.Entry = normalizeAuditEntry(line.Entry)
+		entries = append(entries, line)
+	}
+	if err := lines.Err(); err != nil {
+		return nil, fmt.Errorf("audit: %w", err)
+	}
+	return entries, nil
+}
+
+func (j *File) SaveAuditEntries(tenant string, entries []platform.AuditEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	j.auditMu.Lock()
+	defer j.auditMu.Unlock()
+	existing, err := j.readAuditEntries()
+	if err != nil {
+		return err
+	}
+	seen := map[string]struct{}{}
+	for _, line := range existing {
+		if line.Tenant == tenant {
+			seen[line.Entry.ID] = struct{}{}
+		}
+	}
+	var raw bytes.Buffer
+	for _, entry := range entries {
+		entry = normalizeAuditEntry(entry)
+		if entry.ID == "" {
+			return fmt.Errorf("audit entry needs an identity")
+		}
+		if _, duplicate := seen[entry.ID]; duplicate {
+			continue
+		}
+		seen[entry.ID] = struct{}{}
+		line, err := json.Marshal(auditLine{Tenant: tenant, Entry: entry})
+		if err != nil {
+			return fmt.Errorf("audit: %w", err)
+		}
+		raw.Write(line)
+		raw.WriteByte('\n')
+	}
+	if raw.Len() == 0 {
+		return nil
+	}
+	return appendFileSync(j.auditPath(), raw.Bytes(), "audit")
+}
+
+func (j *File) QueryAuditEntries(query platform.AuditQuery) (platform.AuditPage, error) {
+	if query.Tenant == "" {
+		return platform.AuditPage{}, fmt.Errorf("audit: tenant is required")
+	}
+	j.auditMu.Lock()
+	lines, err := j.readAuditEntries()
+	j.auditMu.Unlock()
+	if err != nil {
+		return platform.AuditPage{}, err
+	}
+	entries := make([]platform.AuditEntry, 0, len(lines))
+	for _, line := range lines {
+		if line.Tenant == query.Tenant {
+			entries = append(entries, line.Entry)
+		}
+	}
+	return selectAuditPage(entries, query, earliestAudit(entries, query.Tenant))
+}
+
+type personalReadLine struct {
+	Tenant string                `json:"tenant"`
+	Read   platform.PersonalRead `json:"read"`
+}
+
+func (j *File) readPersonalReads() ([]personalReadLine, error) {
+	file, err := os.Open(j.personalReadsPath())
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("personal reads: %w", err)
+	}
+	defer file.Close()
+	lines := bufio.NewScanner(file)
+	lines.Buffer(make([]byte, 0, 1<<20), 16<<20)
+	number := 0
+	var reads []personalReadLine
+	seen := map[string]struct{}{}
+	for lines.Scan() {
+		number++
+		if len(lines.Bytes()) == 0 {
+			continue
+		}
+		var line personalReadLine
+		if err := json.Unmarshal(lines.Bytes(), &line); err != nil {
+			return nil, fmt.Errorf("personal reads: %s line %d: %v", j.personalReadsPath(), number, err)
+		}
+		key := line.Tenant + "\x00" + line.Read.ID
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		line.Read = normalizePersonalRead(line.Read)
+		reads = append(reads, line)
+	}
+	if err := lines.Err(); err != nil {
+		return nil, fmt.Errorf("personal reads: %w", err)
+	}
+	return reads, nil
+}
+
+func (j *File) SavePersonalReads(tenant string, reads []platform.PersonalRead) error {
+	if len(reads) == 0 {
+		return nil
+	}
+	j.personalMu.Lock()
+	defer j.personalMu.Unlock()
+	existing, err := j.readPersonalReads()
+	if err != nil {
+		return err
+	}
+	seen := map[string]struct{}{}
+	for _, line := range existing {
+		if line.Tenant == tenant {
+			seen[line.Read.ID] = struct{}{}
+		}
+	}
+	var raw bytes.Buffer
+	for _, read := range reads {
+		read = normalizePersonalRead(read)
+		if read.ID == "" {
+			return fmt.Errorf("personal read needs an identity")
+		}
+		if _, duplicate := seen[read.ID]; duplicate {
+			continue
+		}
+		seen[read.ID] = struct{}{}
+		line, err := json.Marshal(personalReadLine{Tenant: tenant, Read: read})
+		if err != nil {
+			return fmt.Errorf("personal reads: %w", err)
+		}
+		raw.Write(line)
+		raw.WriteByte('\n')
+	}
+	if raw.Len() == 0 {
+		return nil
+	}
+	return appendFileSync(j.personalReadsPath(), raw.Bytes(), "personal reads")
+}
+
+func (j *File) QueryPersonalReads(query platform.PersonalReadQuery) (platform.PersonalReadPage, error) {
+	if query.Tenant == "" {
+		return platform.PersonalReadPage{}, fmt.Errorf("personal reads: tenant is required")
+	}
+	j.personalMu.Lock()
+	lines, err := j.readPersonalReads()
+	j.personalMu.Unlock()
+	if err != nil {
+		return platform.PersonalReadPage{}, err
+	}
+	reads := make([]platform.PersonalRead, 0, len(lines))
+	for _, line := range lines {
+		if line.Tenant == query.Tenant {
+			reads = append(reads, line.Read)
+		}
+	}
+	return selectPersonalReadPage(reads, query, earliestPersonalRead(reads))
+}
+
+func appendFileSync(path string, raw []byte, label string) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	if _, err := file.Write(raw); err != nil {
+		file.Close()
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	return file.Close()
+}
+
+func (j *File) ReplaceRunIndex(tenant, scope string, entries []platform.RunIndexEntry) error {
+	j.runMu.Lock()
+	defer j.runMu.Unlock()
+	current, err := j.readRunIndex()
+	if err != nil {
+		return err
+	}
+	byKey := map[string][]platform.RunIndexEntry{}
+	for _, entry := range current {
+		parts := strings.SplitN(entry.ID, "\x00", 3)
+		if len(parts) < 2 {
+			continue
+		}
+		lineTenant := parts[0]
+		lineScope := ""
+		value := parts[1]
+		if len(parts) == 3 {
+			lineScope, value = parts[1], parts[2]
+		}
+		entry.ID = value
+		entry.Scope = lineScope
+		key := lineTenant + "\x00" + lineScope
+		byKey[key] = append(byKey[key], entry)
+	}
+	for index := range entries {
+		entries[index].Scope = scope
+	}
+	byKey[tenant+"\x00"+scope] = normalizeRuns(entries)
+	var raw bytes.Buffer
+	for key, list := range byKey {
+		name, _, _ := strings.Cut(key, "\x00")
+		for _, entry := range list {
+			saved := entry
+			saved.ID = name + "\x00" + entry.Scope + "\x00" + entry.ID
+			line, err := json.Marshal(saved)
+			if err != nil {
+				return fmt.Errorf("run index: %w", err)
+			}
+			raw.Write(line)
+			raw.WriteByte('\n')
+		}
+	}
+	if raw.Len() == 0 {
+		if err := os.Remove(j.runIndexPath()); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("run index: %w", err)
+		}
+		return nil
+	}
+	return WriteFileAtomic(j.runIndexPath(), raw.Bytes())
+}
+
+func (j *File) readRunIndex() ([]platform.RunIndexEntry, error) {
+	file, err := os.Open(j.runIndexPath())
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("run index: %w", err)
+	}
+	defer file.Close()
+	lines := bufio.NewScanner(file)
+	lines.Buffer(make([]byte, 0, 1<<20), 64<<20)
+	number := 0
+	var entries []platform.RunIndexEntry
+	for lines.Scan() {
+		number++
+		if len(lines.Bytes()) == 0 {
+			continue
+		}
+		var entry platform.RunIndexEntry
+		if err := json.Unmarshal(lines.Bytes(), &entry); err != nil {
+			return nil, fmt.Errorf("run index: %s line %d: %v", j.runIndexPath(), number, err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := lines.Err(); err != nil {
+		return nil, fmt.Errorf("run index: %w", err)
+	}
+	return entries, nil
+}
+
+func (j *File) QueryRunIndex(query platform.RunIndexQuery) (platform.RunIndexPage, error) {
+	j.runMu.Lock()
+	entries, err := j.readRunIndex()
+	j.runMu.Unlock()
+	if err != nil {
+		return platform.RunIndexPage{}, err
+	}
+	var tenantEntries []platform.RunIndexEntry
+	for _, entry := range entries {
+		parts := strings.SplitN(entry.ID, "\x00", 3)
+		if len(parts) >= 2 && parts[0] == query.Tenant {
+			lineScope := ""
+			value := parts[1]
+			if len(parts) == 3 {
+				lineScope, value = parts[1], parts[2]
+			}
+			if query.Scope != "" && lineScope != query.Scope {
+				continue
+			}
+			entry.ID = value
+			entry.Scope = lineScope
+			tenantEntries = append(tenantEntries, entry)
+		}
+	}
+	return selectRunIndexPage(tenantEntries, query), nil
 }

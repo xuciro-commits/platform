@@ -3,7 +3,7 @@ import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, DataTable, Sheet, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, humanizeKernelError, useWorkspace } from "@platform/ui";
 import { type UseQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { when, type AppSettings, type AuditEntry, type Connector, type EndpointView, type ProtocolInfo, type SettingValue } from "./shared";
 
 export function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; children: (data: T) => ReactNode }) {
@@ -17,6 +17,7 @@ export function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; c
 
 export function SystemHealth() {
   const health = useRead<Api.TenantHealth>("/v1/health", 5000);
+  const { open } = useWorkspace();
   return <>
     <PageHeader title={t("Health")} help={t("The host's own runtime view: what started, what it is built from, and what it has been doing. Everything here is reported by the host itself.")} />
     <ReadResult query={health}>{(health) => <div role="region" className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
@@ -31,6 +32,27 @@ export function SystemHealth() {
           [t("Failing connectors"), health.connectorsFailing],
           [t("Failing endpoints"), health.endpointsFailing],
         ]} />
+        <div className="flex flex-wrap gap-2" aria-label={t("Readiness conditions")}>
+          {health.readiness.map((condition) => <Tag key={condition.name} label={`${condition.name}: ${condition.ready ? t("ready") : t("not ready")}${condition.detail ? ` · ${condition.detail}` : ""}`} tone={condition.ready ? "success" : "danger"} />)}
+        </div>
+        <Disclosure summary={t("Observability")}>
+          <PropertyList columns={3} items={[
+            [t("Capture enabled"), health.observations.enabled ? t("Yes") : t("No")],
+            [t("Queued events"), health.observations.pending.toLocaleString()],
+            [t("Written events"), health.observations.written.toLocaleString()],
+            [t("Write failures"), health.observations.writeFailures.toLocaleString()],
+            [t("Dropped events"), health.observations.dropped.toLocaleString()],
+            [t("Daily quota"), `${Math.round(health.observations.quotaBytes / (1024 * 1024)).toLocaleString()} MiB`],
+            [t("Retained from"), health.observations.retainedFrom ? formatStamp(health.observations.retainedFrom) : t("Not reported")],
+            [t("Last write"), health.observations.lastWrite ? formatStamp(health.observations.lastWrite) : t("Never")],
+            [t("Last purge"), health.observations.lastPurge ? formatStamp(health.observations.lastPurge) : t("Not yet")],
+          ]} />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => open({ view: "monitoring-logs" })}>{t("Open logs")}</Button>
+            <Button size="sm" onClick={() => open({ view: "monitoring-runs" })}>{t("Open runs")}</Button>
+            <Button size="sm" onClick={() => open({ view: "audit" })}>{t("Open audit")}</Button>
+          </div>
+        </Disclosure>
         <Disclosure summary={t("Details")}><PropertyList columns={2} items={[[t("Host started"), formatStamp(health.started)], [t("Version"), <code key="version" className="break-all">{health.built || "—"}</code>]]} /></Disclosure>
         {health.status === "quarantined" && <div role="alert" className="text-danger">
           {t("This tenant is quarantined. Inputs and work are stopped. Repair its journal or restore a valid backup, then retry recovery.")}
@@ -209,19 +231,91 @@ export function AppSettingsView() {
   );
 }
 
+type AuditPage = {
+  entries: AuditEntry[];
+  nextCursor?: string;
+  hasMore: boolean;
+  coverage: { retainedFrom?: string; truncated?: boolean };
+};
+
+type PersonalReadPage = {
+  entries: Api.PersonalRead[];
+  nextCursor?: string;
+  hasMore: boolean;
+  coverage: { retainedFrom?: string; truncated?: boolean };
+};
+
+const auditWindowOptions = [
+  { value: "24h", label: "24 hours", hours: 24 },
+  { value: "7d", label: "7 days", hours: 7 * 24 },
+  { value: "30d", label: "30 days", hours: 30 * 24 },
+  { value: "90d", label: "90 days", hours: 90 * 24 },
+  { value: "365d", label: "365 days", hours: 365 * 24 },
+];
+
+function auditPath(base: string, from: string, member: string, app: string, action: string, search: string, cursor?: string) {
+  const query = new URLSearchParams({ from, limit: "200" });
+  if (member) query.set("member", member);
+  if (app) query.set("app", app);
+  if (action) query.set("action", action);
+  if (search) query.set("q", search);
+  if (cursor) query.set("cursor", cursor);
+  return `${base}?${query.toString()}`;
+}
+
 export function Audit() {
-  const audit = useRead<AuditEntry[]>("/v1/audit");
-  const { catalog, me } = useHost();
-  const titles = new Map<string, string>(catalog.map((a) => [a.schema, a.title]));
-  const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
-  const personalQuery = useRead<Api.PersonalRead[]>("/v1/personal-reads");
-  const personalColumns: ColumnDef<Api.PersonalRead, any>[] = [
-    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
-    { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
-    { accessorKey: "type", header: t("Record type"), meta: { width: 160 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { id: "ids", header: t("Records"), accessorFn: (r) => r.ids.join(", "), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { id: "fields", header: t("Personal fields"), meta: { width: 200 }, accessorFn: (r) => r.fields.join(", ") },
-  ];
+  const { catalog, me, client } = useHost();
+  const { open } = useWorkspace();
+  const [window, setWindow] = useState("30d");
+  const [member, setMember] = useState("");
+  const [app, setApp] = useState("");
+  const [action, setAction] = useState("");
+  const [searchDraft, setSearchDraft] = useState("");
+  const [search, setSearch] = useState("");
+  const [older, setOlder] = useState<AuditPage[]>([]);
+  const [olderPersonal, setOlderPersonal] = useState<PersonalReadPage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const from = useMemo(() => new Date(Date.now() - (auditWindowOptions.find((option) => option.value === window)?.hours ?? 24 * 30) * 3600_000).toISOString(), [window]);
+  const audit = useRead<AuditPage>(auditPath("/v1/audit", from, member, app, action, search));
+  const personal = useRead<PersonalReadPage>(auditPath("/v1/personal-reads", from, member, "", "", ""));
+  useEffect(() => {
+    setOlder([]);
+    setOlderPersonal([]);
+  }, [window, member, app, action, search]);
+  const titles = new Map<string, string>(catalog.map((item) => [item.schema, item.title]));
+  const appTitle = (id: string) => me.apps.find((item) => item.id === id)?.title ?? id;
+  const rows = [...audit.data?.entries ?? [], ...older.flatMap((page) => page.entries)];
+  const personalRows = [...personal.data?.entries ?? [], ...olderPersonal.flatMap((page) => page.entries)];
+  const lastPage = older.at(-1) ?? audit.data;
+  const lastPersonal = olderPersonal.at(-1) ?? personal.data;
+  const applyFilters = () => {
+    setOlder([]);
+    setOlderPersonal([]);
+    setSearch(searchDraft.trim());
+    setLoadError("");
+  };
+  const reset = () => {
+    setMember(""); setApp(""); setAction(""); setSearchDraft(""); setSearch("");
+    setOlder([]); setOlderPersonal([]); setLoadError("");
+  };
+  const loadMore = async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      if (lastPage?.hasMore && lastPage.nextCursor) {
+        const next = await client.get<AuditPage>(auditPath("/v1/audit", from, member, app, action, search, lastPage.nextCursor), true);
+        setOlder((current) => [...current, next]);
+      } else if (lastPersonal?.hasMore && lastPersonal.nextCursor) {
+        const next = await client.get<PersonalReadPage>(auditPath("/v1/personal-reads", from, member, "", "", "", lastPersonal.nextCursor), true);
+        setOlderPersonal((current) => [...current, next]);
+      }
+    } catch (problem) {
+      setLoadError(problem instanceof Error ? problem.message : String(problem));
+    } finally {
+      setLoading(false);
+    }
+  };
   const columns: ColumnDef<AuditEntry, any>[] = [
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
@@ -229,12 +323,41 @@ export function Audit() {
     { accessorKey: "action", header: t("Action"), cell: (c) => { const schema = c.getValue() as string, title = titles.get(schema); return <span className="flex min-w-0 items-baseline gap-2"><span className="truncate">{title ?? schema}</span>{title && <span className="truncate font-mono text-2xs text-muted">{schema}</span>}</span>; } },
     { accessorKey: "target", header: t("Target"), cell: (c) => <span className="font-mono text-xs">{c.getValue() ?? ""}</span> },
   ];
+  const personalColumns: ColumnDef<Api.PersonalRead, any>[] = [
+    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
+    { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
+    { accessorKey: "type", header: t("Record type"), meta: { width: 160 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { id: "ids", header: t("Records"), accessorFn: (row) => row.ids.join(", "), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { id: "fields", header: t("Personal fields"), meta: { width: 200 }, accessorFn: (row) => row.fields.join(", ") },
+  ];
   return (
     <>
-      <PageHeader title={t("Audit")} help={t("Accepted inputs of this tenant, newest first, rebuilt from the journal.")} />
-      <ReadResult query={audit}>{(rows) => <DataTable storageKey="monitoring:audit" data={[...rows].reverse()} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 460px)" />}</ReadResult>
+      <PageHeader title={t("Audit")} help={t("Immutable accepted and security events for this tenant. Open Logs for operational diagnostics; audit records cannot be cleared by log retention.")}
+        actions={<Button onClick={() => open({ view: "monitoring-logs" })}>{t("Open logs")}</Button>} />
+      <div className="mb-3 flex min-w-0 flex-wrap items-end gap-2 text-xs">
+        <label className="grid gap-1">{t("Time range")}<Select aria-label={t("Audit time range")} value={window} onChange={(event) => setWindow(event.target.value)}>
+          {auditWindowOptions.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
+        </Select></label>
+        <label className="grid gap-1">{t("Member")}<Input aria-label={t("Audit member")} value={member} onChange={(event) => setMember(event.target.value)} /></label>
+        <label className="grid gap-1">{t("App")}<Input aria-label={t("Audit app")} value={app} onChange={(event) => setApp(event.target.value)} /></label>
+        <label className="grid gap-1">{t("Action")}<Input aria-label={t("Audit action")} value={action} onChange={(event) => setAction(event.target.value)} /></label>
+        <label className="grid min-w-40 flex-1 gap-1">{t("Search")}<Input aria-label={t("Search audit")} value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); applyFilters(); } }} /></label>
+        <Button size="sm" onClick={applyFilters}>{t("Search")}</Button>
+        <Button size="sm" variant="ghost" onClick={reset}>{t("Clear")}</Button>
+      </div>
+      <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+        <span>{t("Retained from")}: {audit.data?.coverage.retainedFrom ? formatStamp(audit.data.coverage.retainedFrom) : t("Not reported")}</span>
+        <span>{t("Showing {count}", { count: rows.length })}</span>
+        {audit.data?.coverage.truncated && <span>{t("Older audit records are available below.")}</span>}
+      </div>
+      <ReadResult query={audit}>{(data) => <DataTable storageKey="monitoring:audit" data={data.entries.length ? rows : []} columns={columns} getRowId={(e) => e.id ?? `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 500px)" empty={t("No audit records in this range")} />}</ReadResult>
+      {(lastPage?.hasMore || loadError) && <div className="mt-2 flex items-center gap-2">
+        <Button size="sm" loading={loading} disabled={!lastPage?.hasMore || loading} onClick={() => void loadMore()}>{t("Load more audit records")}</Button>
+        {loadError && <span role="alert" className="text-xs text-danger">{loadError}</span>}
+      </div>}
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Reads of personal data")}</h2>
-      <ReadResult query={personalQuery}>{(rows) => <DataTable storageKey="monitoring:personal-data-reads" data={rows} columns={personalColumns} getRowId={(r) => `${r.at}${r.member}${r.type}${r.ids.join()}`} height={240} empty={t("Nobody read personal data yet")} />}</ReadResult>
+      <ReadResult query={personal}>{(data) => <DataTable storageKey="monitoring:personal-data-reads" data={data.entries.length ? personalRows : []} columns={personalColumns} getRowId={(r) => r.id ?? `${r.at}${r.member}${r.type}${r.ids.join()}`} height={240} empty={t("Nobody read personal data yet")} />}</ReadResult>
+      {(lastPersonal?.hasMore || loadError) && lastPersonal?.hasMore && <div className="mt-2"><Button size="sm" loading={loading} disabled={loading} onClick={() => void loadMore()}>{t("Load more personal reads")}</Button></div>}
     </>
   );
 }

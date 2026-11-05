@@ -1,8 +1,8 @@
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
 import {
-  Button, DataTable, EmptyState, Input, Notice, PageHeader, PropertyList, Select, Sheet, StatusTag, Switch, Tag,
-  defineStatuses, formatStamp, humanizeKernelError, notify, t, type ColumnDef,
+  Button, DataTable, Disclosure, EmptyState, Input, Notice, PageHeader, PropertyList, Select, Sheet, StatusTag, Switch, Tag,
+  defineStatuses, formatStamp, humanizeKernelError, notify, t, useWorkspace, type ColumnDef,
 } from "@platform/ui";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -64,12 +64,13 @@ function presetWindow(kind: RangeKey, anchor = Date.now()): TimeWindow {
   return { from: new Date(anchor - duration).toISOString(), to: new Date(anchor).toISOString() };
 }
 
-function logsPath(window: TimeWindow, filters: { level: string; source: string; app: string; q: string }, cursor?: string) {
+function logsPath(window: TimeWindow, filters: { level: string; source: string; app: string; q: string; traceId?: string }, cursor?: string) {
   const search = new URLSearchParams({ from: window.from, to: window.to, limit: "100" });
   if (filters.level) search.set("level", filters.level);
   if (filters.source) search.set("source", filters.source);
   if (filters.app) search.set("app", filters.app);
   if (filters.q) search.set("q", filters.q);
+  if (filters.traceId) search.set("traceId", filters.traceId);
   if (cursor) search.set("cursor", cursor);
   return `/v1/monitoring/logs?${search.toString()}`;
 }
@@ -163,19 +164,30 @@ function LogPolicySheet({ onClose }: { onClose: () => void }) {
   const [level, setLevel] = useState(() => setting("logLevel", "info"));
   const [requests, setRequests] = useState(() => setting("logRequests", "10"));
   const [retention, setRetention] = useState(() => setting("logRetentionDays", "30"));
+  const [quota, setQuota] = useState(() => setting("logQuotaMiB", "5120"));
+  const [debugMinutes, setDebugMinutes] = useState("0");
+  const [debugReason, setDebugReason] = useState(() => setting("logDebugReason", ""));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const initial = useRef({ level: setting("logLevel", "info"), requests: setting("logRequests", "10"), retention: setting("logRetentionDays", "30") });
+  const policies = useReadQuery<Api.LogPolicyView[]>("/v1/monitoring/log-policies");
+  const initial = useRef({ level: setting("logLevel", "info"), requests: setting("logRequests", "10"), retention: setting("logRetentionDays", "30"), quota: setting("logQuotaMiB", "5120") });
+  const debugUntil = debugMinutes === "0" ? "" : new Date(Date.now() + Number(debugMinutes) * 60_000).toISOString();
+  const currentDebugUntil = setting("logDebugUntil", "");
+  const currentDebugExpires = currentDebugUntil ? new Date(currentDebugUntil).getTime() : 0;
   const changes = [
     { name: "logLevel", value: level, before: initial.current.level },
     { name: "logRequests", value: requests, before: initial.current.requests },
     { name: "logRetentionDays", value: retention, before: initial.current.retention },
+    { name: "logQuotaMiB", value: quota, before: initial.current.quota },
+    ...(debugUntil ? [{ name: "logDebugReason", value: debugReason.trim(), before: setting("logDebugReason", "") }, { name: "logDebugUntil", value: debugUntil, before: currentDebugUntil }] : []),
+    ...(!debugUntil && currentDebugExpires > Date.now() ? [{ name: "logDebugUntil", value: "", before: currentDebugUntil }] : []),
   ].filter((change) => change.value !== change.before);
   const update = (settings: Record<string, string>) => {
     const values = {
       level: settings.logLevel ?? "info",
       requests: settings.logRequests ?? "10",
       retention: settings.logRetentionDays ?? "30",
+      quota: settings.logQuotaMiB ?? "5120",
     };
     setLevel(values.level);
     setRequests(values.requests);
@@ -191,6 +203,15 @@ function LogPolicySheet({ onClose }: { onClose: () => void }) {
     }
     if (!Number.isSafeInteger(days) || days < 0 || days > 3650) {
       setError(t("Enter retention days from 0 to 3650."));
+      return;
+    }
+    const quotaMiB = Number(quota);
+    if (!Number.isSafeInteger(quotaMiB) || quotaMiB < 1 || quotaMiB > 1048576) {
+      setError(t("Enter a daily quota from 1 to 1048576 MiB."));
+      return;
+    }
+    if (debugUntil && !debugReason.trim()) {
+      setError(t("Temporary debug needs a reason."));
       return;
     }
     setSaving(true);
@@ -243,6 +264,34 @@ function LogPolicySheet({ onClose }: { onClose: () => void }) {
         <Input aria-label={t("Retention days")} type="number" min={0} max={3650} step={1} value={retention} onChange={(event) => setRetention(event.target.value)} />
       </label>
       <p className="text-xs text-muted">{t("0 stops new logs without deleting existing logs.")}</p>
+      <label className="grid gap-1 text-xs">{t("Daily quota (MiB)")}
+        <Input aria-label={t("Daily quota (MiB)")} type="number" min={1} max={1048576} step={1} value={quota} onChange={(event) => setQuota(event.target.value)} />
+      </label>
+      <div className="grid gap-2 rounded border border-line p-2">
+        <span className="text-xs font-medium">{t("Temporary debug")}</span>
+        <Select aria-label={t("Temporary debug window")} value={debugMinutes} onChange={(event) => setDebugMinutes(event.target.value)}>
+          <option value="0">{t("Off")}</option>
+          <option value="15">{t("15 minutes")}</option>
+          <option value="30">{t("30 minutes")}</option>
+        </Select>
+        {debugMinutes !== "0" && <Input aria-label={t("Temporary debug reason")} placeholder={t("Why debug is needed")} value={debugReason} onChange={(event) => setDebugReason(event.target.value)} />}
+        <p className="text-xs text-muted">{t("Temporary debug expires automatically. A reason is required and is recorded in the audit.")}</p>
+      </div>
+      {policies.data && <Disclosure summary={t("Application policies")}>
+        <div className="grid gap-2">
+          {policies.data.map((policy) => <label key={policy.app} className="grid grid-cols-[minmax(0,1fr)_9rem] items-center gap-2 text-xs">
+            <span className="truncate">{me.apps.find((app) => app.id === policy.app)?.title ?? policy.app}</span>
+            <Select aria-label={t("Log level for {app}", { app: policy.app })} value={policy.level || "info"} onChange={async (event) => {
+              const value = JSON.stringify({ level: event.target.value, retentionDays: policy.retentionDays, debugUntil: policy.debugUntil ?? "", reason: policy.reason ?? "" });
+              if (await decide("platform.setting.set", { type: "platform.setting", id: `platform/logPolicy/${policy.app}` }, { value })) await policies.refetch();
+            }}>
+              <option value="info">{t("Info")}</option>
+              <option value="warn">{t("Warning")}</option>
+              <option value="error">{t("Error")}</option>
+            </Select>
+          </label>)}
+        </div>
+      </Disclosure>}
       <p className="text-xs text-muted">{t("Settings are saved separately; a failure stops the remaining changes.")}</p>
       <div className="flex justify-end gap-2">
         <Button disabled={saving} onClick={onClose}>{t("Cancel")}</Button>
@@ -252,19 +301,31 @@ function LogPolicySheet({ onClose }: { onClose: () => void }) {
   </Sheet>;
 }
 
-export function MonitoringLogsView() {
+export function MonitoringLogsView({ initial }: { initial?: Record<string, string> }) {
   const host = useHost();
-  const [range, setRange] = useState<AppliedRange>({ kind: "1h" });
+  const { open } = useWorkspace();
+  const initialQuery = (() => {
+    try {
+      return new URLSearchParams(initial?.query ?? "");
+    } catch {
+      return new URLSearchParams();
+    }
+  })();
+  const initialTime = initial?.time ?? "1h";
+  const [range, setRange] = useState<AppliedRange>(() => initialTime === "custom" && initial?.from && initial?.to
+    ? { kind: "custom", from: initial.from, to: initial.to }
+    : { kind: ranges.some((entry) => entry.id === initialTime) ? initialTime as RangeKey : "1h" });
   const [anchor, setAnchor] = useState(() => Date.now());
   const [customOpen, setCustomOpen] = useState(false);
-  const [customFrom, setCustomFrom] = useState(() => localDateTime(new Date(Date.now() - 60 * 60_000)));
-  const [customTo, setCustomTo] = useState(() => localDateTime(new Date()));
+  const [customFrom, setCustomFrom] = useState(() => localDateTime(initial?.from ?? new Date(Date.now() - 60 * 60_000)));
+  const [customTo, setCustomTo] = useState(() => localDateTime(initial?.to ?? new Date()));
   const [customError, setCustomError] = useState("");
-  const [level, setLevel] = useState("");
-  const [source, setSource] = useState("");
-  const [app, setApp] = useState("");
-  const [searchDraft, setSearchDraft] = useState("");
-  const [search, setSearch] = useState("");
+  const [level, setLevel] = useState(() => initialQuery.get("level") ?? "");
+  const [source, setSource] = useState(() => initialQuery.get("source") ?? "");
+  const [app, setApp] = useState(() => initialQuery.get("app") ?? "");
+  const [traceId, setTraceId] = useState(() => initialQuery.get("traceId") ?? "");
+  const [searchDraft, setSearchDraft] = useState(() => initialQuery.get("q") ?? "");
+  const [search, setSearch] = useState(() => initialQuery.get("q") ?? "");
   const [live, setLive] = useState(false);
   const [paused, setPaused] = useState<FrozenLogs | null>(null);
   const [lastHead, setLastHead] = useState<{ scope: string; page: ObservationPage } | null>(null);
@@ -273,9 +334,12 @@ export function MonitoringLogsView() {
   const [loadError, setLoadError] = useState("");
   const [selected, setSelected] = useState<Observation>();
   const [policyOpen, setPolicyOpen] = useState(false);
+  const [savingView, setSavingView] = useState(false);
+  const [viewTitle, setViewTitle] = useState("");
+  const { decide } = host;
   const timeWindow = range.kind === "custom" ? { from: range.from, to: range.to } : presetWindow(range.kind, anchor);
-  const filters = { level, source, app, q: search };
-  const scope = JSON.stringify([range, level, source, app, search]);
+  const filters = { level, source, app, q: search, traceId };
+  const scope = JSON.stringify([range, level, source, app, search, traceId]);
   const query = useReadQuery<ObservationPage>(logsPath(timeWindow, filters));
   const tail = tailState.scope === scope ? tailState.pages : [];
   const current = query.data ?? (lastHead?.scope === scope ? lastHead.page : undefined);
@@ -291,6 +355,27 @@ export function MonitoringLogsView() {
   const retentionBeforeRange = retainedFrom !== undefined && !Number.isNaN(retainedFrom) && retainedFrom > selectedTimeFrom;
   const rangeBeforeRetention = retainedFrom !== undefined && !Number.isNaN(retainedFrom) && retainedFrom >= new Date(timeWindow.to).getTime();
   const refresh = query.refetch;
+
+  const saveView = async () => {
+    const query = new URLSearchParams();
+    if (level) query.set("level", level);
+    if (source) query.set("source", source);
+    if (app) query.set("app", app);
+    if (search) query.set("q", search);
+    if (traceId) query.set("traceId", traceId);
+    const payload: Record<string, unknown> = {
+      title: viewTitle.trim(), family: "logs", query: query.toString(), time: range.kind,
+      density: "comfortable",
+    };
+    if (range.kind === "custom") {
+      payload.from = range.from;
+      payload.to = range.to;
+    }
+    if (await decide("monitoring.view.save", { type: "monitoring.view", id: crypto.randomUUID() }, payload)) {
+      setSavingView(false);
+      setViewTitle("");
+    }
+  };
 
   useEffect(() => {
     if (!query.data) return;
@@ -418,7 +503,7 @@ export function MonitoringLogsView() {
     },
   ];
 
-  const hasFilters = !!level || !!source || !!app || !!search;
+  const hasFilters = !!level || !!source || !!app || !!search || !!traceId;
   const empty = rangeBeforeRetention
       ? { title: t("No logs are retained for this range"), hint: t("Retention starts at {time}. Choose a newer range.", { time: coverage?.retainedFrom ? formatStamp(coverage.retainedFrom) : t("Not reported") }) }
       : hasFilters
@@ -436,7 +521,10 @@ export function MonitoringLogsView() {
     <PageHeader
       title={t("Logs")}
       help={t("Operational events for this tenant, newest first. Narrow by time, level, source and application, then open an event for its identifiers and attributes. Live polls every 2 seconds while this view is visible; Pause freezes the table and counts new events.")}
-      actions={host.holds("platform", "admin") ? <Button onClick={() => setPolicyOpen(true)}>{t("Log policy")}</Button> : undefined}
+      actions={<div className="flex flex-wrap gap-2">
+        {host.holds("platform", "admin", "auditor") && <Button onClick={() => open({ view: "audit" })}>{t("Audit trail")}</Button>}
+        {host.holds("platform", "admin") && <Button onClick={() => setPolicyOpen(true)}>{t("Log policy")}</Button>}
+      </div>}
     />
     <div className="mb-2 flex min-w-0 flex-wrap items-center gap-1 text-xs">
       <span className="mr-1 text-2xs font-semibold uppercase tracking-wider text-muted">{t("Time range")}</span>
@@ -473,6 +561,7 @@ export function MonitoringLogsView() {
         }} /></label>
       <Button size="sm" onClick={() => setSearch(searchDraft.trim())}>{t("Search")}</Button>
       <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
+        <Button size="sm" onClick={() => setSavingView(true)}>{t("Save as monitoring view")}</Button>
         <Switch checked={live} onChange={setLiveMode} label={t("Live")} />
         {live && (paused
           ? <Button size="sm" onClick={() => setPaused(null)}>{t("Resume")}</Button>
@@ -494,6 +583,13 @@ export function MonitoringLogsView() {
       <Button size="sm" onClick={() => void query.refetch()}>{t("Retry")}</Button>
     </div>}
     {policyOpen && <LogPolicySheet onClose={() => setPolicyOpen(false)} />}
+    <Sheet isolated open={savingView} onOpenChange={setSavingView} title={t("Save as monitoring view")}>
+      <div className="grid gap-3 text-sm">
+        <p className="text-muted">{t("Save the current log filters and time window. It appears in Monitoring views and can be reopened here.")}</p>
+        <label className="grid gap-1 text-xs">{t("View name")}<Input aria-label={t("View name")} value={viewTitle} onChange={(event) => setViewTitle(event.target.value)} /></label>
+        <span className="flex justify-end gap-2"><Button onClick={() => setSavingView(false)}>{t("Cancel")}</Button><Button variant="primary" disabled={!viewTitle.trim()} onClick={() => void saveView()}>{t("Save")}</Button></span>
+      </div>
+    </Sheet>
     {selected && <LogDetails entry={selected} onClose={() => setSelected(undefined)} />}
     {denied
       ? <EmptyState title={t("You do not have access to operational logs")} hint={t("Ask an administrator for monitoring log access. This does not show whether matching events exist.")} action={<Button size="sm" onClick={() => void query.refetch()}>{t("Retry")}</Button>} />
@@ -503,9 +599,10 @@ export function MonitoringLogsView() {
             <Button size="sm" onClick={() => void query.refetch()}>{t("Retry")}</Button>
           </div>
         : <>
+          {traceId && <div className="mb-2 flex items-center gap-2 text-xs"><Tag label={t("Trace {id}", { id: traceId })} tone="info" /><Button size="sm" variant="ghost" onClick={() => setTraceId("")}>{t("Clear trace")}</Button></div>}
           <DataTable storageKey="monitoring:logs" data={visibleRows} columns={columns} getRowId={(entry) => entry.id} rowHeight={28}
             height="max(240px, calc(100dvh - 360px))" onRowClick={(entry) => setSelected(entry)} selectedId={selected?.id} searchable={false}
-            loading={!current} loadingText={t("Loading logs…")} empty={{ ...empty, action: !rangeBeforeRetention && hasFilters ? <Button size="sm" onClick={() => { setLevel(""); setSource(""); setApp(""); setSearchDraft(""); setSearch(""); }}>{t("Clear filters")}</Button> : undefined }} />
+            loading={!current} loadingText={t("Loading logs…")} empty={{ ...empty, action: !rangeBeforeRetention && hasFilters ? <Button size="sm" onClick={() => { setLevel(""); setSource(""); setApp(""); setSearchDraft(""); setSearch(""); setTraceId(""); }}>{t("Clear filters")}</Button> : undefined }} />
           {(lastPage?.hasMore || loadingMore || loadError) && <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
             {live
               ? <span className="text-xs text-muted">{t("Pause Live to load older events.")}</span>

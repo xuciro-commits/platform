@@ -124,7 +124,12 @@ export function MonitoringRunsView({ type: initialType, status: initialStatus }:
         <span className="flex justify-end gap-2">
           <Button onClick={() => setSaving(false)}>{t("Cancel")}</Button>
           <Button variant="primary" disabled={!title.trim()} onClick={async () => {
-            if (await decide("monitoring.view.save", { type: "monitoring.view", id: crypto.randomUUID() }, { title: title.trim(), type, status })) setSaving(false);
+            const query = new URLSearchParams();
+            if (type) query.set("type", type);
+            if (status) query.set("status", status);
+            if (await decide("monitoring.view.save", { type: "monitoring.view", id: crypto.randomUUID() }, {
+              title: title.trim(), family: "runs", query: query.toString(), time: "1h", density: "comfortable", type, status,
+            })) setSaving(false);
           }}>{t("Save")}</Button>
         </span>
       </div>
@@ -139,12 +144,20 @@ export function MonitoringViewsView() {
   return <>
     <PageHeader title={t("Monitoring views")} help={t("Your saved run filters. Open one to see its runs; remove the ones you no longer need. Create a view from the Runs screen.")} />
     <ReadResult query={query}>{(views) => views.length === 0
-      ? <EmptyState title={t("No monitoring views yet")} hint={t("Filter the Runs screen by type and status, then save it as a monitoring view.")}
+      ? <EmptyState title={t("No monitoring views yet")} hint={t("Filter Runs or Logs, then save the current query as a monitoring view.")}
           action={<Button size="sm" onClick={() => open({ view: "monitoring-runs" })}>{t("Open Runs")}</Button>} />
       : <div className="grid max-w-3xl gap-2">
           {views.map((view) => <Card key={view.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
-            <Button variant="link" className="h-auto p-0 text-left font-medium" onClick={() => open({ view: "monitoring-runs", params: { ...(view.type ? { type: view.type } : {}), ...(view.status ? { status: view.status } : {}) } })}>{view.title}</Button>
+            <Button variant="link" className="h-auto p-0 text-left font-medium" onClick={() => {
+              const params = Object.fromEntries(new URLSearchParams(view.query ?? ""));
+              if (!view.query && view.type) params.type = view.type;
+              if (!view.query && view.status) params.status = view.status;
+              open(view.family === "logs"
+                ? { view: "monitoring-logs", params: { ...params, time: view.time ?? "1h", ...(view.from ? { from: view.from } : {}), ...(view.to ? { to: view.to } : {}) } }
+                : { view: "monitoring-runs", params: { ...params, ...(view.type ? { type: view.type } : {}), ...(view.status ? { status: view.status } : {}) } });
+            }}>{view.title}</Button>
             <span className="text-xs text-muted">{t(view.type ? runTypeLabels[view.type] : "All")} · {view.status ? <StatusTag status={view.status} registry={runStatuses} /> : t("All")}</span>
+            <span className="text-xs text-muted">{view.family === "logs" ? t("Logs") : t("Runs")} · {view.time ?? "1h"}</span>
             <Button size="sm" variant="danger" className="ml-auto" onClick={async () => { if (await decide("monitoring.view.remove", { type: "monitoring.view", id: view.id }, {})) void query.refetch(); }}>{t("Remove")}</Button>
           </Card>)}
         </div>}</ReadResult>

@@ -146,6 +146,17 @@ func (t *Tenant) sourceResult(member platform.Member, s build.Source, pull build
 	}
 	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, ExpectedRevision: revision,
 		Target: &pb.EntityRef{Type: build.SourceType, Id: s.ID}, Schema: &pb.SchemaRef{Name: build.SchemaSourcePulled, Version: 1}, Payload: payload}, now)
+	if phase == "finished" {
+		status, detail := "ok", pull.Error
+		if pull.Error != "" || err != nil {
+			status = "failed"
+			if detail == "" && err != nil {
+				detail = err.Error()
+			}
+		}
+		t.observeOwnerRun(now, "data", "source:"+build.ID+":"+s.ID+":"+now.UTC().Format(time.RFC3339Nano), build.ID,
+			"source/"+s.Name, status, "Source "+s.Title, detail)
+	}
 	return err
 }
 

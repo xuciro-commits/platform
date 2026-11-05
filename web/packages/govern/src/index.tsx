@@ -15,6 +15,7 @@ import { Words } from "./words";
 import { SystemHealth, Integrations, Endpoints, AppSettingsView, Audit } from "./operations";
 import { MonitoringOverviewView, MonitoringRunsView, MonitoringViewsView } from "./monitoring";
 import { MonitoringLogsView } from "./observability/logs";
+import { MonitoringAlertsView, MonitoringMetricsView, MonitoringTracesView } from "./observability/insights";
 import { AIConfiguration } from "./ai-configuration";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
 import { Credentials } from "./credentials";
@@ -138,9 +139,12 @@ export const marketplace = defineApp({
 
 const monitoringBuilder = (host: Host) => host.holds("build", "builder");
 const monitoringRuns = (host: Host) => admin(host) || !!host.role("flow") || monitoringBuilder(host);
+const monitoringLogs = (host: Host) => admin(host) || auditor(host) || monitoringBuilder(host) || !!host.role("flow") || !!host.role("data") || !!host.role("ai");
 
 export function createMonitoring(host: Host, integration?: Pick<AppUI, "for" | "views" | "nav">): AppUI {
   const runs = monitoringRuns(host);
+  const logs = monitoringLogs(host);
+  const observability = runs || logs;
   const integrating = !!integration && (!integration.for || integration.for(host));
   return defineApp({
     ...appRegistration("monitoring"), icon: <Activity />,
@@ -150,9 +154,14 @@ export function createMonitoring(host: Host, integration?: Pick<AppUI, "for" | "
       ...(runs ? [
         { id: "monitoring-overview", title: () => t("Overview"), render: () => <MonitoringOverviewView /> },
         { id: "monitoring-runs", title: () => t("Runs"), render: (p: Record<string, string>) => <MonitoringRunsView type={p.type} status={p.status} /> },
-        { id: "monitoring-logs", title: () => t("Logs"), render: () => <MonitoringLogsView /> },
-        { id: "monitoring-views", title: () => t("Monitoring views"), render: () => <MonitoringViewsView /> },
       ] : []),
+      ...(logs ? [{ id: "monitoring-logs", title: () => t("Logs"), render: (p: Record<string, string>) => <MonitoringLogsView initial={p} /> }] : []),
+      ...(observability ? [
+        { id: "monitoring-traces", title: () => t("Traces"), render: () => <MonitoringTracesView /> },
+        { id: "monitoring-metrics", title: () => t("Metrics"), render: () => <MonitoringMetricsView /> },
+        { id: "monitoring-alerts", title: () => t("Alerts"), render: () => <MonitoringAlertsView /> },
+      ] : []),
+      ...(observability ? [{ id: "monitoring-views", title: () => t("Monitoring views"), render: () => <MonitoringViewsView /> }] : []),
       ...(admin(host) ? [
         { id: "system-health", title: () => t("Health"), render: () => <SystemHealth /> },
       ] : []),
@@ -162,7 +171,12 @@ export function createMonitoring(host: Host, integration?: Pick<AppUI, "for" | "
         ...(monitoringRuns(host) ? [
           { label: t("Overview"), icon: <LayoutDashboard />, route: { view: "monitoring-overview" } },
           { label: t("Runs"), icon: <Route />, route: { view: "monitoring-runs" } },
-          { label: t("Logs"), icon: <ScrollText />, route: { view: "monitoring-logs" } },
+        ] : []),
+        ...(logs ? [{ label: t("Logs"), icon: <ScrollText />, route: { view: "monitoring-logs" } }] : []),
+        ...(observability ? [
+          { label: t("Traces"), icon: <Activity />, route: { view: "monitoring-traces" } },
+          { label: t("Metrics"), icon: <BarChart3 />, route: { view: "monitoring-metrics" } },
+          { label: t("Alerts"), icon: <ShieldCheck />, route: { view: "monitoring-alerts" } },
           { label: t("Monitoring views"), icon: <Bookmark />, route: { view: "monitoring-views" } },
         ] : []),
         ...(admin(host) ? [{ label: t("Health"), icon: <BarChart3 />, route: { view: "system-health" } }] : []),

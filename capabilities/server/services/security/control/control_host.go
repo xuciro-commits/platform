@@ -605,7 +605,7 @@ func operationsActions() []platform.Action {
 			Description: "Refuse the connector's deliveries until it is enabled; its cursor is kept.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaSettingSet, Target: SettingType, Capability: "settings", Title: "Change app setting",
 			Description: "Set an app's setting (target <app>/<name>) to a value of its type.",
-			Payload:     []platform.Field{{Name: "value", Type: "string", Required: true, Description: "true/false, a whole number, one of the choices, or text"}}, Roles: admin},
+			Payload:     []platform.Field{{Name: "value", Type: "string", Description: "true/false, a whole number, one of the choices, or text; empty clears a text setting"}}, Roles: admin},
 		{Schema: SchemaWorkRetry, Target: WorkType, Capability: "automation", Title: "Retry work",
 			Description: "Queue a failed event delivery again, or run a scheduled job now.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaProtocolBind, Target: ProtocolType, Capability: "apps", Title: "Choose protocol provider",

@@ -12,6 +12,7 @@ import (
 func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
 	t.runtimePosition = func() int64 { return journal.Position(t.ID) }
 	t.Store = journal
+	t.audit.Backfill()
 	id := t.ID
 	t.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
 		return journal.AppendAccepted(ctx, id, e, key, hash)
@@ -52,6 +53,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		return fmt.Errorf("tenant %s recovery factory has different app composition or restore formats: %v", id, err)
 	}
 	fresh.Files, fresh.Secrets, fresh.Outbound, fresh.AIClient = old.Files, old.Secrets, old.Outbound, old.AIClient
+	fresh.Store = journal
 	fresh.systemDefinitionState.source.Store(old.systemDefinitionState.source.Load())
 	entries, err := journal.Entries(ctx, id, 0)
 	if err != nil {

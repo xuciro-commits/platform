@@ -105,12 +105,22 @@ GET /v1/monitoring/logs
 - 查看日志列表、打开事件、导出和实时流都写安全审计。审计员能看审计事实不等于自动获得日志正文权限。
 - 单条详情不得以内容片段证明无权限对象存在；统一返回不可见语义。
 
+安全审计与个人数据读取使用同一 `(at, id)` 游标：
+
+```text
+GET /v1/audit?from=&to=&member=&app=&action=&q=&cursor=&limit=
+GET /v1/personal-reads?from=&to=&member=&type=&cursor=&limit=
+```
+
+审计读取自身写 `platform.audit.read`；个人读取查询自身写 `platform.personal-reads.read`。审计账本只追加，不受日志保留任务删除。
+
 ## 7.20 健康与指标
 
 - `/healthz` 只表示进程存活；`/readyz` 检查 journal、观测存储、必需 schema 和后台工作循环，依赖不可用时返回 503。
 - `/v1/health` 保留租户工作健康；健康项返回条件、严重度、证据、影响和最近关联运行，不只返回计数。
 - `/metrics` 只允许 loopback 或专用 scrape 凭据，不再接受任意租户成员。指标标签禁止 member、runId、对象 ID 和原始 URL。
 - HTTP 指标必须包含 status class；至少暴露请求量、错误率、延迟、在飞请求；观测自身至少暴露摄取队列、写入失败、丢弃、查询延迟、保留和无权限拒绝。
+- `/v1/health` 的 `observations` 暴露启停、排队、写入、失败、丢弃、清理、保留起点和每日配额；`readiness` 明确 journal、观测存储和工作循环条件。
 
 ## 7.21 产品界面
 
@@ -129,6 +139,8 @@ Health
 
 Errors 是 Logs 的错误指纹分组，不增加第九个入口。Audit 留在 Control Panel，按 Business、Security、Personal reads 分组，不复制到 Monitoring。
 
+入口：Monitoring → Logs 查看运营日志；Monitoring → Traces/Metrics/Alerts 查看请求路径、固定汇总和已启用的 Automate 告警规则；Control Panel → Settings and audit → Audit trail 查看不可变审计；Monitoring → Health 查看采集覆盖和就绪条件。Logs 与 Audit 页面互相提供直接跳转。
+
 Logs 页面：
 
 - 顶部：时间范围、结构化筛选、搜索、Live 开关、保存视图和导出。
@@ -139,13 +151,14 @@ Logs 页面：
 
 保存视图沿用 `monitoring.view`，扩展 family、查询、绝对或相对时间、列和密度；不为 Logs 新建第二套保存资源。
 
+Runs 与 Logs 都可保存为 `monitoring.view`；旧 `type/status` 视图在读取时归一为 `runs` 查询族。运行事实仍由原始 owner 写入，`run_index` 只是可按成员可见范围重建的读模型。
+
 ## 7.22 现存差距
 
 - 进程日志仍是标准库文本，本地文件覆盖写且不轮转。
-- `Tenant.ctx` 仍用于部分内部 span，异步与并发 span 关联不可靠；HTTP 请求关联已经走显式 context，但没有完整自动 instrumentation。
-- `/v1/audit` 与个人读取仍来自内存环，重启和超过上限后不可作为完整证据。
-- `/v1/monitoring/runs` 与 application runs 仍扫描多个 owner 后在内存排序分页。
-- Monitoring 已有 Logs 与租户级保留设置，但 Traces、Metrics、Alerts、导出、查询族保存视图和配额仍未实现。
+- `Tenant.ctx` 仍用于部分内部 span，异步与并发 span 关联不可靠；HTTP 请求关联已经走显式 context，但 Traces 当前展示已保留的请求事件，不是完整 OTel span 树。
+- 运行索引在成员首次查询或变更后重建时会读取 owner，之后从索引分页；owner 继续是运行权威，索引可重建。
+- 日志导出、长期外部存储（Loki/ClickHouse/Kafka）和告警专用执行器不在当前范围；告警规则只有 Automate owner。
 
 ## 相关
 

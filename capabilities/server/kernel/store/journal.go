@@ -20,6 +20,14 @@ type Store interface {
 	SaveObservations(events []platform.Observation) error
 	QueryObservations(query platform.ObservationQuery) (platform.ObservationPage, error)
 	PurgeObservations(tenant string, before time.Time) (int, error)
+	ObservationUsage(tenant string, from time.Time) (int64, error)
+	SummarizeObservations(tenant, member string, from, to time.Time) (platform.ObservationSummary, error)
+	SaveAuditEntries(tenant string, entries []platform.AuditEntry) error
+	QueryAuditEntries(query platform.AuditQuery) (platform.AuditPage, error)
+	SavePersonalReads(tenant string, reads []platform.PersonalRead) error
+	QueryPersonalReads(query platform.PersonalReadQuery) (platform.PersonalReadPage, error)
+	ReplaceRunIndex(tenant, scope string, entries []platform.RunIndexEntry) error
+	QueryRunIndex(query platform.RunIndexQuery) (platform.RunIndexPage, error)
 }
 
 type Transcript struct {

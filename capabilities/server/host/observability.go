@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	mathrand "math/rand/v2"
@@ -31,6 +32,26 @@ type requestCorrelationKey struct{}
 var fallbackCorrelationID atomic.Uint64
 
 const observationPendingLimit = 2000
+
+type LogPolicyView struct {
+	App           string `json:"app"`
+	Level         string `json:"level"`
+	RetentionDays int    `json:"retentionDays"`
+	DebugUntil    string `json:"debugUntil,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+func (t *Tenant) bindAuditStore() {
+	t.audit.SetSink(func(entry platform.AuditEntry) {
+		if err := t.store().SaveAuditEntries(t.ID, []platform.AuditEntry{entry}); err != nil {
+			log.Printf("audit %s: %v", t.ID, err)
+		}
+	}, func(read platform.PersonalRead) {
+		if err := t.store().SavePersonalReads(t.ID, []platform.PersonalRead{read}); err != nil {
+			log.Printf("personal read audit %s: %v", t.ID, err)
+		}
+	})
+}
 
 func randomHex(size int) string {
 	raw := make([]byte, size)
@@ -147,7 +168,7 @@ func (t *Tenant) platformSetting(name string) string {
 
 func (t *Tenant) logLevel() string {
 	level := t.platformSetting(controlowner.SettingLogLevel)
-	if levelRank(level) < 0 {
+	if levelRank(level) < 0 || level == "debug" {
 		return "info"
 	}
 	return level
@@ -167,12 +188,24 @@ func levelRank(level string) int {
 	return -1
 }
 
-func (t *Tenant) logLevelAllows(level string) bool {
+func (t *Tenant) logLevelFor(app string) string {
+	level := t.logLevel()
+	policy := t.logPolicy(app)
+	if levelRank(policy.Level) >= 0 && policy.Level != "debug" {
+		level = policy.Level
+	}
+	if debugUntil := t.logDebugUntil(app); !debugUntil.IsZero() {
+		return "debug"
+	}
+	return level
+}
+
+func (t *Tenant) logLevelAllows(level, app string) bool {
 	rank := levelRank(level)
 	if rank < 0 {
 		rank = levelRank("info")
 	}
-	return rank >= levelRank(t.logLevel())
+	return rank >= levelRank(t.logLevelFor(app))
 }
 
 func (t *Tenant) logRequestPercent() int {
@@ -191,8 +224,71 @@ func (t *Tenant) logRetentionDays() int {
 	return max(0, min(value, 3650))
 }
 
+func (t *Tenant) logPolicy(app string) logPolicyValue {
+	raw := t.platformSetting("logPolicy/" + app)
+	if raw == "" {
+		return logPolicyValue{}
+	}
+	var policy logPolicyValue
+	if json.Unmarshal([]byte(raw), &policy) != nil {
+		return logPolicyValue{}
+	}
+	return policy
+}
+
+func (t *Tenant) logDebugUntil(app string) time.Time {
+	candidates := []string{t.platformSetting(controlowner.SettingLogDebugUntil), t.logPolicy(app).DebugUntil}
+	now := Now()
+	var latest time.Time
+	for _, raw := range candidates {
+		if raw == "" {
+			continue
+		}
+		until, err := time.Parse(time.RFC3339, raw)
+		if err == nil && until.After(now) && until.After(latest) {
+			latest = until
+		}
+	}
+	return latest
+}
+
+func (t *Tenant) logQuotaBytes() int64 {
+	value, err := strconv.Atoi(t.platformSetting(controlowner.SettingLogQuota))
+	if err != nil || value < 1 {
+		value = 5120
+	}
+	return int64(value) << 20
+}
+
+func (t *Tenant) LogPolicies() []LogPolicyView {
+	values := t.settings.Snapshot()
+	out := []LogPolicyView{}
+	for _, app := range t.apps {
+		policy := t.logPolicy(app.Manifest().ID)
+		view := LogPolicyView{
+			App: app.Manifest().ID, Level: policy.Level,
+			RetentionDays: t.logRetentionDays(),
+			DebugUntil:    policy.DebugUntil, Reason: policy.Reason,
+		}
+		if view.Level == "" {
+			view.Level = t.logLevel()
+		}
+		if policy.RetentionDays != nil {
+			view.RetentionDays = *policy.RetentionDays
+		}
+		if view.DebugUntil == "" {
+			if global := values[controlowner.PlatformApp+"/"+controlowner.SettingLogDebugUntil]; global != "" {
+				view.DebugUntil = global
+				view.Reason = values[controlowner.PlatformApp+"/"+controlowner.SettingLogDebugReason]
+			}
+		}
+		out = append(out, view)
+	}
+	return out
+}
+
 func (t *Tenant) recordObservation(event platform.Observation) {
-	if t.logRetentionDays() == 0 || !t.logLevelAllows(event.Level) {
+	if t.logRetentionDays() == 0 || !t.logLevelAllows(event.Level, event.App) {
 		return
 	}
 	if event.ID == "" {
@@ -205,6 +301,23 @@ func (t *Tenant) recordObservation(event platform.Observation) {
 	event.Tenant = t.ID
 	t.observationMu.Lock()
 	defer t.observationMu.Unlock()
+	day := event.At.Truncate(24 * time.Hour)
+	if !t.observationUsageDay.Equal(day) {
+		usage, err := t.store().ObservationUsage(t.ID, day)
+		if err != nil {
+			log.Printf("observation usage %s: %v", t.ID, err)
+		}
+		t.observationUsageDay = day
+		t.observationUsageBytes = usage
+	}
+	raw, _ := json.Marshal(event)
+	if t.observationUsageBytes+int64(len(raw)) > t.logQuotaBytes() {
+		if levelRank(event.Level) < levelRank("warn") {
+			t.observationDropped.Add(1)
+			return
+		}
+	}
+	t.observationUsageBytes += int64(len(raw))
 	if len(t.observationPending) >= observationPendingLimit {
 		drop := -1
 		for index, pending := range t.observationPending {
@@ -227,6 +340,30 @@ func (t *Tenant) recordObservation(event platform.Observation) {
 	t.observationPending = append(t.observationPending, event)
 }
 
+func (t *Tenant) observeOwnerRun(at time.Time, source, runID, app, resource, status, title, detail string) {
+	level, outcome := "info", "ok"
+	switch status {
+	case "failed":
+		level, outcome = "error", "failed"
+	case "cancelled":
+		level, outcome = "warn", "refused"
+	case "pending", "running":
+		level, outcome = "info", "pending"
+	}
+	message := title + " " + status
+	attributes := map[string]string{"status": status}
+	if detail != "" {
+		if len(detail) > 300 {
+			detail = detail[:300]
+		}
+		attributes["error"] = detail
+	}
+	t.recordObservation(platform.Observation{
+		At: at, Level: level, Source: source, App: app, RunID: runID,
+		Resource: resource, Outcome: outcome, Message: message, Attributes: attributes,
+	})
+}
+
 func (t *Tenant) FlushObservations() {
 	t.observationMu.Lock()
 	events := t.observationPending
@@ -237,6 +374,7 @@ func (t *Tenant) FlushObservations() {
 	}
 	if err := t.store().SaveObservations(events); err != nil {
 		log.Printf("observation %s: %v", t.ID, err)
+		t.observationFailed.Add(1)
 		t.observationMu.Lock()
 		lost := len(events) + len(t.observationPending) - observationPendingLimit
 		if lost > 0 {
@@ -248,7 +386,10 @@ func (t *Tenant) FlushObservations() {
 		}
 		t.observationPending = kept
 		t.observationMu.Unlock()
+		return
 	}
+	t.observationWritten.Add(int64(len(events)))
+	t.observationLastWrite.Store(Now().UnixNano())
 }
 
 func (h *Host) observeRequest(t *Tenant, m platform.Member, correlation requestCorrelation, route string, status int, duration time.Duration) {
@@ -334,7 +475,9 @@ func (t *Tenant) PurgeObservations(now time.Time) {
 		log.Printf("purge observations %s: %v", t.ID, err)
 		return
 	}
+	t.observationLastPurge.Store(now.UTC().UnixNano())
 	if removed > 0 {
+		t.observationPurged.Add(int64(removed))
 		log.Printf("purged %d observations for %s", removed, t.ID)
 	}
 }

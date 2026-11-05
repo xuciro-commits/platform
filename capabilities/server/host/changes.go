@@ -18,6 +18,7 @@ type changes struct {
 }
 
 func (t *Tenant) changed() {
+	t.runIndexGen.Add(1)
 	t.markChanged(true, "")
 }
 
@@ -29,7 +30,10 @@ func (t *Tenant) operationsChanged(owner ...string) {
 	t.markChanged(false, name)
 }
 
-func (t *Tenant) changedOwner(owner string) { t.markChanged(true, owner) }
+func (t *Tenant) changedOwner(owner string) {
+	t.runIndexGen.Add(1)
+	t.markChanged(true, owner)
+}
 
 func (t *Tenant) markChanged(data bool, owner string) {
 	c := &t.change

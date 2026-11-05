@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"platformserver/kernel/transport"
+	"platformserver/platform"
 )
 
 func (h *Host) routesObservability(rt *routes) {
@@ -32,6 +34,12 @@ func (t *Tenant) storageReady(ctx context.Context) error {
 		return errors.New("tenant journal is unavailable")
 	}
 	if _, err := journal.Entries(ctx, t.ID, journal.Position(t.ID)); err != nil {
+		return err
+	}
+	if _, err := t.store().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
+		return err
+	}
+	if _, err := t.store().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
 		return err
 	}
 	return nil

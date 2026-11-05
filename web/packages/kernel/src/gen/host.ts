@@ -333,6 +333,32 @@ export type AggregateWindowResult = {
   last?: AggregateWindowEdge;
 };
 
+export type Alert = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  migrated?: string;
+  migratedVersion?: number;
+  name: string;
+  title: string;
+  object: string;
+  field: string;
+  operator: "=" | "!=" | "<" | "<=" | ">" | ">=" | "empty" | "not empty";
+  value?: string;
+  message: string;
+  role?: string;
+  every?: boolean;
+  active: boolean;
+  state?: string;
+  version?: number;
+  definitionVersion?: number;
+  versions?: string[];
+  published?: string;
+};
+
 export type AlertRule = {
   name: string;
   title: string;
@@ -707,12 +733,25 @@ export type Attachment = {
   item: string;
 };
 
+export type AuditCoverage = {
+  retainedFrom?: string;
+  truncated?: boolean;
+};
+
 export type AuditEntry = {
+  id?: string;
   at: string;
   member: string;
   app: string;
   action: string;
   target?: string;
+};
+
+export type AuditPage = {
+  entries: AuditEntry[];
+  nextCursor?: string;
+  hasMore: boolean;
+  coverage: AuditCoverage;
 };
 
 export type AuthorityDeclaration = AuthorityDeclarationJson;
@@ -2289,6 +2328,12 @@ export type Grant = {
   at?: string;
 };
 
+export type HealthCondition = {
+  name: string;
+  ready: boolean;
+  detail?: string;
+};
+
 export type HistogramBucket = {
   lower: string;
   upper: string;
@@ -2654,6 +2699,14 @@ export type LiveQueryResult = {
   body: unknown;
 };
 
+export type LogPolicyView = {
+  app: string;
+  level: string;
+  retentionDays: number;
+  debugUntil?: string;
+  reason?: string;
+};
+
 export type LoopFrame = {
   items?: unknown[];
   outer?: string[];
@@ -2959,6 +3012,7 @@ export type MonitoringRun = {
   retryTarget?: MonitoringRetryTarget;
   retrySchemaVersion?: SchemaVersion;
   retryKind?: "retry" | "rerun";
+  delayed?: boolean;
 };
 
 export type MonitoringRunPage = {
@@ -2978,6 +3032,13 @@ export type MonitoringView = {
   archived?: boolean;
   versionPins?: RecordVersionPin[];
   title: string;
+  family?: "runs" | "logs";
+  query?: string;
+  time?: "15m" | "1h" | "24h" | "7d" | "30d" | "custom";
+  from?: string;
+  to?: string;
+  columns?: string;
+  density?: "compact" | "comfortable";
   type?: "sync" | "build" | "automation" | "function" | "delivery";
   status?: "ok" | "failed" | "pending" | "running" | "warning" | "paused" | "cancelled" | "unknown";
   owner: string;
@@ -3158,6 +3219,20 @@ export type ObservationEvaluation = {
   reused?: boolean;
 };
 
+export type ObservationHealth = {
+  enabled: boolean;
+  pending: number;
+  dropped: number;
+  written: number;
+  writeFailures: number;
+  purged: number;
+  quotaBytes: number;
+  retainedFrom?: string;
+  lastWrite?: string;
+  lastPurge?: string;
+  available: boolean;
+};
+
 export type ObservationInfo = {
   ref: AssetRef;
   version: string;
@@ -3254,6 +3329,18 @@ export type ObservationSampleSource = {
   generation: string;
   sequence?: string;
   clock?: string;
+};
+
+export type ObservationSummary = {
+  from?: string;
+  to?: string;
+  requests: number;
+  errors: number;
+  warnings: number;
+  averageMillis: number;
+  maxMillis: number;
+  sample: boolean;
+  dropped: number;
 };
 
 export type ObservationUnknown = {
@@ -3828,11 +3915,25 @@ export type PermissionAction = {
 };
 
 export type PersonalRead = {
+  id?: string;
   at: string;
   member: string;
   type: string;
   ids: string[];
   fields: string[];
+};
+
+export type PersonalReadCoverage = {
+  retainedFrom?: string;
+  filtered?: boolean;
+  truncated?: boolean;
+};
+
+export type PersonalReadPage = {
+  entries: PersonalRead[];
+  nextCursor?: string;
+  hasMore: boolean;
+  coverage: PersonalReadCoverage;
 };
 
 export type Pin = {
@@ -5062,6 +5163,8 @@ export type TenantHealth = {
   openBreakers: number;
   connectorsFailing: number;
   endpointsFailing: number;
+  observations: ObservationHealth;
+  readiness: HealthCondition[];
 };
 
 export type TenantLink = {

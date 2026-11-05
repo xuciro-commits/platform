@@ -14,6 +14,7 @@ import (
 	appowner "platformserver/services/apps"
 	"platformserver/services/resources/authoring"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -24,7 +25,142 @@ func (t *Tenant) PageView(m platform.Member, app, owner, page string) (platform.
 	return appowner.PageView(t.Definitions(m), t.Entities(m), t.Catalog(m), app, owner, page)
 }
 func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error) {
+	if ref.Kind != platform.AssetApp || ref.Check() != nil || offset < 0 || limit < 1 || limit > 100 {
+		return platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an application and a run page of 1–100")
+	}
+	if len(filters) > 0 {
+		filter := filters[0]
+		if filter.Kind != "" && !slices.Contains([]string{"flow", "agent", "compute", "function", "effect", "job", "dispatch"}, filter.Kind) ||
+			len(filter.State) > 64 || len(filter.Subject) > 512 || !filter.Since.IsZero() && !filter.Until.IsZero() && filter.Since.After(filter.Until) {
+			return platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a valid application run filter")
+		}
+	}
+	m = t.authorizationMember(m)
+	if refusal := t.refreshApplicationRunIndex(m, ref, now); refusal == nil {
+		if page, err := t.applicationRunsFromIndex(m, ref, offset, limit, filters...); err == nil {
+			return page, nil
+		}
+	}
 	return t.applicationContext().Runs(m, ref, offset, limit, now, filters...)
+}
+
+func (t *Tenant) refreshApplicationRunIndex(m platform.Member, ref platform.AssetRef, now time.Time) *kernel.Error {
+	key := "application/" + ref.App + "/" + ref.Name + "/" + m.ID
+	t.runIndexMu.Lock()
+	defer t.runIndexMu.Unlock()
+	if t.runIndexAt == nil {
+		t.runIndexAt = map[string]runIndexCache{}
+	}
+	generation := t.runIndexGen.Load()
+	if cached, ok := t.runIndexAt[key]; ok && cached.Generation == generation && now.Sub(cached.At) < 5*time.Second {
+		return nil
+	}
+	ctx := t.applicationContext()
+	runs := []platform.ApplicationRun{}
+	for skip := 0; ; {
+		page, refusal := ctx.Runs(m, ref, skip, 100, now)
+		if refusal != nil {
+			return refusal
+		}
+		runs = append(runs, page.Runs...)
+		skip += len(page.Runs)
+		if len(page.Runs) == 0 || skip >= page.Total || skip >= 10000 {
+			break
+		}
+	}
+	entries := make([]platform.RunIndexEntry, 0, len(runs))
+	for _, run := range runs {
+		raw, err := json.Marshal(run)
+		if err != nil {
+			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		entries = append(entries, platform.RunIndexEntry{ID: run.Kind + "/" + run.ID, Scope: m.ID, Type: "application", App: ref.Name, Status: run.State, At: run.Created, Payload: raw})
+	}
+	if err := t.store().ReplaceRunIndex(t.ID, key, entries); err != nil {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
+	}
+	t.runIndexAt[key] = runIndexCache{At: now, Generation: generation}
+	return nil
+}
+
+func (t *Tenant) applicationRunsFromIndex(m platform.Member, ref platform.AssetRef, offset, limit int, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, error) {
+	scope := "application/" + ref.App + "/" + ref.Name + "/" + m.ID
+	indexed, err := t.store().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: scope, Offset: 0, Limit: 1000})
+	if err != nil {
+		return platform.ApplicationRunPage{}, err
+	}
+	filter := platform.ApplicationRunFilter{}
+	if len(filters) > 0 {
+		filter = filters[0]
+	}
+	runs := make([]platform.ApplicationRun, 0, len(indexed.Entries))
+	for _, entry := range indexed.Entries {
+		var run platform.ApplicationRun
+		if json.Unmarshal(entry.Payload, &run) != nil {
+			continue
+		}
+		if filter.Kind != "" && run.Kind != filter.Kind || filter.State != "" && run.State != filter.State ||
+			filter.Subject != "" && run.Subject != filter.Subject ||
+			!filter.Since.IsZero() && run.Created.Before(filter.Since) ||
+			!filter.Until.IsZero() && run.Created.After(filter.Until) {
+			continue
+		}
+		runs = append(runs, run)
+	}
+	slices.SortFunc(runs, func(a, b platform.ApplicationRun) int {
+		failed := func(run platform.ApplicationRun) bool {
+			return run.Error != "" || slices.Contains([]string{"failed", "stuck", "blocked", "stopped", "rejected"}, run.State)
+		}
+		if failed(a) != failed(b) {
+			if failed(a) {
+				return -1
+			}
+			return 1
+		}
+		if a.Created.Before(b.Created) {
+			return 1
+		}
+		if a.Created.After(b.Created) {
+			return -1
+		}
+		return strings.Compare(a.Kind+"/"+a.ID, b.Kind+"/"+b.ID)
+	})
+	out := platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}, Total: len(runs)}
+	if definitions, err := t.definitionsFor(m); err == nil {
+		for _, definition := range definitions {
+			if definition.Ref == ref && definition.Application != nil {
+				out.Title = definition.Application.Title
+				break
+			}
+		}
+	}
+	out.Summary = applicationRunSummary(runs)
+	start := min(offset, len(runs))
+	out.Runs = append(out.Runs, runs[start:min(start+limit, len(runs))]...)
+	return out, nil
+}
+
+func applicationRunSummary(runs []platform.ApplicationRun) platform.ApplicationRunSummary {
+	out := platform.ApplicationRunSummary{}
+	for _, run := range runs {
+		if run.Kind == "agent" || run.Kind == "function" {
+			out.AITokens += run.AITokens
+			out.AIUSD += run.AIUSD
+			if !run.CostReported {
+				out.UnmeteredAI++
+			}
+		}
+		if slices.Contains([]string{"failed", "stuck", "blocked", "stopped", "rejected"}, run.State) || run.Error != "" {
+			out.Failed++
+		}
+		if (run.Kind == "effect" || run.Kind == "compute") && !slices.Contains([]string{"delivered", "rejected", "failed", "discarded", "compensated"}, run.State) {
+			out.PendingEffects++
+		}
+		if run.Kind == "flow" && slices.Contains([]string{"running", "waiting", "paused"}, run.State) {
+			out.WaitingFlows++
+		}
+	}
+	return out
 }
 func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *kernel.Error) {
 	return t.applicationContext().Runtime(m, ref, now)

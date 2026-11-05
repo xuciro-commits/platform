@@ -54,3 +54,62 @@ type ObservationPage struct {
 	HasMore    bool                   `json:"hasMore"`
 	Coverage   ObservationLogCoverage `json:"coverage"`
 }
+
+type ObservationSummary struct {
+	From          time.Time `json:"from,omitzero"`
+	To            time.Time `json:"to,omitzero"`
+	Requests      int       `json:"requests"`
+	Errors        int       `json:"errors"`
+	Warnings      int       `json:"warnings"`
+	AverageMillis float64   `json:"averageMillis"`
+	MaxMillis     int64     `json:"maxMillis"`
+	Sample        bool      `json:"sample"`
+	Dropped       int64     `json:"dropped"`
+}
+
+type AuditQuery struct {
+	Tenant string
+	From   time.Time
+	To     time.Time
+	Member string
+	App    string
+	Action string
+	Search string
+	Cursor string
+	Limit  int
+}
+
+type AuditCoverage struct {
+	RetainedFrom time.Time `json:"retainedFrom,omitzero"`
+	Truncated    bool      `json:"truncated,omitempty"`
+}
+
+type AuditPage struct {
+	Entries    []AuditEntry  `json:"entries"`
+	NextCursor string        `json:"nextCursor,omitempty"`
+	HasMore    bool          `json:"hasMore"`
+	Coverage   AuditCoverage `json:"coverage"`
+}
+
+type PersonalReadQuery struct {
+	Tenant string
+	From   time.Time
+	To     time.Time
+	Member string
+	Type   string
+	Cursor string
+	Limit  int
+}
+
+type PersonalReadCoverage struct {
+	RetainedFrom time.Time `json:"retainedFrom,omitzero"`
+	Filtered     bool      `json:"filtered,omitempty"`
+	Truncated    bool      `json:"truncated,omitempty"`
+}
+
+type PersonalReadPage struct {
+	Entries    []PersonalRead       `json:"entries"`
+	NextCursor string               `json:"nextCursor,omitempty"`
+	HasMore    bool                 `json:"hasMore"`
+	Coverage   PersonalReadCoverage `json:"coverage"`
+}

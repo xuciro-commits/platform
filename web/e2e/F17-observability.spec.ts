@@ -25,15 +25,16 @@ test("F17 an administrator finds a refused submission in Logs, inspects its requ
     await page.getByRole("dialog", { name: "Log event" }).getByRole("button", { name: "Close" }).click();
   });
 
-  await test.step("change the log level and restore it without leaving shared test state behind", async () => {
+  await test.step("enable and stop a temporary debug window without leaving shared test state behind", async () => {
     await page.getByRole("button", { name: "Log policy" }).click();
     const policy = page.getByRole("dialog", { name: "Log policy" });
     await expect(policy).toBeVisible();
-    await policy.getByLabel("Application log level").selectOption("debug");
+    await policy.getByLabel("Temporary debug window").selectOption("15");
+    await policy.getByLabel("Temporary debug reason").fill("F17 interaction check");
     await policy.getByRole("button", { name: "Save policy" }).click();
     await expect(policy).toBeHidden({ timeout: 10_000 });
     await page.getByRole("button", { name: "Log policy" }).click();
-    await page.getByRole("dialog", { name: "Log policy" }).getByLabel("Application log level").selectOption("info");
+    await page.getByRole("dialog", { name: "Log policy" }).getByLabel("Temporary debug window").selectOption("0");
     await page.getByRole("dialog", { name: "Log policy" }).getByRole("button", { name: "Save policy" }).click();
     await expect(page.getByRole("dialog", { name: "Log policy" })).toBeHidden({ timeout: 10_000 });
   });
@@ -41,7 +42,16 @@ test("F17 an administrator finds a refused submission in Logs, inspects its requ
   await test.step("the log read itself is visible in the audit trail", async () => {
     const response = await page.request.get("/v1/audit", { headers });
     expect(response.ok(), await response.text()).toBeTruthy();
-    const audit = await response.json() as { action: string; member: string }[];
-    expect(audit.some((entry) => entry.action === "platform.log.read" && entry.member === "admin-1")).toBeTruthy();
+    const audit = await response.json() as { entries: { action: string; member: string }[] };
+    expect(audit.entries.some((entry) => entry.action === "platform.log.read" && entry.member === "admin-1")).toBeTruthy();
+  });
+
+  await test.step("the user entry crosses from Logs to Audit and back", async () => {
+    await signIn(page, "admin", "/monitoring-logs");
+    await page.getByRole("button", { name: "Audit trail" }).click();
+    await expect(page.getByRole("heading", { name: "Audit", level: 1 })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open logs" })).toBeVisible();
+    await page.getByRole("button", { name: "Open logs" }).click();
+    await expect(page.getByRole("heading", { name: "Logs", level: 1 })).toBeVisible();
   });
 });

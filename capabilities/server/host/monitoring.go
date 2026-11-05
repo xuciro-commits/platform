@@ -3,6 +3,7 @@ package host
 import (
 	"cmp"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -31,6 +32,7 @@ type MonitoringRun struct {
 	RetryTarget        *MonitoringRetryTarget  `json:"retryTarget,omitempty"`
 	RetrySchemaVersion *platform.SchemaVersion `json:"retrySchemaVersion,omitempty"`
 	RetryKind          string                  `json:"retryKind,omitempty" enum:"retry,rerun"`
+	Delayed            bool                    `json:"delayed,omitempty"`
 }
 
 type MonitoringRetryTarget struct {
@@ -71,6 +73,115 @@ func (f MonitoringRunFilter) valid() bool {
 		(f.Status == "" || slices.Contains([]string{"ok", "failed", "pending", "running", "warning", "paused", "cancelled", "unknown"}, f.Status))
 }
 
+type runIndexCache struct {
+	At         time.Time
+	Generation int64
+	Coverage   []MonitoringCoverage
+}
+
+func (t *Tenant) monitoringRuns(m platform.Member, filter MonitoringRunFilter, now time.Time) (MonitoringRunPage, *kernel.Error) {
+	m = t.authorizationMember(m)
+	coverage, refusal := t.refreshRunIndex(m, now)
+	if refusal != nil {
+		page, fallback := t.monitoringRunsFromOwners(m, filter, now)
+		if fallback != nil {
+			return page, fallback
+		}
+		page.Coverage = append(page.Coverage, MonitoringCoverage{Source: "run-index", Basis: "latest", Limitation: "index-unavailable"})
+		return page, nil
+	}
+	indexed, err := t.store().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: m.ID, Offset: 0, Limit: 1000})
+	if err != nil {
+		page, fallback := t.monitoringRunsFromOwners(m, filter, now)
+		if fallback != nil {
+			return page, fallback
+		}
+		page.Coverage = append(page.Coverage, MonitoringCoverage{Source: "run-index", Basis: "latest", Limitation: "index-unavailable"})
+		return page, nil
+	}
+	out := MonitoringRunPage{Runs: []MonitoringRun{}, Offset: filter.Offset, Limit: filter.Limit, Coverage: coverage}
+	for _, entry := range indexed.Entries {
+		var run MonitoringRun
+		if json.Unmarshal(entry.Payload, &run) != nil {
+			continue
+		}
+		if run.ID == "" {
+			run.ID = entry.ID
+		}
+		if run.Delayed {
+			out.Overview.DelayedSyncs++
+		}
+		if run.Status == "failed" {
+			out.Overview.FailedRuns++
+			if run.Type == "delivery" {
+				out.Overview.FailedDeliveries++
+			}
+		}
+		if (filter.Type == "" || run.Type == filter.Type) && (filter.Status == "" || run.Status == filter.Status) {
+			out.Runs = append(out.Runs, run)
+		}
+	}
+	out.Total = len(out.Runs)
+	start := min(filter.Offset, out.Total)
+	out.Runs = out.Runs[start:min(start+filter.Limit, out.Total)]
+	return out, nil
+}
+
+func (t *Tenant) refreshRunIndex(m platform.Member, now time.Time) ([]MonitoringCoverage, *kernel.Error) {
+	t.runIndexMu.Lock()
+	defer t.runIndexMu.Unlock()
+	if t.runIndexAt == nil {
+		t.runIndexAt = map[string]runIndexCache{}
+	}
+	generation := t.runIndexGen.Load()
+	if cached, ok := t.runIndexAt[m.ID]; ok && cached.Generation == generation && now.Sub(cached.At) < 5*time.Second {
+		return slices.Clone(cached.Coverage), nil
+	}
+	previous, _ := t.store().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: m.ID, Offset: 0, Limit: 1000})
+	previousStatus := map[string]string{}
+	for _, entry := range previous.Entries {
+		previousStatus[entry.ID] = entry.Status
+	}
+	var runs []MonitoringRun
+	var coverage []MonitoringCoverage
+	for offset := 0; ; {
+		page, refusal := t.monitoringRunsFromOwners(m, MonitoringRunFilter{Offset: offset, Limit: 100}, now)
+		if refusal != nil {
+			return nil, refusal
+		}
+		coverage = page.Coverage
+		runs = append(runs, page.Runs...)
+		offset += len(page.Runs)
+		if len(page.Runs) == 0 || offset >= page.Total || offset >= 10000 {
+			break
+		}
+	}
+	entries := make([]platform.RunIndexEntry, 0, len(runs))
+	for _, run := range runs {
+		if len(previous.Entries) > 0 && (run.Source == "flow" || run.Source == "agent" || run.Source == "function" || run.Source == "compute" || run.Source == "projection" || run.Source == "code" || run.Source == "effect") &&
+			(run.Status == "failed" || run.Status == "cancelled") && previousStatus[run.ID] != run.Status {
+			t.observeOwnerRun(now, "run", run.ID, runResourceApp(run), run.RecordRef, run.Status, run.Title, run.OwnerStatus)
+		}
+		raw, err := json.Marshal(run)
+		if err != nil {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: fmt.Sprintf("run index: %v", err)}
+		}
+		entries = append(entries, platform.RunIndexEntry{ID: run.ID, Scope: m.ID, Type: run.Type, Source: run.Source, App: runResourceApp(run), Status: run.Status, At: run.When, Payload: raw})
+	}
+	if err := t.store().ReplaceRunIndex(t.ID, m.ID, entries); err != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
+	}
+	t.runIndexAt[m.ID] = runIndexCache{At: now, Generation: generation, Coverage: slices.Clone(coverage)}
+	return coverage, nil
+}
+
+func runResourceApp(run MonitoringRun) string {
+	if run.ResourceRef != nil {
+		return run.ResourceRef.App
+	}
+	return ""
+}
+
 func monitoringRecords[T any](t *Tenant, m platform.Member, typ string, coverage *MonitoringCoverage, now time.Time) ([]T, *kernel.Error) {
 	page, refusal := t.recordSelectionFrom(t.records, m, typ, platform.Query{Sort: []string{"id"}, Archived: true}, now)
 	if refusal != nil {
@@ -91,7 +202,7 @@ func monitoringRecords[T any](t *Tenant, m platform.Member, typ string, coverage
 	return rows, nil
 }
 
-func (t *Tenant) monitoringRuns(m platform.Member, filter MonitoringRunFilter, now time.Time) (MonitoringRunPage, *kernel.Error) {
+func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRunFilter, now time.Time) (MonitoringRunPage, *kernel.Error) {
 	out := MonitoringRunPage{Runs: []MonitoringRun{}, Offset: filter.Offset, Limit: filter.Limit, Coverage: []MonitoringCoverage{}}
 	m = t.authorizationMember(m)
 	if refusal := t.admits(m); refusal != nil {
@@ -177,6 +288,7 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter MonitoringRunFilter, n
 				coverage.Limitation = "definition-unavailable"
 			} else if every, parseErr := time.ParseDuration(fixed.Every); parseErr == nil && every > 0 && source.Last != nil && now.After(source.Last.At.Add(every)) {
 				out.Overview.DelayedSyncs++
+				run.Delayed = true
 			}
 		}
 		appendRun(run)

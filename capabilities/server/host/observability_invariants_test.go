@@ -190,6 +190,62 @@ func TestInvariantObservationReadAudit(t *testing.T) {
 	}
 }
 
+func TestInvariantAuditDoesNotDependOnMemoryRing(t *testing.T) {
+	live := newObservationTenant(t, "audit-persistent")
+	for index := 0; index < 1005; index++ {
+		live.audit.Remember(platform.AuditEntry{
+			ID:     fmt.Sprintf("audit-%04d", index),
+			At:     invariantClock.Add(time.Duration(index) * time.Second),
+			Member: "builder", App: build.ID, Action: "build.object.create", Target: fmt.Sprintf("build.object/OBJ-%04d", index),
+		})
+	}
+	if got := len(live.Audit()); got != 1000 {
+		t.Fatalf("hot audit ring kept %d entries, want its bounded 1000", got)
+	}
+	page, err := live.store().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !page.HasMore || len(page.Entries) != 200 || page.Entries[0].ID != "audit-1004" {
+		t.Fatalf("durable audit page: %+v", page)
+	}
+	first, err := live.store().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := live.store().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: first.NextCursor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(next.Entries) != 200 || next.Entries[0].ID != "audit-0804" {
+		t.Fatalf("durable audit cursor: %+v", next.Entries[:1])
+	}
+}
+
+func TestInvariantAuditReadThroughHost(t *testing.T) {
+	live := newObservationTenant(t, "audit-http")
+	live.audit.Remember(platform.AuditEntry{ID: "accepted-a", At: invariantClock.Add(-time.Minute), Member: "builder", App: build.ID, Action: "build.object.create", Target: "build.object/OBJ1"})
+	_, handler := observationHost(live.Tenant)
+	response := observationRequest(t, handler, live.ID, observationToken(live.ID, "admin"), "/v1/audit", url.Values{"limit": {"10"}})
+	if response.Code != http.StatusOK {
+		t.Fatalf("audit: HTTP %d: %s", response.Code, response.Body)
+	}
+	var page platform.AuditPage
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Entries) != 1 || page.Entries[0].ID != "accepted-a" {
+		t.Fatalf("audit entries: %+v", page.Entries)
+	}
+	if !strings.Contains(page.Entries[0].Target, "build.object") || page.Coverage.RetainedFrom.IsZero() {
+		t.Fatalf("audit evidence: %+v", page)
+	}
+	invalid := observationRequest(t, handler, live.ID, observationToken(live.ID, "admin"), "/v1/audit", url.Values{"limit": {"999"}})
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid audit limit: HTTP %d: %s", invalid.Code, invalid.Body)
+	}
+}
+
 func TestInvariantObservationRequestCorrelation(t *testing.T) {
 	live := newObservationTenant(t, "observation-requests")
 	live.settings.Set(controlowner.PlatformApp+"/"+controlowner.SettingLogRequests, "100")

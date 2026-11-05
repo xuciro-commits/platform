@@ -55,7 +55,7 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 | K8 | 系统自举：`system` 租户的发布记录只读；保存新候选与激活都被拒绝，已有候选仍可审查 |
 | K9 | 产品包生命周期：退役归档本包资源；同版本重装恢复本包资源、应用身份和客户记录；升级、降级、回滚分别执行，存储兼容检查阻止旧定义无法读取的数据形状；安装闭包按精确版本显示 `installed / pending / failed` 且不重复提交已安装步骤；重放保持结果 |
 | K10 | 资源所有权 rehome：管理员接受结果只改变 `Project / ManagedBy` 和修订号，RID、类型、名称、记录和重放结果不变；非管理员拒绝，陈旧修订拒绝 |
-| K11 | 运营观测：租户与成员范围不可越过；日志读写不改变接受结果或记录；保留与覆盖边界准确；日志查看产生审计；请求关联来自显式上下文，不来自可变租户状态 |
+| K11 | 运营观测：租户与成员范围不可越过；日志读写不改变接受结果或记录；保留与覆盖边界准确；日志查看产生审计；请求关联来自显式上下文，不来自可变租户状态；运行索引按成员可见范围隔离且不改变 owner 状态 |
 
 资源入口有独立宿主验收：直接检查 page/default/release-plan 三种 route，`build.testplan` 的 `test-plan` / `evaluation-set` 目录引用与 `variant`，以及两种 release kind 的发布预览结果；同时检查 `work.view` 的 v0/v1 状态和 `build.query` 的 v1 ObjectSet 发布合同。这些断言读取实际映射与发布结果，不以生成的前端契约反推。
 
@@ -73,8 +73,8 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 
 ## 7.13 SQL 模式
 
-`make verify-sql` 在本机 PostgreSQL 容器中创建隔离临时库，启动独立宿主，验证项目委派构建者创建对象、viewer/discoverer 的资源目录权限、停止并重启宿主后的读取，最后删除临时库。它验证 SQL 接受结果、项目权限和启动恢复，不替代 `make verify` 的完整 Playwright 路径，也不把内存测试当成 SQL 覆盖。
+`make verify-sql` 在本机 PostgreSQL 容器中创建隔离临时库，启动独立宿主，验证项目委派构建者创建对象、viewer/discoverer 的资源目录权限、运营日志、不可变审计、运行索引、停止并重启宿主后的读取，最后删除临时库。它验证 SQL 接受结果、项目权限和启动恢复，不替代 `make verify` 的完整 Playwright 路径，也不把内存测试当成 SQL 覆盖。
 
 ## 现存差距
 
-- `make verify` 的内核不变量与 F1–F17 仍运行在内存宿主；SQL 模式当前覆盖创建、项目委派、viewer/discoverer 目录权限、日志读取和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。
+- `make verify` 的内核不变量与 F1–F17 仍运行在内存宿主；SQL 模式覆盖创建、项目委派、viewer/discoverer 目录权限、日志、审计、运行索引和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。

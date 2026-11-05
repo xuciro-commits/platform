@@ -101,6 +101,28 @@ var schema = []string{
 	`create index if not exists observations_tenant_run on observations (tenant, run_id, at desc)`,
 	`create index if not exists observations_tenant_trace on observations (tenant, trace_id, at desc)`,
 	`create index if not exists observations_tenant_level on observations (tenant, level, at desc)`,
+	`create table if not exists audit_entries (
+		tenant text not null, id text not null, at timestamptz not null,
+		member text not null default '', app text not null default '',
+		action text not null default '', target text not null default '',
+		primary key (tenant, id))`,
+	`create index if not exists audit_entries_tenant_at on audit_entries (tenant, at desc, id desc)`,
+	`create index if not exists audit_entries_tenant_action on audit_entries (tenant, action, at desc)`,
+	`create table if not exists personal_reads (
+		tenant text not null, id text not null, at timestamptz not null,
+		member text not null default '', record_type text not null default '',
+		record_ids jsonb not null default '[]'::jsonb, fields jsonb not null default '[]'::jsonb,
+		primary key (tenant, id))`,
+	`create index if not exists personal_reads_tenant_at on personal_reads (tenant, at desc, id desc)`,
+	`create table if not exists run_index (
+		tenant text not null, scope text not null default '', id text not null, type text not null default '',
+		source text not null default '', app text not null default '',
+		status text not null default '', at timestamptz not null,
+		payload jsonb not null default '{}'::jsonb, primary key (tenant, scope, id))`,
+	`alter table run_index add column if not exists scope text not null default ''`,
+	`alter table run_index drop constraint if exists run_index_pkey`,
+	`alter table run_index add primary key (tenant, scope, id)`,
+	`create index if not exists run_index_tenant_at on run_index (tenant, at desc, id desc)`,
 	`drop index if exists journal_accepted_key`,
 	`drop index if exists journal_result_key`,
 	`drop index if exists journal_result_request_key`,
@@ -677,4 +699,352 @@ func (j *Postgres) PurgeObservations(tenant string, before time.Time) (int, erro
 		return 0, err
 	}
 	return int(tag.RowsAffected()), nil
+}
+
+func (j *Postgres) ObservationUsage(tenant string, from time.Time) (int64, error) {
+	var total int64
+	if err := j.pool.QueryRow(context.Background(), `select coalesce(sum(pg_column_size(o)), 0) from observations o where tenant = $1 and at >= $2`, tenant, from).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (j *Postgres) SummarizeObservations(tenant, member string, from, to time.Time) (platform.ObservationSummary, error) {
+	out := platform.ObservationSummary{From: from.UTC(), To: to.UTC()}
+	memberClause := ""
+	args := []any{tenant, from, to}
+	if member != "" {
+		memberClause = " and member = $4"
+		args = append(args, member)
+	}
+	if err := j.pool.QueryRow(context.Background(), `select
+		count(*) filter (where source = 'request'),
+		count(*) filter (where level = 'error'),
+		count(*) filter (where level = 'warn'),
+		coalesce(avg((attributes ->> 'durationMs')::bigint) filter (where source = 'request' and attributes ->> 'durationMs' ~ '^[0-9]+$'), 0)::float8,
+		coalesce(max((attributes ->> 'durationMs')::bigint) filter (where source = 'request' and attributes ->> 'durationMs' ~ '^[0-9]+$'), 0)
+		from observations where tenant = $1 and at >= $2 and at < $3`+memberClause, args...).Scan(&out.Requests, &out.Errors, &out.Warnings, &out.AverageMillis, &out.MaxMillis); err != nil {
+		return platform.ObservationSummary{}, err
+	}
+	return out, nil
+}
+
+func (j *Postgres) SaveAuditEntries(tenant string, entries []platform.AuditEntry) error {
+	if tenant == "" || len(entries) == 0 {
+		return nil
+	}
+	ctx := context.Background()
+	tx, err := j.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	batch := &pgx.Batch{}
+	for _, entry := range entries {
+		entry = normalizeAuditEntry(entry)
+		if entry.ID == "" {
+			return fmt.Errorf("audit entry needs an identity")
+		}
+		batch.Queue(`insert into audit_entries (tenant, id, at, member, app, action, target)
+			values ($1,$2,$3,$4,$5,$6,$7) on conflict (tenant, id) do nothing`,
+			tenant, entry.ID, entry.At, entry.Member, entry.App, entry.Action, entry.Target)
+	}
+	results := tx.SendBatch(ctx, batch)
+	for range entries {
+		if _, err := results.Exec(); err != nil {
+			results.Close()
+			return err
+		}
+	}
+	if err := results.Close(); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (j *Postgres) QueryAuditEntries(query platform.AuditQuery) (platform.AuditPage, error) {
+	limit := auditLimit(query.Limit)
+	args := []any{query.Tenant}
+	where := []string{"tenant = $1"}
+	filter := func(column, value string) {
+		if value == "" {
+			return
+		}
+		args = append(args, value)
+		where = append(where, fmt.Sprintf("%s = $%d", column, len(args)))
+	}
+	filter("member", query.Member)
+	filter("app", query.App)
+	filter("action", query.Action)
+	if !query.From.IsZero() {
+		args = append(args, query.From)
+		where = append(where, fmt.Sprintf("at >= $%d", len(args)))
+	}
+	if !query.To.IsZero() {
+		args = append(args, query.To)
+		where = append(where, fmt.Sprintf("at < $%d", len(args)))
+	}
+	if query.Search != "" {
+		args = append(args, strings.ToLower(query.Search))
+		where = append(where, fmt.Sprintf(`strpos(lower(member || ' ' || app || ' ' || action || ' ' || target), $%d) > 0`, len(args)))
+	}
+	if query.Cursor != "" {
+		at, id, err := decodeAuditCursor(query.Cursor)
+		if err != nil {
+			return platform.AuditPage{}, err
+		}
+		args = append(args, at, id)
+		where = append(where, fmt.Sprintf("(at < $%d or (at = $%d and id < $%d))", len(args)-1, len(args)-1, len(args)))
+	}
+	statement := `select id, at, member, app, action, target from audit_entries where ` + strings.Join(where, " and ") +
+		fmt.Sprintf(" order by at desc, id desc limit %d", limit+1)
+	rows, err := j.pool.Query(context.Background(), statement, args...)
+	if err != nil {
+		return platform.AuditPage{}, err
+	}
+	defer rows.Close()
+	entries := make([]platform.AuditEntry, 0, limit+1)
+	for rows.Next() {
+		var entry platform.AuditEntry
+		if err := rows.Scan(&entry.ID, &entry.At, &entry.Member, &entry.App, &entry.Action, &entry.Target); err != nil {
+			return platform.AuditPage{}, err
+		}
+		entry.At = entry.At.UTC()
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return platform.AuditPage{}, err
+	}
+	var retainedFrom *time.Time
+	if err := j.pool.QueryRow(context.Background(), `select min(at) from audit_entries where tenant = $1`, query.Tenant).Scan(&retainedFrom); err != nil {
+		return platform.AuditPage{}, err
+	}
+	hasMore := len(entries) > limit
+	if hasMore {
+		entries = entries[:limit]
+	}
+	if entries == nil {
+		entries = []platform.AuditEntry{}
+	}
+	var earliest time.Time
+	if retainedFrom != nil {
+		earliest = retainedFrom.UTC()
+	}
+	page := platform.AuditPage{Entries: entries, HasMore: hasMore, Coverage: platform.AuditCoverage{RetainedFrom: earliest, Truncated: hasMore}}
+	if hasMore {
+		last := entries[len(entries)-1]
+		page.NextCursor = encodeAuditCursor(last.At, last.ID)
+	}
+	return page, nil
+}
+
+func (j *Postgres) SavePersonalReads(tenant string, reads []platform.PersonalRead) error {
+	if tenant == "" || len(reads) == 0 {
+		return nil
+	}
+	ctx := context.Background()
+	tx, err := j.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	batch := &pgx.Batch{}
+	for _, read := range reads {
+		read = normalizePersonalRead(read)
+		if read.ID == "" {
+			return fmt.Errorf("personal read needs an identity")
+		}
+		ids, _ := json.Marshal(read.IDs)
+		fields, _ := json.Marshal(read.Fields)
+		batch.Queue(`insert into personal_reads (tenant, id, at, member, record_type, record_ids, fields)
+			values ($1,$2,$3,$4,$5,$6,$7) on conflict (tenant, id) do nothing`,
+			tenant, read.ID, read.At, read.Member, read.Type, ids, fields)
+	}
+	results := tx.SendBatch(ctx, batch)
+	for range reads {
+		if _, err := results.Exec(); err != nil {
+			results.Close()
+			return err
+		}
+	}
+	if err := results.Close(); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (j *Postgres) QueryPersonalReads(query platform.PersonalReadQuery) (platform.PersonalReadPage, error) {
+	limit := auditLimit(query.Limit)
+	args := []any{query.Tenant}
+	where := []string{"tenant = $1"}
+	filter := func(column, value string) {
+		if value == "" {
+			return
+		}
+		args = append(args, value)
+		where = append(where, fmt.Sprintf("%s = $%d", column, len(args)))
+	}
+	filter("member", query.Member)
+	filter("record_type", query.Type)
+	if !query.From.IsZero() {
+		args = append(args, query.From)
+		where = append(where, fmt.Sprintf("at >= $%d", len(args)))
+	}
+	if !query.To.IsZero() {
+		args = append(args, query.To)
+		where = append(where, fmt.Sprintf("at < $%d", len(args)))
+	}
+	if query.Cursor != "" {
+		at, id, err := decodeAuditCursor(query.Cursor)
+		if err != nil {
+			return platform.PersonalReadPage{}, err
+		}
+		args = append(args, at, id)
+		where = append(where, fmt.Sprintf("(at < $%d or (at = $%d and id < $%d))", len(args)-1, len(args)-1, len(args)))
+	}
+	statement := `select id, at, member, record_type, record_ids, fields from personal_reads where ` + strings.Join(where, " and ") +
+		fmt.Sprintf(" order by at desc, id desc limit %d", limit+1)
+	rows, err := j.pool.Query(context.Background(), statement, args...)
+	if err != nil {
+		return platform.PersonalReadPage{}, err
+	}
+	defer rows.Close()
+	reads := make([]platform.PersonalRead, 0, limit+1)
+	for rows.Next() {
+		var read platform.PersonalRead
+		var ids, fields []byte
+		if err := rows.Scan(&read.ID, &read.At, &read.Member, &read.Type, &ids, &fields); err != nil {
+			return platform.PersonalReadPage{}, err
+		}
+		if json.Unmarshal(ids, &read.IDs) != nil || json.Unmarshal(fields, &read.Fields) != nil {
+			return platform.PersonalReadPage{}, fmt.Errorf("personal read has invalid arrays")
+		}
+		read.At = read.At.UTC()
+		reads = append(reads, read)
+	}
+	if err := rows.Err(); err != nil {
+		return platform.PersonalReadPage{}, err
+	}
+	var retainedFrom *time.Time
+	if err := j.pool.QueryRow(context.Background(), `select min(at) from personal_reads where tenant = $1`, query.Tenant).Scan(&retainedFrom); err != nil {
+		return platform.PersonalReadPage{}, err
+	}
+	hasMore := len(reads) > limit
+	if hasMore {
+		reads = reads[:limit]
+	}
+	if reads == nil {
+		reads = []platform.PersonalRead{}
+	}
+	var earliest time.Time
+	if retainedFrom != nil {
+		earliest = retainedFrom.UTC()
+	}
+	page := platform.PersonalReadPage{Entries: reads, HasMore: hasMore, Coverage: platform.PersonalReadCoverage{RetainedFrom: earliest, Truncated: hasMore}}
+	if hasMore {
+		last := reads[len(reads)-1]
+		page.NextCursor = encodeAuditCursor(last.At, last.ID)
+	}
+	return page, nil
+}
+
+func (j *Postgres) ReplaceRunIndex(tenant, scope string, entries []platform.RunIndexEntry) error {
+	ctx := context.Background()
+	tx, err := j.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `delete from run_index where tenant = $1 and scope = $2`, tenant, scope); err != nil {
+		return err
+	}
+	batch := &pgx.Batch{}
+	queued := 0
+	for _, entry := range entries {
+		entry = normalizeRun(entry)
+		entry.Scope = scope
+		if entry.ID == "" {
+			continue
+		}
+		batch.Queue(`insert into run_index (tenant, scope, id, type, source, app, status, at, payload)
+			values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+			tenant, scope, entry.ID, entry.Type, entry.Source, entry.App, entry.Status, entry.At, entry.Payload)
+		queued++
+	}
+	results := tx.SendBatch(ctx, batch)
+	for range queued {
+		if _, err := results.Exec(); err != nil {
+			results.Close()
+			return err
+		}
+	}
+	if err := results.Close(); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (j *Postgres) QueryRunIndex(query platform.RunIndexQuery) (platform.RunIndexPage, error) {
+	limit := query.Limit
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	args := []any{query.Tenant, query.Scope}
+	where := []string{"tenant = $1", "scope = $2"}
+	filter := func(column, value string) {
+		if value == "" {
+			return
+		}
+		args = append(args, value)
+		where = append(where, fmt.Sprintf("%s = $%d", column, len(args)))
+	}
+	filter("type", query.Type)
+	filter("source", query.Source)
+	filter("app", query.App)
+	filter("status", query.Status)
+	if !query.From.IsZero() {
+		args = append(args, query.From)
+		where = append(where, fmt.Sprintf("at >= $%d", len(args)))
+	}
+	if !query.To.IsZero() {
+		args = append(args, query.To)
+		where = append(where, fmt.Sprintf("at < $%d", len(args)))
+	}
+	var total int
+	countStatement := `select count(*) from run_index where ` + strings.Join(where, " and ")
+	if err := j.pool.QueryRow(context.Background(), countStatement, args...).Scan(&total); err != nil {
+		return platform.RunIndexPage{}, err
+	}
+	args = append(args, max(0, query.Offset), limit)
+	statement := `select id, type, source, app, status, at, payload from run_index where ` + strings.Join(where, " and ") +
+		fmt.Sprintf(" order by at desc, id desc offset $%d limit $%d", len(args)-1, len(args))
+	rows, err := j.pool.Query(context.Background(), statement, args...)
+	if err != nil {
+		return platform.RunIndexPage{}, err
+	}
+	defer rows.Close()
+	entries := []platform.RunIndexEntry{}
+	for rows.Next() {
+		var entry platform.RunIndexEntry
+		if err := rows.Scan(&entry.ID, &entry.Type, &entry.Source, &entry.App, &entry.Status, &entry.At, &entry.Payload); err != nil {
+			return platform.RunIndexPage{}, err
+		}
+		entry.At = entry.At.UTC()
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return platform.RunIndexPage{}, err
+	}
+	var retainedFrom *time.Time
+	if err := j.pool.QueryRow(context.Background(), `select min(at) from run_index where tenant = $1 and scope = $2`, query.Tenant, query.Scope).Scan(&retainedFrom); err != nil {
+		return platform.RunIndexPage{}, err
+	}
+	var earliest time.Time
+	if retainedFrom != nil {
+		earliest = retainedFrom.UTC()
+	}
+	return platform.RunIndexPage{Entries: entries, Total: total, RetainedFrom: earliest}, nil
 }

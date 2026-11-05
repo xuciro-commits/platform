@@ -52,6 +52,6 @@ func (t *Tenant) publishAccepted(e platform.Event, plan platform.AcceptedEventPl
 func (t *Tenant) Deliveries() []platform.Delivery { return t.audit.RecentDeliveries() }
 
 func submitted(member string, a platform.App, s *pb.Submission, at time.Time) platform.AuditEntry {
-	return platform.AuditEntry{At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),
+	return platform.AuditEntry{ID: "submit:" + a.Manifest().ID + ":" + s.GetIdempotencyKey(), At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),
 		Target: s.GetTarget().GetType() + "/" + s.GetTarget().GetId()}
 }

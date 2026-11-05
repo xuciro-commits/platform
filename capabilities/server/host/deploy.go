@@ -172,6 +172,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 	})
 	(&Host{}).bindSystemDefinitions(ordered)
 	for _, t := range ordered {
+		t.Store = j
 		recoveryStarted := time.Now().UTC()
 		var statePosition int64
 		var stateActive bool
@@ -188,6 +189,12 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			legacyState, err = upgrade.StateNeedsUpgrade(ctx, t.ID)
 			if err != nil {
 				return fmt.Errorf("read SQL state format %s: %w", t.ID, err)
+			}
+		}
+		auditPage, auditErr := t.store().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, Limit: 1})
+		if auditErr == nil && len(auditPage.Entries) == 0 {
+			if all, err := j.Entries(ctx, t.ID, 0); err == nil {
+				t.backfillAudit(all)
 			}
 		}
 		var after int64

@@ -142,6 +142,8 @@ log_from="$(python3 -c 'from datetime import datetime, timedelta, timezone; prin
 log_to="$(python3 -c 'from datetime import datetime, timedelta, timezone; print((datetime.now(timezone.utc)+timedelta(hours=1)).isoformat().replace("+00:00", "Z"))')"
 curl -fsS -H 'Authorization: Bearer admin' -H "Platform-Tenant: ${tenant}" \
   "http://127.0.0.1:${port}/v1/monitoring/logs?from=${log_from}&to=${log_to}&source=submit&limit=100" >"$work/logs.json"
+curl -fsS -H 'Authorization: Bearer admin' -H "Platform-Tenant: ${tenant}" \
+  "http://127.0.0.1:${port}/v1/audit?from=${log_from}&to=${log_to}&limit=200" >"$work/audit.json"
 python3 - "$work/logs.json" <<'PY'
 import json
 import sys
@@ -150,6 +152,15 @@ page = json.load(open(sys.argv[1]))
 entries = page.get("entries", [])
 assert entries, page
 assert any(item.get("source") == "submit" and item.get("outcome") == "ok" for item in entries), entries
+PY
+python3 - "$work/audit.json" <<'PY'
+import json
+import sys
+
+page = json.load(open(sys.argv[1]))
+entries = page.get("entries", [])
+assert entries, page
+assert any(item.get("action") == "build.object.create" for item in entries), entries
 PY
 
 curl -fsS -H 'Authorization: Bearer viewer' -H "Platform-Tenant: ${tenant}" \
@@ -181,6 +192,10 @@ curl -fsS -H 'Authorization: Bearer viewer' -H "Platform-Tenant: ${tenant}" \
   "http://127.0.0.1:${port}/v1/resources" >"$work/recovered-resources.json"
 curl -fsS -H 'Authorization: Bearer admin' -H "Platform-Tenant: ${tenant}" \
   "http://127.0.0.1:${port}/v1/monitoring/logs?from=${log_from}&to=${log_to}&source=submit&limit=100" >"$work/recovered-logs.json"
+curl -fsS -H 'Authorization: Bearer admin' -H "Platform-Tenant: ${tenant}" \
+  "http://127.0.0.1:${port}/v1/audit?from=${log_from}&to=${log_to}&limit=200" >"$work/recovered-audit.json"
+curl -fsS -H 'Authorization: Bearer admin' -H "Platform-Tenant: ${tenant}" \
+  "http://127.0.0.1:${port}/v1/monitoring/runs?limit=100" >"$work/recovered-runs.json"
 python3 - "$work/recovered-logs.json" <<'PY'
 import json
 import sys
@@ -190,6 +205,28 @@ entries = page.get("entries", [])
 assert entries, page
 assert any(item.get("source") == "submit" and item.get("outcome") == "ok" for item in entries), entries
 PY
+python3 - "$work/recovered-audit.json" <<'PY'
+import json
+import sys
+
+page = json.load(open(sys.argv[1]))
+entries = page.get("entries", [])
+assert entries, page
+assert any(item.get("action") == "build.object.create" for item in entries), entries
+assert any(item.get("action") == "platform.log.read" for item in entries), entries
+PY
+python3 - "$work/recovered-runs.json" <<'PY'
+import json
+import sys
+
+page = json.load(open(sys.argv[1]))
+assert isinstance(page.get("runs"), list), page
+assert page.get("coverage"), page
+PY
+audit_rows="$(docker exec platform-postgres-1 sh -ec "psql -U \"\$POSTGRES_USER\" -d \"${db}\" -tAc \"select count(*) from audit_entries where tenant = '${tenant}'\"")"
+[[ "${audit_rows//[[:space:]]/}" -gt 0 ]]
+run_rows="$(docker exec platform-postgres-1 sh -ec "psql -U \"\$POSTGRES_USER\" -d \"${db}\" -tAc \"select count(*) from run_index where tenant = '${tenant}'\"")"
+[[ "${run_rows//[[:space:]]/}" -gt 0 ]]
 python3 - "$work/recovered-resources.json" <<'PY'
 import json
 import sys

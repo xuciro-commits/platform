@@ -20,6 +20,28 @@ type TenantHealth struct {
 	OpenBreakers  int                `json:"openBreakers"`
 	Connectors    int                `json:"connectorsFailing"`
 	Endpoints     int                `json:"endpointsFailing"`
+	Observations  ObservationHealth  `json:"observations"`
+	Readiness     []HealthCondition  `json:"readiness"`
+}
+
+type ObservationHealth struct {
+	Enabled       bool      `json:"enabled"`
+	Pending       int       `json:"pending"`
+	Dropped       int64     `json:"dropped"`
+	Written       int64     `json:"written"`
+	WriteFailures int64     `json:"writeFailures"`
+	Purged        int64     `json:"purged"`
+	QuotaBytes    int64     `json:"quotaBytes"`
+	RetainedFrom  time.Time `json:"retainedFrom,omitzero"`
+	LastWrite     time.Time `json:"lastWrite,omitzero"`
+	LastPurge     time.Time `json:"lastPurge,omitzero"`
+	Available     bool      `json:"available"`
+}
+
+type HealthCondition struct {
+	Name   string `json:"name"`
+	Ready  bool   `json:"ready"`
+	Detail string `json:"detail,omitempty"`
 }
 
 type QueueHealth struct {
@@ -38,7 +60,9 @@ func (t *Tenant) Health(now time.Time) TenantHealth {
 func (t *Tenant) health(now time.Time) TenantHealth {
 	if fault := t.fault.Load(); fault != nil {
 		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: Started,
-			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []platform.Breaker{}}
+			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []platform.Breaker{},
+			Observations: ObservationHealth{Dropped: t.observationDropped.Load()},
+			Readiness:    []HealthCondition{{Name: "journal", Ready: false, Detail: fault.Reason}, {Name: "observations", Ready: false, Detail: "tenant is quarantined"}, {Name: "work-loop", Ready: false, Detail: "tenant is quarantined"}}}
 	}
 	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.workLoop().Deferred(now), Breakers: t.Breakers(now)}
 	if h.Deferred == nil {
@@ -81,6 +105,39 @@ func (t *Tenant) health(now time.Time) TenantHealth {
 	}
 	if t.console.Suspended() {
 		h.Status = "suspended"
+	}
+	t.observationMu.Lock()
+	h.Observations = ObservationHealth{
+		Enabled: t.logRetentionDays() > 0, Pending: len(t.observationPending),
+		Dropped: t.observationDropped.Load(), Written: t.observationWritten.Load(),
+		WriteFailures: t.observationFailed.Load(), Purged: t.observationPurged.Load(),
+		QuotaBytes: t.logQuotaBytes(),
+	}
+	if last := t.observationLastWrite.Load(); last > 0 {
+		h.Observations.LastWrite = time.Unix(0, last).UTC()
+	}
+	if last := t.observationLastPurge.Load(); last > 0 {
+		h.Observations.LastPurge = time.Unix(0, last).UTC()
+	}
+	t.observationMu.Unlock()
+	if page, err := t.store().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: now, Limit: 1}); err == nil {
+		h.Observations.Available = true
+		h.Observations.RetainedFrom = page.Coverage.RetainedFrom
+	} else {
+		h.Observations.Available = false
+	}
+	journalReady := t.store() != nil
+	journalDetail := ""
+	if t.Store == nil {
+		journalDetail = "in-memory test store"
+	}
+	h.Readiness = []HealthCondition{
+		{Name: "journal", Ready: journalReady, Detail: journalDetail},
+		{Name: "observations", Ready: h.Observations.Available, Detail: map[bool]string{true: "", false: "operational log storage is unavailable"}[h.Observations.Available]},
+		{Name: "work-loop", Ready: !t.businessStopped(), Detail: map[bool]string{true: "", false: "business access is stopped"}[!t.businessStopped()]},
+	}
+	if !h.Observations.Available {
+		h.Status = "degraded"
 	}
 	return h
 }

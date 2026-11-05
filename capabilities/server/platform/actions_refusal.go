@@ -168,6 +168,7 @@ type Delivery struct {
 }
 
 type AuditEntry struct {
+	ID     string    `json:"id,omitempty"`
 	At     time.Time `json:"at"`
 	Member string    `json:"member"`
 	App    string    `json:"app"`
@@ -176,6 +177,7 @@ type AuditEntry struct {
 }
 
 type PersonalRead struct {
+	ID     string    `json:"id,omitempty"`
 	At     time.Time `json:"at"`
 	Member string    `json:"member"`
 	Type   string    `json:"type"`

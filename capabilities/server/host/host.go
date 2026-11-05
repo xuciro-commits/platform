@@ -48,6 +48,16 @@ type Tenant struct {
 	observationMu         sync.Mutex
 	observationPending    []platform.Observation
 	observationDropped    atomic.Int64
+	observationWritten    atomic.Int64
+	observationFailed     atomic.Int64
+	observationPurged     atomic.Int64
+	observationLastWrite  atomic.Int64
+	observationLastPurge  atomic.Int64
+	observationUsageDay   time.Time
+	observationUsageBytes int64
+	runIndexMu            sync.Mutex
+	runIndexAt            map[string]runIndexCache
+	runIndexGen           atomic.Int64
 	observationPurgeMu    sync.Mutex
 	lastObservationPurge  time.Time
 	controlAnswer         func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
@@ -136,6 +146,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	}
 	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: services.Kernel.Works(), work: automation.NewWorkBoard(),
 		connectors: newConnectorRoster(services.Kernel), records: records.NewStore()}
+	t.bindAuditStore()
 	t.mu.BindReadScope(t.beginRecordRead, t.closeRecordRead)
 	for i, app := range apps {
 		id := app.Manifest().ID

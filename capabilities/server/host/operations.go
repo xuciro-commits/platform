@@ -14,6 +14,7 @@ import (
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -191,6 +192,12 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 	if task.State == "failed" {
 		t.failedWork("Delivery to "+task.App+" failed: "+task.Title, outcome, task.ID, now, replaying)
 	}
+	runStatus := "ok"
+	if outcome != "ok" {
+		runStatus = "failed"
+	}
+	t.observeOwnerRun(now, "run", task.Kind+":"+task.App+":"+task.ID, task.App, target(s), runStatus,
+		"Delivery to "+task.App, outcome)
 
 	t.enqueue(now)
 	return outcome
@@ -213,6 +220,11 @@ func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) strin
 	t.opsMu.Lock()
 	task.Attempts, task.Last, task.Due, task.Error = int(generation), now, now.Add(task.Job.Every), map[bool]string{true: "", false: outcome}[outcome == "ok"]
 	t.opsMu.Unlock()
+	runStatus := "ok"
+	if outcome != "ok" {
+		runStatus = "failed"
+	}
+	t.observeOwnerRun(now, "worker", "job:"+task.App+":"+task.ID, task.App, task.ID, runStatus, "Scheduled job "+task.Title, outcome)
 
 	t.enqueue(now)
 	return outcome
@@ -432,6 +444,43 @@ func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Tim
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
+	if app == controlowner.PlatformApp && strings.HasPrefix(name, "logPolicy/") {
+		targetApp := strings.TrimPrefix(name, "logPolicy/")
+		if t.app(targetApp) == nil {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		if !c.Replaying {
+			if refusal := validateLogPolicy(p.Value, now, t.platformSetting(controlowner.SettingLogLevel)); refusal != nil {
+				return nil, refusal
+			}
+		}
+		return func(*pb.ChangeRecord) { t.settings.Set(id, p.Value) }, nil
+	}
+	if !c.Replaying {
+		if name == controlowner.SettingLogQuota {
+			quota, err := strconv.Atoi(p.Value)
+			if err != nil || quota < 1 || quota > 1<<20 {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The daily log quota must be between 1 and 1048576 MiB")
+			}
+		}
+		if name == controlowner.SettingLogDebugUntil {
+			if p.Value != "" {
+				until, err := time.Parse(time.RFC3339, p.Value)
+				if err != nil || until.Before(now) || until.After(now.Add(30*time.Minute)) {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Temporary debug must end within the next 30 minutes")
+				}
+				if strings.TrimSpace(t.platformSetting(controlowner.SettingLogDebugReason)) == "" {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Temporary debug needs a reason")
+				}
+			}
+		}
+		if name == controlowner.SettingLogDebugReason && len(p.Value) > 500 {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Temporary debug reason is too long")
+		}
+		if name == controlowner.SettingLogLevel && p.Value == "debug" {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a temporary debug window instead of a permanent debug level")
+		}
+	}
 	i := slices.IndexFunc(a.Manifest().Settings, func(x platform.Setting) bool { return x.Name == name })
 	if i < 0 {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -465,6 +514,43 @@ func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Tim
 			t.settings.Set(platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingNext, "")
 		}
 	}, nil
+}
+
+type logPolicyValue struct {
+	Level         string `json:"level,omitempty"`
+	RetentionDays *int   `json:"retentionDays,omitempty"`
+	DebugUntil    string `json:"debugUntil,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+func validateLogPolicy(raw string, now time.Time, fallbackLevel string) *kernel.Error {
+	if strings.TrimSpace(raw) == "" {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A log policy needs a JSON object")
+	}
+	var policy logPolicyValue
+	if json.Unmarshal([]byte(raw), &policy) != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A log policy needs a JSON object")
+	}
+	if policy.Level != "" && !slices.Contains([]string{"info", "warn", "error", "debug"}, policy.Level) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose info, warn or error for a permanent level")
+	}
+	if policy.Level == "debug" {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a temporary debug window instead of a permanent debug level")
+	}
+	if policy.RetentionDays != nil && (*policy.RetentionDays < 0 || *policy.RetentionDays > 3650) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Retention must be between 0 and 3650 days")
+	}
+	if policy.DebugUntil != "" {
+		until, err := time.Parse(time.RFC3339, policy.DebugUntil)
+		if err != nil || until.Before(now) || until.After(now.Add(30*time.Minute)) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Temporary debug must end within the next 30 minutes")
+		}
+		if strings.TrimSpace(policy.Reason) == "" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Temporary debug needs a reason")
+		}
+	}
+	_ = fallbackLevel
+	return nil
 }
 
 func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {

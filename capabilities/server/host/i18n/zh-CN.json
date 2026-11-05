@@ -2715,5 +2715,21 @@
   "Constraints": "约束",
   "An RE2 regular expression the text must match; anchor it with ^ and $ for the whole value": "文本必须匹配的 RE2 正则表达式；用 ^ 和 $ 锚定整个值",
   "Rehome resources": "转移资源归属",
-  "Transfer resource ownership between projects or packages without changing their identity, definitions, records or history.": "在项目或软件包之间转移资源归属，不改变资源身份、定义、记录或历史。"
+  "Transfer resource ownership between projects or packages without changing their identity, definitions, records or history.": "在项目或软件包之间转移资源归属，不改变资源身份、定义、记录或历史。",
+  "The daily log quota must be between 1 and 1048576 MiB": "每日日志配额必须在 1 到 1048576 MiB 之间",
+  "Temporary debug must end within the next 30 minutes": "临时调试必须在未来 30 分钟内结束",
+  "Temporary debug needs a reason": "临时调试需要填写原因",
+  "Temporary debug reason is too long": "临时调试原因过长",
+  "Use a temporary debug window instead of a permanent debug level": "请使用临时调试窗口，不要设置永久 debug 级别",
+  "A log policy needs a JSON object": "日志策略需要 JSON 对象",
+  "Choose info, warn or error for a permanent level": "永久级别请选择 info、warn 或 error",
+  "Retention must be between 0 and 3650 days": "保留期必须在 0 到 3650 天之间",
+  "The lowest severity written for this tenant. Debug is available only through a temporary window.": "此租户写入的最低级别。debug 只能通过临时窗口启用。",
+  "The maximum operational-log volume a tenant may write in a UTC day; lower-priority events are discarded first.": "租户在 UTC 一天内可写入的运营日志上限；较低优先级事件会先被丢弃。",
+  "RFC 3339 instant no more than 30 minutes ahead; empty leaves debug off.": "RFC 3339 时间点，最多未来 30 分钟；留空表示关闭调试。",
+  "Why debug capture is temporarily widened; recorded for audit.": "临时扩大调试采集的原因；会记录到审计。",
+  "Log level": "日志级别",
+  "Daily log quota (MiB)": "每日日志配额（MiB）",
+  "Temporary debug until": "临时调试截止时间",
+  "Temporary debug reason": "临时调试原因"
 }

@@ -76,9 +76,20 @@ func (t *Tenant) pipelineResult(member platform.Member, p build.Pipeline, run bu
 		key = "pipeline:" + run.Execution.ID + ":" + phase
 	}
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	_, err := t.submitAccepted(t.app(build.ID), member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, ExpectedRevision: revision,
 		Target: &pb.EntityRef{Type: build.PipelineType, Id: p.ID}, Schema: &pb.SchemaRef{Name: build.SchemaPipelineRan, Version: 1}, Payload: payload}, now, true)
+	t.mu.Unlock()
+	if phase == "finished" {
+		status, detail := "ok", run.Error
+		if run.Error != "" || err != nil {
+			status = "failed"
+			if detail == "" && err != nil {
+				detail = err.Error()
+			}
+		}
+		t.observeOwnerRun(now, "worker", "pipeline:"+build.ID+":"+p.ID+":"+now.UTC().Format(time.RFC3339Nano), build.ID,
+			"pipeline/"+p.Name, status, "Pipeline "+p.Title, detail)
+	}
 	return err
 }
 
