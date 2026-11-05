@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600" role="img" aria-labelledby="title desc">
+  <title id="title">Platform system map</title>
+  <desc id="desc">Source systems enter one multi-tenant Go host through data integration, ontology, logic and applications. Governance and AI cross every layer. Product versions are delivered through Marketplace to customer tenants.</desc>
+  <style>
+    svg {
+      --canvas: #f5f7fa;
+      --panel: #ffffff;
+      --panel-soft: #f9fbfd;
+      --line: #d7dde5;
+      --line-strong: #b7c0cc;
+      --text: #17202b;
+      --muted: #687385;
+      --accent: #2d72d2;
+      --accent-soft: #eaf2fd;
+      --accent-line: #b8d2f5;
+      --success: #2f7d4d;
+      --success-soft: #eaf6ef;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --canvas: #0d1117;
+        --panel: #151b23;
+        --panel-soft: #111821;
+        --line: #2a3441;
+        --line-strong: #475466;
+        --text: #f0f4f8;
+        --muted: #98a4b3;
+        --accent: #4c90f0;
+        --accent-soft: #142944;
+        --accent-line: #244b7e;
+        --success: #61bd85;
+        --success-soft: #12291d;
+      }
+    }
+    .bg { fill: var(--canvas); }
+    .panel { fill: var(--panel); stroke: var(--line); }
+    .soft { fill: var(--panel-soft); stroke: var(--line); }
+    .accent-soft { fill: var(--accent-soft); stroke: var(--accent-line); }
+    .success-soft { fill: var(--success-soft); stroke: var(--success); }
+    .rule { stroke: var(--line); }
+    .strong-rule { stroke: var(--line-strong); }
+    .accent-rule { stroke: var(--accent); }
+    .title { fill: var(--text); font-size: 24px; font-weight: 650; }
+    .eyebrow { fill: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 1.7px; }
+    .section { fill: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 1.45px; }
+    .heading { fill: var(--text); font-size: 15px; font-weight: 650; }
+    .body { fill: var(--muted); font-size: 12.5px; }
+    .small { fill: var(--muted); font-size: 11.5px; }
+    .accent { fill: var(--accent); }
+    .success { fill: var(--success); }
+    .caption { fill: var(--muted); font-size: 12px; }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 8 8" refX="6.5" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L8 4L0 8Z" fill="var(--accent)"/>
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 8 8" refX="6.5" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L8 4L0 8Z" fill="var(--line-strong)"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="1" y="1" width="1198" height="598" rx="18"/>
+
+  <text class="eyebrow" x="32" y="42">PLATFORM / SYSTEM MAP</text>
+  <text class="title" x="32" y="76">One governed path from source data to a delivered application.</text>
+
+  <!-- Sources -->
+  <text class="section" x="44" y="128">SOURCES</text>
+  <g>
+    <rect class="soft" x="24" y="146" width="220" height="48" rx="8"/>
+    <text class="heading" x="42" y="168">ERP · CRM · MES</text>
+    <text class="small" x="42" y="184">business systems</text>
+
+    <rect class="soft" x="24" y="202" width="220" height="48" rx="8"/>
+    <text class="heading" x="42" y="224">Databases</text>
+    <text class="small" x="42" y="240">operational data</text>
+
+    <rect class="soft" x="24" y="258" width="220" height="48" rx="8"/>
+    <text class="heading" x="42" y="280">Files · events</text>
+    <text class="small" x="42" y="296">batch and streaming</text>
+
+    <rect class="soft" x="24" y="314" width="220" height="48" rx="8"/>
+    <text class="heading" x="42" y="336">Identity provider</text>
+    <text class="small" x="42" y="352">verified principals</text>
+  </g>
+  <path d="M244 260 H270" class="accent-rule" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Host -->
+  <rect class="panel" x="270" y="100" width="680" height="448" rx="13"/>
+  <text class="section" x="294" y="128">PLATFORM HOST</text>
+  <rect class="accent-soft" x="768" y="112" width="158" height="24" rx="12"/>
+  <text class="accent" x="786" y="128" font-size="10.5" font-weight="700" letter-spacing="1">ONE GO PROCESS</text>
+
+  <!-- Four stages -->
+  <g>
+    <rect class="accent-soft" x="294" y="148" width="138" height="184" rx="9"/>
+    <circle class="accent" cx="316" cy="174" r="4"/>
+    <text class="heading" x="330" y="179">Data</text>
+    <text class="body" x="312" y="210">Connections</text>
+    <text class="body" x="312" y="236">Datasets</text>
+    <text class="body" x="312" y="262">Pipelines</text>
+    <text class="body" x="312" y="288">Writebacks</text>
+
+    <rect class="soft" x="450" y="148" width="138" height="184" rx="9"/>
+    <circle class="accent" cx="472" cy="174" r="4"/>
+    <text class="heading" x="486" y="179">Ontology</text>
+    <text class="body" x="468" y="210">Object types</text>
+    <text class="body" x="468" y="236">Links · interfaces</text>
+    <text class="body" x="468" y="262">Actions</text>
+    <text class="body" x="468" y="288">Value types</text>
+
+    <rect class="soft" x="606" y="148" width="138" height="184" rx="9"/>
+    <circle class="accent" cx="628" cy="174" r="4"/>
+    <text class="heading" x="642" y="179">Logic</text>
+    <text class="body" x="624" y="210">Functions</text>
+    <text class="body" x="624" y="236">Rules</text>
+    <text class="body" x="624" y="262">Automations</text>
+    <text class="body" x="624" y="288">Schedules</text>
+
+    <rect class="soft" x="762" y="148" width="138" height="184" rx="9"/>
+    <circle class="accent" cx="784" cy="174" r="4"/>
+    <text class="heading" x="798" y="179">Experience</text>
+    <text class="body" x="780" y="210">Workshop</text>
+    <text class="body" x="780" y="236">Object Explorer</text>
+    <text class="body" x="780" y="262">AIP Assist</text>
+    <text class="body" x="780" y="288">Object views</text>
+  </g>
+  <path d="M432 240 H448" class="accent-rule" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M588 240 H604" class="accent-rule" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M744 240 H760" class="accent-rule" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Governance and runtime band -->
+  <rect class="soft" x="294" y="352" width="606" height="62" rx="9"/>
+  <text class="section" x="312" y="377">GOVERNANCE + AI · ACROSS EVERY LAYER</text>
+  <text class="body" x="312" y="398">Authorization · markings · branches · audit · releases · monitoring · model gateway</text>
+
+  <!-- Runtime services -->
+  <g>
+    <rect class="soft" x="294" y="428" width="194" height="92" rx="9"/>
+    <text class="heading" x="312" y="457">PostgreSQL</text>
+    <text class="small" x="312" y="478">accepted results</text>
+    <text class="small" x="312" y="495">tenant projections</text>
+
+    <rect class="soft" x="500" y="428" width="194" height="92" rx="9"/>
+    <text class="heading" x="518" y="457">S3-compatible</text>
+    <text class="small" x="518" y="478">files · datasets</text>
+    <text class="small" x="518" y="495">immutable artifacts</text>
+
+    <rect class="soft" x="706" y="428" width="194" height="92" rx="9"/>
+    <text class="heading" x="724" y="457">Isolated compute</text>
+    <text class="small" x="724" y="478">controlled compile</text>
+    <text class="small" x="724" y="495">separate process</text>
+  </g>
+
+  <!-- Delivery -->
+  <text class="section" x="984" y="128">DELIVERY</text>
+  <g>
+    <rect class="soft" x="970" y="146" width="206" height="48" rx="8"/>
+    <text class="heading" x="988" y="168">Project contents</text>
+    <text class="small" x="988" y="184">resources · dependencies</text>
+
+    <rect class="soft" x="970" y="202" width="206" height="48" rx="8"/>
+    <text class="heading" x="988" y="224">Product version</text>
+    <text class="small" x="988" y="240">immutable · tested</text>
+
+    <rect class="soft" x="970" y="258" width="206" height="48" rx="8"/>
+    <text class="heading" x="988" y="280">Marketplace</text>
+    <text class="small" x="988" y="296">install · upgrade</text>
+
+    <rect class="success-soft" x="970" y="314" width="206" height="48" rx="8"/>
+    <text class="heading" x="988" y="336">Customer tenant</text>
+    <text class="small" x="988" y="352">extend without forking</text>
+  </g>
+  <path d="M912 240 H940 V226 H962" class="accent-rule" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text class="caption" x="920" y="222">publish</text>
+  <path d="M1073 196 V200" class="strong-rule" stroke-width="1.25" fill="none" marker-end="url(#arrow-muted)"/>
+  <path d="M1073 252 V256" class="strong-rule" stroke-width="1.25" fill="none" marker-end="url(#arrow-muted)"/>
+  <path d="M1073 308 V312" class="strong-rule" stroke-width="1.25" fill="none" marker-end="url(#arrow-muted)"/>
+
+  <text class="caption" x="294" y="574">Every read and write crosses one authorization decision. Every authoritative write becomes an accepted result.</text>
+  <circle class="success" cx="938" cy="570" r="3"/>
+  <text class="caption" x="948" y="574">History stays replayable</text>
+</svg>
