@@ -134,7 +134,7 @@ read-when: 新增导航项、应用、资源类型、页面或路由，调整 Fi
 
 ## 现存差距
 
-- Object Explorer 主路径已统一为 ObjectSet，并支持分页与按字段计数；`work.view` 版本化状态和完整 `build.query` 发布合同仍在路线图 D1。
+无。
 
 ## 相关
 

@@ -299,6 +299,8 @@ func definitionReleaseAsset(ref platform.AssetRef, version string, definition an
 	contract := 1
 	if link, ok := any(definition).(platform.LinkType); ok {
 		contract = link.Contract()
+	} else if query, ok := any(definition).(platform.NamedQuery); ok {
+		contract = query.ContractVersion()
 	}
 	return platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
 }

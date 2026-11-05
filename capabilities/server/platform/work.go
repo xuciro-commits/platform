@@ -78,6 +78,7 @@ const (
 	WorkTaskType              = "work.task"
 	WorkApprovalType          = "work.approval"
 	WorkViewType              = "work.view"
+	WorkViewStateVersion      = 1
 	MonitoringViewType        = "monitoring.view"
 	WorkApprovalRequestSchema = "work.approval.request"
 )
@@ -167,6 +168,50 @@ type SavedView struct {
 	Entity string `json:"entity" field:"required,readonly" source:"record"`
 	State  string `json:"state" type:"longtext"`
 	Owner  string `json:"owner" field:"readonly" source:"record"`
+}
+
+func workViewState(raw string) (map[string]json.RawMessage, int, error) {
+	raw = strings.TrimSpace(raw)
+	state := map[string]json.RawMessage{}
+	if raw == "" {
+		return state, 0, nil
+	}
+	if json.Unmarshal([]byte(raw), &state) != nil || state == nil {
+		return nil, 0, fmt.Errorf("saved view state must be a JSON object")
+	}
+	encoded, exists := state["version"]
+	if !exists {
+		return state, 0, nil
+	}
+	var version int
+	if json.Unmarshal(encoded, &version) != nil {
+		return nil, 0, fmt.Errorf("saved view state version must be an integer")
+	}
+	if version != 0 && version != WorkViewStateVersion {
+		return nil, 0, fmt.Errorf("saved view state version %d is not supported", version)
+	}
+	return state, version, nil
+}
+
+func CheckWorkViewState(raw string) error {
+	_, _, err := workViewState(raw)
+	return err
+}
+
+func UpgradeWorkViewState(raw string) (string, error) {
+	state, version, err := workViewState(raw)
+	if err != nil {
+		return "", err
+	}
+	if version == WorkViewStateVersion {
+		return strings.TrimSpace(raw), nil
+	}
+	state["version"] = json.RawMessage("1")
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
 }
 
 type AcceptedEventPlan struct {

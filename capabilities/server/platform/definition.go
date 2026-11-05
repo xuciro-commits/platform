@@ -57,6 +57,10 @@ type NamedQuery struct {
 	Limit           int             `json:"limit,omitempty"`
 }
 
+const ObjectSetContractVersion = 1
+
+func (q NamedQuery) ContractVersion() int { return ObjectSetContractVersion }
+
 type AssetRef struct {
 	App  string    `json:"app"`
 	Kind AssetKind `json:"kind"`

@@ -4,8 +4,9 @@ import type { Api } from "@platform/kernel";
 import { Compass } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type ExplorationState = { version?: 1; kind: "exploration"; entity: string; current?: string; recordId?: string; selectedType?: string; filters?: Record<string, string[]>; set?: Api.ObjectSet };
-type ListViewState = ListState & { kind?: "list" };
+type ViewStateVersion = 0 | 1;
+type ExplorationState = { version?: ViewStateVersion; kind: "exploration"; entity: string; current?: string; recordId?: string; selectedType?: string; filters?: Record<string, string[]>; set?: Api.ObjectSet };
+type ListViewState = ListState & { version?: ViewStateVersion; kind?: "list" };
 
 function SaveExplorationDialog({ entity, current, recordId, selectedType, set, onClose }: { entity: string; current?: string; recordId?: string; selectedType?: string; set?: Api.ObjectSet; onClose: () => void }) {
   const { decide } = useHost(), { open } = useWorkspace();
@@ -43,7 +44,7 @@ function SaveListDialog({ entity, state, onClose }: { entity: string; state: Lis
     setBusy(true);
     try {
       const id = newId("VIEW");
-      const payload: ListViewState = { ...state, kind: "list" };
+      const payload: ListViewState = { ...state, version: 1, kind: "list" };
       if (await decide("work.view.save", { type: "work.view", id }, { title, entity, state: JSON.stringify(payload) })) {
         onClose();
         open({ view: "explorer", params: { saved: id } });

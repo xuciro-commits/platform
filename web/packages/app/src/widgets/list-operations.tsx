@@ -23,7 +23,7 @@ export function SaveViewDialog({ type, state, saved, onClose }: { type: string; 
     setBusy(true);
     try {
       const id = saved?.id ?? newId("VIEW");
-      if (await decide("work.view.save", { type: "work.view", id }, { title, entity: type, state: JSON.stringify(state) })) {
+      if (await decide("work.view.save", { type: "work.view", id }, { title, entity: type, state: JSON.stringify({ ...state, version: 1 }) })) {
         onClose();
         if (!saved) open({ view: "saved", params: { id } });
       }

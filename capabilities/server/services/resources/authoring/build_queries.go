@@ -77,6 +77,7 @@ var queryKind = resourceKind[Query, platform.NamedQuery]{
 	description: "A saved object set over a published object or interface; reads use the shared ObjectSet executor and the caller’s permissions.",
 	transition:  "Publish this object set as its next retained version.",
 	immutable:   "A published query keeps its name and source object",
+	contract:    func(platform.NamedQuery) int { return platform.ObjectSetContractVersion },
 	records:     func(b *Build) map[string]Query { return b.queries },
 	validate:    validateQuery,
 	identity: func(a, b Query) bool {

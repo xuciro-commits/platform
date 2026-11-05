@@ -500,7 +500,11 @@ func (w *Work) view(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord)
 	if json.Unmarshal(s.GetPayload(), &p) != nil || exists && p.Entity != v.Entity {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	v.ID, v.Title, v.Entity, v.State, v.Owner, v.Archived = id, p.Title, p.Entity, p.State, c.ID, false
+	state, err := platform.UpgradeWorkViewState(p.State)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	v.ID, v.Title, v.Entity, v.State, v.Owner, v.Archived = id, p.Title, p.Entity, state, c.ID, false
 	if err := c.Check(v); err != nil {
 		return nil, err
 	}
@@ -513,7 +517,15 @@ func (w *Work) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	}
 	if name == "views" {
 		mine, _ := json.Marshal([]any{[]any{"owner", "=", c.ID}})
-		out, _, _ := platform.Find[SavedView](c, platform.Query{Domain: mine, Sort: []string{"title"}})
+		out, _, err := platform.Find[SavedView](c, platform.Query{Domain: mine, Sort: []string{"title"}})
+		if err != nil {
+			return nil, err
+		}
+		for _, view := range out {
+			if err := platform.CheckWorkViewState(view.State); err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+		}
 		return out, nil
 	}
 	mine, _ := json.Marshal([]any{[]any{"requester", "=", c.ID}})
