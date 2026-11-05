@@ -18,15 +18,15 @@ type NativeDetails struct {
 func (a Authorizer) Native(c platform.Caller, permission, kind string, allowed []string, declared bool, details ...NativeDetails) platform.AuthzDecision {
 	c.Member = a.Member(c.Member)
 	pass := passGate("not restricted by this owner")
-	context := &platform.AuthorizationContext{Tenant: platform.AuthorizationGate{Allowed: c.Tenant == a.Tenant, Reason: "The operation belongs to another tenant"}, Principal: platform.AuthorizationGate{Allowed: c.ID != "" && c.Active(), Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass}
-	if current, known := a.LookupMember(c.ID); known && !current.Active() {
+	context := &platform.AuthorizationContext{Tenant: platform.AuthorizationGate{Allowed: c.Tenant == a.sources.Tenant(), Reason: "The operation belongs to another tenant"}, Principal: platform.AuthorizationGate{Allowed: c.ID != "" && c.Active(), Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass}
+	if current, known := a.sources.LookupMember(c.ID); known && !current.Active() {
 		context.Principal.Allowed = false
 	}
-	if c.Agent && a.AgentSuspended(c.ID) {
+	if c.Agent && a.sources.AgentSuspended(c.ID) {
 		context.Principal.Allowed = false
 	}
-	owner := a.App(c.App)
-	if owner == nil || !declared || !a.OwnerActive(c.App) {
+	owner := a.sources.App(c.App)
+	if owner == nil || !declared || !a.sources.OwnerActive(c.App) {
 		context.Verb = &platform.AuthorizationGate{Reason: "The operation is unavailable in its owner declaration"}
 	}
 	var policies []platform.AuthorizationPolicy
@@ -41,16 +41,16 @@ func (a Authorizer) Native(c platform.Caller, permission, kind string, allowed [
 		}
 		store := detail.Store
 		if store == nil {
-			store = a.Store
+			store = a.sources.Store()
 		}
 		at := detail.At
 		if at.IsZero() {
-			at = a.Now()
+			at = a.sources.Now()
 		}
 		walk := NewTraversal()
 		for _, source := range detail.Sources {
 			if name, named := strings.CutPrefix(source, "read:"); named {
-				if !a.NamedReadAllowed(c.Member, name) {
+				if !a.sources.NamedReadAllowed(c.Member, name) {
 					context.Derived = platform.AuthorizationGate{Reason: "The original source is outside the caller's permissions"}
 					break
 				}
@@ -69,19 +69,19 @@ func (a Authorizer) Native(c platform.Caller, permission, kind string, allowed [
 			}
 		}
 	}
-	return a.Decider.Decide(platform.AuthorizationInput{Kind: kind, Subject: platform.AuthorizationSubject{ID: c.ID, App: c.App, Roles: c.RolesHere(), Agent: c.Agent, Automation: c.Automation}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": c.ID, "app": c.App}, Context: context}, policies...)
+	return a.sources.Engine().Decide(platform.AuthorizationInput{Kind: kind, Subject: platform.AuthorizationSubject{ID: c.ID, App: c.App, Roles: c.RolesHere(), Agent: c.Agent, Automation: c.Automation}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": c.ID, "app": c.App}, Context: context}, policies...)
 }
 
 func (a Authorizer) Entry(m platform.Member, app, permission, kind string, at time.Time) platform.AuthzDecision {
 	m = a.Member(m)
 	pass := passGate("not restricted by this owner")
-	context := &platform.AuthorizationContext{Tenant: platform.AuthorizationGate{Allowed: m.Tenant == a.Tenant, Reason: "The operation belongs to another tenant"}, Principal: platform.AuthorizationGate{Allowed: m.ID != "" && m.Active(), Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass}
-	if current, known := a.LookupMember(m.ID); known && !current.Active() {
+	context := &platform.AuthorizationContext{Tenant: platform.AuthorizationGate{Allowed: m.Tenant == a.sources.Tenant(), Reason: "The operation belongs to another tenant"}, Principal: platform.AuthorizationGate{Allowed: m.ID != "" && m.Active(), Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass}
+	if current, known := a.sources.LookupMember(m.ID); known && !current.Active() {
 		context.Principal.Allowed = false
 	}
 	allowed := []string{}
 	var policies []platform.AuthorizationPolicy
-	if owner := a.App(app); owner != nil {
+	if owner := a.sources.App(app); owner != nil {
 		allowed = owner.Manifest().AllRoles()
 		if kind == "read" && slices.Contains(owner.Manifest().Everyone, permission) {
 			allowed = []string{platform.AnyMember}
@@ -89,10 +89,10 @@ func (a Authorizer) Entry(m platform.Member, app, permission, kind string, at ti
 		policies = owner.Manifest().Actions.AuthorizationPolicies()
 		context.Definition, _ = platform.CanonicalDigest([]any{app, owner.Manifest().Version, permission, kind, allowed})
 		if name, input := strings.CutPrefix(permission, "input:"); input {
-			if a.InputGranted(m, app, name) {
+			if a.sources.InputGranted(m, app, name) {
 				allowed = []string{platform.AnyMember}
 			}
 		}
 	}
-	return a.Decider.Decide(platform.AuthorizationInput{Kind: kind, Subject: platform.AuthorizationSubject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": m.ID, "app": app}, Context: context}, policies...)
+	return a.sources.Engine().Decide(platform.AuthorizationInput{Kind: kind, Subject: platform.AuthorizationSubject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": m.ID, "app": app}, Context: context}, policies...)
 }

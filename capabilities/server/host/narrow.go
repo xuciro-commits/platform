@@ -72,7 +72,7 @@ func (t *Tenant) narrowable(et *records.Type) []string {
 }
 
 func fieldName(typ reflect.Type, path []int) string {
-	return objects.FieldName(typ, path)
+	return platform.FieldName(typ, path)
 }
 
 func (t *Tenant) narrowedSource(m platform.Member, v any, now time.Time, held bool, source string) any {

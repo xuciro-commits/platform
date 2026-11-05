@@ -31,15 +31,7 @@ func (t *Owner) narrowable(et *records.Type) []string {
 	return out
 }
 
-func fieldName(t reflect.Type, path []int) string {
-	if len(path) == 0 {
-		return ""
-	}
-	name, _, _ := strings.Cut(t.FieldByIndex(path).Tag.Get("json"), ",")
-	return name
-}
-
-func FieldName(t reflect.Type, path []int) string { return fieldName(t, path) }
+func fieldName(t reflect.Type, path []int) string { return platform.FieldName(t, path) }
 
 func (t *Owner) narrowed(m platform.Member, v any, now time.Time, held bool) any {
 	return t.narrowedSource(m, v, now, held, "")

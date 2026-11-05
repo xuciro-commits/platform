@@ -303,6 +303,14 @@ type FieldInfo struct {
 	Index        []int             `json:"-"`
 }
 
+func FieldName(typ reflect.Type, path []int) string {
+	if len(path) == 0 {
+		return ""
+	}
+	name, _, _ := strings.Cut(typ.FieldByIndex(path).Tag.Get("json"), ",")
+	return name
+}
+
 type FieldCondition struct {
 	Field string   `json:"field"`
 	In    []string `json:"in"`

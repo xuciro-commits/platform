@@ -17,24 +17,31 @@ type RecordMarkings interface {
 }
 
 type Authorizer struct {
-	Store             *records.Store
-	Now               func() time.Time
-	AgentSuspended    func(string) bool
-	OwnerActive       func(string) bool
-	NamedReadAllowed  func(platform.Member, string) bool
-	InputGranted      func(platform.Member, string, string) bool
-	Tenant            string
-	Decider           platform.AuthorizationEngine
-	Member            func(platform.Member) platform.Member
-	LookupMember      func(string) (platform.Member, bool)
-	App               func(string) platform.App
-	ActionOwner       func(string) platform.App
-	KnowledgeReadable func(*records.Store, platform.Member, string, string) bool
-	ScopePolicy       func(*records.Store, platform.Caller, platform.EntityInfo, time.Time, int, *Traversal) (*records.RowFilter, *kernel.Error)
-	SourceWithheld    func(*records.Store, platform.Caller, *records.Type, reflect.Value, []string, time.Time, int, *Traversal) []string
-	ElementExists     func(string, time.Time) bool
-	ProjectAccess     func(*records.Store, platform.Member, string, string, string, bool) (bool, bool)
-	Markings          func(*records.Store, bool) RecordMarkings
+	sources Sources
+}
+
+func NewAuthorizer(sources Sources) Authorizer {
+	return Authorizer{sources: sources}
+}
+
+func (a Authorizer) Member(m platform.Member) platform.Member {
+	m = m.WithAuthorization(a.sources.Engine())
+	current, known := a.sources.LookupMember(m.ID)
+	if !known {
+		if !a.sources.DeclaredPrincipal(m.ID) {
+			m.Roles, m.Grants, m.Status = map[string]string{}, nil, platform.MemberLeft
+		}
+		return m
+	}
+	roles := map[string]string{}
+	for app, role := range current.Roles {
+		if m.Holds(app, role) {
+			roles[app] = role
+		}
+	}
+	grants := slices.DeleteFunc(slices.Clone(current.Grants), func(grant platform.Grant) bool { return !m.Holds(grant.App, grant.Role) })
+	m.Roles, m.Grants, m.Status = roles, grants, current.Status
+	return m
 }
 
 func passGate(reason string) platform.AuthorizationGate {
@@ -63,9 +70,9 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 	}
 	pass := passGate("not restricted by this owner")
 	context := &platform.AuthorizationContext{Tenant: pass, Principal: pass, Row: pass, Fields: pass, Derived: pass, Markings: pass}
-	context.Tenant = platform.AuthorizationGate{Allowed: q.Tenant == a.Tenant && c.Tenant == a.Tenant, Reason: "The operation belongs to another tenant"}
+	context.Tenant = platform.AuthorizationGate{Allowed: q.Tenant == a.sources.Tenant() && c.Tenant == a.sources.Tenant(), Reason: "The operation belongs to another tenant"}
 	context.Principal = platform.AuthorizationGate{Allowed: c.ID != "" && q.Principal == c.ID && c.Active(), Reason: "The operation principal is invalid or inactive"}
-	if current, known := a.LookupMember(c.ID); known && !current.Active() {
+	if current, known := a.sources.LookupMember(c.ID); known && !current.Active() {
 		context.Principal.Allowed = false
 	}
 	if depth >= 16 || cycle {
@@ -75,7 +82,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 	var policies []platform.AuthorizationPolicy
 	if q.Action != "" {
 		context.Verb = &platform.AuthorizationGate{Reason: "The operation is unavailable in its owner declaration"}
-		owner := a.ActionOwner(q.Action)
+		owner := a.sources.ActionOwner(q.Action)
 		if owner != nil {
 			facts, rules, ok := owner.Manifest().Actions.AuthorizationRequest(platform.RouteCaller(c, owner.Manifest().ID), q.Action, request.Resource)
 			if ok {
@@ -106,7 +113,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 				request.Permission = et.Info().Type + ".read"
 			}
 			request.Attributes = map[string]string{"member": c.ID, "app": et.Info().App, "target": et.Info().Type}
-			if owner := a.App(et.Info().App); owner != nil {
+			if owner := a.sources.App(et.Info().App); owner != nil {
 				policies = owner.Manifest().Actions.AuthorizationPolicies()
 			}
 			if et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil {
@@ -135,7 +142,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 			if c.Automation && c.App == et.Info().App {
 				context.Row = passGate("the declared owner service boundary")
 			} else if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
-				context.Row = platform.AuthorizationGate{Allowed: a.KnowledgeReadable(store, c.Member, q.Record, ""), Reason: "The document is outside the caller's source grants"}
+				context.Row = platform.AuthorizationGate{Allowed: a.sources.KnowledgeReadable(store, c.Member, q.Record, ""), Reason: "The document is outside the caller's source grants"}
 			} else if et.Info().Scope.Through != nil && (current == nil || depth >= 16 || cycle) {
 				context.Row = platform.AuthorizationGate{Reason: "The owning record is unavailable or exceeds 16 segments"}
 			} else {
@@ -148,7 +155,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 			}
 		}
 		if q.Record != "" {
-			allowed, projectRead := a.ProjectAccess(store, c.Member, q.Type, q.Record, q.Kind, held)
+			allowed, projectRead := a.sources.ProjectAccess(store, c.Member, q.Type, q.Record, q.Kind, held)
 			if !allowed {
 				context.Row = platform.AuthorizationGate{Reason: "The resource is outside the caller's project access"}
 			} else if projectRead && slices.Contains([]string{"read", "derive", "export"}, q.Kind) {
@@ -166,7 +173,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 			}
 			allowed := known && field.ReadsAny(c.RolesIn(et.Info().App), c.Rules()) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
 			if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
-				allowed = a.KnowledgeReadable(store, c.Member, q.Record, name)
+				allowed = a.sources.KnowledgeReadable(store, c.Member, q.Record, name)
 			}
 			if q.Kind == "write" || q.Kind == "create" {
 				if field.ReadOnly {
@@ -186,12 +193,13 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 			}
 		}
 		if current != nil && depth < 16 && !cycle && slices.Contains([]string{"read", "derive", "export"}, q.Kind) {
-			context.Withheld = append(context.Withheld, a.SourceWithheld(store, c, et, current.Value, q.Fields, at, depth, walk)...)
+			context.Withheld = append(context.Withheld, a.sourceWithheld(store, c, et, current.Value, q.Fields, at, depth, walk)...)
 		}
 	} else if q.Action == "" {
-		if q.Type == "enterprise.element" && a.ElementExists != nil && q.Record != "" {
+		directory := a.sources.Directory()
+		if q.Type == "enterprise.element" && directory != nil && q.Record != "" {
 			request.Allowed = []string{platform.AnyMember}
-			exists := a.ElementExists(q.Record, at)
+			_, exists := directory.Element(q.Record, at.UTC().Format(time.DateOnly))
 			context.Row = platform.AuthorizationGate{Allowed: exists, Reason: "The enterprise source is unavailable"}
 		} else {
 			context.Verb = &platform.AuthorizationGate{Reason: "The record type is unavailable"}
@@ -218,7 +226,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 		context.Derived = platform.AuthorizationGate{Allowed: readable, Reason: "The original source is outside the caller's permissions"}
 	}
 	if et != nil {
-		index := a.Markings(store, held)
+		index := a.sources.Markings(store, held)
 		if !(c.Automation && c.App == et.Info().App) && !(platform.MarkingSet{Level: index.Row(et.Info().Type, current), Compartments: index.Compartments(et.Info().Type, current)}).Cleared(c.Member) {
 			context.Markings = platform.AuthorizationGate{Reason: "The data carries a marking the caller is not cleared for"}
 		} else if q.Kind == "export" && index.Highest(et.Info().Type) == "restricted" {
@@ -231,10 +239,84 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 		context.Fields.Reason = "Some fields are withheld by field permissions or source grants"
 		context.Derived.Reason = "Derived content is limited to readable declared sources"
 	}
-	decision := a.Decider.Decide(request, policies...)
+	decision := a.sources.Engine().Decide(request, policies...)
 
 	if !cycle && depth < 16 {
 		walk.decisions[key] = decision
 	}
 	return decision
+}
+
+func (a Authorizer) ScopePolicy(store *records.Store, c platform.Caller, info platform.EntityInfo, at time.Time, depth int, walk *Traversal) (*records.RowFilter, *kernel.Error) {
+	through := func(v reflect.Value) bool {
+		typ, id, _ := strings.Cut(info.Scope.Through(v.Interface()), "/")
+		return a.Authorize(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at, true, depth+1, walk).Allow
+	}
+	return records.ScopePolicy(info, c.Member, a.sources.Directory(), at, through, c.Rules())
+}
+
+func (a Authorizer) sourceWithheld(store *records.Store, c platform.Caller, et *records.Type, value reflect.Value, fields []string, at time.Time, depth int, walk *Traversal) []string {
+	w := a.sources.DerivationSources(store, c.Member, at, true)
+	all := []string{}
+	for _, d := range et.Info().Derived {
+		if !d.All {
+			all = append(all, w.Sources(value, d)...)
+		}
+	}
+	withheld := []string{}
+	for _, alias := range et.Info().Fields {
+		if alias.AliasOf == "" || len(fields) > 0 && !slices.Contains(fields, alias.Name) {
+			continue
+		}
+		request := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: et.Info().Type, Record: records.Header(value).ID, Fields: []string{alias.AliasOf}}
+		grant := a.Authorize(store, c, request, at, true, depth+1, walk)
+		if !grant.Allow || len(grant.Withheld) > 0 {
+			withheld = append(withheld, alias.Name)
+		}
+	}
+	for _, d := range et.Info().Derived {
+		names := []string{}
+		if len(d.List) > 0 {
+			names = append(names, platform.FieldName(et.Info().Go, d.List))
+		} else {
+			for _, path := range d.Fields {
+				names = append(names, platform.FieldName(et.Info().Go, path))
+			}
+		}
+		if len(fields) > 0 && !slices.ContainsFunc(names, func(name string) bool { return slices.Contains(fields, name) }) {
+			continue
+		}
+		refs := all
+		if !d.All {
+			refs = w.Sources(value, d)
+		}
+		denied := len(refs) == 0 && slices.ContainsFunc(names, func(name string) bool {
+			field, known := et.Info().Field(name)
+			return known && field.SourceType == "generated" && !value.FieldByIndex(field.Index).IsZero()
+		})
+		for _, ref := range refs {
+			if ref == et.Info().Type+"/"+records.Header(value).ID {
+				continue
+			}
+			if name, named := strings.CutPrefix(ref, "read:"); named {
+				denied = denied || !a.sources.NamedReadAllowed(c.Member, name)
+				continue
+			}
+			record, field, _ := strings.Cut(ref, "#")
+			typ, id, _ := strings.Cut(record, "/")
+			sourceFields := []string{}
+			if field != "" {
+				sourceFields = append(sourceFields, field)
+			}
+			source := a.Authorize(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: typ, Record: id, Fields: sourceFields}, at, true, depth+1, walk)
+			denied = denied || !source.Allow || len(source.Withheld) > 0
+			if denied {
+				break
+			}
+		}
+		if denied {
+			withheld = append(withheld, names...)
+		}
+	}
+	return withheld
 }
