@@ -52,6 +52,16 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	}
 	submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": inspected.Digest})
 	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
+	views := target.app("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
+	var receipt *platform.PackageView
+	for i := range views {
+		if views[i].Descriptor.ID == descriptor.ID && views[i].Installed != nil && views[i].Installed.Version == descriptor.Version {
+			receipt = &views[i]
+		}
+	}
+	if receipt == nil || len(receipt.Plan.Steps) == 0 || receipt.Plan.Steps[0].Status != "installed" {
+		t.Fatalf("install closure receipt: %+v", receipt)
+	}
 
 	target.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "Keep my data"})
 	objectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}
@@ -101,5 +111,30 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	record = nil
 	if json.Unmarshal(platform.Raw(view.Record), &record) != nil || record["note"] != "Keep my data" {
 		t.Fatalf("replay changed customer data: %#v", record)
+	}
+
+	next := descriptor
+	next.Version = "1.1.0"
+	nextOffer, err := target.inspectPackage(context.Background(), platform.PackageInspectRequest{Content: platform.Raw(next)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	submit(packages.SchemaPackageImport, map[string]any{"id": next.ID, "digest": nextOffer.Digest})
+	submit(packages.SchemaPackageUpgrade, map[string]any{"id": next.ID, "version": next.Version})
+	submit(packages.SchemaPackageDowngrade, map[string]any{"id": next.ID, "version": descriptor.Version})
+	installedVersion := func() string {
+		for _, view := range target.app("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews() {
+			if view.Descriptor.ID == descriptor.ID && view.Installed != nil {
+				return view.Installed.Version
+			}
+		}
+		return ""
+	}
+	if version := installedVersion(); version != descriptor.Version {
+		t.Fatalf("downgrade installed %s, want %s", version, descriptor.Version)
+	}
+	submit(packages.SchemaPackageRollback, map[string]any{"id": next.ID, "version": next.Version})
+	if version := installedVersion(); version != next.Version {
+		t.Fatalf("rollback installed %s, want %s", version, next.Version)
 	}
 }

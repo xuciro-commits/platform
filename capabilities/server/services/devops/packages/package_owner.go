@@ -69,11 +69,13 @@ func (d *Owner) Prepare(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRec
 var _ platform.BlueprintCatalog = (*Owner)(nil)
 
 const (
-	SchemaPackageInstall  = "platform.package.install"
-	SchemaPackageUpgrade  = "platform.package.upgrade"
-	SchemaPackageDrain    = "platform.package.drain"
-	SchemaPackageRetire   = "platform.package.retire"
-	platformCompatibility = "1"
+	SchemaPackageInstall   = "platform.package.install"
+	SchemaPackageUpgrade   = "platform.package.upgrade"
+	SchemaPackageDowngrade = "platform.package.downgrade"
+	SchemaPackageRollback  = "platform.package.rollback"
+	SchemaPackageDrain     = "platform.package.drain"
+	SchemaPackageRetire    = "platform.package.retire"
+	platformCompatibility  = "1"
 )
 
 func Actions() []platform.Action {
@@ -87,6 +89,10 @@ func Actions() []platform.Action {
 			Description: "Precheck a package's requirements and register the contributions it brings.", Payload: fields, Roles: admin},
 		{Schema: SchemaPackageUpgrade, Target: platform.PackageType, Capability: "packages", Title: "Upgrade package",
 			Description: "Replace an installed package's version, keeping the artifact it replaced.", Payload: fields, Roles: admin},
+		{Schema: SchemaPackageDowngrade, Target: platform.PackageType, Capability: "packages", Title: "Downgrade package",
+			Description: "Switch to an older exact version only when its storage and extensions remain compatible; the replaced artifact stays retained.", Payload: fields, Roles: admin},
+		{Schema: SchemaPackageRollback, Target: platform.PackageType, Capability: "packages", Title: "Roll back package",
+			Description: "Restore the immediately previous retained version only when its storage and extensions remain compatible.", Payload: fields, Roles: admin},
 		{Schema: SchemaPackageDrain, Target: platform.PackageType, Capability: "packages", Title: "Mark package for uninstall",
 			Description: "Check dependent products and mark the package for uninstall. New use is not blocked until runtime draining is enabled; finish work in flight before retiring.",
 			Payload:     []platform.Field{{Name: "id", Type: "string", Required: true}}, Roles: admin},
@@ -374,6 +380,19 @@ func (d *Owner) verifySealedPackage(held platform.InstalledPackage) error {
 	return nil
 }
 
+func latestRetained(retained []platform.RetainedArtifact) (platform.RetainedArtifact, bool) {
+	if len(retained) == 0 {
+		return platform.RetainedArtifact{}, false
+	}
+	latest := retained[0]
+	for _, item := range retained[1:] {
+		if !item.At.Before(latest.At) {
+			latest = item
+		}
+	}
+	return latest, true
+}
+
 func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	if s.GetSchema().GetName() == SchemaPackageImport || s.GetSchema().GetName() == SchemaPackageRemoveSource {
 		return d.decidePackageSource(c, s)
@@ -407,7 +426,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		var archive func(*pb.ChangeRecord)
 		if schema == SchemaPackageRetire {
 			var refusal *kernel.Error
-			archive, refusal = d.host.PrepareManagedPackage(c, platform.PackageDescriptor{ID: p.ID}, nil, true)
+			archive, refusal = d.host.PrepareManagedPackage(c, platform.PackageDescriptor{ID: p.ID}, nil, true, false, false)
 			if refusal != nil {
 				return nil, refusal
 			}
@@ -424,11 +443,40 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	if indexErr != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package index cannot be read: {reason}", indexErr.Error())
 	}
-	descriptor, ok := index.Find(p.ID, p.Version)
+	rollback := schema == SchemaPackageRollback
+	prior := d.packagesOf()[p.ID]
+	var descriptor platform.PackageDescriptor
+	var ok bool
+	if rollback {
+		if prior == nil || prior.State == "retired" {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		previous, found := latestRetained(prior.Retained)
+		if !found || previous.Version != p.Version {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A rollback can only restore the immediately previous retained version")
+		}
+		sealed, err := d.sealedPackageDescriptor(p.ID, p.Version, previous.Digest)
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained package artifact is unavailable: {reason}", err.Error())
+		}
+		descriptor, ok = sealed, true
+		index = &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+		index.Packages = append(index.Packages, descriptor)
+	} else {
+		descriptor, ok = index.Find(p.ID, p.Version)
+	}
 	if !ok && p.Version != "" {
-		prior := d.packagesOf()[p.ID]
-		if prior != nil && prior.State == "retired" && prior.Artifact != "" {
-			sealed, err := d.sealedPackageDescriptor(p.ID, p.Version, prior.Artifact)
+		if prior != nil {
+			artifact := ""
+			if prior.Version == p.Version {
+				artifact = prior.Artifact
+			} else if i := slices.IndexFunc(prior.Retained, func(r platform.RetainedArtifact) bool { return r.Version == p.Version }); i >= 0 {
+				artifact = prior.Retained[i].Digest
+			}
+			if artifact == "" {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			}
+			sealed, err := d.sealedPackageDescriptor(p.ID, p.Version, artifact)
 			if err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained package artifact is unavailable: {reason}", err.Error())
 			}
@@ -451,11 +499,22 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The package {package} cannot be installed: {reason}", p.ID, strings.Join(pre.Problems, "; "))
 	}
 	upgrade := schema == SchemaPackageUpgrade
-	prior := d.packagesOf()[p.ID]
-	if upgrade {
+	downgrade := schema == SchemaPackageDowngrade
+	rollbackUpgrade := false
+	if upgrade || downgrade {
 		if prior == nil || prior.State == "retired" {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
+		direction := platform.ComparePackageVersions(descriptor.Version, prior.Version)
+		if upgrade && direction <= 0 || downgrade && direction >= 0 {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The requested version is not an {direction} from the installed version", map[bool]string{true: "upgrade", false: "downgrade"}[upgrade])
+		}
+	} else if rollback {
+		direction := platform.ComparePackageVersions(descriptor.Version, prior.Version)
+		if direction == 0 {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The retained version is already installed")
+		}
+		rollbackUpgrade = direction > 0
 	} else if prior != nil && prior.State != "retired" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} is already installed; upgrade it instead", p.ID)
 	}
@@ -472,7 +531,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	if assetErr != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", assetErr.Error())
 	}
-	install, refusal := d.host.PrepareManagedPackage(c, descriptor, available, false)
+	install, refusal := d.host.PrepareManagedPackage(c, descriptor, available, false, upgrade || rollbackUpgrade, downgrade || rollback && !rollbackUpgrade)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -540,7 +599,11 @@ func (d *Owner) PackageViews() []platform.PackageView {
 		if held := installed[descriptor.ID]; held != nil {
 			copy := *held
 			view.Installed = &copy
-			view.Update = held.State == "active" && platform.ComparePackageVersions(descriptor.Version, held.Version) > 0
+			direction := platform.ComparePackageVersions(descriptor.Version, held.Version)
+			view.Update = held.State == "active" && direction > 0
+			view.Downgrade = held.State == "active" && direction < 0
+			previous, found := latestRetained(held.Retained)
+			view.Rollback = held.State == "active" && direction != 0 && found && previous.Version == descriptor.Version
 			view.Removal = d.packageRemoval(descriptor.ID)
 		}
 		out = append(out, view)
@@ -564,6 +627,33 @@ func (d *Owner) PackageViews() []platform.PackageView {
 		pre = d.precheck(descriptor, sealedIndex)
 		copy := *held
 		out = append(out, platform.PackageView{Descriptor: descriptor, Installed: &copy, Precheck: pre, Plan: d.installationPlan(descriptor, sealedIndex), Source: "installed", Removal: d.packageRemoval(held.ID)})
+	}
+	for _, held := range installed {
+		if held.State != "active" {
+			continue
+		}
+		for _, retained := range held.Retained {
+			if listed[held.ID+"@"+retained.Version] {
+				continue
+			}
+			descriptor, err := d.sealedPackageDescriptor(held.ID, retained.Version, retained.Digest)
+			copy := *held
+			view := platform.PackageView{Source: "retained", Installed: &copy, Descriptor: descriptor}
+			view.Downgrade = err == nil && platform.ComparePackageVersions(retained.Version, held.Version) < 0
+			previous, found := latestRetained(held.Retained)
+			view.Rollback = err == nil && platform.ComparePackageVersions(retained.Version, held.Version) != 0 && found && previous.Version == retained.Version
+			if err != nil {
+				descriptor = platform.PackageDescriptor{ID: held.ID, Version: retained.Version, Namespace: held.Namespace, Title: held.Title}
+				view.Descriptor = descriptor
+				view.Precheck.Problems = []string{err.Error()}
+			} else {
+				sealedIndex := &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+				sealedIndex.Packages = append(sealedIndex.Packages, descriptor)
+				view.Descriptor, view.Precheck, view.Plan = descriptor, d.precheck(descriptor, sealedIndex), d.installationPlan(descriptor, sealedIndex)
+			}
+			listed[held.ID+"@"+retained.Version] = true
+			out = append(out, view)
+		}
 	}
 	slices.SortFunc(out, func(a, b platform.PackageView) int {
 		if a.Descriptor.ID != b.Descriptor.ID {

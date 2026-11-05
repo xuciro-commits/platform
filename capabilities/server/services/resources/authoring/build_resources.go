@@ -16,6 +16,7 @@ const FolderType = "build.folder"
 const SchemaResourceRegister = ResourceType + ".register"
 const SchemaResourceMove = ResourceType + ".move"
 const SchemaResourceMigrateProjects = ResourceType + ".migrate-projects"
+const SchemaResourceRehome = ResourceType + ".rehome"
 const WorkspaceProject = "workspace"
 
 type Resource struct {
@@ -81,6 +82,7 @@ func resourceActions(native []platform.Action) []platform.Action {
 		{Schema: SchemaResourceRegister, Target: ResourceType, Title: "Register resource", Description: "Record the stable identity and location of an existing resource.", Automation: true, Payload: []platform.Field{{Name: "resources", Type: "json", Required: true}}},
 		{Schema: SchemaResourceMove, Target: ResourceType, Title: "Move resource", Description: "Move a resource to a project or folder without changing its identity.", Capability: "resources", Roles: []string{Builder}, Payload: []platform.Field{{Name: "project", Type: "string", Required: true}, {Name: "folder", Type: "string"}}},
 		{Schema: SchemaResourceMigrateProjects, Target: ResourceType, Title: "Migrate resource projects", Description: "Assign unowned legacy resources to the only project that references them.", Automation: true, Payload: []platform.Field{{Name: "assignments", Type: "json", Required: true}}},
+		{Schema: SchemaResourceRehome, Target: ResourceType, Title: "Rehome resources", Description: "Transfer resource ownership between projects or packages without changing their identity, definitions, records or history.", Capability: "resources", Roles: []string{Builder}, Payload: []platform.Field{{Name: "entries", Type: "json", Required: true}}},
 	}
 	for i := range actions {
 		action := &actions[i]
@@ -149,6 +151,47 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 				for _, item := range input.Assignments {
 					resource, _ := platform.Get[Resource](c, item.ID)
 					resource.Project = item.Project
+					c.Put(r, resource)
+				}
+			}, nil
+		} else if s.GetSchema().GetName() == SchemaResourceRehome {
+			if !c.Replaying && !c.Holds("platform", "admin") {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rehoming resources requires a platform administrator")
+			}
+			var input struct {
+				Entries []struct {
+					ID        string `json:"id"`
+					Project   string `json:"project"`
+					ManagedBy string `json:"managedBy"`
+					Version   uint32 `json:"version"`
+				} `json:"entries"`
+			}
+			if json.Unmarshal(s.GetPayload(), &input) != nil || len(input.Entries) == 0 {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the resources, destination project and owner")
+			}
+			seen := map[string]bool{}
+			for _, item := range input.Entries {
+				resource, known := platform.Get[Resource](c, item.ID)
+				project, exists := platform.Get[Application](c, item.Project)
+				if !known || !exists || project.Archived || item.Project == "" || seen[item.ID] {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The resource ownership request is stale")
+				}
+				if item.Version != resource.Version {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The resource ownership request is stale")
+				}
+				if resource.Type == AppType && item.Project != resource.Project {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A project application keeps its project identity")
+				}
+				if resource.Folder != "" && item.Project != resource.Project {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Move the resource out of its folder before rehoming it")
+				}
+				seen[item.ID] = true
+			}
+			return func(r *pb.ChangeRecord) {
+				for _, item := range input.Entries {
+					resource, _ := platform.Get[Resource](c, item.ID)
+					resource.Project, resource.ManagedBy = item.Project, item.ManagedBy
+					resource.Version++
 					c.Put(r, resource)
 				}
 			}, nil

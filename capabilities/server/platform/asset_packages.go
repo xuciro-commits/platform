@@ -109,6 +109,8 @@ type Precheck struct {
 type PackageView struct {
 	Plan         PackageInstallPlan `json:"plan"`
 	Update       bool               `json:"update,omitempty"`
+	Downgrade    bool               `json:"downgrade,omitempty"`
+	Rollback     bool               `json:"rollback,omitempty"`
 	Origin       string             `json:"origin,omitempty"`
 	Product      string             `json:"product,omitempty"`
 	Candidate    string             `json:"candidate,omitempty"`
@@ -121,10 +123,13 @@ type PackageView struct {
 }
 
 type PackageInstallStep struct {
-	ID      string `json:"id"`
-	Version string `json:"version"`
-	Title   string `json:"title"`
-	Action  string `json:"action"`
+	ID               string `json:"id"`
+	Version          string `json:"version"`
+	Title            string `json:"title"`
+	Action           string `json:"action"`
+	Status           string `json:"status"`
+	InstalledVersion string `json:"installedVersion,omitempty"`
+	Problem          string `json:"problem,omitempty"`
 }
 
 type PackageResourceChange struct {
@@ -285,7 +290,7 @@ type PackageState struct {
 }
 
 type PackageHost interface {
-	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool) (func(*pb.ChangeRecord), *kernel.Error)
+	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *kernel.Error)
 	Apps() []App
 	CodeReleaseAssets() ([]ReleaseAsset, error)
 	PutPackageArtifact(string, []byte) error

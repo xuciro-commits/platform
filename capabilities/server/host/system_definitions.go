@@ -217,7 +217,7 @@ func (t *Tenant) applySystemDefinitionProjection() error {
 	if err := view.installSystemDefinitionProjection(projection, true); err != nil {
 		return err
 	}
-	if err := t.validateAssetStorage(view, false); err != nil {
+	if err := t.validateAssetStorage(view, false, false); err != nil {
 		return err
 	}
 	if err := t.anchorReleaseRecords(view.records); err != nil {
@@ -339,5 +339,5 @@ func (t *Tenant) checkSystemDefinitionProjection(projection *systemDefinitionPro
 	if err := view.installSystemDefinitionProjection(projection, true); err != nil {
 		return err
 	}
-	return t.validateAssetStorage(view, false)
+	return t.validateAssetStorage(view, false, false)
 }

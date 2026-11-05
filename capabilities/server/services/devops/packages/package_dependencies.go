@@ -209,19 +209,28 @@ func (d *Owner) installationPlan(root platform.PackageDescriptor, index *platfor
 	}
 	for _, descriptor := range ordered {
 		held, exists := installed[descriptor.ID]
+		step := platform.PackageInstallStep{ID: descriptor.ID, Version: descriptor.Version, Title: descriptor.Title}
 		if exists && held.Version == descriptor.Version {
-			continue
-		}
-		check := d.precheck(descriptor, index, ordered)
-		if len(check.Problems) > 0 {
-			plan.Problems = append(plan.Problems, check.Problems...)
+			step.Action, step.Status = SchemaPackageInstall, "installed"
+			plan.Steps = append(plan.Steps, step)
 			continue
 		}
 		action := SchemaPackageInstall
 		if exists {
-			action = SchemaPackageUpgrade
+			if platform.ComparePackageVersions(descriptor.Version, held.Version) < 0 {
+				action = SchemaPackageDowngrade
+			} else {
+				action = SchemaPackageUpgrade
+			}
+			step.InstalledVersion = held.Version
 		}
-		plan.Steps = append(plan.Steps, platform.PackageInstallStep{ID: descriptor.ID, Version: descriptor.Version, Title: descriptor.Title, Action: action})
+		step.Action, step.Status = action, "pending"
+		check := d.precheck(descriptor, index, ordered)
+		if len(check.Problems) > 0 {
+			step.Status, step.Problem = "failed", strings.Join(check.Problems, "; ")
+			plan.Problems = append(plan.Problems, check.Problems...)
+		}
+		plan.Steps = append(plan.Steps, step)
 	}
 	return plan
 }

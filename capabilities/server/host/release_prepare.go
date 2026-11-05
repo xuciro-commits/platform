@@ -336,7 +336,7 @@ func (r releaseInstallationRuntime) Stage(plans []platform.ReleaseInstallation, 
 }
 func (r releaseInstallationRuntime) CheckExtensions() error { return r.t.checkExtensionSet() }
 func (r releaseInstallationRuntime) CheckStorage(trial releaseowner.InstallationRuntime, upgrade bool) error {
-	return r.t.validateAssetStorage(trial.(releaseInstallationRuntime).t, upgrade)
+	return r.t.validateAssetStorage(trial.(releaseInstallationRuntime).t, upgrade, false)
 }
 func (r releaseInstallationRuntime) Pending(id string, raw []byte) error {
 	return r.t.pendingWorkFitsLocked(id, raw)

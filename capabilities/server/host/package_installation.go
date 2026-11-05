@@ -17,7 +17,7 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.PackageDescriptor, available []platform.ReleaseAsset, archive bool) (func(*pb.ChangeRecord), *kernel.Error) {
+func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.PackageDescriptor, available []platform.ReleaseAsset, archive, upgrade, downgrade bool) (func(*pb.ChangeRecord), *kernel.Error) {
 	if c.Replaying || descriptor.Blueprint == nil && !archive {
 		return nil, nil
 	}
@@ -111,9 +111,9 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		}
 	}
 	if impacts := h.t.packageRemovalImpacts(removed, refs); len(impacts) > 0 {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before upgrading the product", impacts[0].Resource.String(), impacts[0].Consumer.String())
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before switching the product version", impacts[0].Resource.String(), impacts[0].Consumer.String())
 	}
-	context := platform.AssetReleaseContext{Member: c.Member, At: d.at, ManagedBy: descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: true}
+	context := platform.AssetReleaseContext{Member: c.Member, At: d.at, ManagedBy: descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: upgrade}
 	_, _, err = h.t.bootstrapOwnerDraftsLockedWithArchived(candidate, context, false, nil, true, d)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())
@@ -133,10 +133,10 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
 	if err := d.tenant.checkExtensionSet(); err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package upgrade breaks an extension: {reason}", err.Error())
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package version breaks an extension: {reason}", err.Error())
 	}
-	if err := h.t.validateAssetStorage(d.tenant, true); err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package upgrade needs a data migration: {reason}", err.Error())
+	if err := h.t.validateAssetStorage(d.tenant, upgrade, downgrade); err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package version cannot read the current data: {reason}", err.Error())
 	}
 	media := []platform.ReleaseInstallation{}
 	for _, plan := range plans {

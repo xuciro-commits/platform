@@ -3359,6 +3359,9 @@ export type PackageInstallStep = {
   version: string;
   title: string;
   action: string;
+  status: string;
+  installedVersion?: string;
+  problem?: string;
 };
 
 export type PackagePreparation = {
@@ -3436,6 +3439,8 @@ export type PackageSetupStep = {
 export type PackageView = {
   plan: PackageInstallPlan;
   update?: boolean;
+  downgrade?: boolean;
+  rollback?: boolean;
   origin?: string;
   product?: string;
   candidate?: string;

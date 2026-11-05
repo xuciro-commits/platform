@@ -124,14 +124,14 @@ func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchive
 	return draft, nil
 }
 
-func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool) error {
+func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade, allowContraction bool) error {
 	shapes := []releaseowner.StoredShape{}
 	for typ, old := range t.records.Types() {
 		if next := draft.records.Type(typ); next != nil {
 			shapes = append(shapes, releaseowner.StoredShape{Before: old.Info(), After: next.Info(), Records: old.Rows().Len()})
 		}
 	}
-	return releaseowner.CheckStorage(shapes, t.definitions, draft.definitions, upgrade)
+	return releaseowner.CheckStorage(shapes, t.definitions, draft.definitions, upgrade, allowContraction)
 }
 func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 	return releaseowner.ValidateSet(releaseowner.ValidationContext{

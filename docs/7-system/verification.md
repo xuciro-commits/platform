@@ -53,7 +53,10 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 | K6 | 分支：分支保存不改变 main；合并是单个接受结果 |
 | K7 | 产品版本：只从已保存候选冻结 Contents 闭包；版本不可替换，产品后续编辑不改写版本字节，Marketplace 目录消费同一版本 |
 | K8 | 系统自举：`system` 租户的发布记录只读；保存新候选与激活都被拒绝，已有候选仍可审查 |
-| K9 | 产品包生命周期：退役归档本包资源；同版本重装恢复本包资源、应用身份和客户记录；重放保持结果 |
+| K9 | 产品包生命周期：退役归档本包资源；同版本重装恢复本包资源、应用身份和客户记录；升级、降级、回滚分别执行，存储兼容检查阻止旧定义无法读取的数据形状；安装闭包按精确版本显示 `installed / pending / failed` 且不重复提交已安装步骤；重放保持结果 |
+| K10 | 资源所有权 rehome：管理员接受结果只改变 `Project / ManagedBy` 和修订号，RID、类型、名称、记录和重放结果不变；非管理员拒绝，陈旧修订拒绝 |
+
+资源入口有独立宿主验收：直接检查 page/default/release-plan 三种 route，`build.testplan` 的 `test-plan` / `evaluation-set` 目录引用与 `variant`，以及两种 release kind 的发布预览结果；同时检查 `work.view` 的 v0/v1 状态和 `build.query` 的 v1 ObjectSet 发布合同。这些断言读取实际映射与发布结果，不以生成的前端契约反推。
 
 ## 7.11 黄金路径验收
 

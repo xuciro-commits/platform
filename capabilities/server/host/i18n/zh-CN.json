@@ -1294,6 +1294,13 @@
   "The package's ID": "软件包 ID",
   "The version; empty: the newest the index offers": "版本；留空：索引提供的最新版本",
   "Upgrade package": "升级软件包",
+  "Downgrade package": "降级软件包",
+  "Switch to an older exact version only when its storage and extensions remain compatible; the replaced artifact stays retained.": "仅在存储与扩展兼容时切换到较旧的精确版本；被替换的制品继续保留。",
+  "Roll back package": "回滚软件包",
+  "Restore the immediately previous retained version only when its storage and extensions remain compatible.": "仅在存储与扩展兼容时恢复最近一次保留的上一版本。",
+  "Remove references to {resource} from {consumer} before switching the product version": "切换产品版本前，请先移除 {consumer} 对 {resource} 的引用",
+  "The package version breaks an extension: {reason}": "该软件包版本会破坏扩展：{reason}",
+  "The package version cannot read the current data: {reason}": "该软件包版本无法读取当前数据：{reason}",
   "app, kind and name of every asset the project covers": "项目覆盖的每个资产的应用、类型和名称",
   "member IDs with their part in the project": "成员 ID 及其在项目中的角色",
   "Approval policies": "审批策略",
@@ -2706,5 +2713,7 @@
   "Base": "基础类型",
   "Pattern": "格式",
   "Constraints": "约束",
-  "An RE2 regular expression the text must match; anchor it with ^ and $ for the whole value": "文本必须匹配的 RE2 正则表达式；用 ^ 和 $ 锚定整个值"
+  "An RE2 regular expression the text must match; anchor it with ^ and $ for the whole value": "文本必须匹配的 RE2 正则表达式；用 ^ 和 $ 锚定整个值",
+  "Rehome resources": "转移资源归属",
+  "Transfer resource ownership between projects or packages without changing their identity, definitions, records or history.": "在项目或软件包之间转移资源归属，不改变资源身份、定义、记录或历史。"
 }

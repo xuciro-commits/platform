@@ -32,15 +32,17 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
   const [selection, setSelection] = useState("");
   const [search, setSearch] = useState("");
   const [versions, setVersions] = useState<Record<string, string>>({});
+  const [progress,setProgress]=useState<Record<string,string>>({});
   const [review,setReview]=useState<{schema:string;id:string;payload:unknown;view:Api.PackageView;details:Api.PackageReview[]}>();
   if (!items.length) return null;
   const act = async (schema: string, id: string, payload: unknown, confirmed=false) => {
-    if(!confirmed && ["platform.package.install","platform.package.upgrade","platform.package.retire"].includes(schema)) {
+    if(!confirmed && ["platform.package.install","platform.package.upgrade","platform.package.downgrade","platform.package.rollback","platform.package.retire"].includes(schema)) {
       const version=(payload as {version?:string}).version;
       const view=items.find(item=>item.descriptor.id===id && (!version || item.descriptor.version===version))!;
       setBusy(id);setRefused(current=>({...current,[id]:""}));
       const steps=schema==="platform.package.retire"?[{id,version:view.descriptor.version}]:view.plan.steps;
-      const results=await Promise.all(steps.map(step=>client.call<Api.PackageReview>("GET",`/v1/packages/${encodeURIComponent(step.id)}/review?version=${encodeURIComponent(step.version)}${schema==="platform.package.retire"?"&mode=uninstall":""}`)));
+      setProgress(Object.fromEntries(steps.filter(step=>"status" in step).map(step=>[step.id,(step as Api.PackageInstallStep).status])));
+      const results=await Promise.all(steps.filter(step=>!("status" in step)||(step as Api.PackageInstallStep).status!=="installed").map(step=>client.call<Api.PackageReview>("GET",`/v1/packages/${encodeURIComponent(step.id)}/review?version=${encodeURIComponent(step.version)}${schema==="platform.package.retire"?"&mode=uninstall":""}`)));
       setBusy("");
       const failed=results.find(result=>!result.ok);
       if(failed){setRefused(current=>({...current,[id]:apiErrorMessage(failed.body)??t("The product review could not be loaded.")}));return;}
@@ -49,8 +51,13 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
     setBusy(id); setRefused((r) => ({ ...r, [id]: "" }));
     const submit=(action:string,target:string,body:unknown)=>decide(action,{type:"platform.package",id:target},body,{onRefused:reason=>setRefused(current=>({...current,[id]:`${target}: ${reason}`}))});
     if(confirmed && schema!=="platform.package.retire") {
+      const statuses={...progress};
       for(const step of review!.view.plan.steps) {
-        if(!await submit(step.action,step.id,{id:step.id,version:step.version})){setBusy("");return;}
+        if(statuses[step.id]==="installed") continue;
+        const action=step.id===review!.id&&["platform.package.downgrade","platform.package.rollback"].includes(review!.schema)?review!.schema:step.action;
+        if(!await submit(action,step.id,{id:step.id,version:step.version})){statuses[step.id]="failed";setProgress(statuses);setBusy("");return;}
+        statuses[step.id]="installed";
+        setProgress({...statuses});
       }
     } else if(!await submit(schema,id,payload)){setBusy("");return;}
     setReview(undefined);
@@ -101,7 +108,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
             {state === "active" && chosen && held?.version === d.version && <p className="text-sm text-muted">{t(d.blueprint ? "Installed. Product resources are read-only; create extensions in your own project." : "Installed. Available features can be opened from Applications.")}</p>}
             <Disclosure summary={t("Technical details")}><dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
               <dt className="text-muted">{t("Namespace")}</dt><dd className="break-all font-mono">{d.namespace || held?.namespace}</dd>
-              <dt className="text-muted">{t("Source")}</dt><dd>{t(source === "installed" ? "Installed record" : source === "imported" ? "Imported product version" : source === "product" ? "DevOps product version" : "Deployment catalog")}</dd>
+              <dt className="text-muted">{t("Source")}</dt><dd>{t(source === "installed" ? "Installed record" : source === "retained" ? "Retained artifact" : source === "imported" ? "Imported product version" : source === "product" ? "DevOps product version" : "Deployment catalog")}</dd>
               <dt className="text-muted">{t("Offered")}</dt><dd>{source === "installed" ? "—" : d.version || "—"}{d.compatibility ? ` · ${t("platform API {v}", { v: d.compatibility })}` : ""}</dd>
               <dt className="text-muted">{t(state === "retired" ? "Last installed" : "Installed")}</dt><dd>{held ? `${held.version}${held.installedAt ? ` · ${when(held.installedAt)}` : ""}` : "—"}</dd>
               <dt className="text-muted">{t("Requires")}</dt><dd>{d.requires?.length ? d.requires.join(", ") : t("nothing")}</dd>
@@ -134,7 +141,9 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
             </div>}
             {can("platform.package.install") && <div className="flex flex-wrap gap-2">
               {next === "install" && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} title={installable ? undefined : t("Fix the precheck first")} onClick={() => void act("platform.package.install", id, { id, version: d.version })}>{t(reinstall ? "Reinstall" : "Install")}</Button>}
-              {different && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} onClick={() => void act("platform.package.upgrade", id, { id, version: d.version })}>{t("Switch to {v}", { v: d.version })}</Button>}
+              {different && chosen?.update && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} onClick={() => void act("platform.package.upgrade", id, { id, version: d.version })}>{t("Upgrade to {v}", { v: d.version })}</Button>}
+              {different && chosen?.rollback && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} onClick={() => void act("platform.package.rollback", id, { id, version: d.version })}>{t("Roll back to {v}", { v: d.version })}</Button>}
+              {different && chosen?.downgrade && !chosen?.rollback && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} onClick={() => void act("platform.package.downgrade", id, { id, version: d.version })}>{t("Downgrade to {v}", { v: d.version })}</Button>}
               {next === "drain" && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.drain", id, { id })}>{t("Mark for uninstall")}</Button>}
               {next === "retire" && <Button size="sm" disabled={busy === id || removal?.ok === false} onClick={() => void act("platform.package.retire", id, { id })}>{t("Retire")}</Button>}
               {sourceDigest && (!held || state === "retired" || held.version !== d.version) && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.remove-source", id, { id, digest: sourceDigest })}>{t("Remove source")}</Button>}
@@ -150,19 +159,22 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
         );
       })}
       </Panel>
-      <Dialog open={!!review} onOpenChange={open=>{if(!open)setReview(undefined);}} title={t(review?.schema==="platform.package.retire"?"Review retirement":review?.schema==="platform.package.upgrade"?"Review upgrade":"Review installation")} wide>
+            <Dialog open={!!review} onOpenChange={open=>{if(!open)setReview(undefined);}} title={t(review?.schema==="platform.package.retire"?"Review retirement":review?.schema==="platform.package.upgrade"?"Review upgrade":review?.schema==="platform.package.downgrade"?"Review downgrade":review?.schema==="platform.package.rollback"?"Review rollback":"Review installation")} wide>
         {review && <div className="grid gap-3 text-sm">
           <strong>{review.view.descriptor.title||review.id} · {review.view.descriptor.version}</strong>
           <PropertyList items={[[t("Installed version"),review.view.installed?.version||"—"],[t("Required products"),review.view.descriptor.requires?.join(", ")||t("None")]]}/>
           <p className="text-muted">{t(review.schema==="platform.package.retire"?"Retire archives managed resources and preserves customer data and extensions.":"Review the product resources before confirming this exact version.")}</p>
-          {review.schema!=="platform.package.retire" && <ol aria-label={t("Installation order")} className="divide-y divide-border">{review.view.plan.steps.map(step=><li key={step.id} className="flex flex-wrap justify-between gap-2 py-2"><span>{step.title||step.id}</span><span>{t(step.action==="platform.package.upgrade"?"Upgrade":"Install")} · {step.version}</span></li>)}</ol>}
+          {review.schema!=="platform.package.retire" && <ol aria-label={t("Installation order")} className="divide-y divide-border">{review.view.plan.steps.map(step=>{
+            const status=progress[step.id]??step.status;
+            return <li key={step.id} className="grid gap-1 py-2"><div className="flex flex-wrap justify-between gap-2"><span>{step.title||step.id}</span><span className="flex items-center gap-2"><Tag label={t(status==="installed"?"Installed":status==="failed"?"Failed":"Pending")} tone={status==="installed"?"success":status==="failed"?"danger":"warning"} />{status!=="installed" && <span>{t(step.action==="platform.package.upgrade"?"Upgrade":step.action==="platform.package.downgrade"?"Downgrade":"Install")} · {step.version}</span>}</span></div>{step.installedVersion&&step.installedVersion!==step.version&&<span className="text-xs text-muted">{t("Installed version")}: {step.installedVersion}</span>}{step.problem&&<span className="text-xs text-[var(--tone-danger)]">{step.problem}</span>}</li>;
+          })}</ol>}
           <ul aria-label={t("Resource changes")} className="max-h-72 overflow-auto divide-y divide-border">{review.details.flatMap(detail=>detail.changes.map(change=><li key={`${detail.id}/${change.ref.app}/${change.ref.kind}/${change.ref.name}`} className="flex flex-wrap gap-2 py-1 text-xs"><Tag label={t(change.change)}/><span className="text-muted">{change.ref.kind}</span><span className="break-all">{change.ref.name}</span><span className="text-muted">{change.before||"—"} → {change.after||"—"}</span></li>))}</ul>
           {review.details.some(detail=>detail.extensions.length>0) && <ul aria-label={t("Customer extensions")} className="divide-y divide-border">{review.details.flatMap(detail=>detail.extensions.map(extension=><li key={`${detail.id}/${extension.type}`} className="py-2 text-xs"><strong>{extension.type}</strong><p>{extension.issue?t(extension.issue):t("Compatible with this version")}</p><p className="text-muted">{extension.fields.join(", ")}</p></li>))}</ul>}
           {review.details.some(detail=>detail.removals.length>0) && <section aria-label={t("References affected by removal")} className="grid gap-2"><h3 className="font-semibold">{t("References affected by removal")}</h3><p className="text-muted">{t(review.schema==="platform.package.retire"?"These resources will keep their data and references, but the removed resources will be unavailable.":"Update these references before upgrading this product.")}</p><ul className="divide-y divide-border">{review.details.flatMap(detail=>detail.removals.map(impact=><li key={`${detail.id}/${impact.resource.name}/${impact.consumer.kind}/${impact.consumer.name}`} className="grid gap-1 py-2 text-xs"><strong>{impact.consumer.name}</strong><span className="text-muted">{impact.resource.kind} · {impact.resource.name}</span></li>))}</ul></section>}
           {review.details.flatMap(detail=>detail.problems??[]).map(problem=><Notice key={problem} tone="danger" message={t(problem)}/>)}
           {review.view.plan.problems?.map(problem=><Notice key={problem} tone="warning" message={t(problem)}/>)}
           {refused[review.id] && <Notice tone="danger" role="alert" message={refused[review.id]!}/>}
-          <div className="flex justify-end gap-2"><Button disabled={busy===review.id} onClick={()=>setReview(undefined)}>{t("Cancel")}</Button><Button variant="primary" disabled={busy===review.id || review.schema!=="platform.package.retire" && review.details.some(detail=>detail.problems?.length)} onClick={()=>void act(review.schema,review.id,review.payload,true)}>{t(review.schema==="platform.package.retire"?"Retire":review.schema==="platform.package.upgrade"?"Upgrade":"Install")}</Button></div>
+          <div className="flex justify-end gap-2"><Button disabled={busy===review.id} onClick={()=>setReview(undefined)}>{t("Cancel")}</Button><Button variant="primary" disabled={busy===review.id || !!review.view.plan.problems?.length || review.view.plan.steps.some(step=>(progress[step.id]??step.status)==="failed") || review.schema!=="platform.package.retire" && review.details.some(detail=>detail.problems?.length)} onClick={()=>void act(review.schema,review.id,review.payload,true)}>{t(review.schema==="platform.package.retire"?"Retire":review.schema==="platform.package.upgrade"?"Upgrade":review.schema==="platform.package.downgrade"?"Downgrade":review.schema==="platform.package.rollback"?"Roll back":"Install")}</Button></div>
         </div>}
       </Dialog>
     </div>

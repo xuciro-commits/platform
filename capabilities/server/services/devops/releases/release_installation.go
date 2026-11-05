@@ -82,6 +82,20 @@ func OptionalStoredAddition(old, next platform.EntityInfo) *platform.FieldInfo {
 	return nil
 }
 
+func CompatibleStoredRemoval(old, next platform.EntityInfo) bool {
+	if len(next.Fields) >= len(old.Fields) {
+		return false
+	}
+	for _, field := range next.Fields {
+		previous, ok := old.Field(field.Name)
+		if !ok || previous.Type != field.Type || previous.Ref != field.Ref || previous.Required != field.Required ||
+			!slices.Equal(previous.Choices, field.Choices) || !reflect.DeepEqual(previous.Property, field.Property) || !reflect.DeepEqual(previous.ValueType, field.ValueType) {
+			return false
+		}
+	}
+	return true
+}
+
 type ReleaseExtensionReview struct {
 	Type          string                `json:"type"`
 	Base          platform.AssetBinding `json:"base"`
@@ -336,14 +350,21 @@ type ProjectAwareInstallationRuntime interface {
 	ReleaseProject(platform.ReleaseCandidate) string
 }
 
-func CheckStorage(shapes []StoredShape, before, after []platform.Definition, upgrade bool) error {
+func CheckStorage(shapes []StoredShape, before, after []platform.Definition, upgrade, allowContraction bool) error {
 	for _, shape := range shapes {
 		if shape.Records == 0 {
 			continue
 		}
-		if !SameStoredFields(shape.Before, shape.After) && (!upgrade || OptionalStoredAddition(shape.Before, shape.After) == nil) {
-			return fmt.Errorf("object %s has records; changing their storage shape needs a supported upgrade plan", shape.Before.Type)
+		if SameStoredFields(shape.Before, shape.After) {
+			continue
 		}
+		if upgrade && OptionalStoredAddition(shape.Before, shape.After) != nil {
+			continue
+		}
+		if allowContraction && CompatibleStoredRemoval(shape.Before, shape.After) {
+			continue
+		}
+		return fmt.Errorf("object %s has records; changing their storage shape needs a supported upgrade plan", shape.Before.Type)
 	}
 	for _, definition := range before {
 		if definition.Action != nil && definition.Source != "code" && !slices.ContainsFunc(after, func(next platform.Definition) bool { return next.Ref == definition.Ref }) {
