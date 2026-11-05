@@ -425,6 +425,18 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package index cannot be read: {reason}", indexErr.Error())
 	}
 	descriptor, ok := index.Find(p.ID, p.Version)
+	if !ok && p.Version != "" {
+		prior := d.packagesOf()[p.ID]
+		if prior != nil && prior.State == "retired" && prior.Artifact != "" {
+			sealed, err := d.sealedPackageDescriptor(p.ID, p.Version, prior.Artifact)
+			if err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained package artifact is unavailable: {reason}", err.Error())
+			}
+			descriptor, ok = sealed, true
+			index = &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+			index.Packages = append(index.Packages, descriptor)
+		}
+	}
 	if !ok {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
@@ -539,7 +551,7 @@ func (d *Owner) PackageViews() []platform.PackageView {
 			continue
 		}
 		descriptor := platform.PackageDescriptor{ID: held.ID, Version: held.Version, Title: held.Title, Namespace: held.Namespace, Contributions: held.Contributions}
-		pre := platform.Precheck{ID: held.ID, Version: held.Version, Problems: []string{"This installed version is not in the deployment index and cannot be installed from this list."}}
+		pre := platform.Precheck{ID: held.ID, Version: held.Version}
 		if held.Artifact != "" {
 			if sealed, err := d.sealedPackageDescriptor(held.ID, held.Version, held.Artifact); err == nil {
 				descriptor = sealed
@@ -547,8 +559,11 @@ func (d *Owner) PackageViews() []platform.PackageView {
 				pre.Problems = append(pre.Problems, err.Error())
 			}
 		}
+		sealedIndex := &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+		sealedIndex.Packages = append(sealedIndex.Packages, descriptor)
+		pre = d.precheck(descriptor, sealedIndex)
 		copy := *held
-		out = append(out, platform.PackageView{Descriptor: descriptor, Installed: &copy, Precheck: pre, Source: "installed", Removal: d.packageRemoval(held.ID)})
+		out = append(out, platform.PackageView{Descriptor: descriptor, Installed: &copy, Precheck: pre, Plan: d.installationPlan(descriptor, sealedIndex), Source: "installed", Removal: d.packageRemoval(held.ID)})
 	}
 	slices.SortFunc(out, func(a, b platform.PackageView) int {
 		if a.Descriptor.ID != b.Descriptor.ID {

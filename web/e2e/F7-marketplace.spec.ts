@@ -89,6 +89,9 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   expect((await customer.read<{record:{note:string}}>(`/v1/records/${customerType}/${extensionRecord}`)).record.note).toBe("Keep my extension");
   const retired=await customer.read<ResourceDirectory>("/v1/resources");
   expect(retired.resources.filter(resource=>resource.managedBy===consumer).every(resource=>resource.state==="archived")).toBeTruthy();
+  const consumerSource=(await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===consumer);
+  expect(consumerSource?.sourceDigest).toBeTruthy();
+  await customer.submit("platform.package",consumer,"remove-source",{id:consumer,digest:consumerSource!.sourceDigest},null);
   await page.goto("/#/apps?tab=retired");
   await page.getByRole("button",{name:new RegExp(consumerTitle)}).click();
   const retiredPanel=page.getByRole("region",{name:`Package ${consumer}`});

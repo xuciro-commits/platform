@@ -25,7 +25,6 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范见 [6-domain/packages](6-domain/packages.md)。一批只交付一个可运行的完整路径；完成的条目直接删除。
 
-- [ ] C4 让产品版本、部署目录和导入来源使用同一不可变摘要语义；导入大小已统一为 16 MiB。
 - [ ] C6 定义生产完成与会计过账的一致性边界；在边界决定前不得发布 ERP/MES 拆分包。
 - [ ] C7 增加 ownership rehome 接受结果：只改变 `Project / ManagedBy`，保留 RID、类型名、应用身份、记录、媒体和历史。
 - [ ] C8 拆分 manufacturing 为 core/ERP/MES（按 C6、C7 的结论），移除 MES 对 ERP 内部记录地址的轮询，改用对象接口、动作或版本化查询。

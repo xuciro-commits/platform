@@ -73,6 +73,7 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 		t.Fatalf("retirement changed customer data: %#v", record)
 	}
 
+	submit(packages.SchemaPackageRemoveSource, map[string]any{"id": descriptor.ID, "digest": inspected.Digest})
 	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
 	if resource := resourceRecord(t, target, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID {
 		t.Fatalf("reinstall did not restore the package resource: %+v", resource)
