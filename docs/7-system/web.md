@@ -74,4 +74,4 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 
 - 治理资源尚未全面采用同一路由入口。
 - `@platform/kernel` 未改名（路线图“已知漂移”）。
-- Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；`catalog` 已改为按需加载，首屏复测与拆包决策见路线图 D4。
+- Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；`catalog` 已改为按需加载。2026-11-05 在隔离本地宿主、全新建浏览器上下文中复测：builder 首绘 140ms、传输 1.54MB；user 首绘 112ms、传输 0.95MB。builder 多出的 `workflow` 分块属于构建应用本身，不是可安全移出首屏的共享依赖；暂不做机械拆包，后续以真实任务路径和网络条件变化再测。
