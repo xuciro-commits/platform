@@ -225,6 +225,69 @@ func Entities() []platform.Entity {
 
 type Core struct{ ledger *platform.Ledger }
 
+func (c *Core) LegacySeeds() []platform.LegacySeed {
+	seeds := []platform.LegacySeed{}
+	add := func(typ string, values []any) {
+		for _, value := range values {
+			var id string
+			switch item := value.(type) {
+			case UoM:
+				id = item.ID
+			case Currency:
+				id = item.ID
+			case Account:
+				id = item.ID
+			case Period:
+				id = item.ID
+			}
+			if id != "" {
+				seeds = append(seeds, platform.LegacySeed{Type: typ, ID: id, Value: value})
+			}
+		}
+	}
+	add(UoMType, []any{
+		UoM{Record: platform.Record{ID: "uom-pce"}, Code: "PCE", Name: "Piece", Dimension: "count"},
+		UoM{Record: platform.Record{ID: "uom-kgm"}, Code: "KGM", Name: "Kilogram", Dimension: "mass", Decimals: 3},
+		UoM{Record: platform.Record{ID: "uom-grm"}, Code: "GRM", Name: "Gram", Dimension: "mass"},
+		UoM{Record: platform.Record{ID: "uom-mtr"}, Code: "MTR", Name: "Metre", Dimension: "length", Decimals: 2},
+		UoM{Record: platform.Record{ID: "uom-ltr"}, Code: "LTR", Name: "Litre", Dimension: "volume", Decimals: 2},
+		UoM{Record: platform.Record{ID: "uom-hur"}, Code: "HUR", Name: "Hour", Dimension: "time", Decimals: 2},
+		UoM{Record: platform.Record{ID: "uom-box"}, Code: "BX", Name: "Box", Dimension: "count"},
+		UoM{Record: platform.Record{ID: "uom-plt"}, Code: "PF", Name: "Pallet", Dimension: "count"},
+	})
+	add(CurrencyType, []any{
+		Currency{Record: platform.Record{ID: "cur-cny"}, Code: "CNY", Name: "Renminbi", Decimals: 2, Symbol: "¥"},
+		Currency{Record: platform.Record{ID: "cur-usd"}, Code: "USD", Name: "US dollar", Decimals: 2, Symbol: "$"},
+		Currency{Record: platform.Record{ID: "cur-eur"}, Code: "EUR", Name: "Euro", Decimals: 2, Symbol: "€"},
+	})
+	add(AccountType, []any{
+		Account{Record: platform.Record{ID: "acc-1000"}, Code: "1000", Name: "Assets", Kind: "asset", Active: true},
+		Account{Record: platform.Record{ID: "acc-1001"}, Code: "1001", Name: "Bank", Kind: "asset", Parent: "1000", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-1122"}, Code: "1122", Name: "Receivables", Kind: "asset", Parent: "1000", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-1403"}, Code: "1403", Name: "Raw materials", Kind: "asset", Parent: "1000", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-1405"}, Code: "1405", Name: "Finished goods", Kind: "asset", Parent: "1000", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-2000"}, Code: "2000", Name: "Liabilities", Kind: "liability", Active: true},
+		Account{Record: platform.Record{ID: "acc-2202"}, Code: "2202", Name: "Payables", Kind: "liability", Parent: "2000", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-2221"}, Code: "2221", Name: "Tax payable", Kind: "liability", Parent: "2000", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-2290"}, Code: "2290", Name: "GR/IR clearing", Kind: "liability", Parent: "2000", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-4000"}, Code: "4000", Name: "Equity", Kind: "equity", Active: true},
+		Account{Record: platform.Record{ID: "acc-4001"}, Code: "4001", Name: "Capital", Kind: "equity", Parent: "4000", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-6000"}, Code: "6000", Name: "Revenue", Kind: "revenue", Active: true},
+		Account{Record: platform.Record{ID: "acc-6001"}, Code: "6001", Name: "Sales", Kind: "revenue", Parent: "6000", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-6400"}, Code: "6400", Name: "Expenses", Kind: "expense", Active: true},
+		Account{Record: platform.Record{ID: "acc-6401"}, Code: "6401", Name: "Cost of goods sold", Kind: "expense", Parent: "6400", Posting: true, Active: true},
+		Account{Record: platform.Record{ID: "acc-6601"}, Code: "6601", Name: "Operating expenses", Kind: "expense", Parent: "6400", Posting: true, Active: true},
+	})
+	periods := make([]any, 0, 12)
+	for month := time.January; month <= time.December; month++ {
+		first := time.Date(2026, month, 1, 0, 0, 0, 0, time.UTC)
+		code := first.Format("2006-01")
+		periods = append(periods, Period{Record: platform.Record{ID: "per-" + code}, Code: code, Year: 2026, From: first.Format(time.DateOnly), To: first.AddDate(0, 1, -1).Format(time.DateOnly), State: "open"})
+	}
+	add(PeriodType, periods)
+	return seeds
+}
+
 func New(tenant string) *Core {
 	entities := Entities()
 	types := make([]string, len(entities))

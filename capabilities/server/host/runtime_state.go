@@ -24,6 +24,9 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 	if !ok {
 		return nil
 	}
+	if err := t.restoreLegacySeeds(ctx, store); err != nil {
+		return err
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	d, err := t.runtimeStateDeltaLocked()
