@@ -127,6 +127,7 @@ read-when: 新增导航项、应用、资源类型、页面或路由，调整 Fi
 | 审阅变更 | 分支控件“审阅并保存” | Home 的提案、Notifications |
 | 发布与安装 | DevOps、Marketplace | 项目页“验证与交付” |
 | 定义产品与版本 | DevOps Products | 项目页“Release in DevOps…”、Marketplace |
+| 退役与重装产品 | Marketplace → Installed / Retired | 无；退役包不从目录消失 |
 | 管理权限 | 项目页 Access（项目角色） | Control Panel（成员、标记、业务角色） |
 
 资源 URL 使用 RID；编辑器在入口将 RID 解析为所属服务的记录身份。Files 的文件夹树、Search 的资源结果与血缘图的编辑入口读取同一份资源目录，移动只改变目录位置。Search 展示项目与文件夹路径，业务门户及扩展模块的运行页面使用已发布定义的 RID。

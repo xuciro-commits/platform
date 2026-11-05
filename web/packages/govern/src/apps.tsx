@@ -10,14 +10,14 @@ export function Apps({tab="catalog"}:{tab?:string}) {
   const { holds} = useHost(), { open } = useWorkspace();
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const all=packages.data??[];
-  const shown=tab==="installed"?all.filter(item=>item.installed?.state!=="retired" && item.installed?.version===item.descriptor.version):tab==="updates"?all.filter(item=>item.update):all.filter(item=>item.source!=="installed");
+  const shown=tab==="installed"?all.filter(item=>item.installed?.state!=="retired" && item.installed?.version===item.descriptor.version):tab==="retired"?all.filter(item=>item.installed?.state==="retired"):tab==="updates"?all.filter(item=>item.update):all.filter(item=>item.source!=="installed");
   return (
     <>
-      <PageHeader title={t(tab==="installed"?"Installed":tab==="updates"?"Updates":"Catalog")} help={t("Install, switch versions or uninstall product versions. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
+      <PageHeader title={t(tab==="installed"?"Installed":tab==="retired"?"Retired":tab==="updates"?"Updates":"Catalog")} help={t("Install, switch versions or retire product versions. Retire archives live definitions and keeps application data, extensions and history; an exact version can be reinstalled.")} />
       {tab==="catalog" && <PackageSources items={all} />}
       {packages.isError ? <div role="alert"><p>{t("Product version inventory could not be loaded.")}</p><Button onClick={() => void packages.refetch()}>{t("Retry")}</Button></div> : packages.isPending ? <p role="status">{t("Loading product versions…")}</p> : !packages.data?.length ? <p className="text-sm text-muted">{t("No product version is available. Publish one in DevOps, or transfer a product version file.")}</p> : null}
       <PackageList key={tab} items={shown} updates={tab==="updates"} />
-      {!packages.isPending && !packages.isError && !shown.length && <p role="status" className="text-sm text-muted">{t(tab==="updates"?"Your installed products are up to date.":tab==="installed"?"No products are installed.":"No products are available.")}</p>}
+      {!packages.isPending && !packages.isError && !shown.length && <p role="status" className="text-sm text-muted">{t(tab==="updates"?"Your installed products are up to date.":tab==="installed"?"No products are installed.":tab==="retired"?"No products are retired.":"No products are available.")}</p>}
       {holds("platform", "admin") && <Button variant="link" className="mt-4" onClick={() => open({ view: "matrix" })}>{t("Inspect built-in modules in the capability matrix")}</Button>}
     </>
   );
@@ -67,7 +67,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
           const entries = items.filter(item => (item.descriptor.id || item.installed?.id) === id);
           const held = entries.find(item => item.installed)?.installed;
           return <Button key={id} variant="row" aria-current={selected === id ? "true" : undefined} className={`h-auto w-full items-start justify-between gap-2 whitespace-normal rounded-md p-3 text-left ${selected === id ? "bg-row-selected" : ""}`} onClick={() => setSelection(id)}>
-            <span className="grid min-w-0 gap-1"><span className="break-words font-medium">{entries[0]!.descriptor.title || held?.title || id}</span><span className="break-all text-xs text-muted">{id}</span></span><Tag label={held?.state && held.state !== "retired" ? t(held.state) : t("not installed")} tone={stateTone(held?.state)} />
+            <span className="grid min-w-0 gap-1"><span className="break-words font-medium">{entries[0]!.descriptor.title || held?.title || id}</span><span className="break-all text-xs text-muted">{id}</span></span><Tag label={held?.state ? t(held.state) : t("not installed")} tone={stateTone(held?.state)} />
           </Button>;
         })}</div>
         {!shown.length && <p role="status" className="py-4 text-sm text-muted">{t("No package matches your search.")}</p>}
@@ -90,7 +90,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
           <Panel key={id} aria-label={t("Package {id}", { id })} className="grid min-w-0 content-start gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold">{d.title || held?.title || id}</span><span className="break-all font-mono text-xs text-muted">{id}</span>
-              <Tag label={state && state !== "retired" ? t(state) : t("not installed")} tone={stateTone(state)} />
+              <Tag label={state ? t(state) : t("not installed")} tone={stateTone(state)} />
               {d.blueprint && <Tag label={t("Product version")} tone="info" />}
             </div>
             {(d.description || d.blueprint) && <div className="flex justify-end"><ContextHelp title={d.title || held?.title || id}>{d.description && <p>{d.description}</p>}{d.blueprint && <p>{t("Install the reviewed product and its dependencies into managed projects. Customer extensions stay in your own projects; business data and access grants are separate.")}</p>}</ContextHelp></div>}
@@ -135,26 +135,26 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
             {can("platform.package.install") && <div className="flex flex-wrap gap-2">
               {next === "install" && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} title={installable ? undefined : t("Fix the precheck first")} onClick={() => void act("platform.package.install", id, { id, version: d.version })}>{t(reinstall ? "Reinstall" : "Install")}</Button>}
               {different && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} onClick={() => void act("platform.package.upgrade", id, { id, version: d.version })}>{t("Switch to {v}", { v: d.version })}</Button>}
-              {next === "drain" && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.drain", id, { id })}>{t("Prepare to uninstall")}</Button>}
-              {next === "retire" && <Button size="sm" disabled={busy === id || removal?.ok === false} onClick={() => void act("platform.package.retire", id, { id })}>{t("Uninstall")}</Button>}
+              {next === "drain" && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.drain", id, { id })}>{t("Mark for uninstall")}</Button>}
+              {next === "retire" && <Button size="sm" disabled={busy === id || removal?.ok === false} onClick={() => void act("platform.package.retire", id, { id })}>{t("Retire")}</Button>}
               {sourceDigest && (!held || state === "retired" || held.version !== d.version) && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.remove-source", id, { id, digest: sourceDigest })}>{t("Remove source")}</Button>}
             </div>}
-            {held && state !== "retired" && <Disclosure summary={t("Uninstall impact")}>
-              <p className="text-xs">{t("Uninstall withdraws the package's live contributions. Business records, history, copied application definitions and sealed artifacts remain.")}</p>
+            {held && state !== "retired" && <Disclosure summary={t("Retire impact")}>
+              <p className="text-xs">{t("Retire archives the package's live definitions. Business records, extensions, history, copied application definitions and sealed artifacts remain.")}</p>
               {removal?.blockers?.map(problem => <p key={problem} className="mt-1 text-xs text-[var(--tone-warning)]">{problem}</p>)}
               <Button size="sm" onClick={() => open({ view: "package-help", params: { topic: "uninstall" } })}>{t("Package guide")}</Button>
             </Disclosure>}
-            {state === "draining" && <p className="text-xs text-muted">{t("New use has stopped. Finish work in flight before uninstalling; application data and history will stay.")}</p>}
+            {state === "draining" && <p className="text-xs text-muted">{t("Marked for uninstall. Runtime draining is not enabled yet; finish work in flight before retiring. Application data and history will stay.")}</p>}
             {refused[id] && <p role="alert" className="break-words text-xs text-[var(--tone-danger)]">{refused[id]}</p>}
           </Panel>
         );
       })}
       </Panel>
-      <Dialog open={!!review} onOpenChange={open=>{if(!open)setReview(undefined);}} title={t(review?.schema==="platform.package.retire"?"Review uninstall":review?.schema==="platform.package.upgrade"?"Review upgrade":"Review installation")} wide>
+      <Dialog open={!!review} onOpenChange={open=>{if(!open)setReview(undefined);}} title={t(review?.schema==="platform.package.retire"?"Review retirement":review?.schema==="platform.package.upgrade"?"Review upgrade":"Review installation")} wide>
         {review && <div className="grid gap-3 text-sm">
           <strong>{review.view.descriptor.title||review.id} · {review.view.descriptor.version}</strong>
           <PropertyList items={[[t("Installed version"),review.view.installed?.version||"—"],[t("Required products"),review.view.descriptor.requires?.join(", ")||t("None")]]}/>
-          <p className="text-muted">{t(review.schema==="platform.package.retire"?"Uninstall archives managed resources and preserves customer data and extensions.":"Review the product resources before confirming this exact version.")}</p>
+          <p className="text-muted">{t(review.schema==="platform.package.retire"?"Retire archives managed resources and preserves customer data and extensions.":"Review the product resources before confirming this exact version.")}</p>
           {review.schema!=="platform.package.retire" && <ol aria-label={t("Installation order")} className="divide-y divide-border">{review.view.plan.steps.map(step=><li key={step.id} className="flex flex-wrap justify-between gap-2 py-2"><span>{step.title||step.id}</span><span>{t(step.action==="platform.package.upgrade"?"Upgrade":"Install")} · {step.version}</span></li>)}</ol>}
           <ul aria-label={t("Resource changes")} className="max-h-72 overflow-auto divide-y divide-border">{review.details.flatMap(detail=>detail.changes.map(change=><li key={`${detail.id}/${change.ref.app}/${change.ref.kind}/${change.ref.name}`} className="flex flex-wrap gap-2 py-1 text-xs"><Tag label={t(change.change)}/><span className="text-muted">{change.ref.kind}</span><span className="break-all">{change.ref.name}</span><span className="text-muted">{change.before||"—"} → {change.after||"—"}</span></li>))}</ul>
           {review.details.some(detail=>detail.extensions.length>0) && <ul aria-label={t("Customer extensions")} className="divide-y divide-border">{review.details.flatMap(detail=>detail.extensions.map(extension=><li key={`${detail.id}/${extension.type}`} className="py-2 text-xs"><strong>{extension.type}</strong><p>{extension.issue?t(extension.issue):t("Compatible with this version")}</p><p className="text-muted">{extension.fields.join(", ")}</p></li>))}</ul>}
@@ -162,7 +162,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
           {review.details.flatMap(detail=>detail.problems??[]).map(problem=><Notice key={problem} tone="danger" message={t(problem)}/>)}
           {review.view.plan.problems?.map(problem=><Notice key={problem} tone="warning" message={t(problem)}/>)}
           {refused[review.id] && <Notice tone="danger" role="alert" message={refused[review.id]!}/>}
-          <div className="flex justify-end gap-2"><Button disabled={busy===review.id} onClick={()=>setReview(undefined)}>{t("Cancel")}</Button><Button variant="primary" disabled={busy===review.id || review.schema!=="platform.package.retire" && review.details.some(detail=>detail.problems?.length)} onClick={()=>void act(review.schema,review.id,review.payload,true)}>{t(review.schema==="platform.package.retire"?"Uninstall":review.schema==="platform.package.upgrade"?"Upgrade":"Install")}</Button></div>
+          <div className="flex justify-end gap-2"><Button disabled={busy===review.id} onClick={()=>setReview(undefined)}>{t("Cancel")}</Button><Button variant="primary" disabled={busy===review.id || review.schema!=="platform.package.retire" && review.details.some(detail=>detail.problems?.length)} onClick={()=>void act(review.schema,review.id,review.payload,true)}>{t(review.schema==="platform.package.retire"?"Retire":review.schema==="platform.package.upgrade"?"Upgrade":"Install")}</Button></div>
         </div>}
       </Dialog>
     </div>

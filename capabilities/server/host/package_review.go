@@ -95,10 +95,16 @@ func (h *Host) routesPackageReview(rt *routes) {
 				WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 				return
 			}
-			for _, asset := range assets {
-				after[asset.Ref] = asset
+			for i, asset := range assets {
+				complete, err := platform.WithDependencies(asset)
+				if err != nil {
+					WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+					return
+				}
+				assets[i] = complete
+				after[complete.Ref] = complete
 			}
-			extensions, err := t.releaseExtensionReview(platform.ReleaseCandidate{Assets: blueprint.Assets})
+			extensions, err := t.releaseExtensionReview(platform.ReleaseCandidate{Assets: assets})
 			if err != nil {
 				answer.Problems = append(answer.Problems, err.Error())
 			} else {

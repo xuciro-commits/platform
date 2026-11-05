@@ -40,6 +40,14 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		value.FieldByName("Archived").SetBool(true)
 		caller.Put(r, value.Interface())
 	}
+	restoreResource := func(r *pb.ChangeRecord, resource build.Resource) {
+		resource.State, resource.Archived = "active", false
+		caller.Put(r, resource)
+		et := d.records.Type(resource.Type)
+		value := records.Copy(et.Info().Go, et.Rows().Get(resource.Draft).Value.Interface())
+		value.FieldByName("Archived").SetBool(false)
+		caller.Put(r, value.Interface())
+	}
 	if archive {
 		return func(r *pb.ChangeRecord) {
 			for _, resource := range resources {
@@ -106,7 +114,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before upgrading the product", impacts[0].Resource.String(), impacts[0].Consumer.String())
 	}
 	context := platform.AssetReleaseContext{Member: c.Member, At: d.at, ManagedBy: descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: true}
-	_, _, err = h.t.bootstrapOwnerDraftsLocked(candidate, context, false, nil, d)
+	_, _, err = h.t.bootstrapOwnerDraftsLockedWithArchived(candidate, context, false, nil, true, d)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())
 	}
@@ -145,7 +153,6 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		caller.Put(r, project)
 		projectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: projectName}
 		caller.Put(r, build.Resource{Record: platform.Record{ID: platform.ResourceID(c.Tenant, projectRef)}, Ref: projectRef, Type: build.AppType, Draft: projectID, Project: projectID, Title: descriptor.Title, State: "active", Version: 1, ManagedBy: descriptor.ID})
-		installed := map[platform.AssetRef]bool{}
 		for _, plan := range plans {
 			typ, id, _ := strings.Cut(plan.Record, "/")
 			et := d.records.Type(typ)
@@ -159,7 +166,6 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 			image, _ := json.Marshal(row.Value.Interface())
 			ref := plan.Ref
 			d.installations = append(d.installations, platform.ReleaseInstallation{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: image}, Ref: &ref, Record: plan.Record})
-			installed[ref] = true
 			var title struct{ Title string }
 			_ = json.Unmarshal(image, &title)
 			if title.Title == "" {
@@ -172,8 +178,13 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 			caller.Put(r, resource)
 		}
 		for _, resource := range resources {
-			if resource.ManagedBy == descriptor.ID && resource.Ref != projectRef && !installed[resource.Ref] {
+			if resource.ManagedBy == descriptor.ID && resource.Ref != projectRef && !refs[resource.Ref] {
 				archiveResource(r, resource)
+			}
+		}
+		for _, resource := range resources {
+			if refs[resource.Ref] && resource.Archived {
+				restoreResource(r, resource)
 			}
 		}
 		for _, version := range mediaVersions {
@@ -183,7 +194,9 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 }
 
 func (t *Tenant) prepareBatchDefinitions(rows *records.Store, installations []platform.ReleaseInstallation) (*Tenant, error) {
-	view, err := t.assetInstallationView(rows)
+	definitionRows := rows.ForkRecords()
+	restoreReferencedDefinitions(definitionRows, installations)
+	view, err := t.assetInstallationView(definitionRows)
 	if err != nil {
 		return nil, err
 	}
@@ -214,4 +227,40 @@ func (t *Tenant) prepareBatchDefinitions(rows *records.Store, installations []pl
 		return nil, err
 	}
 	return view, nil
+}
+
+func restoreReferencedDefinitions(rows *records.Store, installations []platform.ReleaseInstallation) {
+	referenced := map[platform.AssetRef]bool{}
+	for _, installation := range installations {
+		if installation.Ref != nil {
+			referenced[*installation.Ref] = true
+		}
+	}
+	if len(referenced) == 0 {
+		return
+	}
+	resources := rows.Type(build.ResourceType)
+	if resources == nil {
+		return
+	}
+	for _, row := range resources.Rows().All() {
+		resource, ok := row.Value.Interface().(build.Resource)
+		if !ok || !referenced[resource.Ref] {
+			continue
+		}
+		et := rows.Type(resource.Type)
+		if et == nil {
+			continue
+		}
+		current := et.Rows().Get(resource.Draft)
+		if current == nil || !records.Header(current.Value).Archived {
+			continue
+		}
+		value := reflect.New(current.Value.Type()).Elem()
+		value.Set(current.Value)
+		records.Header(value).Archived = false
+		copy := *current
+		copy.Value = value
+		et.SetRow(resource.Draft, &copy)
+	}
 }

@@ -81,8 +81,11 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []platform.Release
 	return draft, nil
 }
 
-func (t *Tenant) assetInstallationView(recordView *records.Store) (*Tenant, error) {
+func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchived ...bool) (*Tenant, error) {
 	draft := (hostView{t: t}).installationDraft()
+	if len(includeArchived) > 0 {
+		draft.includeArchivedDefinitions = includeArchived[0]
+	}
 	draft.records = recordView.ForkRecords()
 	draft.console.Restore(t.console.SnapshotState())
 	draft.Secrets = t.Secrets

@@ -40,6 +40,10 @@ func (t *Tenant) ownedAssetDefinition(plan platform.AssetInstallation) (platform
 }
 
 func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.Definition, error) {
+	return t.ownedAssetDefinitionsWithArchived(base, t.includeArchivedDefinitions)
+}
+
+func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, includeArchived bool) ([]platform.Definition, error) {
 	base = slices.Clone(base)
 	base = slices.DeleteFunc(base, func(definition platform.Definition) bool {
 		return !t.ownerActive(definition.Ref.App) || definition.Ref.Kind == platform.AssetAgent && definition.Source != "code" && definition.Source != "system"
@@ -123,7 +127,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 				continue
 			}
 			for id, row := range et.Rows().All() {
-				if records.Header(row.Value).Archived {
+				if records.Header(row.Value).Archived && !includeArchived {
 					continue
 				}
 				ordinal := row.Value.FieldByIndex(version.Index).Int()

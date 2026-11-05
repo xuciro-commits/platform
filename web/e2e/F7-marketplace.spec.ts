@@ -3,7 +3,7 @@ import { acceptedClient, expect, signIn, test, unique } from "./kit";
 
 test.use({actionTimeout:15_000});
 
-test("F7 an administrator reviews a dependency closure, installs managed products, upgrades them and preserves customer extensions on uninstall", async ({ page }) => {
+test("F7 an administrator reviews a dependency closure, installs managed products, upgrades them and preserves customer extensions on retirement", async ({ page }) => {
   test.setTimeout(180_000);
   const source=acceptedClient(page,"publisher","publisher"), customer=acceptedClient(page);
   const tag=unique("product"), provider=`${tag}provider`, consumer=`${tag}consumer`;
@@ -81,14 +81,30 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   expect((await customer.read<{record:{note:string}}>(`/v1/records/${customerType}/${extensionRecord}`)).record.note).toBe("Keep my extension");
   await page.goto("/#/apps?tab=installed");
   await page.getByRole("button",{name:new RegExp(consumerTitle)}).click();
-  await panel.getByRole("button",{name:"Prepare to uninstall",exact:true}).click();
-  await panel.getByRole("button",{name:"Uninstall",exact:true}).click();
-  const uninstall=page.getByRole("dialog",{name:"Review uninstall",exact:true});
-  await uninstall.getByRole("button",{name:"Uninstall",exact:true}).click();
+  await panel.getByRole("button",{name:"Mark for uninstall",exact:true}).click();
+  await panel.getByRole("button",{name:"Retire",exact:true}).click();
+  const uninstall=page.getByRole("dialog",{name:"Review retirement",exact:true});
+  await uninstall.getByRole("button",{name:"Retire",exact:true}).click();
   await expect(uninstall).toBeHidden();
   expect((await customer.read<{record:{note:string}}>(`/v1/records/${customerType}/${extensionRecord}`)).record.note).toBe("Keep my extension");
-  const final=await customer.read<ResourceDirectory>("/v1/resources");
-  expect(final.resources.filter(resource=>resource.managedBy===consumer).every(resource=>resource.state==="archived")).toBeTruthy();
+  const retired=await customer.read<ResourceDirectory>("/v1/resources");
+  expect(retired.resources.filter(resource=>resource.managedBy===consumer).every(resource=>resource.state==="archived")).toBeTruthy();
+  await page.goto("/#/apps?tab=retired");
+  await page.getByRole("button",{name:new RegExp(consumerTitle)}).click();
+  const retiredPanel=page.getByRole("region",{name:`Package ${consumer}`});
+  await expect(retiredPanel.getByRole("button",{name:"Reinstall",exact:true})).toBeVisible();
+  await retiredPanel.getByRole("button",{name:"Reinstall",exact:true}).click();
+  const reinstall=page.getByRole("dialog",{name:"Review installation",exact:true});
+  await reinstall.getByRole("button",{name:"Install",exact:true}).click();
+  await expect(reinstall).toBeHidden();
+  expect((await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===consumer)?.installed?.state).toBe("active");
+  expect((await customer.read<{record:{note:string}}>(`/v1/records/${customerType}/${extensionRecord}`)).record.note).toBe("Keep my extension");
+  await page.goto("/#/apps?tab=installed");
+  await page.getByRole("button",{name:new RegExp(consumerTitle)}).click();
+  await panel.getByRole("button",{name:"Mark for uninstall",exact:true}).click();
+  await panel.getByRole("button",{name:"Retire",exact:true}).click();
+  await uninstall.getByRole("button",{name:"Retire",exact:true}).click();
+  await expect(uninstall).toBeHidden();
   const replacement=unique("REPLACEMENT"), replacementType=`${provider}replacement`;
   await source.submit("build.object",replacement,"create",{name:replacementType,title:"Replacement provider",project:publisherProject,fields});
   await source.submit("build.app",providerApp,"edit",{resources:[ref("object",`build.${replacementType}`)]});
@@ -109,10 +125,10 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   await removal.getByRole("button",{name:"Cancel",exact:true}).click();
   await page.goto("/#/apps?tab=installed");
   await page.getByRole("button",{name:new RegExp(providerTitle)}).click();
-  await updatePanel.getByRole("button",{name:"Prepare to uninstall",exact:true}).click();
-  await updatePanel.getByRole("button",{name:"Uninstall",exact:true}).click();
+  await updatePanel.getByRole("button",{name:"Mark for uninstall",exact:true}).click();
+  await updatePanel.getByRole("button",{name:"Retire",exact:true}).click();
   await expect(uninstall.getByRole("region",{name:"References affected by removal"})).toContainText(customerType);
-  await uninstall.getByRole("button",{name:"Uninstall",exact:true}).click();
+  await uninstall.getByRole("button",{name:"Retire",exact:true}).click();
   await expect(uninstall).toBeHidden();
   expect((await customer.read<{record:{note:string}}>(`/v1/records/${customerType}/${extensionRecord}`)).record.note).toBe("Keep my extension");
 });

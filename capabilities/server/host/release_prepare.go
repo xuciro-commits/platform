@@ -5,6 +5,7 @@ import releaseowner "platformserver/services/devops/releases"
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"slices"
 	"strconv"
@@ -23,6 +24,10 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 }
 
 func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool, request *releaseowner.OwnerDraftRequest, existing ...*stagedDecision) (*stagedDecision, json.RawMessage, error) {
+	return t.bootstrapOwnerDraftsLockedWithArchived(candidate, context, definitionOnly, request, false, existing...)
+}
+
+func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool, request *releaseowner.OwnerDraftRequest, includeArchived bool, existing ...*stagedDecision) (*stagedDecision, json.RawMessage, error) {
 	registry, err := t.assetRegistryLocked()
 	if err != nil {
 		return nil, nil, err
@@ -42,7 +47,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	if len(existing) > 0 {
 		decision = existing[0]
 	}
-	view, err := t.assetInstallationView(decision.records)
+	view, err := t.assetInstallationView(decision.records, includeArchived)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -159,8 +164,19 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		if draft.Ref.Kind == platform.AssetObject || draft.Ref.Kind == platform.AssetFlow {
 			logicalName = strings.TrimPrefix(logicalName, build.ID+".")
 		}
-		for _, row := range et.Rows().All() {
-			if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && row.Value.FieldByIndex(nameField.Index).String() == logicalName {
+		for id, row := range et.Rows().All() {
+			archived := row.Value.FieldByName("Record").Interface().(platform.Record).Archived
+			if includeArchived && archived && row.Value.FieldByIndex(nameField.Index).String() == logicalName {
+				value := reflect.New(row.Value.Type()).Elem()
+				value.Set(row.Value)
+				records.Header(value).Archived = false
+				copy := *row
+				copy.Value = value
+				et.SetRow(id, &copy)
+				view.records.TrackWrite(et.Info().Type + "/" + id)
+				archived = false
+			}
+			if (context.ManagedBy != "" || !archived) && row.Value.FieldByIndex(nameField.Index).String() == logicalName {
 				matches++
 			}
 		}

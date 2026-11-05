@@ -26,7 +26,7 @@ type LiveQueryFrame struct {
 	Results  []LiveQueryResult `json:"results"`
 }
 
-const liveReadBudget = 1 << 20
+const liveReadBudget = 8 << 20
 
 func liveReadAllowed(p string) bool {
 	if strings.HasPrefix(p, "/v1/packages/") && strings.HasSuffix(p, "/preparation") {

@@ -87,11 +87,11 @@ func Actions() []platform.Action {
 			Description: "Precheck a package's requirements and register the contributions it brings.", Payload: fields, Roles: admin},
 		{Schema: SchemaPackageUpgrade, Target: platform.PackageType, Capability: "packages", Title: "Upgrade package",
 			Description: "Replace an installed package's version, keeping the artifact it replaced.", Payload: fields, Roles: admin},
-		{Schema: SchemaPackageDrain, Target: platform.PackageType, Capability: "packages", Title: "Drain package",
-			Description: "Stop new use of the package's contributions; work in flight finishes and history stays.",
+		{Schema: SchemaPackageDrain, Target: platform.PackageType, Capability: "packages", Title: "Mark package for uninstall",
+			Description: "Check dependent products and mark the package for uninstall. New use is not blocked until runtime draining is enabled; finish work in flight before retiring.",
 			Payload:     []platform.Field{{Name: "id", Type: "string", Required: true}}, Roles: admin},
 		{Schema: SchemaPackageRetire, Target: platform.PackageType, Capability: "packages", Title: "Retire package",
-			Description: "Register nothing further from the package; its records and artifacts stay.",
+			Description: "Archive the package's managed definitions and project; business records, extensions, history and artifacts stay.",
 			Payload:     []platform.Field{{Name: "id", Type: "string", Required: true}}, Roles: admin},
 	}
 }

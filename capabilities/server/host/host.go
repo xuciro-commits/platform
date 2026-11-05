@@ -113,6 +113,8 @@ type Tenant struct {
 	cancels               computeowner.Cancels
 	memFiles              resources.MemoryFiles
 	uploads               resources.Uploads
+
+	includeArchivedDefinitions bool
 }
 
 func (t *Tenant) Audit() []platform.AuditEntry { return t.audit.All() }

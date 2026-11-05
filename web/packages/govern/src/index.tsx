@@ -2,7 +2,7 @@ import "./i18n";
 import { appRegistration, defineApp, useHost, type AppUI, type AppView, type Host } from "@platform/app";
 import { Button, Card, PageHeader, useWorkspace, navigationLinks, type NavSection, t } from "@platform/ui";
 import { MarkingEditor, Markings } from "./markings";
-import { Activity, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bookmark, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
+import { Activity, Archive, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bookmark, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
@@ -129,6 +129,7 @@ export const marketplace = defineApp({
   nav: () => [{ label: t("Marketplace"), items: [
     { label: t("Catalog"), icon: <Store />, route: { view: "apps",params:{tab:"catalog"} } },
     { label: t("Installed"), icon: <Blocks />, route: { view: "apps",params:{tab:"installed"} } },
+    { label: t("Retired"), icon: <Archive />, route: { view: "apps",params:{tab:"retired"} } },
     { label: t("Updates"), icon: <Upload />, route: { view: "apps",params:{tab:"updates"} } },
     { label: t("Package guide"), icon: <BookOpen />, route: { view: "package-help" } },
   ] }],
