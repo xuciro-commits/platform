@@ -119,13 +119,13 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 - 侧栏：Products、Releases、Test plans。
 - 产品页面：Contents（从项目选资源，显示依赖闭包）→ 保存的候选 → Versions（从候选冻结语义版本）→ Test plans。
-- Releases：候选表（原型 A）；选中候选打开发布审阅（M18：内容差异、检查、测试计划结果）；“New candidate”在页内组合。保存的候选在 Products 中按 Contents 与依赖冻结为语义版本；Marketplace 只消费这些产品版本。
+- Releases：候选表（原型 A）；选中候选打开发布审阅（M18：内容差异、检查、测试计划结果）；“New candidate”在页内组合。保存的候选在 Products 中按 Contents 与依赖冻结为语义版本；Marketplace 只消费这些产品版本。`system` 租户的发布记录只读：保留已有候选审查，不显示 “New candidate”，也不能保存或激活；平台自身维护走静态维护，业务发布在业务租户完成。
 
 ## Marketplace
 
-- 侧栏：Catalog、Installed、Updates。
+- 侧栏：Catalog、Installed、Retired、Updates。
 - 产品详情：描述、版本、包含的资源类型与数量、所需权限 → 主按钮“Install”打开 Sheet（目标项目名、标记映射、角色映射）→ 安装审阅（M18）。
-- Installed：安装表，带版本与“可升级”；升级走升级审阅（列出客户扩展受影响处）。
+- Installed：安装表，带版本与“可升级”；升级走升级审阅（列出客户扩展受影响处）；退役走影响审阅，Retired 保留最后安装版本并允许同版本重装。
 
 ## Data Lineage
 

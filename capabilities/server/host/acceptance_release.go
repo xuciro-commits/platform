@@ -126,6 +126,9 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 	if !holdsIndependentBuildRole(m, build.Builder, build.Publisher) {
 		return "", fmt.Errorf("builder or publisher role required")
 	}
+	if t.ID == systemscope.Tenant {
+		return "", fmt.Errorf("%s", systemReleaseWriteDiagnostic)
+	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("candidate ID and idempotency key are required")
 	}
@@ -165,7 +168,10 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 	return t.ActivateReleaseWithUpgrade(m, candidateID, key, "", now)
 }
 
-const systemReleaseActivationDiagnostic = "System definitions activate through an approved Platform change. Publish business applications in a business workspace."
+const (
+	systemReleaseWriteDiagnostic      = "System self-hosting is frozen; release records are read-only. Publish business applications in a business workspace."
+	systemReleaseActivationDiagnostic = "System self-hosting is frozen; this candidate is a retained review record and cannot be activated. Publish business applications in a business workspace."
+)
 
 func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key, upgradeID string, now time.Time) (string, error) {
 	if t.ID == systemscope.Tenant {
