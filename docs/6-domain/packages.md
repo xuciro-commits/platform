@@ -102,7 +102,7 @@ read-when: 改动产品包、Marketplace 安装、升级、卸载、重装、产
 - ERP 拥有 `productionbatch`、`erpreceipt`、`erpmove`、`erpstock`、`erpproductionposting`、`erpentry` 和 `erpline`；批次接收、库存移动、生产与会计记录必须在同一个 ERP 接受结果内完成。
 - MES 拥有现场执行、`mesbatch`、`mesissue`、`messignature` 和 `mesproductionresult`；MES 现场完成到 ERP 接收允许最终一致。
 - MES 通过现有 `mesproductionresult.send`、Confirmation、`mesproductionconfirm` 回写 ERP 的 `productionorder.confirm`；不新增 outbox、网关或分布式事务协调器。
-- ERP 包必须同时提供版本化读协议或查询，供 MES 读取生产订单和生产批次；MES 不轮询 ERP 内部记录地址。
+- ERP 包通过 `productionorderupstream` 和 `productionbatchupstream` 命名查询向 MES 提供生产订单与生产批次；MES 不轮询 ERP 内部记录地址。
 - 只有 ERP 内部需要强同步；MES 与 ERP 之间不得把库存或会计拆成独立异步步骤，也不能用新的幂等键重试已接收批次。
 
 存量租户不能直接安装拆分包。`build.resource.rehome` 提供管理员接受结果，只改变资源的 `Project / ManagedBy` 和资源修订号，保留 RID、类型名、应用身份、记录、媒体和历史；项目应用自身不能改变项目 ID，带文件夹的资源必须先移出文件夹，批量请求用资源修订号拒绝陈旧写入。完成 rehome 后再归档旧包。未完成迁移前，旧单体包保留为兼容伞，新租户使用拆分包。拆包顺序固定为 ERP base、MES dependent；当前所有 blueprint asset 仍属于 `build`，拆包只改变所有权与依赖，不产生第二套事务权威。

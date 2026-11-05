@@ -795,6 +795,44 @@
         "ref": {
           "app": "build",
           "kind": "query",
+          "name": "productionorderupstream"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.query-1",
+        "body": {
+          "name": "productionorderupstream",
+          "title": "Upstream production orders",
+          "description": "Published production orders visible to the calling member.",
+          "object": "build.productionorder",
+          "sort": [
+            "id"
+          ],
+          "limit": 200
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "query",
+          "name": "productionbatchupstream"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.query-1",
+        "body": {
+          "name": "productionbatchupstream",
+          "title": "Accepted upstream batches",
+          "description": "Published production batches visible to the calling member.",
+          "object": "build.productionbatch",
+          "sort": [
+            "id"
+          ],
+          "limit": 200
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "query",
           "name": "erpstockvalue"
         },
         "contractVersion": 1,
@@ -12098,7 +12136,7 @@
           "title": "Upstream production plans",
           "connection": "productionupstream",
           "profile": "json",
-          "url": "/v1/records/build.productionorder?limit=200",
+          "url": "/v1/queries/build/productionorderupstream",
           "path": "records",
           "object": "build.mesupstreamorder",
           "objectBindings": {
@@ -15660,7 +15698,7 @@
           "title": "Accepted upstream batches",
           "connection": "productionupstream",
           "profile": "json",
-          "url": "/v1/records/build.productionbatch?limit=200&sort=-created",
+          "url": "/v1/queries/build/productionbatchupstream",
           "path": "records",
           "dataset": "mesproductionreceipts"
         }
@@ -23469,6 +23507,16 @@
               "app": "build",
               "kind": "query",
               "name": "erpcomponentsbyproduct"
+            },
+            {
+              "app": "build",
+              "kind": "query",
+              "name": "productionorderupstream"
+            },
+            {
+              "app": "build",
+              "kind": "query",
+              "name": "productionbatchupstream"
             },
             {
               "app": "build",

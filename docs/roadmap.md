@@ -21,7 +21,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范见 [6-domain/packages](6-domain/packages.md)。一批只交付一个可运行的完整路径；完成的条目直接删除。
 
-- [ ] C8 拆分 manufacturing 为 core/ERP/MES（按 C6、C7 的结论），移除 MES 对 ERP 内部记录地址的轮询，改用对象接口、动作或版本化查询。
+- [ ] C8 按 C6、C7 的结论拆分 manufacturing 为 core/ERP/MES 包并完成存量 rehome；MES 已改用 `productionorderupstream` / `productionbatchupstream` 查询，不再轮询 ERP 内部记录地址。
 - [ ] C11 增加统一 lifecycle impact graph：依赖、客户扩展、客户引用、在飞工作、连接前提和可保留输出供 drain、uninstall、upgrade 共用一次计算。
 - [ ] C12 只在真实需求出现后实现 purge/detach、输出保留、制品 GC、自动升级、维护窗口和多安装实例；默认保留数据、手动升级。
 
