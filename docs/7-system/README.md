@@ -13,6 +13,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 - 本文：进程与包、写入路径、读取路径、运行机制、协议与版本、代码规范。
 - [web.md](web.md)：前端架构。
 - [verification.md](verification.md)：检查、钩子与验收。
+- [observability.md](observability.md)：日志、审计、运行诊断、追踪、指标、健康、保留与访问权限。
 
 ## 7.1 规则
 
@@ -91,7 +92,7 @@ POST /v1/submissions
 | 后台工作 | 同步、构建、自动化、投递经工作队列；每项有运行记录与重试 |
 | 隔离计算 | 函数在独立进程的 WASM 中执行：内存页上限、并发槽、模块大小上限、摘要校验；构建在无网络容器中 |
 | AI 网关 | 预留额度 → 调用供应商 → 结算；推断许可由部署环境指定 |
-| 可观测 | OpenTelemetry 追踪与指标；`/healthz`、`/metrics` |
+| 可观测 | 运行中心的日志、追踪、指标与健康；审计独立；详见 [observability](observability.md) |
 
 ## 7.5.1 发布路径
 

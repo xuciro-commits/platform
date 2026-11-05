@@ -2,7 +2,7 @@ import "./i18n";
 import { appRegistration, defineApp, useHost, type AppUI, type AppView, type Host } from "@platform/app";
 import { Button, Card, PageHeader, useWorkspace, navigationLinks, type NavSection, t } from "@platform/ui";
 import { MarkingEditor, Markings } from "./markings";
-import { Activity, Archive, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bookmark, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, Settings, ShieldCheck, FlaskConical, History, KeyRound, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
+import { Activity, Archive, ArrowLeftRight, BarChart3, BookA, BookOpen, Blocks, Bookmark, Bot, BrainCircuit, Building2, Cable, LayoutDashboard, ScrollText, Settings, ShieldCheck, FlaskConical, History, KeyRound, Route, Server, SlidersHorizontal, Store, Upload, Users } from "lucide-react";
 import { Members, MemberDetail } from "./people";
 import { Permissions } from "./permissions";
 import { MyAccount } from "./account";
@@ -14,6 +14,7 @@ import { PackagePreparation } from "./package-preparation";
 import { Words } from "./words";
 import { SystemHealth, Integrations, Endpoints, AppSettingsView, Audit } from "./operations";
 import { MonitoringOverviewView, MonitoringRunsView, MonitoringViewsView } from "./monitoring";
+import { MonitoringLogsView } from "./observability/logs";
 import { AIConfiguration } from "./ai-configuration";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
 import { Credentials } from "./credentials";
@@ -149,6 +150,7 @@ export function createMonitoring(host: Host, integration?: Pick<AppUI, "for" | "
       ...(runs ? [
         { id: "monitoring-overview", title: () => t("Overview"), render: () => <MonitoringOverviewView /> },
         { id: "monitoring-runs", title: () => t("Runs"), render: (p: Record<string, string>) => <MonitoringRunsView type={p.type} status={p.status} /> },
+        { id: "monitoring-logs", title: () => t("Logs"), render: () => <MonitoringLogsView /> },
         { id: "monitoring-views", title: () => t("Monitoring views"), render: () => <MonitoringViewsView /> },
       ] : []),
       ...(admin(host) ? [
@@ -160,6 +162,7 @@ export function createMonitoring(host: Host, integration?: Pick<AppUI, "for" | "
         ...(monitoringRuns(host) ? [
           { label: t("Overview"), icon: <LayoutDashboard />, route: { view: "monitoring-overview" } },
           { label: t("Runs"), icon: <Route />, route: { view: "monitoring-runs" } },
+          { label: t("Logs"), icon: <ScrollText />, route: { view: "monitoring-logs" } },
           { label: t("Monitoring views"), icon: <Bookmark />, route: { view: "monitoring-views" } },
         ] : []),
         ...(admin(host) ? [{ label: t("Health"), icon: <BarChart3 />, route: { view: "system-health" } }] : []),

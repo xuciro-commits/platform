@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -178,11 +179,11 @@ func (w *edgeWriter) NoCompression() { w.noCompress = true }
 func (w *edgeWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 type Stats struct {
-	inflight atomic.Int64
-	total    atomic.Int64
-	mu       sync.Mutex
-	counts   map[string]*atomic.Int64
-	latency  map[string]*latencyHist
+	inflight     atomic.Int64
+	total        atomic.Int64
+	mu           sync.Mutex
+	statusCounts map[string]map[string]*atomic.Int64
+	latency      map[string]*latencyHist
 }
 
 type latencyHist struct {
@@ -208,7 +209,7 @@ func (h *latencyHist) observe(d time.Duration) {
 }
 
 func NewStats() *Stats {
-	return &Stats{counts: map[string]*atomic.Int64{}, latency: map[string]*latencyHist{}}
+	return &Stats{statusCounts: map[string]map[string]*atomic.Int64{}, latency: map[string]*latencyHist{}}
 }
 
 func patternOf(path string) string {
@@ -231,11 +232,20 @@ func patternOf(path string) string {
 func (s *Stats) observe(pattern string, status int, d time.Duration) {
 	s.total.Add(1)
 	key := pattern
+	class := "unknown"
+	if status >= 100 && status < 600 {
+		class = strconv.Itoa(status/100) + "xx"
+	}
 	s.mu.Lock()
-	counter, ok := s.counts[key]
-	if !ok {
+	counts := s.statusCounts[key]
+	if counts == nil {
+		counts = map[string]*atomic.Int64{}
+		s.statusCounts[key] = counts
+	}
+	counter := counts[class]
+	if counter == nil {
 		counter = &atomic.Int64{}
-		s.counts[key] = counter
+		counts[class] = counter
 	}
 	hist, ok := s.latency[key]
 	if !ok {
@@ -244,27 +254,35 @@ func (s *Stats) observe(pattern string, status int, d time.Duration) {
 	}
 	s.mu.Unlock()
 	counter.Add(1)
-	_ = status
 	hist.observe(d)
 }
 
 func (s *Stats) WritePrometheus(w io.Writer) {
 	var b strings.Builder
-	b.WriteString("# HELP platform_requests_total Requests served, by route pattern.\n# TYPE platform_requests_total counter\n")
+	b.WriteString("# HELP platform_requests_total Requests served, by route pattern and status class.\n# TYPE platform_requests_total counter\n")
 	s.mu.Lock()
-	patterns := make([]string, 0, len(s.counts))
-	for pattern := range s.counts {
+	patterns := make([]string, 0, len(s.statusCounts))
+	for pattern := range s.statusCounts {
 		patterns = append(patterns, pattern)
 	}
 	s.mu.Unlock()
+	slices.Sort(patterns)
+	type classCounter struct {
+		class   string
+		counter *atomic.Int64
+	}
 	for _, pattern := range patterns {
 		s.mu.Lock()
-		counter, hist := s.counts[pattern], s.latency[pattern]
-		s.mu.Unlock()
-		if counter == nil {
-			continue
+		counts, hist := s.statusCounts[pattern], s.latency[pattern]
+		classes := make([]classCounter, 0, len(counts))
+		for class, counter := range counts {
+			classes = append(classes, classCounter{class: class, counter: counter})
 		}
-		b.WriteString("platform_requests_total{route=\"" + pattern + "\"} " + strconv.FormatInt(counter.Load(), 10) + "\n")
+		s.mu.Unlock()
+		slices.SortFunc(classes, func(left, right classCounter) int { return strings.Compare(left.class, right.class) })
+		for _, class := range classes {
+			b.WriteString("platform_requests_total{route=\"" + pattern + "\",status_class=\"" + class.class + "\"} " + strconv.FormatInt(class.counter.Load(), 10) + "\n")
+		}
 		if hist == nil {
 			continue
 		}
@@ -294,7 +312,7 @@ func Edge(next http.Handler, stats *Stats, limiter *Limiter, tenantHeader, schem
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept-Language, "+tenantHeader+", "+schemaVersionHeader+", If-None-Match")
-		w.Header().Set("Access-Control-Expose-Headers", "ETag")
+		w.Header().Set("Access-Control-Expose-Headers", "ETag, X-Request-Id")
 		w.Header().Set("Vary", "Accept-Language")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		if r.Method == http.MethodOptions {
@@ -317,6 +335,9 @@ func Edge(next http.Handler, stats *Stats, limiter *Limiter, tenantHeader, schem
 		edge := &edgeWriter{ResponseWriter: w, request: r, acceptGzip: AcceptsGzip(r)}
 		next.ServeHTTP(edge, r)
 		edge.Close()
+		if r.Pattern != "" {
+			pattern = r.Pattern
+		}
 		stats.observe(pattern, edge.statusCode(), time.Since(started))
 		if accessLog {
 			log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, edge.statusCode(), time.Since(started).Round(time.Microsecond), RemoteOf(r))

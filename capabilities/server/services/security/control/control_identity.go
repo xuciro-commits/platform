@@ -228,6 +228,9 @@ const (
 	SettingMFA          = "mfaRequired"
 	SettingSessionHours = "sessionHours"
 	SettingDigest       = "digest"
+	SettingLogLevel     = "logLevel"
+	SettingLogRequests  = "logRequests"
+	SettingLogRetention = "logRetentionDays"
 )
 
 func tenantSettings() []platform.Setting {
@@ -249,6 +252,9 @@ func tenantSettings() []platform.Setting {
 		{Name: SettingMFA, Title: "Require a second factor", Type: "boolean", Default: "false", Description: "Every sign-in must carry the identity provider's word that a second factor was used (amr); a host whose provider does not say admits none."},
 		{Name: SettingSessionHours, Title: "Session length (hours)", Type: "integer", Default: "12", Description: "How long a sign-in lasts on this host before the identity provider is asked again; 0: as long as the credential."},
 		{Name: SettingDigest, Title: "Mail digest", Type: "choice", Default: "instant", Choices: []string{"instant", "hourly", "daily"}, Description: "How notifications are mailed until a member chooses."},
+		{Name: SettingLogLevel, Title: "Log level", Type: "choice", Default: "info", Choices: []string{"debug", "info", "warn", "error"}, Description: "The lowest severity written for this tenant."},
+		{Name: SettingLogRequests, Title: "Request log sample (%)", Type: "integer", Default: "10", Description: "The percentage of successful requests written; failures and requests at or over one second are always written."},
+		{Name: SettingLogRetention, Title: "Log retention (days)", Type: "integer", Default: "30", Description: "How long operational logs are retained, from 0 to 3650 days; 0 stops new logs without deleting existing logs."},
 	}
 }
 

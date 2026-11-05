@@ -592,6 +592,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 		host.SignWith(signer, d.TokenTTL)
 	}
 	return d.listen(ctx, host, func(shutdown context.Context) error {
+		for _, t := range registry.List() {
+			t.FlushObservations()
+		}
 		if err := resources.Close(shutdown); err != nil {
 			return err
 		}

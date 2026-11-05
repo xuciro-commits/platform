@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"platformserver/platform"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,6 +17,9 @@ type Store interface {
 	SaveTranscript(x Transcript)
 	Transcripts(tenant, run string, limit int) []Transcript
 	PurgeTranscripts(tenant string, before time.Time)
+	SaveObservations(events []platform.Observation) error
+	QueryObservations(query platform.ObservationQuery) (platform.ObservationPage, error)
+	PurgeObservations(tenant string, before time.Time) (int, error)
 }
 
 type Transcript struct {

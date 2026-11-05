@@ -181,6 +181,7 @@ func (h *Host) Handler() http.Handler {
 	h.routesDiscovery(rt)
 	h.routesApplications(rt)
 	h.routesMonitoring(rt)
+	h.routesObservability(rt)
 	h.routesRecords(rt)
 	h.routesResources(rt)
 	h.routesEditProposals(rt)
@@ -197,18 +198,14 @@ func (h *Host) Handler() http.Handler {
 	h.hostConsoleRoutes(mux)
 	h.environmentRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		quarantined := 0
 		tenants := h.currentTenants()
+		quarantined := 0
 		for _, t := range tenants {
 			if t.quarantined() {
 				quarantined++
 			}
 		}
-		status := "ok"
-		if quarantined > 0 {
-			status = "degraded"
-		}
-		WriteJSON(w, http.StatusOK, map[string]any{"status": status, "tenants": len(tenants), "quarantined": quarantined, "release": h.Release, "releaseDigest": h.ReleaseDigest})
+		WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "tenants": len(tenants), "quarantined": quarantined, "release": h.Release, "releaseDigest": h.ReleaseDigest})
 	})
 	if h.Web != "" {
 		if h.web == nil {
@@ -246,13 +243,19 @@ func (h *Host) Handler() http.Handler {
 }
 
 func (h *Host) scrapeAllowed(r *http.Request) bool {
-	if r.Header.Get("Authorization") != "" {
-		if _, _, ok := h.member(r); ok {
-			return true
-		}
-	}
 	host := transport.RemoteOf(r)
-	return host == "127.0.0.1" || host == "::1" || host == "localhost"
+	if host == "127.0.0.1" || host == "::1" || host == "localhost" {
+		return true
+	}
+	if h.authenticate == nil {
+		return false
+	}
+	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if credential == "" {
+		return false
+	}
+	subject, ok := h.authenticate(credential)
+	return ok && h.HostAdmins[subject]
 }
 
 var statuses = map[pb.ErrorCode]int{

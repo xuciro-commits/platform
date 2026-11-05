@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"platformserver/platform"
 )
 
 type File struct {
@@ -30,6 +32,9 @@ type File struct {
 	writeFault  error
 	vectors     map[string]map[string][]float32
 	transcripts []Transcript
+
+	observationMu  sync.Mutex
+	observationIDs map[string]map[string]struct{}
 }
 
 type fileLine struct {
@@ -76,6 +81,10 @@ func OpenFile(dir string, identify Identify) (*File, error) {
 }
 
 func (j *File) entriesPath() string { return filepath.Join(j.dir, "journal.jsonl") }
+
+func (j *File) observationsPath() string {
+	return filepath.Join(j.dir, "derived", "observations.jsonl")
+}
 
 func (j *File) loadEntries() error {
 	file, err := os.Open(j.entriesPath())
@@ -537,4 +546,179 @@ func (j *File) PurgeTranscripts(tenant string, before time.Time) {
 	if err := WriteFileAtomic(path, out); err != nil {
 		log.Printf("purge transcripts: %v", err)
 	}
+}
+
+func (j *File) loadObservationIDs() error {
+	events, err := j.readObservations()
+	if err != nil {
+		return err
+	}
+	ids := map[string]map[string]struct{}{}
+	for _, event := range events {
+		if ids[event.Tenant] == nil {
+			ids[event.Tenant] = map[string]struct{}{}
+		}
+		ids[event.Tenant][event.ID] = struct{}{}
+	}
+	j.observationIDs = ids
+	return nil
+}
+
+func (j *File) readObservations() ([]platform.Observation, error) {
+	file, err := os.Open(j.observationsPath())
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("observations: %w", err)
+	}
+	defer file.Close()
+	lines := bufio.NewScanner(file)
+	lines.Buffer(make([]byte, 0, 1<<20), 64<<20)
+	number := 0
+	var events []platform.Observation
+	seen := map[string]struct{}{}
+	for lines.Scan() {
+		number++
+		if len(lines.Bytes()) == 0 {
+			continue
+		}
+		var event platform.Observation
+		if err := json.Unmarshal(lines.Bytes(), &event); err != nil {
+			return nil, fmt.Errorf("observations: %s line %d: %v", j.observationsPath(), number, err)
+		}
+		key := event.Tenant + "\x00" + event.ID
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		events = append(events, normalizeObservation(event))
+	}
+	if err := lines.Err(); err != nil {
+		return nil, fmt.Errorf("observations: %w", err)
+	}
+	return events, nil
+}
+
+func (j *File) SaveObservations(events []platform.Observation) error {
+	if len(events) == 0 {
+		return nil
+	}
+	j.observationMu.Lock()
+	defer j.observationMu.Unlock()
+	if j.observationIDs == nil {
+		if err := j.loadObservationIDs(); err != nil {
+			return err
+		}
+	}
+	added := map[string][]string{}
+	pending := map[string]struct{}{}
+	var raw bytes.Buffer
+	for _, event := range events {
+		event = normalizeObservation(event)
+		if _, seen := j.observationIDs[event.Tenant][event.ID]; seen {
+			continue
+		}
+		key := event.Tenant + "\x00" + event.ID
+		if _, seen := pending[key]; seen {
+			continue
+		}
+		line, err := json.Marshal(event)
+		if err != nil {
+			return fmt.Errorf("observations: %w", err)
+		}
+		pending[key] = struct{}{}
+		added[event.Tenant] = append(added[event.Tenant], event.ID)
+		raw.Write(line)
+		raw.WriteByte('\n')
+	}
+	if raw.Len() == 0 {
+		return nil
+	}
+	file, err := os.OpenFile(j.observationsPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return fmt.Errorf("observations: %w", err)
+	}
+	if _, err := file.Write(raw.Bytes()); err != nil {
+		file.Close()
+		return fmt.Errorf("observations: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return fmt.Errorf("observations: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("observations: %w", err)
+	}
+	for tenant, ids := range added {
+		if j.observationIDs[tenant] == nil {
+			j.observationIDs[tenant] = map[string]struct{}{}
+		}
+		for _, id := range ids {
+			j.observationIDs[tenant][id] = struct{}{}
+		}
+	}
+	return nil
+}
+
+func (j *File) QueryObservations(query platform.ObservationQuery) (platform.ObservationPage, error) {
+	if query.Tenant == "" {
+		return platform.ObservationPage{}, fmt.Errorf("observations: tenant is required")
+	}
+	j.observationMu.Lock()
+	events, err := j.readObservations()
+	j.observationMu.Unlock()
+	if err != nil {
+		return platform.ObservationPage{}, err
+	}
+	return selectObservationPage(events, query, earliestObservation(events, query.Tenant))
+}
+
+func (j *File) PurgeObservations(tenant string, before time.Time) (int, error) {
+	j.observationMu.Lock()
+	defer j.observationMu.Unlock()
+	events, err := j.readObservations()
+	if err != nil {
+		return 0, err
+	}
+	kept := make([]platform.Observation, 0, len(events))
+	removed := 0
+	for _, event := range events {
+		if event.Tenant == tenant && event.At.Before(before) {
+			removed++
+			continue
+		}
+		kept = append(kept, event)
+	}
+	if removed == 0 {
+		return 0, nil
+	}
+	path := j.observationsPath()
+	if len(kept) == 0 {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return 0, fmt.Errorf("observations: %w", err)
+		}
+	} else {
+		var raw bytes.Buffer
+		for _, event := range kept {
+			line, err := json.Marshal(event)
+			if err != nil {
+				return 0, fmt.Errorf("observations: %w", err)
+			}
+			raw.Write(line)
+			raw.WriteByte('\n')
+		}
+		if err := WriteFileAtomic(path, raw.Bytes()); err != nil {
+			return 0, err
+		}
+	}
+	ids := map[string]map[string]struct{}{}
+	for _, event := range kept {
+		if ids[event.Tenant] == nil {
+			ids[event.Tenant] = map[string]struct{}{}
+		}
+		ids[event.Tenant][event.ID] = struct{}{}
+	}
+	j.observationIDs = ids
+	return removed, nil
 }

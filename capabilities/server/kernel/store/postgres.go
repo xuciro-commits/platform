@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"platformserver/platform"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
@@ -85,6 +87,20 @@ var schema = []string{
 		tenant text not null, at timestamptz not null, member text not null, model text not null,
 		run text not null default '', request jsonb not null, answer jsonb not null, outcome text not null)`,
 	`create index if not exists transcripts_run on transcripts (tenant, run, at)`,
+	`create table if not exists observations (
+		tenant text not null, id text not null, at timestamptz not null,
+		level text not null, source text not null, member text not null default '',
+		app text not null default '', route text not null default '',
+		request_id text not null default '', trace_id text not null default '',
+		span_id text not null default '', run_id text not null default '',
+		resource text not null default '', submission_id text not null default '',
+		change_id text not null default '', outcome text not null default '',
+		message text not null, attributes jsonb not null default '{}'::jsonb,
+		primary key (tenant, id))`,
+	`create index if not exists observations_tenant_at on observations (tenant, at desc, id desc)`,
+	`create index if not exists observations_tenant_run on observations (tenant, run_id, at desc)`,
+	`create index if not exists observations_tenant_trace on observations (tenant, trace_id, at desc)`,
+	`create index if not exists observations_tenant_level on observations (tenant, level, at desc)`,
 	`drop index if exists journal_accepted_key`,
 	`drop index if exists journal_result_key`,
 	`drop index if exists journal_result_request_key`,
@@ -538,4 +554,127 @@ func (j *Postgres) PurgeTranscripts(tenant string, before time.Time) {
 	if _, err := j.pool.Exec(context.Background(), `delete from transcripts where tenant = $1 and at < $2`, tenant, before); err != nil {
 		log.Printf("purge transcripts: %v", err)
 	}
+}
+
+func (j *Postgres) SaveObservations(events []platform.Observation) error {
+	if len(events) == 0 {
+		return nil
+	}
+	ctx := context.Background()
+	tx, err := j.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	batch := &pgx.Batch{}
+	for _, event := range events {
+		event = normalizeObservation(event)
+		batch.Queue(`insert into observations
+			(tenant, id, at, level, source, member, app, route, request_id, trace_id, span_id,
+			 run_id, resource, submission_id, change_id, outcome, message, attributes)
+			values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+			on conflict (tenant, id) do nothing`,
+			event.Tenant, event.ID, event.At, event.Level, event.Source, event.Member, event.App, event.Route,
+			event.RequestID, event.TraceID, event.SpanID, event.RunID, event.Resource, event.SubmissionID,
+			event.ChangeID, event.Outcome, event.Message, event.Attributes)
+	}
+	results := tx.SendBatch(ctx, batch)
+	for range events {
+		if _, err := results.Exec(); err != nil {
+			results.Close()
+			return err
+		}
+	}
+	if err := results.Close(); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (j *Postgres) QueryObservations(query platform.ObservationQuery) (platform.ObservationPage, error) {
+	cursorAt, cursorID, hasCursor, err := prepareObservationQuery(query)
+	if err != nil {
+		return platform.ObservationPage{}, err
+	}
+	limit := observationLimit(query.Limit)
+	args := []any{query.Tenant}
+	where := []string{"tenant = $1"}
+	filter := func(column, value string) {
+		if value == "" {
+			return
+		}
+		args = append(args, value)
+		where = append(where, fmt.Sprintf("%s = $%d", column, len(args)))
+	}
+	filter("level", query.Level)
+	filter("source", query.Source)
+	filter("app", query.App)
+	filter("member", query.Member)
+	filter("request_id", query.RequestID)
+	filter("trace_id", query.TraceID)
+	filter("run_id", query.RunID)
+	filter("resource", query.Resource)
+	if !query.From.IsZero() {
+		args = append(args, query.From)
+		where = append(where, fmt.Sprintf("at >= $%d", len(args)))
+	}
+	if !query.To.IsZero() {
+		args = append(args, query.To)
+		where = append(where, fmt.Sprintf("at < $%d", len(args)))
+	}
+	if query.Search != "" {
+		args = append(args, strings.ToLower(query.Search))
+		where = append(where, fmt.Sprintf(`(strpos(lower(message), $%d) > 0 or exists (
+			select 1 from jsonb_each_text(attributes) attribute
+			where strpos(lower(attribute.value), $%d) > 0))`, len(args), len(args)))
+	}
+	if hasCursor {
+		args = append(args, cursorAt, cursorID)
+		where = append(where, fmt.Sprintf("(at < $%d or (at = $%d and id < $%d))", len(args)-1, len(args)-1, len(args)))
+	}
+	statement := `select tenant, id, at, level, source, member, app, route, request_id, trace_id, span_id,
+		run_id, resource, submission_id, change_id, outcome, message, attributes
+		from observations where ` + strings.Join(where, " and ") +
+		fmt.Sprintf(" order by at desc, id desc limit %d", limit+1)
+	rows, err := j.pool.Query(context.Background(), statement, args...)
+	if err != nil {
+		return platform.ObservationPage{}, err
+	}
+	defer rows.Close()
+	entries := make([]platform.Observation, 0, limit+1)
+	for rows.Next() {
+		var event platform.Observation
+		if err := rows.Scan(&event.Tenant, &event.ID, &event.At, &event.Level, &event.Source, &event.Member,
+			&event.App, &event.Route, &event.RequestID, &event.TraceID, &event.SpanID, &event.RunID,
+			&event.Resource, &event.SubmissionID, &event.ChangeID, &event.Outcome, &event.Message,
+			&event.Attributes); err != nil {
+			return platform.ObservationPage{}, err
+		}
+		event.At = event.At.UTC()
+		entries = append(entries, event)
+	}
+	if err := rows.Err(); err != nil {
+		return platform.ObservationPage{}, err
+	}
+	var retainedFrom *time.Time
+	if err := j.pool.QueryRow(context.Background(), `select min(at) from observations where tenant = $1`, query.Tenant).Scan(&retainedFrom); err != nil {
+		return platform.ObservationPage{}, err
+	}
+	hasMore := len(entries) > limit
+	if hasMore {
+		entries = entries[:limit]
+	}
+	var earliest time.Time
+	if retainedFrom != nil {
+		earliest = retainedFrom.UTC()
+	}
+	return finishObservationPage(entries, earliest, hasMore), nil
+}
+
+func (j *Postgres) PurgeObservations(tenant string, before time.Time) (int, error) {
+	tag, err := j.pool.Exec(context.Background(), `delete from observations where tenant = $1 and at < $2`, tenant, before)
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
 }

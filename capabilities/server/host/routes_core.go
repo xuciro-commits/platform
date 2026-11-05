@@ -60,23 +60,33 @@ func (h *Host) routesCore(rt *routes) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/submissions", Summary: "Submit a decision: an action on a target, received in the kernel's order (K6) and journaled once accepted", Body: pb.Submission{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var sub *pb.Submission
+		var record *pb.ChangeRecord
+		var refusal *kernel.Error
+		defer func() {
+			t.observeSubmission(r, m, sub, record, refusal, h.Now())
+		}()
 		body, _ := io.ReadAll(r.Body)
-		sub := &pb.Submission{}
+		sub = &pb.Submission{}
 		if protojson.Unmarshal(body, sub) != nil {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			refusal = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			Reply(w, nil, refusal)
 			return
 		}
 		if original := r.Header.Get("Platform-Correction-Of"); original != "" {
 			correlation := "correction:" + original
 			if sub.CorrelationId != "" && sub.CorrelationId != correlation {
-				Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The correction source differs from the submitted identity"))
+				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The correction source differs from the submitted identity")
+				Reply(w, nil, refusal)
 				return
 			}
 			sub.CorrelationId = correlation
 		}
-		record, err, issues := t.submitSchemaDiagnosed(m, sub, r.Header.Get(SchemaVersionHeader), h.Now())
+		var issues []platform.FieldIssue
+		record, refusal, issues = t.submitSchemaDiagnosed(m, sub, r.Header.Get(SchemaVersionHeader), h.Now())
 		localized := t.localizedFieldIssues(m, issues, t.Language(m, r))
-		Reply(w, record, t.i18n.Said(err, t.Language(m, r)), localized...)
+		refusal = t.i18n.Said(refusal, t.Language(m, r))
+		Reply(w, record, refusal, localized...)
 	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: Explanation{},
 		Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

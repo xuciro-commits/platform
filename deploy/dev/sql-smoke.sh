@@ -138,6 +138,20 @@ submit admin platform platform.project sqlproject platform.project.save sql-smok
 submit delegate build build.object sqlobject build.object.create sql-smoke-object 0 \
   '{"name":"sqlobject","title":"SQL object","project":"sqlproject","fields":[{"name":"title","title":"Title","type":"text","required":true}],"access":[{"role":"user","read":"all"}],"states":[{"name":"open","title":"Open"}]}'
 
+log_from="$(python3 -c 'from datetime import datetime, timedelta, timezone; print((datetime.now(timezone.utc)-timedelta(hours=1)).isoformat().replace("+00:00", "Z"))')"
+log_to="$(python3 -c 'from datetime import datetime, timedelta, timezone; print((datetime.now(timezone.utc)+timedelta(hours=1)).isoformat().replace("+00:00", "Z"))')"
+curl -fsS -H 'Authorization: Bearer admin' -H "Platform-Tenant: ${tenant}" \
+  "http://127.0.0.1:${port}/v1/monitoring/logs?from=${log_from}&to=${log_to}&source=submit&limit=100" >"$work/logs.json"
+python3 - "$work/logs.json" <<'PY'
+import json
+import sys
+
+page = json.load(open(sys.argv[1]))
+entries = page.get("entries", [])
+assert entries, page
+assert any(item.get("source") == "submit" and item.get("outcome") == "ok" for item in entries), entries
+PY
+
 curl -fsS -H 'Authorization: Bearer viewer' -H "Platform-Tenant: ${tenant}" \
   "http://127.0.0.1:${port}/v1/resources" >"$work/viewer-resources.json"
 curl -fsS -H 'Authorization: Bearer discoverer' -H "Platform-Tenant: ${tenant}" \
@@ -165,6 +179,17 @@ curl -fsS -H 'Authorization: Bearer admin' -H "Platform-Tenant: ${tenant}" \
 python3 -c 'import json,sys; r=json.load(open(sys.argv[1])).get("record",{}); assert r.get("title")=="SQL project", r; assert r.get("revision")==1, r' "$work/record.json"
 curl -fsS -H 'Authorization: Bearer viewer' -H "Platform-Tenant: ${tenant}" \
   "http://127.0.0.1:${port}/v1/resources" >"$work/recovered-resources.json"
+curl -fsS -H 'Authorization: Bearer admin' -H "Platform-Tenant: ${tenant}" \
+  "http://127.0.0.1:${port}/v1/monitoring/logs?from=${log_from}&to=${log_to}&source=submit&limit=100" >"$work/recovered-logs.json"
+python3 - "$work/recovered-logs.json" <<'PY'
+import json
+import sys
+
+page = json.load(open(sys.argv[1]))
+entries = page.get("entries", [])
+assert entries, page
+assert any(item.get("source") == "submit" and item.get("outcome") == "ok" for item in entries), entries
+PY
 python3 - "$work/recovered-resources.json" <<'PY'
 import json
 import sys

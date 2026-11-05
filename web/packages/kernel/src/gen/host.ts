@@ -3077,6 +3077,27 @@ export type ObjectView = {
   page: AssetRef;
 };
 
+export type Observation = {
+  id: string;
+  at: string;
+  level: "debug" | "info" | "warn" | "error";
+  source: "request" | "submit" | "run" | "worker" | "data" | "app";
+  tenant: string;
+  member?: string;
+  app?: string;
+  route?: string;
+  requestId?: string;
+  traceId?: string;
+  spanId?: string;
+  runId?: string;
+  resource?: string;
+  submissionId?: string;
+  changeId?: string;
+  outcome?: "ok" | "refused" | "failed" | "pending";
+  message: string;
+  attributes?: Record<string, string>;
+};
+
 export type ObservationCoverage = {
   availableSince: string;
   completeUntil: string;
@@ -3168,6 +3189,21 @@ export type ObservationIntervals = {
   latePolicy: "reject" | "correct";
   latenessSeconds: number;
   maxIntervals: number;
+};
+
+export type ObservationLogCoverage = {
+  retainedFrom?: string;
+  filtered?: boolean;
+  sampled?: boolean;
+  truncated?: boolean;
+  dropped: number;
+};
+
+export type ObservationPage = {
+  entries: Observation[];
+  nextCursor?: string;
+  hasMore: boolean;
+  coverage: ObservationLogCoverage;
 };
 
 export type ObservationPoint = {

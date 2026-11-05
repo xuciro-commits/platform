@@ -5,6 +5,7 @@ import transport "platformserver/kernel/transport"
 import (
 	"net/http"
 	"platformkernel/kernel"
+	"time"
 
 	"platformserver/platform"
 )
@@ -24,11 +25,20 @@ func (rt *routes) handle(route transport.Route, f func(w http.ResponseWriter, r 
 	h := rt.h
 	h.routes = append(h.routes, route)
 	rt.mux.HandleFunc(route.Pattern, func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
 		m, t, ok := h.member(r)
 		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		correlation := newRequestCorrelation(r)
+		r = withRequestCorrelation(r, correlation)
+		tracked := &statusWriter{ResponseWriter: w}
+		w = tracked
+		w.Header().Set("X-Request-Id", correlation.RequestID)
+		defer func() {
+			h.observeRequest(t, m, correlation, route.Pattern, tracked.statusCode(), time.Since(started))
+		}()
 		if t.quarantined() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health" && r.Pattern != "GET /v1/applications/{app}/{name}/runtime") &&
 			(r.Method != http.MethodPost || r.URL.Path != "/v1/recovery/retry") {
 			WriteJSON(w, http.StatusServiceUnavailable, map[string]any{

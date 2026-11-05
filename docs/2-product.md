@@ -75,7 +75,7 @@ read-when: 新增能力或应用、判断能力归属、新增资源类型、处
 | DevOps | 产品（项目中的 Contents 与依赖）、发布候选、不可变产品版本、发布审阅、业务测试计划 | 构建者、发布者 |
 | Marketplace | 安装、升级、退役、重装 | 管理员、构建者 |
 | Data Lineage | 无；血缘图与标记传播 | 构建者 |
-| Monitoring | 监控视图；运行记录（同步、构建、自动化、函数、投递） | 构建者、管理员 |
+| Monitoring | 监控视图、运行、日志、追踪、指标、告警与健康 | 构建者、管理员、审计员（按能力） |
 
 分支与提案属于治理面：每个工具应用侧栏顶部的分支控件进入，提案在 Home 与 Notifications 汇总，不属于任何工具。
 
@@ -101,9 +101,13 @@ read-when: 新增能力或应用、判断能力归属、新增资源类型、处
 | 出站调用 | Data Connection 的回写 | 动作副作用引用它们，不直接发 HTTP |
 | 模型调用 | AI 网关（模型在 Control Panel 配置） | AIP Logic、Agent Studio、AIP Assist 调用网关 |
 | 搜索 | Search 索引 | 各产品提供可索引的元数据，不自建搜索 |
-| 审计 | 接受结果日志 | Control Panel 查询；资源页 History 分区展示 |
+| 审计 | 接受结果与拒绝、安全事件账本 | Control Panel 查询；资源页 History 分区展示 |
+| 运营日志 | Monitoring 的独立观测存储 | 只用于诊断，不进入 journal；按租户、运行、资源与请求关联 |
+| 追踪与指标 | OpenTelemetry 与受限 rollup | Monitoring 查询；告警复用 Automate |
 | 权限 | 授权引擎（唯一实现） | 所有读写都过同一决定路径 |
 | 打包与安装 | DevOps 与 Marketplace | 资源声明可打包性，不自建导入导出 |
+
+日志不是审计，审计也不是日志。运行状态仍由原 owner 拥有，Monitoring 只投影与关联；任何产品不得建立第二套运行扫描或日志网关。
 
 ## 2.4 平台内置与产品包
 

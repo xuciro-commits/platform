@@ -131,6 +131,8 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 			case <-ticker.C:
 			}
 			for _, t := range current() {
+				t.FlushObservations()
+				t.PurgeObservations(Now())
 				if t.businessStopped() {
 					continue
 				}

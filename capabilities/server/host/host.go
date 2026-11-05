@@ -45,6 +45,11 @@ type Tenant struct {
 	observationWindows    map[string]observationWindowAttempt
 	confirmationReads     statusReadSchedule
 	dispatchReads         statusReadSchedule
+	observationMu         sync.Mutex
+	observationPending    []platform.Observation
+	observationDropped    atomic.Int64
+	observationPurgeMu    sync.Mutex
+	lastObservationPurge  time.Time
 	controlAnswer         func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity              platform.IdentityDirectory
 	claims                platform.Facts

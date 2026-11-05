@@ -135,9 +135,13 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 ## Monitoring
 
-- 侧栏：Overview、Runs、Monitoring views、Health。
-- Overview：原型 E，统计块为失败运行、延迟同步、失败投递。
+- 侧栏：Overview、Runs、Logs、Traces、Metrics、Alerts、Monitoring views、Health。
+- Overview：原型 E，统计块为失败运行、错误趋势、延迟同步、失败投递和日志摄取缺口。
 - Runs：所有运行（同步、构建、自动化、函数、投递）一个表，按类型筛选；失败行可重试并链接到资源；“Save as monitoring view”把当前类型与状态筛选存为监控视图。
+- Logs：时间范围与白名单筛选、错误指纹分组、结果表、详情侧窗、保存视图和异步导出；Live 默认关闭，暂停和断线都显示缺口。
+- Traces：按运行、资源或 trace ID 查询；横向 waterfall、span 详情和关联日志。
+- Metrics：只展示固定描述符与允许的分组，不提供 PromQL。
+- Alerts：展示 Automate 产生的告警实例和评估历史，不建立第二个规则引擎。
 - Monitoring views：当前用户保存的运行筛选列表；打开一个即以其类型与状态进入 Runs。
 
 ## Notifications
@@ -153,7 +157,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 - Markings：标记列表（分级或专项、获准成员与团队数、状态）→ 标记页（数据许可、解除权限、被标记的资源）；两类许可分别选择成员与团队。专项可创建、归档与恢复。
 - AI：供应商、模型、用量、试验场。
 - Settings：语言与词汇、租户与应用设置、凭据。
-- Audit：接受结果查询表（主体、动作、资源、时间、结果）。
+- Audit：按 Business、Security、Personal reads 分组查询；主体、动作、资源、时间、结果、请求与原因可筛；查看、筛选和导出本身产生审计。
 
 ## Host Console
 

@@ -12,10 +12,22 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 ## 当前批次
 
-### 对象探索与规则收口（2026-11-04）
+### 可观测性收敛（2026-11-05）
 
-本轮只保留未完成、需要继续验收的能力；完成项由 git 历史追溯，不建立第二份完成清单。发布四族与旧页面格式的保留理由仍写在 `docs/7-system/README.md`。
+目标规范见 [7-system/observability](7-system/observability.md)。先修事实源，再扩界面；一批仍交付一条可运行路径。
 
+- [x] O1 建立独立运营观测存储与统一 `Observation` 契约；内存、文件、PostgreSQL 同语义；日志不写业务 journal。
+- [x] O2 HTTP 入口生成 request ID 与 W3C trace 上下文；记录租户、主体、路由模式、状态、耗时；默认记录失败、慢请求与 10% 成功请求。
+- [x] O3a 提交接受与拒绝写入运营日志；日志查询按租户、级别、来源、应用、时间、运行、资源、请求过滤，使用游标与保留覆盖。
+- [ ] O3b 后台失败与 owner 运行生命周期写入运营日志；运行索引成为 Monitoring 与 application runs 的唯一查询路径。
+- [x] O4a Monitoring → Logs 完成列表、筛选、详情、空/无权限/截断/保留状态；Live 明确为 2 秒轮询并支持暂停。
+- [ ] O4b 保存视图扩为查询族，旧 type/status 视图迁移且不出现第二套保存资源。
+- [x] O5a 完成租户级日志策略：级别、请求日志、保留；清理幂等；策略变更经接受结果；日志访问写入审计。
+- [ ] O5b 增加配额、临时 debug、应用级策略和不可变安全审计存储；审计读取不能依赖内存环。
+- [x] O6a `/healthz` 只做存活，新增 `/readyz`；`/metrics` 改为 loopback 或 host admin 抓取，并保留状态类。
+- [ ] O6b Health 显示观测摄取、丢弃、保留和 readiness 条件及关联运行。
+- [ ] O7 运行索引替代 Monitoring 与 application runs 的 owner 全量扫描；历史缺口显示 `coverage`，原始 owner 仍是运行权威。
+- [ ] O8 Traces、Metrics、Alerts 只在 O1–O7 通过后接入；告警复用 Automate，不新建执行器。
 
 ### 包生命周期收敛（2026-11-05）
 
