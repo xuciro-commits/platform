@@ -121,6 +121,7 @@ read-when: 新增导航项、应用、资源类型、页面或路由，调整 Fi
 |---|---|---|
 | 新建资源 | 拥有者应用列表页的“新建…” | 项目页 Overview 的下一步；Files 的“新建”菜单 |
 | 打开资源 | Search、Files、Recent | 引用链接、血缘图 |
+| 追溯数据来源与影响 | 数据资源页 Usage 的 “Open in Data Lineage” | Data Lineage Overview、Open in…、命令面板 |
 | 查找对象 | Search、Object Explorer | 模块中的对象表、关系链接 |
 | 执行动作 | 对象视图的动作栏 | 模块中的按钮、工作项 |
 | 处理任务 | Notifications 收件箱 | Home 的我的工作项 |

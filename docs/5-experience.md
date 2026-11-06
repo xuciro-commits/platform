@@ -63,6 +63,23 @@ read-when: 设计或改变一条用户任务路径、写界面文案与翻译、
 
 成功标准：三次交互内到达对象；不能执行的动作说明原因。
 
+### F19 构建者：追溯来源并评估改动影响
+
+1. 对象类型资源页 Usage → “Open in Data Lineage” → Graph 以该对象类型为根，Both、Depth 1。
+2. 选中上游数据集 → Inspector 显示 Inputs 与 Outputs、已消费版本、stale 原因与 Protection → Expand 上游一层。
+3. 打开 “Show fields” → 选中一个属性 → 字段追踪显示它来自哪个外部字段、经过哪些步骤。
+4. 对上游数据集 Focus here → Direction 选 Downstream → dock Impact 显示受影响的资源与字段数 → 双击打开管道。
+
+成功标准：从资源页到回答“从哪来、这个字段从哪来、改这里影响谁”不超过六次交互；选中不移动视口；URL 复制后打开同一视图；未声明来源的字段显示为未验证。
+
+### F20 项目委派构建者：只看到自己的项目
+
+1. 项目委派的构建者打开 Data Lineage → Overview 只列出可打开的项目，其余合并为匿名一行。
+2. 进入本项目 Graph → 跨项目的上游显示为匿名边界与计数。
+3. 一个保存后尚未激活、会降低对象类型保护的定义改动 → Inspector 显示 Preview 与 Protection 不同；没有许可的业务用户仍读不到该对象类型。
+
+成功标准：响应与页面都不出现其他项目资源的名称、RID 或行数；Protection 不因未激活改动降低；超过上限时显示 “Showing … of …”。
+
 ### F5 业务用户：处理工作项与审批
 
 1. Notifications 徽标 → Inbox → 打开工作项。

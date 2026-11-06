@@ -82,6 +82,10 @@ Home、Search、Files、Applications、Notifications、Data Connection、Pipelin
 | Installation | 安装 | 产品版本在租户中的实例 | Marketplace |
 | Extension | 扩展 | 客户在受管资源之上的资源 | 6-domain §6.22 |
 | Lineage | 血缘 | 资源之间的数据来源关系 | Data Lineage |
+| Preview marking | 预览标记 | 按当前保存的定义推导的生效标记，只用于展示 | 6-domain/lineage |
+| Protection | 保护标记 | 按执行使用的已接受定义与写出证据推导的标记，用于授权；内部称 Guard | 6-domain/lineage |
+| Impact | 影响 | 从一个资源出发可达的上游或下游资源与字段 | Data Lineage |
+| Boundary | 边界 | 因深度、其他项目或无权而未展开的邻居计数 | Data Lineage |
 | Run | 运行 | 同步、构建、自动化、函数、投递的一次执行记录 | Monitoring |
 | Member | 成员 | 租户中的主体 | Control Panel |
 | Team | 团队 | 成员集合 | Control Panel |

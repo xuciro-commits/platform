@@ -129,9 +129,78 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 ## Data Lineage
 
-- 侧栏：Lineage。
-- 单视图：PageHeader（着色方式：资源类型 / 标记 / 状态；刷新）→ 画布（M19 只读）+ 右侧详情面板（类型、版本、标记、生效标记、你的访问、输入、输出、打开资源）。
-- 从任意资源页的 Usage 分区“Open in Data Lineage”进入，并聚焦该节点。
+数据语义与读取合同见 [6-domain/lineage](../6-domain/lineage.md)。代码在 `web/packages/govern/src/lineage/`，一个 `defineApp`（`data-lineage`），视图 `lineage`。只给构建者与集成者；项目委派的构建者只看到自己的项目。
+
+- 侧栏：段落 “Data Lineage”：Overview（`#/lineage`）、Graph（`#/lineage?focus=…` 或 `#/lineage?project=…`；无焦点时为选择资源的空状态）。不放定义依赖、能力发现、运行或调度。
+- URL 回放：`project`、`focus`、`direction`、`depth`、`fields`、`field`、`color`、`selected` 全部进 URL；复制链接得到同一视图。侧窗打开时这些参数不进 URL（3-information §3.6）。
+- 命令面板：“Data Lineage” 归 “Governance” 组；另有 “Show lineage of current resource”（当前页是六类数据资源之一时）。
+
+### Overview
+
+- 原型 A 加一行统计块。PageHeader：标题、数量（项目数 · 资源数）、帮助、“Find a resource…” 搜索框（选取并返回，M22；选中即进入 Graph 并聚焦）、刷新。
+- 统计块：Stale、Failed、Never run、Unreadable、Cross-project links；点击筛选下方项目表中含该状态的项目。
+- 项目表：Project、Resources（按种类图标加计数）、Stale、Failed、Never run、Highest protection（Guard）、Cross-project in / out、Updated。行点击进入该项目的 Graph。不可打开的项目合并为一行匿名“Other projects”，只显示资源总数并说明原因，不可点击。
+- 默认不画全租户图。
+
+### Graph
+
+原型 C，只读，使用 `Workbench`（左 264、右 320、dock 200，按 `lineage` 记忆）。
+
+- 头部：面包屑 Data Lineage › 项目 › 焦点资源；状态区显示基线（“main · saved definitions”）与构建时间，Preview 与 Guard 不一致时显示警告标签 “Protection differs from preview”；操作：Direction（Upstream / Both / Downstream，SegmentedChoice）、Depth（1–3）、“Show fields” 开关、Color by（Resource type / Protection / Status）、Fit graph、刷新、⋯（Copy link、Copy RID）。
+- 左面板 “Scope”：
+  - 图内搜索：只搜已加载子图的名称、API 名与字段名；Enter 依次选中匹配项；无匹配时给出 “Search everywhere” 打开全局 Search。
+  - 种类图例即筛选：每种一个复选框，带分类色与计数。
+  - 状态筛选：Current、Stale、Failed、Never run、Unknown。
+  - 项目视图下：“Hide unconnected”（带计数）。
+  - 筛选只高亮匹配项、弱化其余，不改变布局；有筛选时画布顶部显示 “{n} hidden by filters · Clear”。
+  - Coverage：截断、不可读、边界与标记完整性的计数，点击打开 dock 的 Coverage 页签。
+- 画布（M19 只读，`RelationCanvas`，左到右即上游到下游）：
+  - 根节点加强调环与 “Focus” 标记。节点：分类色图标、显示名、说明行（种类 · 版本；跨项目时加项目名）、状态徽标（stale 用 warning、failed 用 danger、never-run 用 neutral）、Guard 标记徽标；`markingStatus=preview-only` 时加 “≠” 标识，`unknown` 显示 “?”。
+  - 有未展开邻居的节点在对应一侧显示 “+n” 把手；点击把手只展开那一侧一层，新节点放在父节点旁，视口不动。
+  - 无权邻居画为一个匿名幽灵节点 “{n} resources you cannot open”，不可选中、不可打开。
+  - 边：已消费版本落后时为虚线 warning，标签 “read v3 · now v5”；同一对资源的多条边分别绘制，选中时显示角色（join、lookup、binding、result…）；跨项目边带项目边界标记。
+  - 分类色来自 ui 的类别色令牌，经 RelationNode 的类别色字段传入（patterns M19）；warning 与 danger 只表示状态。不改 `relationNodeClasses` 的全局色调语义。
+- 交互：
+  - 单击选中：只更新 Inspector，视口不动；选中项在视口外时平移到可见，不缩放。
+  - 双击或 ⌘Enter：打开资源（经拥有者 `opens`，M19）。
+  - Focus here（F、Inspector 按钮、右键菜单）：以选中节点为根重新请求邻域，写入 URL，适应视口。
+  - Isolate path（I）：只保留根与选中节点之间路径上的已加载节点，顶部显示 “Isolated · Show all”。
+  - Expand（X）：选中节点两侧各展开一层。
+  - 键盘：← 上游、→ 下游、↑↓ 同层兄弟之间移动选中；Enter 进入 Inspector；Esc 先退出 Isolate，再清除选中；+ / − 调整 Depth。
+  - 只在首次加载与根改变时适应视口；布局按焦点根记忆（`storeKey` 为 `lineage:<根>`）。
+- Inspector（右，M6 只读形态）：
+  - 头：图标、显示名、种类、项目路径、RID（等宽弱化）；主按钮 “Open”（不可打开时禁用并说明原因）；次级 “Focus here”；⋯：Isolate path、Copy RID、View runs in Monitoring。
+  - Status：状态标签、stale 原因的句子（“Input Orders is at v5; last run read v3”）、最近活动、行数；失败只显示翻译后的原因码与 “View run” 链接，不显示原始错误文本。
+  - Protection：Declared、Preview、Protection（Guard）三行；不一致时说明 “Takes effect when the saved definition is activated”；Your access（Cleared / Needs …）。
+  - Inputs（n）与 Outputs（n）：每行显示资源名、角色标签、已消费与当前版本、跨项目标记；点击选中该节点。
+  - Versions：Saved definition、Running definition、Dataset version。
+  - Fields（数据集、对象类型、数据源，“Show fields” 打开时）：字段列表与确定性标签；点击字段进入字段追踪。
+  - 无选中时显示根的摘要、图例与覆盖说明。
+- 字段追踪：选中字段后画布切换为字段图（同一个 `RelationCanvas`，节点为“资源 · 字段”，边标操作），头部显示 “Tracing {field} · Back to resources”；`unverified` 字段用虚线框，提示 “No declared source”。
+- Dock（默认收起，页签带计数）：
+  - Impact：上游与下游可达数（按种类、按项目）、stale 与 failed 数；受影响资源表（名称、种类、项目、距离、状态），行点击选中或 Focus；`atLeast` 时显示 “At least {n}”。
+  - Fields：当前字段追踪的路径表（资源、字段、操作、确定性）。
+  - Coverage：截断原因与 “Showing {returned} of {total}”、不可读计数与原因、边界列表、标记完整性、基线与构建时间。
+- 状态（M12）：
+  - 加载：与 Workbench 同形的骨架。
+  - 错误：Notice danger 加重试；不显示空图。
+  - 截断：画布顶部 Notice warning “Showing {returned} of {total} resources. Reduce depth or choose one direction.”。
+  - 不可读或标记不完整：Notice info，链接到 Coverage。
+  - 焦点不存在或无权：EmptyState “This resource does not exist or you cannot open it”，返回 Overview。
+  - 无数据：EmptyState 说明数据从 Data Connection 开始，主按钮 “Open Data Connection”。
+  - 宽度不足 960：一次显示一个区域（4-interaction §4.3 C）；首次显示画布。
+- 刷新：不轮询整图；窗口重新获得焦点或资源变更失效时重读；头部显示构建时间。
+
+### 入口
+
+| 入口 | 行为 |
+|---|---|
+| 连接、数据源、数据集、管道、对象类型、回写资源页的 Usage | “Open in Data Lineage” → Graph，focus=该资源 RID，Both，Depth 1 |
+| Open in…（M15）对象类型 | “Lineage” → 同上，传 RID |
+| Ontology Manager 对象类型 Data › Usage and lineage | 保留定义依赖图；字段来源表读取 `/v1/lineage?focus=…&fields=on`，未知显示 “Not declared” |
+| Monitoring Runs 资源链接 | 经拥有者 `opens` 打开资源本身，不进血缘 |
+| 观测源 “Dependencies and capabilities” | 进入定义的 Usage，不进血缘 |
+| 浏览定义（`#/definitions`） | 承接原血缘页底部的定义依赖与能力发现 |
 
 ## Monitoring
 

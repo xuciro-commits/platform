@@ -19,6 +19,7 @@
 | 任务路径、文案、启发式检查 | [5-experience](docs/5-experience.md) |
 | 资源内核、本体、对象、数据、动作、函数、自动化 | [6-domain](docs/6-domain/README.md) |
 | 授权、项目角色、标记、行列策略 | [6-domain/security](docs/6-domain/security.md) |
+| 血缘、保护标记基线、影响分析、列级血缘 | [6-domain/lineage](docs/6-domain/lineage.md) |
 | 分支、提案、产品、版本、安装、升级 | [6-domain/change](docs/6-domain/change.md) |
 | Go 包、写入与读取路径、运行机制、协议 | [7-system](docs/7-system/README.md) |
 | 前端包、路由、数据获取、i18n | [7-system/web](docs/7-system/web.md) |
