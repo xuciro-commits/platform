@@ -333,6 +333,9 @@ func (h hostView) InstallApplication(c platform.Caller, a platform.Application) 
 	if c.Staging() {
 		unsupportedStagedEffect()
 	}
+	if c.Replaying {
+		return h.t.storeApplication(h.app, a)
+	}
 	return h.t.InstallApplication(h.app, a)
 }
 func (h hostView) ValidateInstallApplication(a platform.Application) error {
