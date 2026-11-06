@@ -3,6 +3,7 @@ package host
 import transport "platformserver/kernel/transport"
 
 import (
+	"bytes"
 	"net/http"
 	"platformkernel/kernel"
 	"time"
@@ -91,11 +92,58 @@ func (rt *routes) recordRead(route transport.Route, f func(http.ResponseWriter, 
 			f(w, r, m, t)
 			return
 		}
-		_, err := coordinatedRecordRead(t, r.Context(), func() (struct{}, *kernel.Error) { f(w, r, m, t); return struct{}{}, nil })
+		buffered := &laneBuffer{target: w}
+		_, err := coordinatedRecordRead(t, withLaneHolder(r.Context(), route.Pattern), func() (struct{}, *kernel.Error) {
+			f(buffered, r, m, t)
+			return struct{}{}, nil
+		})
 		if err != nil {
 			Reply(w, nil, err)
+			return
 		}
+		buffered.release()
 	})
+}
+
+type laneBuffer struct {
+	target http.ResponseWriter
+	status int
+	body   bytes.Buffer
+	after  func(http.ResponseWriter)
+}
+
+func (b *laneBuffer) Header() http.Header { return b.target.Header() }
+
+func (b *laneBuffer) WriteHeader(status int) {
+	if b.status == 0 {
+		b.status = status
+	}
+}
+
+func (b *laneBuffer) Write(p []byte) (int, error) {
+	if b.status == 0 {
+		b.status = http.StatusOK
+	}
+	return b.body.Write(p)
+}
+
+func (b *laneBuffer) release() {
+	if b.after != nil && b.status == 0 && b.body.Len() == 0 {
+		b.after(b.target)
+		return
+	}
+	if b.status != 0 {
+		b.target.WriteHeader(b.status)
+	}
+	_, _ = b.target.Write(b.body.Bytes())
+}
+
+func outsideLane(w http.ResponseWriter, f func(http.ResponseWriter)) {
+	if b, ok := w.(*laneBuffer); ok {
+		b.after = f
+		return
+	}
+	f(w)
 }
 func (rt *routes) metadata(route transport.Route, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
 	rt.recordRead(route, f)

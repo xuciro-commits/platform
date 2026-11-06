@@ -106,6 +106,8 @@ Home、Search、Files、Applications、Notifications、Data Connection、Pipelin
 | Independent builder | 独立构建者 | 直接被授予构建者角色、而非经项目角色获得的成员 | 6-domain/security |
 | Support access | 支持授权 | 成员开启的限时支持访问 | Control Panel |
 | Accepted result | 接受结果 | 权威写入的唯一形式 | 7-system §7.3 |
+| Lane | 车道 | 每个租户唯一的提交序列锁，可取消、按到达排队 | 7-system/concurrency |
+| Read image | 读取映像 | 某个已应用位置上读取所需租户状态的不可变快照 | 7-system/concurrency |
 
 ## 角色名
 

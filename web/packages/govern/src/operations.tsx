@@ -31,6 +31,8 @@ export function SystemHealth() {
           [t("Open breakers"), `${health.openBreakers} / ${health.breakers.length}`],
           [t("Failing connectors"), health.connectorsFailing],
           [t("Failing endpoints"), health.endpointsFailing],
+          [t("Tenant lane"), health.lane.waiters > 0 ? t("{n} waiting", { n: health.lane.waiters }) : t("Idle")],
+          [t("Last slow lane hold"), health.lane.lastSlow ? t("{holder} held {s} s at {at}", { holder: health.lane.lastSlow.holder, s: health.lane.lastSlow.seconds.toFixed(1), at: formatStamp(health.lane.lastSlow.at) }) : t("None")],
         ]} />
         <div className="flex flex-wrap gap-2" aria-label={t("Readiness conditions")}>
           {health.readiness.map((condition) => <Tag key={condition.name} label={`${condition.name}: ${condition.ready ? t("ready") : t("not ready")}${condition.detail ? ` · ${condition.detail}` : ""}`} tone={condition.ready ? "success" : "danger"} />)}

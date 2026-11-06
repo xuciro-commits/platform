@@ -120,6 +120,7 @@ GET /v1/personal-reads?from=&to=&member=&type=&cursor=&limit=
 - `/v1/health` 保留租户工作健康；健康项返回条件、严重度、证据、影响和最近关联运行，不只返回计数。
 - `/metrics` 只允许 loopback 或专用 scrape 凭据，不再接受任意租户成员。指标标签禁止 member、runId、对象 ID 和原始 URL。
 - HTTP 指标必须包含 status class；至少暴露请求量、错误率、延迟、在飞请求；观测自身至少暴露摄取队列、写入失败、丢弃、查询延迟、保留和无权限拒绝。
+- `/v1/health` 的 `lane` 暴露车道等待数与最近一次慢持有；车道指标与持有预算见 [concurrency C8](concurrency.md)。
 - `/v1/health` 的 `observations` 暴露启停、排队、写入、失败、丢弃、清理、保留起点和每日配额；`readiness` 明确 journal、观测存储和工作循环条件。
 
 ## 7.21 产品界面

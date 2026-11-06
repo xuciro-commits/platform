@@ -75,6 +75,7 @@ type Tenant struct {
 	i18n                  transport.Translator
 	agentRun              string
 	mu                    runtimekernel.Lane
+	laneLastSlow          atomic.Pointer[LaneHold]
 	views                 transport.ViewCache
 	defGen                atomic.Uint64
 	streamMu              sync.Mutex
@@ -152,6 +153,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		connectors: newConnectorRoster(services.Kernel), records: records.NewStore()}
 	t.bindAuditStore()
 	t.mu.BindReadScope(t.beginRecordRead, t.closeRecordRead)
+	t.observeLane()
 	for i, app := range apps {
 		id := app.Manifest().ID
 		if _, exists := t.appIndex[id]; exists || id == "" {

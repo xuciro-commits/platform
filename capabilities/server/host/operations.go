@@ -3,6 +3,7 @@ package host
 import automation "platformserver/services/automate/runtime"
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
@@ -118,7 +119,16 @@ func (t *Tenant) Work(now time.Time) {
 }
 
 func (t *Tenant) Round(now time.Time, budget int) (more bool) {
-	t.mu.Lock()
+	for range max(budget, 1) {
+		if more = t.step(now); !more {
+			return false
+		}
+	}
+	return more
+}
+
+func (t *Tenant) step(now time.Time) (more bool) {
+	_ = t.mu.Hold(context.Background(), "work")
 	defer t.mu.Unlock()
 	if t.businessStopped() {
 		return false
@@ -129,7 +139,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 			more = false
 		}
 	}()
-	return t.workLoop().Round(now, budget)
+	return t.workLoop().Round(now, 1)
 }
 
 func (t *Tenant) overQuota(app string, now time.Time) bool { return t.quota.Over(app, t.Quota, now) }

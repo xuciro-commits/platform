@@ -22,6 +22,20 @@ type TenantHealth struct {
 	Endpoints     int                `json:"endpointsFailing"`
 	Observations  ObservationHealth  `json:"observations"`
 	Readiness     []HealthCondition  `json:"readiness"`
+	Lane          LaneHealth         `json:"lane"`
+}
+
+type LaneHealth struct {
+	Holder      string    `json:"holder,omitempty"`
+	HeldSeconds float64   `json:"heldSeconds"`
+	Waiters     int64     `json:"waiters"`
+	LastSlow    *LaneHold `json:"lastSlow,omitempty"`
+}
+
+type LaneHold struct {
+	Holder  string    `json:"holder"`
+	Seconds float64   `json:"seconds"`
+	At      time.Time `json:"at"`
 }
 
 type ObservationHealth struct {
@@ -52,12 +66,32 @@ type QueueHealth struct {
 }
 
 func (t *Tenant) Health(now time.Time) TenantHealth {
+	lane := t.laneHealth(now, true)
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.health(now)
+	h := t.healthState(now)
+	t.mu.Unlock()
+	t.finishHealth(&h, now)
+	h.Lane = lane
+	return h
 }
 
 func (t *Tenant) health(now time.Time) TenantHealth {
+	h := t.healthState(now)
+	t.finishHealth(&h, now)
+	h.Lane = t.laneHealth(now, false)
+	return h
+}
+
+func (t *Tenant) laneHealth(now time.Time, outside bool) LaneHealth {
+	state := t.mu.State()
+	lane := LaneHealth{Waiters: state.Waiters, LastSlow: t.laneLastSlow.Load()}
+	if outside && !state.Since.IsZero() {
+		lane.Holder, lane.HeldSeconds = state.Holder, now.Sub(state.Since).Seconds()
+	}
+	return lane
+}
+
+func (t *Tenant) healthState(now time.Time) TenantHealth {
 	if fault := t.fault.Load(); fault != nil {
 		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: Started,
 			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []platform.Breaker{},
@@ -68,23 +102,7 @@ func (t *Tenant) health(now time.Time) TenantHealth {
 	if h.Deferred == nil {
 		h.Deferred = []string{}
 	}
-	t.opsMu.Lock()
-	for _, a := range t.apps {
-		q := t.work.Queued(a.Manifest().ID)
-		if len(q) == 0 {
-			continue
-		}
-		qh := QueueHealth{App: a.Manifest().ID, Depth: len(q)}
-		for _, x := range q {
-			if age := now.Sub(x.Due); age > qh.Oldest {
-				qh.Oldest = age
-			}
-		}
-		qh.Age = qh.Oldest.Seconds()
-		h.Queues = append(h.Queues, qh)
-	}
-	h.Failed = t.work.FailedCount()
-	t.opsMu.Unlock()
+	h.Queues, h.Failed = t.queueHealth(now)
 	for _, b := range h.Breakers {
 		if b.State != "closed" {
 			h.OpenBreakers++
@@ -120,6 +138,13 @@ func (t *Tenant) health(now time.Time) TenantHealth {
 		h.Observations.LastPurge = time.Unix(0, last).UTC()
 	}
 	t.observationMu.Unlock()
+	return h
+}
+
+func (t *Tenant) finishHealth(h *TenantHealth, now time.Time) {
+	if h.Status == "quarantined" {
+		return
+	}
 	if page, err := t.store().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: now, Limit: 1}); err == nil {
 		h.Observations.Available = true
 		h.Observations.RetainedFrom = page.Coverage.RetainedFrom
@@ -139,7 +164,27 @@ func (t *Tenant) health(now time.Time) TenantHealth {
 	if !h.Observations.Available {
 		h.Status = "degraded"
 	}
-	return h
+}
+
+func (t *Tenant) queueHealth(now time.Time) ([]QueueHealth, int) {
+	queues := []QueueHealth{}
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	for _, a := range t.apps {
+		q := t.work.Queued(a.Manifest().ID)
+		if len(q) == 0 {
+			continue
+		}
+		qh := QueueHealth{App: a.Manifest().ID, Depth: len(q)}
+		for _, x := range q {
+			if age := now.Sub(x.Due); age > qh.Oldest {
+				qh.Oldest = age
+			}
+		}
+		qh.Age = qh.Oldest.Seconds()
+		queues = append(queues, qh)
+	}
+	return queues, t.work.FailedCount()
 }
 
 var Started = time.Now().UTC().Truncate(time.Second)

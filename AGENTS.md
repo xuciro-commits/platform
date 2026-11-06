@@ -22,6 +22,7 @@
 | 血缘、保护标记基线、影响分析、列级血缘 | [6-domain/lineage](docs/6-domain/lineage.md) |
 | 分支、提案、产品、版本、安装、升级 | [6-domain/change](docs/6-domain/change.md) |
 | Go 包、写入与读取路径、运行机制、协议 | [7-system](docs/7-system/README.md) |
+| 租户车道、协调读取持锁、决定与提交、后台工作持锁 | [7-system/concurrency](docs/7-system/concurrency.md) |
 | 前端包、路由、数据获取、i18n | [7-system/web](docs/7-system/web.md) |
 | 检查、钩子、验收用例 | [7-system/verification](docs/7-system/verification.md) |
 

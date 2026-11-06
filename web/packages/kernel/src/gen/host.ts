@@ -2594,6 +2594,19 @@ export type KnowledgeIndexStatus = {
   problem?: string;
 };
 
+export type LaneHealth = {
+  holder?: string;
+  heldSeconds: number;
+  waiters: number;
+  lastSlow?: LaneHold;
+};
+
+export type LaneHold = {
+  holder: string;
+  seconds: number;
+  at: string;
+};
+
 export type Layer = {
   name: string;
   allowed: boolean;
@@ -5295,6 +5308,7 @@ export type TenantHealth = {
   endpointsFailing: number;
   observations: ObservationHealth;
   readiness: HealthCondition[];
+  lane: LaneHealth;
 };
 
 export type TenantLink = {

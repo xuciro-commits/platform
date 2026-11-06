@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"log"
 	"os"
 
 	"time"
@@ -56,12 +57,30 @@ func end(span trace.Span, outcome string) {
 
 var meters = struct {
 	attempts, failures metric.Int64Counter
+	laneWait, laneHold metric.Float64Histogram
 }{}
+
+const laneHoldBudget = 200 * time.Millisecond
 
 func init() {
 	m := otel.Meter("platformserver")
 	meters.attempts, _ = m.Int64Counter("platform.work.attempts", metric.WithDescription("Attempts of owned work: deliveries, jobs, effects"))
 	meters.failures, _ = m.Int64Counter("platform.work.failures", metric.WithDescription("Attempts of owned work that did not succeed"))
+	meters.laneWait, _ = m.Float64Histogram("platform.lane.wait", metric.WithUnit("s"), metric.WithDescription("Time spent waiting for the tenant lane, per holder kind"))
+	meters.laneHold, _ = m.Float64Histogram("platform.lane.hold", metric.WithUnit("s"), metric.WithDescription("Time the tenant lane was held, per holder kind"))
+}
+
+func (t *Tenant) observeLane() {
+	tenant := t.ID
+	t.mu.Observe(func(holder string, waited, held time.Duration) {
+		attrs := metric.WithAttributes(attribute.String("platform.tenant", tenant), attribute.String("platform.lane.holder", holder))
+		meters.laneWait.Record(context.Background(), waited.Seconds(), attrs)
+		meters.laneHold.Record(context.Background(), held.Seconds(), attrs)
+		if held > laneHoldBudget {
+			t.laneLastSlow.Store(&LaneHold{Holder: holder, Seconds: held.Seconds(), At: time.Now().UTC()})
+			log.Printf("tenant %s lane held %v by %s (budget %v)", tenant, held.Round(time.Millisecond), holder, laneHoldBudget)
+		}
+	})
 }
 
 func counted(t *Tenant, kind, app, outcome string) {
@@ -78,21 +97,32 @@ func observeFrom(current func() []*Tenant) func() error {
 	oldest, _ := m.Float64ObservableGauge("platform.queue.oldest", metric.WithUnit("s"), metric.WithDescription("Age of the oldest waiting item, per tenant and app"))
 	failed, _ := m.Int64ObservableGauge("platform.work.failed", metric.WithDescription("Owned work that gave up and waits for a person"))
 	open, _ := m.Int64ObservableGauge("platform.breakers.open", metric.WithDescription("Destinations whose breaker is open"))
+	waiters, _ := m.Int64ObservableGauge("platform.lane.waiters", metric.WithDescription("Callers waiting for the tenant lane"))
+	held, _ := m.Float64ObservableGauge("platform.lane.held", metric.WithUnit("s"), metric.WithDescription("How long the current tenant lane holder has held it"))
 	registration, err := m.RegisterCallback(func(_ context.Context, o metric.Observer) error {
 		now := time.Now()
 		for _, t := range current() {
-			h := t.Health(now)
-			for _, q := range h.Queues {
+			queues, failures := t.queueHealth(now)
+			for _, q := range queues {
 				attrs := metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.app", q.App))
 				o.ObserveInt64(depth, int64(q.Depth), attrs)
 				o.ObserveFloat64(oldest, q.Oldest.Seconds(), attrs)
 			}
+			openBreakers := 0
+			for _, b := range t.Breakers(now) {
+				if b.State != "closed" {
+					openBreakers++
+				}
+			}
+			lane := t.laneHealth(now, true)
 			attrs := metric.WithAttributes(attribute.String("platform.tenant", t.ID))
-			o.ObserveInt64(failed, int64(h.Failed), attrs)
-			o.ObserveInt64(open, int64(h.OpenBreakers), attrs)
+			o.ObserveInt64(failed, int64(failures), attrs)
+			o.ObserveInt64(open, int64(openBreakers), attrs)
+			o.ObserveInt64(waiters, lane.Waiters, attrs)
+			o.ObserveFloat64(held, lane.HeldSeconds, attrs)
 		}
 		return nil
-	}, depth, oldest, failed, open)
+	}, depth, oldest, failed, open, waiters, held)
 	if err != nil {
 		return func() error { return err }
 	}

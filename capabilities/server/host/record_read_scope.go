@@ -61,6 +61,20 @@ func (t *Tenant) closeRecordRead() {
 		}
 	}
 }
+
+type laneHolderKey struct{}
+
+func withLaneHolder(ctx context.Context, holder string) context.Context {
+	return context.WithValue(ctx, laneHolderKey{}, holder)
+}
+
+func laneHolderOf(ctx context.Context, fallback string) string {
+	if holder, ok := ctx.Value(laneHolderKey{}).(string); ok && holder != "" {
+		return holder
+	}
+	return fallback
+}
+
 func (t *Tenant) recordReadRefusal() *kernel.Error {
 	if t.recordReadError != nil || t.quarantined() {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -74,7 +88,9 @@ func recordRead[T any](t *Tenant, ctx context.Context, read func() (T, *kernel.E
 	return coordinatedRecordRead(t, ctx, read)
 }
 func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func() (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	t.mu.LockContext(ctx)
+	if err := t.mu.Hold(ctx, laneHolderOf(ctx, "read")); err != nil {
+		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read was cancelled while waiting for the tenant")
+	}
 	defer t.mu.Unlock()
 	defer func() {
 		if failure := recover(); failure != nil {

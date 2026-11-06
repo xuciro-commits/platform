@@ -86,7 +86,12 @@ func (t *Tenant) SweepUploads(now time.Time) {
 }
 
 func (t *Tenant) downloadBytes(w http.ResponseWriter, hash, name, contentType string) {
-	body, size, gerr := t.files().Get(context.Background(), t.ID+"/"+hash)
+	files := t.files()
+	outsideLane(w, func(w http.ResponseWriter) { streamBytes(w, files, t.ID+"/"+hash, name, contentType) })
+}
+
+func streamBytes(w http.ResponseWriter, files platform.FileStore, key, name, contentType string) {
+	body, size, gerr := files.Get(context.Background(), key)
 	if gerr != nil {
 		http.Error(w, "the file's bytes are not in the store", http.StatusServiceUnavailable)
 		return
