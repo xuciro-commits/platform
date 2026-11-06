@@ -259,6 +259,9 @@ saved:
 }
 
 func (o *Owner) integrationInventory(kind platform.AssetKind) ([]any, error) {
+	if o.inventory != nil {
+		return o.inventory(kind)
+	}
 	typ := integrationRecordType(kind)
 	if typ == nil {
 		return nil, nil

@@ -2409,6 +2409,8 @@ register("zh-CN", {
   "Writebacks": "回写",
   "formula": "公式",
   "Data lineage": "数据血缘",
+  "Field lineage could not be loaded.": "无法加载字段血缘。",
+  "Used here": "在此使用",
   "Nothing feeds or follows this object yet. A data source or a pipeline writes its records; a writeback sends its actions to an external system.": "还没有东西流入或流出此对象。数据源或管道写入它的记录；回写把它的动作发送到外部系统。",
   "Comes from": "来自",
   "id": "ID",

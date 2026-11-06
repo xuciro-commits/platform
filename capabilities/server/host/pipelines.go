@@ -111,6 +111,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 			log.Printf("pipeline retained input unavailable: %v", err)
 			return
 		}
+		run.Object, run.Marking, run.Compartments = plan.Object, plan.Marking, slices.Clone(plan.Compartments)
 	} else if !ok {
 		run.Error = "The execution member is no longer available"
 	} else {
@@ -164,6 +165,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 				}
 				run.Quarantine = quarantined
 				plan = integrationPreparation{Object: p.OutputObject, Dataset: p.OutputDataset, Enterprise: p.OutputEnterprise, Producer: "pipeline:" + p.Name, Marking: run.Marking, Compartments: run.Compartments, Declassified: run.Declassified, Data: kept}
+				run.Object = plan.Object
 				plan.Type, plan.ID = build.PipelineType, p.ID
 				if plan.Data == nil {
 					plan.Data = []map[string]any{}

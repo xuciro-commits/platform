@@ -5,7 +5,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { useId } from "react";
 import type { Api } from "@platform/kernel";
-import { useHost, useReadQuery } from "@platform/app";
+import { OpenLineage, useHost, useReadQuery } from "@platform/app";
 import { CompartmentField, MarkingField } from "./marking";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 
@@ -77,5 +77,6 @@ export function ConnectionEditor({ id }: { id: string }) {
         </>}
       </Panel>
     </fieldset></StructuredEditor>
+    <Panel title={t("Usage")} className="grid gap-2"><OpenLineage type="build.connection" record={draft.id} /></Panel>
   </div>;
 }

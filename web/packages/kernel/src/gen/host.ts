@@ -793,6 +793,12 @@ export type BlockPort = {
   type: string;
 };
 
+export type Boundary = {
+  upstream: number;
+  downstream: number;
+  reason?: string;
+};
+
 export type BranchChangeEntry = {
   seq: number;
   at: string;
@@ -2430,6 +2436,15 @@ export type ImageRegionsRequest = {
   regions: ImageRegion[];
 };
 
+export type ImpactItem = {
+  id: string;
+  kind: string;
+  project?: string;
+  title: string;
+  distance: number;
+  status: string;
+};
+
 export type ImportRow = {
   row: number;
   id: string;
@@ -2608,31 +2623,138 @@ export type Limit = {
 export type Lineage = {
   nodes: LineageNode[];
   edges: LineageEdge[];
+  groups?: LineageGroup[];
+  scope: LineageScope;
+  basis: LineageBasis;
+  total: LineageTotal;
+  returned: LineageTotal;
+  truncated: boolean;
+  truncationReasons?: string[];
+  unreadable?: LineageUnreadable[];
+  coverage: LineageCoverage;
+  impact?: LineageImpact;
+  fieldNodes?: LineageFieldNode[];
+  fieldEdges?: LineageFieldEdge[];
+  generatedAt: string;
+};
+
+export type LineageBasis = {
+  generation: number;
+  preview: string;
+  guard: string;
+  builtAt: string;
+};
+
+export type LineageCoverage = {
+  markingsComplete: boolean;
+  statusComplete: boolean;
+  fieldsComplete: boolean;
 };
 
 export type LineageEdge = {
+  id: string;
   from: string;
   to: string;
-  version?: number;
+  role: string;
+  occurrence?: number;
+  declaredBy?: string[];
+  consumedVersion?: number;
+  currentVersion?: number;
   stale?: boolean;
+  crossesProject?: boolean;
+  unresolved?: boolean;
+};
+
+export type LineageFieldEdge = {
+  id: string;
+  from: string;
+  to: string;
+  operation: string;
+  step?: number;
+  occurrence?: number;
+  certainty: string;
+};
+
+export type LineageFieldNode = {
+  id: string;
+  node: string;
+  kind: string;
+  record?: string;
+  project?: string;
+  name: string;
+  title: string;
+  certainty: string;
+};
+
+export type LineageGroup = {
+  project: string;
+  resources: number;
+  byKind: Record<string, number>;
+  stale: number;
+  failed: number;
+  neverRun: number;
+  unreadable: number;
+  guard?: string;
+};
+
+export type LineageImpact = {
+  upstream: number;
+  downstream: number;
+  byKind: Record<string, number>;
+  byProject: Record<string, number>;
+  stale: number;
+  failed: number;
+  fields: number;
+  items: ImpactItem[];
+  atLeast: boolean;
 };
 
 export type LineageNode = {
   id: string;
   kind: string;
   record?: string;
+  rid?: string;
+  project?: string;
   name: string;
   title: string;
   state?: string;
-  marking?: string;
-  compartments?: string[];
-  effectiveCompartments?: string[];
+  status: string;
+  staleReasons?: string[];
+  declared?: string;
   effective?: string;
-  version?: number;
+  guard?: string;
+  markingStatus: string;
+  definitionVersion?: number;
+  executionVersion?: number;
+  datasetVersion?: number;
   rows?: number;
   at?: string;
-  error?: string;
-  stale?: boolean;
+  errorCode?: string;
+  canOpen: boolean;
+  canReadData: boolean;
+  connected: boolean;
+  distance?: number;
+  boundary?: Boundary;
+  unreadable?: boolean;
+};
+
+export type LineageScope = {
+  mode: string;
+  project?: string;
+  focus?: string;
+  direction?: string;
+  depth?: number;
+  branch?: string;
+};
+
+export type LineageTotal = {
+  nodes: number;
+  edges: number;
+};
+
+export type LineageUnreadable = {
+  reason: string;
+  count: number;
 };
 
 export type Link = {
@@ -3995,6 +4117,7 @@ export type PipelineRun = {
   rows: number;
   written: number;
   deleted?: number;
+  object?: string;
   marking?: string;
   compartments?: string[];
   declassified?: string[];
@@ -4974,6 +5097,9 @@ export type SourceField = {
 export type SourcePull = {
   execution?: IntegrationExecution;
   definitionVersion?: string;
+  object?: string;
+  marking?: string;
+  compartments?: string[];
   at: string;
   rows: number;
   applied: number;

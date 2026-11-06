@@ -8,7 +8,7 @@ import { useAuthoringModel } from "./authoring-model";
 import { DeclaredByObject, declaringObject } from "./object-datasources";
 
 import type { Api } from "@platform/kernel";
-import { useHost, useReadQuery } from "@platform/app";
+import { OpenLineage, useHost, useReadQuery } from "@platform/app";
 import { Button, Checkbox, DataTable, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 
@@ -144,5 +144,6 @@ export function DataSourceEditor({ id, initialStream = false }: { id: string; in
         </>}
       </Panel>}
     </PanelGroup></fieldset></StructuredEditor>
+    <Panel title={t("Usage")} className="grid gap-2"><OpenLineage type="build.source" record={draft.id} /></Panel>
   </div>;
 }

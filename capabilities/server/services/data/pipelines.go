@@ -346,6 +346,7 @@ type PipelineRun struct {
 	Rows              int                       `json:"rows"`
 	Written           int                       `json:"written"`
 	Deleted           int                       `json:"deleted,omitempty"`
+	Object            string                    `json:"object,omitempty" field:"readonly"`
 	Marking           string                    `json:"marking,omitempty"`
 	Compartments      []string                  `json:"compartments,omitempty"`
 	Declassified      []string                  `json:"declassified,omitempty"`

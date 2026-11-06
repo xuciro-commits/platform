@@ -1,5 +1,6 @@
+import type { Api } from "@platform/kernel";
 import { useApplicationWorkspace } from "../projects/application-scope";
-import { assetKey, DependencyGraph, useDependencies, useReadQuery } from "@platform/app";
+import { DependencyGraph, OpenLineage, useReadQuery } from "@platform/app";
 import { Button, DataTable, Panel, t, type Route } from "@platform/ui";
 
 type Conn = { id: string; name: string; title: string; kind: string; state: string };
@@ -30,37 +31,44 @@ function integrationPresentation(evidence: ReturnType<typeof useIntegrationEvide
   };
 }
 
-function producedBy(p: Pipe, column: string): string {
-  for (const s of [...(p.steps ?? [])].reverse()) {
-    if ((s.kind === "rename" || s.kind === "compute") && s.to === column) return s.kind === "rename" ? `← ${s.from}` : `= ${t("formula")}`;
-    if (s.kind === "aggregate" && s.measures?.some((m) => m.to === column)) return `= ${t("aggregate")}`;
-  }
-  return "";
+function useObjectFieldLineage(object: string) {
+  const directory = useReadQuery<Api.ResourceDirectory>("/v1/resources");
+  const resource = directory.data?.resources.find(item => item.type === "build.object" && item.ref.kind === "object" && item.ref.name === object && !item.archived);
+  const path = resource ? `/v1/lineage?${new URLSearchParams({ mode: "focus", focus: resource.id, direction: "both", depth: "1", fields: "on" }).toString()}` : "/v1/lineage";
+  const graph = useReadQuery<Api.Lineage>(path, undefined, !!resource?.id);
+  return { resource, nodes: graph.data?.fieldNodes ?? [], edges: graph.data?.fieldEdges ?? [], loading: graph.isPending, error: graph.isError };
 }
 
 export function ObjectLineage({ object, fields }: { object: string; fields: { name: string; title: string }[] }) {
   const evidence = useIntegrationEvidence(), { open } = useApplicationWorkspace();
   const presentation = integrationPresentation(evidence);
   const ref = { app: object.split(".")[0] ?? "", kind: "object", name: object };
-  const dependencies = useDependencies(ref);
-  const used = new Set((dependencies.data?.usedBy ?? []).map(assetKey));
-  const direct = evidence.sources.filter(source => used.has(`build/source/${source.name}`));
-  const pipes = evidence.pipelines.filter(pipeline => used.has(`build/pipeline/${pipeline.name}`));
+  const lineage = useObjectFieldLineage(object);
   const openAsset = (asset: typeof ref) => open(presentation.route(asset));
-  const feeders = (field: string) => [
-    ...direct.filter(source => source.mapping?.some(mapping => mapping.to === field)).map(source => `${t("Source")} ${source.title} (${source.mapping!.find(mapping => mapping.to === field)!.from})`),
-    ...pipes.map(pipeline => `${t("Pipeline")} ${pipeline.title} ${producedBy(pipeline, field)}`.trim()),
-  ];
+  const title = (id: string) => {
+    const node = lineage.nodes.find(item => item.id === id);
+    return node ? `${node.kind} ${node.title || node.name}` : id;
+  };
+  const feeders = (field: string) => {
+    const id = `object:${object}#${field}`;
+    return lineage.edges.filter(edge => edge.to === id).map(edge => title(edge.from));
+  };
+  const usedBy = (field: string) => {
+    const id = `object:${object}#${field}`;
+    return lineage.edges.filter(edge => edge.from === id).map(edge => title(edge.to));
+  };
   return <div className="grid gap-3">
     <Panel title={t("Declared dependencies")} help={t("Published dependencies and reverse impact come from the shared asset description.")}>
       <DependencyGraph asset={ref} labels={presentation.labels} onOpen={openAsset} />
-      <Button size="sm" variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(ref), node: `object:${object}` } })}>{t("Open in Data Lineage")}</Button>
+      {lineage.resource?.draft && <OpenLineage type="build.object" record={lineage.resource.draft} />}
     </Panel>
     <Panel title={t("Field by field")} help={t("Current source mappings for the published dependencies. Open the original integration to inspect its configuration and recorded outcome.")}>
-      <DataTable storageKey="ontology:field-lineage" data={fields} getRowId={field => field.name} searchable={false} height={Math.min(360, 40 + fields.length * 28)} columns={[
+      {lineage.error && <p role="alert" className="text-xs text-danger">{t("Field lineage could not be loaded.")}</p>}
+      <DataTable storageKey="ontology:field-lineage" data={fields} getRowId={field => field.name} searchable={false} loading={lineage.loading} height={Math.min(360, 40 + fields.length * 28)} columns={[
         { id: "title", header: t("Field"), accessorFn: field => field.title },
         { id: "name", header: t("Name"), accessorFn: field => field.name },
-        { id: "origin", header: t("Comes from"), accessorFn: field => feeders(field.name).join(" · ") || t("entered here") },
+        { id: "origin", header: t("Comes from"), accessorFn: field => feeders(field.name).join(" · ") || t("unverified") },
+        { id: "used", header: t("Used here"), accessorFn: field => usedBy(field.name).join(" · ") || "—" },
       ]} />
     </Panel>
     <Panel title={t("Runtime evidence")} help={t("Recorded integration outcomes remain separate from declared dependencies.")}>
@@ -78,6 +86,6 @@ export function DatasetLineage({ dataset }: { dataset: string }) {
   return <Panel title={t("Declared dependencies")} className="grid gap-2 text-xs" help={t("Published dependencies and reverse impact come from the shared asset description.")}>
     <DependencyGraph asset={ref} labels={presentation.labels} onOpen={asset => open(presentation.route(asset))} height={320} />
     <p>{t("Dataset version")}: {record.version ?? "—"}</p>
-    <Button size="sm" variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(ref), node: `dataset:${dataset}` } })}>{t("Open in Data Lineage")}</Button>
+    <OpenLineage type="build.dataset" record={dataset} />
   </Panel>;
 }

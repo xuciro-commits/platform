@@ -178,6 +178,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 			log.Printf("source retained input unavailable: %v", err)
 			return
 		}
+		pull.Object, pull.Marking, pull.Compartments = plan.Object, plan.Marking, slices.Clone(plan.Compartments)
 	} else if !ok {
 		pull.Error = "The execution member is no longer available"
 	} else if raw, err := t.readSource(s); err != nil {
@@ -190,6 +191,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		}
 		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
 		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: marking.Level, Compartments: marking.Compartments}
+		pull.Object, pull.Marking, pull.Compartments = plan.Object, plan.Marking, slices.Clone(plan.Compartments)
 		plan.Type, plan.ID = build.SourceType, s.ID
 		if s.Stream {
 			plan.Transaction = "append"

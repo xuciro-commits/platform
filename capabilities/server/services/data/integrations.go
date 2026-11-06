@@ -479,6 +479,8 @@ type DatasetProjection struct {
 	MergeVersion int       `json:"mergeVersion,omitempty"`
 	Objects      []string  `json:"objects,omitempty"`
 	Deleted      int       `json:"deleted,omitempty"`
+	Marking      string    `json:"marking,omitempty" field:"readonly"`
+	Compartments []string  `json:"compartments,omitempty" field:"readonly"`
 	Object       string    `json:"object"`
 	Version      int       `json:"version"`
 	At           time.Time `json:"at"`

@@ -430,7 +430,7 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 					"rows": []map[string]any{{"id": "A1", "note": "higher clearance"}}, "marking": phase.other,
 				})
 			}
-			graph, refusal := live.lineage(inspector)
+			graph, refusal := live.lineage(inspector, LineageRequest{Mode: "overview"})
 			if refusal != nil {
 				t.Fatalf("read lineage: %+v", refusal)
 			}
@@ -447,11 +447,11 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 				}
 			}
 			for _, id := range []string{"dataset:INPUT", "dataset:OUTPUT"} {
-				if nodes[id].Marking != "internal" {
-					t.Fatalf("%s has declared marking %q; want internal so propagation is required", id, nodes[id].Marking)
+				if nodes[id].Declared != "internal" {
+					t.Fatalf("%s has declared marking %q; want internal so propagation is required", id, nodes[id].Declared)
 				}
 			}
-			if nodes["object:build.alpha"].Marking != "" || nodes["pipeline:PIPELINE"].Marking != "" {
+			if nodes["object:build.alpha"].Declared != "" || nodes["pipeline:PIPELINE"].Declared != "" {
 				t.Fatal("the object and pipeline must inherit their effective markings without declaring one")
 			}
 			index := live.markingsIn(live.records, false)

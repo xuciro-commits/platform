@@ -5,7 +5,7 @@ import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Layers } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { chromeViews, explorerApplication, lineageApplication, personalWork } from "./chrome";
+import { chromeViews, explorerApplication, personalWork } from "./chrome";
 import { availablePackages, loadPackages, packages } from "./host/packages";
 import { usePlatformHost } from "./host/usePlatformHost";
 import { IDENTITY_KEY, TENANT_KEY, forget, preferred, remember, remembered, type Identity } from "./session/identity";
@@ -108,7 +108,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   const [loadedPackages, setLoadedPackages] = useState<{ scope: string; applications: (host: Host) => AppUI[] }>();
   const loadedApps = useMemo(() => loadedPackages && loadedPackages.scope === packageScope
-    ? (host: Host) => [...loadedPackages.applications(host), personalWork, lineageApplication]
+    ? (host: Host) => [...loadedPackages.applications(host), personalWork]
     : undefined, [loadedPackages, packageScope]);
   const [packageAttempt, setPackageAttempt] = useState(0);
   const [packageFailure, setPackageFailure] = useState<string>();
@@ -422,7 +422,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           { id: "observations", label: t("Read observations"), group: t("Ontology"), run: () => { location.hash = "#/observations"; } },
           { id: "explorer", label: t("Object Explorer"), group: t("Ontology"), run: () => { location.hash = "#/explorer"; } },
           ...(host.holds("build", "builder") ? [
-            { id: "lineage", label: t("Data Lineage"), group: t("Ontology"), run: () => { location.hash = "#/lineage"; } },
+            { id: "lineage", label: t("Data Lineage"), group: t("Governance"), run: () => { location.hash = "#/lineage"; } },
             { id: "records", label: t("Browse all records"), run: () => { location.hash = "#/records"; } },
             { id: "definitions", label: t("Browse definitions"), run: () => { location.hash = "#/definitions"; } },
           ] : []), ...(app?.commands?.(host) ?? [])]}

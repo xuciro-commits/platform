@@ -21,6 +21,7 @@ import { AIProviders, AIPlayground, AIUsage } from "./ai";
 import { Credentials } from "./credentials";
 import { Agents, AgentRuns, AgentMemories, Evaluations } from "./processes";
 import { HostMigrations, HostOverview, HostPromotions, HostTenant } from "./host";
+import { dataLineage } from "./lineage";
 
 import {SystemConsole} from "./system";
 
@@ -225,5 +226,5 @@ export const hostConsole = defineApp({
   ] }],
 });
 
-export const contributions: AppUI[] = [marketplace, hostConsole];
+export const contributions: AppUI[] = [marketplace, hostConsole, dataLineage];
 export default controlPanel;

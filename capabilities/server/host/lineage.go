@@ -7,47 +7,409 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	"platformserver/services/resources/authoring"
+	"platformserver/services/data/lineage"
+	build "platformserver/services/resources/authoring"
 )
 
-type LineageNode struct {
-	ID                    string     `json:"id"`
-	Kind                  string     `json:"kind"`
-	Record                string     `json:"record,omitempty"`
-	Name                  string     `json:"name"`
-	Title                 string     `json:"title"`
-	State                 string     `json:"state,omitempty"`
-	Marking               string     `json:"marking,omitempty"`
-	Compartments          []string   `json:"compartments,omitempty"`
-	EffectiveCompartments []string   `json:"effectiveCompartments,omitempty"`
-	Effective             string     `json:"effective,omitempty"`
-	Version               int        `json:"version,omitempty"`
-	Rows                  int        `json:"rows,omitempty"`
-	At                    *time.Time `json:"at,omitempty"`
-	Error                 string     `json:"error,omitempty"`
-	Stale                 bool       `json:"stale,omitempty"`
+type LineageNode lineage.Node
+type LineageEdge lineage.Edge
+type LineageGroup lineage.Group
+type LineageTotal lineage.Total
+type LineageCoverage lineage.Coverage
+type LineageUnreadable lineage.Unreadable
+type LineageImpact lineage.Impact
+type LineageImpactItem lineage.ImpactItem
+type LineageFieldNode lineage.FieldNode
+type LineageFieldEdge lineage.FieldEdge
+
+type LineageScope struct {
+	Mode      string `json:"mode"`
+	Project   string `json:"project,omitempty"`
+	Focus     string `json:"focus,omitempty"`
+	Direction string `json:"direction,omitempty"`
+	Depth     int    `json:"depth,omitempty"`
+	Branch    string `json:"branch,omitempty"`
 }
 
-type LineageEdge struct {
-	From    string `json:"from"`
-	To      string `json:"to"`
-	Version int    `json:"version,omitempty"`
-	Stale   bool   `json:"stale,omitempty"`
+type LineageBasis struct {
+	Generation uint64 `json:"generation"`
+	Preview    string `json:"preview"`
+	Guard      string `json:"guard"`
+	BuiltAt    string `json:"builtAt"`
 }
 
 type Lineage struct {
-	Nodes []LineageNode `json:"nodes"`
-	Edges []LineageEdge `json:"edges"`
+	Nodes       []LineageNode       `json:"nodes"`
+	Edges       []LineageEdge       `json:"edges"`
+	Groups      []LineageGroup      `json:"groups,omitempty"`
+	Scope       LineageScope        `json:"scope"`
+	Basis       LineageBasis        `json:"basis"`
+	Total       LineageTotal        `json:"total"`
+	Returned    LineageTotal        `json:"returned"`
+	Truncated   bool                `json:"truncated"`
+	Truncation  []string            `json:"truncationReasons,omitempty"`
+	Unreadable  []LineageUnreadable `json:"unreadable,omitempty"`
+	Coverage    LineageCoverage     `json:"coverage"`
+	Impact      *LineageImpact      `json:"impact,omitempty"`
+	FieldNodes  []LineageFieldNode  `json:"fieldNodes,omitempty"`
+	FieldEdges  []LineageFieldEdge  `json:"fieldEdges,omitempty"`
+	GeneratedAt time.Time           `json:"generatedAt"`
 }
 
-func lineageRecords[T any](c platform.Caller) []T {
-	rows, _, refusal := platform.Find[T](c, platform.Query{Sort: []string{"id"}, Limit: 1000})
-	if refusal != nil {
-		return nil
+type LineageRequest struct {
+	Mode      string
+	Project   string
+	Focus     string
+	Ref       string
+	Direction string
+	Depth     int
+	NodeLimit int
+	EdgeLimit int
+	Fields    bool
+	Field     string
+}
+
+func (t *Tenant) lineage(m platform.Member, request LineageRequest) (Lineage, *kernel.Error) {
+	if err := t.admits(m); err != nil {
+		return Lineage{}, err
 	}
-	return rows
+	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
+		return Lineage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	t.records.Lock()
+	raw := t.lineageRecordsLocked(t.records)
+	meta, visible := t.lineageMetaLocked(m, raw)
+	focus, refusal := t.lineageFocusLocked(request)
+	generation := t.records.Generation()
+	t.records.Unlock()
+	if refusal != nil {
+		return Lineage{}, refusal
+	}
+	if request.Mode == "" {
+		if focus != "" || request.Ref != "" {
+			request.Mode = "focus"
+		} else {
+			request.Mode = "overview"
+		}
+	}
+	if request.Mode != "overview" && request.Mode != "focus" {
+		return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "mode is overview or focus")
+	}
+	if request.Direction == "" {
+		request.Direction = "both"
+	}
+	if request.Direction != "upstream" && request.Direction != "downstream" && request.Direction != "both" {
+		return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "direction is upstream, downstream or both")
+	}
+	if request.Depth == 0 {
+		request.Depth = 1
+	}
+	if request.Depth < 1 || request.Depth > 3 {
+		return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "depth is 1 to 3")
+	}
+	previewInput := raw
+	previewInput.Meta = meta
+	preview := lineage.Build(previewInput, lineage.Preview)
+	guard := lineage.Build(t.lineageGuard(raw), lineage.Guard)
+	guardNodes := map[string]lineage.Node{}
+	for _, node := range guard.Nodes {
+		guardNodes[node.ID] = node
+	}
+	for i := range preview.Nodes {
+		value, ok := guardNodes[preview.Nodes[i].ID]
+		if !ok {
+			preview.Nodes[i].Guard = preview.Nodes[i].Effective
+			preview.Nodes[i].GuardCompartments = slices.Clone(preview.Nodes[i].EffectiveCompartments)
+			preview.Nodes[i].MarkingStatus = "unknown"
+			continue
+		}
+		preview.Nodes[i].Guard = value.Guard
+		preview.Nodes[i].GuardCompartments = slices.Clone(value.GuardCompartments)
+		preview.Nodes[i].MarkingStatus = "consistent"
+		if preview.Nodes[i].Guard != preview.Nodes[i].Effective || !slices.Equal(preview.Nodes[i].GuardCompartments, preview.Nodes[i].EffectiveCompartments) {
+			preview.Nodes[i].MarkingStatus = "preview-only"
+		}
+	}
+	preview = lineage.Project(preview, func(node lineage.Node) bool {
+		value, ok := visible[node.ID]
+		return !ok || value
+	}, "other-project")
+	var fieldNodes []lineage.FieldNode
+	var fieldEdges []lineage.FieldEdge
+	if request.Fields || request.Field != "" {
+		fieldNodes, fieldEdges = lineage.Fields(preview, raw)
+	}
+	var impact *LineageImpact
+	if request.Mode == "focus" && focus != "" {
+		if value := lineage.ComputeImpact(preview, focus); value != nil {
+			converted := LineageImpact(*value)
+			impact = &converted
+		}
+	}
+	preview = lineage.Scope(preview, lineage.Params{
+		Mode: request.Mode, Project: request.Project, Focus: focus, Direction: request.Direction, Depth: request.Depth,
+		NodeLimit: request.NodeLimit, EdgeLimit: request.EdgeLimit,
+	})
+	if request.Field != "" {
+		fieldNodes, fieldEdges = lineage.FieldTrace(fieldNodes, fieldEdges, request.Field)
+	} else if request.Fields {
+		fieldNodes, fieldEdges = lineage.ScopeFields(preview, fieldNodes, fieldEdges)
+	}
+	if request.Fields || request.Field != "" {
+		preview.Coverage.FieldsComplete = true
+	}
+	if request.Mode == "focus" && focus == "" {
+		return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "focus is required")
+	}
+	if request.Mode == "focus" {
+		if _, ok := previewNodeByID(preview, focus); !ok {
+			return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This resource does not exist or you cannot open it")
+		}
+	}
+	return Lineage{
+		Nodes:       responseNodes(preview.Nodes),
+		Edges:       responseEdges(preview.Edges),
+		Groups:      responseGroups(preview.Groups),
+		Scope:       LineageScope{Mode: request.Mode, Project: request.Project, Focus: focus, Direction: request.Direction, Depth: request.Depth},
+		Basis:       LineageBasis{Generation: generation, Preview: "saved definitions", Guard: "accepted definitions", BuiltAt: time.Now().UTC().Format(time.RFC3339)},
+		Total:       LineageTotal(preview.Total),
+		Returned:    LineageTotal(preview.Returned),
+		Truncated:   preview.Truncated,
+		Truncation:  preview.Reasons,
+		Unreadable:  responseUnreadable(preview.Unreadable),
+		Coverage:    LineageCoverage(preview.Coverage),
+		Impact:      impact,
+		FieldNodes:  responseFieldNodes(fieldNodes),
+		FieldEdges:  responseFieldEdges(fieldEdges),
+		GeneratedAt: time.Now().UTC(),
+	}, nil
+}
+
+func (t *Tenant) lineageRecordsLocked(store *records.Store) lineage.Input {
+	return lineage.Input{
+		Connections: storeRows[dataowner.Connection](store, dataowner.ConnectionType),
+		Sources:     storeRows[dataowner.Source](store, dataowner.SourceType),
+		Datasets:    storeRows[dataowner.Dataset](store, dataowner.DatasetType),
+		Pipelines:   storeRows[dataowner.Pipeline](store, dataowner.PipelineType),
+		Objects:     storeRows[build.Object](store, build.ObjectType),
+		Writebacks:  storeRows[dataowner.Writeback](store, dataowner.WritebackType),
+	}
+}
+
+func (t *Tenant) lineageMetaLocked(m platform.Member, raw lineage.Input) (map[string]lineage.Meta, map[string]bool) {
+	meta := map[string]lineage.Meta{}
+	visible := map[string]bool{}
+	resources := storeRows[build.Resource](t.records, build.ResourceType)
+	projectRID := map[string]string{}
+	for _, row := range resources {
+		if row.Ref.Kind == platform.AssetApp {
+			projectRID[row.Draft] = row.ID
+			projectRID[row.Ref.Name] = row.ID
+		}
+	}
+	for _, row := range resources {
+		node := lineageNodeID(row)
+		if node == "" {
+			continue
+		}
+		role := t.resourceRole(m, row.Project)
+		project := row.Project
+		if rid, ok := projectRID[project]; ok {
+			project = rid
+		}
+		entry := lineage.Meta{RID: row.ID, Project: project, CanOpen: role != "" && role != platform.ProjectDiscovererRole, CanRead: role != "" && role != platform.ProjectDiscovererRole, Visible: role != ""}
+		meta[node], visible[node] = entry, entry.Visible
+	}
+	for _, node := range lineage.NodeIDs(raw) {
+		if _, ok := meta[node]; ok {
+			continue
+		}
+		typ, id := lineageNodeType(node)
+		if typ == "" {
+			continue
+		}
+		allowed := !projectDelegated(m)
+		if typ != build.ObjectType {
+			allowed, _ = t.resourcePermission(t.records, m, typ, id, "read", true)
+		}
+		entry := lineage.Meta{CanOpen: allowed, CanRead: allowed, Visible: allowed}
+		meta[node], visible[node] = entry, allowed
+	}
+	return meta, visible
+}
+
+func (t *Tenant) lineageFocusLocked(request LineageRequest) (string, *kernel.Error) {
+	value := strings.TrimSpace(request.Focus)
+	if value == "" {
+		value = strings.TrimSpace(request.Ref)
+	}
+	if value == "" {
+		return "", nil
+	}
+	if strings.Contains(value, ":") {
+		return value, nil
+	}
+	for _, row := range storeRows[build.Resource](t.records, build.ResourceType) {
+		if row.ID == value || row.Ref.App+"/"+string(row.Ref.Kind)+"/"+row.Ref.Name == value {
+			return lineageNodeID(row), nil
+		}
+	}
+	if strings.Contains(value, "/") {
+		parts := strings.Split(value, "/")
+		if len(parts) == 3 {
+			for _, row := range storeRows[build.Resource](t.records, build.ResourceType) {
+				if row.Ref.App == parts[0] && string(row.Ref.Kind) == parts[1] && row.Ref.Name == parts[2] {
+					return lineageNodeID(row), nil
+				}
+			}
+		}
+	}
+	return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This resource does not exist or you cannot open it")
+}
+
+func (t *Tenant) lineageGuard(input lineage.Input) lineage.Input {
+	owner := t.dataOwner().WithInventory(lineageInventory(input))
+	for i, item := range input.Connections {
+		if fixed, err := owner.ConnectionConfiguration(item); err == nil {
+			input.Connections[i] = fixed
+		}
+	}
+	for i, item := range input.Sources {
+		if fixed, err := owner.ExecutionSource(item); err == nil {
+			input.Sources[i] = fixed
+		}
+	}
+	for i, item := range input.Datasets {
+		if fixed, err := owner.ExecutionDataset(item); err == nil {
+			input.Datasets[i] = fixed
+		}
+	}
+	for i, item := range input.Pipelines {
+		if fixed, err := owner.ExecutionPipeline(item); err == nil {
+			input.Pipelines[i] = fixed
+		}
+	}
+	for i, item := range input.Writebacks {
+		if fixed, err := owner.ExecutionWriteback(item); err == nil {
+			input.Writebacks[i] = fixed
+		}
+	}
+	for i, item := range input.Objects {
+		if fixed, ok := build.ReadPublication[build.Object](item.Published); ok {
+			fixed.Record = item.Record
+			fixed.Archived = item.Archived
+			input.Objects[i] = fixed
+		}
+	}
+	input.Evidence = lineageEvidence(input)
+	return input
+}
+
+func lineageInventory(input lineage.Input) dataowner.IntegrationInventory {
+	records := map[platform.AssetKind][]any{
+		platform.AssetConnection: toAny(input.Connections),
+		platform.AssetSource:     toAny(input.Sources),
+		platform.AssetDataset:    toAny(input.Datasets),
+		platform.AssetPipeline:   toAny(input.Pipelines),
+		platform.AssetWriteback:  toAny(input.Writebacks),
+	}
+	return func(kind platform.AssetKind) ([]any, error) {
+		return records[kind], nil
+	}
+}
+
+func toAny[T any](items []T) []any {
+	out := make([]any, len(items))
+	for i := range items {
+		out[i] = items[i]
+	}
+	return out
+}
+
+func lineageEvidence(input lineage.Input) []lineage.Evidence {
+	connections := map[string]dataowner.Connection{}
+	for _, item := range input.Connections {
+		connections[item.ID] = item
+	}
+	out := []lineage.Evidence{}
+	for _, item := range input.Datasets {
+		for _, projection := range item.Projections {
+			marking := projection.Marking
+			compartments := projection.Compartments
+			if marking == "" && len(compartments) == 0 {
+				marking, compartments = item.Marking, item.Compartments
+			}
+			out = append(out, lineage.Evidence{Target: "object:" + lineageObjectType(projection.Object), Marking: marking, Compartments: slices.Clone(compartments)})
+		}
+	}
+	for _, item := range input.Sources {
+		if item.Object == "" || item.Last == nil {
+			continue
+		}
+		marking, compartments := item.Last.Marking, item.Last.Compartments
+		if connection, ok := connections[item.Connection]; ok && marking == "" && len(compartments) == 0 {
+			marking, compartments = connection.Marking, connection.Compartments
+		}
+		out = append(out, lineage.Evidence{Target: "object:" + lineageObjectType(item.Object), Marking: marking, Compartments: slices.Clone(compartments)})
+	}
+	for _, item := range input.Pipelines {
+		if item.Last == nil || item.Last.Object == "" {
+			continue
+		}
+		out = append(out, lineage.Evidence{Target: "object:" + lineageObjectType(item.Last.Object), Marking: item.Last.Marking, Compartments: slices.Clone(item.Last.Compartments)})
+	}
+	for _, item := range input.Writebacks {
+		if item.Object == "" || len(item.Result) == 0 {
+			continue
+		}
+		if connection, ok := connections[item.Connection]; ok {
+			out = append(out, lineage.Evidence{Target: "object:" + lineageObjectType(item.Object), Marking: connection.Marking, Compartments: slices.Clone(connection.Compartments)})
+		}
+	}
+	return out
+}
+
+func lineageNodeID(resource build.Resource) string {
+	switch resource.Ref.Kind {
+	case platform.AssetObject:
+		return "object:" + resource.Ref.Name
+	case platform.AssetConnection:
+		return "connection:" + resource.Draft
+	case platform.AssetSource:
+		return "source:" + resource.Draft
+	case platform.AssetDataset:
+		return "dataset:" + resource.Draft
+	case platform.AssetPipeline:
+		return "pipeline:" + resource.Draft
+	case platform.AssetWriteback:
+		return "writeback:" + resource.Draft
+	}
+	return ""
+}
+
+func lineageNodeType(node string) (string, string) {
+	kind, id, ok := strings.Cut(node, ":")
+	if !ok {
+		return "", ""
+	}
+	switch kind {
+	case "connection":
+		return build.ConnectionType, id
+	case "source":
+		return build.SourceType, id
+	case "dataset":
+		return build.DatasetType, id
+	case "pipeline":
+		return build.PipelineType, id
+	case "writeback":
+		return build.WritebackType, id
+	case "object":
+		return build.ObjectType, id
+	}
+	return "", ""
 }
 
 func lineageObjectType(name string) string {
@@ -57,185 +419,59 @@ func lineageObjectType(name string) string {
 	return build.ID + "." + name
 }
 
-func (t *Tenant) lineage(m platform.Member) (Lineage, *kernel.Error) {
-	if err := t.admits(m); err != nil {
-		return Lineage{}, err
+func previewNodeByID(graph lineage.Graph, id string) (lineage.Node, bool) {
+	for _, node := range graph.Nodes {
+		if node.ID == id {
+			return node, true
+		}
 	}
-	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
-		return Lineage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
-	}
-	c := t.caller(m, t.app(build.ID), false)
-	return lineageGraph(lineageInputs{
-		connections: lineageRecords[dataowner.Connection](c),
-		datasets:    lineageRecords[dataowner.Dataset](c),
-		objects:     lineageRecords[build.Object](c),
-		sources:     lineageRecords[dataowner.Source](c),
-		pipelines:   lineageRecords[dataowner.Pipeline](c),
-		writebacks:  lineageRecords[dataowner.Writeback](c),
-	}), nil
+	return lineage.Node{}, false
 }
 
-type lineageInputs struct {
-	connections []dataowner.Connection
-	datasets    []dataowner.Dataset
-	objects     []build.Object
-	sources     []dataowner.Source
-	pipelines   []dataowner.Pipeline
-	writebacks  []dataowner.Writeback
+func responseNodes(nodes []lineage.Node) []LineageNode {
+	out := make([]LineageNode, len(nodes))
+	for i, node := range nodes {
+		out[i] = LineageNode(node)
+	}
+	return out
 }
 
-func lineageGraph(in lineageInputs) Lineage {
-	out := Lineage{Nodes: []LineageNode{}, Edges: []LineageEdge{}}
-	at := map[string]int{}
-	add := func(node LineageNode) {
-		if _, seen := at[node.ID]; seen {
-			return
-		}
-		at[node.ID] = len(out.Nodes)
-		out.Nodes = append(out.Nodes, node)
+func responseEdges(edges []lineage.Edge) []LineageEdge {
+	out := make([]LineageEdge, len(edges))
+	for i, edge := range edges {
+		out[i] = LineageEdge(edge)
 	}
-	edges := map[string]bool{}
-	link := func(edge LineageEdge) {
-		if edge.From == "" || edge.To == "" || edge.From == edge.To {
-			return
-		}
-		if _, ok := at[edge.From]; !ok {
-			return
-		}
-		if _, ok := at[edge.To]; !ok {
-			return
-		}
-		key := edge.From + ">" + edge.To
-		if edges[key] {
-			return
-		}
-		edges[key] = true
-		out.Edges = append(out.Edges, edge)
-	}
-	when := func(v time.Time) *time.Time {
-		if v.IsZero() {
-			return nil
-		}
-		return &v
-	}
+	return out
+}
 
-	for _, conn := range in.connections {
-		node := LineageNode{ID: "connection:" + conn.ID, Kind: "connection", Record: conn.ID, Name: conn.Name, Title: conn.Title, State: conn.State, Marking: conn.Marking, Compartments: conn.Compartments}
-		if conn.Last != nil {
-			node.At = when(conn.Last.At)
-			node.Error = conn.Last.Error
-		}
-		add(node)
+func responseGroups(groups []lineage.Group) []LineageGroup {
+	out := make([]LineageGroup, len(groups))
+	for i, group := range groups {
+		out[i] = LineageGroup(group)
 	}
-	versions := map[string]int{}
-	for _, ds := range in.datasets {
-		versions[ds.ID] = ds.Version
-		node := LineageNode{ID: "dataset:" + ds.ID, Kind: "dataset", Record: ds.ID, Name: ds.Name, Title: ds.Title, Marking: ds.Marking, Compartments: ds.Compartments, Version: ds.Version}
-		if ds.Last != nil {
-			node.Rows = ds.Last.Rows
-			node.At = when(ds.Last.At)
-		}
-		add(node)
-	}
-	for _, o := range in.objects {
-		add(LineageNode{ID: "object:" + lineageObjectType(o.Name), Kind: "object", Record: o.ID, Name: lineageObjectType(o.Name), Title: o.Title, State: o.State})
-	}
-	for _, s := range in.sources {
-		node := LineageNode{ID: "source:" + s.ID, Kind: "source", Record: s.ID, Name: s.Name, Title: s.Title, State: s.State}
-		if s.Last != nil {
-			node.Rows = s.Last.Rows
-			node.At = when(s.Last.At)
-			node.Error = s.Last.Error
-		}
-		add(node)
-	}
-	for _, p := range in.pipelines {
-		node := LineageNode{ID: "pipeline:" + p.ID, Kind: "pipeline", Record: p.ID, Name: p.Name, Title: p.Title, State: p.State, Marking: p.Marking, Compartments: p.Compartments}
-		if p.Last != nil {
-			node.Rows = p.Last.Written
-			node.At = when(p.Last.At)
-			node.Error = p.Last.Error
-		}
-		add(node)
-	}
-	for _, w := range in.writebacks {
-		add(LineageNode{ID: "writeback:" + w.ID, Kind: "writeback", Record: w.ID, Name: w.Name, Title: w.Title, State: w.State, Rows: w.Sent})
-	}
+	return out
+}
 
-	for _, s := range in.sources {
-		id := "source:" + s.ID
-		link(LineageEdge{From: "connection:" + s.Connection, To: id})
-		link(LineageEdge{From: id, To: "dataset:" + s.Dataset})
-		link(LineageEdge{From: id, To: "object:" + lineageObjectType(s.Object)})
+func responseUnreadable(items []lineage.Unreadable) []LineageUnreadable {
+	out := make([]LineageUnreadable, len(items))
+	for i, item := range items {
+		out[i] = LineageUnreadable(item)
 	}
-	for _, p := range in.pipelines {
-		id := "pipeline:" + p.ID
-		stale := false
-		for _, input := range append([]string{p.Input}, p.StepDatasets()...) {
-			edge := LineageEdge{From: "dataset:" + input, To: id}
-			if p.Last != nil && p.Last.Execution != nil {
-				if consumed, ok := p.Last.Execution.Inputs[input]; ok {
-					edge.Version = consumed
-					edge.Stale = consumed != versions[input]
-				}
-			}
-			stale = stale || edge.Stale
-			link(edge)
-		}
-		out.Nodes[at[id]].Stale = stale
-		link(LineageEdge{From: id, To: "dataset:" + p.OutputDataset})
-		link(LineageEdge{From: id, To: "object:" + lineageObjectType(p.OutputObject)})
-	}
-	for _, o := range in.objects {
-		id := "object:" + lineageObjectType(o.Name)
-		for _, binding := range o.DataSources {
-			if binding.Kind == "source" || binding.Kind == "pipeline" || binding.Kind == "dataset" {
-				link(LineageEdge{From: binding.Kind + ":" + binding.Source, To: id})
-			}
-		}
-	}
-	for _, w := range in.writebacks {
-		id := "writeback:" + w.ID
-		link(LineageEdge{From: "object:" + lineageObjectType(w.Object), To: id})
-		link(LineageEdge{From: id, To: "connection:" + w.Connection})
-	}
+	return out
+}
 
-	linked := map[string]bool{}
-	for _, edge := range out.Edges {
-		linked[edge.From], linked[edge.To] = true, true
+func responseFieldNodes(nodes []lineage.FieldNode) []LineageFieldNode {
+	out := make([]LineageFieldNode, len(nodes))
+	for i, node := range nodes {
+		out[i] = LineageFieldNode(node)
 	}
-	kept := out.Nodes[:0]
-	for _, node := range out.Nodes {
-		if node.Kind != "object" || linked[node.ID] {
-			kept = append(kept, node)
-		}
+	return out
+}
+
+func responseFieldEdges(edges []lineage.FieldEdge) []LineageFieldEdge {
+	out := make([]LineageFieldEdge, len(edges))
+	for i, edge := range edges {
+		out[i] = LineageFieldEdge(edge)
 	}
-	out.Nodes = kept
-	clear(at)
-	for i := range out.Nodes {
-		at[out.Nodes[i].ID] = i
-		out.Nodes[i].Effective = out.Nodes[i].Marking
-		out.Nodes[i].EffectiveCompartments = platform.JoinCompartments(out.Nodes[i].Compartments)
-	}
-	declassified := map[string][]string{}
-	for _, pipeline := range in.pipelines {
-		declassified["pipeline:"+pipeline.ID] = pipeline.PublishedDeclassifications()
-	}
-	for changed := true; changed; {
-		changed = false
-		for _, edge := range out.Edges {
-			from, to := &out.Nodes[at[edge.From]], &out.Nodes[at[edge.To]]
-			if to.Kind == "connection" {
-				continue
-			}
-			incoming := (platform.MarkingSet{Level: from.Effective, Compartments: from.EffectiveCompartments}).Without(declassified[to.ID])
-			level := platform.HigherMarking(to.Effective, incoming.Level)
-			compartments := platform.JoinCompartments(to.EffectiveCompartments, incoming.Compartments)
-			if level != to.Effective || !slices.Equal(compartments, to.EffectiveCompartments) {
-				to.Effective, to.EffectiveCompartments, changed = level, compartments, true
-			}
-		}
-	}
-	slices.SortStableFunc(out.Edges, func(a, b LineageEdge) int { return strings.Compare(a.From+">"+a.To, b.From+">"+b.To) })
 	return out
 }

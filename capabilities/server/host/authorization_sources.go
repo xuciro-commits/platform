@@ -78,4 +78,4 @@ func (m securityMarkings) Row(typ string, row *records.Row) string { return m.ro
 func (m securityMarkings) Compartments(typ string, row *records.Row) []string {
 	return m.compartments(typ, row)
 }
-func (m securityMarkings) Highest(typ string) string { return m.highest(typ) }
+func (m securityMarkings) Highest(typ string, row *records.Row) string { return m.highest(typ, row) }

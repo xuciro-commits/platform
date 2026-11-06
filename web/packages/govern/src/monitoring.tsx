@@ -89,7 +89,7 @@ export function MonitoringRunsView({ type: initialType, status: initialStatus }:
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState("");
   const query = useRead<MonitoringRunPage>(runsQuery(type, status), 5000);
-  const openResource = (ref: Api.AssetRef) => open({ view: "lineage", params: { ref: `${ref.app}/${ref.kind}/${ref.name}` } }, { window: "beside" });
+  const openResource = (ref: Api.AssetRef) => open({ view: "definition", params: { app: ref.app, kind: ref.kind, name: ref.name } }, { window: "beside" });
   const columns: ColumnDef<MonitoringRun, any>[] = [
     { accessorKey: "type", header: t("Type"), meta: { width: 110 }, cell: (c) => t(runTypeLabels[c.getValue() as MonitoringRunType] ?? c.getValue()) },
     { accessorKey: "title", header: t("Run"), cell: ({ row: { original: run } }) => run.recordRef

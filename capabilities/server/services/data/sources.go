@@ -357,6 +357,9 @@ type SourceField struct {
 type SourcePull struct {
 	Execution         *IntegrationExecution `json:"execution,omitempty"`
 	DefinitionVersion string                `json:"definitionVersion,omitempty"`
+	Object            string                `json:"object,omitempty" field:"readonly"`
+	Marking           string                `json:"marking,omitempty" field:"readonly"`
+	Compartments      []string              `json:"compartments,omitempty" field:"readonly"`
 	At                time.Time             `json:"at"`
 	Rows              int                   `json:"rows"`
 	Applied           int                   `json:"applied"`

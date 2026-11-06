@@ -33,7 +33,10 @@ type Owner struct {
 	host            Host
 	files           platform.FileHost
 	releaseDraftIDs map[platform.AssetRef]string
+	inventory       IntegrationInventory
 }
+
+type IntegrationInventory func(platform.AssetKind) ([]any, error)
 
 func New(host Host) *Owner {
 	return &Owner{host: host}
@@ -45,6 +48,12 @@ func (o *Owner) AttachFiles(files platform.FileHost) {
 
 func (o *Owner) Fork(host Host) *Owner {
 	return &Owner{host: host, files: o.files, releaseDraftIDs: cloneDraftIDs(o.releaseDraftIDs)}
+}
+
+func (o *Owner) WithInventory(inventory IntegrationInventory) *Owner {
+	copy := *o
+	copy.inventory = inventory
+	return &copy
 }
 
 func (o *Owner) DraftID(ref platform.AssetRef) string {

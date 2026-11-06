@@ -9,12 +9,11 @@ import { useState, type ReactNode } from "react";
 import { ApplicationsPortal } from "./shell/Applications";
 import { projectionOfSurface } from "./shell/legacy";
 import type { Projection } from "./shell/registry";
-import { Bell, ClipboardList, Compass, Inbox as InboxIcon, Network, Send } from "lucide-react";
+import { Bell, ClipboardList, Compass, Inbox as InboxIcon, Send } from "lucide-react";
 
 import { Home } from "./shell/Home";
 import { Files } from "./shell/Files";
 import { ObjectExplorer } from "./shell/Explorer";
-import { Lineage } from "./shell/Lineage";
 import { Search } from "./shell/Search";
 
 type Notification = Api.Notification;
@@ -267,13 +266,6 @@ export const explorerApplication = defineApp({
   description: "Search, filter and open objects of every type you may read.",
   views: [{ id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} saved={p.saved} /> }],
   nav: () => [{ label: t("Explore"), items: [{ label: t("Explore"), icon: <Compass />, route: { view: "explorer" } }] }],
-});
-
-export const lineageApplication = defineApp({
-  ...appRegistration("data-lineage"), icon: <Network />,
-  description: "How resources depend on each other, and what a change reaches.",
-  views: [{ id: "lineage", title: () => t("Data Lineage"), render: (p) => <Lineage ref={p.ref} node={p.node} /> }],
-  nav: () => [{ label: t("Data Lineage"), items: [{ label: t("Lineage"), icon: <Network />, route: { view: "lineage" } }] }],
 });
 
 export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[] = () => []): View[] => [

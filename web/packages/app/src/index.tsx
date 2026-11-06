@@ -36,7 +36,7 @@ import { DeclaredActionDialog, NewActions, RecordActions, useTransition, useReco
 import {recordKanbanMoves} from "./actions/record-actions";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 export { ComputeCall } from "./automation/capability";
-export { OpenIn, type OpenInPlace } from "./actions/OpenIn";
+export { OpenIn, OpenLineage, type OpenInPlace } from "./actions/OpenIn";
 import { OpenIn as OpenInMenu } from "./actions/OpenIn";
 export { pageDocumentFromSections } from "./pages/pageDocument";
 export { semanticModelView, semanticPropertyTypes, semanticValueTypes, assetBindingKey, propertyKey, relationKey, type SemanticPropertyType, type SemanticValueType, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";

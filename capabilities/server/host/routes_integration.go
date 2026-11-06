@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strconv"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -88,10 +89,48 @@ func (h *Host) routesIntegration(rt *routes) {
 	})
 	rt.public(transport.Route{Pattern: "POST /a2a/{tenant}/{agent}", Summary: "A2A 1.0 JSON-RPC to a published agent; the caller signs in with the host's issuer", Body: json.RawMessage{}}, h.serveA2A)
 	rt.handle(transport.Route{Pattern: "POST /mcp", Summary: "MCP: the caller's catalog as tools (JSON-RPC)", Body: json.RawMessage{}}, h.mcp)
-	rt.recordRead(transport.Route{Pattern: "GET /v1/lineage", Summary: "Data lineage across connections, sources, datasets, pipelines, object types and writebacks the caller may read, with dataset versions, stale inputs and propagated markings", Answer: Lineage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		out, err := t.lineage(m)
+	rt.recordRead(transport.Route{Pattern: "GET /v1/lineage",
+		Summary: "Data lineage across connections, sources, datasets, pipelines, object types and writebacks the caller may read, with dataset versions, stale inputs and propagated markings",
+		Query: []transport.Param{
+			{Name: "mode", Description: "overview or focus; defaults from focus/ref"},
+			{Name: "project", Description: "a project RID used as the overview scope"},
+			{Name: "focus", Description: "a resource RID or lineage node ID"},
+			{Name: "ref", Description: "an app/kind/name resource reference"},
+			{Name: "node", Description: "a legacy lineage node ID"},
+			{Name: "direction", Description: "upstream, downstream or both"},
+			{Name: "depth", Description: "1 to 3"},
+			{Name: "nodeLimit", Description: "response node cap, at most 500"},
+			{Name: "edgeLimit", Description: "response edge cap, at most 1000"},
+			{Name: "fields", Description: "off or on: include field nodes and edges"},
+			{Name: "field", Description: "a field node ID to trace upstream and downstream"},
+		}, Answer: Lineage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		depth, err := lineageInt(r, "depth", 0)
 		if err != nil {
 			Reply(w, nil, err)
+			return
+		}
+		nodeLimit, err := lineageInt(r, "nodeLimit", 0)
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		edgeLimit, err := lineageInt(r, "edgeLimit", 0)
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		focus := r.URL.Query().Get("focus")
+		if focus == "" {
+			focus = r.URL.Query().Get("node")
+		}
+		out, refusal := t.lineage(m, LineageRequest{
+			Mode: r.URL.Query().Get("mode"), Project: r.URL.Query().Get("project"),
+			Focus: focus, Ref: r.URL.Query().Get("ref"), Direction: r.URL.Query().Get("direction"),
+			Depth: depth, NodeLimit: nodeLimit, EdgeLimit: edgeLimit,
+			Fields: r.URL.Query().Get("fields") == "on", Field: r.URL.Query().Get("field"),
+		})
+		if refusal != nil {
+			Reply(w, nil, refusal)
 			return
 		}
 		WriteJSON(w, http.StatusOK, out)
@@ -104,4 +143,16 @@ func (h *Host) routesIntegration(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
+}
+
+func lineageInt(r *http.Request, name string, fallback int) (int, *kernel.Error) {
+	raw := r.URL.Query().Get(name)
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, name+" is a non-negative integer")
+	}
+	return value, nil
 }

@@ -3,7 +3,7 @@ import { useDraftInventory } from "../branches/records";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { useStudioApplication } from "../projects/use-studio-application";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
-import { assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, useHost, type Definition, type SemanticRelation } from "@platform/app";
+import { assetKey, useDependencies, newId, OpenLineage, pageDocumentFromSections, semanticModelView, useHost, type Definition, type SemanticRelation } from "@platform/app";
 import { ContextHelp, Button, Checkbox, DataTable, EmptyState, Form, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, Tag,
   t, type ColumnDef, ResourceSections } from "@platform/ui";
 import type { Api } from "@platform/kernel";
@@ -138,6 +138,7 @@ function ObjectTypeDetail({ name, initialTab }: { name: string; initialTab?: str
         </div>)}{!actions.length && <EmptyState title={t("No action of this object is offered to you.")} />}</div> },
       { id: "data", title: t("Data"), content: resource.installed ? <RecordList source={host.source} type={resource.ref.name} fields={resource.fields.filter((field) => field.type !== "lines" && !("aside" in field && field.aside)).slice(0, 6).map((field) => field.name)} height={420} /> : <EmptyState title={t("Publish this object before reading its business records.")} /> },
       { id: "usage", title: t("Usage"), badge: used.length, content: <div className="grid gap-1">{dependencies.isError && <p role="alert" className="text-xs text-danger">{t("Asset dependencies could not be loaded.")}</p>}
+        {resource.draft && <OpenLineage type="build.object" record={resource.draft.id} />}
         {used.map(owner => <Button key={assetKey(owner.ref)} variant="row" onClick={() => owner.page ? open({ view: "page", params: { app: owner.ref.app, kind: "page", name: owner.ref.name } }) : open({ view: "definition", params: { ...owner.ref, surface: "studio" } })}>
           <span className="min-w-0 flex-1 truncate">{owner.page?.title ?? owner.action?.title ?? owner.query?.title ?? owner.ref.name}</span><Tag label={owner.ref.kind} /></Button>)}
         {!used.length && <EmptyState title={t("No visible declared usage.")} />}</div> },

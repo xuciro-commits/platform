@@ -6,7 +6,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useState } from "react";
-import { useHost, useReadQuery } from "@platform/app";
+import { OpenLineage, useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { DeclassificationField, MarkingTag } from "./marking";
 import { Button, Checkbox, DataTable, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
@@ -224,6 +224,7 @@ export function PipelineEditor({ id }: { id: string }) {
         </>}
       </Panel>
     </PanelGroup></fieldset></StructuredEditor>
+    <Panel title={t("Usage")} className="grid gap-2"><OpenLineage type="build.pipeline" record={draft.id} /></Panel>
   </div>;
 }
 

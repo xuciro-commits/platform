@@ -5,12 +5,13 @@ import (
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/data/lineage"
 	"platformserver/services/resources/authoring"
 )
 
 type markingIndex struct {
 	store               *records.Store
-	graph               Lineage
+	graph               lineage.Graph
 	generation          uint64
 	datasets            map[string]string
 	types               map[string]string
@@ -65,23 +66,16 @@ func (t *Tenant) markingsIn(store *records.Store, held bool) markingIndex {
 	if t.markings.store == store && t.markings.generation == store.Generation() && t.markings.types != nil {
 		return t.markings
 	}
-	graph := lineageGraph(lineageInputs{
-		connections: storeRows[build.Connection](store, build.ConnectionType),
-		datasets:    storeRows[build.Dataset](store, build.DatasetType),
-		objects:     storeRows[build.Object](store, build.ObjectType),
-		sources:     storeRows[build.Source](store, build.SourceType),
-		pipelines:   storeRows[build.Pipeline](store, build.PipelineType),
-		writebacks:  storeRows[build.Writeback](store, build.WritebackType),
-	})
+	graph := lineage.Build(t.lineageGuard(t.lineageRecordsLocked(store)), lineage.Guard)
 	index := markingIndex{store: store, graph: graph, generation: store.Generation(), datasets: map[string]string{}, types: map[string]string{}, datasetCompartments: map[string][]string{}, typeCompartments: map[string][]string{}}
 	for _, node := range graph.Nodes {
 		switch node.Kind {
 		case "dataset":
-			index.datasets[node.Record] = node.Effective
-			index.datasetCompartments[node.Record] = node.EffectiveCompartments
+			index.datasets[node.Record] = node.Guard
+			index.datasetCompartments[node.Record] = node.GuardCompartments
 		case "object":
-			index.types[node.Name] = platform.HigherMarking(index.types[node.Name], node.Effective)
-			index.typeCompartments[node.Name] = platform.JoinCompartments(index.typeCompartments[node.Name], node.EffectiveCompartments)
+			index.types[node.Name] = platform.HigherMarking(index.types[node.Name], node.Guard)
+			index.typeCompartments[node.Name] = platform.JoinCompartments(index.typeCompartments[node.Name], node.GuardCompartments)
 		}
 	}
 	t.markings = index
@@ -103,7 +97,12 @@ func (index markingIndex) visible(m platform.Member, value reflect.Value) bool {
 	return !ok || (platform.MarkingSet{Level: index.datasets[version.Dataset], Compartments: index.datasetCompartments[version.Dataset]}).Cleared(m)
 }
 
-func (index markingIndex) highest(typ string) string {
+func (index markingIndex) highest(typ string, row *records.Row) string {
+	if typ == build.DatasetVersionType && row != nil {
+		if version, ok := rowAs[build.DatasetVersion](row); ok {
+			return index.datasets[version.Dataset]
+		}
+	}
 	if typ != build.DatasetVersionType && typ != build.DatasetType {
 		return index.types[typ]
 	}

@@ -5,7 +5,7 @@ import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useAuthoringModel } from "./authoring-model";
 
-import { useHost, useReadQuery } from "@platform/app";
+import { OpenLineage, useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 
@@ -104,5 +104,6 @@ export function WritebackEditor({ id }: { id: string }) {
         </li>)}</ul> : <p className="text-xs text-muted">{t("Nothing sent yet.")}</p>}
       </Panel>
     </PanelGroup></fieldset></StructuredEditor>
+    <Panel title={t("Usage")} className="grid gap-2"><OpenLineage type="build.writeback" record={draft.id} /></Panel>
   </div>;
 }

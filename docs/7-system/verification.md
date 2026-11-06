@@ -14,7 +14,7 @@ read-when: 运行或新增检查、验收用例、钩子；判断一项改动需
 
 - R1 没运行的检查不能报为通过；报告写出实际运行的命令与结果。
 - R2 必须恒成立的约束由钩子或用例保证，不靠文字提醒。
-- R3 测试只有两类：`capabilities/server` 中的内核不变量测试，`web/e2e/` 中按 5-experience F1–F17 编号的验收用例。
+- R3 测试只有两类：`capabilities/server` 中的内核不变量测试，`web/e2e/` 中按 5-experience F1–F20 编号的验收用例。
 - R4 验收在隔离的宿主上运行：内存日志、开发令牌席位（`web/e2e/tenants.json`），不依赖 `make local`、数据库或真实账号。
 
 ## 7.8 静态检查
@@ -64,7 +64,7 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 ## 7.11 黄金路径验收
 
 - 位置：`web/e2e/F<n>-<名称>.spec.ts`，Playwright；配置每次默认在 18496 启动一个全新宿主并加载工作区构建，`PLATFORM_E2E_PORT` 可指定独立端口；不复用已有宿主（复用会带入别的运行留下的草稿）。
-- 登录：`kit.ts` 的 `signIn(page, 主体)` 以开发令牌进入；席位为 admin、builder、user、publisher。
+- 登录：`kit.ts` 的 `signIn(page, 主体)` 以开发令牌进入；席位为 admin、builder、user、publisher，以及 F20 使用的 cleared。
 - 每个用例对应 5-experience 的一条任务路径，步骤与成功标准逐条断言。
 - 用例在空项目中创建自己的资源，结束时归档；不依赖其他用例的数据。
 - 选择器使用可访问名称（角色 + 名称），不用 CSS 类。
@@ -85,5 +85,4 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 
 ## 现存差距
 
-- K12、F19、F20 尚未实现，按路线图“Data Lineage 重建”交付。
-- `make verify` 的内核不变量与 F1–F17 仍运行在内存宿主；SQL 模式覆盖创建、项目委派、viewer/discoverer 目录权限、日志、审计、运行索引和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。
+- `make verify` 的内核不变量与 F1–F20 仍运行在内存宿主；SQL 模式覆盖创建、项目委派、viewer/discoverer 目录权限、日志、审计、运行索引和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。

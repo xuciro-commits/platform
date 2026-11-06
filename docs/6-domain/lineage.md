@@ -175,34 +175,13 @@ read-when: 改动血缘推导、生效标记与保护标记、影响分析、列
 
 ## 现存差距
 
-以下为 2026-11-05 对照代码的结果，按路线图“Data Lineage 重建”排期。
+2026-11-06 复核：L1–L4 已实现，K12、F19、F20 通过；以下只保留未完成项。
 
-后端（6 领域、7 系统）：
-
-- 项目越权（P0）：`host/lineage.go` 的 `lineage` 只检查 Builder/Integrator，经 `platform.Find` 读取全部六类记录；`host/records_write.go` 的 `runtime.Find` 以 `visible=nil` 调用 `records.Store.Find`。项目委派的构建者经 `ProjectGrants`（`services/security/policy_decisions.go`）获得 builder，可读到其他项目的连接、数据源、数据集、管道、对象类型、行数与错误。资源目录按项目过滤（`host/resource_directory.go` 的 `resourceDirectory`），血缘绕过了它。
-- 基线混用（P0）：`host/markings.go` 的 `markingsIn` 从当前记录构图，授权（`services/security/records.go` 的 `Authorize`）直接读取其结果；执行器读取已接受定义（`services/data/release_execution.go` 的 `Execution*`），解除步骤读取 `PublishedDeclassifications`。对象类型没有累计标记，保存一个删去受限数据源绑定的对象类型定义即可在激活前降低其 Guard。
-- 写出证据缺失：`SourcePull` 不记录写出目标与标记；生产者不累计写出目标。
-- 静默截断与静默空图：`lineageRecords` 每类只取 1000 条，拒绝时返回 nil。
-- 静默丢边：`lineageGraph` 的 `link` 丢弃终点不存在的边，并按 `from>to` 去重。
-- 未连接对象类型被删除，焦点根可能消失。
-- 状态只有 `Stale` 布尔与原始 `Error`；没有 never-run、failed、definition-changed、upstream-stale。
-- 回写结果映射（`Writeback.Result`）没有入站边。
-- 推导位于 `host`，不在 `services/data`。
-- 导出判断错误：`markingIndex.highest` 对数据集版本取全租户所有数据集的最高分级，任一数据集为 restricted 时所有数据集都不能导出 CSV。
-- 没有 K12 不变量覆盖 R3–R7。
-
-前端（3 信息、4 交互、7 系统）：
-
-- 位置错误：Data Lineage 在 `web/apps/workspace/src/shell/Lineage.tsx` 定义并由 `chrome.tsx` 注册；治理应用应在 `@platform/govern`（web R1）。应用说明写成“资源之间如何依赖”，是定义依赖的描述。命令面板把它归在 “Ontology” 组。
-- 布局：不是原型 C 的 Workbench；画布固定 520px，详情在 xl 以下掉到画布下方；底部折叠区混入“Published definition dependencies”与“Available capabilities”（R2）。
-- 焦点无效：`ref` 只驱动底部定义依赖，不聚焦血缘图；`OpenIn` 只传 `ref`，进入后无选中；选中只把其余节点变暗，不是 Focus。
-- 详情只有 Inputs，没有 Outputs、关系角色、Guard、markingStatus、项目与 canOpen；直接显示原始错误文本。
-- 打开资源依赖额外读取 `/v1/resources` 拼装；整图每 15 秒轮询。
-- 颜色：`relationNodeClasses` 用 warning 表示管道、danger 表示回写，与状态色冲突；`DependencyGraph` 把对象类型标 warning。
-- 错误入口：Monitoring Runs 的资源链接（`govern/src/monitoring.tsx`）在侧窗打开血缘；观测源的 “Dependencies and capabilities”（`app/src/observations/Observations.tsx`）进入血缘。
-- 客户端推断：`build/src/ontology/lineage.tsx` 以每类 200 条记录在浏览器推断字段来源，未知显示“entered here”；`integration-health.tsx` 复用同一推断读取。
-- 连接、数据源、管道、回写的资源页没有进入血缘的入口。
-- 没有 F19、F20 验收。
+- 列级推导仍按保守子集处理：`compute` 的 `FormulaExpr`、join/lookup 未列字段、多步管道的中间字段节点尚未完整展开；无法静态确认时显示 `unverified`。这不影响已声明映射、对象绑定、写回请求/结果与 F19 的主路径。
+- Guard 的执行定义解析失败时当前仍回退到保存记录；`coverage.markingsComplete` 已可表达不完整，但尚未把该状态接入授权 fail-closed。正常版本化记录不受影响，这是后续安全加固项。
+- 分支：`branch` 参数尚未复用 Branch 暂存世界；当前读取 main 的保存定义与运行证据。分支图必须只读且不写 main 标记索引。
+- 规模与缓存：每次请求仍重新收集记录并构图；尚未按 generation 缓存，也未测量 1000+ 资源的响应时间。
+- 产品化：项目聚合图仍以总览表加单项目图为主；保存/分享视图配方、超大图虚拟化与可访问性检查未实现。
 
 ## 相关
 

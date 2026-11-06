@@ -49,7 +49,7 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 	member := c.Member
 	member.Roles = map[string]string{build.ID: build.Builder}
 	t.mu.Unlock()
-	result := build.DatasetProjection{Object: object, Version: ds.Version, At: now, Rows: len(data), MergeVersion: 1}
+	result := build.DatasetProjection{Object: object, Version: ds.Version, At: now, Rows: len(data), MergeVersion: 1, Marking: marking, Compartments: slices.Clone(ds.Compartments)}
 	pause := func(reason string) {
 		result.Paused = reason
 		t.recordProjection(member, dataset, previous, known, result, now)
