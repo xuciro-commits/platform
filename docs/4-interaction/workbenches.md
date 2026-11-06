@@ -132,25 +132,26 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 数据语义与读取合同见 [6-domain/lineage](../6-domain/lineage.md)。代码在 `web/packages/govern/src/lineage/`，一个 `defineApp`（`data-lineage`），视图 `lineage`。只给构建者与集成者；项目委派的构建者只看到自己的项目。
 
 - 侧栏：段落 “Data Lineage”：Overview（`#/lineage`）、Graph（`#/lineage?focus=…` 或 `#/lineage?project=…`；无焦点时为选择资源的空状态）。不放定义依赖、能力发现、运行或调度。
-- URL 回放：`project`、`focus`、`direction`、`depth`、`fields`、`field`、`color`、`selected` 全部进 URL；复制链接得到同一视图。侧窗打开时这些参数不进 URL（3-information §3.6）。
+- URL 回放：`branch`、`project`、`focus`、`direction`、`depth`、`fields`、`field`、`color`、`selected` 全部进 URL；复制链接得到同一视图。侧窗打开时这些参数不进 URL（3-information §3.6）。
 - 命令面板：“Data Lineage” 归 “Governance” 组；另有 “Show lineage of current resource”（当前页是六类数据资源之一时）。
 
 ### Overview
 
 - 原型 A 加一行统计块。PageHeader：标题、数量（项目数 · 资源数）、帮助、“Find a resource…” 搜索框（选取并返回，M22；选中即进入 Graph 并聚焦）、刷新。
 - 统计块：Stale、Failed、Never run、Unreadable、Cross-project links；点击筛选下方项目表中含该状态的项目。
-- 项目表：Project、Resources（按种类图标加计数）、Stale、Failed、Never run、Highest protection（Guard）、Cross-project in / out、Updated。行点击进入该项目的 Graph。不可打开的项目合并为一行匿名“Other projects”，只显示资源总数并说明原因，不可点击。
+- 项目表：Project、Resources（按种类图标加计数）、Stale、Failed、Never run、Highest protection（Guard）、Cross-project in / out、Unconnected、Updated。行点击进入该项目的 Graph。不可打开的项目合并为一行匿名“Other projects”，只显示资源总数并说明原因，不可点击。
 - 默认不画全租户图。
 
 ### Graph
 
 原型 C，只读，使用 `Workbench`（左 264、右 320、dock 200，按 `lineage` 记忆）。
 
-- 头部：面包屑 Data Lineage › 项目 › 焦点资源；状态区显示基线（“main · saved definitions”）与构建时间，Preview 与 Guard 不一致时显示警告标签 “Protection differs from preview”；操作：Direction（Upstream / Both / Downstream，SegmentedChoice）、Depth（1–3）、“Show fields” 开关、Color by（Resource type / Protection / Status）、Fit graph、刷新、⋯（Copy link、Copy RID）。
+- 头部：面包屑 Data Lineage › 项目 › 焦点资源；Branch 选择器（main 与 open/proposed 分支，分支图只读）；状态区显示基线（“main · saved definitions” 或 “branch … · saved definitions”）与构建时间，Preview 与 Guard 不一致时显示警告标签 “Protection differs from preview”；操作：Direction（Upstream / Both / Downstream，SegmentedChoice）、Depth（1–3）、“Show fields” 开关、Color by（Resource type / Protection / Status）、Fit graph、刷新、Save view、⋯（Copy link、Copy RID）。
 - 左面板 “Scope”：
   - 图内搜索：只搜已加载子图的名称、API 名与字段名；Enter 依次选中匹配项；无匹配时给出 “Search everywhere” 打开全局 Search。
   - 种类图例即筛选：每种一个复选框，带分类色与计数。
   - 状态筛选：Current、Stale、Failed、Never run、Unknown。
+  - Saved views：只列当前成员私有、`entity=lineage` 的查询配方；打开时重新读取 URL 参数并重新鉴权，不保存节点、边、标记或权限快照。
   - 项目视图下：“Hide unconnected”（带计数）。
   - 筛选只高亮匹配项、弱化其余，不改变布局；有筛选时画布顶部显示 “{n} hidden by filters · Clear”。
   - Coverage：截断、不可读、边界与标记完整性的计数，点击打开 dock 的 Coverage 页签。
@@ -173,10 +174,10 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
   - Status：状态标签、stale 原因的句子（“Input Orders is at v5; last run read v3”）、最近活动、行数；失败只显示翻译后的原因码与 “View run” 链接，不显示原始错误文本。
   - Protection：Declared、Preview、Protection（Guard）三行；不一致时说明 “Takes effect when the saved definition is activated”；Your access（Cleared / Needs …）。
   - Inputs（n）与 Outputs（n）：每行显示资源名、角色标签、已消费与当前版本、跨项目标记；点击选中该节点。
-  - Versions：Saved definition、Running definition、Dataset version。
+  - Versions：Saved definition、Running definition、Dataset version；分支图不混入 main 的已消费版本。
   - Fields（数据集、对象类型、数据源，“Show fields” 打开时）：字段列表与确定性标签；点击字段进入字段追踪。
   - 无选中时显示根的摘要、图例与覆盖说明。
-- 字段追踪：选中字段后画布切换为字段图（同一个 `RelationCanvas`，节点为“资源 · 字段”，边标操作），头部显示 “Tracing {field} · Back to resources”；`unverified` 字段用虚线框，提示 “No declared source”。
+- 字段追踪：选中字段后画布切换为字段图（同一个 `RelationCanvas`，节点为“资源 · 字段”，边标操作），头部显示 “Back to resources”；`unverified` 字段用虚线框与标签，`derived` 与 `declared` 分开显示，不伪造确定来源。
 - Dock（默认收起，页签带计数）：
   - Impact：上游与下游可达数（按种类、按项目）、stale 与 failed 数；受影响资源表（名称、种类、项目、距离、状态），行点击选中或 Focus；`atLeast` 时显示 “At least {n}”。
   - Fields：当前字段追踪的路径表（资源、字段、操作、确定性）。

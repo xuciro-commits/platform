@@ -14,7 +14,7 @@ read-when: 运行或新增检查、验收用例、钩子；判断一项改动需
 
 - R1 没运行的检查不能报为通过；报告写出实际运行的命令与结果。
 - R2 必须恒成立的约束由钩子或用例保证，不靠文字提醒。
-- R3 测试只有两类：`capabilities/server` 中的内核不变量测试，`web/e2e/` 中按 5-experience F1–F20 编号的验收用例。
+- R3 测试只有两类：`capabilities/server` 中的内核不变量测试，`web/e2e/` 中按 5-experience F1–F21 编号的验收用例。
 - R4 验收在隔离的宿主上运行：内存日志、开发令牌席位（`web/e2e/tenants.json`），不依赖 `make local`、数据库或真实账号。
 
 ## 7.8 静态检查
@@ -57,7 +57,7 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 | K9 | 产品包生命周期：退役归档本包资源；同版本重装恢复本包资源、应用身份和客户记录；升级、降级、回滚分别执行，存储兼容检查阻止旧定义无法读取的数据形状；安装闭包按精确版本显示 `installed / pending / failed` 且不重复提交已安装步骤；重放保持结果 |
 | K10 | 资源所有权 rehome：管理员接受结果只改变 `Project / ManagedBy` 和修订号，RID、类型、名称、记录和重放结果不变；非管理员拒绝，陈旧修订拒绝 |
 | K11 | 运营观测：租户与成员范围不可越过；日志读写不改变接受结果或记录；保留与覆盖边界准确；日志查看产生审计；请求关联来自显式上下文，不来自可变租户状态；运行索引按成员可见范围隔离且不改变 owner 状态 |
-| K12 | 血缘：Guard 不因保存但未激活的定义改动降低，且不低于写出证据；项目委派构建者的血缘响应不含其他项目资源的身份；裁剪不改变标记与影响计数；截断、不可读、悬空引用都被计数；同一对资源的多条边保持独立身份 |
+| K12 | 血缘：Guard 不因保存但未激活的定义改动降低，且不低于写出证据；项目委派构建者的血缘响应不含其他项目资源的身份；裁剪不改变标记与影响计数；截断、不可读、悬空引用都被计数；同一对资源的多条边保持独立身份；FormulaExpr、join/lookup 的字段来源与回写请求/结果可追踪；不可读接受定义 fail-closed |
 
 资源入口有独立宿主验收：直接检查 page/default/release-plan 三种 route，`build.testplan` 的 `test-plan` / `evaluation-set` 目录引用与 `variant`，以及两种 release kind 的发布预览结果；同时检查 `work.view` 的 v0/v1 状态和 `build.query` 的 v1 ObjectSet 发布合同。这些断言读取实际映射与发布结果，不以生成的前端契约反推。
 
@@ -85,4 +85,4 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 
 ## 现存差距
 
-- `make verify` 的内核不变量与 F1–F20 仍运行在内存宿主；SQL 模式覆盖创建、项目委派、viewer/discoverer 目录权限、日志、审计、运行索引和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。
+- `make verify` 的内核不变量与 F1–F21 仍运行在内存宿主；SQL 模式覆盖创建、项目委派、viewer/discoverer 目录权限、日志、审计、运行索引和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。
