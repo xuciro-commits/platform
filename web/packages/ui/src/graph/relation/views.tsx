@@ -1,6 +1,6 @@
-import { BaseEdge, Handle, Position, type Edge, type EdgeProps, type Node, type NodeProps } from "@xyflow/react";
+import { BaseEdge, Handle, Position, useUpdateNodeInternals, type Edge, type EdgeProps, type Node, type NodeProps } from "@xyflow/react";
 import { Box } from "lucide-react";
-import type { CSSProperties } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { cn } from "../../lib/cn";
 import { IconGlyph } from "../../components/IconPicker";
 import { t } from "../../i18n";
@@ -22,7 +22,9 @@ function Sides({ data }: { data: RelationNodeData }) {
   </>;
 }
 
-function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
+function RelationNodeView({ id, data, selected }: NodeProps<RelationShapeNode>) {
+  const update = useUpdateNodeInternals();
+  useEffect(() => { update(id); }, [id, data.collapsedView, data.facts, data.detail, update]);
   const classDecl = data.class ? relationNodeClasses[data.class] : undefined;
   const color = (data.tone ?? classDecl?.tone) ? `var(--tone-${data.tone ?? classDecl?.tone})` : "var(--primary)";
   const accessible = [data.label, relationNodeCaption(data), data.flag, selected ? t("Selected") : ""].filter(Boolean).join(" · ");
@@ -36,13 +38,15 @@ function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
   const expandable = !data.badge && !!(data.facts?.length || data.detail);
   return <div className={cn("platform-relation-node", selected && "platform-relation-node-selected", data.dim && "opacity-60", data.faded && "opacity-30", data.linking && "platform-relation-node-linking")}
     style={{ width: data.size?.width ?? relationNodeSize.width, minHeight: data.size?.height ?? relationNodeSize.height, "--block-color": color } as CSSProperties} title={data.detail ?? data.label} aria-label={accessible} aria-current={selected ? "true" : undefined} aria-expanded={expandable ? !data.collapsedView : undefined}>
-    <span className="platform-canvas-node-icon" aria-hidden="true">{data.icon ?? (classDecl ? <IconGlyph name={classDecl.icon} /> : <Box />)}</span>
-    <span className="min-w-0 flex-1">
-      {caption && <span className="platform-canvas-node-caption"><span className="!max-w-full">{t(caption)}</span></span>}
-      <span className="platform-canvas-node-title block">{data.label}</span>
-    </span>
-    {data.flag && <Tooltip content={data.flag}><span className="platform-relation-flag" /></Tooltip>}
-    {expandable && <CanvasNodeFold id={data.id} open={!data.collapsedView} />}
+    <div className="platform-relation-heading">
+      <span className="platform-canvas-node-icon" aria-hidden="true">{data.icon ?? (classDecl ? <IconGlyph name={classDecl.icon} /> : <Box />)}</span>
+      <span className="min-w-0 flex-1">
+        {caption && <span className="platform-canvas-node-caption"><span className="!max-w-full">{t(caption)}</span></span>}
+        <span className="platform-canvas-node-title block">{data.label}</span>
+      </span>
+      {data.flag && <Tooltip content={data.flag}><span className="platform-relation-flag" /></Tooltip>}
+      {expandable && <CanvasNodeFold id={data.id} open={!data.collapsedView} />}
+    </div>
     <Sides data={data} />
     {expandable && !data.collapsedView && <div className="platform-relation-details" role="group" aria-label={t("Node details")} onClick={event => event.stopPropagation()}>
       {data.detail && <p className="break-words text-xs text-muted">{data.detail}</p>}

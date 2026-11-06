@@ -57,9 +57,15 @@ test("F24 a builder distinguishes focus from graph expansion, returns to the pro
 
   const outputNode = page.getByRole("region", { name: "Data lineage graph", exact: true }).getByLabel(new RegExp(`^${outputTitle} · Dataset`)).first();
   await expect(outputNode).toHaveAttribute("aria-expanded", "false");
+  const collapsedBox = await outputNode.boundingBox();
   await outputNode.getByRole("button", { name: "Expand node details" }).click();
   await expect(outputNode).toHaveAttribute("aria-expanded", "true");
   await expect(outputNode.getByRole("group", { name: "Node details" })).toBeVisible();
+  const expandedBox = await outputNode.boundingBox();
+  const detailsBox = await outputNode.getByRole("group", { name: "Node details" }).boundingBox();
+  expect(expandedBox!.height).toBeGreaterThan(collapsedBox!.height);
+  expect(detailsBox!.y).toBeGreaterThanOrEqual(expandedBox!.y);
+  expect(detailsBox!.y + detailsBox!.height).toBeLessThanOrEqual(expandedBox!.y + expandedBox!.height);
   await outputNode.getByRole("button", { name: "Collapse node details" }).click();
   await expect(outputNode.getByRole("group", { name: "Node details" })).toHaveCount(0);
 

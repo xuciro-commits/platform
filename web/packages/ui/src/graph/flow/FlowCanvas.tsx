@@ -63,7 +63,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   const stored = useRef<Record<string, CanvasPosition> | undefined>(undefined);
   const externalSelection = useRef<string | undefined>(undefined);
   const copied = useRef<{ nodes: FlowNode[]; edges: FlowEdge[] } | undefined>(undefined);
-  const { folded, allCollapsed, toggle, toggleAll, state: collapsed } = useCanvasFold(nodes, node => catalog.find((kind) => kind.id === node.kind)?.collapsed ?? false);
+  const { folded, allCollapsed, toggle, toggleAll, state: collapsed } = useCanvasFold(nodes, node => catalog.find((kind) => kind.id === node.kind)?.collapsed);
   const [palette, setPalette] = useState<FlowAddContext>();
   const [pickedEdge, setPickedEdge] = useState<string>();
   const [help, setHelp] = useState(false);
