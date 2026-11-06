@@ -31,14 +31,14 @@ export function CanvasFurniture() {
   </>;
 }
 
-export function CanvasRefit({ signature, ready = true, once = false, onReady }: { signature: string; ready?: boolean; once?: boolean; onReady?: (ready: boolean) => void }) {
+export function CanvasRefit({ signature, ready = true, once = false, requireMeasured = true, onReady }: { signature: string; ready?: boolean; once?: boolean; requireMeasured?: boolean; onReady?: (ready: boolean) => void }) {
   const { fitView } = useReactFlow();
   const measured = useNodesInitialized();
   const width = useStore((s) => s.width), height = useStore((s) => s.height);
   const fitted = useRef<string | undefined>(undefined);
   const previous = useRef<{ signature: string; width: number; height: number } | undefined>(undefined);
   const callback = useRef(onReady); callback.current = onReady;
-  const usable = ready && measured && width > 0 && height > 0;
+  const usable = ready && (!requireMeasured || measured) && width > 0 && height > 0;
   useEffect(() => {
     if (!usable) return;
     if (once) {

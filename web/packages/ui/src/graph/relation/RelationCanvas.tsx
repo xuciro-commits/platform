@@ -69,7 +69,8 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   const layoutJob = useCanvasLayout(async () => {
     if (!missing.length) return emptyPositions;
     const ids = new Set(missing.map((n) => n.id));
-    const placed = Object.entries(knownRef.current).filter(([id]) => nodes.some((n) => n.id === id)).map(([id, at]) => ({ at, box: sizeOf(nodes.find((n) => n.id === id)!) }));
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const placed = Object.entries(knownRef.current).filter(([id]) => nodeById.has(id)).map(([id, at]) => ({ at, box: sizeOf(nodeById.get(id)!) }));
     const arranged = await relationLayout(layout, missing, relations.filter((r) => ids.has(r.from) && ids.has(r.to)));
     if (!placed.length) return arranged;
     const left = Math.min(...placed.map((p) => p.at.x)), below = Math.max(...placed.map((p) => p.at.y + p.box.height)) + 96;
@@ -77,6 +78,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   }, JSON.stringify([layout, missing.map((n) => [n.id, n.size, n.badge?.size]), relations]));
   const arranged = layoutJob.data ?? emptyPositions;
   const owned = useMemo(() => ({ ...arranged, ...known }), [arranged, known]);
+  const placed = useMemo(() => nodes.filter((node) => !!owned[node.id]), [nodes, owned]);
   const layoutVersion = useRef(0);
   const [layoutError, setLayoutError] = useState<string>();
   useEffect(() => () => { layoutVersion.current++; }, []);
@@ -88,12 +90,16 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
     return ids;
   }, [focusOnHover, hovered, edges]);
   useEffect(() => {
-    setFlowNodes((previous) => nodes.map((n) => {
-      const old = previous.find((p) => p.id === n.id);
-      return { id: n.id, type: "entity", position: owned[n.id] ?? old?.position ?? { x: 0, y: 0 }, selected: n.id === selected, draggable: (editable || !!storeKey) && !linking, measured: old?.measured,
-        connectable: editable && (linking || canReconnect) && n.linkable !== false, data: { ...n, linking, acceptsConnections: editable && (linking || canReconnect), faded: !!near && !near.has(n.id) } };
-    }));
-  }, [nodes, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey, near]);
+    setFlowNodes((previous) => {
+      const previousById = new Map(previous.map((node) => [node.id, node]));
+      return placed.map((n) => {
+        const old = previousById.get(n.id);
+        const size = sizeOf(n);
+        return { id: n.id, type: "entity", position: owned[n.id] ?? old?.position ?? { x: 0, y: 0 }, selected: n.id === selected, draggable: (editable || !!storeKey) && !linking, measured: old?.measured, initialWidth: size.width, initialHeight: size.height,
+          connectable: editable && (linking || canReconnect) && n.linkable !== false, data: { ...n, linking, acceptsConnections: editable && (linking || canReconnect), faded: !!near && !near.has(n.id) } };
+      });
+    });
+  }, [placed, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey, near]);
 
   const flowEdges = useMemo<RelationLineEdge[]>(() => {
     const boxes: Record<string, Rect> = {};
@@ -112,12 +118,13 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
       return { id: e.id, source: e.source, target: e.target, hierarchy: { parent: parentEnd, axis: axis.get(parentEnd === "source" ? e.source : e.target), trunk: stackedLeaf(hierarchy, child) } };
     });
     const routes = routeEdges(boxes, requests);
-    return edges.map((e, i) => {
+    return edges.flatMap((e, i) => {
+      if (!boxes[e.source] || !boxes[e.target]) return [];
       const route = routes[e.id];
       const quiet = declared && hierarchy.links.has(i) && selected !== e.source && selected !== e.target;
-      return { id: e.id, source: e.source, target: e.target, sourceHandle: route?.sourceSide ?? Position.Bottom, targetHandle: route?.targetSide ?? Position.Top, type: "relation", data: { ...e, route, quiet, faded: !!near && e.source !== hovered && e.target !== hovered }, deletable: false,
+      return [{ id: e.id, source: e.source, target: e.target, sourceHandle: route?.sourceSide ?? Position.Bottom, targetHandle: route?.targetSide ?? Position.Top, type: "relation", data: { ...e, route, quiet, faded: !!near && e.source !== hovered && e.target !== hovered }, deletable: false,
         selected: e.id === pickedEdge, reconnectable: editable && !!onReconnect && e.reconnectable !== false,
-        markerEnd: e.directed === false ? undefined : { type: MarkerType.ArrowClosed, color: e.tone ? `var(--tone-${e.tone})` : "var(--muted)", width: 14, height: 14 } };
+        markerEnd: e.directed === false ? undefined : { type: MarkerType.ArrowClosed, color: e.tone ? `var(--tone-${e.tone})` : "var(--muted)", width: 14, height: 14 } }];
     });
   }, [edges, relations, hierarchy, flowNodes, editable, onReconnect, pickedEdge, selected, near, hovered]);
 
@@ -125,8 +132,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   const fitKey = viewportKey ?? drawing;
   const synchronized = !layoutJob.pending && flowNodes.length > 0 && flowNodes.length === nodes.length && flowNodes.every((node) => {
     const expected = owned[node.id];
-    return nodes.some((n) => n.id === node.id) && !!node.measured?.width && !!node.measured?.height
-      && (!expected || node.position.x === expected.x && node.position.y === expected.y);
+    return nodes.some((n) => n.id === node.id) && !!expected && node.position.x === expected.x && node.position.y === expected.y;
   });
 
   useEffect(() => {
@@ -152,7 +158,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
       onDragOver={(e) => { if (editable && dropType && e.dataTransfer.types.includes(dropType)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
       onDrop={(e) => { if (!editable || !dropType || !onDrop) return; const payload = e.dataTransfer.getData(dropType); if (!payload) return; e.preventDefault();
         const at = screenToFlowPosition({ x: e.clientX, y: e.clientY }); onDrop(payload, { x: at.x - relationNodeSize.width / 2, y: at.y - relationNodeSize.height / 2 }); }}>
-      <ReactFlow<RelationShapeNode, RelationLineEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={relationNodeTypes} edgeTypes={relationEdgeTypes} onNodesChange={onNodesChange}
+      <ReactFlow<RelationShapeNode, RelationLineEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={relationNodeTypes} edgeTypes={relationEdgeTypes} onNodesChange={onNodesChange} onlyRenderVisibleElements
         colorMode="system" minZoom={0.1} maxZoom={2.5} fitView fitViewOptions={fitting} zoomOnScroll panOnScroll={false} zoomOnPinch panOnDrag preventScrolling
         nodesDraggable={(editable || !!storeKey) && !linking} nodesConnectable={linking} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} connectionRadius={40}
         isValidConnection={(c) => c.source !== c.target && nodes.some((n) => n.id === c.source && n.linkable !== false) && nodes.some((n) => n.id === c.target && n.linkable !== false)}
@@ -166,7 +172,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
           if (storeKey) persist({ ...owned, ...changed });
           onPositionsChange?.(changed);
         }}>
-        <CanvasRefit signature={fitKey} ready={synchronized} once onReady={onViewportReady} />
+        <CanvasRefit signature={fitKey} ready={synchronized} requireMeasured={false} once onReady={onViewportReady} />
         <CanvasFurniture />
         {nodes.length > 12 && <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor="var(--border)" maskColor="color-mix(in oklch, var(--background), transparent 40%)" style={{ width: 140, height: 90 }} />}
       </ReactFlow>

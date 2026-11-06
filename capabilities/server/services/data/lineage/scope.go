@@ -15,6 +15,13 @@ type Params struct {
 	EdgeLimit int
 }
 
+const (
+	defaultNodeLimit = 200
+	defaultEdgeLimit = 400
+	maxNodeLimit     = 2000
+	maxEdgeLimit     = 5000
+)
+
 func Project(g Graph, visible func(Node) bool, reason string) Graph {
 	if visible == nil {
 		return g
@@ -82,16 +89,16 @@ func Scope(g Graph, p Params) Graph {
 		}
 	}
 	if p.NodeLimit <= 0 {
-		p.NodeLimit = 200
+		p.NodeLimit = defaultNodeLimit
 	}
-	if p.NodeLimit > 500 {
-		p.NodeLimit = 500
+	if p.NodeLimit > maxNodeLimit {
+		p.NodeLimit = maxNodeLimit
 	}
 	if p.EdgeLimit <= 0 {
-		p.EdgeLimit = 400
+		p.EdgeLimit = defaultEdgeLimit
 	}
-	if p.EdgeLimit > 1000 {
-		p.EdgeLimit = 1000
+	if p.EdgeLimit > maxEdgeLimit {
+		p.EdgeLimit = maxEdgeLimit
 	}
 	g.Total = Total{Nodes: len(g.Nodes), Edges: len(g.Edges)}
 	if p.Mode == "overview" && p.Project == "" {

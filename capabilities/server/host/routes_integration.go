@@ -100,8 +100,8 @@ func (h *Host) routesIntegration(rt *routes) {
 			{Name: "branch", Description: "a branch ID; reads its staged definitions and no main run evidence"},
 			{Name: "direction", Description: "upstream, downstream or both"},
 			{Name: "depth", Description: "1 to 3"},
-			{Name: "nodeLimit", Description: "response node cap, at most 500"},
-			{Name: "edgeLimit", Description: "response edge cap, at most 1000"},
+			{Name: "nodeLimit", Description: "response node cap, at most 2000"},
+			{Name: "edgeLimit", Description: "response edge cap, at most 5000"},
 			{Name: "fields", Description: "off or on: include field nodes and edges"},
 			{Name: "field", Description: "a field node ID to trace upstream and downstream"},
 		}, Answer: Lineage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

@@ -169,7 +169,7 @@ export function LineagePage({ params }: { params: Params }) {
   const depth = Math.max(1, Math.min(3, Number(params.depth || 1)));
   const color: ColorBy = params.color === "protection" || params.color === "status" ? params.color : "resource";
   const fields = params.fields === "on" || !!params.field;
-  const queryPath = `/v1/lineage?${new URLSearchParams(clean({ mode, project, focus: focusParam, branch, direction, depth: String(depth), fields: fields ? "on" : "", field: params.field ?? "" })).toString()}`;
+  const queryPath = `/v1/lineage?${new URLSearchParams(clean({ mode, project, focus: focusParam, branch, direction, depth: String(depth), nodeLimit: "2000", edgeLimit: "5000", fields: fields ? "on" : "", field: params.field ?? "" })).toString()}`;
   const noFocus = mode === "focus" && !focusParam && !project;
   const query = useReadQuery<Graph>(queryPath, undefined, !noFocus);
   const graph = query.data ?? empty;

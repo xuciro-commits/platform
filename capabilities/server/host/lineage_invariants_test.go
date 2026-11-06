@@ -196,8 +196,18 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 	if !limited.Truncated || !slices.Contains(limited.Truncation, "node-limit") || limited.Returned.Nodes != 1 {
 		t.Fatalf("node limit was not reported: %+v", limited)
 	}
+	if _, ok := lineageNode(limited, "object:build.alpha"); !ok {
+		t.Fatalf("node limit dropped the focus: %+v", limited.Nodes)
+	}
 	if limited.Impact == nil || limited.Impact.Upstream != shallow.Impact.Upstream {
 		t.Fatalf("truncation changed impact counts: %+v", limited.Impact)
+	}
+	edgeLimited, refusal := live.lineage(live.member(t), LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, EdgeLimit: 1})
+	if refusal != nil {
+		t.Fatalf("edge-limited lineage: %+v", refusal)
+	}
+	if !edgeLimited.Truncated || !slices.Contains(edgeLimited.Truncation, "edge-limit") || edgeLimited.Returned.Edges != 1 || edgeLimited.Total.Edges <= edgeLimited.Returned.Edges {
+		t.Fatalf("edge limit lost its counts or reason: %+v", edgeLimited)
 	}
 }
 
@@ -288,14 +298,16 @@ func TestInvariantK12LineageBranchReadsStagedDefinitionsWithoutChangingMain(t *t
 }
 
 func TestInvariantK12LineageBuildsThousandResourcesWithoutSilentLoss(t *testing.T) {
-	input := lineage.Input{}
+	input := lineage.Input{Meta: map[string]lineage.Meta{}}
 	for i := 0; i < 1200; i++ {
+		id := "DS" + strconv.Itoa(i)
 		input.Datasets = append(input.Datasets, dataowner.Dataset{
-			Record: platform.Record{ID: "DS" + strconv.Itoa(i)},
+			Record: platform.Record{ID: id},
 			Name:   "dataset" + strconv.Itoa(i),
 			Title:  "Dataset " + strconv.Itoa(i),
 			Schema: []dataowner.DatasetField{{Name: "id", Type: "text"}},
 		})
+		input.Meta["dataset:"+id] = lineage.Meta{Project: "p1"}
 	}
 	start := time.Now()
 	graph := lineage.Build(input, lineage.Preview)
@@ -304,6 +316,14 @@ func TestInvariantK12LineageBuildsThousandResourcesWithoutSilentLoss(t *testing.
 	}
 	if len(graph.Nodes) != 1200 || graph.Total.Nodes != 1200 || graph.Truncated {
 		t.Fatalf("1200 resources were silently lost or truncated: nodes=%d total=%+v truncated=%v", len(graph.Nodes), graph.Total, graph.Truncated)
+	}
+	scoped := lineage.Scope(graph, lineage.Params{Mode: "overview", Project: "p1", NodeLimit: 2000, EdgeLimit: 5000})
+	if scoped.Total.Nodes != 1200 || scoped.Returned.Nodes != 1200 || len(scoped.Nodes) != 1200 || scoped.Truncated {
+		t.Fatalf("1200 scoped resources were silently lost or truncated: nodes=%d total=%+v returned=%+v truncated=%v", len(scoped.Nodes), scoped.Total, scoped.Returned, scoped.Truncated)
+	}
+	limited := lineage.Scope(graph.Clone(), lineage.Params{Mode: "overview", Project: "p1", NodeLimit: 100, EdgeLimit: 5000})
+	if limited.Total.Nodes != 1200 || limited.Returned.Nodes != 100 || !limited.Truncated || !slices.Contains(limited.Reasons, "node-limit") {
+		t.Fatalf("scoped truncation lost its counts or reason: total=%+v returned=%+v truncated=%v reasons=%v", limited.Total, limited.Returned, limited.Truncated, limited.Reasons)
 	}
 }
 
