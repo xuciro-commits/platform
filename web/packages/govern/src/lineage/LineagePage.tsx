@@ -1,8 +1,8 @@
 import { newId, useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, DataTable, Dialog, EmptyState, Form, Input, Notice, Panel, PropertyList, RelationCanvas, SegmentedChoice, Select, Workbench, t, useWorkspace, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
+import { ActionMenu, Button, DataTable, Dialog, EmptyState, Form, Input, Notice, Panel, PropertyList, RelationCanvas, SegmentedChoice, Select, Tag, ViewVisibilityContext, Workbench, t, useWorkspace, type ColumnDef, type RelationEdge, type RelationNode, type Tone } from "@platform/ui";
 import { ArrowLeftRight, ChevronLeft, Copy, Crosshair, Download, Expand, RefreshCw, Search } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { lineageExportFileName, lineageImpactCSV, lineageImpactDocument, lineageSubgraphCSV, lineageSubgraphDocument, type LineageExportFormat, type LineageExportTarget } from "./export";
 
 type Params = Record<string, string>;
@@ -23,11 +23,11 @@ const empty: Graph = {
 const kindView: Record<string, string> = { connection: "connection", source: "data-source", dataset: "dataset", pipeline: "pipeline", object: "object-type", writeback: "writeback" };
 const kindOrder = ["connection", "source", "dataset", "pipeline", "object", "writeback"];
 const kindTitle: Record<string, string> = { connection: "Connection", source: "Source", dataset: "Dataset", pipeline: "Pipeline", object: "Object type", writeback: "Writeback" };
-const kindTone: Record<string, string> = { connection: "neutral", source: "info", dataset: "success", pipeline: "info", object: "neutral", writeback: "warning" };
+const kindTone: Record<string, Tone> = { connection: "neutral", source: "info", dataset: "success", pipeline: "info", object: "neutral", writeback: "warning" };
 const statusText: Record<string, string> = { current: "Current", stale: "Stale", failed: "Failed", "never-run": "Never run", unreadable: "Unreadable", unknown: "Unknown" };
 type ColorBy = "resource" | "protection" | "status";
-const protectionTone: Record<string, string> = { restricted: "danger", confidential: "warning", internal: "info", "": "neutral" };
-const statusTone: Record<string, string> = { failed: "danger", stale: "warning", "never-run": "neutral", unknown: "neutral", unreadable: "neutral", current: "success" };
+const protectionTone: Record<string, Tone> = { restricted: "danger", confidential: "warning", internal: "info", "": "neutral" };
+const statusTone: Record<string, Tone> = { failed: "danger", stale: "warning", "never-run": "neutral", unknown: "neutral", unreadable: "neutral", current: "success" };
 
 function clean(params: Params): Params {
   return Object.fromEntries(Object.entries(params).filter(([, value]) => value !== ""));
@@ -39,6 +39,15 @@ function nodeId(params: Params): string {
 
 function statusNode(node: Node): string {
   return statusText[node.status] ?? node.status;
+}
+
+function resourceLabel(node: Node): string {
+  return [
+    node.title || node.name,
+    t(kindTitle[node.kind] ?? node.kind),
+    t(statusNode(node)),
+    node.guard ? `${t("Protection")}: ${node.guard}` : "",
+  ].filter(Boolean).join(" · ");
 }
 
 function resourceOpen(open: ReturnType<typeof useWorkspace>["open"], node: Node, params: Params) {
@@ -187,8 +196,13 @@ export function LineagePage({ params }: { params: Params }) {
   const [savingView, setSavingView] = useState(false);
   const [viewTitle, setViewTitle] = useState("");
   const [isolated, setIsolated] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const [inspectorOpenRequest, setInspectorOpenRequest] = useState(0);
+  const resourceListRef = useRef<HTMLUListElement>(null);
+  const inspectorRef = useRef<HTMLDivElement>(null);
   const selected = params.selected || graph.scope.focus || "";
   const root = graph.scope.focus || selected;
+  const viewRoot = graph.scope.focus || project || "overview";
   const selectedNode = graph.nodes.find(node => node.id === selected);
   const fieldMode = !!params.field;
   const selectedField = (graph.fieldNodes ?? []).find(field => field.id === params.field);
@@ -202,6 +216,56 @@ export function LineagePage({ params }: { params: Params }) {
   const focusSelected = (patch: Params = {}) => {
     if (!selectedNode) return;
     update({ mode: "focus", focus: selectedNode.id, selected: selectedNode.id, ...patch });
+  };
+  const focusNode = (node: Node) => {
+    focus(node);
+    setAnnouncement(t("Focused on {name}.", { name: node.title || node.name }));
+  };
+  const expandSelected = () => {
+    if (!selectedNode) return;
+    const next = Math.min(3, depth + 1);
+    focusSelected({ depth: String(next) });
+    setAnnouncement(t("Expanded {name} to depth {depth}.", { name: selectedNode.title || selectedNode.name, depth: next }));
+  };
+  const toggleIsolated = () => {
+    if (!selected) return;
+    const next = !isolated;
+    setIsolated(next);
+    setAnnouncement(next
+      ? t("Isolated path shown for {name}.", { name: selectedNode?.title || selectedNode?.name || selected })
+      : t("Isolation cleared. All filtered resources are visible."));
+  };
+  const chooseNode = (node: Node) => {
+    update({ selected: node.id });
+    setAnnouncement(t("Selected {name}. Details are in the Inspector.", { name: node.title || node.name }));
+  };
+  const chooseNodeByID = (id: string) => {
+    const node = graph.nodes.find(item => item.id === id);
+    if (node) chooseNode(node);
+    else update({ selected: id });
+  };
+  const moveToInspector = (node: Node) => {
+    chooseNode(node);
+    setInspectorOpenRequest(value => value + 1);
+    requestAnimationFrame(() => requestAnimationFrame(() => inspectorRef.current?.focus()));
+  };
+  const chooseField = (id: string, name: string) => {
+    update({ fields: "on", field: id, selected: id });
+    setAnnouncement(t("Selected field {name}.", { name }));
+  };
+  const chooseSelection = (id?: string) => {
+    if (!id) {
+      update({ selected: "" });
+      setAnnouncement(t("Selection returned to the focus resource."));
+      return;
+    }
+    if (fieldMode) {
+      const field = (graph.fieldNodes ?? []).find(item => item.id === id);
+      if (field) chooseField(id, field.title || field.name);
+      else update({ selected: id });
+      return;
+    }
+    chooseNodeByID(id);
   };
   const copy = async (text: string, message: string) => {
     try { await navigator.clipboard.writeText(text); notify.success(message); } catch { notify.error(t("Copy failed")); }
@@ -232,14 +296,20 @@ export function LineagePage({ params }: { params: Params }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
-      if (event.key.toLowerCase() === "f" && selectedNode) { event.preventDefault(); focus(selectedNode); }
-      if (event.key.toLowerCase() === "i" && selectedNode) { event.preventDefault(); setIsolated(value => !value); }
-      if (event.key.toLowerCase() === "x" && selectedNode) { event.preventDefault(); focusSelected({ depth: String(Math.min(3, depth + 1)) }); }
-      if (event.key.toLowerCase() === "escape") { setIsolated(false); update({ selected: "" }); }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "f" && selectedNode) { event.preventDefault(); focusNode(selectedNode); }
+      if (key === "i" && selectedNode) { event.preventDefault(); toggleIsolated(); }
+      if (key === "x" && selectedNode) { event.preventDefault(); expandSelected(); }
+      if (key === "escape") {
+        setIsolated(false);
+        update({ selected: "" });
+        setAnnouncement(t("Isolation cleared. Selection returned to the focus resource."));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedNode, depth, focusSelected, update]);
+  }, [selectedNode, isolated, depth, focusNode, expandSelected, toggleIsolated, update]);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -262,6 +332,39 @@ export function LineagePage({ params }: { params: Params }) {
   const fieldResourceIDs = useMemo(() => new Set(shownFieldNodes.map(field => field.node)), [shownFieldNodes]);
   const exportNodes = useMemo(() => fieldMode ? graph.nodes.filter(node => fieldResourceIDs.has(node.id)) : visible, [fieldMode, graph.nodes, fieldResourceIDs, visible]);
   const exportEdges = useMemo(() => fieldMode ? graph.edges.filter(edge => fieldResourceIDs.has(edge.from) && fieldResourceIDs.has(edge.to)) : visibleEdges, [fieldMode, fieldResourceIDs, graph.edges, visibleEdges]);
+  const chooseSearchResult = () => {
+    if (fieldMode) {
+      const needle = search.trim().toLowerCase();
+      const matches = (graph.fieldNodes ?? []).filter(field => !needle || `${field.title} ${field.name}`.toLowerCase().includes(needle));
+      if (!matches.length) {
+        setAnnouncement(t("No fields match the current search."));
+        return;
+      }
+      const current = matches.findIndex(field => field.id === params.field);
+      const next = matches[current < 0 ? 0 : (current + 1) % matches.length]!;
+      chooseField(next.id, next.title || next.name);
+      return;
+    }
+    if (!visible.length) {
+      setAnnouncement(t("No resources match the current search and filters."));
+      return;
+    }
+    const current = visible.findIndex(node => node.id === selected);
+    const next = visible[current < 0 ? 0 : (current + 1) % visible.length]!;
+    resourceListRef.current?.querySelector<HTMLButtonElement>(`[data-lineage-resource="${next.id}"]`)?.focus();
+    chooseNode(next);
+  };
+  const moveResource = (event: ReactKeyboardEvent<HTMLButtonElement>, node: Node) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || !visible.length) return;
+    event.preventDefault();
+    const current = Math.max(0, visible.findIndex(item => item.id === node.id));
+    const index = event.key === "Home" ? 0
+      : event.key === "End" ? visible.length - 1
+      : (current + (event.key === "ArrowDown" ? 1 : -1) + visible.length) % visible.length;
+    const next = visible[index]!;
+    resourceListRef.current?.querySelector<HTMLButtonElement>(`[data-lineage-resource="${next.id}"]`)?.focus();
+    chooseNode(next);
+  };
   const hidden = graph.nodes.length - filtered.length;
   const download = (target: LineageExportTarget, format: LineageExportFormat) => {
     if (target === "impact") {
@@ -279,12 +382,12 @@ export function LineagePage({ params }: { params: Params }) {
     const body = format === "csv" ? lineageSubgraphCSV(exported) : JSON.stringify(exported, null, 2);
     saveExport(lineageExportFileName(target, format, exported.exportedAt), body, format);
   };
-  const toolbar = <div className="flex flex-wrap items-center gap-1">
+  const toolbar = <div role="group" aria-label={t("Lineage actions")} className="flex flex-wrap items-center gap-1">
     <Select aria-label={t("Branch")} value={branch} onChange={event => update({ branch: event.target.value, focus: "", selected: "" })} className="w-44" disabled={!holds("build", "builder")}>
       <option value="">{t("main")}</option>
       {(branches.data ?? []).filter(item => item.state === "open" || item.state === "proposed").map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
     </Select>
-    {fieldMode && <Button size="sm" variant="ghost" onClick={() => update({ field: "", selected: params.focus || "" })}><ChevronLeft />{t("Back to resources")}</Button>}
+    {fieldMode && <Button size="sm" variant="ghost" onClick={() => { update({ field: "", selected: params.focus || "" }); setAnnouncement(t("Back to resources")); }}><ChevronLeft />{t("Back to resources")}</Button>}
     <SegmentedChoice compact label={t("Direction")} value={direction} onChange={value => focusSelected({ direction: value })} options={[{ value: "upstream", label: t("Upstream") }, { value: "both", label: t("Both") }, { value: "downstream", label: t("Downstream") }]} />
     <Select aria-label={t("Depth")} value={String(depth)} onChange={event => focusSelected({ depth: event.target.value })} className="w-24">
       {[1, 2, 3].map(value => <option key={value} value={value}>{t("Depth {n}", { n: value })}</option>)}
@@ -292,9 +395,9 @@ export function LineagePage({ params }: { params: Params }) {
     <Select aria-label={t("Color by")} value={color} onChange={event => update({ color: event.target.value })} className="w-36">
       <option value="resource">{t("Resource type")}</option><option value="protection">{t("Protection")}</option><option value="status">{t("Status")}</option>
     </Select>
-    <Button size="sm" variant="ghost" onClick={() => focusSelected()} disabled={!selectedNode}><Crosshair />{t("Focus")}</Button>
-    <Button size="sm" variant="ghost" onClick={() => setIsolated(value => !value)} disabled={!selected}><ArrowLeftRight />{isolated ? t("Show all") : t("Isolate")}</Button>
-    <Button size="sm" variant="ghost" onClick={() => focusSelected({ depth: String(Math.min(3, depth + 1)) })} disabled={!selectedNode}><Expand />{t("Expand")}</Button>
+    <Button size="sm" variant="ghost" onClick={() => selectedNode && focusNode(selectedNode)} disabled={!selectedNode}><Crosshair />{t("Focus")}</Button>
+    <Button size="sm" variant="ghost" onClick={toggleIsolated} disabled={!selected}><ArrowLeftRight />{isolated ? t("Show all") : t("Isolate")}</Button>
+    <Button size="sm" variant="ghost" onClick={expandSelected} disabled={!selectedNode}><Expand />{t("Expand")}</Button>
     <Button size="sm" variant="ghost" onClick={() => void query.refetch()}><RefreshCw />{t("Refresh")}</Button>
     <ActionMenu label={t("Export")} icon={<Download />} commands={[
       { id: "subgraph-json", label: t("Visible subgraph · JSON"), run: () => download("subgraph", "json") },
@@ -307,47 +410,93 @@ export function LineagePage({ params }: { params: Params }) {
   </div>;
 
   if (mode === "overview" && !project) return <Overview graph={graph} loading={query.isPending} error={!!query.isError} onRetry={() => void query.refetch()} onProject={id => update({ project: id, mode: "overview" })} />;
-  if (noFocus) return <EmptyState title={t("Choose a resource")} hint={t("Open a data resource from Search or its resource page to start a focused graph.")} action={<Button onClick={() => update({ mode: "overview", project: "", focus: "", selected: "" })}>{t("Overview")}</Button>} />;
-  if (query.isError) return <EmptyState title={t("Data lineage could not be loaded")} hint={t("Try again, or return to the overview.")} action={<div className="flex gap-2"><Button onClick={() => void query.refetch()}>{t("Retry")}</Button><Button variant="ghost" onClick={() => update({ mode: "overview", project: "", focus: "", selected: "" })}>{t("Overview")}</Button></div>} />;
-  if (query.isPending) return <div className="grid h-full place-items-center"><p className="text-sm text-muted">{t("Loading…")}</p></div>;
-  if (!graph.nodes.length) return <EmptyState title={t("No data resources yet")} hint={t("Start in Data Connection, then return here to trace the flow.")} action={<Button onClick={() => open({ view: "connection" })}>{t("Open Data Connection")}</Button>} />;
+  if (noFocus) return <div role="status"><EmptyState title={t("Choose a resource")} hint={t("Open a data resource from Search or its resource page to start a focused graph.")} action={<Button onClick={() => update({ mode: "overview", project: "", focus: "", selected: "" })}>{t("Overview")}</Button>} /></div>;
+  if (query.isError) return <div role="alert"><EmptyState title={t("Data lineage could not be loaded")} hint={t("Try again, or return to the overview.")} action={<div className="flex gap-2"><Button onClick={() => void query.refetch()}>{t("Retry")}</Button><Button variant="ghost" onClick={() => update({ mode: "overview", project: "", focus: "", selected: "" })}>{t("Overview")}</Button></div>} /></div>;
+  if (query.isPending) return <div className="grid h-full place-items-center"><p role="status" className="text-sm text-muted">{t("Loading lineage graph…")}</p></div>;
+  if (!graph.nodes.length) return <div role="status"><EmptyState title={t("No data resources yet")} hint={t("Start in Data Connection, then return here to trace the flow.")} action={<Button onClick={() => open({ view: "connection" })}>{t("Open Data Connection")}</Button>} /></div>;
 
   const left = <div className="grid gap-3 p-2">
-    <label className="grid gap-1 text-xs font-medium">{t("Find in graph")}<span className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" /><Input value={search} onChange={event => setSearch(event.target.value)} className="pl-7" placeholder={t("Name or API name")} /></span></label>
-    {lineageViews.length > 0 && <label className="grid gap-1 text-xs font-medium">{t("Saved views")}<Select aria-label={t("Saved views")} value="" onChange={event => { const view = lineageViews.find(item => item.id === event.target.value); if (view) loadView(view); }}><option value="">{t("Choose a saved view")}</option>{lineageViews.map(view => <option key={view.id} value={view.id}>{view.title}</option>)}</Select></label>}
-    <label className="grid gap-1 text-xs font-medium">{t("Kind")}<Select value={kind} onChange={event => setKind(event.target.value)}><option value="">{t("All kinds")}</option>{kindOrder.map(value => <option key={value} value={value}>{t(kindTitle[value] ?? value)}</option>)}</Select></label>
-    <label className="grid gap-1 text-xs font-medium">{t("Status")}<Select value={status} onChange={event => setStatus(event.target.value)}><option value="">{t("All states")}</option>{Object.entries(statusText).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</Select></label>
-    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={hideUnconnected} onChange={event => setHideUnconnected(event.target.checked)} />{t("Hide unconnected")}</label>
-    <div className="grid gap-1 text-xs"><span className="font-medium">{t("Coverage")}</span><span className="text-muted">{t("{visible} of {total} resources", { visible: visible.length, total: graph.total.nodes })}</span>{hidden > 0 && <span className="text-warning">{t("{n} hidden by filters", { n: hidden })}</span>}</div>
+    <section aria-label={t("Filters")} className="grid gap-2">
+      <label className="grid gap-1 text-xs font-medium">{t("Find in graph")}<span className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" /><Input value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => {
+        if (event.key === "Enter") { event.preventDefault(); chooseSearchResult(); }
+        else if (event.key === "Escape" && search) { event.preventDefault(); setSearch(""); setAnnouncement(t("Search cleared.")); }
+      }} className="pl-7" placeholder={t("Name or API name")} /></span></label>
+      {lineageViews.length > 0 && <label className="grid gap-1 text-xs font-medium">{t("Saved views")}<Select aria-label={t("Saved views")} value="" onChange={event => { const view = lineageViews.find(item => item.id === event.target.value); if (view) loadView(view); }}><option value="">{t("Choose a saved view")}</option>{lineageViews.map(view => <option key={view.id} value={view.id}>{view.title}</option>)}</Select></label>}
+      <label className="grid gap-1 text-xs font-medium">{t("Kind")}<Select value={kind} onChange={event => setKind(event.target.value)}><option value="">{t("All kinds")}</option>{kindOrder.map(value => <option key={value} value={value}>{t(kindTitle[value] ?? value)}</option>)}</Select></label>
+      <label className="grid gap-1 text-xs font-medium">{t("Status")}<Select value={status} onChange={event => setStatus(event.target.value)}><option value="">{t("All states")}</option>{Object.entries(statusText).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</Select></label>
+      <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={hideUnconnected} onChange={event => setHideUnconnected(event.target.checked)} />{t("Hide unconnected")}</label>
+      <div className="grid gap-1 text-xs"><span className="font-medium">{t("Coverage")}</span><span role="status" aria-live="polite" aria-atomic="true" className="text-muted">{t("{visible} of {total} resources", { visible: visible.length, total: graph.total.nodes })}</span>{hidden > 0 && <span className="text-warning">{t("{n} hidden by filters", { n: hidden })}</span>}</div>
+    </section>
+    {!fieldMode && <ViewVisibilityContext.Consumer>{shown => shown ? <section aria-label={t("Graph resources")} className="grid gap-1">
+      <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-semibold">{t("Resources")}</h3><span className="text-2xs text-muted">{t("Showing {n} resources", { n: visible.length })}</span></div>
+      {visible.length > 0 ? <ul ref={resourceListRef} aria-label={t("Graph resources")} className="grid max-h-64 gap-0.5 overflow-y-auto pr-1">
+        {visible.map(node => <li key={node.id}>
+          <Button data-lineage-resource={node.id}
+            variant="ghost" aria-pressed={node.id === selected} aria-label={resourceLabel(node)}
+            className={`h-auto w-full flex-col items-stretch justify-start gap-1 whitespace-normal px-2 py-1.5 text-left ${node.id === selected ? "bg-row-selected" : ""}`}
+            onClick={() => chooseNode(node)}
+            onKeyDown={event => {
+              if (event.key === "Enter") { event.preventDefault(); moveToInspector(node); return; }
+              moveResource(event, node);
+            }}>
+            <span className="truncate text-xs font-medium">{node.title || node.name}</span>
+            <span className="flex flex-wrap items-center gap-1">
+              <Tag label={t(kindTitle[node.kind] ?? node.kind)} tone={kindTone[node.kind] ?? "neutral"} />
+              <Tag label={t(statusNode(node))} tone={statusTone[node.status] ?? "neutral"} />
+              {node.guard && <Tag label={`${t("Protection")}: ${node.guard}`} tone={protectionTone[node.guard] ?? "neutral"} />}
+              {node.id === selected && <Tag label={t("Selected")} tone="info" />}
+            </span>
+          </Button>
+        </li>)}
+      </ul> : <p role="status" className="text-xs text-muted">{t("No resources match the current search and filters.")}</p>}
+      <p className="text-2xs text-muted">{t("Use Up and Down to move through resources. Enter opens the Inspector; F, I, X and Escape keep working.")}</p>
+    </section> : null}</ViewVisibilityContext.Consumer>}
     <Button size="sm" variant="ghost" onClick={() => update({ mode: "overview", project: "", focus: "", selected: "" })}><ChevronLeft />{t("Overview")}</Button>
   </div>;
 
   const inspector = fieldMode
-    ? <FieldInspector field={selectedField} graph={graph} onSelect={id => update({ selected: id })} />
-    : <Inspector node={selectedNode} graph={graph} onOpen={openNode} onFocus={focus} onSelect={id => update({ selected: id })} onCopyRID={rid => void copy(rid, t("RID copied"))} onCopyLink={() => void copy(location.href, t("Link copied"))} onFields={() => update({ fields: "on", field: "" })} />;
+    ? <FieldInspector field={selectedField} graph={graph} containerRef={inspectorRef} onSelect={id => {
+      const field = (graph.fieldNodes ?? []).find(item => item.id === id);
+      if (field) chooseField(id, field.title || field.name);
+      else update({ selected: id });
+    }} />
+    : <Inspector node={selectedNode} graph={graph} containerRef={inspectorRef} onOpen={openNode} onFocus={focusNode} onSelect={chooseNodeByID} onCopyRID={rid => void copy(rid, t("RID copied"))} onCopyLink={() => void copy(location.href, t("Link copied"))} onFields={() => update({ fields: "on", field: "" })} />;
   const downstream = graph.impact?.downstream ?? (root ? reachable(graph.edges, root, true).length : 0);
   const dock = {
     label: t("Analysis"),
     tabs: [
-      { id: "impact", title: t("Impact"), badge: downstream, content: <Impact graph={graph} root={root} onSelect={id => update({ selected: id })} /> },
+      { id: "impact", title: t("Impact"), badge: downstream, content: <Impact graph={graph} root={root} onSelect={chooseNodeByID} /> },
       { id: "coverage", title: t("Coverage"), badge: graph.unreadable?.length, content: <Coverage graph={graph} /> },
-      { id: "fields", title: t("Fields"), content: <Fields graph={graph} node={selectedNode} selected={params.field ?? ""} onSelect={id => update({ fields: "on", field: id, selected: id })} /> },
+      { id: "fields", title: t("Fields"), content: <Fields graph={graph} node={selectedNode} selected={params.field ?? ""} onSelect={id => {
+        const field = (graph.fieldNodes ?? []).find(item => item.id === id);
+        if (field) chooseField(id, field.title || field.name);
+        else update({ fields: "on", field: id, selected: id });
+      }} /> },
     ],
   };
-  return <><Workbench storageKey={`lineage:${root || project || "overview"}`} crumbs={[{ label: t("Data Lineage"), onClick: () => update({ mode: "overview", project: "", focus: "", selected: "" }) }, ...(project ? [{ label: project }] : [])]}
-    title={selectedNode?.title || graph.scope.focus || t("Graph")} status={<span className="text-xs text-muted">{graph.basis.preview} · {new Date(graph.generatedAt).toLocaleString()}</span>}
-    actions={toolbar} left={{ label: t("Scope"), content: left }} right={{ label: t("Inspector"), content: inspector }} dock={dock} mainLabel={t("Data lineage graph")} onKeyDown={() => undefined}>
+  return <>
+    <div role="status" aria-live="polite" aria-atomic="true" aria-label={t("Lineage status")} className="sr-only">{announcement}</div>
+    <Workbench storageKey={`lineage:${viewRoot}`} crumbs={[{ label: t("Data Lineage"), onClick: () => update({ mode: "overview", project: "", focus: "", selected: "" }) }, ...(project ? [{ label: project }] : [])]}
+    title={selectedNode?.title || graph.scope.focus || t("Graph")} status={<span aria-label={t("Graph basis")} className="text-xs text-muted">{graph.basis.preview} · {new Date(graph.generatedAt).toLocaleString()}</span>}
+    actions={toolbar} left={{ label: t("Scope"), content: left }} right={{ label: t("Inspector"), content: inspector, selection: String(inspectorOpenRequest) }} dock={dock} mainLabel={t("Data lineage graph")}>
     <div className="relative h-full min-h-[26rem]">
-      {graph.nodes.some(node => node.markingStatus !== "consistent") && <div className="absolute left-2 top-2 z-10"><Notice tone="warning" message={t("Protection differs from preview. The saved definition is not active yet.")} /></div>}
-      {graph.truncated && <div className="absolute left-2 top-2 z-10"><Notice tone="warning" message={t("Showing {returned} of {total} resources. Reduce depth or choose one direction.", { returned: graph.returned.nodes, total: graph.total.nodes })} /></div>}
+      <div className="absolute left-2 top-2 z-10 grid max-w-[32rem] gap-1">
+        {isolated && <div role="status" className="flex items-center gap-2 rounded-md border border-border bg-surface p-2 text-xs shadow-sm">
+          <ArrowLeftRight aria-hidden className="size-3.5 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1">{t("Isolated path · {n} resources shown", { n: visible.length })}</span>
+          <Button size="sm" variant="ghost" onClick={toggleIsolated}>{t("Show all")}</Button>
+        </div>}
+        {graph.nodes.some(node => node.markingStatus !== "consistent") && <Notice tone="warning" message={t("Protection differs from preview. The saved definition is not active yet.")} />}
+        {graph.truncated && <Notice tone="warning" message={t("Showing {returned} of {total} resources. Reduce depth or choose one direction.", { returned: graph.returned.nodes, total: graph.total.nodes })} />}
+      </div>
       <RelationCanvas
         nodes={fieldMode ? fieldRelationNodes(shownFieldNodes) : relationNodes(visible, color)}
         edges={fieldMode ? fieldRelationEdges(shownFieldEdges) : relationEdges(visibleEdges)}
         selected={selected}
         height="100%"
         label={fieldMode ? t("Field lineage") : t("Data Lineage")}
-        storeKey={`lineage:${fieldMode ? "fields:" + (params.field || "all") : root || project || "overview"}`}
-        onSelect={(id?: string) => update({ selected: id ?? "" })}
+        storeKey={`lineage:${fieldMode ? "fields:" + (params.field || "all") : viewRoot}`}
+        onSelect={chooseSelection}
         onOpen={(id: string) => { if (fieldMode) return; const node = graph.nodes.find(item => item.id === id); if (node) openNode(node); }}
       />
     </div>
@@ -396,11 +545,11 @@ function PageTitle({ title, subtitle, onRefresh }: { title: string; subtitle: st
   return <div className="flex min-w-0 items-center justify-between gap-3"><div className="min-w-0"><h1 className="truncate text-xl font-semibold">{title}</h1><p className="text-xs text-muted">{subtitle}</p></div><Button size="sm" variant="ghost" onClick={onRefresh}><RefreshCw />{t("Refresh")}</Button></div>;
 }
 
-function FieldInspector({ field, graph, onSelect }: { field?: NonNullable<Graph["fieldNodes"]>[number]; graph: Graph; onSelect: (id: string) => void }) {
-  if (!field) return <div className="p-3 text-xs text-muted">{t("Choose a field to trace its source and downstream use.")}</div>;
+function FieldInspector({ field, graph, containerRef, onSelect }: { field?: NonNullable<Graph["fieldNodes"]>[number]; graph: Graph; containerRef: RefObject<HTMLDivElement | null>; onSelect: (id: string) => void }) {
+  if (!field) return <div ref={containerRef} role="group" aria-label={t("Selected field details")} tabIndex={-1} className="p-3 text-xs text-muted outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">{t("Choose a field to trace its source and downstream use.")}</div>;
   const incoming = (graph.fieldEdges ?? []).filter(edge => edge.to === field.id);
   const outgoing = (graph.fieldEdges ?? []).filter(edge => edge.from === field.id);
-  return <div className="grid gap-3 overflow-auto p-3 text-xs">
+  return <div ref={containerRef} role="group" aria-label={t("Selected field details")} tabIndex={-1} className="grid gap-3 overflow-auto p-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
     <div><h2 className="truncate text-sm font-semibold">{field.title || field.name}</h2><p className="truncate text-muted">{field.kind} · {field.node}</p></div>
     <PropertyList items={[
       [t("Resource"), field.node],
@@ -421,11 +570,11 @@ function FieldNeighbors({ edges, graph, side, onSelect }: { edges: NonNullable<G
   })}</div>;
 }
 
-function Inspector({ node, graph, onOpen, onFocus, onSelect, onCopyRID, onCopyLink, onFields }: { node?: Node; graph: Graph; onOpen: (node: Node) => void; onFocus: (node: Node) => void; onSelect: (id: string) => void; onCopyRID: (rid: string) => void; onCopyLink: () => void; onFields: () => void }) {
-  if (!node) return <div className="p-3 text-xs text-muted">{t("Select a resource to inspect its versions, protection and inputs.")}</div>;
+function Inspector({ node, graph, containerRef, onOpen, onFocus, onSelect, onCopyRID, onCopyLink, onFields }: { node?: Node; graph: Graph; containerRef: RefObject<HTMLDivElement | null>; onOpen: (node: Node) => void; onFocus: (node: Node) => void; onSelect: (id: string) => void; onCopyRID: (rid: string) => void; onCopyLink: () => void; onFields: () => void }) {
+  if (!node) return <div ref={containerRef} role="group" aria-label={t("Selected resource details")} tabIndex={-1} className="p-3 text-xs text-muted outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">{t("Select a resource to inspect its versions, protection and inputs.")}</div>;
   const incoming = graph.edges.filter(edge => edge.to === node.id);
   const outgoing = graph.edges.filter(edge => edge.from === node.id);
-  return <div className="grid gap-3 overflow-auto p-3 text-xs">
+  return <div ref={containerRef} role="group" aria-label={t("Selected resource details")} tabIndex={-1} className="grid gap-3 overflow-auto p-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
     <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold">{node.title || node.name}</h2><p className="truncate text-muted">{kindTitle[node.kind] ?? node.kind} · {node.name}</p></div></div>
     <div className="flex flex-wrap gap-1"><Button size="sm" variant="primary" disabled={!node.canOpen} onClick={() => onOpen(node)}>{t("Open")}</Button><Button size="sm" variant="ghost" onClick={() => onFocus(node)}><Crosshair />{t("Focus here")}</Button><Button size="sm" variant="ghost" onClick={onFields}>{t("Show fields")}</Button><Button size="sm" variant="ghost" onClick={() => node.rid && onCopyRID(node.rid)} disabled={!node.rid}><Copy />{t("RID")}</Button><Button size="sm" variant="ghost" onClick={onCopyLink}><Copy />{t("Link")}</Button></div>
     <PropertyList items={[

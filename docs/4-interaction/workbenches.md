@@ -149,7 +149,8 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 - 头部：面包屑 Data Lineage › 项目 › 焦点资源；Branch 选择器（main 与 open/proposed 分支，分支图只读）；状态区显示基线（“main · saved definitions” 或 “branch … · saved definitions”）与构建时间，Preview 与 Guard 不一致时显示警告标签 “Protection differs from preview”；操作：Direction（Upstream / Both / Downstream，SegmentedChoice）、Depth（1–3）、“Show fields” 开关、Color by（Resource type / Protection / Status）、Fit graph、刷新、Export、Save view、⋯（Copy link、Copy RID）。
 - Export 菜单直接下载 Visible subgraph 或 Impact list 的 CSV / JSON。子图使用当前筛选与 Isolate 后的可见节点和边；字段模式导出画布上的字段路径。影响列表直接使用当前血缘响应中的 impact，无焦点图时不可用。导出只在浏览器内整理已返回、已授权的数据，不新建查询或计算路径。
 - 左面板 “Scope”：
-  - 图内搜索：只搜已加载子图的名称、API 名与字段名；Enter 依次选中匹配项；无匹配时给出 “Search everywhere” 打开全局 Search。
+  - 图内搜索：只搜已加载子图的名称、API 名与字段名；Enter 依次选中匹配项并把焦点移到资源列表；无匹配时给出 “Search everywhere” 打开全局 Search。
+  - 资源列表：列出筛选后可见的资源，每项带种类、状态与保护标记文本；↑/↓、Home/End 在列表中移动并同步选中，Enter 打开 Inspector 并把焦点移入。选中本身不强制切换区域，避免窄宽度下资源列表消失。
   - 种类图例即筛选：每种一个复选框，带分类色与计数。
   - 状态筛选：Current、Stale、Failed、Never run、Unknown。
   - Saved views：只列当前成员私有、`entity=lineage` 的查询配方；打开时重新读取 URL 参数并重新鉴权，不保存节点、边、标记或权限快照。
@@ -168,7 +169,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
   - Focus here（F、Inspector 按钮、右键菜单）：以选中节点为根重新请求邻域，写入 URL，适应视口。
   - Isolate path（I）：只保留根与选中节点之间路径上的已加载节点，顶部显示 “Isolated · Show all”。
   - Expand（X）：选中节点两侧各展开一层。
-  - 键盘：← 上游、→ 下游、↑↓ 同层兄弟之间移动选中；Enter 进入 Inspector；Esc 先退出 Isolate，再清除选中；+ / − 调整 Depth。
+  - 键盘：资源列表 ↑/↓、Home/End 移动并选中；Enter 进入 Inspector；F 聚焦、I 隔离、X 展开、Esc 退出隔离并把选中返回焦点资源。筛选计数、加载、错误、选中与隔离状态都有可读文本或 live region，不以颜色作为唯一状态。
   - 只在首次加载与根改变时适应视口；布局按焦点根记忆（`storeKey` 为 `lineage:<根>`）。
 - Inspector（右，M6 只读形态）：
   - 头：图标、显示名、种类、项目路径、RID（等宽弱化）；主按钮 “Open”（不可打开时禁用并说明原因）；次级 “Focus here”；⋯：Isolate path、Copy RID、View runs in Monitoring。

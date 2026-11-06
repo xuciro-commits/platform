@@ -24,15 +24,16 @@ function Sides({ data }: { data: RelationNodeData }) {
 function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
   const classDecl = data.class ? relationNodeClasses[data.class] : undefined;
   const color = (data.tone ?? classDecl?.tone) ? `var(--tone-${data.tone ?? classDecl?.tone})` : "var(--primary)";
+  const accessible = [data.label, relationNodeCaption(data), data.flag, selected ? t("Selected") : ""].filter(Boolean).join(" · ");
   if (data.badge) return <div className={cn("platform-relation-badge", selected && "platform-relation-badge-selected", data.linking && "platform-relation-node-linking")}
     style={{ width: data.badge.size, height: data.badge.size, background: color, borderColor: color } as CSSProperties}
-    aria-label={data.label} title={[data.label, data.detail].filter(Boolean).join(" · ")}>
+    aria-label={accessible} aria-current={selected ? "true" : undefined} title={[data.label, data.detail].filter(Boolean).join(" · ")}>
     <span aria-hidden="true" className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-1" style={{ fontSize: data.badge.size > 24 ? 8 : 7 }}>{data.badge.label}</span>
     <Sides data={data} />
   </div>;
   const caption = relationNodeCaption(data);
   return <div className={cn("platform-relation-node", selected && "platform-relation-node-selected", data.dim && "opacity-60", data.faded && "opacity-30", data.linking && "platform-relation-node-linking")}
-    style={{ width: data.size?.width ?? relationNodeSize.width, minHeight: data.size?.height ?? relationNodeSize.height, "--block-color": color } as CSSProperties} title={data.detail ?? data.label} aria-label={data.label}>
+    style={{ width: data.size?.width ?? relationNodeSize.width, minHeight: data.size?.height ?? relationNodeSize.height, "--block-color": color } as CSSProperties} title={data.detail ?? data.label} aria-label={accessible} aria-current={selected ? "true" : undefined}>
     <span className="platform-canvas-node-icon" aria-hidden="true">{data.icon ?? (classDecl ? <IconGlyph name={classDecl.icon} /> : <Box />)}</span>
     <span className="min-w-0 flex-1">
       {caption && <span className="platform-canvas-node-caption"><span className="!max-w-full">{t(caption)}</span></span>}
