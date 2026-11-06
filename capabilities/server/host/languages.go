@@ -79,22 +79,28 @@ func canonical(tag string) string {
 }
 
 func (t *Tenant) Texts(app string) []string {
-	a := t.app(app)
-	if a == nil {
-		return nil
-	}
-	m := a.Manifest()
+	var m platform.Manifest
 	var parts []any
-	parts = append(parts, map[string]any{"title": m.Title}, m.Actions.All(), m.Pages, m.Settings, m.Emits)
+	if a := t.app(app); a != nil {
+		m = a.Manifest()
+		parts = append(parts, map[string]any{"title": m.Title}, m.Actions.All(), m.Pages, m.Settings, m.Emits)
+	}
+	for _, definition := range t.definitions {
+		if definition.Ref.App == app {
+			parts = append(parts, definition)
+		}
+	}
 	for _, et := range t.records.Types() {
 		if et.Info().App == app {
 			parts = append(parts, et.Info())
 		}
 	}
-	for _, a := range m.Actions.All() {
-		if a.Approval != nil {
-			for _, l := range a.Approval.Levels {
-				parts = append(parts, map[string]any{"title": l.Title})
+	if m.Actions != nil {
+		for _, a := range m.Actions.All() {
+			if a.Approval != nil {
+				for _, l := range a.Approval.Levels {
+					parts = append(parts, map[string]any{"title": l.Title})
+				}
 			}
 		}
 	}

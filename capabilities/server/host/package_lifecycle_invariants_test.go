@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"platformserver/platform"
@@ -61,6 +62,10 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	}
 	if receipt == nil || len(receipt.Plan.Steps) == 0 || receipt.Plan.Steps[0].Status != "installed" {
 		t.Fatalf("install closure receipt: %+v", receipt)
+	}
+	words := target.Words(build.ID)
+	if !slices.Contains(words.Apps, build.ID) || !slices.ContainsFunc(words.Words, func(word Word) bool { return word.Text == "Alpha application" }) {
+		t.Fatalf("installed application texts are not available for translation: %+v", words)
 	}
 
 	target.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "Keep my data"})

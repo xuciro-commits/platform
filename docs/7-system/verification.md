@@ -25,7 +25,7 @@ read-when: 运行或新增检查、验收用例、钩子；判断一项改动需
 | Go 包边界 | `node scripts/check-boundaries.mjs`：`go list` 的实际导入与 [README §7.2](README.md#72-包结构) 依赖列一致；不符的导入只能是该文件“现存差距”中登记的条目，条目消除后必须删除 |
 | 宿主类型与页面契约 | `make contract` 前后 `kernel/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json` 逐字节一致 |
 | Web | 改动包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
-| 文案 | 新字符串在 `zh-CN` 字典中；动态键取值齐全 |
+| 文案 | `node scripts/check-i18n.mjs` 检查 `t("...")` 字面量与 `defineApp` 说明都在字典中；动态键取值齐全 |
 | 全部 | `git diff --check` |
 
 Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时。

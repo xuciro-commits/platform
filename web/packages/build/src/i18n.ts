@@ -4641,4 +4641,10 @@ register("zh-CN", {
   "Go to Files": "前往文件",
   "Adding the resource to this project…": "正在将资源加入此项目…",
   "Adding the page to this module…": "正在将页面加入此模块…",
+  "Define the action's transaction before changing where it leaves a record.": "在更改动作离开记录的位置之前，先定义该动作的事务。",
+  "Edit contents": "编辑内容",
+  "Review changes": "审阅变更",
+  "Stream": "流",
+  "This action is still stored in the old object draft. Migrate its action types before editing the lifecycle.": "此动作仍存储在旧对象草稿中。编辑生命周期前请先迁移其动作类型。",
+  "Upload file": "上传文件",
 });

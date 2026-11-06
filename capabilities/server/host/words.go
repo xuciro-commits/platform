@@ -2,13 +2,10 @@ package host
 
 import (
 	"encoding/json"
-	"platformserver/kernel/transport"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
-	controlowner "platformserver/services/security/control"
-	"slices"
 	"strings"
 
 	"time"
@@ -46,29 +43,6 @@ func (t *Tenant) Words(app string) WordsView {
 		view.Apps = append(view.Apps, a.Manifest().ID)
 	}
 	texts := t.Texts(app)
-	if app == controlowner.BuildApp {
-		seen := map[string]bool{}
-		for _, s := range texts {
-			seen[s] = true
-		}
-		var parts []any
-		for _, d := range t.definitions {
-			if d.Ref.App == controlowner.BuildApp {
-				parts = append(parts, d)
-			}
-		}
-		raw, _ := json.Marshal(parts)
-		var tree any
-		json.Unmarshal(raw, &tree)
-		transport.WalkTexts(tree, func(s string) string {
-			if s != "" && !seen[s] {
-				seen[s] = true
-				texts = append(texts, s)
-			}
-			return s
-		})
-		slices.Sort(texts)
-	}
 	own := t.words.Clone()
 	for _, s := range texts {
 		w := Word{Text: s, Translations: map[string]string{}, Own: map[string]string{}}

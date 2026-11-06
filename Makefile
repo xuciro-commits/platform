@@ -88,6 +88,7 @@ check:
 	@cmp .build/contract/resources.ts web/packages/build/src/gen/resources.ts
 	@cmp .build/contract/page_compat.json capabilities/server/platform/page_compat.json
 	cd web && $(PNPM) typecheck && $(PNPM) build
+	node scripts/check-i18n.mjs
 	git diff HEAD --check
 
 e2e:
