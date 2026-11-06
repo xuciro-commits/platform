@@ -317,7 +317,7 @@ func (t *Tenant) liveVersion(query string) string {
 		owner = "flow"
 	case "/v1/agents", "/v1/runs", "/v1/memories":
 		owner = "agent"
-	case "/v1/me", "/v1/actions", "/v1/entities", "/v1/definitions", "/v1/apps", "/v1/protocols", "/v1/views":
+	case "/v1/me", "/v1/actions", "/v1/entities", "/v1/definitions", "/v1/apps", "/v1/protocols":
 		return fmt.Sprintf("%d/%d", global, meta)
 	}
 	return fmt.Sprintf("%d/%d/%d", global, meta, owners[owner])

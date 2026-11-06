@@ -19,8 +19,7 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 	live := newInvariantTenantWithApps(t, id, []platform.App{workapp.New(id)})
 	member := live.member(t)
 	caller := platform.NewCaller(runtime{live.Tenant}, member, workapp.ID, false, false)
-	owner, ok := live.app(workapp.ID).(*workapp.Work)
-	if !ok {
+	if _, ok := live.app(workapp.ID).(*workapp.Work); !ok {
 		t.Fatal("the work owner is not attached")
 	}
 	save := func(viewID, title, state string) *kernel.Error {
@@ -36,7 +35,7 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 	}
 	views := func() ([]workapp.SavedView, *kernel.Error) {
 		t.Helper()
-		value, refusal := owner.Read(caller, "views")
+		value, refusal := live.Read(member, "views")
 		if refusal != nil {
 			return nil, refusal
 		}
@@ -63,8 +62,12 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 		return workapp.SavedView{}
 	}
 
+	before := live.liveVersion("/v1/views")
 	if refusal := save("VIEW0", "Legacy exploration", `{"kind":"exploration","entity":"build.alpha","set":{"object":"build.alpha"}}`); refusal != nil {
 		t.Fatalf("version 0 state was refused: %s: %s", refusal.Code, refusal.Message)
+	}
+	if after := live.liveVersion("/v1/views"); after == before {
+		t.Fatal("a saved view did not invalidate its live read")
 	}
 	items, refusal := views()
 	if refusal != nil {

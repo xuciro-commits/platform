@@ -159,7 +159,9 @@ func (w *Work) entities() []platform.Entity {
 						}},
 				}}},
 		policyEntity(),
-		{Type: ViewType, Title: "Saved view", Model: SavedView{}},
+		{Type: ViewType, Title: "Saved view", Model: SavedView{},
+			Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "owner",
+				Participants: func(record any) []string { return []string{record.(SavedView).Owner} }}},
 		{Type: DelegationType, Title: "Delegation", Model: Delegation{}, Description: "A member's approvals and tasks handed to another for some days; the delegate decides for them, and the request says so.",
 			Scope: platform.Scope{Participants: func(record any) []string { d := record.(Delegation); return []string{d.From, d.To} }}},
 	}

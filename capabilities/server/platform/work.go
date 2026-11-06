@@ -166,7 +166,7 @@ type SavedView struct {
 	Record
 	Title  string `json:"title" field:"required,search" source:"record"`
 	Entity string `json:"entity" field:"required,readonly" source:"record"`
-	State  string `json:"state" type:"longtext"`
+	State  string `json:"state" type:"longtext" source:"record"`
 	Owner  string `json:"owner" field:"readonly" source:"record"`
 }
 
