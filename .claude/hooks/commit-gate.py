@@ -73,6 +73,11 @@ def main():
         with open(passed, "w") as f:
             f.write(digest)
 
+    staged = {f for f in run(["git", "diff", "--cached", "--name-only"], root)[1].splitlines() if f}
+    args = re.search(r"\bgit\s+commit\b([^\n|;&<]*)", command).group(1)
+    whole = re.search(r"\s(--all|-(?!-)[A-Za-z]*a[A-Za-z]*)(\s|$)", args)
+    if staged and not whole:
+        changed, digest = staged, run(["git", "write-tree"], root)[1]
     code_changed = [f for f in changed if not f.startswith("docs/")]
     stale = []
     for doc in sorted(glob.glob(os.path.join(root, "docs", "**", "*.md"), recursive=True)):

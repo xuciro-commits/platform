@@ -1,1 +1,3 @@
-**/gen/** -whitespace linguist-generated
+**/gen/** -whitespace linguist-generated -diff
+web/packages/app/src/pageui/safety.ts -whitespace linguist-generated -diff
+capabilities/server/platform/page_compat.json -whitespace linguist-generated -diff

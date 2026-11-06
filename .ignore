@@ -1,0 +1,4 @@
+web/apps/catalog/src/gen/
+web/packages/ui/src/gen/
+web/packages/app/src/pageui/safety.ts
+capabilities/server/platform/page_compat.json

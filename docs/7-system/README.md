@@ -125,6 +125,7 @@ apps、function、integration 与 automation 的发布步骤已并入各自 owne
 ## 7.7 代码规范
 
 - 手写文件 ≤ 800 行（Go）/ 600 行（TS）；超出按职责拆分，不按“工具函数”拆。只含字面量的数据文件（各包 `i18n.ts`、`zh-CN.ts`、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`kernel/src/gen/*.ts`）不计。
+- 生成文件在 `.gitattributes` 标为 generated 且不出文本 diff（要看内容用 `git diff --text`）；纯数据生成物另列在 `.ignore`，不进代码搜索。新增生成物同步这两份清单；只改生成器或其源，不手改生成物。
 - 包名表达职责；同一名字不指两样东西（如 `kernel`、`agents`）。
 - 不留兼容分支，除非存储格式需要（且写明版本）。页面 `format` 0/3 属此类：三个产品包的页面仍以 document 或 documentless 的旧格式交付，且历史接受映像按原字节恢复，退役需要先迁移产品包与已接受映像。
 - 注释、删除旧路径、新依赖的规则见 AGENTS.md 硬规则。
