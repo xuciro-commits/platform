@@ -8,8 +8,9 @@ import { CanvasEdgeLabel, canvasEdgeColor } from "../core/edge";
 import { routePath, type Route } from "../core/route";
 import { relationNodeCaption, relationNodeClasses, relationNodeSize, type RelationEdge, type RelationNode } from "./model";
 import { Tooltip } from "../../primitives/tooltip";
+import { CanvasNodeFold } from "../core/fold";
 
-type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean; faded?: boolean };
+type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean; faded?: boolean; collapsedView: boolean };
 export type RelationShapeNode = Node<RelationNodeData>;
 export type RelationLineEdge = Edge<RelationEdge & { route?: Route; quiet?: boolean; faded?: boolean } & Record<string, unknown>>;
 
@@ -32,15 +33,26 @@ function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
     <Sides data={data} />
   </div>;
   const caption = relationNodeCaption(data);
+  const expandable = !data.badge && !!(data.facts?.length || data.detail);
   return <div className={cn("platform-relation-node", selected && "platform-relation-node-selected", data.dim && "opacity-60", data.faded && "opacity-30", data.linking && "platform-relation-node-linking")}
-    style={{ width: data.size?.width ?? relationNodeSize.width, minHeight: data.size?.height ?? relationNodeSize.height, "--block-color": color } as CSSProperties} title={data.detail ?? data.label} aria-label={accessible} aria-current={selected ? "true" : undefined}>
+    style={{ width: data.size?.width ?? relationNodeSize.width, minHeight: data.size?.height ?? relationNodeSize.height, "--block-color": color } as CSSProperties} title={data.detail ?? data.label} aria-label={accessible} aria-current={selected ? "true" : undefined} aria-expanded={expandable ? !data.collapsedView : undefined}>
     <span className="platform-canvas-node-icon" aria-hidden="true">{data.icon ?? (classDecl ? <IconGlyph name={classDecl.icon} /> : <Box />)}</span>
     <span className="min-w-0 flex-1">
       {caption && <span className="platform-canvas-node-caption"><span className="!max-w-full">{t(caption)}</span></span>}
       <span className="platform-canvas-node-title block">{data.label}</span>
     </span>
     {data.flag && <Tooltip content={data.flag}><span className="platform-relation-flag" /></Tooltip>}
+    {expandable && <CanvasNodeFold id={data.id} open={!data.collapsedView} />}
     <Sides data={data} />
+    {expandable && !data.collapsedView && <div className="platform-relation-details" role="group" aria-label={t("Node details")} onClick={event => event.stopPropagation()}>
+      {data.detail && <p className="break-words text-xs text-muted">{data.detail}</p>}
+      {!!data.facts?.length && <dl className="mt-1 grid gap-1 text-xs">
+        {data.facts.map(fact => <div key={fact.label} className="grid gap-0.5">
+          <dt className="text-2xs uppercase tracking-wide text-muted">{fact.label}</dt>
+          <dd className="break-words">{fact.value}</dd>
+        </div>)}
+      </dl>}
+    </div>}
   </div>;
 }
 

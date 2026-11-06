@@ -7,7 +7,7 @@ export type RelationBadge = { label: string; size: number };
 export type RelationNode = {
   id: string; label: string; caption?: string; icon?: ReactNode; tone?: string; dim?: boolean;
   flag?: string; detail?: string; linkable?: boolean; facts?: RelationFact[]; badge?: RelationBadge;
-  class?: string;
+  class?: string; collapsed?: boolean;
   size?: { width: number; height: number };
 };
 

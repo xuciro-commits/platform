@@ -56,9 +56,9 @@
 .platform-flow-heading { display: flex; align-items: center; gap: 9px; height: 53px; padding: 10px 10px 0 13px; }
 .platform-flow-glyph { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; color: var(--muted); }
 .platform-flow-glyph svg { width: 13px; height: 13px; }
-.platform-flow-collapse { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: var(--muted); border-radius: 4px; flex-shrink: 0; }
-.platform-flow-collapse:hover { background: var(--row-hover); color: var(--foreground); }
-.platform-flow-collapse svg { width: 13px; height: 13px; }
+.platform-canvas-node-fold { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: var(--muted); border-radius: 4px; flex-shrink: 0; }
+.platform-canvas-node-fold:hover { background: var(--row-hover); color: var(--foreground); }
+.platform-canvas-node-fold svg { width: 13px; height: 13px; }
 .platform-flow-port { width: 10px !important; height: 10px !important; border: 2px solid var(--surface) !important; box-shadow: 0 0 0 1px var(--border); transition: box-shadow var(--dur-fast), width var(--dur-fast), height var(--dur-fast); }
 .platform-flow-port::after { content: ""; position: absolute; inset: -8px; }
 .platform-flow-port:hover { width: 13px !important; height: 13px !important; box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary), transparent 70%); }
@@ -102,7 +102,8 @@
 .platform-relation-node:hover { border-color: color-mix(in oklch, var(--block-color), var(--border) 60%); }
 .platform-relation-node-selected { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 78%); }
 .platform-relation-node-linking { cursor: crosshair; }
-.platform-relation-flag { position: absolute; right: 8px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--tone-info); }
+.platform-relation-flag { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--tone-info); }
+.platform-relation-details { position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: 248px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-lg); }
 .platform-relation-handle { width: 8px; height: 8px; border: 1px solid var(--border); background: var(--surface); opacity: 0; }
 .platform-relation-node-linking .platform-relation-handle { opacity: 1; }
 .platform-relation-handle-active { width: 10px; height: 10px; background: var(--primary); border-color: var(--surface); opacity: 1; }

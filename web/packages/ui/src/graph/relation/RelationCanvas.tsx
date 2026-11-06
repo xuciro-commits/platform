@@ -1,9 +1,10 @@
 import { ConnectionMode, MarkerType, MiniMap, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow } from "@xyflow/react";
-import { ArrowDownFromLine, ArrowLeftFromLine, ArrowRightFromLine, ArrowUpFromLine, ChevronDown, ChevronUp, Grid3x3, Maximize, Orbit, Waves } from "lucide-react";
+import { ArrowDownFromLine, ArrowLeftFromLine, ArrowRightFromLine, ArrowUpFromLine, Grid3x3, Maximize, Orbit, Waves } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { CanvasActionBar, CanvasActionButton, CanvasEmpty, CanvasHelp, CanvasHelpTool, CanvasTool, CanvasToolbar } from "../core/chrome";
+import { CanvasFoldAllTool, CanvasFoldContext, useCanvasFold } from "../core/fold";
 import { CanvasFurniture, CanvasFrame, CanvasRefit, fitting } from "../core/frame";
 import { routeEdges, type Rect, type RouteRequest } from "../core/route";
 import { readCanvasPositions, writeCanvasPositions } from "../core/store";
@@ -50,7 +51,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   const [help, setHelp] = useState(false);
   const [pickedEdge, setPickedEdge] = useState<string>();
   const [hovered, setHovered] = useState<string>();
-  const [expanded, setExpanded] = useState<string>();
+  const { folded, allCollapsed, toggle, toggleAll, state: collapsed } = useCanvasFold(nodes);
   const canReconnect = editable && !!onReconnect;
   const relations = useMemo(() => edges.map((e) => ({ id: e.id, from: e.source, to: e.target, parent: e.parent })), [edges]);
   const hierarchy = useMemo(() => relationHierarchy(nodes.map((n) => n.id), relations), [nodes, relations]);
@@ -95,11 +96,11 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
       return placed.map((n) => {
         const old = previousById.get(n.id);
         const size = sizeOf(n);
-        return { id: n.id, type: "entity", position: owned[n.id] ?? old?.position ?? { x: 0, y: 0 }, selected: n.id === selected, draggable: (editable || !!storeKey) && !linking, measured: old?.measured, initialWidth: size.width, initialHeight: size.height,
-          connectable: editable && (linking || canReconnect) && n.linkable !== false, data: { ...n, linking, acceptsConnections: editable && (linking || canReconnect), faded: !!near && !near.has(n.id) } };
+        return { id: n.id, type: "entity", position: owned[n.id] ?? old?.position ?? { x: 0, y: 0 }, selected: n.id === selected, draggable: (editable || !!storeKey) && !linking, measured: old?.measured, initialWidth: size.width, initialHeight: size.height, zIndex: folded(n) ? undefined : 10,
+          connectable: editable && (linking || canReconnect) && n.linkable !== false, data: { ...n, linking, acceptsConnections: editable && (linking || canReconnect), faded: !!near && !near.has(n.id), collapsedView: folded(n) } };
       });
     });
-  }, [placed, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey, near]);
+  }, [placed, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey, near, collapsed]);
 
   const flowEdges = useMemo<RelationLineEdge[]>(() => {
     const boxes: Record<string, Rect> = {};
@@ -152,19 +153,19 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
       setTimeout(() => void fitView({ ...fitting, duration: 220 }), 30);
     } catch (error) { if (version === layoutVersion.current) setLayoutError(String(error)); }
   };
-  const chosen = nodes.find((n) => n.id === selected);
   return <CanvasFrame label={label} height={height} role={editable || storeKey ? "region" : "figure"}>
     <div className="platform-canvas platform-relation h-full outline-none" aria-label={label}
       onDragOver={(e) => { if (editable && dropType && e.dataTransfer.types.includes(dropType)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
       onDrop={(e) => { if (!editable || !dropType || !onDrop) return; const payload = e.dataTransfer.getData(dropType); if (!payload) return; e.preventDefault();
         const at = screenToFlowPosition({ x: e.clientX, y: e.clientY }); onDrop(payload, { x: at.x - relationNodeSize.width / 2, y: at.y - relationNodeSize.height / 2 }); }}>
-      <ReactFlow<RelationShapeNode, RelationLineEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={relationNodeTypes} edgeTypes={relationEdgeTypes} onNodesChange={onNodesChange} onlyRenderVisibleElements
+      <CanvasFoldContext.Provider value={{ toggle }}>
+        <ReactFlow<RelationShapeNode, RelationLineEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={relationNodeTypes} edgeTypes={relationEdgeTypes} onNodesChange={onNodesChange} onlyRenderVisibleElements
         colorMode="system" minZoom={0.1} maxZoom={2.5} fitView fitViewOptions={fitting} zoomOnScroll panOnScroll={false} zoomOnPinch panOnDrag preventScrolling
         nodesDraggable={(editable || !!storeKey) && !linking} nodesConnectable={linking} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} connectionRadius={40}
         isValidConnection={(c) => c.source !== c.target && nodes.some((n) => n.id === c.source && n.linkable !== false) && nodes.some((n) => n.id === c.target && n.linkable !== false)}
         onConnect={(c) => { if (c.source && c.target && c.source !== c.target) onLink?.(c.source, c.target); }}
-        onNodeClick={(_, n) => { setPickedEdge(undefined); onSelect?.(n.id); }} onNodeDoubleClick={(_, n) => onOpen?.(n.id)} onNodeMouseEnter={focusOnHover ? (_, n) => setHovered(n.id) : undefined} onNodeMouseLeave={focusOnHover ? () => setHovered(undefined) : undefined} onPaneClick={() => { onSelect?.(undefined); setPickedEdge(undefined); setExpanded(undefined); }}
-        onEdgeClick={(_, e) => { setPickedEdge(e.id); setExpanded(undefined); onSelect?.(undefined); }}
+        onNodeClick={(_, n) => { setPickedEdge(undefined); onSelect?.(n.id); }} onNodeDoubleClick={(_, n) => onOpen?.(n.id)} onNodeMouseEnter={focusOnHover ? (_, n) => setHovered(n.id) : undefined} onNodeMouseLeave={focusOnHover ? () => setHovered(undefined) : undefined} onPaneClick={() => { onSelect?.(undefined); setPickedEdge(undefined); }}
+        onEdgeClick={(_, e) => { setPickedEdge(e.id); onSelect?.(undefined); }}
         edgesFocusable={editable && !!edgeActions}
         onReconnect={onReconnect ? (old, c) => { if (c.source && c.target && c.source !== c.target && (c.source !== old.source || c.target !== old.target)) onReconnect(old.id, c.source, c.target); } : undefined}
         onNodeDragStop={(_, __, dragged) => {
@@ -175,7 +176,8 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
         <CanvasRefit signature={fitKey} ready={synchronized} requireMeasured={false} once onReady={onViewportReady} />
         <CanvasFurniture />
         {nodes.length > 12 && <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor="var(--border)" maskColor="color-mix(in oklch, var(--background), transparent 40%)" style={{ width: 140, height: 90 }} />}
-      </ReactFlow>
+        </ReactFlow>
+      </CanvasFoldContext.Provider>
 
       <CanvasToolbar label={t("Canvas tools")}>
         <div className="relative">
@@ -184,6 +186,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
             {relationLayouts.map((k) => <button key={k} type="button" role="menuitemradio" aria-checked={layout === k} className={cn("platform-canvas-tool !justify-start", layout === k && "bg-row-selected")} onClick={() => void arrange(k)}>{layoutMeta[k].icon}<span>{t(layoutMeta[k].title)}</span></button>)}
           </div>}
         </div>
+        {nodes.some(node => !node.badge && !!(node.facts?.length || node.detail)) && <CanvasFoldAllTool allCollapsed={allCollapsed} onToggle={toggleAll} />}
         <CanvasTool label={t("Fit canvas")} icon={<Maximize />} onClick={() => void fitView({ ...fitting, duration: 220 })} />
         {linking && <span className="px-2 text-xs text-[var(--tone-warning)]">{t("Drag from one element to another to relate them.")}</span>}
         <CanvasHelpTool open={help} onToggle={() => setHelp(!help)} />
@@ -191,6 +194,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
 
       <CanvasHelp open={help} onClose={() => setHelp(false)} items={[
         t("Click an element to select it; double-click to open it."),
+        t("The chevron on a node expands its core details."),
         editable && t("Drag an element to move it; the position is saved with the view."),
         editable && linking && t("Drag from one element to another to relate them."),
         editable && !!nodeActions && t("The selected element's operations appear in the bar at the bottom of the canvas."),
@@ -202,17 +206,9 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
         {edgeActions(pickedEdge).map((a) => <CanvasActionButton key={a.id} action={a} />)}
       </CanvasActionBar>}
 
-      {selected && (nodeActions || chosen?.facts?.length) && <CanvasActionBar label={t("Element operations")}>
-        {!!chosen?.facts?.length && <CanvasTool label={t("Details")} icon={expanded === selected ? <ChevronDown /> : <ChevronUp />}
-          pressed={expanded === selected} onClick={() => setExpanded(expanded === selected ? undefined : selected)} />}
+      {selected && nodeActions && <CanvasActionBar label={t("Element operations")}>
         {(nodeActions?.(selected) ?? []).map((a) => <CanvasActionButton key={a.id} action={a} />)}
       </CanvasActionBar>}
-
-      {expanded && <div role="dialog" aria-label={t("Details")} className="absolute bottom-14 left-1/2 z-20 w-72 -translate-x-1/2 rounded-md border border-border bg-surface p-3 text-xs shadow-lg">
-        <p className="font-semibold">{expanded}</p>
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">{(chosen?.facts ?? []).map((f) => <span key={f.label} className="contents"><dt className="text-muted">{f.label}</dt><dd className="min-w-0 break-words">{f.value}</dd></span>)}</dl>
-        <button type="button" className="mt-2 rounded px-2 py-1 text-muted hover:bg-row-hover" onClick={() => setExpanded(undefined)}>{t("Close")}</button>
-      </div>}
 
       {(layoutError || layoutJob.error) && <div role="alert" className="absolute bottom-2 left-2 rounded bg-surface p-2 text-xs text-danger">{t("Layout failed")}: {layoutError || layoutJob.error}</div>}
       {!nodes.length && <CanvasEmpty>{children}</CanvasEmpty>}

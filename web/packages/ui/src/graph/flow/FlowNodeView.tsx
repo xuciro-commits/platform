@@ -1,16 +1,15 @@
 import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
-import { AlertTriangle, Check, ChevronDown, ChevronUp, Clock, Loader2, Repeat } from "lucide-react";
-import { createContext, useContext, useEffect, type CSSProperties, type ReactNode } from "react";
+import { AlertTriangle, Check, Clock, Loader2, Repeat } from "lucide-react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { flowBlockHeight, flowNodeWidth, flowShapeBox, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort } from "./model";
 import { eventRing, flowNodeIcon, flowShape, loops, notationGlyph, notationOf, notationTitle, type FlowNotation, type FlowShape } from "./notation";
 import { Tooltip } from "../../primitives/tooltip";
+import { CanvasNodeFold } from "../core/fold";
 
 type FlowNodeData = FlowNode & { definition: FlowNodeKind; direction: "right" | "down"; editable: boolean; collapsedView: boolean };
 export type FlowShapeNode = Node<FlowNodeData, "block">;
-export const FlowInteraction = createContext<{ onCollapse: (id: string) => void }>({ onCollapse: () => {} });
-
 const statusMeta: Record<FlowNodeStatus, { label: string; tone: string; icon?: ReactNode }> = {
   idle: { label: "Not run", tone: "neutral" }, running: { label: "Running", tone: "info", icon: <Loader2 className="animate-spin" /> },
   waiting: { label: "Waiting", tone: "warning", icon: <Clock /> }, success: { label: "Succeeded", tone: "success", icon: <Check /> },
@@ -47,7 +46,6 @@ function Shape({ shape, notation, color }: { shape: FlowShape; notation: FlowNot
 
 export function FlowNodeView({ id, data, selected }: NodeProps<FlowShapeNode>) {
   const { definition: kind, compact, collapsedView: collapsed, direction } = data;
-  const { onCollapse } = useContext(FlowInteraction);
   const update = useUpdateNodeInternals();
   const notation = data.notation ?? kind.notation ?? notationOf(kind.id);
   const shape = flowShape(notation, kind.id);
@@ -95,8 +93,7 @@ export function FlowNodeView({ id, data, selected }: NodeProps<FlowShapeNode>) {
         {shape !== "task" && <Tooltip content={notationTitle(notation)}><span>{glyph}</span></Tooltip>}
         {looping && <Tooltip content={t("Repeats")}><span><Repeat /></span></Tooltip>}
       </span>}
-      {!compact && (kind.inputs.length > 0 || kind.outputs.length > 0) && <Tooltip content={t(collapsed ? "Expand block ports" : "Collapse block ports")}><button type="button" className="nodrag nopan platform-flow-collapse"
-        onClick={(event) => { event.stopPropagation(); onCollapse(id); }} aria-label={t(collapsed ? "Expand block ports" : "Collapse block ports")}>{collapsed ? <ChevronDown /> : <ChevronUp />}</button></Tooltip>}
+      {!compact && (kind.inputs.length > 0 || kind.outputs.length > 0 || !!data.detail || !!data.status || !!data.boundary?.length) && <CanvasNodeFold id={id} open={!collapsed} />}
     </div>
     {!compact && !collapsed && data.detail && <div className="platform-canvas-node-detail px-3" title={data.detail}>{data.detail}</div>}
     {ports}

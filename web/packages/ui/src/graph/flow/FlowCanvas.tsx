@@ -1,8 +1,9 @@
 import { ConnectionLineType, MarkerType, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, type Connection } from "@xyflow/react";
-import { AlignHorizontalJustifyStart, ArrowDown, ArrowRight, ChevronsDownUp, ChevronsUpDown, Copy, Maximize, Plus, Redo2, Scissors, Trash2, Undo2 } from "lucide-react";
+import { AlignHorizontalJustifyStart, ArrowDown, ArrowRight, Copy, Maximize, Plus, Redo2, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { CanvasActionBar, CanvasActionButton, CanvasEmpty, CanvasHelp, CanvasHelpTool, CanvasTool, CanvasToolbar, CanvasToolDivider } from "../core/chrome";
+import { CanvasFoldAllTool, CanvasFoldContext, useCanvasFold } from "../core/fold";
 import { CanvasFurniture, CanvasFrame, CanvasRefit, fitting } from "../core/frame";
 import { laneBands, type LaneAssignment } from "../core/layered";
 import { readCanvasPositions, writeCanvasPositions } from "../core/store";
@@ -12,7 +13,7 @@ import { useCanvasLayout } from "../core/layout/use-layout";
 import { samePositions } from "../core/layout/edge-routing";
 import type { LayoutResult } from "../core/layout/types";
 import { FlowEdgeView, FlowEdgeInteraction, type FlowLineEdge } from "./FlowEdgeView";
-import { FlowInteraction, FlowNodeView, type FlowShapeNode } from "./FlowNodeView";
+import { FlowNodeView, type FlowShapeNode } from "./FlowNodeView";
 import { FlowLaneView, type FlowLaneShapeNode } from "./FlowLaneView";
 import { FlowPalette } from "./FlowPalette";
 import { FLOW_NODE_DROP, flowBlockHeight, flowNodeBox, flowNodeWidth, flowPlacement, validateFlowConnection,
@@ -62,9 +63,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   const stored = useRef<Record<string, CanvasPosition> | undefined>(undefined);
   const externalSelection = useRef<string | undefined>(undefined);
   const copied = useRef<{ nodes: FlowNode[]; edges: FlowEdge[] } | undefined>(undefined);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const folded = (node: FlowNode) => collapsed[node.id] ?? node.collapsed ?? catalog.find((kind) => kind.id === node.kind)?.collapsed ?? false;
-  const allCollapsed = nodes.length > 0 && nodes.every(folded);
+  const { folded, allCollapsed, toggle, toggleAll, state: collapsed } = useCanvasFold(nodes, node => catalog.find((kind) => kind.id === node.kind)?.collapsed);
   const [palette, setPalette] = useState<FlowAddContext>();
   const [pickedEdge, setPickedEdge] = useState<string>();
   const [help, setHelp] = useState(false);
@@ -285,7 +284,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
         onAdd(kind, { position: flowPlacement(screenToFlowPosition({ x: event.clientX, y: event.clientY }), flowBlockHeight(definition), measuredBoxes(), definition.size?.width) });
         setPalette(undefined);
       }}>
-      <FlowInteraction.Provider value={{ onCollapse: (id) => setCollapsed((current) => ({ ...current, [id]: !folded(nodes.find((node) => node.id === id) ?? { id, kind: "", label: "", position: { x: 0, y: 0 } }) })) }}>
+      <CanvasFoldContext.Provider value={{ toggle }}>
         <FlowEdgeInteraction.Provider value={{ onInsert: (edge, position) => setPalette({ edge, position }) }}>
           <ReactFlow<FlowCanvasNode, FlowLineEdge> nodes={flowNodes} edges={flowEdges.map((edge) => ({ ...edge, data: { ...edge.data!, route: (routed ?? defaultLayout.data) && samePositions((routed ?? defaultLayout.data)!.positions, flowNodes.filter((node) => node.type !== "lane")) ? (routed ?? defaultLayout.data)!.routes[edge.id] : undefined } }))} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} fitView fitViewOptions={fitting}
@@ -317,7 +316,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
             <CanvasFurniture />
           </ReactFlow>
         </FlowEdgeInteraction.Provider>
-      </FlowInteraction.Provider>
+      </CanvasFoldContext.Provider>
 
       <CanvasToolbar label={t("Canvas tools")}>
         {editable && onAdd && <CanvasTool primary label={t("Add block")} title={t("Add block (N)")} text={t("Add block")} icon={<Plus />} onClick={() => setPalette(addContext())} />}
@@ -325,10 +324,7 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
         <CanvasTool label={t(direction === "right" ? "Flow top to bottom" : "Flow left to right")}
           icon={direction === "right" ? <ArrowDown /> : <ArrowRight />}
           onClick={() => { const next: CanvasDirection = direction === "right" ? "down" : "right"; void arrange(next); }} />
-        {catalog.some((kind) => kind.inputs.length || kind.outputs.length) && !nodes.every((node) => node.compact) &&
-          <CanvasTool label={t(allCollapsed ? "Expand all blocks" : "Collapse all blocks")}
-            icon={allCollapsed ? <ChevronsUpDown /> : <ChevronsDownUp />}
-            onClick={() => setCollapsed(Object.fromEntries(nodes.map((node) => [node.id, !allCollapsed])))} />}
+        {!nodes.every((node) => node.compact) && <CanvasFoldAllTool allCollapsed={allCollapsed} onToggle={toggleAll} />}
         <CanvasTool label={t("Fit canvas")} icon={<Maximize />} onClick={() => void fitView({ ...fitting, duration: 220 })} />
         {editable && history && <>
           <CanvasToolDivider />
