@@ -97,6 +97,7 @@ func (h *Host) routesIntegration(rt *routes) {
 			{Name: "focus", Description: "a resource RID or lineage node ID"},
 			{Name: "ref", Description: "an app/kind/name resource reference"},
 			{Name: "node", Description: "a legacy lineage node ID"},
+			{Name: "branch", Description: "a branch ID; reads its staged definitions and no main run evidence"},
 			{Name: "direction", Description: "upstream, downstream or both"},
 			{Name: "depth", Description: "1 to 3"},
 			{Name: "nodeLimit", Description: "response node cap, at most 500"},
@@ -123,10 +124,10 @@ func (h *Host) routesIntegration(rt *routes) {
 		if focus == "" {
 			focus = r.URL.Query().Get("node")
 		}
-		out, refusal := t.lineage(m, LineageRequest{
+		out, refusal := t.lineageLocked(m, LineageRequest{
 			Mode: r.URL.Query().Get("mode"), Project: r.URL.Query().Get("project"),
 			Focus: focus, Ref: r.URL.Query().Get("ref"), Direction: r.URL.Query().Get("direction"),
-			Depth: depth, NodeLimit: nodeLimit, EdgeLimit: edgeLimit,
+			Depth: depth, NodeLimit: nodeLimit, EdgeLimit: edgeLimit, Branch: r.URL.Query().Get("branch"),
 			Fields: r.URL.Query().Get("fields") == "on", Field: r.URL.Query().Get("field"),
 		})
 		if refusal != nil {

@@ -2694,6 +2694,10 @@ export type LineageGroup = {
   failed: number;
   neverRun: number;
   unreadable: number;
+  crossIn: number;
+  crossOut: number;
+  unconnected: number;
+  updated?: string;
   guard?: string;
 };
 

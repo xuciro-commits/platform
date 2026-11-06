@@ -1,6 +1,7 @@
 package lineage
 
 import (
+	"maps"
 	"slices"
 	"time"
 
@@ -17,11 +18,12 @@ const (
 )
 
 type Meta struct {
-	RID     string
-	Project string
-	CanOpen bool
-	CanRead bool
-	Visible bool
+	RID         string
+	Project     string
+	ProjectName string
+	CanOpen     bool
+	CanRead     bool
+	Visible     bool
 }
 
 type Evidence struct {
@@ -40,6 +42,7 @@ type Input struct {
 	Meta        map[string]Meta
 	Evidence    []Evidence
 	Unreadable  []Unreadable
+	Opaque      []string
 }
 
 type Unreadable struct {
@@ -121,14 +124,18 @@ type FieldEdge struct {
 }
 
 type Group struct {
-	Project    string         `json:"project"`
-	Resources  int            `json:"resources"`
-	ByKind     map[string]int `json:"byKind"`
-	Stale      int            `json:"stale"`
-	Failed     int            `json:"failed"`
-	NeverRun   int            `json:"neverRun"`
-	Unreadable int            `json:"unreadable"`
-	Guard      string         `json:"guard,omitempty"`
+	Project     string         `json:"project"`
+	Resources   int            `json:"resources"`
+	ByKind      map[string]int `json:"byKind"`
+	Stale       int            `json:"stale"`
+	Failed      int            `json:"failed"`
+	NeverRun    int            `json:"neverRun"`
+	Unreadable  int            `json:"unreadable"`
+	CrossIn     int            `json:"crossIn"`
+	CrossOut    int            `json:"crossOut"`
+	Unconnected int            `json:"unconnected"`
+	Updated     *time.Time     `json:"updated,omitempty"`
+	Guard       string         `json:"guard,omitempty"`
 }
 
 type ImpactItem struct {
@@ -293,8 +300,58 @@ func (g Graph) normalized() Graph {
 	return g
 }
 
+func (g Graph) Clone() Graph {
+	out := g
+	out.Nodes = slices.Clone(g.Nodes)
+	for i := range out.Nodes {
+		out.Nodes[i].StaleReasons = slices.Clone(out.Nodes[i].StaleReasons)
+		out.Nodes[i].DeclaredCompartments = slices.Clone(out.Nodes[i].DeclaredCompartments)
+		out.Nodes[i].EffectiveCompartments = slices.Clone(out.Nodes[i].EffectiveCompartments)
+		out.Nodes[i].GuardCompartments = slices.Clone(out.Nodes[i].GuardCompartments)
+		if out.Nodes[i].Boundary != nil {
+			boundary := *out.Nodes[i].Boundary
+			out.Nodes[i].Boundary = &boundary
+		}
+	}
+	out.Edges = slices.Clone(g.Edges)
+	for i := range out.Edges {
+		out.Edges[i].DeclaredBy = slices.Clone(out.Edges[i].DeclaredBy)
+	}
+	out.Unreadable = slices.Clone(g.Unreadable)
+	out.Groups = make([]Group, len(g.Groups))
+	for i, group := range g.Groups {
+		out.Groups[i] = group
+		out.Groups[i].ByKind = maps.Clone(group.ByKind)
+	}
+	if g.Impact != nil {
+		impact := *g.Impact
+		impact.ByKind = maps.Clone(g.Impact.ByKind)
+		impact.ByProject = maps.Clone(g.Impact.ByProject)
+		impact.Items = slices.Clone(g.Impact.Items)
+		out.Impact = &impact
+	}
+	out.FieldNodes = slices.Clone(g.FieldNodes)
+	out.FieldEdges = slices.Clone(g.FieldEdges)
+	return out
+}
+
+func ApplyAccess(g Graph, meta map[string]Meta) Graph {
+	for i := range g.Nodes {
+		value, ok := meta[g.Nodes[i].ID]
+		if !ok {
+			continue
+		}
+		g.Nodes[i].RID = value.RID
+		g.Nodes[i].Project = value.Project
+		g.Nodes[i].CanOpen = value.CanOpen
+		g.Nodes[i].CanReadData = value.CanRead
+	}
+	return g
+}
+
 func (g Graph) group() []Group {
 	groups := map[string]*Group{}
+	at := g.byID()
 	for _, node := range g.Nodes {
 		project := node.Project
 		if project == "" {
@@ -307,6 +364,13 @@ func (g Graph) group() []Group {
 		}
 		group.Resources++
 		group.ByKind[node.Kind]++
+		if !node.Connected {
+			group.Unconnected++
+		}
+		if node.At != nil && (group.Updated == nil || group.Updated.Before(*node.At)) {
+			updated := *node.At
+			group.Updated = &updated
+		}
 		switch node.Status {
 		case "stale":
 			group.Stale++
@@ -318,6 +382,23 @@ func (g Graph) group() []Group {
 			group.Unreadable++
 		}
 		group.Guard = platform.HigherMarking(group.Guard, node.Guard)
+	}
+	for _, edge := range g.Edges {
+		from, fromOK := at[edge.From]
+		to, toOK := at[edge.To]
+		if !fromOK || !toOK {
+			continue
+		}
+		fromProject, toProject := g.Nodes[from].Project, g.Nodes[to].Project
+		if fromProject == "" || toProject == "" || fromProject == toProject {
+			continue
+		}
+		if group := groups[fromProject]; group != nil {
+			group.CrossOut++
+		}
+		if group := groups[toProject]; group != nil {
+			group.CrossIn++
+		}
 	}
 	out := make([]Group, 0, len(groups))
 	for _, group := range groups {

@@ -3,6 +3,7 @@ package lineage
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,7 +49,7 @@ func Build(in Input, basis Basis) Graph {
 		if !include(item.Archived) {
 			continue
 		}
-		node := Node{ID: "connection:" + item.ID, Kind: "connection", Record: item.ID, Name: item.Name, Title: item.Title, State: item.State, Declared: item.Marking, DeclaredCompartments: slices.Clone(item.Compartments)}
+		node := Node{ID: "connection:" + item.ID, Kind: "connection", Record: item.ID, Name: item.Name, Title: item.Title, State: item.State, Declared: item.Marking, DeclaredCompartments: slices.Clone(item.Compartments), DefinitionVersion: item.DefinitionVersion}
 		if item.Last != nil {
 			node.At = when(item.Last.At)
 			if !item.Last.OK || item.Last.Error != "" {
@@ -75,10 +76,11 @@ func Build(in Input, basis Basis) Graph {
 		if !include(item.Archived) {
 			continue
 		}
-		node := Node{ID: "source:" + item.ID, Kind: "source", Record: item.ID, Name: item.Name, Title: item.Title, State: item.State}
+		node := Node{ID: "source:" + item.ID, Kind: "source", Record: item.ID, Name: item.Name, Title: item.Title, State: item.State, DefinitionVersion: item.DefinitionVersion}
 		if item.Last != nil {
 			node.Rows = item.Last.Rows
 			node.At = when(item.Last.At)
+			node.ExecutionVersion = executionVersion(item.Last.DefinitionVersion)
 			if item.Last.Error != "" || item.Last.Failed > 0 {
 				node.Status = "failed"
 				node.ErrorCode = "pull-failed"
@@ -94,6 +96,7 @@ func Build(in Input, basis Basis) Graph {
 		if item.Last != nil {
 			node.Rows = item.Last.Written
 			node.At = when(item.Last.At)
+			node.ExecutionVersion = executionVersion(item.Last.DefinitionVersion)
 			if item.Last.Error != "" {
 				node.Status = "failed"
 				node.ErrorCode = "run-failed"
@@ -262,6 +265,14 @@ func Build(in Input, basis Basis) Graph {
 		}
 		g.Edges = append(g.Edges, edge)
 	}
+	projects := map[string]string{}
+	for _, node := range g.Nodes {
+		projects[node.ID] = node.Project
+	}
+	for i := range g.Edges {
+		from, to := projects[g.Edges[i].From], projects[g.Edges[i].To]
+		g.Edges[i].CrossesProject = from != "" && to != "" && from != to
+	}
 	for i := range g.Nodes {
 		g.Nodes[i].Connected = connected(g.Edges, g.Nodes[i].ID)
 	}
@@ -278,6 +289,11 @@ func objectType(name string) string {
 		return name
 	}
 	return build.ID + "." + name
+}
+
+func executionVersion(value string) int {
+	version, _ := strconv.Atoi(value)
+	return version
 }
 
 func index(nodes []Node, id string) int {
@@ -312,6 +328,17 @@ func propagate(g *Graph, basis Basis, in Input) {
 		g.Nodes[i].EffectiveCompartments = slices.Clone(g.Nodes[i].DeclaredCompartments)
 		g.Nodes[i].Guard = g.Nodes[i].Effective
 		g.Nodes[i].GuardCompartments = slices.Clone(g.Nodes[i].EffectiveCompartments)
+	}
+	if len(in.Opaque) > 0 {
+		g.Coverage.MarkingsComplete = false
+		for _, id := range in.Opaque {
+			i := index(g.Nodes, id)
+			if i < 0 {
+				continue
+			}
+			g.Nodes[i].Effective = "restricted"
+			g.Nodes[i].Guard = "restricted"
+		}
 	}
 	declassified := map[string][]string{}
 	for _, item := range in.Pipelines {

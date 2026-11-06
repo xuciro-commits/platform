@@ -1,7 +1,9 @@
 package host
 
 import (
+	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,6 +66,7 @@ type LineageRequest struct {
 	Project   string
 	Focus     string
 	Ref       string
+	Branch    string
 	Direction string
 	Depth     int
 	NodeLimit int
@@ -72,21 +75,115 @@ type LineageRequest struct {
 	Field     string
 }
 
+type lineageSnapshot struct {
+	generation uint64
+	raw        lineage.Input
+	base       map[string]lineage.Meta
+	preview    lineage.Graph
+	guard      lineage.Graph
+	builtAt    time.Time
+}
+
 func (t *Tenant) lineage(m platform.Member, request LineageRequest) (Lineage, *kernel.Error) {
+	return recordRead(t, context.Background(), func() (Lineage, *kernel.Error) {
+		return t.lineageLocked(m, request)
+	})
+}
+
+func (t *Tenant) lineageLocked(m platform.Member, request LineageRequest) (Lineage, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return Lineage{}, err
 	}
 	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
 		return Lineage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	t.records.Lock()
-	raw := t.lineageRecordsLocked(t.records)
-	meta, visible := t.lineageMetaLocked(m, raw)
-	focus, refusal := t.lineageFocusLocked(request)
-	generation := t.records.Generation()
-	t.records.Unlock()
-	if refusal != nil {
-		return Lineage{}, refusal
+	now := time.Now()
+	var raw lineage.Input
+	var base map[string]lineage.Meta
+	var meta map[string]lineage.Meta
+	var visible map[string]bool
+	var focus string
+	var refusal *kernel.Error
+	var preview, guard lineage.Graph
+	var generation uint64
+	var builtAt time.Time
+	if request.Branch != "" {
+		mainGeneration := t.records.Generation()
+		branch, branchRefusal := t.readBranchLocked(m, request.Branch, now)
+		if branchRefusal != nil {
+			return Lineage{}, branchRefusal
+		}
+		cacheKey := request.Branch + ":" + strconv.FormatUint(mainGeneration, 10) + ":" + strconv.FormatUint(uint64(branch.Revision), 10)
+		t.lineageMu.Lock()
+		world, cachedWorld := t.lineageWorlds[cacheKey]
+		t.lineageMu.Unlock()
+		if !cachedWorld {
+			built, refusal := t.branchWorldLocked(m, request.Branch, now)
+			if refusal != nil {
+				return Lineage{}, refusal
+			}
+			world = &built
+			t.lineageMu.Lock()
+			if t.lineageWorlds == nil {
+				t.lineageWorlds = map[string]*branchWorld{}
+			}
+			if len(t.lineageWorlds) >= 8 {
+				clear(t.lineageWorlds)
+			}
+			t.lineageWorlds[cacheKey] = world
+			t.lineageMu.Unlock()
+		}
+		branchStore := world.view.records
+		generation = mainGeneration
+		t.lineageMu.Lock()
+		cachedGraph := t.lineageBranches[cacheKey]
+		t.lineageMu.Unlock()
+		if cachedGraph != nil {
+			raw, base, preview, guard = cachedGraph.raw, cachedGraph.base, cachedGraph.preview.Clone(), cachedGraph.guard.Clone()
+			builtAt = cachedGraph.builtAt
+			branchStore.Lock()
+			meta, visible = world.view.lineageAccessLocked(branchStore, m, base)
+			focus, refusal = world.view.lineageFocusLocked(branchStore, request)
+			branchStore.Unlock()
+		} else {
+			branchStore.Lock()
+			raw = world.view.lineageRecordsLocked(branchStore)
+			base = world.view.lineageBaseMetaLocked(branchStore, raw)
+			meta, visible = world.view.lineageAccessLocked(branchStore, m, base)
+			focus, refusal = world.view.lineageFocusLocked(branchStore, request)
+			branchStore.Unlock()
+			if refusal == nil {
+				raw.Meta = base
+				preview = lineage.Build(raw, lineage.Preview)
+				guard = t.lineageMainSnapshot().guard.Clone()
+				builtAt = now
+				t.lineageMu.Lock()
+				if t.lineageBranches == nil {
+					t.lineageBranches = map[string]*lineageSnapshot{}
+				}
+				if len(t.lineageBranches) >= 8 {
+					clear(t.lineageBranches)
+				}
+				t.lineageBranches[cacheKey] = &lineageSnapshot{generation: mainGeneration, raw: raw, base: base, preview: preview.Clone(), guard: guard.Clone(), builtAt: builtAt}
+				t.lineageMu.Unlock()
+			}
+		}
+		if refusal != nil {
+			return Lineage{}, refusal
+		}
+	} else {
+		t.records.Lock()
+		focus, refusal = t.lineageFocusLocked(t.records, request)
+		t.records.Unlock()
+		if refusal != nil {
+			return Lineage{}, refusal
+		}
+		snapshot := t.lineageMainSnapshot()
+		raw, base, preview, guard = snapshot.raw, snapshot.base, snapshot.preview.Clone(), snapshot.guard.Clone()
+		generation, builtAt = snapshot.generation, snapshot.builtAt
+		t.records.Lock()
+		meta, visible = t.lineageAccessLocked(t.records, m, base)
+		t.records.Unlock()
 	}
 	if request.Mode == "" {
 		if focus != "" || request.Ref != "" {
@@ -110,10 +207,8 @@ func (t *Tenant) lineage(m platform.Member, request LineageRequest) (Lineage, *k
 	if request.Depth < 1 || request.Depth > 3 {
 		return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "depth is 1 to 3")
 	}
-	previewInput := raw
-	previewInput.Meta = meta
-	preview := lineage.Build(previewInput, lineage.Preview)
-	guard := lineage.Build(t.lineageGuard(raw), lineage.Guard)
+	raw.Meta = base
+	preview = lineage.ApplyAccess(preview, meta)
 	guardNodes := map[string]lineage.Node{}
 	for _, node := range guard.Nodes {
 		guardNodes[node.ID] = node
@@ -124,6 +219,9 @@ func (t *Tenant) lineage(m platform.Member, request LineageRequest) (Lineage, *k
 			preview.Nodes[i].Guard = preview.Nodes[i].Effective
 			preview.Nodes[i].GuardCompartments = slices.Clone(preview.Nodes[i].EffectiveCompartments)
 			preview.Nodes[i].MarkingStatus = "unknown"
+			if request.Branch != "" {
+				preview.Nodes[i].MarkingStatus = "preview-only"
+			}
 			continue
 		}
 		preview.Nodes[i].Guard = value.Guard
@@ -173,8 +271,8 @@ func (t *Tenant) lineage(m platform.Member, request LineageRequest) (Lineage, *k
 		Nodes:       responseNodes(preview.Nodes),
 		Edges:       responseEdges(preview.Edges),
 		Groups:      responseGroups(preview.Groups),
-		Scope:       LineageScope{Mode: request.Mode, Project: request.Project, Focus: focus, Direction: request.Direction, Depth: request.Depth},
-		Basis:       LineageBasis{Generation: generation, Preview: "saved definitions", Guard: "accepted definitions", BuiltAt: time.Now().UTC().Format(time.RFC3339)},
+		Scope:       LineageScope{Mode: request.Mode, Project: request.Project, Focus: focus, Direction: request.Direction, Depth: request.Depth, Branch: request.Branch},
+		Basis:       LineageBasis{Generation: generation, Preview: lineagePreviewBasis(request.Branch), Guard: "main · accepted definitions", BuiltAt: builtAt.UTC().Format(time.RFC3339)},
 		Total:       LineageTotal(preview.Total),
 		Returned:    LineageTotal(preview.Returned),
 		Truncated:   preview.Truncated,
@@ -188,6 +286,43 @@ func (t *Tenant) lineage(m platform.Member, request LineageRequest) (Lineage, *k
 	}, nil
 }
 
+func (t *Tenant) lineageMainSnapshot() lineageSnapshot {
+	generation := t.records.Generation()
+	t.lineageMu.Lock()
+	cached := t.lineageCache
+	t.lineageMu.Unlock()
+	if cached != nil && cached.generation == generation {
+		return *cached
+	}
+	t.records.Lock()
+	raw := t.lineageRecordsLocked(t.records)
+	base := t.lineageBaseMetaLocked(t.records, raw)
+	generation = t.records.Generation()
+	t.records.Unlock()
+	raw.Meta = base
+	snapshot := lineageSnapshot{
+		generation: generation,
+		raw:        raw,
+		base:       base,
+		preview:    lineage.Build(raw, lineage.Preview),
+		guard:      lineage.Build(t.lineageGuard(raw), lineage.Guard),
+		builtAt:    time.Now().UTC(),
+	}
+	t.lineageMu.Lock()
+	if t.lineageCache == nil || t.lineageCache.generation <= generation {
+		t.lineageCache = &snapshot
+	}
+	t.lineageMu.Unlock()
+	return snapshot
+}
+
+func lineagePreviewBasis(branch string) string {
+	if branch != "" {
+		return "branch " + branch + " · saved definitions"
+	}
+	return "main · saved definitions"
+}
+
 func (t *Tenant) lineageRecordsLocked(store *records.Store) lineage.Input {
 	return lineage.Input{
 		Connections: storeRows[dataowner.Connection](store, dataowner.ConnectionType),
@@ -199,10 +334,9 @@ func (t *Tenant) lineageRecordsLocked(store *records.Store) lineage.Input {
 	}
 }
 
-func (t *Tenant) lineageMetaLocked(m platform.Member, raw lineage.Input) (map[string]lineage.Meta, map[string]bool) {
+func (t *Tenant) lineageBaseMetaLocked(store *records.Store, raw lineage.Input) map[string]lineage.Meta {
 	meta := map[string]lineage.Meta{}
-	visible := map[string]bool{}
-	resources := storeRows[build.Resource](t.records, build.ResourceType)
+	resources := storeRows[build.Resource](store, build.ResourceType)
 	projectRID := map[string]string{}
 	for _, row := range resources {
 		if row.Ref.Kind == platform.AssetApp {
@@ -215,33 +349,46 @@ func (t *Tenant) lineageMetaLocked(m platform.Member, raw lineage.Input) (map[st
 		if node == "" {
 			continue
 		}
-		role := t.resourceRole(m, row.Project)
 		project := row.Project
 		if rid, ok := projectRID[project]; ok {
 			project = rid
 		}
-		entry := lineage.Meta{RID: row.ID, Project: project, CanOpen: role != "" && role != platform.ProjectDiscovererRole, CanRead: role != "" && role != platform.ProjectDiscovererRole, Visible: role != ""}
-		meta[node], visible[node] = entry, entry.Visible
+		meta[node] = lineage.Meta{RID: row.ID, Project: project, ProjectName: row.Project, CanOpen: true, CanRead: true, Visible: true}
 	}
 	for _, node := range lineage.NodeIDs(raw) {
 		if _, ok := meta[node]; ok {
 			continue
 		}
-		typ, id := lineageNodeType(node)
-		if typ == "" {
-			continue
+		meta[node] = lineage.Meta{CanOpen: true, CanRead: true, Visible: true}
+	}
+	return meta
+}
+
+func (t *Tenant) lineageAccessLocked(store *records.Store, m platform.Member, base map[string]lineage.Meta) (map[string]lineage.Meta, map[string]bool) {
+	meta := make(map[string]lineage.Meta, len(base))
+	visible := map[string]bool{}
+	for node, entry := range base {
+		allowed := true
+		if entry.RID != "" || entry.Project != "" {
+			project := entry.ProjectName
+			if project == "" {
+				project = entry.Project
+			}
+			role := t.resourceRole(m, project)
+			allowed = role != "" && role != platform.ProjectDiscovererRole
+		} else if projectDelegated(m) {
+			typ, id := lineageNodeType(node)
+			if typ != "" && typ != build.ObjectType {
+				allowed, _ = t.resourcePermission(store, m, typ, id, "read", true)
+			}
 		}
-		allowed := !projectDelegated(m)
-		if typ != build.ObjectType {
-			allowed, _ = t.resourcePermission(t.records, m, typ, id, "read", true)
-		}
-		entry := lineage.Meta{CanOpen: allowed, CanRead: allowed, Visible: allowed}
+		entry.CanOpen, entry.CanRead, entry.Visible = allowed, allowed, allowed
 		meta[node], visible[node] = entry, allowed
 	}
 	return meta, visible
 }
 
-func (t *Tenant) lineageFocusLocked(request LineageRequest) (string, *kernel.Error) {
+func (t *Tenant) lineageFocusLocked(store *records.Store, request LineageRequest) (string, *kernel.Error) {
 	value := strings.TrimSpace(request.Focus)
 	if value == "" {
 		value = strings.TrimSpace(request.Ref)
@@ -252,7 +399,7 @@ func (t *Tenant) lineageFocusLocked(request LineageRequest) (string, *kernel.Err
 	if strings.Contains(value, ":") {
 		return value, nil
 	}
-	for _, row := range storeRows[build.Resource](t.records, build.ResourceType) {
+	for _, row := range storeRows[build.Resource](store, build.ResourceType) {
 		if row.ID == value || row.Ref.App+"/"+string(row.Ref.Kind)+"/"+row.Ref.Name == value {
 			return lineageNodeID(row), nil
 		}
@@ -260,7 +407,7 @@ func (t *Tenant) lineageFocusLocked(request LineageRequest) (string, *kernel.Err
 	if strings.Contains(value, "/") {
 		parts := strings.Split(value, "/")
 		if len(parts) == 3 {
-			for _, row := range storeRows[build.Resource](t.records, build.ResourceType) {
+			for _, row := range storeRows[build.Resource](store, build.ResourceType) {
 				if row.Ref.App == parts[0] && string(row.Ref.Kind) == parts[1] && row.Ref.Name == parts[2] {
 					return lineageNodeID(row), nil
 				}
@@ -275,26 +422,36 @@ func (t *Tenant) lineageGuard(input lineage.Input) lineage.Input {
 	for i, item := range input.Connections {
 		if fixed, err := owner.ConnectionConfiguration(item); err == nil {
 			input.Connections[i] = fixed
+		} else {
+			input.Opaque = append(input.Opaque, "connection:"+item.ID)
 		}
 	}
 	for i, item := range input.Sources {
 		if fixed, err := owner.ExecutionSource(item); err == nil {
 			input.Sources[i] = fixed
+		} else {
+			input.Opaque = append(input.Opaque, "source:"+item.ID)
 		}
 	}
 	for i, item := range input.Datasets {
 		if fixed, err := owner.ExecutionDataset(item); err == nil {
 			input.Datasets[i] = fixed
+		} else {
+			input.Opaque = append(input.Opaque, "dataset:"+item.ID)
 		}
 	}
 	for i, item := range input.Pipelines {
 		if fixed, err := owner.ExecutionPipeline(item); err == nil {
 			input.Pipelines[i] = fixed
+		} else {
+			input.Opaque = append(input.Opaque, "pipeline:"+item.ID)
 		}
 	}
 	for i, item := range input.Writebacks {
 		if fixed, err := owner.ExecutionWriteback(item); err == nil {
 			input.Writebacks[i] = fixed
+		} else {
+			input.Opaque = append(input.Opaque, "writeback:"+item.ID)
 		}
 	}
 	for i, item := range input.Objects {
@@ -302,6 +459,8 @@ func (t *Tenant) lineageGuard(input lineage.Input) lineage.Input {
 			fixed.Record = item.Record
 			fixed.Archived = item.Archived
 			input.Objects[i] = fixed
+		} else if item.Published != "" {
+			input.Opaque = append(input.Opaque, "object:"+lineageObjectType(item.Name))
 		}
 	}
 	input.Evidence = lineageEvidence(input)

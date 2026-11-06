@@ -2,8 +2,10 @@ package host
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -234,4 +236,138 @@ func TestInvariantK12LineageGuardNeverFallsBelowWriteEvidence(t *testing.T) {
 		}
 	}
 	t.Fatal("object node is missing")
+}
+
+func TestInvariantK12LineageGuardFailsClosedWhenAcceptedDefinitionIsUnreadable(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k12-unreadable")
+	guard := live.lineageGuard(lineage.Input{
+		Objects: []build.Object{{Name: "alpha", Title: "Alpha", Published: "{"}},
+	})
+	graph := lineage.Build(guard, lineage.Guard)
+	if graph.Coverage.MarkingsComplete {
+		t.Fatal("an unreadable accepted definition must make marking coverage incomplete")
+	}
+	for _, node := range graph.Nodes {
+		if node.ID == "object:build.alpha" {
+			if node.Guard != "restricted" {
+				t.Fatalf("unreadable accepted definition did not fail closed: %+v", node)
+			}
+			return
+		}
+	}
+	t.Fatal("object node is missing")
+}
+
+func TestInvariantK12LineageBranchReadsStagedDefinitionsWithoutChangingMain(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k12-branch")
+	live.accept(t, "build.object.create", build.ObjectType, "OBJ", invariantObject("alpha", "Alpha"))
+	branch, refusal := live.CreateBranch(live.member(t), BranchCreateRequest{Name: "lineage", Title: "Lineage"}, invariantClock)
+	if refusal != nil {
+		t.Fatalf("create branch: %+v", refusal)
+	}
+	changed := invariantObject("alpha", "Alpha branch")
+	changed["fields"] = append(changed["fields"].([]build.Field), build.Field{Name: "detail", Title: "Detail", Type: "text"})
+	if _, refusal = live.SaveBranchResource(live.member(t), branch.ID, build.ObjectType, "OBJ", BranchSaveRequest{Spec: platform.Raw(changed)}, invariantClock); refusal != nil {
+		t.Fatalf("save branch object: %+v", refusal)
+	}
+	main, refusal := live.lineage(live.member(t), LineageRequest{Mode: "focus", Focus: "object:build.alpha"})
+	if refusal != nil {
+		t.Fatalf("main lineage: %+v", refusal)
+	}
+	branched, refusal := live.lineage(live.member(t), LineageRequest{Mode: "focus", Branch: branch.ID, Focus: "object:build.alpha"})
+	if refusal != nil {
+		t.Fatalf("branch lineage: %+v", refusal)
+	}
+	if node, ok := lineageNode(main, "object:build.alpha"); !ok || node.Title != "Alpha" {
+		t.Fatalf("main lineage changed by branch save: %+v", node)
+	}
+	node, ok := lineageNode(branched, "object:build.alpha")
+	if !ok || node.Title != "Alpha branch" || branched.Scope.Branch != branch.ID {
+		t.Fatalf("branch lineage did not read staged definitions: %+v scope=%+v", node, branched.Scope)
+	}
+}
+
+func TestInvariantK12LineageBuildsThousandResourcesWithoutSilentLoss(t *testing.T) {
+	input := lineage.Input{}
+	for i := 0; i < 1200; i++ {
+		input.Datasets = append(input.Datasets, dataowner.Dataset{
+			Record: platform.Record{ID: "DS" + strconv.Itoa(i)},
+			Name:   "dataset" + strconv.Itoa(i),
+			Title:  "Dataset " + strconv.Itoa(i),
+			Schema: []dataowner.DatasetField{{Name: "id", Type: "text"}},
+		})
+	}
+	start := time.Now()
+	graph := lineage.Build(input, lineage.Preview)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("building 1200 resources took %s", elapsed)
+	}
+	if len(graph.Nodes) != 1200 || graph.Total.Nodes != 1200 || graph.Truncated {
+		t.Fatalf("1200 resources were silently lost or truncated: nodes=%d total=%+v truncated=%v", len(graph.Nodes), graph.Total, graph.Truncated)
+	}
+}
+
+func TestInvariantK12LineageFieldDerivationAndWriteback(t *testing.T) {
+	input := lineage.Input{
+		Connections: []dataowner.Connection{{Record: platform.Record{ID: "C"}, Name: "conn", Title: "Connection"}},
+		Datasets: []dataowner.Dataset{
+			{Record: platform.Record{ID: "IN"}, Name: "input", Title: "Input", Schema: []dataowner.DatasetField{{Name: "note", Type: "text"}, {Name: "key", Type: "text"}}},
+			{Record: platform.Record{ID: "LOOK"}, Name: "lookup", Title: "Lookup", Schema: []dataowner.DatasetField{{Name: "value", Type: "text"}, {Name: "other", Type: "text"}, {Name: "key", Type: "text"}}},
+			{Record: platform.Record{ID: "OUT"}, Name: "output", Title: "Output", Schema: []dataowner.DatasetField{{Name: "label", Type: "text"}, {Name: "value", Type: "text"}}},
+			{Record: platform.Record{ID: "JOINED"}, Name: "joined", Title: "Joined", Schema: []dataowner.DatasetField{{Name: "value", Type: "text"}}},
+		},
+		Pipelines: []dataowner.Pipeline{
+			{Record: platform.Record{ID: "COMPUTE"}, Name: "compute", Title: "Compute", Input: "IN", OutputDataset: "OUT",
+				Steps: []platform.TransformStep{{Kind: "compute", To: "label", FormulaExpr: &platform.Expr{Kind: "text", Ref: "note"}}}},
+			{Record: platform.Record{ID: "LOOKUP"}, Name: "lookup", Title: "Lookup", Input: "IN", OutputDataset: "OUT",
+				Steps: []platform.TransformStep{{Kind: "lookup", Dataset: "LOOK", Columns: []string{"value"}, Column: "key", Match: "key"}}},
+			{Record: platform.Record{ID: "JOIN"}, Name: "join", Title: "Join", Input: "IN", OutputDataset: "JOINED",
+				Steps: []platform.TransformStep{{Kind: "join", Dataset: "LOOK"}}},
+		},
+		Objects: []build.Object{{
+			Record: platform.Record{ID: "OBJ"}, Name: "alpha", Title: "Alpha",
+			Fields: []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "manual", Title: "Manual", Type: "text"}},
+		}},
+		Writebacks: []dataowner.Writeback{{
+			Record: platform.Record{ID: "WB"}, Name: "write", Title: "Write", Connection: "C", Object: "alpha",
+			Mapping: []dataowner.SourceField{{From: "note", To: "body"}},
+			Result:  []dataowner.SourceField{{From: "status", To: "note"}},
+		}},
+	}
+	graph := lineage.Build(input, lineage.Preview)
+	fields, edges := lineage.Fields(graph, input)
+	find := func(id string) (lineage.FieldNode, bool) {
+		for _, field := range fields {
+			if field.ID == id {
+				return field, true
+			}
+		}
+		return lineage.FieldNode{}, false
+	}
+	hasEdge := func(from, to, operation string) bool {
+		for _, edge := range edges {
+			if edge.From == from && edge.To == to && edge.Operation == operation {
+				return true
+			}
+		}
+		return false
+	}
+	if field, ok := find("pipeline:COMPUTE#label"); !ok || field.Certainty != "derived" {
+		t.Fatalf("FormulaExpr field was not derived: %+v", field)
+	}
+	if !hasEdge("dataset:IN#note", "pipeline:COMPUTE#label", "compute") {
+		t.Fatalf("FormulaExpr did not trace the source field: %+v", edges)
+	}
+	if !hasEdge("dataset:LOOK#value", "pipeline:LOOKUP#value", "lookup") || hasEdge("dataset:LOOK#other", "pipeline:LOOKUP#other", "lookup") {
+		t.Fatalf("lookup traced fields it did not declare: %+v", edges)
+	}
+	if !hasEdge("dataset:IN#key", "pipeline:LOOKUP#key", "key") || !hasEdge("dataset:LOOK#key", "pipeline:LOOKUP#key", "key") {
+		t.Fatalf("lookup keys were not traced: %+v", edges)
+	}
+	if field, ok := find("pipeline:JOIN#other"); !ok || field.Certainty != "derived" {
+		t.Fatalf("join did not derive its unlisted fields: %+v", field)
+	}
+	if !hasEdge("object:build.alpha#note", "writeback:WB#body", "request") || !hasEdge("writeback:WB#status", "object:build.alpha#note", "result") {
+		t.Fatalf("writeback request/result fields were not traced: %+v", edges)
+	}
 }

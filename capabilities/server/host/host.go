@@ -80,6 +80,10 @@ type Tenant struct {
 	streamMu              sync.Mutex
 	markingMu             sync.Mutex
 	markings              markingIndex
+	lineageMu             sync.Mutex
+	lineageCache          *lineageSnapshot
+	lineageBranches       map[string]*lineageSnapshot
+	lineageWorlds         map[string]*branchWorld
 	fault                 atomic.Pointer[tenantFault]
 	apps                  []platform.App
 	appIndex              map[string]int

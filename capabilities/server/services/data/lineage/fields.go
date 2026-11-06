@@ -149,12 +149,18 @@ func Fields(g Graph, in Input) ([]FieldNode, []FieldEdge) {
 					continue
 				}
 				state := fieldState{certainty: "derived"}
-				if used, err := platform.FormulaFields(step.Formula); err == nil {
-					for name := range used {
-						if value, ok := current[name]; ok {
-							state.sources = append(state.sources, value.sources...)
-							state.certainty = mergeCertainty(state.certainty, value.certainty)
-						}
+				used := map[string]bool{}
+				if step.FormulaExpr != nil {
+					for _, ref := range platform.ConditionRefs(*step.FormulaExpr) {
+						used[fieldRef(ref)] = true
+					}
+				} else if fields, err := platform.FormulaFields(step.Formula); err == nil {
+					used = fields
+				}
+				for name := range used {
+					if value, ok := current[name]; ok {
+						state.sources = append(state.sources, value.sources...)
+						state.certainty = mergeCertainty(state.certainty, value.certainty)
 					}
 				}
 				slices.Sort(state.sources)
@@ -167,7 +173,12 @@ func Fields(g Graph, in Input) ([]FieldNode, []FieldEdge) {
 					continue
 				}
 				columns := step.Columns
+				certainty := "declared"
 				if len(columns) == 0 {
+					if step.Kind == "lookup" {
+						continue
+					}
+					certainty = "derived"
 					for _, field := range right.Schema {
 						columns = append(columns, field.Name)
 					}
@@ -177,9 +188,19 @@ func Fields(g Graph, in Input) ([]FieldNode, []FieldEdge) {
 					if step.As != "" {
 						target = step.As + "." + column
 					}
-					state := fieldState{sources: []string{fieldNode("dataset:"+right.ID, column)}, certainty: "declared"}
+					state := fieldState{sources: []string{fieldNode("dataset:"+right.ID, column)}, certainty: certainty}
 					next[target] = state
 					produce(addNode, addEdge, pipeline, pipelineNode, target, target, state, step.Kind, stepIndex, occurrence)
+				}
+				if step.Column != "" {
+					from := addNode("dataset:"+pipeline.Input, "dataset", pipeline.Input, step.Column, step.Column, "unverified")
+					to := addNode(pipelineNode, "pipeline", pipeline.ID, step.Column, step.Column, "declared")
+					addEdge(from, to, "key", stepIndex+1, 0, "declared")
+				}
+				if step.Match != "" {
+					from := addNode("dataset:"+right.ID, "dataset", right.ID, step.Match, step.Match, "unverified")
+					to := addNode(pipelineNode, "pipeline", pipeline.ID, step.Column, step.Column, "declared")
+					addEdge(from, to, "key", stepIndex+1, 0, "declared")
 				}
 			case "aggregate":
 				aggregated := map[string]fieldState{}
@@ -294,6 +315,13 @@ func cloneFields(in map[string]fieldState) map[string]fieldState {
 
 func fieldNode(node, name string) string {
 	return node + "#" + name
+}
+
+func fieldRef(ref string) string {
+	if _, name, ok := strings.Cut(ref, "."); ok {
+		return name
+	}
+	return ref
 }
 
 func mergeCertainty(a, b string) string {

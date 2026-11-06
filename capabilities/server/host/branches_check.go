@@ -244,6 +244,7 @@ type branchWorld struct {
 	stage   branchStage
 	actions []branchAction
 	view    *Tenant
+	branch  build.Branch
 }
 
 func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) (branchWorld, *kernel.Error) {
@@ -274,7 +275,7 @@ func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) 
 	if err != nil {
 		return world, branchRefuse("{reason}", err.Error())
 	}
-	return branchWorld{stage: stage, actions: actions, view: view}, nil
+	return branchWorld{stage: stage, actions: actions, view: view, branch: branch}, nil
 }
 
 func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions []branchAction, now time.Time) (BranchGraphCheck, *stagedCandidate) {
