@@ -10,6 +10,7 @@ A batch is one thin, usable slice across layers. It ends committed and pushed, w
 ## 1 Choose
 
 - Read `docs/roadmap.md`. Take the item under "当前批次" unless the owner named another; when it is empty, the owner picks the next one. The owner sets direction, not order; ask only about decisions with a lasting cost.
+- If the latest `verify` run on main failed (`gh run list -w verify -b main -L 1`), the batch is that fix.
 - Confirm the item's owner in `docs/2-product.md`. If there is none, the batch starts by fixing that spec.
 
 ## 2 Read
@@ -31,6 +32,7 @@ A batch is one thin, usable slice across layers. It ends committed and pushed, w
 
 - Delete what the change replaces in the same batch.
 - Fix small, clearly wrong things in passing (a stale line, a missing translation, a dead entry). Anything that needs its own design goes to the roadmap instead.
+- A new Go import outside docs/7-system/README §7.2 is fixed in the code, or the table is changed as a design decision stated in the commit body. Never add a gap entry to make the check pass.
 - Never write code comments. Tests only as kernel invariants or golden-path acceptance (docs/7-system/verification).
 
 ## 5 Verify
@@ -43,5 +45,5 @@ A batch is one thin, usable slice across layers. It ends committed and pushed, w
 
 - In the specs: delete gap entries the batch closed; add gaps it found; change rules it overturned.
 - In the roadmap: delete finished rows, keep "当前批次" truthful, and put newly found unscheduled work under "已知漂移".
-- Commit message: Chinese subject naming the batch, a blank line, a body of what changed and why, then the attribution line. Push to main.
+- Commit message: Chinese subject naming the batch, a blank line, a body of what changed and why, then the attribution line. Push to main. The push starts the `verify` workflow; report its run link, and report a failure as not verified.
 - Report to the owner: what is now true, the screens to walk, and anything not verified (say exactly what was not run).

@@ -71,6 +71,7 @@ contract:
 
 verify:
 	cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"
+	node scripts/check-boundaries.mjs
 	cd capabilities/server && $(GO) test -count=1 -run 'TestInvariant' ./host
 	@mkdir -p .build/contract
 	@cp web/packages/kernel/src/gen/host.ts .build/contract/host.ts

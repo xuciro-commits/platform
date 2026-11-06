@@ -62,6 +62,10 @@ def main():
         code, out = run(["go", "build", "./..."], os.path.join(root, "capabilities/server"), env=env)
         if code:
             problems.append("go build ./... failed:\n" + out[-4000:])
+    if go or "docs/7-system/README.md" in changed or "scripts/check-boundaries.mjs" in changed:
+        code, out = run(["node", "scripts/check-boundaries.mjs"], root, timeout=180)
+        if code:
+            problems.append("package boundaries (docs/7-system/README.md §7.2):\n" + out[-4000:])
 
     packages = sorted({"/".join(f.split("/")[:3]) for f in present
                        if f.startswith(("web/packages/", "web/apps/")) and f.endswith((".ts", ".tsx"))})

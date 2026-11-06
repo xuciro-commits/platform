@@ -22,6 +22,7 @@ read-when: 运行或新增检查、验收用例、钩子；判断一项改动需
 | 改动 | 命令 |
 |---|---|
 | Go | `cd capabilities/server && go build ./... && go vet ./...`；`gofmt -l` 为空 |
+| Go 包边界 | `node scripts/check-boundaries.mjs`：`go list` 的实际导入与 [README §7.2](README.md#72-包结构) 依赖列一致；不符的导入只能是该文件“现存差距”中登记的条目，条目消除后必须删除 |
 | 宿主类型与页面契约 | `make contract` 前后 `kernel/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json` 逐字节一致 |
 | Web | 改动包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 文案 | 新字符串在 `zh-CN` 字典中；动态键取值齐全 |
@@ -34,7 +35,7 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 | 钩子 | 时机 | 作用 |
 |---|---|---|
 | `format.py` | 编辑或写入 `.go` 文件后 | `gofmt -w` 该文件 |
-| `commit-gate.py` | 执行 `git commit` 前 | 对相对 HEAD 的全部改动（含未跟踪文件）：Go 文件 gofmt 与 `go build ./...`；改动的 TS 包 `tsc`；`git diff HEAD --check`。改动的代码命中某规范 `covers` 而该规范未改时，首次拦下并列出规范；内容不变再次提交则放行 |
+| `commit-gate.py` | 执行 `git commit` 前 | 对相对 HEAD 的全部改动（含未跟踪文件）：Go 文件 gofmt 与 `go build ./...`；Go 文件、§7.2 或检查脚本有改动时运行包边界检查；改动的 TS 包 `tsc`；`git diff HEAD --check`。改动的代码命中某规范 `covers` 而该规范未改时，首次拦下并列出规范；内容不变再次提交则放行 |
 
 
 钩子失败时以退出码 2 把原因交回代理；代理修正后重试，不绕过钩子。
@@ -70,6 +71,8 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 ## 7.12 一条命令
 
 `make verify`：静态检查 + 内存宿主内核不变量 + 黄金路径验收；批次结束前运行。
+
+GitHub Actions（`.github/workflows/verify.yml`）在每次推送 main 与每个拉取请求上运行同一条 `make verify`，是“通过”的唯一判定；本机运行只用于更早发现问题。CI 失败时下一批先修复。
 
 ## 7.13 SQL 模式
 

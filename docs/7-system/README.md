@@ -32,11 +32,11 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | 包 | 职责 | 依赖 |
 |---|---|---|
 | `expr` | Expr 的解析、类型检查、求值与 SQL 下推编译；前端经 WASM 复用 | 无 |
-| `kernel` | 提交接收、幂等、修订、接受结果编码、车道、重放与快照；`kernel/store` 拥有 PostgreSQL、文件及内存持久化，`kernel/records` 拥有记录投影与读取计划 | `expr` |
-| `platform` | 应用 SDK：Manifest、Caller、动作目录、Expr 与 ObjectSet 接口、授权接口 | `kernel` |
+| `kernel` | 提交接收、幂等、修订、接受结果编码、车道、重放与快照；`kernel/store` 拥有 PostgreSQL、文件及内存持久化，`kernel/records` 拥有记录投影与读取计划；按 `platform` 契约实现 | `expr`、`platform` |
+| `platform` | 应用 SDK：Manifest、Caller、动作目录、Expr 与 ObjectSet 接口、授权接口；稳定叶层，不依赖实现 | `expr` |
 | `services/resources` | RID、项目、文件夹、资源生命周期、工作状态、分支、提案 | `platform` |
 | `services/ontology` | 本体元数据与类型检查 | `platform`、resources |
-| `services/objects` | 对象投影、编辑事实、索引、ObjectSet 执行 | `platform`、ontology |
+| `services/objects` | 对象投影、编辑事实、索引、ObjectSet 执行 | `expr`、`platform`、ontology |
 | `services/actions` | 动作执行、提交条件、副作用调度 | `platform`、objects、functions |
 | `services/functions` | 函数制品、受控编译、隔离执行 | `platform` |
 | `services/data` | 连接、数据源、观测源、数据集、管道、调度、回写、匹配规则、血缘与标记推导 | `platform`、resources |
@@ -46,8 +46,9 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `services/devops` | 产品、版本、安装、升级 | `platform`、resources |
 | `services/security` | 成员、团队、组织单元、业务角色、标记；授权上下文构造与唯一决定函数 | `platform` |
 | `services/ai` | 模型网关、AIP Logic、智能体运行、AIP Assist | `platform`、functions、actions |
-| `host` | HTTP 路由、身份接入、租户装配、部署、后台调度 | 全部 services |
-| `cmd/*` | 二进制入口 | `host` |
+| `apps/*` | 内置应用的编译部分（R3） | `platform` |
+| `host` | HTTP 路由、身份接入、租户装配、部署、后台调度 | `kernel`、`platform`、`apps/*`、全部 services |
+| `cmd/*` | 二进制入口、契约生成器与受控辅助进程；只做装配 | 全部 |
 
 - 服务之间的调用面在被调服务的 `api.go` 中声明为接口；装配在 `host` 完成。
 - 产品包中的行业逻辑不进入任何 Go 包。
@@ -130,6 +131,17 @@ apps、function、integration 与 automation 的发布步骤已并入各自 owne
 
 ## 现存差距
 
+- 依赖差距：以下导入违反 7.2 的依赖列，由 `scripts/check-boundaries.mjs` 棘轮检查；新增违规或已消除而未删除的条目都会失败。消除一条就删一条。
+- 依赖差距：`kernel` → `services/security/control`。
+- 依赖差距：`services/ai` → `kernel/store`。
+- 依赖差距：`services/apps` → `kernel/systemscope`。
+- 依赖差距：`services/automate` → `services/ontology`。
+- 依赖差距：`services/data` → `services/ontology`、`kernel/store`。
+- 依赖差距：`services/devops` → `services/data`。
+- 依赖差距：`services/functions` → `services/ai/evaluation`、`services/ontology`、`services/resources/publication`。
+- 依赖差距：`services/objects` → `kernel/acceptedformat`、`kernel/records`、`services/apps/pages`、`services/security`。
+- 依赖差距：`services/resources` → `kernel/systemscope`、`services/apps/authoring`、`services/automate/authoring`、`services/data`、`services/functions/authoring`、`services/ontology`。
+- 依赖差距：`services/security` → `kernel/records`。
 - `apps/history` 只声明旧 `core.*` 记录形状，供既有接受结果解码与重放；它没有动作、规则、角色或面向用户的新写入路径。启动恢复只为 SQL 状态中已经存在的旧 core 种子补回对应记录，新租户不会生成这些种子。新产品主数据与会计记录由产品包拥有。
 
 ## 相关
