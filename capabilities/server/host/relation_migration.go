@@ -158,12 +158,16 @@ func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.Ch
 
 func (t *Tenant) ownedRelations(store *records.Store, c platform.Caller, entity string, at time.Time) []platform.RelationLink {
 	store.Lock()
-	defer store.Unlock()
-	out := []platform.RelationLink{}
+	types := []*records.Type{}
 	for _, et := range store.Types() {
 		if !ownedRelationSchema(et.Info()) {
 			continue
 		}
+		types = append(types, et)
+	}
+	store.Unlock()
+	out := []platform.RelationLink{}
+	for _, et := range types {
 		filter := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("boolean", "migration"), platform.ExprLiteralValue("boolean", false)}}
 		if entity != "" {
 			filter = platform.Expr{Op: "and", Kind: "boolean", Args: []platform.Expr{filter, {Op: "or", Kind: "boolean", Args: []platform.Expr{
