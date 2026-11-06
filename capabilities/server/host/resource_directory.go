@@ -1,7 +1,9 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"net/http"
 	"slices"
@@ -10,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
@@ -33,15 +36,54 @@ func (t *Tenant) resourceActionActive(name string) bool {
 		action, _ := owner.Manifest().Actions.Action(name)
 		target = action.Target
 	}
-	if directory := t.records.Type(build.ResourceType); directory != nil {
-		for _, row := range directory.Rows().All() {
-			resource := row.Value.Interface().(build.Resource)
-			if resource.ManagedBy != "" && resource.State == "archived" && (resource.Ref.Name == name || resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == target) {
-				return false
+	names := []string{name}
+	if target != "" && target != name {
+		names = append(names, target)
+	}
+	_, retired := findResource(t.records, []persistence.StateFilter{
+		{Path: []string{"value", "state"}, Values: []string{"archived"}},
+		{Path: []string{"value", "ref", "name"}, Values: names},
+	}, func(resource build.Resource) bool {
+		return resource.ManagedBy != "" && resource.State == "archived" &&
+			(resource.Ref.Name == name || resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == target)
+	})
+	return !retired
+}
+
+func findResource(store *records.Store, filters []persistence.StateFilter, match func(build.Resource) bool) (build.Resource, bool) {
+	resources := store.Type(build.ResourceType)
+	if resources == nil {
+		return build.Resource{}, false
+	}
+	if view := store.Current().View(); view != nil {
+		after := ""
+		for {
+			ids, err := view.StateCandidates(context.Background(), store.Current().Tenant(), build.ResourceType, filters, after, 256, store.Current().Applied())
+			if err != nil {
+				panic(fmt.Errorf("resource candidates: %w", err))
 			}
+			for _, id := range ids {
+				if row := resources.Rows().Get(id); row != nil {
+					resource := row.Value.Interface().(build.Resource)
+					if match(resource) {
+						return resource, true
+					}
+				}
+			}
+			if len(ids) < 256 {
+				break
+			}
+			after = ids[len(ids)-1]
+		}
+		return build.Resource{}, false
+	}
+	for _, row := range resources.Rows().All() {
+		resource := row.Value.Interface().(build.Resource)
+		if match(resource) {
+			return resource, true
 		}
 	}
-	return true
+	return build.Resource{}, false
 }
 
 func projectDelegated(m platform.Member) bool {
@@ -87,14 +129,11 @@ func (t *Tenant) resourcePermission(store *records.Store, m platform.Member, typ
 		return true, false
 	case build.AppType:
 		project = id
-		if directory := store.Type(build.ResourceType); directory != nil {
-			for _, row := range directory.Rows().All() {
-				resource := row.Value.Interface().(build.Resource)
-				if resource.Type == typ && resource.Draft == id {
-					project = resource.Project
-					break
-				}
-			}
+		if resource, ok := findResource(store, []persistence.StateFilter{
+			{Path: []string{"value", "type"}, Values: []string{typ}},
+			{Path: []string{"value", "draft"}, Values: []string{id}},
+		}, func(resource build.Resource) bool { return resource.Type == typ && resource.Draft == id }); ok {
+			project = resource.Project
 		}
 	case build.FolderType:
 		if row := store.Type(typ).Rows().Get(id); row != nil {
@@ -109,13 +148,19 @@ func (t *Tenant) resourcePermission(store *records.Store, m platform.Member, typ
 			return true, false
 		}
 	default:
-		if resources := store.Type(build.ResourceType); resources != nil {
-			for _, row := range resources.Rows().All() {
-				resource := row.Value.Interface().(build.Resource)
-				if resource.Type == typ && resource.Draft == id || !definition && resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == typ {
-					project = resource.Project
-					break
-				}
+		if resource, ok := findResource(store, []persistence.StateFilter{
+			{Path: []string{"value", "type"}, Values: []string{typ}},
+			{Path: []string{"value", "draft"}, Values: []string{id}},
+		}, func(resource build.Resource) bool { return resource.Type == typ && resource.Draft == id }); ok {
+			project = resource.Project
+		} else if !definition {
+			if resource, ok := findResource(store, []persistence.StateFilter{
+				{Path: []string{"value", "ref", "kind"}, Values: []string{string(platform.AssetObject)}},
+				{Path: []string{"value", "ref", "name"}, Values: []string{typ}},
+			}, func(resource build.Resource) bool {
+				return resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == typ
+			}); ok {
+				project = resource.Project
 			}
 		}
 	}

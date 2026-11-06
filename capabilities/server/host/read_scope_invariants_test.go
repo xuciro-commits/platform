@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"testing"
 
@@ -14,6 +15,9 @@ import (
 type sqlShapedReads struct {
 	opened     int
 	candidates []string
+	filters    [][]persistence.StateFilter
+	current    int
+	allIDs     []string
 }
 
 type sqlShapedState struct{ reads *sqlShapedReads }
@@ -51,14 +55,19 @@ func (sqlShapedView) Checkpoint(context.Context, string) (persistence.StateDiges
 }
 func (sqlShapedView) Position() int64 { return 0 }
 func (sqlShapedView) Close() error    { return nil }
-func (sqlShapedView) StateCurrent(context.Context, string, string, string) (persistence.StateCurrent, error) {
+func (v sqlShapedView) StateCurrent(context.Context, string, string, string) (persistence.StateCurrent, error) {
+	v.reads.current++
 	return persistence.StateCurrent{}, nil
 }
 func (sqlShapedView) StateRecord(context.Context, string, string, string) (json.RawMessage, error) {
 	return nil, nil
 }
-func (v sqlShapedView) StateCandidates(_ context.Context, _, typ string, _ []persistence.StateFilter, _ string, _ int, _ int64) ([]string, error) {
+func (v sqlShapedView) StateCandidates(_ context.Context, _, typ string, filters []persistence.StateFilter, _ string, _ int, _ int64) ([]string, error) {
 	v.reads.candidates = append(v.reads.candidates, typ)
+	v.reads.filters = append(v.reads.filters, filters)
+	if len(filters) == 0 {
+		return v.reads.allIDs, nil
+	}
 	return nil, nil
 }
 func (sqlShapedView) StateHistory(context.Context, string, string, string, int, int) ([]json.RawMessage, error) {
@@ -98,7 +107,11 @@ func TestInvariantBuilderWorkingDraftsAuthorizeInsideTheReadScope(t *testing.T) 
 
 func TestInvariantAuthorizationOutsideTheReadScopeReadsTheResourceDirectory(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-authorize-read-scope")
-	reads := &sqlShapedReads{}
+	allIDs := make([]string, 500)
+	for i := range allIDs {
+		allIDs[i] = fmt.Sprintf("resource-%03d", i)
+	}
+	reads := &sqlShapedReads{allIDs: allIDs}
 	withSQLShapedReads(t, live, reads)
 	c := platform.NewCaller(runtime{live.Tenant}, live.member(t), build.ID, false, false)
 	if decision := live.authorizeNative(c, "GET /v1/releases/drafts/working", "read", []string{build.Builder}, true); !decision.Allow {
@@ -109,6 +122,14 @@ func TestInvariantAuthorizationOutsideTheReadScopeReadsTheResourceDirectory(t *t
 	}
 	if !slices.Contains(reads.candidates, build.ResourceType) {
 		t.Fatalf("the authorization did not read %s inside the read scope; read %v", build.ResourceType, reads.candidates)
+	}
+	for i, typ := range reads.candidates {
+		if typ == build.ResourceType && len(reads.filters[i]) == 0 {
+			t.Fatal("the authorization scanned the entire resource directory instead of asking for retired candidates")
+		}
+	}
+	if reads.current != 0 {
+		t.Fatalf("the authorization read %d resource rows without a matching retired candidate", reads.current)
 	}
 }
 
