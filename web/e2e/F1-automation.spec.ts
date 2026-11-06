@@ -54,4 +54,23 @@ test("F1 a builder creates a notification automation, runs it on an object and p
   expect(process.record.paused).toBeFalsy();
   expect(process.record.version).toBe(1);
   await api.submit("build.process", processID, "pause", {});
+  const foldFlow = unique("FOLDFLOW");
+  await api.submit("build.process", foldFlow, "create", {
+    name: unique("foldflow"), title: "Fold flow", kind: "flow", manual: true, project,
+    inputSchema: { type: "object", properties: {} },
+    steps: [{ name: "start", title: "Start", kind: "payload", next: "done" }, { name: "done", title: "Return", kind: "end" }],
+  });
+  const resources = await api.read<Api.ResourceDirectory>("/v1/resources");
+  const flowResource = resources.resources.find(resource => resource.draft === foldFlow && resource.ref.kind === "flow");
+  expect(flowResource).toBeTruthy();
+  const flowPage = await page.context().newPage();
+  await flowPage.addInitScript(token => sessionStorage.setItem("workspace:identity", token), "admin");
+  await flowPage.goto(`/#/flow/${flowResource!.id}?application=${project}`);
+  const flowMap = flowPage.getByRole("region", { name: "Flow map" });
+  const flowNodes = flowMap.locator(".react-flow__node");
+  await expect(flowNodes).toHaveCount(2);
+  await expect(flowNodes.first().getByRole("button", { name: "Collapse node details" })).toBeVisible();
+  await flowNodes.first().getByRole("button", { name: "Collapse node details" }).click();
+  await expect(flowNodes.first().getByRole("button", { name: "Expand node details" })).toBeVisible();
+  await expect(flowNodes.nth(1).getByRole("button", { name: "Collapse node details" })).toBeVisible();
 });
