@@ -40,6 +40,17 @@ def covers(path):
     return []
 
 
+def fingerprint(root, changed):
+    state = hashlib.sha256()
+    for name in sorted(changed):
+        path = os.path.join(root, name)
+        state.update(name.encode() + b"\0")
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                state.update(hashlib.sha256(f.read()).digest())
+    return state.hexdigest()
+
+
 def main():
     command = json.load(sys.stdin).get("tool_input", {}).get("command", "")
     if not re.search(r"\bgit\s+commit\b", command):
@@ -50,38 +61,17 @@ def main():
     tracked = run(["git", "diff", "--name-only", "HEAD"], root)[1].splitlines()
     untracked = run(["git", "ls-files", "--others", "--exclude-standard"], root)[1].splitlines()
     changed = {f for f in tracked + untracked if f}
-    present = sorted(f for f in changed if os.path.isfile(os.path.join(root, f)))
-    problems = []
-
-    go = [f for f in present if f.endswith(".go")]
-    if go:
-        out = run(["gofmt", "-l", *go], root)[1]
-        if out:
-            problems.append("gofmt would change:\n" + out)
+    digest = fingerprint(root, changed)
+    gated = [f for f in changed if not f.startswith("docs/") or f == "docs/7-system/README.md"]
+    passed = os.path.join(root, ".git", "claude-check-pass")
+    if gated and not (os.path.isfile(passed) and open(passed).read() == digest):
         env = dict(os.environ, GOPROXY="https://goproxy.cn,direct")
-        code, out = run(["go", "build", "./..."], os.path.join(root, "capabilities/server"), env=env)
+        code, out = run(["make", "check"], root, timeout=300, env=env)
         if code:
-            problems.append("go build ./... failed:\n" + out[-4000:])
-    if go or "docs/7-system/README.md" in changed or "scripts/check-boundaries.mjs" in changed:
-        code, out = run(["node", "scripts/check-boundaries.mjs"], root, timeout=180)
-        if code:
-            problems.append("package boundaries (docs/7-system/README.md §7.2):\n" + out[-4000:])
-
-    packages = sorted({"/".join(f.split("/")[:3]) for f in present
-                       if f.startswith(("web/packages/", "web/apps/")) and f.endswith((".ts", ".tsx"))})
-    for pkg in packages:
-        if os.path.isfile(os.path.join(root, pkg, "tsconfig.json")):
-            code, out = run(["pnpm", "exec", "tsc", "-p", "."], os.path.join(root, pkg))
-            if code:
-                problems.append(f"tsc in {pkg} failed:\n" + out[-4000:])
-
-    out = run(["git", "diff", "HEAD", "--check"], root)[1]
-    if out:
-        problems.append("git diff --check:\n" + out)
-
-    if problems:
-        print("\n\n".join(problems), file=sys.stderr)
-        return 2
+            print("make check failed:\n" + out[-6000:], file=sys.stderr)
+            return 2
+        with open(passed, "w") as f:
+            f.write(digest)
 
     code_changed = [f for f in changed if not f.startswith("docs/")]
     stale = []
@@ -95,14 +85,6 @@ def main():
             stale.append(f"{name}: " + ", ".join(hits[:6]) + (" …" if len(hits) > 6 else ""))
     if not stale:
         return 0
-    state = hashlib.sha256()
-    for name in sorted(changed):
-        path = os.path.join(root, name)
-        state.update(name.encode() + b"\0")
-        if os.path.isfile(path):
-            with open(path, "rb") as f:
-                state.update(hashlib.sha256(f.read()).digest())
-    digest = state.hexdigest()
     mark = os.path.join(root, ".git", "claude-doc-gate")
     if os.path.isfile(mark) and open(mark).read() == digest:
         return 0

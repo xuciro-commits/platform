@@ -30,7 +30,6 @@ read-when: 新建、拆分、删除文档，改技能、规则或钩子，处理
 | 路径规则 | `.claude/rules/*.md` | 编辑匹配路径时 | 该区域必须遵守的短规则与要读的规范 | 流程步骤 | ≤60 行 |
 | 技能 | `.claude/skills/*/SKILL.md` | 任务匹配时 | 可重复的操作流程与检查清单 | 规范本身（链接到规范） | ≤300 行 |
 | 钩子 | `.claude/settings.json`、`.claude/hooks/` | 自动 | 确定性检查 | 判断性规则 | — |
-| CI | `.github/workflows/`、`scripts/check-*.mjs` | 每次推送 | 与 `make verify` 相同的检查；规范表格可被脚本直接读取并执行 | 只在 CI 中存在的检查 | — |
 
 不再建立的文档：ADR 目录、按变更归档的 spec、审计报告、评审报告、会议纪要、进度日志。它们是历史，历史在 git 与提交说明里。
 
