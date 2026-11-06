@@ -1676,4 +1676,10 @@ export default {
   "Clear search": "清空搜索",
   "Back to editor": "返回编辑区",
   "No records match these filters.": "没有记录符合当前筛选。",
+  "Record sections are unavailable.": "此对象视图没有可用的分区数据源。",
+  "No additional activity.": "没有更多动态。",
+  "Nothing is waiting on this record.": "此记录没有待处理事项。",
+  "Nothing to show.": "没有可显示的内容。",
+  "Some records in this section are restricted.": "此分区中的部分记录受限。",
+  "{section} could not be loaded: {reason}": "{section} 无法加载：{reason}",
 } as Record<string, string>;

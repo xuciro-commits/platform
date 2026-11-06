@@ -82,7 +82,8 @@ export function useRecordSection(source: RecordSource, type: string, id: string,
     return () => { request.current++; stop?.(); };
   }, [refresh,visible,type,id,section]);
   const current = result?.source===sourceIdentity&&result.identity===identity?result:undefined;
-  return {view:current?.view,error:current?.key===key?current.error:undefined,loading:!!section&&(current?.key!==key||current.loading),refresh};
+  const unavailable = !!section && !source.section;
+  return {view:current?.view,error:current?.key===key?current.error:unavailable?t("Record sections are unavailable."):undefined,loading:!!section&&!unavailable&&(current?.key!==key||current.loading),refresh};
 }
 
 export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs,recordLinks,linksOnly=false,statusTracker,statusOnly=false }: {

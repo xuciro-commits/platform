@@ -390,7 +390,7 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
   );
 }
 
-export function RecordDetail({ type, id, fields, allowed, advice, source: recordSource, recordTabs, onOpen }: { type: string; id: string; fields?: string[]; allowed?: string[]; advice?: { action: string; fields: string[] }; source?: RecordSource; recordTabs?: readonly string[]; onOpen?: (type: string, record: EntityRecord) => void }) {
+export function RecordDetail({ type, id, fields, allowed, advice, source: recordSource, recordTabs, sectionNavigation, onOpen }: { type: string; id: string; fields?: string[]; allowed?: string[]; advice?: { action: string; fields: string[] }; source?: RecordSource; recordTabs?: readonly string[]; sectionNavigation?: "sidebar" | "inline"; onOpen?: (type: string, record: EntityRecord) => void }) {
   const { source: hostSource, can, decide, client, me, catalog, resend,refresh } = useHost();
   const source = recordSource ?? hostSource;
   const openRecord = useOpenRecord();
@@ -427,7 +427,7 @@ export function RecordDetail({ type, id, fields, allowed, advice, source: record
   ])];
   return (
     <>
-      <ObjectView source={source} type={type} id={id} sections={sections} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
+      <ObjectView source={source} type={type} id={id} sections={sections} sectionNavigation={sectionNavigation} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
         work={view => {
           const dispatchTask = type === "work.task" && typeof view.record.ref === "string" && view.record.ref.startsWith("build.dispatch/") ? view.record.ref.slice("build.dispatch/".length) : undefined;
           const call = type === "build.function-call" ? view.record : undefined;

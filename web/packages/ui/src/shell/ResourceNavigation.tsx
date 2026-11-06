@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useContext, useLayoutEffect, type ReactNode } from "react";
 import { cn } from "../lib/cn";
+import { ContentTabs } from "../layout/ContentTabs";
 import {PanelContext, WorkspaceContext} from "./WorkspaceContext";
 
 export type ResourceSection = { id: string; label: ReactNode; icon?: ReactNode; badge?: ReactNode; group?: string };
@@ -40,10 +41,13 @@ export function ResourceNavigation({ back, title, icon, meta, sections, value, o
   </div>, target);
 }
 
-export function ResourceSections({ items, value, onChange, ...navigation }: Omit<Parameters<typeof ResourceNavigation>[0], "sections"> & {
+export function ResourceSections({ items, value, onChange, inline = false, ...navigation }: Omit<Parameters<typeof ResourceNavigation>[0], "sections"> & {
+  inline?: boolean;
   items: (Omit<ResourceSection, "label"> & { title: ReactNode; content: ReactNode })[];
 }) {
   const active = items.find(item => item.id === value) ?? items[0];
+  if (inline) return <ContentTabs label={navigation.title} value={active?.id} onChange={onChange}
+    items={items.map(({ id, title, content }) => ({ id, title, content }))} />;
   return <>
     <ResourceNavigation {...navigation} sections={items.map(({ content: _content, title, ...item }) => ({ ...item, label: title }))} value={active?.id ?? ""} onChange={onChange} />
     {active?.content}

@@ -50,7 +50,7 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
       listInlineEdit={inlineEdit}
       detail={(id) => <>
         {opens.has(type) && <Button className="mb-2" variant="primary" onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open full view")}</Button>}
-        <RecordDetail type={type} id={id} fields={page.detailFields} allowed={allowed} />
+        <RecordDetail type={type} id={id} fields={page.detailFields} allowed={allowed} sectionNavigation="inline" />
       </>} />
     <SaveViewDialog type={type} state={saving} onClose={() => setSaving(undefined)} />
   </>;
@@ -114,7 +114,7 @@ export function PagePreview({ definition, definitions }: { definition: PageDefin
       selected={selected} onSelect={setSelected}
       notice={<Panel role="status" className="mb-3 text-xs text-muted">{t("Preview uses sample data. Actions do not run.")}</Panel>}
       actions={<div className="flex flex-wrap gap-1">{actions.map((a) => <Button key={assetKey(a.ref)} size="sm" onClick={() => { setValues({}); setAction(a); }}>{a.action!.title}</Button>)}</div>}
-      detail={(id) => <ObjectView source={source} type={info.type} id={id} fields={page.detailFields} sections={["overview"]} />} />
+      detail={(id) => <ObjectView source={source} type={info.type} id={id} fields={page.detailFields} sections={["overview"]} sectionNavigation="inline" />} />
     <Dialog open={!!action} onOpenChange={(open) => !open && setAction(undefined)} title={action?.action?.title ?? t("Action preview")}>
       {action?.action && <div className="grid gap-3">
         <p className="text-xs text-muted">{assetKey(action.ref)} · {t("Preview only")}</p>

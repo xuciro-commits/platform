@@ -29,7 +29,7 @@ function ObjectRecordSurface({ type, id, inspect, route, onOpen }: Props) {
   const openFull = (target = type, record = id) => { onOpen?.(); workspace.open({ view: "record", params: { type: target, id: record } }, { window: "tab", from }); };
   if (!view) {
     return <div className="grid min-w-0 gap-2">
-      <RecordDetail type={type} id={id} onOpen={(target, record) => openFull(target, record.id)} />
+      <RecordDetail type={type} id={id} sectionNavigation={inspect ? "inline" : "sidebar"} onOpen={(target, record) => openFull(target, record.id)} />
     </div>;
   }
   if (!application || !entry || !page || !pageRef || !application.pages.includes(view.page.name)) return <Notice tone="danger" message={t("This object's Workshop view is unavailable. Ask a builder to check its module and page.")} />;

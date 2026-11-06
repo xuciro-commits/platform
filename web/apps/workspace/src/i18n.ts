@@ -396,4 +396,5 @@ register("zh-CN", {
   "Status": "状态",
   "This folder is empty.": "此文件夹为空。",
   "Version": "版本",
+  "Object set": "对象集",
 });

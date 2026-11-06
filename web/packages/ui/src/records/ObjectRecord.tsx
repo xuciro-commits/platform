@@ -27,10 +27,11 @@ export const objectViewSections = ["overview", "links", "activity", "files", "wo
 type SectionState = ReturnType<typeof useRecordSection>;
 
 export function ObjectView({
-  source, type, id, reload = 0, fields, sections = objectViewSections, can, onTransition, actions, menu, onOpen, work, files, comments, tasks, detailPresentation,
+  source, type, id, reload = 0, fields, sections = objectViewSections, sectionNavigation = "sidebar", can, onTransition, actions, menu, onOpen, work, files, comments, tasks, detailPresentation,
 }: {
   source: RecordSource; type: string; id: string; reload?: number; fields?: string[];
   sections?: readonly RecordSection[];
+  sectionNavigation?: "sidebar" | "inline";
   detailPresentation?: DetailPresentationOptions;
   can?: (schema: string) => boolean; onTransition?: (schema: string, record: EntityRecord) => void;
   actions?: (record: EntityRecord) => ReactNode; menu?: (record: EntityRecord) => ContextCommand[];
@@ -132,7 +133,7 @@ export function ObjectView({
   ].filter(item => sections.includes(item.id as RecordSection));
   return <RecordReadContext.Provider value={{scope:source.scope??source,type,record}}><div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-3">
     {header}
-    <ResourceSections title={info.title} meta={record.id} value={chosen} onChange={value => setActive(value as RecordSection)}
+    <ResourceSections title={info.title} meta={record.id} inline={sectionNavigation === "inline"} value={chosen} onChange={value => setActive(value as RecordSection)}
       items={items.map(item => ({ id: item.id, title: item.title, content: item.content }))} />
   </div></RecordReadContext.Provider>;
 }
