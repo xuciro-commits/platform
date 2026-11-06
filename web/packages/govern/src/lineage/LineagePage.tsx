@@ -1,8 +1,9 @@
 import { newId, useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, DataTable, Dialog, EmptyState, Form, Input, Notice, Panel, PropertyList, RelationCanvas, SegmentedChoice, Select, Workbench, t, useWorkspace, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
-import { ArrowLeftRight, ChevronLeft, Copy, Crosshair, Expand, RefreshCw, Search } from "lucide-react";
+import { ActionMenu, Button, DataTable, Dialog, EmptyState, Form, Input, Notice, Panel, PropertyList, RelationCanvas, SegmentedChoice, Select, Workbench, t, useWorkspace, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
+import { ArrowLeftRight, ChevronLeft, Copy, Crosshair, Download, Expand, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { lineageExportFileName, lineageImpactCSV, lineageImpactDocument, lineageSubgraphCSV, lineageSubgraphDocument, type LineageExportFormat, type LineageExportTarget } from "./export";
 
 type Params = Record<string, string>;
 type Graph = Api.Lineage;
@@ -60,6 +61,12 @@ function runningVersion(node: Node): string {
 function boundaryText(boundary: Node["boundary"]): string {
   if (!boundary) return "";
   return t("{upstream} upstream · {downstream} downstream boundary", { upstream: boundary.upstream ?? 0, downstream: boundary.downstream ?? 0 });
+}
+
+function saveExport(filename: string, body: string, format: LineageExportFormat) {
+  const url = URL.createObjectURL(new Blob([body], { type: format === "csv" ? "text/csv;charset=utf-8" : "application/json;charset=utf-8" }));
+  Object.assign(document.createElement("a"), { href: url, download: filename }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function nodeTone(node: Node, color: ColorBy): string {
@@ -250,7 +257,28 @@ export function LineagePage({ params }: { params: Params }) {
     return keep.size ? filtered.filter(node => keep.has(node.id)) : filtered;
   }, [filtered, graph.edges, isolated, root, selected]);
   const visibleEdges = useMemo(() => graph.edges.filter(edge => visible.some(node => node.id === edge.from) && visible.some(node => node.id === edge.to)), [graph.edges, visible]);
+  const shownFieldNodes = useMemo(() => fieldMode ? (graph.fieldNodes ?? []).filter(field => !search.trim() || `${field.title} ${field.name}`.toLowerCase().includes(search.trim().toLowerCase())) : [], [fieldMode, graph.fieldNodes, search]);
+  const shownFieldEdges = useMemo(() => fieldMode ? (graph.fieldEdges ?? []).filter(edge => shownFieldNodes.some(field => field.id === edge.from) && shownFieldNodes.some(field => field.id === edge.to)) : [], [fieldMode, graph.fieldEdges, shownFieldNodes]);
+  const fieldResourceIDs = useMemo(() => new Set(shownFieldNodes.map(field => field.node)), [shownFieldNodes]);
+  const exportNodes = useMemo(() => fieldMode ? graph.nodes.filter(node => fieldResourceIDs.has(node.id)) : visible, [fieldMode, graph.nodes, fieldResourceIDs, visible]);
+  const exportEdges = useMemo(() => fieldMode ? graph.edges.filter(edge => fieldResourceIDs.has(edge.from) && fieldResourceIDs.has(edge.to)) : visibleEdges, [fieldMode, fieldResourceIDs, graph.edges, visibleEdges]);
   const hidden = graph.nodes.length - filtered.length;
+  const download = (target: LineageExportTarget, format: LineageExportFormat) => {
+    if (target === "impact") {
+      if (!graph.impact) return;
+      const exported = lineageImpactDocument(graph, graph.impact);
+      const body = format === "csv" ? lineageImpactCSV(exported) : JSON.stringify(exported, null, 2);
+      saveExport(lineageExportFileName(target, format, exported.exportedAt), body, format);
+      return;
+    }
+    const exported = lineageSubgraphDocument(graph, {
+      nodes: exportNodes, edges: exportEdges,
+      fields: fieldMode ? shownFieldNodes : undefined, fieldEdges: fieldMode ? shownFieldEdges : undefined,
+      filters: { search, kind, status, hideUnconnected, isolated, fieldMode },
+    });
+    const body = format === "csv" ? lineageSubgraphCSV(exported) : JSON.stringify(exported, null, 2);
+    saveExport(lineageExportFileName(target, format, exported.exportedAt), body, format);
+  };
   const toolbar = <div className="flex flex-wrap items-center gap-1">
     <Select aria-label={t("Branch")} value={branch} onChange={event => update({ branch: event.target.value, focus: "", selected: "" })} className="w-44" disabled={!holds("build", "builder")}>
       <option value="">{t("main")}</option>
@@ -268,6 +296,12 @@ export function LineagePage({ params }: { params: Params }) {
     <Button size="sm" variant="ghost" onClick={() => setIsolated(value => !value)} disabled={!selected}><ArrowLeftRight />{isolated ? t("Show all") : t("Isolate")}</Button>
     <Button size="sm" variant="ghost" onClick={() => focusSelected({ depth: String(Math.min(3, depth + 1)) })} disabled={!selectedNode}><Expand />{t("Expand")}</Button>
     <Button size="sm" variant="ghost" onClick={() => void query.refetch()}><RefreshCw />{t("Refresh")}</Button>
+    <ActionMenu label={t("Export")} icon={<Download />} commands={[
+      { id: "subgraph-json", label: t("Visible subgraph · JSON"), run: () => download("subgraph", "json") },
+      { id: "subgraph-csv", label: t("Visible subgraph · CSV"), run: () => download("subgraph", "csv") },
+      { id: "impact-json", label: t("Impact list · JSON"), separatorBefore: true, disabled: !graph.impact, reason: !graph.impact ? t("Impact export is available in a focused graph.") : undefined, run: () => download("impact", "json") },
+      { id: "impact-csv", label: t("Impact list · CSV"), disabled: !graph.impact, reason: !graph.impact ? t("Impact export is available in a focused graph.") : undefined, run: () => download("impact", "csv") },
+    ]}>{t("Export")}</ActionMenu>
     <Button size="sm" variant="ghost" onClick={() => void copy(location.href, t("Link copied"))}><Copy />{t("Copy link")}</Button>
     <Button size="sm" variant="ghost" onClick={() => setSavingView(true)}>{t("Save view")}</Button>
   </div>;
@@ -307,8 +341,8 @@ export function LineagePage({ params }: { params: Params }) {
       {graph.nodes.some(node => node.markingStatus !== "consistent") && <div className="absolute left-2 top-2 z-10"><Notice tone="warning" message={t("Protection differs from preview. The saved definition is not active yet.")} /></div>}
       {graph.truncated && <div className="absolute left-2 top-2 z-10"><Notice tone="warning" message={t("Showing {returned} of {total} resources. Reduce depth or choose one direction.", { returned: graph.returned.nodes, total: graph.total.nodes })} /></div>}
       <RelationCanvas
-        nodes={fieldMode ? fieldRelationNodes((graph.fieldNodes ?? []).filter(field => !search.trim() || `${field.title} ${field.name}`.toLowerCase().includes(search.trim().toLowerCase()))) : relationNodes(visible, color)}
-        edges={fieldMode ? fieldRelationEdges((graph.fieldEdges ?? []).filter(edge => (graph.fieldNodes ?? []).some(field => field.id === edge.from) && (graph.fieldNodes ?? []).some(field => field.id === edge.to))) : relationEdges(visibleEdges)}
+        nodes={fieldMode ? fieldRelationNodes(shownFieldNodes) : relationNodes(visible, color)}
+        edges={fieldMode ? fieldRelationEdges(shownFieldEdges) : relationEdges(visibleEdges)}
         selected={selected}
         height="100%"
         label={fieldMode ? t("Field lineage") : t("Data Lineage")}

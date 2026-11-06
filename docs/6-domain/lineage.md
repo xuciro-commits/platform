@@ -174,21 +174,30 @@ read-when: 改动血缘推导、生效标记与保护标记、影响分析、列
 - 前端不轮询整图；以显式刷新、窗口重新获得焦点和资源变更失效为准。
 - 已加载子图由 React Flow 仅挂载视口内的节点与边；筛选、聚焦与隔离在已加载子图上执行，不重新请求整图。
 
+### L10 导出
+
+- 导出发生在工作台内，只整理当前 `/v1/lineage` 响应中已返回且已授权的数据，不新增查询、不重新计算血缘、不保存权限快照。
+- 可见子图 JSON 包含查询范围、基线、构建时间、覆盖状态、当前筛选，以及筛选与 Isolate 后的节点和边；字段模式还包含画布上显示的 `fieldNodes`、`fieldEdges`。
+- 节点包含名称、种类、项目、状态、版本、保护标记与稳定原因码；边保留端点、角色和已消费/当前版本；字段保留所属资源、名称、类型、项目与确定性。
+- CSV 使用同一批数据的长表：每行以 `recordType` 区分 node、edge、field 与 field-edge，并给出可读标题和关系端点。
+- 影响列表直接导出当前响应中的 `impact` 汇总与条目，并补充仍在本响应节点集合内的保护、版本和状态字段；无焦点图时不提供。
+- 不导出未返回节点、不可读资源的身份、原始错误文本、内部记录载荷或权限判断细节。
+
 ## 现存差距
 
-2026-11-06 复核：规范 L1–L6 已实现，K12、F19、F20、F21 通过。
+2026-11-06 复核：规范 L1–L6 与 L10 已实现，K12、F19–F22 通过。
 
 - Guard 的执行定义解析失败时已 fail-closed：受影响节点标为 `unknown`、`markingsComplete=false`，Guard 提升到 `restricted` 并沿边传播；正常版本化记录不受影响。
 - 分支 `branch` 参数复用 Branch 暂存世界，只读、按 branch revision + main generation 缓存，不混入 main 的运行证据或标记索引；节点展示保存/执行/数据集/已消费版本。
 - 构图按 Generation 缓存；1200 个资源的构图与 Scope 不变量通过。项目聚合提供跨项目出入边、未连接与更新时间。
 - 成员私有的保存视图复用 `work.view`，只保存查询参数；打开时重新鉴权、重新构图。字段图、`FormulaExpr`、join/lookup 键、回写请求/结果与项目隔离均有验收。
 - 仍保留的保守边界：无法静态解析的公式或管道模式显示 `unverified`/`derived`，不伪造来源。
-- 产品化仍未完成：导出和专项可访问性验收未实现；当前只覆盖已加载子图的筛选、隔离和键盘操作，不声称支持完整大图工作流。
+- 产品化仍未完成：专项可访问性验收未实现；导出只覆盖当前已加载的可见子图与现有影响列表，不对未返回节点或不可读资源作推断。
 
 ## 相关
 
 - 标记规则：[security §6.15](security.md)
 - 数据声明：[6-domain §6.6](README.md)
 - 工作台布局：[4-interaction/workbenches § Data Lineage](../4-interaction/workbenches.md#data-lineage)
-- 任务路径：[5-experience F19、F20、F21](../5-experience.md)
+- 任务路径：[5-experience F19–F22](../5-experience.md)
 - 验证：[7-system/verification §7.10、§7.11](../7-system/verification.md)

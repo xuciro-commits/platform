@@ -146,7 +146,8 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 原型 C，只读，使用 `Workbench`（左 264、右 320、dock 200，按 `lineage` 记忆）。
 
-- 头部：面包屑 Data Lineage › 项目 › 焦点资源；Branch 选择器（main 与 open/proposed 分支，分支图只读）；状态区显示基线（“main · saved definitions” 或 “branch … · saved definitions”）与构建时间，Preview 与 Guard 不一致时显示警告标签 “Protection differs from preview”；操作：Direction（Upstream / Both / Downstream，SegmentedChoice）、Depth（1–3）、“Show fields” 开关、Color by（Resource type / Protection / Status）、Fit graph、刷新、Save view、⋯（Copy link、Copy RID）。
+- 头部：面包屑 Data Lineage › 项目 › 焦点资源；Branch 选择器（main 与 open/proposed 分支，分支图只读）；状态区显示基线（“main · saved definitions” 或 “branch … · saved definitions”）与构建时间，Preview 与 Guard 不一致时显示警告标签 “Protection differs from preview”；操作：Direction（Upstream / Both / Downstream，SegmentedChoice）、Depth（1–3）、“Show fields” 开关、Color by（Resource type / Protection / Status）、Fit graph、刷新、Export、Save view、⋯（Copy link、Copy RID）。
+- Export 菜单直接下载 Visible subgraph 或 Impact list 的 CSV / JSON。子图使用当前筛选与 Isolate 后的可见节点和边；字段模式导出画布上的字段路径。影响列表直接使用当前血缘响应中的 impact，无焦点图时不可用。导出只在浏览器内整理已返回、已授权的数据，不新建查询或计算路径。
 - 左面板 “Scope”：
   - 图内搜索：只搜已加载子图的名称、API 名与字段名；Enter 依次选中匹配项；无匹配时给出 “Search everywhere” 打开全局 Search。
   - 种类图例即筛选：每种一个复选框，带分类色与计数。

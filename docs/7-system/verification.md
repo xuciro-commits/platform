@@ -14,7 +14,7 @@ read-when: 运行或新增检查、验收用例、钩子；判断一项改动需
 
 - R1 没运行的检查不能报为通过；报告写出实际运行的命令与结果。
 - R2 必须恒成立的约束由钩子或用例保证，不靠文字提醒。
-- R3 测试只有两类：`capabilities/server` 中的内核不变量测试，`web/e2e/` 中按 5-experience F1–F21 编号的验收用例。
+- R3 测试只有两类：`capabilities/server` 中的内核不变量测试，`web/e2e/` 中按 5-experience F1–F22 编号的验收用例。
 - R4 验收在隔离的宿主上运行：内存日志、开发令牌席位（`web/e2e/tenants.json`），不依赖 `make local`、数据库或真实账号。
 
 ## 7.8 静态检查
@@ -85,4 +85,4 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 
 ## 现存差距
 
-- `make verify` 的内核不变量与 F1–F21 仍运行在内存宿主；SQL 模式覆盖创建、项目委派、viewer/discoverer 目录权限、日志、审计、运行索引和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。
+- `make verify` 的内核不变量与 F1–F22 仍运行在内存宿主；SQL 模式覆盖创建、项目委派、viewer/discoverer 目录权限、日志、审计、运行索引和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。
