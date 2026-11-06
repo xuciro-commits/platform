@@ -20,6 +20,7 @@ test("F1 a builder creates a notification automation, runs it on an object and p
   await page.getByRole("menuitem", { name: /Send notification/ }).click();
   await page.getByLabel("Notification title", { exact: true }).fill("Item requires attention");
   await page.getByLabel("Message", { exact: true }).fill("Review this item");
+  await page.route("**/v1/submissions", async route => { await new Promise(resolve => setTimeout(resolve, 250)); await route.continue(); });
   await page.getByRole("button", {name:"Create",exact:true}).click();
   let processID = "";
   await expect.poll(async () => {

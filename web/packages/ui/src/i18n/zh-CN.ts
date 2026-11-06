@@ -1012,7 +1012,6 @@ export default {
   "Could not open this view.": "无法打开此视图。",
   "This address points to a task your current access does not include.": "该地址指向的任务不包含在你当前的访问范围内。",
   "Could not open a new window. Allow pop-ups and try again.": "无法打开新窗口，请允许弹出窗口后重试。",
-  "An operation is in progress. Wait for its result before leaving.": "操作正在进行，请等待结果后再离开。",
   "Unsaved changes": "未保存的修改",
   "Save your work in the editor, or discard the changes to continue.": "请在编辑器中保存，或放弃修改后继续。",
   "Keep editing": "继续编辑",
