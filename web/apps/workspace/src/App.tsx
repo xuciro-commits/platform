@@ -111,7 +111,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     ? (host: Host) => [...loadedPackages.applications(host), personalWork]
     : undefined, [loadedPackages, packageScope]);
   const [packageAttempt, setPackageAttempt] = useState(0);
-  const [packageFailure, setPackageFailure] = useState<string>();
+  const [packageFailure, setPackageFailure] = useState<{ message: string; detail?: string }>();
   const ready = !!me && declared.phase === "ready" && !packageFailure && !!loadedApps;
   useEffect(() => {
     if (!me) return;
@@ -119,7 +119,14 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     setPackageFailure(undefined);
     void loadPackages(selectedPackages, explorerApplication)
       .then((applications) => { if (live) setLoadedPackages({ scope: packageScope!, applications }); })
-      .catch(() => { if (live) setPackageFailure(t("The workspace's applications could not load. Retry, or sign in again.")); });
+      .catch((error: unknown) => {
+        if (!live) return;
+        console.error("workspace packages failed to load", error);
+        setPackageFailure({
+          message: t("The workspace's applications could not load. Retry, or sign in again."),
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      });
     return () => { live = false; };
   }, [packageScope, packageAttempt]);
 
@@ -351,7 +358,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     </div>
   </main>;
   if (declared.phase === "error") return bootstrap(t("The host's declarations could not load, so the workspace cannot tell what you may see and do."), undefined, () => setDeclareAttempt((n) => n + 1));
-  if (packageFailure) return bootstrap(packageFailure, undefined, () => setPackageAttempt((n) => n + 1));
+  if (packageFailure) return bootstrap(packageFailure.message, packageFailure.detail, () => setPackageAttempt((n) => n + 1));
   if (discovery.phase === "error") return bootstrap(t("The workspace could not read what this member may see and do."), discovery.message, discovery.retry);
   if (discovery.phase === "offline") return bootstrap(t("The live connection is unavailable."), discovery.message, discovery.retry, false);
   if (!host || !apps || !ready || discovery.phase !== "ready") return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;

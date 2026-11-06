@@ -2,11 +2,12 @@ import { withApp, type AppUI, type Host, type Me } from "@platform/app";
 import { memberRoles } from "@platform/app/roles";
 
 type PackageLoad = { default: AppUI; contributions?: AppUI[] };
-export type Package = { serves: string[]; roles?: string[]; public?: boolean; when?: (held: ReadonlySet<string>, member: Me["profile"]) => boolean; load: () => Promise<PackageLoad> };
+export type Package = { id: string; serves: string[]; roles?: string[]; public?: boolean; when?: (held: ReadonlySet<string>, member: Me["profile"]) => boolean; load: () => Promise<PackageLoad> };
 
-const governPackage: Package = { serves: ["platform", "enterprise", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@platform/govern") };
-const buildPackage: Package = { serves: ["build"], roles: ["builder", "integrator", "publisher"], load: () => import("@platform/build") };
+const governPackage: Package = { id: "govern", serves: ["platform", "enterprise", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@platform/govern") };
+const buildPackage: Package = { id: "build", serves: ["build"], roles: ["builder", "integrator", "publisher"], load: () => import("@platform/build") };
 const catalogPackage: Package = {
+  id: "catalog",
   serves: [],
   when: (held, member) => held.has("build") && memberRoles(member, "build").includes("builder")
     || held.has("platform") && memberRoles(member, "platform").includes("admin"),
@@ -27,7 +28,13 @@ export function availablePackages(apps: readonly string[], member: Me["profile"]
 }
 
 export async function loadPackages(selected: readonly Package[], objectExplorer: AppUI): Promise<(host: Host) => AppUI[]> {
-  const groups = await Promise.all(selected.map(async source => ({ source, module: await source.load() })));
+  const groups = await Promise.all(selected.map(async source => {
+    try {
+      return { source, module: await source.load() };
+    } catch (error) {
+      throw new Error(`${source.id} package could not load: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+  }));
   const govern = groups.find(group => group.source === governPackage)?.module as typeof import("@platform/govern") | undefined;
   const build = groups.find(group => group.source === buildPackage)?.module as typeof import("@platform/build") | undefined;
   const entries = groups.flatMap(({ source, module }) => [module.default, ...(module.contributions ?? [])]
