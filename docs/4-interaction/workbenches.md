@@ -132,7 +132,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 数据语义与读取合同见 [6-domain/lineage](../6-domain/lineage.md)。代码在 `web/packages/govern/src/lineage/`，一个 `defineApp`（`data-lineage`），视图 `lineage`。只给构建者与集成者；项目委派的构建者只看到自己的项目。
 
 - 侧栏：段落 “Data Lineage”：Overview（`#/lineage`）、Graph（`#/lineage?focus=…` 或 `#/lineage?project=…`；无焦点时为选择资源的空状态）。不放定义依赖、能力发现、运行或调度。
-- URL 回放：`branch`、`project`、`focus`、`direction`、`depth`、`fields`、`field`、`color`、`selected` 全部进 URL；复制链接得到同一视图。侧窗打开时这些参数不进 URL（3-information §3.6）。
+- URL 回放：`branch`、`project`、`focus`、`direction`、`depth`、`fields`、`field`、`color`、`selected` 全部进 URL；复制链接得到同一视图。聚焦、改方向、改深度与返回项目都推入浏览器历史，后退回到上一层图；选择节点只替换当前 URL。侧窗打开时这些参数不进 URL（3-information §3.6）。
 - 命令面板：“Data Lineage” 归 “Governance” 组；另有 “Show lineage of current resource”（当前页是六类数据资源之一时）。
 
 ### Overview
@@ -146,7 +146,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 原型 C，只读，使用 `Workbench`（左 264、右 320、dock 200，按 `lineage` 记忆）。
 
-- 头部：面包屑 Data Lineage › 项目 › 焦点资源；Branch 选择器（main 与 open/proposed 分支，分支图只读）；状态区显示基线（“main · saved definitions” 或 “branch … · saved definitions”）与构建时间，Preview 与 Guard 不一致时显示警告标签 “Protection differs from preview”；操作：Direction（Upstream / Both / Downstream，SegmentedChoice）、Depth（1–3）、“Show fields” 开关、Color by（Resource type / Protection / Status）、Fit graph、刷新、Export、Save view、⋯（Copy link、Copy RID）。
+- 头部：面包屑 Data Lineage › 项目 › 焦点资源；项目面包屑在焦点图可点击回项目图。Branch 选择器（main 与 open/proposed 分支，分支图只读）；状态区显示基线（“main · saved definitions” 或 “branch … · saved definitions”）与构建时间，Preview 与 Guard 不一致时显示警告标签 “Protection differs from preview”。项目图操作：Color by、Focus、Fit、刷新、Export、Save view；焦点图再显示 Back to project、Direction（Upstream / Both / Downstream，SegmentedChoice）、Depth（1–3）、Isolate、Expand。
 - Export 菜单直接下载 Visible subgraph 或 Impact list 的 CSV / JSON。子图使用当前筛选与 Isolate 后的可见节点和边；字段模式导出画布上的字段路径。影响列表直接使用当前血缘响应中的 impact，无焦点图时不可用。导出只在浏览器内整理已返回、已授权的数据，不新建查询或计算路径。
 - 左面板 “Scope”：
   - 图内搜索：只搜已加载子图的名称、API 名与字段名；Enter 依次选中匹配项并把焦点移到资源列表；无匹配时给出 “Search everywhere” 打开全局 Search。
@@ -158,7 +158,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
   - 筛选只高亮匹配项、弱化其余，不改变布局；有筛选时画布顶部显示 “{n} hidden by filters · Clear”。
   - Coverage：截断、不可读、边界与标记完整性的计数，点击打开 dock 的 Coverage 页签。
 - 画布（M19 只读，`RelationCanvas`，左到右即上游到下游）：
-  - 根节点加强调环与 “Focus” 标记。节点：分类色图标、显示名、说明行（种类 · 版本；跨项目时加项目名）、状态徽标（stale 用 warning、failed 用 danger、never-run 用 neutral）、Guard 标记徽标；`markingStatus=preview-only` 时加 “≠” 标识，`unknown` 显示 “?”。
+  - 根节点加强调环与 “Focus” 标记。节点默认收起：分类色图标、显示名、说明行（种类 · 版本；跨项目时加项目名）、状态徽标（stale 用 warning、failed 用 danger、never-run 用 neutral）、Guard 标记徽标与右上 chevron；展开后浮出类型、项目、状态、保护等核心属性，不改变布局与视口。`markingStatus=preview-only` 时加 “≠” 标识，`unknown` 显示 “?”。
   - 有未展开邻居的节点在对应一侧显示 “+n” 把手；点击把手只展开那一侧一层，新节点放在父节点旁，视口不动。
   - 无权邻居画为一个匿名幽灵节点 “{n} resources you cannot open”，不可选中、不可打开。
   - 边：已消费版本落后时为虚线 warning，标签 “read v3 · now v5”；同一对资源的多条边分别绘制，选中时显示角色（join、lookup、binding、result…）；跨项目边带项目边界标记。
@@ -166,10 +166,12 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 - 交互：
   - 单击选中：只更新 Inspector，视口不动；选中项在视口外时平移到可见，不缩放。
   - 双击或 ⌘Enter：打开资源（经拥有者 `opens`，M19）。
-  - Focus here（F、Inspector 按钮、右键菜单）：以选中节点为根重新请求邻域，写入 URL，适应视口。
-  - Isolate path（I）：只保留根与选中节点之间路径上的已加载节点，顶部显示 “Isolated · Show all”。
-  - Expand（X）：选中节点两侧各展开一层。
-  - 键盘：资源列表 ↑/↓、Home/End 移动并选中；Enter 进入 Inspector；F 聚焦、I 隔离、X 展开、Esc 退出隔离并把选中返回焦点资源。筛选计数、加载、错误、选中与隔离状态都有可读文本或 live region，不以颜色作为唯一状态。
+  - Focus here（F、工具条、Inspector）：以选中节点为根重新请求邻域，保留 Direction 与 Depth，推入浏览器历史并适应视口。项目图也可聚焦一个节点。
+  - Expand（X）：只在焦点图出现；从当前根多显示一层，根不变，推入历史。项目图已经包含全部项目资源，不显示该操作。
+  - Isolate path（I）：只在焦点图且选中节点不同于根时出现；只保留根与选中节点之间路径上的已加载节点，顶部显示 “Isolated · Show all”。
+  - 返回：项目面包屑或 “Back to project” 回到项目图；“Back to overview” 回到无项目范围的总览；浏览器后退回到上一层图。Esc 依次清除隔离、清除选中、返回项目图。
+  - 节点详情：节点默认收起，chevron 展开核心属性；工具条“全部展开/全部收起”作用于当前图，不改变后端范围。
+  - 键盘：资源列表 ↑/↓、Home/End 移动并选中；Enter 进入 Inspector；F 聚焦、I 隔离、X 展开、Esc 按上面的层级返回。筛选计数、加载、错误、选中与隔离状态都有可读文本或 live region，不以颜色作为唯一状态。
   - 只在首次加载与根改变时适应视口；布局按焦点根记忆（`storeKey` 为 `lineage:<根>`）。
 - Inspector（右，M6 只读形态）：
   - 头：图标、显示名、种类、项目路径、RID（等宽弱化）；主按钮 “Open”（不可打开时禁用并说明原因）；次级 “Focus here”；⋯：Isolate path、Copy RID、View runs in Monitoring。

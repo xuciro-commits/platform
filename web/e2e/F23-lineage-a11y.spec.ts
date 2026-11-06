@@ -67,21 +67,35 @@ test("F23 a builder completes the Data Lineage task from the overview table and 
   await expect(details).toBeFocused();
   await expect(details.getByRole("heading", { name: datasetTitle, exact: true })).toBeVisible();
 
-  await page.keyboard.press("i");
-  await expect(page.getByText(/Isolated path · .* resources shown/)).toBeVisible();
-  await expect(page.getByRole("status", { name: "Lineage status", exact: true })).toContainText(`Isolated path shown for ${datasetTitle}`);
-
-  await page.keyboard.press("x");
-  await expect(page.getByRole("combobox", { name: "Depth", exact: true })).toHaveValue("2");
-  await expect(page.getByRole("status", { name: "Lineage status", exact: true })).toContainText(`Expanded ${datasetTitle} to depth 2`);
-
   await page.keyboard.press("f");
   await expect(page).toHaveURL(new RegExp(`focus=${encodeURIComponent(`dataset:${dataset}`)}`));
   await expect(page.getByRole("status", { name: "Lineage status", exact: true })).toContainText(`Focused on ${datasetTitle}`);
 
+  await page.keyboard.press("x");
+  await expect(page.getByRole("combobox", { name: "Depth", exact: true })).toHaveValue("2");
+  await expect(page.getByRole("status", { name: "Lineage status", exact: true })).toContainText("Expanded graph to depth 2");
+
+  await search.focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type(objectTitle);
+  await page.keyboard.press("Enter");
+  const objectRow = page.getByRole("button", { name: new RegExp(objectTitle) });
+  await expect(objectRow).toBeFocused();
+  await page.keyboard.press("i");
+  await expect(page.getByText(/Isolated path · .* resources shown/)).toBeVisible();
+  await expect(page.getByRole("status", { name: "Lineage status", exact: true })).toContainText(`Isolated path shown for ${objectTitle}`);
+
   await page.keyboard.press("Escape");
   await expect(page.getByText(/Isolated path · .* resources shown/)).toHaveCount(0);
-  await expect(page.getByRole("status", { name: "Lineage status", exact: true })).toContainText("Isolation cleared. Selection returned to the focus resource.");
+  await expect(page.getByRole("status", { name: "Lineage status", exact: true })).toContainText("Isolation cleared.");
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("status", { name: "Lineage status", exact: true })).toContainText("Selection returned to the focus resource.");
+
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(new RegExp(`project=${encodeURIComponent(projectRID).replaceAll(".", "\\.")}`));
+  await expect(page).not.toHaveURL(/focus=/);
+  await expect(page.getByRole("status", { name: "Lineage status", exact: true })).toContainText("Returned to the project graph.");
 
   const breadcrumb = page.getByRole("navigation", { name: "Breadcrumbs", exact: true }).getByRole("button", { name: "Data Lineage", exact: true });
   await breadcrumb.focus();

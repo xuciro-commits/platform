@@ -206,29 +206,36 @@ export function LineagePage({ params }: { params: Params }) {
   const selectedNode = graph.nodes.find(node => node.id === selected);
   const fieldMode = !!params.field;
   const selectedField = (graph.fieldNodes ?? []).find(field => field.id === params.field);
+  const focusMode = mode === "focus" && !!focusParam;
+  const projectID = project || graph.scope.project || graph.nodes.find(node => node.id === graph.scope.focus)?.project || "";
 
-  const update = (patch: Params) => {
+  const update = (patch: Params, replace = true) => {
     const next = clean({ ...params, ...patch });
-    open({ view: "lineage", params: next }, { replace: true });
+    open({ view: "lineage", params: next }, { replace });
   };
   const openNode = (node: Node) => resourceOpen(open, node, params);
-  const focus = (node: Node) => update({ mode: "focus", focus: node.id, selected: node.id, project: node.project ?? project });
-  const focusSelected = (patch: Params = {}) => {
-    if (!selectedNode) return;
-    update({ mode: "focus", focus: selectedNode.id, selected: selectedNode.id, ...patch });
-  };
+  const focus = (node: Node) => update({ mode: "focus", focus: node.id, selected: node.id, project: node.project ?? projectID }, false);
   const focusNode = (node: Node) => {
     focus(node);
     setAnnouncement(t("Focused on {name}.", { name: node.title || node.name }));
   };
   const expandSelected = () => {
-    if (!selectedNode) return;
+    if (!selectedNode || !focusMode) return;
     const next = Math.min(3, depth + 1);
-    focusSelected({ depth: String(next) });
-    setAnnouncement(t("Expanded {name} to depth {depth}.", { name: selectedNode.title || selectedNode.name, depth: next }));
+    if (next === depth) return;
+    update({ depth: String(next) }, false);
+    setAnnouncement(t("Expanded graph to depth {depth}.", { depth: next }));
+  };
+  const backToProject = () => {
+    if (!focusMode) return;
+    update({ mode: "overview", project: projectID, focus: "", node: "", ref: "", selected: "", field: "", fields: "", depth: "" }, false);
+    setAnnouncement(projectID ? t("Returned to the project graph.") : t("Returned to the overview."));
   };
   const toggleIsolated = () => {
-    if (!selected) return;
+    if (!focusMode || !selected || root === selected) {
+      setAnnouncement(t("Select another resource to isolate its path."));
+      return;
+    }
     const next = !isolated;
     setIsolated(next);
     setAnnouncement(next
@@ -299,17 +306,23 @@ export function LineagePage({ params }: { params: Params }) {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const key = event.key.toLowerCase();
       if (key === "f" && selectedNode) { event.preventDefault(); focusNode(selectedNode); }
-      if (key === "i" && selectedNode) { event.preventDefault(); toggleIsolated(); }
-      if (key === "x" && selectedNode) { event.preventDefault(); expandSelected(); }
+      if (key === "i" && focusMode && selectedNode && selectedNode.id !== focusParam) { event.preventDefault(); toggleIsolated(); }
+      if (key === "x" && focusMode && selectedNode) { event.preventDefault(); expandSelected(); }
       if (key === "escape") {
-        setIsolated(false);
-        update({ selected: "" });
-        setAnnouncement(t("Isolation cleared. Selection returned to the focus resource."));
+        if (isolated) {
+          setIsolated(false);
+          setAnnouncement(t("Isolation cleared."));
+        } else if (selected && root && selected !== root) {
+          update({ selected: "" });
+          setAnnouncement(t("Selection returned to the focus resource."));
+        } else if (focusMode) {
+          backToProject();
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedNode, isolated, depth, focusNode, expandSelected, toggleIsolated, update]);
+  }, [selectedNode, isolated, depth, focusMode, focusParam, root, selected, focusNode, expandSelected, toggleIsolated, backToProject, update]);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -383,21 +396,24 @@ export function LineagePage({ params }: { params: Params }) {
     saveExport(lineageExportFileName(target, format, exported.exportedAt), body, format);
   };
   const toolbar = <div role="group" aria-label={t("Lineage actions")} className="flex flex-wrap items-center gap-1">
-    <Select aria-label={t("Branch")} value={branch} onChange={event => update({ branch: event.target.value, focus: "", selected: "" })} className="w-44" disabled={!holds("build", "builder")}>
+    {focusMode && <Button size="sm" variant="ghost" onClick={backToProject}><ChevronLeft />{projectID ? t("Back to project") : t("Back to overview")}</Button>}
+    <Select aria-label={t("Branch")} value={branch} onChange={event => update({ branch: event.target.value, focus: "", selected: "" }, false)} className="w-44" disabled={!holds("build", "builder")}>
       <option value="">{t("main")}</option>
       {(branches.data ?? []).filter(item => item.state === "open" || item.state === "proposed").map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
     </Select>
     {fieldMode && <Button size="sm" variant="ghost" onClick={() => { update({ field: "", selected: params.focus || "" }); setAnnouncement(t("Back to resources")); }}><ChevronLeft />{t("Back to resources")}</Button>}
-    <SegmentedChoice compact label={t("Direction")} value={direction} onChange={value => focusSelected({ direction: value })} options={[{ value: "upstream", label: t("Upstream") }, { value: "both", label: t("Both") }, { value: "downstream", label: t("Downstream") }]} />
-    <Select aria-label={t("Depth")} value={String(depth)} onChange={event => focusSelected({ depth: event.target.value })} className="w-24">
-      {[1, 2, 3].map(value => <option key={value} value={value}>{t("Depth {n}", { n: value })}</option>)}
-    </Select>
+    {focusMode && <>
+      <SegmentedChoice compact label={t("Direction")} value={direction} onChange={value => update({ direction: value, focus: focusParam, selected }, false)} options={[{ value: "upstream", label: t("Upstream") }, { value: "both", label: t("Both") }, { value: "downstream", label: t("Downstream") }]} />
+      <Select aria-label={t("Depth")} value={String(depth)} onChange={event => update({ depth: event.target.value, focus: focusParam, selected }, false)} className="w-24">
+        {[1, 2, 3].map(value => <option key={value} value={value}>{t("Depth {n}", { n: value })}</option>)}
+      </Select>
+    </>}
     <Select aria-label={t("Color by")} value={color} onChange={event => update({ color: event.target.value })} className="w-36">
       <option value="resource">{t("Resource type")}</option><option value="protection">{t("Protection")}</option><option value="status">{t("Status")}</option>
     </Select>
-    <Button size="sm" variant="ghost" onClick={() => selectedNode && focusNode(selectedNode)} disabled={!selectedNode}><Crosshair />{t("Focus")}</Button>
-    <Button size="sm" variant="ghost" onClick={toggleIsolated} disabled={!selected}><ArrowLeftRight />{isolated ? t("Show all") : t("Isolate")}</Button>
-    <Button size="sm" variant="ghost" onClick={expandSelected} disabled={!selectedNode}><Expand />{t("Expand")}</Button>
+    <Button size="sm" variant="ghost" onClick={() => selectedNode && focusNode(selectedNode)} disabled={!selectedNode || selectedNode.id === focusParam} title={t("Make the selected resource the graph root")}><Crosshair />{t("Focus")}</Button>
+    {focusMode && <Button size="sm" variant="ghost" onClick={toggleIsolated} disabled={!selectedNode || selectedNode.id === focusParam} title={t("Show only the path between the root and the selected resource")}><ArrowLeftRight />{isolated ? t("Show all") : t("Isolate")}</Button>}
+    {focusMode && <Button size="sm" variant="ghost" onClick={expandSelected} disabled={!selectedNode || depth >= 3} title={t("Show one more hop from the current root")}><Expand />{t("Expand")}</Button>}
     <Button size="sm" variant="ghost" onClick={() => void query.refetch()}><RefreshCw />{t("Refresh")}</Button>
     <ActionMenu label={t("Export")} icon={<Download />} commands={[
       { id: "subgraph-json", label: t("Visible subgraph · JSON"), run: () => download("subgraph", "json") },
@@ -476,7 +492,7 @@ export function LineagePage({ params }: { params: Params }) {
   };
   return <>
     <div role="status" aria-live="polite" aria-atomic="true" aria-label={t("Lineage status")} className="sr-only">{announcement}</div>
-    <Workbench storageKey={`lineage:${viewRoot}`} crumbs={[{ label: t("Data Lineage"), onClick: () => update({ mode: "overview", project: "", focus: "", selected: "" }) }, ...(project ? [{ label: project }] : [])]}
+    <Workbench storageKey={`lineage:${viewRoot}`} crumbs={[{ label: t("Data Lineage"), onClick: () => update({ mode: "overview", project: "", focus: "", selected: "" }, false) }, ...(projectID ? [{ label: t("Project"), ...(focusMode ? { onClick: backToProject } : {}) }] : [])]}
     title={selectedNode?.title || graph.scope.focus || t("Graph")} status={<span aria-label={t("Graph basis")} className="text-xs text-muted">{graph.basis.preview} · {new Date(graph.generatedAt).toLocaleString()}</span>}
     actions={toolbar} left={{ label: t("Scope"), content: left }} right={{ label: t("Inspector"), content: inspector, selection: String(inspectorOpenRequest) }} dock={dock} mainLabel={t("Data lineage graph")}>
     <div className="relative h-full min-h-[26rem]">
