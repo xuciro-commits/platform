@@ -27,31 +27,63 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 	if err := t.restoreLegacySeeds(ctx, store); err != nil {
 		return err
 	}
+	needsUpgrade := false
+	if upgrade, ok := j.(persistence.RuntimeStateUpgrade); ok {
+		var err error
+		needsUpgrade, err = upgrade.StateNeedsUpgrade(ctx, t.ID)
+		if err != nil {
+			return err
+		}
+	}
+	var view persistence.StateReadView
+	if recovery, ok := j.(persistence.RuntimeStateRecovery); ok {
+		position, active, err := recovery.StatePosition(ctx, t.ID)
+		if err != nil {
+			return err
+		}
+		if active && !needsUpgrade && prefix == nil && position == j.Position(t.ID) {
+			t.installRuntimeRecords(store, func() int64 { return j.Position(t.ID) })
+			t.installRuntimeHistory(store, func() int64 { return j.Position(t.ID) })
+			t.enableCurrentReadScopes()
+			return nil
+		}
+		if active {
+			t.records.Lock()
+			t.records.Current().Configure(store, t.ID, position, func() int64 { return j.Position(t.ID) })
+			t.records.UseCurrentRows()
+			t.records.Unlock()
+			if views, ok := store.(persistence.StateReadViews); ok {
+				view, err = views.BeginStateRead(ctx, t.ID, position)
+				if err != nil {
+					return err
+				}
+				t.records.Current().Bind(view)
+				defer func() {
+					t.records.Current().Bind(nil)
+					_ = view.Close()
+				}()
+			}
+		}
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	d, err := t.runtimeStateDeltaLocked()
 	if err != nil {
 		return err
 	}
-	if upgrade, ok := j.(persistence.RuntimeStateUpgrade); ok {
-		needed, upgradeErr := upgrade.StateNeedsUpgrade(ctx, t.ID)
-		if upgradeErr != nil {
-			return upgradeErr
+	if needsUpgrade {
+		position := j.Position(t.ID)
+		if prefix != nil {
+			position = prefix.Position
 		}
-		if needed {
-			position := j.Position(t.ID)
-			if prefix != nil {
-				position = prefix.Position
-			}
-			images, values, readErr := LegacyStatePreimages(ctx, j, t.ID, position)
-			if readErr != nil {
-				return readErr
-			}
-			if prefix != nil {
-				prefix.Delta.LegacyImages, prefix.Delta.LegacyValues = images, values
-			} else {
-				d.LegacyImages, d.LegacyValues = images, values
-			}
+		images, values, readErr := LegacyStatePreimages(ctx, j, t.ID, position)
+		if readErr != nil {
+			return readErr
+		}
+		if prefix != nil {
+			prefix.Delta.LegacyImages, prefix.Delta.LegacyValues = images, values
+		} else {
+			d.LegacyImages, d.LegacyValues = images, values
 		}
 	}
 	if prefix != nil {
