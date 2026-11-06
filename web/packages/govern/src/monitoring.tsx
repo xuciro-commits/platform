@@ -1,6 +1,6 @@
 import type { Api } from "@platform/kernel";
 import { useHost, useOpenRecord, useReadQuery as useRead } from "@platform/app";
-import { Button, Card, DataTable, EmptyState, Input, Notice, PageHeader, Sheet, StatusTag, defineStatuses, t, formatStamp, useWorkspace, type ColumnDef } from "@platform/ui";
+import { Button, Card, DataTable, Disclosure, EmptyState, Input, Notice, PageHeader, Sheet, StatusTag, defineStatuses, t, formatStamp, useWorkspace, type ColumnDef } from "@platform/ui";
 import { useState } from "react";
 import { ReadResult } from "./operations";
 
@@ -75,9 +75,63 @@ export function MonitoringOverviewView() {
 function CoverageNotices({ coverage }: { coverage: MonitoringCoverage[] }) {
   const limited = coverage.filter((entry) => entry.limitation);
   if (!limited.length) return null;
+  const degraded = new Set(["index-unavailable", "definition-unavailable", "read-limit", "input-unavailable"]);
+  const failures = limited.filter((entry) => degraded.has(entry.limitation!));
   return <div className="mt-3 grid max-w-3xl gap-2">
-    {limited.map((entry) => <Notice key={entry.source} tone="warning" title={entry.source} message={entry.limitation!} />)}
+    {failures.map((entry) => <Notice key={entry.source} tone="warning" title={coverageSource(entry.source)} message={coverageLimitation(entry.limitation!)} />)}
+    <Disclosure summary={t("Data coverage and known limits")} className="text-xs">
+      <p className="mt-1 text-muted">{t("Coverage describes what each source can show. A known limit is not a failed run.")}</p>
+      <dl className="mt-2 grid gap-2">
+        {limited.map((entry) => <div key={entry.source} className="grid gap-0.5 border-t border-line py-2">
+          <dt className="font-medium">{coverageSource(entry.source)}</dt>
+          <dd className="text-muted">{coverageBasis(entry.basis)} · {coverageLimitation(entry.limitation!)}</dd>
+        </div>)}
+      </dl>
+    </Disclosure>
   </div>;
+}
+
+function coverageSource(source: string) {
+  const labels: Record<string, string> = {
+    source: "Sync sources",
+    pipeline: "Pipelines",
+    compute: "Computed functions",
+    code: "Code",
+    projection: "Projections",
+    function: "Function runs",
+    flow: "Automations",
+    agent: "Agents",
+    work: "Work",
+    effect: "Deliveries",
+    "integration-effect": "Integration deliveries",
+    "delivery-attempts": "Delivery attempts",
+    "run-index": "Run index",
+  };
+  return labels[source] ? t(labels[source]) : source;
+}
+
+function coverageBasis(basis: MonitoringCoverage["basis"]) {
+  return t({
+    latest: "Current execution state",
+    current: "Current state",
+    retained: "Retained runs",
+  }[basis]);
+}
+
+function coverageLimitation(limitation: string) {
+  const labels: Record<string, string> = {
+    "latest-only": "Only the latest execution is included for this source.",
+    "caller-only": "Results are limited to runs visible to you.",
+    "permission-filtered": "Results follow your access permissions.",
+    "retained-window": "Only deliveries inside the retained window are included.",
+    "metadata-only": "Only delivery metadata is included.",
+    "not-included": "Individual delivery attempts are not included in this run view.",
+    "index-unavailable": "The run index is temporarily unavailable; counts were rebuilt from the original owners.",
+    "definition-unavailable": "A source definition is unavailable, so delayed-sync detection may be incomplete.",
+    "read-limit": "A source reached the read limit, so the run list may be incomplete.",
+    "input-unavailable": "Some run input details are unavailable.",
+  };
+  return labels[limitation] ? t(labels[limitation]) : t("An unclassified coverage limit applies to this source: {limit}", { limit: limitation });
 }
 
 export function MonitoringRunsView({ type: initialType, status: initialStatus }: { type?: string; status?: string }) {

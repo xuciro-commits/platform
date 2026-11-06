@@ -6,7 +6,7 @@ import { ReadResult } from "../operations";
 
 type Range = "1h" | "24h" | "7d" | "30d";
 
-function window(range: Range) {
+function rangeWindow(range: Range) {
   const hours = { "1h": 1, "24h": 24, "7d": 168, "30d": 720 }[range];
   const to = new Date();
   return { from: new Date(to.getTime() - hours * 3_600_000).toISOString(), to: to.toISOString() };
@@ -25,7 +25,7 @@ function RangePicker({ value, onChange }: { value: Range; onChange: (value: Rang
 
 export function MonitoringMetricsView() {
   const [range, setRange] = useState<Range>("24h");
-  const times = useMemo(() => window(range), [range]);
+  const times = useMemo(() => rangeWindow(range), [range]);
   const query = useReadQuery<Api.ObservationSummary>(`/v1/monitoring/metrics?${new URLSearchParams(times)}`, 5000);
   return <>
     <PageHeader title={t("Metrics")} help={t("Operational request and log-health rollups. These are diagnostic signals, not business facts; the original owners remain authoritative.")}
@@ -66,7 +66,7 @@ type TraceRow = {
 
 export function MonitoringTracesView() {
   const [range, setRange] = useState<Range>("24h");
-  const times = useMemo(() => window(range), [range]);
+  const times = useMemo(() => rangeWindow(range), [range]);
   const query = useReadQuery<Api.ObservationPage>(`/v1/monitoring/traces?${new URLSearchParams({ ...times, limit: "200" })}`, 5000);
   const { open } = useWorkspace();
   const traces = useMemo(() => {
