@@ -76,6 +76,8 @@ test("F22 a builder exports the visible lineage subgraph, impact list, fields, a
 
   await test.step("an isolated path exports node and edge rows as CSV without the hidden input", async () => {
     await page.goto(`/#/lineage?mode=focus&focus=${encodeURIComponent(objectRID)}&depth=3&selected=${encodeURIComponent(`pipeline:${pipeline}`)}`);
+    await page.getByPlaceholder("Name or API name").fill("");
+    await expect(page.getByText(inputTitle, { exact: true }).first()).toBeVisible();
     await page.getByRole("button", { name: "Isolate", exact: true }).click();
     await expect(page.getByRole("button", { name: "Show all", exact: true })).toBeVisible();
 

@@ -161,4 +161,4 @@ read-when: 新增或改变资源类型、对象模型、动作、函数、自动
 
 ## 现存差距
 
-- 授权上下文的来源装配仍在宿主，路线图 D2 将其收进 `services/security` 的窄端口；重放继续显式使用 `NativeRules`。
+- 授权上下文的来源装配仍在宿主，尚未收进 `services/security` 的窄端口；重放继续显式使用 `NativeRules`。

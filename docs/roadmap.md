@@ -12,14 +12,6 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 ## 当前批次
 
-### Data Lineage 产品化后续（2026-11-06）
-
-目标规范见 [6-domain/lineage](6-domain/lineage.md) 与 [4-interaction/workbenches § Data Lineage](4-interaction/workbenches.md#data-lineage)。L1–L6 与 F19–F21 已交付，以下只保留未完成项。
-
-- [ ] D1 超大图性能（P1）：已加载子图的前端虚拟化/按需展开，保持 1000+ 资源的筛选、聚焦与隔离可用；验收为不静默丢节点、交互不卡顿。
-- [ ] D2 导出（P2）：从当前只读图导出可见子图或影响列表，复用同一查询与授权结果，不建立第二条计算路径。
-- [ ] D3 可访问性（P2）：对图、表格、筛选、Inspector 与键盘路径做专项检查；验收为关键任务可只用键盘完成，并有明确的焦点和错误反馈。
-
 ### 包生命周期收敛（2026-11-05）
 
 目标规范见 [6-domain/packages](6-domain/packages.md)。一批只交付一个可运行的完整路径；完成的条目直接删除。
