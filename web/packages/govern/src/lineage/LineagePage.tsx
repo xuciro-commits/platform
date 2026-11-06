@@ -1,6 +1,6 @@
-import { useReadQuery } from "@platform/app";
+import { newId, useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, DataTable, EmptyState, Input, Notice, Panel, PropertyList, RelationCanvas, SegmentedChoice, Select, Workbench, t, useWorkspace, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
+import { Button, DataTable, Dialog, EmptyState, Form, Input, Notice, Panel, PropertyList, RelationCanvas, SegmentedChoice, Select, Workbench, t, useWorkspace, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
 import { ArrowLeftRight, ChevronLeft, Copy, Crosshair, Expand, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -9,6 +9,7 @@ type Graph = Api.Lineage;
 type Node = Api.LineageNode;
 type Edge = Api.LineageEdge;
 type Group = Api.LineageGroup;
+type SavedLineage = { version: number; params: Params };
 
 const empty: Graph = {
   nodes: [], edges: [], groups: [],
@@ -52,6 +53,10 @@ function displayVersion(node: Node): string {
   return "";
 }
 
+function runningVersion(node: Node): string {
+  return node.executionVersion ? `v${node.executionVersion}` : "";
+}
+
 function boundaryText(boundary: Node["boundary"]): string {
   if (!boundary) return "";
   return t("{upstream} upstream · {downstream} downstream boundary", { upstream: boundary.upstream ?? 0, downstream: boundary.downstream ?? 0 });
@@ -69,7 +74,7 @@ function relationNodes(visible: Node[], color: ColorBy): RelationNode[] {
     label: node.title || node.name,
     class: node.kind,
     tone: nodeTone(node, color),
-    caption: `${kindTitle[node.kind] ?? node.kind}${displayVersion(node) ? ` · ${displayVersion(node)}` : ""} · ${statusNode(node)}${node.boundary ? ` · ${boundaryText(node.boundary)}` : ""}`,
+    caption: `${kindTitle[node.kind] ?? node.kind}${displayVersion(node) ? ` · ${displayVersion(node)}` : ""}${runningVersion(node) ? ` → ${runningVersion(node)}` : ""} · ${statusNode(node)}${node.boundary ? ` · ${boundaryText(node.boundary)}` : ""}`,
     detail: [node.project, node.name].filter(Boolean).join(" · "),
     dim: false,
     flag: node.status === "failed" ? (node.errorCode || t("Failed")) : node.status === "stale" ? t("Stale") : undefined,
@@ -91,6 +96,36 @@ function relationEdges(edges: Edge[]): RelationEdge[] {
     dashed: edge.stale,
     tone: edge.stale ? "warning" : undefined,
     label: edge.role === "input" || edge.role === "join" || edge.role === "lookup" ? `${edge.role}${edge.consumedVersion ? ` v${edge.consumedVersion}` : ""}` : edge.role,
+  }));
+}
+
+function fieldRelationNodes(nodes: NonNullable<Graph["fieldNodes"]>): RelationNode[] {
+  return nodes.map(node => ({
+    id: node.id,
+    label: node.title || node.name,
+    class: "field",
+    tone: node.certainty === "unverified" ? "neutral" : node.certainty === "derived" ? "warning" : "info",
+    caption: `${node.kind} · ${node.certainty}`,
+    detail: node.project,
+    dim: false,
+    flag: node.certainty === "unverified" ? t("unverified") : undefined,
+    facts: [
+      { label: t("Resource"), value: node.node },
+      { label: t("Field"), value: node.name },
+      { label: t("Certainty"), value: t(node.certainty) },
+    ],
+  }));
+}
+
+function fieldRelationEdges(edges: NonNullable<Graph["fieldEdges"]>): RelationEdge[] {
+  return edges.map(edge => ({
+    id: edge.id,
+    source: edge.from,
+    target: edge.to,
+    directed: true,
+    dashed: edge.certainty === "unverified",
+    tone: edge.certainty === "unverified" ? "neutral" : undefined,
+    label: `${edge.operation}${edge.step ? ` · ${edge.step}` : ""}`,
   }));
 }
 
@@ -123,24 +158,33 @@ function pathNodes(edges: Edge[], start: string, end: string): Set<string> {
 
 export function LineagePage({ params }: { params: Params }) {
   const { open, notify } = useWorkspace();
+  const { holds, decide } = useHost();
+  const branches = useReadQuery<Api.BranchDetail[]>("/v1/branches", undefined, holds("build", "builder"));
+  const savedViews = useReadQuery<Api.SavedView[]>("/v1/views");
   const focusParam = nodeId(params);
   const mode = params.mode || (focusParam ? "focus" : "overview");
   const project = params.project ?? "";
+  const branch = params.branch ?? "";
   const direction = params.direction === "upstream" || params.direction === "downstream" ? params.direction : "both";
   const depth = Math.max(1, Math.min(3, Number(params.depth || 1)));
   const color: ColorBy = params.color === "protection" || params.color === "status" ? params.color : "resource";
   const fields = params.fields === "on" || !!params.field;
-  const queryPath = `/v1/lineage?${new URLSearchParams(clean({ mode, project, focus: focusParam, direction, depth: String(depth), fields: fields ? "on" : "", field: params.field ?? "" })).toString()}`;
+  const queryPath = `/v1/lineage?${new URLSearchParams(clean({ mode, project, focus: focusParam, branch, direction, depth: String(depth), fields: fields ? "on" : "", field: params.field ?? "" })).toString()}`;
   const noFocus = mode === "focus" && !focusParam && !project;
   const query = useReadQuery<Graph>(queryPath, undefined, !noFocus);
   const graph = query.data ?? empty;
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState("");
   const [status, setStatus] = useState("");
+  const [hideUnconnected, setHideUnconnected] = useState(false);
+  const [savingView, setSavingView] = useState(false);
+  const [viewTitle, setViewTitle] = useState("");
   const [isolated, setIsolated] = useState(false);
   const selected = params.selected || graph.scope.focus || "";
   const root = graph.scope.focus || selected;
   const selectedNode = graph.nodes.find(node => node.id === selected);
+  const fieldMode = !!params.field;
+  const selectedField = (graph.fieldNodes ?? []).find(field => field.id === params.field);
 
   const update = (patch: Params) => {
     const next = clean({ ...params, ...patch });
@@ -154,6 +198,28 @@ export function LineagePage({ params }: { params: Params }) {
   };
   const copy = async (text: string, message: string) => {
     try { await navigator.clipboard.writeText(text); notify.success(message); } catch { notify.error(t("Copy failed")); }
+  };
+  const lineageViews = (savedViews.data ?? []).filter(view => view.entity === "lineage" && !view.archived);
+  const saveView = async () => {
+    if (!viewTitle.trim()) return;
+    const id = newId("LINEAGE");
+    if (await decide("work.view.save", { type: "work.view", id }, {
+      title: viewTitle,
+      entity: "lineage",
+      state: JSON.stringify({ version: 1, params: clean({ ...params, selected: "" }) }),
+    })) {
+      setSavingView(false);
+      setViewTitle("");
+      void savedViews.refetch();
+    }
+  };
+  const loadView = (view: Api.SavedView) => {
+    try {
+      const parsed = JSON.parse(view.state) as SavedLineage;
+      if (parsed.version === 1 && parsed.params && typeof parsed.params === "object") open({ view: "lineage", params: parsed.params }, { replace: true });
+    } catch {
+      notify.error(t("This saved view is unreadable."));
+    }
   };
 
   useEffect(() => {
@@ -173,10 +239,11 @@ export function LineagePage({ params }: { params: Params }) {
     return graph.nodes.filter(node => {
       if (kind && node.kind !== kind) return false;
       if (status && node.status !== status) return false;
+      if (hideUnconnected && !node.connected) return false;
       if (needle && !`${node.title} ${node.name} ${node.project ?? ""}`.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [graph.nodes, kind, search, status]);
+  }, [graph.nodes, hideUnconnected, kind, search, status]);
   const visible = useMemo(() => {
     if (!isolated || !root || !selected || root === selected) return filtered;
     const keep = pathNodes(graph.edges, root, selected);
@@ -185,6 +252,11 @@ export function LineagePage({ params }: { params: Params }) {
   const visibleEdges = useMemo(() => graph.edges.filter(edge => visible.some(node => node.id === edge.from) && visible.some(node => node.id === edge.to)), [graph.edges, visible]);
   const hidden = graph.nodes.length - filtered.length;
   const toolbar = <div className="flex flex-wrap items-center gap-1">
+    <Select aria-label={t("Branch")} value={branch} onChange={event => update({ branch: event.target.value, focus: "", selected: "" })} className="w-44" disabled={!holds("build", "builder")}>
+      <option value="">{t("main")}</option>
+      {(branches.data ?? []).filter(item => item.state === "open" || item.state === "proposed").map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+    </Select>
+    {fieldMode && <Button size="sm" variant="ghost" onClick={() => update({ field: "", selected: params.focus || "" })}><ChevronLeft />{t("Back to resources")}</Button>}
     <SegmentedChoice compact label={t("Direction")} value={direction} onChange={value => focusSelected({ direction: value })} options={[{ value: "upstream", label: t("Upstream") }, { value: "both", label: t("Both") }, { value: "downstream", label: t("Downstream") }]} />
     <Select aria-label={t("Depth")} value={String(depth)} onChange={event => focusSelected({ depth: event.target.value })} className="w-24">
       {[1, 2, 3].map(value => <option key={value} value={value}>{t("Depth {n}", { n: value })}</option>)}
@@ -197,6 +269,7 @@ export function LineagePage({ params }: { params: Params }) {
     <Button size="sm" variant="ghost" onClick={() => focusSelected({ depth: String(Math.min(3, depth + 1)) })} disabled={!selectedNode}><Expand />{t("Expand")}</Button>
     <Button size="sm" variant="ghost" onClick={() => void query.refetch()}><RefreshCw />{t("Refresh")}</Button>
     <Button size="sm" variant="ghost" onClick={() => void copy(location.href, t("Link copied"))}><Copy />{t("Copy link")}</Button>
+    <Button size="sm" variant="ghost" onClick={() => setSavingView(true)}>{t("Save view")}</Button>
   </div>;
 
   if (mode === "overview" && !project) return <Overview graph={graph} loading={query.isPending} error={!!query.isError} onRetry={() => void query.refetch()} onProject={id => update({ project: id, mode: "overview" })} />;
@@ -207,31 +280,51 @@ export function LineagePage({ params }: { params: Params }) {
 
   const left = <div className="grid gap-3 p-2">
     <label className="grid gap-1 text-xs font-medium">{t("Find in graph")}<span className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" /><Input value={search} onChange={event => setSearch(event.target.value)} className="pl-7" placeholder={t("Name or API name")} /></span></label>
+    {lineageViews.length > 0 && <label className="grid gap-1 text-xs font-medium">{t("Saved views")}<Select aria-label={t("Saved views")} value="" onChange={event => { const view = lineageViews.find(item => item.id === event.target.value); if (view) loadView(view); }}><option value="">{t("Choose a saved view")}</option>{lineageViews.map(view => <option key={view.id} value={view.id}>{view.title}</option>)}</Select></label>}
     <label className="grid gap-1 text-xs font-medium">{t("Kind")}<Select value={kind} onChange={event => setKind(event.target.value)}><option value="">{t("All kinds")}</option>{kindOrder.map(value => <option key={value} value={value}>{t(kindTitle[value] ?? value)}</option>)}</Select></label>
     <label className="grid gap-1 text-xs font-medium">{t("Status")}<Select value={status} onChange={event => setStatus(event.target.value)}><option value="">{t("All states")}</option>{Object.entries(statusText).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</Select></label>
+    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={hideUnconnected} onChange={event => setHideUnconnected(event.target.checked)} />{t("Hide unconnected")}</label>
     <div className="grid gap-1 text-xs"><span className="font-medium">{t("Coverage")}</span><span className="text-muted">{t("{visible} of {total} resources", { visible: visible.length, total: graph.total.nodes })}</span>{hidden > 0 && <span className="text-warning">{t("{n} hidden by filters", { n: hidden })}</span>}</div>
     <Button size="sm" variant="ghost" onClick={() => update({ mode: "overview", project: "", focus: "", selected: "" })}><ChevronLeft />{t("Overview")}</Button>
   </div>;
 
-  const inspector = <Inspector node={selectedNode} graph={graph} onOpen={openNode} onFocus={focus} onSelect={id => update({ selected: id })} onCopyRID={rid => void copy(rid, t("RID copied"))} onCopyLink={() => void copy(location.href, t("Link copied"))} onFields={() => update({ fields: "on", field: "" })} />;
+  const inspector = fieldMode
+    ? <FieldInspector field={selectedField} graph={graph} onSelect={id => update({ selected: id })} />
+    : <Inspector node={selectedNode} graph={graph} onOpen={openNode} onFocus={focus} onSelect={id => update({ selected: id })} onCopyRID={rid => void copy(rid, t("RID copied"))} onCopyLink={() => void copy(location.href, t("Link copied"))} onFields={() => update({ fields: "on", field: "" })} />;
   const downstream = graph.impact?.downstream ?? (root ? reachable(graph.edges, root, true).length : 0);
   const dock = {
     label: t("Analysis"),
     tabs: [
       { id: "impact", title: t("Impact"), badge: downstream, content: <Impact graph={graph} root={root} onSelect={id => update({ selected: id })} /> },
       { id: "coverage", title: t("Coverage"), badge: graph.unreadable?.length, content: <Coverage graph={graph} /> },
-      { id: "fields", title: t("Fields"), content: <Fields graph={graph} node={selectedNode} selected={params.field ?? ""} onSelect={id => update({ fields: "on", field: id, selected: selectedNode?.id ?? "" })} /> },
+      { id: "fields", title: t("Fields"), content: <Fields graph={graph} node={selectedNode} selected={params.field ?? ""} onSelect={id => update({ fields: "on", field: id, selected: id })} /> },
     ],
   };
-  return <Workbench storageKey={`lineage:${root || project || "overview"}`} crumbs={[{ label: t("Data Lineage"), onClick: () => update({ mode: "overview", project: "", focus: "", selected: "" }) }, ...(project ? [{ label: project }] : [])]}
+  return <><Workbench storageKey={`lineage:${root || project || "overview"}`} crumbs={[{ label: t("Data Lineage"), onClick: () => update({ mode: "overview", project: "", focus: "", selected: "" }) }, ...(project ? [{ label: project }] : [])]}
     title={selectedNode?.title || graph.scope.focus || t("Graph")} status={<span className="text-xs text-muted">{graph.basis.preview} · {new Date(graph.generatedAt).toLocaleString()}</span>}
     actions={toolbar} left={{ label: t("Scope"), content: left }} right={{ label: t("Inspector"), content: inspector }} dock={dock} mainLabel={t("Data lineage graph")} onKeyDown={() => undefined}>
     <div className="relative h-full min-h-[26rem]">
       {graph.nodes.some(node => node.markingStatus !== "consistent") && <div className="absolute left-2 top-2 z-10"><Notice tone="warning" message={t("Protection differs from preview. The saved definition is not active yet.")} /></div>}
       {graph.truncated && <div className="absolute left-2 top-2 z-10"><Notice tone="warning" message={t("Showing {returned} of {total} resources. Reduce depth or choose one direction.", { returned: graph.returned.nodes, total: graph.total.nodes })} /></div>}
-      <RelationCanvas nodes={relationNodes(visible, color)} edges={relationEdges(visibleEdges)} selected={selected} height="100%" label={t("Data Lineage")} storeKey={`lineage:${root || project || "overview"}`} onSelect={(id?: string) => update({ selected: id ?? "" })} onOpen={(id: string) => { const node = graph.nodes.find(item => item.id === id); if (node) openNode(node); }} />
+      <RelationCanvas
+        nodes={fieldMode ? fieldRelationNodes((graph.fieldNodes ?? []).filter(field => !search.trim() || `${field.title} ${field.name}`.toLowerCase().includes(search.trim().toLowerCase()))) : relationNodes(visible, color)}
+        edges={fieldMode ? fieldRelationEdges((graph.fieldEdges ?? []).filter(edge => (graph.fieldNodes ?? []).some(field => field.id === edge.from) && (graph.fieldNodes ?? []).some(field => field.id === edge.to))) : relationEdges(visibleEdges)}
+        selected={selected}
+        height="100%"
+        label={fieldMode ? t("Field lineage") : t("Data Lineage")}
+        storeKey={`lineage:${fieldMode ? "fields:" + (params.field || "all") : root || project || "overview"}`}
+        onSelect={(id?: string) => update({ selected: id ?? "" })}
+        onOpen={(id: string) => { if (fieldMode) return; const node = graph.nodes.find(item => item.id === id); if (node) openNode(node); }}
+      />
     </div>
-  </Workbench>;
+  </Workbench>
+    <Dialog open={savingView} onOpenChange={open => { if (!open) setSavingView(false); }} title={t("Save view")}>
+      <Form className="grid gap-3" onSubmit={() => { if (viewTitle.trim()) void saveView(); }}>
+        <Input aria-label={t("Name")} placeholder={t("Name of the view")} value={viewTitle} onChange={event => setViewTitle(event.target.value)} autoFocus />
+        <div className="flex justify-end gap-2"><Button type="button" onClick={() => setSavingView(false)}>{t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!viewTitle.trim()}>{t("Save")}</Button></div>
+      </Form>
+    </Dialog>
+  </>;
 }
 
 function Overview({ graph, loading, error, onRetry, onProject }: { graph: Graph; loading: boolean; error: boolean; onRetry: () => void; onProject: (id: string) => void }) {
@@ -249,6 +342,9 @@ function Overview({ graph, loading, error, onRetry, onProject }: { graph: Graph;
     { id: "stale", header: t("Stale"), accessorFn: row => row.stale },
     { id: "failed", header: t("Failed"), accessorFn: row => row.failed },
     { id: "never", header: t("Never run"), accessorFn: row => row.neverRun },
+    { id: "cross", header: t("Cross-project"), accessorFn: row => `${row.crossIn ?? 0} in · ${row.crossOut ?? 0} out` },
+    { id: "unconnected", header: t("Unconnected"), accessorFn: row => row.unconnected ?? 0 },
+    { id: "updated", header: t("Updated"), accessorFn: row => row.updated ? new Date(row.updated).toLocaleString() : "—" },
     { id: "guard", header: t("Highest protection"), accessorFn: row => row.guard || t("None") },
   ];
   return <div className="grid gap-4 p-4">
@@ -266,6 +362,31 @@ function PageTitle({ title, subtitle, onRefresh }: { title: string; subtitle: st
   return <div className="flex min-w-0 items-center justify-between gap-3"><div className="min-w-0"><h1 className="truncate text-xl font-semibold">{title}</h1><p className="text-xs text-muted">{subtitle}</p></div><Button size="sm" variant="ghost" onClick={onRefresh}><RefreshCw />{t("Refresh")}</Button></div>;
 }
 
+function FieldInspector({ field, graph, onSelect }: { field?: NonNullable<Graph["fieldNodes"]>[number]; graph: Graph; onSelect: (id: string) => void }) {
+  if (!field) return <div className="p-3 text-xs text-muted">{t("Choose a field to trace its source and downstream use.")}</div>;
+  const incoming = (graph.fieldEdges ?? []).filter(edge => edge.to === field.id);
+  const outgoing = (graph.fieldEdges ?? []).filter(edge => edge.from === field.id);
+  return <div className="grid gap-3 overflow-auto p-3 text-xs">
+    <div><h2 className="truncate text-sm font-semibold">{field.title || field.name}</h2><p className="truncate text-muted">{field.kind} · {field.node}</p></div>
+    <PropertyList items={[
+      [t("Resource"), field.node],
+      [t("Field"), field.name],
+      [t("Certainty"), t(field.certainty)],
+    ]} />
+    <Section title={t("Inputs ({n})", { n: incoming.length })}><FieldNeighbors edges={incoming} graph={graph} side="from" onSelect={onSelect} /></Section>
+    <Section title={t("Outputs ({n})", { n: outgoing.length })}><FieldNeighbors edges={outgoing} graph={graph} side="to" onSelect={onSelect} /></Section>
+  </div>;
+}
+
+function FieldNeighbors({ edges, graph, side, onSelect }: { edges: NonNullable<Graph["fieldEdges"]>; graph: Graph; side: "from" | "to"; onSelect: (id: string) => void }) {
+  if (!edges.length) return <p className="text-muted">{t("None")}</p>;
+  return <div className="grid gap-1">{edges.map(edge => {
+    const id = side === "from" ? edge.from : edge.to;
+    const field = (graph.fieldNodes ?? []).find(item => item.id === id);
+    return <button key={edge.id} type="button" className="grid min-w-0 grid-cols-[1fr_auto] items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-row-hover" onClick={() => onSelect(id)}><span className="truncate">{field?.title || field?.name || id}</span><span className="text-muted">{edge.operation} · {t(edge.certainty)}</span></button>;
+  })}</div>;
+}
+
 function Inspector({ node, graph, onOpen, onFocus, onSelect, onCopyRID, onCopyLink, onFields }: { node?: Node; graph: Graph; onOpen: (node: Node) => void; onFocus: (node: Node) => void; onSelect: (id: string) => void; onCopyRID: (rid: string) => void; onCopyLink: () => void; onFields: () => void }) {
   if (!node) return <div className="p-3 text-xs text-muted">{t("Select a resource to inspect its versions, protection and inputs.")}</div>;
   const incoming = graph.edges.filter(edge => edge.to === node.id);
@@ -277,7 +398,7 @@ function Inspector({ node, graph, onOpen, onFocus, onSelect, onCopyRID, onCopyLi
       [t("Status"), statusNode(node)], [t("Project"), node.project ?? "—"], [t("RID"), node.rid ? <code className="break-all">{node.rid}</code> : "—"],
       [t("Declared"), node.declared || "—"], [t("Preview"), node.effective || "—"], [t("Protection"), node.guard || "—"],
       ...(node.markingStatus !== "consistent" ? [[t("Marking state"), node.markingStatus] as [string, ReactNode]] : []),
-      [t("Saved definition"), node.definitionVersion ? `v${node.definitionVersion}` : "—"], [t("Dataset version"), node.datasetVersion ? `v${node.datasetVersion}` : "—"],
+      [t("Saved definition"), node.definitionVersion ? `v${node.definitionVersion}` : "—"], [t("Running definition"), runningVersion(node) || "—"], [t("Dataset version"), node.datasetVersion ? `v${node.datasetVersion}` : "—"],
       [t("Rows"), node.canReadData && node.rows ? String(node.rows) : "—"], [t("Last activity"), node.at ? new Date(node.at).toLocaleString() : "—"],
       ...(node.staleReasons?.length ? [[t("Stale reasons"), node.staleReasons.join(", ")] as [string, ReactNode]] : []),
       ...(node.boundary ? [[t("Boundaries"), `${boundaryText(node.boundary)}${node.boundary.reason ? ` · ${t(node.boundary.reason)}` : ""}`] as [string, ReactNode]] : []),

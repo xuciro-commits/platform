@@ -56,6 +56,7 @@ test("F19 a builder opens Data Lineage from an object type, inspects upstream ev
     await expect(page.getByRole("button").filter({ hasText: "Title" }).first()).toBeVisible();
     await page.getByRole("button").filter({ hasText: "Title" }).first().click();
     await expect(page.getByText("title → Note · bind", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Back to resources", exact: true }).click();
   });
 
   await test.step("focusing the dataset and changing direction recalculates impact", async () => {
