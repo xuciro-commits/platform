@@ -203,7 +203,7 @@ func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time
 }
 
 func (t *Tenant) WriteView(kind string, m platform.Member, lang string, w http.ResponseWriter, r *http.Request) {
-	t.views.WriteView(t.definitionsFingerprint(), transport.Rights(m), kind, lang, w, r, func() any {
+	t.viewCache().WriteView(t.definitionsFingerprint(), transport.Rights(m), kind, lang, w, r, func() any {
 		switch kind {
 		case "entities":
 			return t.Entities(m)

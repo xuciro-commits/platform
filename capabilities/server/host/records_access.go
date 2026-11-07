@@ -17,11 +17,11 @@ func viewOf(m platform.Member, et *records.Type) (*records.Type, []platform.Fiel
 
 func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	gen, key := t.definitionsFingerprint(), transport.Rights(m)
-	if out, ok := t.views.Entities(gen, key); ok {
+	if out, ok := t.viewCache().Entities(gen, key); ok {
 		return out
 	}
 	out := t.entityView(m)
-	t.views.StoreEntities(gen, key, out)
+	t.viewCache().StoreEntities(gen, key, out)
 	return out
 }
 

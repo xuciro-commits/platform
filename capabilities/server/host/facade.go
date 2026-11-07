@@ -10,11 +10,11 @@ import (
 
 func (t *Tenant) Catalog(m platform.Member) []platform.Action {
 	gen, key := t.definitionsFingerprint(), transport.Rights(m)
-	if out, ok := t.views.Catalog(gen, key); ok {
+	if out, ok := t.viewCache().Catalog(gen, key); ok {
 		return out
 	}
 	out := t.buildCatalog(m)
-	t.views.StoreCatalog(gen, key, out)
+	t.viewCache().StoreCatalog(gen, key, out)
 	return out
 }
 

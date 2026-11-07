@@ -87,7 +87,10 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 	legacy := workapp.SavedView{Record: platform.Record{ID: "HISTORY"}, Title: "History", Entity: "build.alpha", Owner: member.ID,
 		State: `{"kind":"list","search":"old"}`}
 	receipt := &pb.ChangeRecord{ChangeId: "historical-work-view", Submission: &pb.Submission{PrincipalId: member.ID, Schema: &pb.SchemaRef{Name: workapp.SchemaViewSave}}}
-	if refusal := live.records.Put(caller, receipt, legacy); refusal != nil {
+	live.mu.Lock()
+	refusal = live.records.Put(caller, receipt, legacy)
+	live.mu.Unlock()
+	if refusal != nil {
 		t.Fatalf("seed a historical view: %s: %s", refusal.Code, refusal.Message)
 	}
 	items, refusal = views()
@@ -100,7 +103,10 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 
 	unsupported := workapp.SavedView{Record: platform.Record{ID: "FUTURE"}, Title: "Future", Entity: "build.alpha", Owner: member.ID,
 		State: `{"version":2,"kind":"list"}`}
-	if refusal := live.records.Put(caller, receipt, unsupported); refusal != nil {
+	live.mu.Lock()
+	refusal = live.records.Put(caller, receipt, unsupported)
+	live.mu.Unlock()
+	if refusal != nil {
 		t.Fatalf("seed an unsupported view: %s: %s", refusal.Code, refusal.Message)
 	}
 	if _, refusal := views(); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {

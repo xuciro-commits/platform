@@ -490,6 +490,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.invalidateReadImage()
 	if s.Checkpoint != nil {
 		t.snapshotPosition = s.Checkpoint.Position
 	}

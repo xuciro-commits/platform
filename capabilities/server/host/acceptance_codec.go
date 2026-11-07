@@ -384,6 +384,7 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 func (t *Tenant) recordsAcceptedResults() bool { return t.AcceptResult != nil || t.Record != nil }
 
 func (t *Tenant) acceptedResultApplied() {
+	t.stateEpoch.Add(1)
 	t.records.Lock()
 	if t.records.Current().Position() != nil {
 		t.records.Current().MarkApplied(t.records.Current().Position()())

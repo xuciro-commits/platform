@@ -37,6 +37,8 @@ type Tenant struct {
 	currentReadScopes     bool
 	readScope             *recordReadScope
 	readOrigin            *Tenant
+	readImage             atomic.Pointer[tenantReadImage]
+	stateEpoch            atomic.Uint64
 	startupSnapshot       *snapshotCompatibility
 	runtimePosition       func() int64
 	snapshotPosition      int64
@@ -77,6 +79,7 @@ type Tenant struct {
 	mu                    runtimekernel.Lane
 	laneLastSlow          atomic.Pointer[LaneHold]
 	views                 transport.ViewCache
+	readViews             *transport.ViewCache
 	defGen                atomic.Uint64
 	streamMu              sync.Mutex
 	markingMu             sync.Mutex
@@ -151,7 +154,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: services.Kernel.Works(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
 		connectors: newConnectorRoster(services.Kernel), records: records.NewStore()}
 	t.bindAuditStore()
-	t.mu.BindReadScope(t.beginRecordRead, t.closeRecordRead)
+	t.mu.BindReadScope(t.beginRecordRead, t.endLane)
 	t.observeLane()
 	for i, app := range apps {
 		id := app.Manifest().ID

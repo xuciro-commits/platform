@@ -180,9 +180,6 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *h
 }
 
 func (t *Tenant) liveVersion(query string) string {
-	target, body, _ := strings.Cut(query, "\n")
-	u, _ := url.Parse(target)
-	p := u.Path
 	c := &t.change
 	c.mu.Lock()
 	global, meta, seq := c.global, c.owners["platform"]+c.owners["enterprise"]+c.owners["build"], c.seq
@@ -195,6 +192,18 @@ func (t *Tenant) liveVersion(query string) string {
 		ops[k] = v
 	}
 	c.mu.Unlock()
+	if image := t.readImage.Load(); image != nil {
+		return image.state.liveReadVersion(query, global, meta, seq, image.operations, owners, ops)
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.liveReadVersion(query, global, meta, seq, seq, owners, ops)
+}
+
+func (t *Tenant) liveReadVersion(query string, global, meta, seq, published int64, owners, ops map[string]int64) string {
+	target, body, _ := strings.Cut(query, "\n")
+	u, _ := url.Parse(target)
+	p := u.Path
 	if strings.HasPrefix(p, "/v1/releases/candidates/") {
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
 	}
@@ -211,11 +220,9 @@ func (t *Tenant) liveVersion(query string) string {
 		return fmt.Sprintf("%d/%d/%d", global, meta, generation)
 	}
 	if strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) {
-		t.mu.Lock()
-		defer t.mu.Unlock()
 		parts := strings.Split(p, "/")
 		if len(parts) != 6 {
-			return fmt.Sprint(seq)
+			return fmt.Sprintf("%d/%d", seq, published)
 		}
 		ref := platform.AssetRef{App: parts[3], Kind: platform.AssetApp, Name: parts[4]}
 		_, graphs, err := t.applicationRunGraphsLocked(ref)
@@ -239,10 +246,10 @@ func (t *Tenant) liveVersion(query string) string {
 		t.records.Lock()
 		a, b := t.records.LiveVersion("flow.instance"), t.records.LiveVersion("agent.run")
 		t.records.Unlock()
-		return fmt.Sprintf("%d/%d/%d/%d/%d", global, meta, a, b, operationVersion)
+		return fmt.Sprintf("%d/%d/%d/%d/%d/%d", global, meta, a, b, operationVersion, published)
 	}
 	if liveOperationRead(p) || strings.HasPrefix(p, "/v1/chain/") || p == "/v1/business-refusals" || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
-		return fmt.Sprint(seq)
+		return fmt.Sprintf("%d/%d", seq, published)
 	}
 	if strings.HasPrefix(p, "/v1/object-sets/") {
 		var request ObjectSetRequest
@@ -299,11 +306,9 @@ func (t *Tenant) liveVersion(query string) string {
 	}
 	owner := "platform"
 	if name, ok := strings.CutPrefix(p, "/v1/"); ok && !strings.Contains(name, "/") {
-		t.mu.Lock()
 		if app := t.owner["read:"+name]; app != nil {
 			owner = app.Manifest().ID
 		}
-		t.mu.Unlock()
 	}
 	switch p {
 	case "/v1/releases/active", "/v1/releases/candidates", "/v1/releases/drafts/working", "/v1/build/drafts/actions", "/v1/release-profile", "/v1/capabilities", "/v1/page-model/rules":

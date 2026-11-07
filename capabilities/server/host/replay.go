@@ -13,6 +13,7 @@ import (
 func (t *Tenant) Replay(entries []Entry) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.invalidateReadImage()
 	if t.procs != nil {
 		defer t.procs.Pin(nil)
 	}

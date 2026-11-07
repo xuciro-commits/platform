@@ -95,7 +95,11 @@ func (t *Tenant) laneHealth(now time.Time, outside bool) LaneHealth {
 }
 
 func (t *Tenant) healthState(now time.Time) TenantHealth {
-	if fault := t.fault.Load(); fault != nil {
+	operational := t
+	if source := t.scopeSource(); source != nil {
+		operational = source
+	}
+	if fault := operational.fault.Load(); fault != nil {
 		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: Started,
 			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []platform.Breaker{},
 			Observations: ObservationHealth{Dropped: t.observationDropped.Load()},
@@ -127,20 +131,20 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 	if t.console.Suspended() {
 		h.Status = "suspended"
 	}
-	t.observationMu.Lock()
+	operational.observationMu.Lock()
 	h.Observations = ObservationHealth{
-		Enabled: t.logRetentionDays() > 0, Pending: len(t.observationPending),
-		Dropped: t.observationDropped.Load(), Written: t.observationWritten.Load(),
-		WriteFailures: t.observationFailed.Load(), Purged: t.observationPurged.Load(),
+		Enabled: t.logRetentionDays() > 0, Pending: len(operational.observationPending),
+		Dropped: operational.observationDropped.Load(), Written: operational.observationWritten.Load(),
+		WriteFailures: operational.observationFailed.Load(), Purged: operational.observationPurged.Load(),
 		QuotaBytes: t.logQuotaBytes(),
 	}
-	if last := t.observationLastWrite.Load(); last > 0 {
+	if last := operational.observationLastWrite.Load(); last > 0 {
 		h.Observations.LastWrite = time.Unix(0, last).UTC()
 	}
-	if last := t.observationLastPurge.Load(); last > 0 {
+	if last := operational.observationLastPurge.Load(); last > 0 {
 		h.Observations.LastPurge = time.Unix(0, last).UTC()
 	}
-	t.observationMu.Unlock()
+	operational.observationMu.Unlock()
 	return h
 }
 

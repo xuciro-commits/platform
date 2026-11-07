@@ -8,13 +8,14 @@ import (
 )
 
 type changes struct {
-	mu        sync.Mutex
-	seq       int64
-	data      int64
-	wake      chan struct{}
-	global    int64
-	owners    map[string]int64
-	opsOwners map[string]int64
+	mu          sync.Mutex
+	seq         int64
+	data        int64
+	wake        chan struct{}
+	global      int64
+	owners      map[string]int64
+	opsOwners   map[string]int64
+	pendingData map[string]bool
 }
 
 func (t *Tenant) changed() {
@@ -39,6 +40,13 @@ func (t *Tenant) markChanged(data bool, owner string) {
 	c := &t.change
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if data && t.readOrigin == nil && t.readImage.Load() != nil && !t.quarantined() {
+		if c.pendingData == nil {
+			c.pendingData = map[string]bool{}
+		}
+		c.pendingData[owner] = true
+		return
+	}
 	c.seq++
 	if data {
 		c.data++

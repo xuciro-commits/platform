@@ -2,15 +2,180 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 
 	runtimekernel "platformserver/kernel"
+	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	computeowner "platformserver/services/functions/runtime"
 )
+
+type tenantReadImage struct {
+	state       *Tenant
+	epoch       uint64
+	definitions uint64
+	records     uint64
+	operations  int64
+	position    int64
+	next        chan struct{}
+}
+
+func (t *Tenant) viewCache() *transport.ViewCache {
+	if t.readViews != nil {
+		return t.readViews
+	}
+	return &t.views
+}
+
+func (t *Tenant) invalidateReadImage() {
+	if image := t.readImage.Swap(nil); image != nil {
+		close(image.next)
+	}
+}
+
+func (t *Tenant) endLane() {
+	defer t.closeRecordRead()
+	if t.readError() != nil || t.quarantined() {
+		return
+	}
+	for _, owner := range t.apps {
+		if _, ok := owner.(platform.ReadForkApp); !ok {
+			return
+		}
+	}
+	t.change.mu.Lock()
+	operations := t.change.seq + int64(len(t.change.pendingData))
+	t.change.mu.Unlock()
+	epoch, definitions, position := t.stateEpoch.Load(), t.defGen.Load(), t.records.Current().Applied()
+	t.records.Lock()
+	generation := t.records.Generation()
+	t.records.Unlock()
+	if previous := t.readImage.Load(); previous != nil && previous.epoch == epoch && previous.definitions == definitions && previous.records == generation && previous.operations == operations && previous.position == position {
+		return
+	}
+	state, err := t.forkReadState(context.Background())
+	if err != nil {
+		t.quarantine(fmt.Errorf("publish read image: %w", err))
+		return
+	}
+	image := &tenantReadImage{state: state, epoch: epoch, definitions: definitions, records: generation, operations: operations, position: position, next: make(chan struct{})}
+	if previous := t.readImage.Swap(image); previous != nil {
+		close(previous.next)
+	}
+	t.change.mu.Lock()
+	pending := len(t.change.pendingData) > 0
+	for owner := range t.change.pendingData {
+		t.change.seq++
+		t.change.data++
+		if owner == "" {
+			t.change.global++
+		} else {
+			if t.change.owners == nil {
+				t.change.owners = map[string]int64{}
+			}
+			t.change.owners[owner]++
+		}
+	}
+	t.change.pendingData = nil
+	if t.change.wake != nil {
+		close(t.change.wake)
+		t.change.wake = nil
+	}
+	t.change.mu.Unlock()
+	if pending {
+		wakeWork()
+	}
+}
+
+func (t *Tenant) countReadImage(ctx context.Context, outcome string) {
+	meters.readImages.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
+}
+
+func readPublishedImage[T any](t *Tenant, image *tenantReadImage, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if err, ok := recovered.(error); ok {
+				failure = err
+				var mismatch *persistence.StatePositionError
+				if errors.As(err, &mismatch) && mismatch.Position < mismatch.Applied {
+					t.quarantine(err)
+				}
+				var zero T
+				value, refusal = zero, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return
+			}
+			panic(recovered)
+		}
+	}()
+	view, err := image.state.forkReadState(ctx)
+	if err != nil {
+		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read scope could not be prepared: {reason}", err.Error()), err
+	}
+	defer func() {
+		view.closeRecordRead()
+		if err := view.readError(); err != nil {
+			var zero T
+			value, refusal, failure = zero, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, err
+		}
+	}()
+	view.openRecordRead(ctx)
+	if refusal := view.recordReadRefusal(); refusal != nil {
+		return value, refusal, view.readError()
+	}
+	value, refusal = read(view)
+	return value, refusal, nil
+}
+
+func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		if ctx.Err() != nil || t.quarantined() {
+			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		image := t.readImage.Load()
+		if image == nil {
+			break
+		}
+		if source := t.systemDefinitionState.source.Load(); source != nil && source.systemDefinitions.Load() != image.state.systemDefinitionState.published.Load() {
+			break
+		}
+		value, refusal, err := readPublishedImage(t, image, ctx, read)
+		if err == nil {
+			return value, refusal
+		}
+		var mismatch *persistence.StatePositionError
+		if !errors.As(err, &mismatch) || mismatch.Position <= mismatch.Applied {
+			if mismatch != nil {
+				t.countReadImage(ctx, "quarantined")
+			}
+			return value, refusal
+		}
+		if attempt == 2 {
+			break
+		}
+		t.countReadImage(ctx, "retried")
+		timer := time.NewTimer(50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		case <-image.next:
+			timer.Stop()
+		case <-timer.C:
+		}
+	}
+	t.countReadImage(ctx, "fallback")
+	return readFromLane(t, ctx, read)
+}
 
 func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	control, err := t.captureControl()
@@ -25,6 +190,9 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.readOrigin = t
 	if t.readOrigin != nil {
 		view.readOrigin = t.readOrigin
+		view.readViews = t.viewCache()
+	} else {
+		view.readViews = &view.views
 	}
 	view.currentReadScopes = t.currentReadScopes
 	view.records = t.records.ForkRecords()
@@ -116,7 +284,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 		}, view.words.Clone, PlatformLanguages)
 	view.i18n.InstallApplications(view.definitions)
 	view.audit = t.audit.Fork()
-	view.audit.SetSink(t.audit.Remember, t.audit.ReadPersonal)
+	view.audit.SetSink(view.readOrigin.audit.Remember, view.readOrigin.audit.ReadPersonal)
 	view.observationDropped.Store(t.observationDropped.Load())
 	view.observationWritten.Store(t.observationWritten.Load())
 	view.observationFailed.Store(t.observationFailed.Load())

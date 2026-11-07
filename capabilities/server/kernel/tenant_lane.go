@@ -57,6 +57,9 @@ func (l *Lane) State() LaneState {
 }
 
 func (l *Lane) acquire(ctx context.Context, holder string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	l.once.Do(func() { l.slot = make(chan struct{}, 1) })
 	started := time.Now()
 	select {

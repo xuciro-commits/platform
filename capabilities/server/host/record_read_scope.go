@@ -48,7 +48,8 @@ func (t *Tenant) beginRecordRead(ctx context.Context) {
 
 func (t *Tenant) enableCurrentReadScopes() {
 	t.currentReadScopes = true
-	t.mu.BindReadScope(t.beginRecordRead, t.closeRecordRead)
+	t.invalidateReadImage()
+	t.mu.BindReadScope(t.beginRecordRead, t.endLane)
 }
 func (t *Tenant) openRecordRead(ctx context.Context) {
 	if !t.currentReadScopes || t.quarantined() {
@@ -58,7 +59,7 @@ func (t *Tenant) openRecordRead(ctx context.Context) {
 	if err != nil {
 		t.readScope.err = err
 		var mismatch *persistence.StatePositionError
-		if errors.As(err, &mismatch) {
+		if errors.As(err, &mismatch) && (t.readOrigin == nil || mismatch.Position < mismatch.Applied) {
 			t.quarantine(err)
 		}
 		return
@@ -116,6 +117,10 @@ func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Ten
 	if t.scopeSource() != nil {
 		return read(t)
 	}
+	return readFromImage(t, ctx, read)
+}
+
+func readFromLane[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
 	return lockedRecordRead(t, ctx, func(t *Tenant) (value T, refusal *kernel.Error) {
 		for _, owner := range t.apps {
 			if _, ok := owner.(platform.ReadForkApp); !ok {

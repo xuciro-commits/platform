@@ -20,9 +20,8 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 ### 租户并发（2026-11-06）
 
-目标规范见 [7-system/concurrency](7-system/concurrency.md)。车道已可取消、可观测，后台按任务持锁，HTTP 响应与文件字节在车道外写出；剩余三批按顺序做，每批 `make check`、K13 加 `-race`。
+目标规范见 [7-system/concurrency](7-system/concurrency.md)。车道已可取消、可观测，后台按任务持锁，HTTP 响应与文件字节在车道外写出；剩余两批按顺序做，每批 `make check`、K13 加 `-race`。
 
-- [ ] T3 读取映像（P0）：盘点读取闭包触达的可变状态并纳入映像（C3），车道内应用后发布；`coordinatedRecordRead` 改为取映像 + C4 位置校验与回退，不取车道。完成标准：后台任务持有车道时记录读取不等待；`platform.read_image.retries` 上线；K13 增加“读取不混用两个位置”。
 - [ ] T4 决定与提交分离（P1）：`submit` 与后台任务在映像分叉上决定，带基准位置；车道内只校验、提交、应用、发布；冲突重算 2 次后回退到车道内决定（C5）。完成标准：`platform.decision.conflicts` 上线；K1 重放逐字节不变；K13 增加“并发提交等价于某个串行顺序”。
 - [ ] T5 车道内工作清点（P1）：逐一核对 56 个文件 129 处 `t.mu.Lock` 是否符合 C-R2，外部 I/O 改为预留/结算；`SweepUploads` 先引入待删除标记再移出车道；`BeginAgentRead` 改用映像。
 

@@ -237,11 +237,11 @@ func (t *Tenant) registerDefinitions() error {
 
 func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 	gen, key := t.definitionsFingerprint(), transport.Rights(m)
-	if out, ok := t.views.Definitions(gen, key); ok {
+	if out, ok := t.viewCache().Definitions(gen, key); ok {
 		return out
 	}
 	out := t.buildDefinitions(m)
-	t.views.StoreDefinitions(gen, key, out)
+	t.viewCache().StoreDefinitions(gen, key, out)
 	return out
 }
 
