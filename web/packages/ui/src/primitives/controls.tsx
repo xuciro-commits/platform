@@ -83,7 +83,7 @@ export function FilePicker({ accept, onFile, children, ...button }:
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <input ref={input} type="file" accept={accept} className="hidden" onChange={(e) => {
+      <input ref={input} type="file" accept={accept} disabled={button.disabled} className="hidden" onChange={(e) => {
         const file = e.target.files?.[0];
         e.target.value = "";
         if (file) onFile(file);
