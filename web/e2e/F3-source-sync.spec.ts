@@ -143,6 +143,8 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
       // Credentials never in clear text (definition): the saved connection record stores only the
       // secret NAME, and no clear-text credential value appears anywhere in the record.
       const saved = await read<{ record: { secret?: string } }>(`/v1/records/build.connection/${connectionID}`);
+      await expect(page).toHaveURL(/#\/connection\/ri\./);
+      await expect(page.getByRole("textbox", { name: "Secret name", exact: true })).toHaveValue(secretName);
       expect(saved.record.secret, "the connection stores the credential by reference name").toBe(secretName);
       expect(JSON.stringify(saved.record), "no clear-text credential value is persisted in the definition").not.toContain(secretClearText);
 

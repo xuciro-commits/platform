@@ -25,6 +25,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, 
   const [draft, setDraft] = useState(empty), [edited, setDirty] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [joining, setJoining] = useState(false);
+  const [savedTarget, setSavedTarget] = useState<string>();
   const [createID] = useState(() => privateState?.edit?.target.id ?? crypto.randomUUID());
   const trial = useActionTrial();
   const fields = host.source.entity(type)?.fields ?? [];
@@ -90,8 +91,13 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, view, 
     setError(message); return false;
   };
   const showSaved = (target: string) => {
-    open({ view, params: { id: target } }, { replace: true });
+    setSavedTarget(target);
   };
+  useEffect(() => {
+    if (!savedTarget || busy || dirty) return;
+    setSavedTarget(undefined);
+    open({ view, params: { id: savedTarget } }, { replace: true });
+  }, [savedTarget, busy, dirty, open, view]);
   const save = async (deferNavigation = false): Promise<Saved | undefined> => {
     if (inputs?.invalid) return;
     const submitted = structuredClone(draft), target = submitted.id || createID;
