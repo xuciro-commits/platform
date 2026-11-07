@@ -110,7 +110,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 	switch {
 	case policy.Record != "":
 		member, _ := t.Member(run.Member)
-		page, refusal := t.Records(member, policy.Record, platform.Query{Domain: platform.Raw([]any{[]any{policy.KeyField, "=", commandKey}}), Limit: 2, Sort: []string{"id"}}, at)
+		page, refusal := t.Records(context.Background(), member, policy.Record, platform.Query{Domain: platform.Raw([]any{[]any{policy.KeyField, "=", commandKey}}), Limit: 2, Sort: []string{"id"}}, at)
 		if refusal != nil {
 			problem = fmt.Errorf("The dispatch status record is unavailable to the applicant")
 		} else {

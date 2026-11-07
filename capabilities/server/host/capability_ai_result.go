@@ -12,8 +12,8 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) ReadCapabilityAI(m platform.Member, id string, now time.Time) (platform.OperationResult, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (platform.OperationResult, *kernel.Error) {
+func (t *Tenant) ReadCapabilityAI(ctx context.Context, m platform.Member, id string, now time.Time) (platform.OperationResult, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (platform.OperationResult, *kernel.Error) {
 		return t.readCapabilityAI(m, id, now)
 	})
 }
@@ -43,7 +43,7 @@ func (t *Tenant) readCapabilityAI(m platform.Member, id string, now time.Time) (
 	if run.Member != m.ID && !m.Holds(build.ID, build.Builder) {
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Function call is unavailable to this member")
 	}
-	caller := platform.NewCaller(runtime{t}, m, owner, false, false)
+	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, owner, false, false)
 	if refusal := authorizationRefusal(t.authorizeCapability(caller, owner, contract.Name, contract.Roles, true, authorizationDetails{At: now, Sources: run.Sources})); refusal != nil {
 		return answer, refusal
 	}

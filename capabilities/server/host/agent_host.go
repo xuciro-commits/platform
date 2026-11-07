@@ -128,7 +128,7 @@ func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMe
 		if req.Limit == 0 || req.Limit > agentObjectRows {
 			req.Limit = agentObjectRows
 		}
-		caller := platform.NewCaller(runtime{h.t}, reader, "", false, false)
+		caller := platform.NewCaller(runtime{t: h.t}, reader, "", false, false)
 		page, object, err := h.t.loadObjectSet(h.t.records, caller, req.Set, objectWindow{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true}, now)
 		if err != nil {
 			return out, err
@@ -218,16 +218,16 @@ func (h hostView) AgentProviderAvailable(provider string, now time.Time) bool {
 	return h.t.breakers.Allow("ai:"+provider, now, false)
 }
 func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AIModel, member platform.Member, request platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
-	_, refusal := recordRead(h.t, context.Background(), func() (struct{}, *kernel.Error) {
-		c := platform.NewCaller(runtime{h.t}, member, platform.AgentApp, false, false)
-		return struct{}{}, authorizationRefusal(h.t.authorizeNative(c, "model:"+request.Model, "action", []string{platform.AnyMember}, true))
+	_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+		c := platform.NewCaller(runtime{t: t}, member, platform.AgentApp, false, false)
+		return struct{}{}, authorizationRefusal(t.authorizeNative(c, "model:"+request.Model, "action", []string{platform.AnyMember}, true))
 	})
 	if refusal != nil {
 		return platform.ChatAnswer{}, &platform.AIError{Status: 403, Detail: refusal.Message}
 	}
 	answer, failure := h.t.call(provider, model, member, request, now)
-	_, _ = recordRead(h.t, context.Background(), func() (struct{}, *kernel.Error) {
-		if value, ok := h.Record(platform.RunType + "/" + request.Run); ok {
+	_, _ = recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+		if value, ok := t.held(platform.RunType + "/" + request.Run); ok {
 			if run, ok := value.(platform.AgentRunRecord); ok {
 				answer.Usage = agentRunUsage(answer.Usage, run)
 			}

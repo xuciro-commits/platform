@@ -40,6 +40,15 @@ func (v *View) UnmarshalJSON(raw []byte) error {
 
 func (e *Enterprise) AcceptedLedger() *platform.Ledger { return e.ledger }
 
+func (e *Enterprise) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	fork, err := e.ForkAcceptedState()
+	if err != nil {
+		return nil, err
+	}
+	fork.(*Enterprise).ledger = ledger
+	return fork, nil
+}
+
 func (e *Enterprise) ForkAcceptedState() (platform.App, error) {
 	raw, err := e.AcceptedState()
 	if err != nil {

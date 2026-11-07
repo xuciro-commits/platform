@@ -35,7 +35,7 @@ func TestInvariantAutomationPauseGatesNewTriggersNotRunning(t *testing.T) {
 			if !ok || instance.State != "done" {
 				t.Fatalf("scheduled instance %s: %+v found=%v; want done", key, instance, ok)
 			}
-			view, refusal := live.RecordOf(live.member(t), "build.alpha", key, now)
+			view, refusal := live.RecordOf(t.Context(), live.member(t), "build.alpha", key, now)
 			if refusal != nil || view.Record == nil {
 				t.Fatalf("scheduled effect %s was not accepted: record=%v refusal=%v", key, view.Record, refusal)
 			}
@@ -43,7 +43,7 @@ func TestInvariantAutomationPauseGatesNewTriggersNotRunning(t *testing.T) {
 		checkInstances(invariantClock, 1)
 		live.accept(t, build.SchemaProcessPause, build.ProcessType, "PROCESS", map[string]any{})
 		live.accept(t, build.SchemaProcess, build.ProcessType, "PROCESS", map[string]any{})
-		view, refusal := live.RecordOf(live.member(t), build.ProcessType, "PROCESS", invariantClock)
+		view, refusal := live.RecordOf(t.Context(), live.member(t), build.ProcessType, "PROCESS", invariantClock)
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
@@ -115,7 +115,7 @@ func TestInvariantAutomationPauseGatesNewTriggersNotRunning(t *testing.T) {
 			t.Fatalf("the paused schedule created a new instance: got %d; want 1", got)
 		}
 		key := pausedAt.Format(time.RFC3339)
-		if _, refusal := live.RecordOf(live.member(t), "build.alpha", key, pausedAt); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+		if _, refusal := live.RecordOf(t.Context(), live.member(t), "build.alpha", key, pausedAt); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
 			t.Fatalf("the paused schedule produced its effect: %v", refusal)
 		}
 		live.accept(t, build.SchemaProcessResume, build.ProcessType, "PROCESS", map[string]any{})
@@ -148,7 +148,7 @@ func TestInvariantAutomationPauseGatesNewTriggersNotRunning(t *testing.T) {
 		if !ok || completed.State != "done" || completed.Revision <= before.Revision {
 			t.Fatalf("pausing prevented the existing wait from completing: %+v found=%v", completed, ok)
 		}
-		view, refusal := live.RecordOf(live.member(t), build.ProcessType, "PROCESS", invariantClock)
+		view, refusal := live.RecordOf(t.Context(), live.member(t), build.ProcessType, "PROCESS", invariantClock)
 		if refusal != nil || !view.Record.(build.Process).Paused {
 			t.Fatalf("the process was not paused while its existing run completed: record=%v refusal=%v", view.Record, refusal)
 		}

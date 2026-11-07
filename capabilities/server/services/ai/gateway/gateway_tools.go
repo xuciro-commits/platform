@@ -2,6 +2,7 @@ package aigateway
 
 import (
 	"cmp"
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -72,7 +73,7 @@ func (g Tools) Serve(w http.ResponseWriter, r *http.Request, m platform.Member) 
 	case "tools/list":
 		reply(map[string]any{"tools": g.List(m)})
 	case "tools/call":
-		reply(g.Call(m, req.Params.Name, req.Params.Arguments))
+		reply(g.Call(r.Context(), m, req.Params.Name, req.Params.Arguments))
 	default:
 		writeJSON(w, http.StatusOK, rpcError(req.ID, -32601, "method not found"))
 	}
@@ -113,7 +114,7 @@ func (g Tools) List(m platform.Member) []map[string]any {
 	return tools
 }
 
-func (g Tools) Call(m platform.Member, name string, args map[string]any) map[string]any {
+func (g Tools) Call(ctx context.Context, m platform.Member, name string, args map[string]any) map[string]any {
 	text := func(v any, isError bool) map[string]any {
 		raw, _ := json.Marshal(v)
 		return map[string]any{"content": []map[string]any{{"type": "text", "text": string(raw)}}, "isError": isError}
@@ -124,7 +125,7 @@ func (g Tools) Call(m platform.Member, name string, args map[string]any) map[str
 		if i < 0 {
 			return text(map[string]string{"error": "unknown tool"}, true)
 		}
-		out, err := g.Host.Read(m, reads[i])
+		out, err := g.Host.Read(ctx, m, reads[i])
 		if err != nil {
 			return text(map[string]string{"error": err.Error()}, true)
 		}

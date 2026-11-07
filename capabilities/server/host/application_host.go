@@ -276,7 +276,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 				if json.Unmarshal([]byte(effect.Body), &binding) != nil || binding.Build != nil {
 					continue
 				}
-				result, err := t.operationResult(platform.NewCaller(runtime{t}, m, controlowner.PlatformApp, false, false), effect.ID)
+				result, err := t.operationResult(platform.NewCaller(runtime{t: t}, m, controlowner.PlatformApp, false, false), effect.ID)
 				if err != nil {
 					continue
 				}
@@ -299,7 +299,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 			return out, err
 		},
 		Readable: t.readable, Quarantined: t.quarantined, RecoveryAllowed: func(m platform.Member) *kernel.Error {
-			c := platform.NewCaller(runtime{t}, m, controlowner.PlatformApp, false, false)
+			c := platform.NewCaller(runtime{t: t}, m, controlowner.PlatformApp, false, false)
 			return authorizationRefusal(t.authorizeNative(c, "application recovery", "read", []string{controlowner.Admin}, true))
 		},
 		Quota: func(m platform.Member, at time.Time) *platform.AIQuota {
@@ -348,7 +348,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 			return out
 		},
 		AI: t.applicationAILocked, AIUsage: t.applicationAIUsage, RecordCount: func(m platform.Member, typ string, at time.Time) (int, *kernel.Error) {
-			page, err := t.Records(m, typ, platform.Query{Limit: 1}, at)
+			page, err := t.Records(t.readContext(), m, typ, platform.Query{Limit: 1}, at)
 			return page.Total, err
 		},
 	}

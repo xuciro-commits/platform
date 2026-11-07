@@ -47,7 +47,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			t.mu.Unlock()
 			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot prepare the operation input")
 		}
-		c := platform.NewCaller(runtime{t}, current, q.App, false, false)
+		c := platform.NewCaller(runtime{t: t, scoped: true}, current, q.App, false, false)
 		if refusal := authorizationRefusal(t.authorizeCapability(c, q.App, op.Name, op.Roles, op.Check() == nil, authorizationDetails{At: now, Sources: q.Sources})); refusal != nil {
 			t.mu.Unlock()
 			return platform.OperationCall{}, refusal
@@ -131,8 +131,8 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted operation intent is unavailable")
 }
 
-func (t *Tenant) ReadOperation(member platform.Member, id string) (platform.OperationResult, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (platform.OperationResult, *kernel.Error) {
-		return t.operationResult(platform.NewCaller(runtime{t}, member, controlowner.PlatformApp, false, false), id)
+func (t *Tenant) ReadOperation(ctx context.Context, member platform.Member, id string) (platform.OperationResult, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (platform.OperationResult, *kernel.Error) {
+		return t.operationResult(platform.NewCaller(runtime{t: t, scoped: true}, member, controlowner.PlatformApp, false, false), id)
 	})
 }

@@ -183,6 +183,15 @@ func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Decla
 
 func (w *Work) AcceptedLedger() *platform.Ledger { return w.ledger }
 
+func (w *Work) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	fork, err := w.ForkDecision()
+	if err != nil {
+		return nil, err
+	}
+	fork.(*Work).ledger = ledger
+	return fork, nil
+}
+
 func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

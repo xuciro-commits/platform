@@ -145,7 +145,7 @@ func (h hostView) CheckDispatchRead(run platform.DispatchRun, at time.Time) *ker
 	if json.Unmarshal(run.Observation, &definition) != nil || !valid || definition.Object.Name != typ {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dispatch observation is unavailable")
 	}
-	caller := platform.NewCaller(runtime{h.t}, member, definition.Object.App, false, false)
+	caller := platform.NewCaller(runtime{t: h.t}, member, definition.Object.App, false, false)
 	if refusal := authorizationRefusal(h.t.authorizeNative(caller, definition.Name, "read", definition.Roles, true, authorizationDetails{At: at})); refusal != nil {
 		return refusal
 	}

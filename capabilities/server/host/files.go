@@ -54,7 +54,7 @@ func (t *Tenant) SweepUploads(now time.Time) {
 	if len(old) == 0 {
 		return
 	}
-	_, _ = coordinatedRecordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
+	_, _ = lockedRecordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
 		retained := map[string]bool{}
 		if t.app(platform.FileApp) != nil {
 			if !retainUploadHashes[platform.File](t.automation(platform.FileApp, false), func(file platform.File) { retained[file.Hash] = true }) {

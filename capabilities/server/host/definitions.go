@@ -271,7 +271,7 @@ func (r runtime) VisibleApplications(c platform.Caller) []platform.AssetRef {
 	return refs
 }
 func (d *stagedDecision) VisibleApplications(c platform.Caller) []platform.AssetRef {
-	return (runtime{d.tenant}).VisibleApplications(c)
+	return (runtime{t: d.tenant}).VisibleApplications(c)
 }
 
 func (t *Tenant) definitionsFingerprint() uint64 { return t.defGen.Load() }

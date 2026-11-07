@@ -301,7 +301,11 @@ func (c *Core) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: c.ledger.Catalog, Entities: Entities(), Interfaces: Interfaces()}
 }
 
-func (c *Core) AcceptedLedger() *platform.Ledger         { return c.ledger }
+func (c *Core) AcceptedLedger() *platform.Ledger { return c.ledger }
+
+func (c *Core) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	return &Core{ledger: ledger}, nil
+}
 func (c *Core) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 func (c *Core) SnapshotFormat() string                   { return "platform.ledger.v1" }
 func (c *Core) Snapshot() (json.RawMessage, error)       { return c.ledger.Snapshot() }

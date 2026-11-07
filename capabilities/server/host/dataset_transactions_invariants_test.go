@@ -125,7 +125,7 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 			}
 			check := func(id, note string, archived bool) {
 				t.Helper()
-				view, refusal := live.RecordOf(live.member(t), "build.merged", id, invariantClock)
+				view, refusal := live.RecordOf(t.Context(), live.member(t), "build.merged", id, invariantClock)
 				if refusal != nil {
 					t.Fatal(refusal)
 				}

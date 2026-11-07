@@ -144,7 +144,7 @@ func (t *Tenant) enterpriseUsageRead(m platform.Member, id, until string, now ti
 	if _, err := time.Parse(time.DateOnly, until); err != nil {
 		return EnterpriseUsage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid effective period")
 	}
-	c := platform.NewCaller(runtime{t}, m, enterprisemodel.ID, false, false)
+	c := platform.NewCaller(runtime{t: t, scoped: true}, m, enterprisemodel.ID, false, false)
 	result := t.enterpriseExternalUsage(c, t.records, id, until, now, true)
 	model, err := t.tenantLinkModel()
 	if err != nil {

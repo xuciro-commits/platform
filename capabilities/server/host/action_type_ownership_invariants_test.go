@@ -11,7 +11,7 @@ import (
 
 func invariantReadObject(t *testing.T, live *invariantTenant, id string) build.Object {
 	t.Helper()
-	view, refusal := live.RecordOf(live.member(t), build.ObjectType, id, invariantClock)
+	view, refusal := live.RecordOf(t.Context(), live.member(t), build.ObjectType, id, invariantClock)
 	if refusal != nil {
 		t.Fatalf("read object %s: %v", id, refusal)
 	}
@@ -24,7 +24,7 @@ func invariantReadObject(t *testing.T, live *invariantTenant, id string) build.O
 
 func invariantReadActionType(t *testing.T, live *invariantTenant, id string) build.ActionType {
 	t.Helper()
-	view, refusal := live.RecordOf(live.member(t), build.ActionTypeType, id, invariantClock)
+	view, refusal := live.RecordOf(t.Context(), live.member(t), build.ActionTypeType, id, invariantClock)
 	if refusal != nil {
 		t.Fatalf("read action type %s: %v", id, refusal)
 	}

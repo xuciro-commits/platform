@@ -66,7 +66,7 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 		}
 		result.Partial = result.Partial || value.Partial
 		result.Hidden = result.Hidden || value.Hidden
-		caller := platform.NewCaller(runtime{t}, member, info.App, false, false)
+		caller := platform.NewCaller(runtime{t: t, scoped: true}, member, info.App, false, false)
 		rows := []map[string]any{}
 		for _, row := range value.Records {
 			id := fmt.Sprint(row["id"])
@@ -123,7 +123,7 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Matrix exceeds 1600 cells; bind narrower declared collections")
 		}
 		info, _ := t.entity(rows.Object)
-		caller := platform.NewCaller(runtime{t}, member, info.App, false, false)
+		caller := platform.NewCaller(runtime{t: t, scoped: true}, member, info.App, false, false)
 		for _, row := range rows.Records {
 			for _, column := range columns.Records {
 				answer, err := platform.EvaluateRule(*c.Value, platform.MatrixRuleReads(c), caller, nil, map[string]any{"row": row["id"], "column": column["id"]}, at, t.entity)

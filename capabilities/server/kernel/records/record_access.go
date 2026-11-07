@@ -251,6 +251,7 @@ func Write(info platform.EntityInfo, receipt *pb.ChangeRecord, prev *Row, v refl
 }
 
 type CurrentScope struct {
+	ctx             context.Context
 	backend         persistence.RuntimeState
 	view            persistence.StateReadView
 	tenant, release string
@@ -299,7 +300,7 @@ func (r *currentRows) view() persistence.StateReadView {
 
 func (r *currentRows) Get(id string) *Row {
 	view := r.view()
-	current, err := view.StateCurrent(context.Background(), r.store.tenant, r.typ, id)
+	current, err := view.StateCurrent(r.store.Context(), r.store.tenant, r.typ, id)
 	if err != nil {
 		panic(fmt.Errorf("record %s/%s: %w", r.typ, id, err))
 	}
@@ -330,7 +331,7 @@ func (r *currentRows) Get(id string) *Row {
 	row.RetainOriginal(image.Value)
 	count := current.HistoryCount
 	row.LoadHistory = func(after int) []RecordChange {
-		list, err := view.StateHistory(context.Background(), r.store.tenant, r.typ, id, after, count)
+		list, err := view.StateHistory(r.store.Context(), r.store.tenant, r.typ, id, after, count)
 		if err != nil {
 			panic(fmt.Errorf("record history %s/%s: %w", r.typ, id, err))
 		}
@@ -346,7 +347,7 @@ func (r *currentRows) Get(id string) *Row {
 }
 
 func (r *currentRows) IDs(after string, limit int) []string {
-	ids, err := r.view().StateCandidates(context.Background(), r.store.tenant, r.typ, nil, after, limit, r.store.applied)
+	ids, err := r.view().StateCandidates(r.store.Context(), r.store.tenant, r.typ, nil, after, limit, r.store.applied)
 	if err != nil {
 		panic(fmt.Errorf("record candidates: %w", err))
 	}
@@ -354,6 +355,7 @@ func (r *currentRows) IDs(after string, limit int) []string {
 }
 
 func (s *CurrentScope) Open(ctx context.Context) (persistence.StateReadView, error) {
+	s.ctx = ctx
 	views, ok := s.backend.(persistence.StateReadViews)
 	if !ok {
 		return nil, nil
@@ -366,6 +368,12 @@ func (s *CurrentScope) Open(ctx context.Context) (persistence.StateReadView, err
 	return view, nil
 }
 func (s *CurrentScope) Detach() persistence.StateReadView { view := s.view; s.view = nil; return view }
+func (s *CurrentScope) Context() context.Context {
+	if s.ctx != nil {
+		return s.ctx
+	}
+	return context.Background()
+}
 func (s *CurrentScope) Reader() interface {
 	StateCandidates(context.Context, string, string, []persistence.StateFilter, string, int, int64) ([]string, error)
 } {
@@ -418,7 +426,7 @@ func VisitPlan(image IndexImage, lookup ImageLookup, plan Plan, visible func(ref
 
 		after := ""
 		for {
-			ids, readErr := current.Reader().StateCandidates(context.Background(), current.Tenant(), image.Info.Type, filters, after, 256, current.Applied())
+			ids, readErr := current.Reader().StateCandidates(current.Context(), current.Tenant(), image.Info.Type, filters, after, 256, current.Applied())
 			if readErr != nil {
 				panic(fmt.Errorf("record candidates: %w", readErr))
 			}

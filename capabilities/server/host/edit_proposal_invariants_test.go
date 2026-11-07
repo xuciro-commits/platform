@@ -38,11 +38,11 @@ func TestInvariantEditProposalUsesNormalActionEngine(t *testing.T) {
 	for _, run := range live.operationDispatches(now) {
 		run()
 	}
-	result, refusal := live.ReadOperation(live.member(t), call.ID)
+	result, refusal := live.ReadOperation(t.Context(), live.member(t), call.ID)
 	if refusal != nil || result.State != "completed" {
 		t.Fatalf("proposal result state=%q refusal=%v", result.State, refusal)
 	}
-	read, refusal := live.readEditProposal(live.member(t), "compute", call.ID, "")
+	read, refusal := live.readEditProposal(t.Context(), live.member(t), "compute", call.ID, "")
 	if refusal != nil || len(read.Edits) != 1 || read.Edits[0].Type != "build.alpha" {
 		t.Fatalf("read proposal: %+v refusal=%v", read, refusal)
 	}
@@ -54,7 +54,7 @@ func TestInvariantEditProposalUsesNormalActionEngine(t *testing.T) {
 	if err != nil || answer.Applied != 1 {
 		t.Fatalf("apply proposal: %+v: %v", answer, err)
 	}
-	view, refusal := live.RecordOf(live.member(t), "build.alpha", "A1", now.Add(2*time.Second))
+	view, refusal := live.RecordOf(t.Context(), live.member(t), "build.alpha", "A1", now.Add(2*time.Second))
 	if refusal != nil || view.Values["note"] != "accepted from proposal" {
 		t.Fatalf("created record=%+v refusal=%v", view, refusal)
 	}

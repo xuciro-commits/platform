@@ -30,7 +30,7 @@ func (t *Tenant) actionCheck(m platform.Member, schema string, request ActionChe
 		return ActionCheckResult{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	transition, lifecycle, hasTransition := t.modelTransition(platform.AssetRef{App: appID, Kind: platform.AssetAction, Name: schema})
-	caller := platform.NewCaller(runtime{t}, m, appID, false, false)
+	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, appID, false, false)
 	decision := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "action", Action: schema, Type: request.Target.Object, Record: request.Target.ID}, at, false)
 	result := ActionCheckResult{Allowed: decision.Allow, Conditions: []ActionConditionCheck{}, Authorization: &decision}
 	say := func(message string) string { return t.i18n.SayInApp(appID, lang, message) }

@@ -120,7 +120,7 @@ func (h hostView) TrainingReadable(member platform.Member, candidate platform.AI
 	if candidate.Tenant != h.t.ID {
 		return "The training candidate belongs to another tenant"
 	}
-	c := platform.NewCaller(runtime{h.t}, member, platform.AIApp, false, false)
+	c := platform.NewCaller(runtime{t: h.t}, member, platform.AIApp, false, false)
 	if candidate.ActionDefinition != "" {
 		owner := h.t.app(candidate.App)
 		if owner == nil {

@@ -12,7 +12,7 @@ import (
 
 func interfaceRecord(t *testing.T, live *invariantTenant, id string) build.InterfaceRecord {
 	t.Helper()
-	view, refusal := live.RecordOf(live.member(t), build.InterfaceType, id, invariantClock)
+	view, refusal := live.RecordOf(t.Context(), live.member(t), build.InterfaceType, id, invariantClock)
 	if refusal != nil {
 		t.Fatalf("read interface %s: %v", id, refusal)
 	}
@@ -26,7 +26,7 @@ func interfaceRecord(t *testing.T, live *invariantTenant, id string) build.Inter
 func resourceRecord(t *testing.T, live *invariantTenant, ref platform.AssetRef) build.Resource {
 	t.Helper()
 	rid := platform.ResourceID(live.ID, ref)
-	view, refusal := live.RecordOf(live.member(t), build.ResourceType, rid, invariantClock)
+	view, refusal := live.RecordOf(t.Context(), live.member(t), build.ResourceType, rid, invariantClock)
 	if refusal != nil {
 		t.Fatalf("read resource %s: %v", ref, refusal)
 	}
@@ -89,7 +89,7 @@ func TestInvariantC14InterfaceResourceLifecycle(t *testing.T) {
 	}
 	live.accept(t, build.QueryType+".create", build.QueryType, "QUERY1", query)
 	live.accept(t, build.QueryType+".publish", build.QueryType, "QUERY1", map[string]any{})
-	queryRecord, refusal := live.RecordOf(live.member(t), build.QueryType, "QUERY1", invariantClock)
+	queryRecord, refusal := live.RecordOf(t.Context(), live.member(t), build.QueryType, "QUERY1", invariantClock)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}

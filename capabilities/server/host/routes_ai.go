@@ -3,7 +3,6 @@ package host
 import transport "platformserver/kernel/transport"
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,12 +14,12 @@ import (
 
 func (h *Host) routesAI(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/ai/training/export", Summary: "Export a fixed currently qualified SFT or DPO dataset without external calls", Answer: platform.AITrainingExport{}, Query: []transport.Param{{Name: "format", Description: "sft or dpo"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		answer, refusal := recordRead(t, context.Background(), func() (platform.AITrainingExport, *kernel.Error) {
+		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (platform.AITrainingExport, *kernel.Error) {
 			owner, ok := t.ai.(platform.AITrainingOwner)
 			if !ok {
 				return platform.AITrainingExport{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Training data is unavailable")
 			}
-			return owner.TrainingExport(platform.NewCaller(runtime{t}, m, platform.AIApp, false, false), r.URL.Query().Get("format"), h.Now())
+			return owner.TrainingExport(platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false), r.URL.Query().Get("format"), h.Now())
 		})
 		if refusal != nil {
 			Reply(w, nil, refusal)
@@ -34,7 +33,7 @@ func (h *Host) routesAI(rt *routes) {
 		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/ai/knowledge-index", Summary: "Original knowledge vector index preparation and current retrieval mode", Answer: platform.KnowledgeIndexStatus{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		status, err := t.KnowledgeIndexStatus(m)
+		status, err := t.KnowledgeIndexStatus(r.Context(), m)
 		if err != nil {
 			Reply(w, nil, err)
 		} else {
@@ -43,7 +42,7 @@ func (h *Host) routesAI(rt *routes) {
 		}
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/ai/model-selection", Summary: "Purpose-compatible models and effective configuration from the original AI and settings owners", Answer: ModelSelection{}, Query: []transport.Param{{Name: "purpose", Description: "generation, agent or embedding"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		selection, err := t.ModelSelection(m, r.URL.Query().Get("purpose"))
+		selection, err := t.ModelSelection(r.Context(), m, r.URL.Query().Get("purpose"))
 		if err != nil {
 			Reply(w, nil, err)
 		} else {
@@ -132,7 +131,7 @@ func (h *Host) routesAI(rt *routes) {
 		WriteJSON(w, http.StatusOK, platform.AIVendors)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/capabilities/calls/ai/{id}", Summary: "Read the original typed AI call result after member and source checks", Answer: platform.OperationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		answer, err := t.ReadCapabilityAI(m, r.PathValue("id"), h.Now())
+		answer, err := t.ReadCapabilityAI(r.Context(), m, r.PathValue("id"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return

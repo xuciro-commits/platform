@@ -1,4 +1,5 @@
 export default {
+  "The read scope could not be prepared: {reason}": "无法准备读取范围：{reason}",
  "Media set could not be loaded.": "无法加载媒体集。", "File could not be downloaded.": "无法下载文件。", "Media set": "媒体集", "Media item": "媒体项", "Choose a file": "选择文件",
  "Refreshing record…":"正在刷新记录…",
  "Authorized delivery results":"受权交付结果",

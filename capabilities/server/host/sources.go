@@ -26,7 +26,7 @@ func (t *Tenant) PullSources(now time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) {
 		return
 	}
-	sources, refusal := coordinatedRecordRead(t, context.Background(), func() ([]dataowner.Source, *kernel.Error) {
+	sources, refusal := coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Source, *kernel.Error) {
 		found, _, err := platform.Find[dataowner.Source](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 		if err != nil {
 			return nil, err
@@ -184,7 +184,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 	} else if raw, err := t.readSource(s); err != nil {
 		pull.Error = err.Error()
 	} else {
-		marking, refusal := recordRead(t, context.Background(), func() (platform.MarkingSet, *kernel.Error) { return t.connectionMarkings(s.Connection), nil })
+		marking, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.MarkingSet, *kernel.Error) { return t.connectionMarkings(s.Connection), nil })
 		if refusal != nil {
 			log.Printf("source connection state unavailable: %v", refusal)
 			return
@@ -347,7 +347,7 @@ func (t *Tenant) declaredRows(object, kind, source string, input []map[string]an
 }
 
 func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []build.SourceRow, now time.Time) (int, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (int, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) {
 		merged := 0
 		if resolver := t.resolver(member, object, producer, now); resolver != nil {
 			for i := range rows {

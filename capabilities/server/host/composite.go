@@ -150,7 +150,7 @@ func (t *Tenant) stageCompositeLocked(m platform.Member, edits []platform.Compos
 		if err := t.delegatedBound(m, sub); err != nil {
 			return nil, fmt.Errorf("edit %d: %s refused (%s)", i+1, edit.Schema, err.Error())
 		}
-		if _, err := app.Submit(platform.NewCaller(runtime{draft}, m, build.ID, true, false), sub, now); err != nil {
+		if _, err := app.Submit(platform.NewCaller(runtime{t: draft}, m, build.ID, true, false), sub, now); err != nil {
 			return nil, fmt.Errorf("edit %d: %s refused (%s)", i+1, edit.Schema, err.Error())
 		}
 	}

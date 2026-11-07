@@ -286,8 +286,8 @@ type projectionRows struct {
 }
 
 func (p *Projection) rows(ctx context.Context, typ string, ids map[string]bool) ([][]any, [][]any, map[string]int, error) {
-	out, refusal := recordRead(p.tenant, ctx, func() (projectionRows, *kernel.Error) {
-		rows, changes, ends := p.readRows(typ, ids)
+	out, refusal := recordRead(p.tenant, ctx, func(t *Tenant) (projectionRows, *kernel.Error) {
+		rows, changes, ends := p.readRows(t, typ, ids)
 		return projectionRows{rows, changes, ends}, nil
 	})
 	if refusal != nil {
@@ -296,7 +296,7 @@ func (p *Projection) rows(ctx context.Context, typ string, ids map[string]bool) 
 	return out.rows, out.changes, out.ends, nil
 }
 
-func (p *Projection) readRows(typ string, ids map[string]bool) (rows [][]any, changes [][]any, ends map[string]int) {
+func (p *Projection) readRows(t *Tenant, typ string, ids map[string]bool) (rows [][]any, changes [][]any, ends map[string]int) {
 	p.mu.Lock()
 	written := make(map[string]int, len(ids))
 	if ids == nil {
@@ -313,7 +313,7 @@ func (p *Projection) readRows(typ string, ids map[string]bool) (rows [][]any, ch
 		}
 	}
 	p.mu.Unlock()
-	s := p.tenant.records
+	s := t.records
 	s.Lock()
 	defer s.Unlock()
 	et := s.Type(typ)

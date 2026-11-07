@@ -60,6 +60,14 @@ type Quota struct {
 	turn int
 }
 
+func (q *Quota) Fork() Quota {
+	fork := Quota{used: make(map[string]usedMinute, len(q.used)), turn: q.turn}
+	for key, value := range q.used {
+		fork.used[key] = value
+	}
+	return fork
+}
+
 type usedMinute struct {
 	minute time.Time
 	n      int

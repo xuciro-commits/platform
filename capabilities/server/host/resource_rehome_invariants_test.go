@@ -45,7 +45,7 @@ func TestInvariantResourceOwnershipRehome(t *testing.T) {
 	if after.Project != "REHOMEPROJECT" || after.ManagedBy != "next.package" || after.Version != before.Version+1 {
 		t.Fatalf("rehome did not transfer ownership: %+v", after)
 	}
-	view, refusal := live.RecordOf(live.member(t), "build.rehomeobject", "ROW1", invariantClock)
+	view, refusal := live.RecordOf(t.Context(), live.member(t), "build.rehomeobject", "ROW1", invariantClock)
 	if refusal != nil || view.Record == nil {
 		t.Fatalf("rehome changed record access: %v", refusal)
 	}
@@ -55,7 +55,7 @@ func TestInvariantResourceOwnershipRehome(t *testing.T) {
 	if replayedResource.Project != after.Project || replayedResource.ManagedBy != after.ManagedBy {
 		t.Fatalf("replay did not preserve rehome: %+v", replayedResource)
 	}
-	if _, refusal := replayed.RecordOf(replayed.member(t), "build.rehomeobject", "ROW1", invariantClock); refusal != nil {
+	if _, refusal := replayed.RecordOf(t.Context(), replayed.member(t), "build.rehomeobject", "ROW1", invariantClock); refusal != nil {
 		t.Fatalf("replay changed the customer record: %v", refusal)
 	}
 }

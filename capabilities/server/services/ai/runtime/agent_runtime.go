@@ -108,6 +108,15 @@ func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Dec
 
 func (a *Agents) AcceptedLedger() *platform.Ledger { return a.ledger }
 
+func (a *Agents) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	fork, err := a.ForkDecision()
+	if err != nil {
+		return nil, err
+	}
+	fork.(*Agents).ledger = ledger
+	return fork, nil
+}
+
 func (a *Agents) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (a *Agents) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }

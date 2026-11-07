@@ -38,7 +38,7 @@ func (t *Tenant) objectOwner(store *records.Store) *objects.Owner {
 }
 
 func (t *Tenant) objectCaller(m platform.Member, app string) platform.Caller {
-	return platform.NewCaller(runtime{t}, m, app, false, false)
+	return platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
 }
 
 func (t *Tenant) objectFollows(m platform.Member, target string) bool {

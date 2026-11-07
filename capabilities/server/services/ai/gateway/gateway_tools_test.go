@@ -1,6 +1,7 @@
 package aigateway
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -32,7 +33,7 @@ func (h *proposalHost) Catalog(platform.Member) []platform.Action {
 
 func (*proposalHost) ModelToolReads(platform.Member) []string { return nil }
 
-func (*proposalHost) Read(platform.Member, string, ...json.RawMessage) (any, *kernel.Error) {
+func (*proposalHost) Read(context.Context, platform.Member, string, ...json.RawMessage) (any, *kernel.Error) {
 	return nil, nil
 }
 
@@ -45,6 +46,7 @@ func TestMCPProposalConfirmationUsesRunRoute(t *testing.T) {
 	action := platform.Action{Schema: "build.alpha.approve", Target: "build.alpha", Title: "Approve", Description: "Approve a widget", Roles: []string{"builder"}, Capability: "objects"}
 	host := &proposalHost{action: action}
 	result := (Tools{Host: host, Now: func() time.Time { return time.Unix(0, 0) }}).Call(
+		t.Context(),
 		platform.Member{ID: "member"},
 		toolName(action.Schema),
 		map[string]any{"target": "OBJ", "payload": map[string]any{}, "idempotencyKey": "test"},

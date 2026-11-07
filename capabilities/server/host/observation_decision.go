@@ -30,7 +30,7 @@ func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *platfor
 	if json.Unmarshal(asset.Body, &definition) != nil {
 		return nil
 	}
-	caller := platform.NewCaller(runtime{t}, m, evidence.Definition.Ref.App, false, false)
+	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, evidence.Definition.Ref.App, false, false)
 	if !t.authorizeNative(caller, evidence.Definition.Ref.Name, "read", definition.Roles, true).Allow {
 		return nil
 	}
@@ -146,7 +146,7 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 		t.mu.Unlock()
 		return answer, observationUnavailable(err)
 	}
-	caller := platform.NewCaller(runtime{t}, m, decision.Action.App, false, false)
+	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, decision.Action.App, false, false)
 	if refusal := authorizationRefusal(t.authorizeCapability(caller, decision.Action.App, action.Schema, action.Roles, declared && action.Target == plan.entity.Type, authorizationDetails{At: now, Sources: plan.sources})); refusal != nil {
 		t.mu.Unlock()
 		return answer, refusal

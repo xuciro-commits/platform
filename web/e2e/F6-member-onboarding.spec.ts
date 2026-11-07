@@ -1,4 +1,4 @@
-import { expect, signIn, test, unique } from "./kit";
+import { acceptedClient, expect, signIn, test, unique } from "./kit";
 
 test.use({ actionTimeout: 15_000 });
 
@@ -8,6 +8,18 @@ test("F6 an admin invites a member, grants a role, and the member sees only what
   const id = unique("m");
   const subject = `user:${id}@example.test`;
   const adminHeaders = { authorization: "Bearer admin" };
+
+  await test.step("a personal token is delivered once and sessions stay visible", async () => {
+	const api = acceptedClient(page), token = unique("personal");
+	await api.submit("platform.token", token, "issue", { label: "F6 personal integration" }, null);
+	const response = await page.request.get(`/v1/tokens/${token}/secret`, { headers: api.headers });
+	expect(response.ok()).toBeTruthy();
+	expect((await response.json()).secret).toEqual(expect.any(String));
+	expect((await page.request.get(`/v1/tokens/${token}/secret`, { headers: api.headers })).status()).toBe(404);
+	expect((await api.read<{ id: string }[]>("/v1/tokens")).some(item => item.id === token)).toBe(true);
+	expect((await api.read<unknown[]>("/v1/sessions")).length).toBeGreaterThan(0);
+	await api.submit("platform.token", token, "revoke", {}, null);
+  });
 
   const read = async <T,>(pg: typeof page, path: string, headers = adminHeaders): Promise<T> => {
     const response = await pg.request.get(path, { headers });

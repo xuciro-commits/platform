@@ -121,7 +121,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	ctx := agentowner.FunctionAccess{Tenant: t.ID, Member: t.Member, AuthorityOf: t.authorityOf, Suspended: t.suspended,
 		Authorize: func(member platform.Member, owner string, f platform.AIFunction, sources []string, definition string, at time.Time) bool {
-			c := platform.NewCaller(runtime{t}, member, owner, false, false)
+			c := platform.NewCaller(runtime{t: t, scoped: true}, member, owner, false, false)
 			return t.authorizeCapability(c, owner, f.Name, f.Roles, true, authorizationDetails{At: at, Sources: sources, Definition: definition}).Allow
 		},
 		Source: func(typ, id string) (platform.EntityInfo, bool) {
@@ -215,7 +215,7 @@ func (t *Tenant) functionHistory(store *records.Store, member platform.Member, i
 	if et == nil {
 		return agentowner.FunctionHistory{}, fmt.Errorf("conversation history is unavailable")
 	}
-	reader := platform.NewCaller(runtime{t}, member, et.Info().App, false, false)
+	reader := platform.NewCaller(runtime{t: t, scoped: true}, member, et.Info().App, false, false)
 	decision := t.authorizeFrom(store, reader, platform.AuthzRequest{Principal: member.ID, Tenant: member.Tenant, Kind: "derive", Type: et.Info().Type, Record: id, Fields: []string{"question", "output"}}, time.Now(), true)
 	if !decision.Allow || len(decision.Withheld) > 0 {
 		return agentowner.FunctionHistory{}, fmt.Errorf("conversation history is not readable")

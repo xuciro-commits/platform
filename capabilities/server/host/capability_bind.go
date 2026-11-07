@@ -25,7 +25,7 @@ func (t *Tenant) bindCapabilityInputs(m platform.Member, q platform.CapabilityIn
 		}
 		return q.Inputs, sources, nil
 	}
-	caller := platform.NewCaller(runtime{t}, m, q.Ref.App, false, false)
+	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, q.Ref.App, false, false)
 	var subject json.RawMessage
 	usedRecord := false
 	values := map[string]json.RawMessage{}

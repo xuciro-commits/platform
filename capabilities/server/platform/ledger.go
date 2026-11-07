@@ -33,6 +33,7 @@ type Authorities interface {
 }
 type ChangeLog interface {
 	ForkLog() ChangeLog
+	ForkLogWithSchemas(SchemaRegistry) ChangeLog
 	SetFacts(func(string, string) bool)
 	Records(string) []*pb.ChangeRecord
 	Last(string) *pb.ChangeRecord
@@ -91,7 +92,10 @@ func (c Caller) Kernel() KernelFactory {
 type NativeKernel struct{}
 type nativeChanges struct{ *kernel.ChangeLog }
 
-func (n nativeChanges) ForkLog() ChangeLog                   { return nativeChanges{n.Fork()} }
+func (n nativeChanges) ForkLog() ChangeLog { return nativeChanges{n.Fork()} }
+func (n nativeChanges) ForkLogWithSchemas(s SchemaRegistry) ChangeLog {
+	return nativeChanges{n.ForkWithSchemas(s)}
+}
 func (n nativeChanges) SetFacts(f func(string, string) bool) { n.Facts = f }
 func (NativeKernel) Schemas(refs []*pb.SchemaRef) SchemaRegistry {
 	return kernel.NewSchemaRegistry(refs, nil)
@@ -233,6 +237,22 @@ func (l *Ledger) ForkAcceptedChanges() ChangeLog {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.changes.ForkLog()
+}
+
+func (l *Ledger) ForkRead() (*Ledger, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	registry := l.kernel.Schemas(l.schemaRefs)
+	fork := &Ledger{tenant: l.tenant, authority: l.authority, declarations: slices.Clone(l.declarations),
+		kernel: l.kernel, schemaRefs: slices.Clone(l.schemaRefs), schemas: registry,
+		changes: l.changes.ForkLogWithSchemas(registry), archive: l.archive,
+		authorities: l.kernel.Authorities(l.authority), Catalog: NewCatalog(l.Catalog.All()...)}
+	for _, declaration := range fork.declarations {
+		if err := fork.authorities.Declare(declaration); err != nil {
+			return nil, err
+		}
+	}
+	return fork, nil
 }
 
 func (l *Ledger) RecordsFor(tenant string) []*pb.ChangeRecord {

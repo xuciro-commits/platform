@@ -63,7 +63,7 @@ func (h *Host) routesIntegration(rt *routes) {
 		if !readCapabilityBody(w, r, &q) {
 			return
 		}
-		answer, err := t.InvokeCapability(m, q, h.Now())
+		answer, err := t.InvokeCapability(r.Context(), m, q, h.Now())
 		if err != nil {
 			Reply(w, nil, t.i18n.Said(err, t.Language(m, r)), t.localizedFieldIssues(m, answer.Issues, t.Language(m, r))...)
 			return
@@ -71,7 +71,7 @@ func (h *Host) routesIntegration(rt *routes) {
 		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/capabilities/calls/compute/{id}", Summary: "Read a retained compute result after rechecking member and protected sources", Answer: platform.OperationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		answer, err := t.ReadOperation(m, r.PathValue("id"))
+		answer, err := t.ReadOperation(r.Context(), m, r.PathValue("id"))
 		if err != nil {
 			Reply(w, nil, err)
 			return

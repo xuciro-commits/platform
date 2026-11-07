@@ -50,7 +50,7 @@ func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, 
 		if refusal != nil {
 			return nil, nil, refusal
 		}
-		caller := platform.NewCaller(runtime{t}, m, sub.GetAuthority(), false, false)
+		caller := platform.NewCaller(runtime{t: t, scoped: true}, m, sub.GetAuthority(), false, false)
 		decision := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "write", Type: sub.GetTarget().GetType(), Record: sub.GetTarget().GetId(), Action: projected.GetSchema().GetName()}, now, false)
 		if !decision.Allow {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, decision.Reason)
@@ -73,7 +73,7 @@ func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, 
 		attributes = append(attributes, name)
 	}
 	slices.Sort(attributes)
-	caller := platform.NewCaller(runtime{t}, m, sub.GetAuthority(), false, false)
+	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, sub.GetAuthority(), false, false)
 	kind := "write"
 	if strings.HasSuffix(sub.GetSchema().GetName(), ".create") {
 		kind = "create"
@@ -217,7 +217,7 @@ func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmiss
 }
 
 func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBinding, current []dataowner.SourceRow, now time.Time) ([]dataowner.SourceRow, *kernel.Error) {
-	return recordRead(t, context.Background(), func() ([]dataowner.SourceRow, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.SourceRow, *kernel.Error) {
 		present := map[string]bool{}
 		for _, row := range current {
 			if row.Error != "" {

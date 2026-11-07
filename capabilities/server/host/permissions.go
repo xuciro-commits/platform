@@ -80,7 +80,7 @@ func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (
 	if info, exists := t.entity(request.Type); exists {
 		app = info.App
 	}
-	c := platform.NewCaller(runtime{t}, m, app, false, false)
+	c := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
 	return t.authorizeFrom(t.records, c, request, at, false), nil
 }
 
@@ -112,7 +112,7 @@ func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error)
 		mf := a.Manifest()
 		if action, own := mf.Actions.Action(permission); own {
 			out.App, out.Roles, out.Allowed = mf.ID, nonNil(m.RolesIn(mf.ID)), nonNil(action.Roles)
-			out.Verdict = mf.Actions.Decide(platform.NewCaller(runtime{t}, m, mf.ID, false, false), permission)
+			out.Verdict = mf.Actions.Decide(platform.NewCaller(runtime{t: t, scoped: true}, m, mf.ID, false, false), permission)
 			return out, nil
 		}
 	}

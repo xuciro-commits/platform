@@ -37,7 +37,7 @@ func TestInvariantK1K4K5CompartmentClearancesAndDeclassification(t *testing.T) {
 	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "A", "note": "protected"}}})
 	for _, id := range []string{"reader", "partial", "admin"} {
 		member, _ := live.Member(id)
-		page, refusal := live.Records(member, build.DatasetVersionType, platform.Query{}, invariantClock)
+		page, refusal := live.Records(t.Context(), member, build.DatasetVersionType, platform.Query{}, invariantClock)
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
@@ -81,7 +81,7 @@ func TestInvariantK1K4K5CompartmentClearancesAndDeclassification(t *testing.T) {
 		t.Fatal("a caller forged a pipeline execution result")
 	}
 	partial, _ := live.Member("partial")
-	visible, refusal := live.Records(partial, build.DatasetVersionType, platform.Query{}, invariantClock)
+	visible, refusal := live.Records(t.Context(), partial, build.DatasetVersionType, platform.Query{}, invariantClock)
 	if refusal != nil || len(visible.Records) != 1 || visible.Records[0].(build.DatasetVersion).Dataset != "OUTPUT" {
 		t.Fatalf("declassified output not readable: %+v %v", visible, refusal)
 	}

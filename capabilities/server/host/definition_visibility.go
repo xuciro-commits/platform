@@ -168,7 +168,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 		case platform.AssetFunction:
-			caller := platform.NewCaller(runtime{t}, m, def.Ref.App, false, false)
+			caller := platform.NewCaller(runtime{t: t, scoped: true}, m, def.Ref.App, false, false)
 			if def.Function == nil || !t.authorizeCapability(caller, def.Ref.App, def.Function.Name, def.Function.Roles, true, authorizationDetails{}).Allow {
 				continue
 			}
@@ -192,7 +192,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				def.Agent = &projection
 			}
 		case platform.AssetCompute:
-			caller := platform.NewCaller(runtime{t}, m, def.Ref.App, false, false)
+			caller := platform.NewCaller(runtime{t: t, scoped: true}, m, def.Ref.App, false, false)
 			if def.Operation == nil || !t.authorizeCapability(caller, def.Ref.App, def.Operation.Name, def.Operation.Roles, true, authorizationDetails{}).Allow {
 				continue
 			}
@@ -204,7 +204,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 			declaration := def.Observation
-			caller := platform.NewCaller(runtime{t}, m, def.Ref.App, false, false)
+			caller := platform.NewCaller(runtime{t: t, scoped: true}, m, def.Ref.App, false, false)
 			if !t.authorizeNative(caller, def.Ref.Name, "read", declaration.Roles, true).Allow {
 				continue
 			}

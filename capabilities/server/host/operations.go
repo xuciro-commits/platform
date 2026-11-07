@@ -100,7 +100,7 @@ func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.
 func (t *Tenant) delivered(d platform.Delivery) { t.audit.Delivered(d) }
 
 func (t *Tenant) automation(app string, replaying bool) platform.Caller {
-	return platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{}}, app, replaying, true)
+	return platform.NewCaller(runtime{t: t, scoped: true}, platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{}}, app, replaying, true)
 }
 
 func (t *Tenant) automated(parent platform.Caller, app string) platform.Caller {

@@ -5,7 +5,6 @@ import records "platformserver/kernel/records"
 import automation "platformserver/services/automate/runtime"
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -36,7 +35,8 @@ type Tenant struct {
 	systemDefinitionState systemDefinitionState
 	installingSet         bool
 	currentReadScopes     bool
-	recordReadError       error
+	readScope             *recordReadScope
+	readOrigin            *Tenant
 	startupSnapshot       *snapshotCompatibility
 	runtimePosition       func() int64
 	snapshotPosition      int64
@@ -71,7 +71,7 @@ type Tenant struct {
 	Store                 Store
 	memStore              persistence.Memory
 	knowledge             platform.Glossary
-	index                 knowledgeindex.Index
+	index                 *knowledgeindex.Index
 	i18n                  transport.Translator
 	agentRun              string
 	mu                    runtimekernel.Lane
@@ -126,7 +126,6 @@ type Tenant struct {
 	procs                 platform.Processes
 	listeners             []string
 	agents                platform.AgentRuntime
-	ctx                   context.Context
 	Files                 platform.FileStore
 	ComputeWorker         platform.WasmWorker
 	Compiler              platform.CodeCompiler
@@ -149,7 +148,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if err := services.Check(); err != nil {
 		return nil, err
 	}
-	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: services.Kernel.Works(), work: automation.NewWorkBoard(),
+	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: services.Kernel.Works(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
 		connectors: newConnectorRoster(services.Kernel), records: records.NewStore()}
 	t.bindAuditStore()
 	t.mu.BindReadScope(t.beginRecordRead, t.closeRecordRead)
@@ -356,5 +355,5 @@ func (t *Tenant) app(id string) platform.App {
 }
 
 func (t *Tenant) caller(m platform.Member, app platform.App, replaying bool) platform.Caller {
-	return platform.NewCaller(runtime{t}, m, app.Manifest().ID, replaying, false)
+	return platform.NewCaller(runtime{t: t, scoped: true}, m, app.Manifest().ID, replaying, false)
 }

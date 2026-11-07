@@ -351,8 +351,8 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 	if t.quarantined() {
 		return nil, fmt.Errorf("tenant %s is stopped", t.ID)
 	}
-	if t.recordReadError != nil {
-		return nil, t.recordReadError
+	if t.readError() != nil {
+		return nil, t.readError()
 	}
 	if t.AcceptResult != nil {
 		before := int64(0)

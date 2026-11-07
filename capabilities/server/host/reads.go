@@ -56,20 +56,20 @@ func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Tim
 	return out, err
 }
 
-func (t *Tenant) Read(m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+func (t *Tenant) Read(ctx context.Context, m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	if name == "health" && t.quarantined() {
 		t.mu.Lock()
 		defer t.mu.Unlock()
 		return t.read(m, name, inputs...)
 	}
-	return coordinatedRecordRead(t, context.Background(), func() (any, *kernel.Error) { return t.read(m, name, inputs...) })
+	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *kernel.Error) { return t.read(m, name, inputs...) })
 }
 func (t *Tenant) read(m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	return t.readFrom(m, t.owner["read:"+name], name, inputs...)
 }
 
-func (t *Tenant) ReadFrom(m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
-	return coordinatedRecordRead(t, context.Background(), func() (any, *kernel.Error) { return t.readFromApp(m, app, name, inputs...) })
+func (t *Tenant) ReadFrom(ctx context.Context, m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *kernel.Error) { return t.readFromApp(m, app, name, inputs...) })
 }
 func (t *Tenant) readFromApp(m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	a := t.app(app)

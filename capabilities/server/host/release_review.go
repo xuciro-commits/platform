@@ -37,7 +37,7 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleasePage{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
 		return releaseowner.ReleasePage{}, err
 	}
@@ -54,7 +54,7 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (releaseowner.
 	if err := t.admits(m); err != nil {
 		return releaseowner.SavedReleaseReview{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates/{id}", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
 		return releaseowner.SavedReleaseReview{}, err
 	}

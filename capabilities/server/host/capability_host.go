@@ -1,7 +1,6 @@
 package host
 
 import (
-	"context"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -11,10 +10,6 @@ import (
 	"strconv"
 )
 
-func (t *Tenant) Capabilities(m platform.Member) []platform.CapabilityDescriptor {
-	answer, _ := recordRead(t, context.Background(), func() ([]platform.CapabilityDescriptor, *kernel.Error) { return t.capabilities(m), nil })
-	return answer
-}
 func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor {
 	if t.admits(m) != nil {
 		return []platform.CapabilityDescriptor{}
@@ -37,7 +32,7 @@ func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor
 			permission, roles = definition.Operation.Name, definition.Operation.Roles
 		}
 		if permission != "" {
-			caller := platform.NewCaller(runtime{t}, m, definition.Ref.App, false, false)
+			caller := platform.NewCaller(runtime{t: t}, m, definition.Ref.App, false, false)
 			if !t.authorizeCapability(caller, definition.Ref.App, permission, roles, true, authorizationDetails{}).Allow {
 				continue
 			}
@@ -45,12 +40,6 @@ func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor
 		visible = append(visible, definition)
 	}
 	return authoring.CapabilityPalette(visible, m.Holds("build", "builder"))
-}
-
-func (t *Tenant) DescribeCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (platform.CapabilityDescriptor, *kernel.Error) {
-		return t.describeCapability(m, ref, version)
-	})
 }
 
 func (t *Tenant) describeCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, *kernel.Error) {
@@ -93,14 +82,14 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 		}
 	case platform.AssetCompute:
 		operation, ordinal, ok := operationDefinition(app, ref.Name, version)
-		caller := platform.NewCaller(runtime{t}, m, ref.App, false, false)
+		caller := platform.NewCaller(runtime{t: t}, m, ref.App, false, false)
 		if !ok || ordinal != version || !t.authorizeCapability(caller, ref.App, operation.Name, operation.Roles, true, authorizationDetails{}).Allow {
 			return platform.CapabilityDescriptor{}, false
 		}
 		selected.Operation = &operation
 	case platform.AssetFunction:
 		function, ordinal, ok := agentowner.FunctionDefinition(app, ref.Name, version)
-		caller := platform.NewCaller(runtime{t}, m, ref.App, false, false)
+		caller := platform.NewCaller(runtime{t: t}, m, ref.App, false, false)
 		if !ok || ordinal != version || !t.authorizeCapability(caller, ref.App, function.Name, function.Roles, true, authorizationDetails{}).Allow {
 			return platform.CapabilityDescriptor{}, false
 		}

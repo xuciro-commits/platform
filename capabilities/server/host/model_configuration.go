@@ -32,8 +32,8 @@ type ModelSelection struct {
 	Models          []ModelChoice         `json:"models"`
 }
 
-func (t *Tenant) ModelSelection(m platform.Member, purpose string) (ModelSelection, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (ModelSelection, *kernel.Error) {
+func (t *Tenant) ModelSelection(ctx context.Context, m platform.Member, purpose string) (ModelSelection, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (ModelSelection, *kernel.Error) {
 		out := ModelSelection{Purpose: purpose, Models: []ModelChoice{}}
 		if purpose != "generation" && purpose != "agent" && purpose != "embedding" {
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a model purpose")

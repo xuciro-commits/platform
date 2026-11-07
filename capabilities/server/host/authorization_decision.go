@@ -68,25 +68,15 @@ func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.Authz
 
 type authorizationDetails = security.NativeDetails
 
-func (t *Tenant) authorizeReading(decide func() platform.AuthzDecision) platform.AuthzDecision {
-	if t.quarantined() {
-		return platform.AuthzDecision{}
+func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool, details ...authorizationDetails) platform.AuthzDecision {
+	if c.ReadScoped() {
+		return t.authorizer().Native(c, permission, kind, allowed, declared && t.resourceActionActive(permission), details...)
 	}
-	if !t.currentReadScopes || t.records.Current().View() != nil {
-		return decide()
-	}
-	var decision platform.AuthzDecision
-	_, _ = coordinatedRecordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
-		decision = decide()
-		return struct{}{}, nil
+	decision, _ := recordRead(t, context.Background(), func(t *Tenant) (platform.AuthzDecision, *kernel.Error) {
+		c := platform.NewCaller(runtime{t: t}, c.Member, c.App, c.Replaying, c.Automation)
+		return t.authorizer().Native(c, permission, kind, allowed, declared && t.resourceActionActive(permission), details...), nil
 	})
 	return decision
-}
-
-func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool, details ...authorizationDetails) platform.AuthzDecision {
-	return t.authorizeReading(func() platform.AuthzDecision {
-		return t.authorizer().Native(c, permission, kind, allowed, declared && t.resourceActionActive(permission), details...)
-	})
 }
 
 func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string, allowed []string, declared bool, detail authorizationDetails) platform.AuthzDecision {
@@ -119,12 +109,14 @@ func (t *Tenant) authorizeFrom(store *records.Store, c platform.Caller, q platfo
 			t.simulationTrace(platform.DecisionTrace{Kind: "authorization", Request: &q, Authorization: &decision})
 		}()
 	}
-	if held {
+	if held || c.ReadScoped() {
 		return t.authorizeDepth(store, c, q, at, held, 0, newAuthorizationWalk())
 	}
-	return t.authorizeReading(func() platform.AuthzDecision {
-		return t.authorizeDepth(store, c, q, at, false, 0, newAuthorizationWalk())
+	decision, _ = recordRead(t, context.Background(), func(t *Tenant) (platform.AuthzDecision, *kernel.Error) {
+		c := platform.NewCaller(runtime{t: t}, c.Member, c.App, c.Replaying, c.Automation)
+		return t.authorizeDepth(t.records, c, q, at, false, 0, newAuthorizationWalk()), nil
 	})
+	return decision
 }
 
 type authorizationWalk = security.Traversal
@@ -143,7 +135,7 @@ func (t *Tenant) connectorInputGranted(m platform.Member, app, name string) bool
 }
 
 func (t *Tenant) visibleIn(store *records.Store, m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
-	return t.visibleForCallerIn(store, platform.NewCaller(runtime{t}, m, et.Info().App, false, false), et, at)
+	return t.visibleForCallerIn(store, platform.NewCaller(runtime{t: t}, m, et.Info().App, false, false), et, at)
 }
 
 func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {

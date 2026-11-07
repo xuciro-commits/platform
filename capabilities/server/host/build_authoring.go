@@ -14,7 +14,7 @@ func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]platform.Capabili
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/build/drafts/actions", "read", []string{build.Builder}, true)); err != nil {
 		return nil, err
 	}

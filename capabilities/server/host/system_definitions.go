@@ -329,8 +329,8 @@ func (h hostView) SystemDefinitionReadOnly(ref platform.AssetRef) bool {
 func (t *Tenant) checkSystemDefinitionProjection(projection *systemDefinitionProjection) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.recordReadError != nil {
-		return t.recordReadError
+	if t.readError() != nil {
+		return t.readError()
 	}
 	view, err := t.assetInstallationView(t.records)
 	if err != nil {

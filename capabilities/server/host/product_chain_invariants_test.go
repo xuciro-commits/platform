@@ -36,7 +36,7 @@ func TestInvariantProductVersionFreezesSavedCandidate(t *testing.T) {
 		"product": "alpha", "version": "1.0.0", "candidate": candidate,
 	})
 
-	view, refusal := live.RecordOf(live.member(t), build.ProductVersionType, "alpha@1.0.0", invariantClock)
+	view, refusal := live.RecordOf(t.Context(), live.member(t), build.ProductVersionType, "alpha@1.0.0", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read product version: %v", refusal)
 	}
@@ -56,7 +56,7 @@ func TestInvariantProductVersionFreezesSavedCandidate(t *testing.T) {
 
 	product["title"] = "Alpha product, revised"
 	live.accept(t, build.ProductType+".edit", build.ProductType, "alpha", product)
-	again, refusal := live.RecordOf(live.member(t), build.ProductVersionType, "alpha@1.0.0", invariantClock)
+	again, refusal := live.RecordOf(t.Context(), live.member(t), build.ProductVersionType, "alpha@1.0.0", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read product version after product edit: %v", refusal)
 	}
@@ -70,7 +70,7 @@ func TestInvariantProductVersionFreezesSavedCandidate(t *testing.T) {
 		t.Fatal("a published product version was replaced")
 	}
 	restored := live.restore(t, live.entries)
-	replayed, refusal := restored.RecordOf(restored.member(t), build.ProductVersionType, "alpha@1.0.0", invariantClock)
+	replayed, refusal := restored.RecordOf(t.Context(), restored.member(t), build.ProductVersionType, "alpha@1.0.0", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read replayed product version: %v", refusal)
 	}

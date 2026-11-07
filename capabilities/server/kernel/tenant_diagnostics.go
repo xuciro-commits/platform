@@ -24,6 +24,12 @@ type AuditLog struct {
 	readSink   func(platform.PersonalRead)
 }
 
+func (l *AuditLog) Fork() AuditLog {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return AuditLog{entries: slices.Clone(l.entries), deliveries: slices.Clone(l.deliveries), personal: slices.Clone(l.personal)}
+}
+
 func keepLast[T any](xs []T, n int) []T {
 	if len(xs) > n {
 		return xs[len(xs)-n:]

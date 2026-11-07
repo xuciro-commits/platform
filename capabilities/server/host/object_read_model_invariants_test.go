@@ -30,7 +30,7 @@ func TestInvariantObjectSectionsReadIndependently(t *testing.T) {
 	if !ok {
 		t.Fatal("reader is not seated")
 	}
-	base, refusal := live.RecordOf(reader, "build.alpha", "A1", invariantClock)
+	base, refusal := live.RecordOf(t.Context(), reader, "build.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read object: %v", refusal)
 	}
@@ -83,7 +83,7 @@ func TestInvariantOwnedRelationsReadWithoutNestedRecordLock(t *testing.T) {
 	if err := live.records.Install(info); err != nil {
 		t.Fatal(err)
 	}
-	caller := platform.NewCaller(runtime{live.Tenant}, live.member(t), build.ID, false, false)
+	caller := platform.NewCaller(runtime{t: live.Tenant}, live.member(t), build.ID, false, false)
 	done := make(chan []platform.RelationLink, 1)
 	go func() {
 		done <- live.ownedRelations(live.records, caller, "", invariantClock)
@@ -114,7 +114,7 @@ func TestInvariantPageModelUsesObjectSetWindow(t *testing.T) {
 	if entity == nil {
 		t.Fatal("bulk object type is unavailable")
 	}
-	caller := platform.NewCaller(runtime{live.Tenant}, live.member(t), build.ID, false, false)
+	caller := platform.NewCaller(runtime{t: live.Tenant}, live.member(t), build.ID, false, false)
 	for index := 0; index <= platform.RecordSetMaxRows; index++ {
 		name := fmt.Sprintf("row %d", index)
 		if index%1000 == 0 {

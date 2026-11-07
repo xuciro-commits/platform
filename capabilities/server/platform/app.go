@@ -142,6 +142,14 @@ func (c Caller) Staging() bool {
 	return ok
 }
 
+func (c Caller) ReadScoped() bool {
+	if c.Staging() {
+		return true
+	}
+	scope, ok := c.rt.(interface{ ReadScoped() bool })
+	return ok && scope.ReadScoped()
+}
+
 type DecisionFailureRuntime interface{ FailDecision(*kernel.Error) }
 
 type DecisionDeclarationRuntime interface {
@@ -180,6 +188,11 @@ type AcceptedHistoryApp interface {
 type DecisionForkApp interface {
 	App
 	ForkDecision() (App, error)
+}
+
+type ReadForkApp interface {
+	App
+	ForkRead(*Ledger) (App, error)
 }
 
 type AcceptedInputApp interface {

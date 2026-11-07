@@ -1,6 +1,6 @@
 ---
 level: 7 系统架构
-covers: [capabilities/server/kernel/tenant_lane.go, capabilities/server/host/record_read_scope.go, capabilities/server/host/submit.go, capabilities/server/host/staged_decision.go, capabilities/server/host/operations.go, capabilities/server/kernel/records/**, capabilities/server/kernel/store/postgres.go, capabilities/server/services/automate/runtime/automation_work.go]
+covers: [capabilities/server/kernel/tenant_lane.go, capabilities/server/host/record_read_scope.go, capabilities/server/host/read_image.go, capabilities/server/host/runtime.go, capabilities/server/host/submit.go, capabilities/server/host/staged_decision.go, capabilities/server/host/operations.go, capabilities/server/kernel/records/**, capabilities/server/kernel/store/postgres.go, capabilities/server/services/automate/runtime/automation_work.go]
 read-when: 改动租户车道、协调读取、暂存决定、接受结果提交与应用、后台工作轮次，或在车道内新增任何工作
 ---
 
@@ -68,6 +68,8 @@ read-when: 改动租户车道、协调读取、暂存决定、接受结果提交
 - 发布：车道内应用完成后，以原子指针替换“当前映像”。读取者 `Load` 一次，整次读取只用这一份。
 - 映像内容清单写在一处（`host` 的映像构造函数），读取闭包只经它取状态；新增读取依赖必须先加进清单。
 - 前提是读取范围按次持有：一次读取的 SQL 视图、读取错误、系统定义投影和追踪上下文属于这次读取的值，经调用者传递，不再是租户级字段；在此之前任何两次读取都不能并发。
+- `host/read_image.go` 是状态清单与唯一构造处：复用持久记录根、分叉拥有者状态与账本，复制控制、发布、授权、通知及运行前提；分叉的拥有者重新绑定该范围的 Host。`runtime.ReadScoped` 显式表明已有范围，不以租户中恰好打开了某个 SQL 视图来推断当前调用者持有范围。
+- 会话、个人令牌列表及令牌的一次性密钥交付读取原 Console，由其自身互斥保护；它们是即时会话状态，不从已接受位置的映像复制或消费。索引同步、上传清理等修改状态的操作也不得走只读范围。
 - 内存：持久结构共享未改动部分；旧映像随最后一个读取者释放。不得为发布深拷贝全量行。
 
 ### C4 读取一致性
@@ -127,14 +129,13 @@ SQL 来源行仍从 PostgreSQL 可重复读事务读取：
 
 ## 现存差距
 
-- 读取：`host/record_read_scope.go` 的 `coordinatedRecordRead` 每次读取仍取车道。读取范围是租户级的单一槽位（`t.recordReadError`、`records.Current()` 的已打开视图、`beginRecordRead` 中的 `applySystemDefinitionProjection`、`telemetry.go` 的 `t.ctx`），C3 的前提尚未满足。
-- 读取：`Records`、`RecordOf`、`Search`、`Readable` 等 `Tenant` 方法与非 HTTP 调用仍传 `context.Background()`。
+- 读取：`coordinatedRecordRead` 已创建独立的记录、账本、SQL 视图、错误、系统定义与追踪范围，`Tenant` 读取方法显式接受调用方上下文，SQL 行、历史和接受状态查询复用该上下文；当前仍在车道内构造并执行，尚未发布 C3 映像和实现 C4 重试。未实现 `ReadForkApp` 的拥有者暂留车道。
 - 提交：`host/submit.go` 的 `submit` 从准入后整段持有车道，决定在车道内计算；`newStagedDecision` 分叉的是可变的当前存储，序列、通知、连接器与拥有者账本取自活动状态。
-- 映像：读取闭包触达的可变状态（成员与授权、标记索引、资源目录、各拥有者账本、序列、通知、连接器）尚未盘点，也未冻结。
+- 映像：读取范围的可变状态清单已落在 `forkReadState`，记录与索引复用现有持久根，拥有者状态和账本隔离；仍缺原子发布和按已应用位置复用。
 - 车道内：56 个文件共 129 处直接调用 `t.mu.Lock`（`continuous_frames.go`、`agent_host.go`、`release_candidate.go`、`branches.go`、`aicall.go` 等），持有范围未逐一核对是否符合 C-R2；`agent_host.go` 的 `BeginAgentRead` 以车道代替读取映像。
 - 车道内：`host/files.go` 的 `SweepUploads` 在车道内删除对象存储字节；移出需要先有“待删除”标记协议，否则与附件引用竞争会丢字节。
 - 指标：`platform.decision.conflicts`、`platform.read_image.retries` 随 C4、C5 落地。
-- 验证：K13 只覆盖 C2 与 C6；C4、C5 的并发部分随实现补齐。
+- 验证：K13 已覆盖 C2、C6 与独立读取范围；C4、C5 的并发部分随实现补齐。
 
 ## 相关
 

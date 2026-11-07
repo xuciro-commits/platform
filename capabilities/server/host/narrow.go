@@ -50,7 +50,7 @@ func (t *Tenant) mayReadIn(store *records.Store, m platform.Member, now time.Tim
 		if et != nil {
 			app = et.Info().App
 		}
-		c := platform.NewCaller(runtime{t}, m, app, false, false)
+		c := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
 		fields := []string{}
 		if field != "" {
 			fields = append(fields, field)

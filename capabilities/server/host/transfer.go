@@ -186,7 +186,7 @@ func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now
 	if et == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	c := platform.NewCaller(runtime{t}, m, et.Info().App, false, false)
+	c := platform.NewCaller(runtime{t: t, scoped: true}, m, et.Info().App, false, false)
 	if err := authorizationRefusal(t.authorizeFrom(t.records, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "export", Type: typ}, now, false)); err != nil {
 		return nil, err
 	}

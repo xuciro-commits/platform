@@ -297,9 +297,9 @@ func (t *Tenant) vectorSpace(name string) string {
 	return name + "@" + digest
 }
 
-func (t *Tenant) KnowledgeIndexStatus(m platform.Member) (platform.KnowledgeIndexStatus, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (platform.KnowledgeIndexStatus, *kernel.Error) {
-		c := platform.NewCaller(runtime{t}, m, controlowner.PlatformApp, false, false)
+func (t *Tenant) KnowledgeIndexStatus(ctx context.Context, m platform.Member) (platform.KnowledgeIndexStatus, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (platform.KnowledgeIndexStatus, *kernel.Error) {
+		c := platform.NewCaller(runtime{t: t}, m, controlowner.PlatformApp, false, false)
 		if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/ai/knowledge-index", "read", []string{controlowner.Admin}, true)); err != nil {
 			return platform.KnowledgeIndexStatus{}, err
 		}
@@ -375,7 +375,7 @@ func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []s
 func (t *Tenant) knowledgeContext() knowledgeindex.Context {
 	return knowledgeindex.Context{Tenant: t.ID, Store: t.store(), Sync: t.sync,
 		Read: func(read func()) {
-			_, _ = recordRead(t, context.Background(), func() (struct{}, *kernel.Error) { read(); return struct{}{}, nil })
+			_, _ = lockedRecordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { read(); return struct{}{}, nil })
 		},
 		Visible: t.knowledgePassageReadableInLane,
 		ScopeReadable: func(reader *platform.Member, scope string, at time.Time) bool {
@@ -394,7 +394,7 @@ func (t *Tenant) knowledgeContext() knowledgeindex.Context {
 		NeedsRebuild: t.embeddingNeedsRebuild, Space: t.vectorSpace, Embed: t.embed, Stopped: t.businessStopped, Changed: func() { t.operationsChanged(platform.KnowledgeApp) }}
 }
 func (t *Tenant) sync() {
-	_, _ = recordRead(t, context.Background(), func() (struct{}, *kernel.Error) { t.syncRecords(); return struct{}{}, nil })
+	_, _ = lockedRecordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { t.syncRecords(); return struct{}{}, nil })
 }
 func (t *Tenant) syncRecords() {
 	t.index.Sync(func(walked bool) ([]knowledgeindex.Source, map[string]bool) {

@@ -54,7 +54,11 @@ func (m *Monitoring) Manifest() platform.Manifest {
 		Reads: []string{ReadViews}, Everyone: []string{ReadViews}}
 }
 
-func (m *Monitoring) AcceptedLedger() *platform.Ledger         { return m.ledger }
+func (m *Monitoring) AcceptedLedger() *platform.Ledger { return m.ledger }
+
+func (m *Monitoring) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	return &Monitoring{ledger: ledger}, nil
+}
 func (m *Monitoring) Declarations() []*pb.AuthorityDeclaration { return m.ledger.Declarations() }
 func (m *Monitoring) SnapshotFormat() string                   { return "platform.ledger.v1" }
 func (m *Monitoring) Snapshot() (json.RawMessage, error)       { return m.ledger.Snapshot() }

@@ -143,7 +143,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "DS1", map[string]any{"rows": []map[string]any{{"id": "A1", "note": "input"}}})
 	live.accept(t, "build.source.create", build.SourceType, "SRC1", map[string]any{"name": "feed", "title": "Feed", "url": "https://example.test/data", "dataset": "DS1", "every": "1m"})
 	live.accept(t, "build.source.publish", build.SourceType, "SRC1", map[string]any{})
-	sourceView, refusal := live.RecordOf(live.member(t), build.SourceType, "SRC1", now)
+	sourceView, refusal := live.RecordOf(t.Context(), live.member(t), build.SourceType, "SRC1", now)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
@@ -151,7 +151,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	live.accept(t, build.SchemaSourcePulled, build.SourceType, "SRC1", map[string]any{"pull": build.SourcePull{At: invariantClock, DefinitionVersion: source.ExecutionVersion(), Error: "source failed"}})
 	live.accept(t, "build.pipeline.create", build.PipelineType, "PL1", map[string]any{"name": "transform", "title": "Transform", "input": "DS1", "outputDataset": "DS2", "steps": []platform.TransformStep{{Kind: "select", Columns: []string{"id"}}}})
 	live.accept(t, "build.pipeline.publish", build.PipelineType, "PL1", map[string]any{})
-	pipelineView, refusal := live.RecordOf(live.member(t), build.PipelineType, "PL1", now)
+	pipelineView, refusal := live.RecordOf(t.Context(), live.member(t), build.PipelineType, "PL1", now)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
@@ -162,7 +162,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	live.accept(t, build.SchemaDatasetProjected, build.DatasetType, "DS1", map[string]any{"projection": build.DatasetProjection{Object: "build.alpha", Version: 1, At: invariantClock, Rows: 1, Refused: 1}})
 	live.accept(t, "build.code.create", build.CodeType, "CODE1", map[string]any{"name": "algorithm", "title": "Algorithm", "language": "go", "source": "package main\nfunc main() {}", "input": platform.ValueSchema{Type: "string"}, "output": platform.ValueSchema{Type: "string"}, "roles": []string{build.Builder}, "limits": platform.OperationLimits{TimeoutMillis: 100, MemoryPages: 1, MaxInputBytes: 1024, MaxOutputBytes: 1024}})
 	live.accept(t, build.SchemaCodeCompile, build.CodeType, "CODE1", map[string]any{})
-	codeView, refusal := live.RecordOf(live.member(t), build.CodeType, "CODE1", now)
+	codeView, refusal := live.RecordOf(t.Context(), live.member(t), build.CodeType, "CODE1", now)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
@@ -175,7 +175,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	if live.quarantined() {
 		t.Fatal("retaining the compilation failure quarantined the tenant")
 	}
-	codeView, refusal = live.RecordOf(live.member(t), build.CodeType, "CODE1", now)
+	codeView, refusal = live.RecordOf(t.Context(), live.member(t), build.CodeType, "CODE1", now)
 	if refusal != nil || codeView.Record.(build.Code).State != "failed" {
 		for _, effect := range live.Effects(now) {
 			if effect.ID == code.Call {
@@ -304,7 +304,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		if find(adminPage, "work:job:probe/failed").Status != "failed" || job.State != "scheduled" || job.Status != "" {
 			t.Fatalf("job view changed the authoritative job or lost its failure: %+v", job)
 		}
-		value, refusal := live.Read(admin, "work")
+		value, refusal := live.Read(t.Context(), admin, "work")
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
@@ -401,7 +401,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		for _, page := range []MonitoringRunPage{adminPage, builderPage} {
 			for id, want := range map[string]string{waiting: "pending", done: "ok", compensated: "failed", rollback: "running", cancelled: "cancelled"} {
 				run := find(page, "flow:"+id)
-				view, refusal := live.RecordOf(admin, platform.FlowInstanceType, id, now)
+				view, refusal := live.RecordOf(t.Context(), admin, platform.FlowInstanceType, id, now)
 				if refusal != nil {
 					t.Fatal(refusal)
 				}
@@ -413,7 +413,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			}
 			for id, want := range map[string]string{"running": "running", "waiting": "pending", "done": "ok", "failed": "failed", "cancelled": "cancelled"} {
 				run := find(page, "agent:"+id)
-				view, refusal := live.RecordOf(admin, platform.RunType, id, now)
+				view, refusal := live.RecordOf(t.Context(), admin, platform.RunType, id, now)
 				if refusal != nil {
 					t.Fatal(refusal)
 				}
@@ -496,7 +496,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		}
 		after := read("admin", "?limit=100")
 		recovered := find(after, run.ID)
-		view, refusal := live.RecordOf(admin, platform.FlowInstanceType, rollback, now)
+		view, refusal := live.RecordOf(t.Context(), admin, platform.FlowInstanceType, rollback, now)
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
@@ -532,8 +532,8 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		if recorder.Code != http.StatusUnauthorized {
 			t.Fatalf("anonymous monitoring: HTTP %d", recorder.Code)
 		}
-		_, refusal := recordRead(live.Tenant, context.Background(), func() (MonitoringRunPage, *kernel.Error) {
-			return live.monitoringRuns(platform.Member{ID: "admin", Tenant: "another-tenant", Roles: admin.Roles}, MonitoringRunFilter{Limit: 50}, now)
+		_, refusal := recordRead(live.Tenant, context.Background(), func(t *Tenant) (MonitoringRunPage, *kernel.Error) {
+			return t.monitoringRuns(platform.Member{ID: "admin", Tenant: "another-tenant", Roles: admin.Roles}, MonitoringRunFilter{Limit: 50}, now)
 		})
 		if refusal == nil {
 			t.Fatal("another tenant was admitted to monitoring")

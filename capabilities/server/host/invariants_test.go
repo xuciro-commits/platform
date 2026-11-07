@@ -100,7 +100,7 @@ func TestInvariantK1ObjectViewReleaseReplayPreservesHistory(t *testing.T) {
 	}
 	pagePublication := func(tenant *invariantTenant) build.Page {
 		t.Helper()
-		view, refusal := tenant.RecordOf(tenant.member(t), build.PageType, "DETAIL1", invariantClock)
+		view, refusal := tenant.RecordOf(t.Context(), tenant.member(t), build.PageType, "DETAIL1", invariantClock)
 		if refusal != nil {
 			t.Fatalf("read detail publication: %v", refusal)
 		}
@@ -323,11 +323,11 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 
 	t.Run("read refusal carries its reason", func(t *testing.T) {
 		want := "Authorization denied at verb: No role or policy grants this operation"
-		page, refusal := tn.Records(unprivileged, build.DatasetVersionType, platform.Query{}, invariantClock)
+		page, refusal := tn.Records(t.Context(), unprivileged, build.DatasetVersionType, platform.Query{}, invariantClock)
 		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Message != want || len(page.Records) != 0 {
 			t.Fatalf("unauthorized collection read: page=%+v refusal=%+v; want POLICY_DENIED with %q", page, refusal, want)
 		}
-		view, refusal := tn.RecordOf(unprivileged, build.DatasetVersionType, openID, invariantClock)
+		view, refusal := tn.RecordOf(t.Context(), unprivileged, build.DatasetVersionType, openID, invariantClock)
 		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Message != want || view.Record != nil {
 			t.Fatalf("unauthorized single read: view=%+v refusal=%+v; want POLICY_DENIED with %q", view, refusal, want)
 		}
@@ -338,7 +338,7 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 			member platform.Member
 			want   []string
 		}{{cleared, []string{guardedID, openID}}, {uncleared, []string{openID}}} {
-			page, refusal := tn.Records(check.member, build.DatasetVersionType, platform.Query{Sort: []string{"id"}}, invariantClock)
+			page, refusal := tn.Records(t.Context(), check.member, build.DatasetVersionType, platform.Query{Sort: []string{"id"}}, invariantClock)
 			if refusal != nil {
 				t.Fatalf("%s collection read: %+v", check.member.ID, refusal)
 			}
@@ -361,13 +361,13 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 			member platform.Member
 			id     string
 		}{{cleared, guardedID}, {uncleared, openID}} {
-			view, refusal := tn.RecordOf(check.member, build.DatasetVersionType, check.id, invariantClock)
+			view, refusal := tn.RecordOf(t.Context(), check.member, build.DatasetVersionType, check.id, invariantClock)
 			if refusal != nil || view.Record == nil {
 				t.Fatalf("%s cannot read visible version %s: view=%+v refusal=%+v", check.member.ID, check.id, view, refusal)
 			}
 		}
-		hidden, refusal := tn.RecordOf(uncleared, build.DatasetVersionType, guardedID, invariantClock)
-		missing, absent := tn.RecordOf(uncleared, build.DatasetVersionType, "MISSING@1", invariantClock)
+		hidden, refusal := tn.RecordOf(t.Context(), uncleared, build.DatasetVersionType, guardedID, invariantClock)
+		missing, absent := tn.RecordOf(t.Context(), uncleared, build.DatasetVersionType, "MISSING@1", invariantClock)
 		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND || hidden.Record != nil || !reflect.DeepEqual(refusal, absent) || !reflect.DeepEqual(hidden, missing) {
 			t.Fatalf("uncleared read differs from a missing version: hidden=%+v refusal=%+v missing=%+v refusal=%+v", hidden, refusal, missing, absent)
 		}
@@ -381,7 +381,7 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 			t.Fatal(refusal)
 		}
 		for _, reader := range []platform.Member{uncleared, unprivileged} {
-			hits := tn.Search(&reader, "guarded", invariantClock)
+			hits := tn.Search(t.Context(), &reader, "guarded", invariantClock)
 			if len(hits) != 1 || hits[0].Resource == nil {
 				t.Fatalf("%s resource discovery: %+v", reader.ID, hits)
 			}
@@ -390,7 +390,7 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 				t.Fatalf("%s discovered wrong identity or permission: %+v", reader.ID, resource)
 			}
 		}
-		if _, refusal := tn.RecordOf(unprivileged, build.DatasetType, "GUARDED", invariantClock); refusal == nil {
+		if _, refusal := tn.RecordOf(t.Context(), unprivileged, build.DatasetType, "GUARDED", invariantClock); refusal == nil {
 			t.Fatal("discovery granted access to a resource definition")
 		}
 	})
@@ -430,7 +430,7 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 					"rows": []map[string]any{{"id": "A1", "note": "higher clearance"}}, "marking": phase.other,
 				})
 			}
-			graph, refusal := live.lineage(inspector, LineageRequest{Mode: "overview"})
+			graph, refusal := live.lineage(t.Context(), inspector, LineageRequest{Mode: "overview"})
 			if refusal != nil {
 				t.Fatalf("read lineage: %+v", refusal)
 			}
@@ -574,7 +574,7 @@ func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
 		t.Fatalf("merge sealed %d merge results and %d candidate saves; want one of each", mergeResults, candidateResults)
 	}
 	for _, object := range objects {
-		view, refusal := live.RecordOf(member, build.ObjectType, object.id, invariantClock)
+		view, refusal := live.RecordOf(t.Context(), member, build.ObjectType, object.id, invariantClock)
 		if refusal != nil {
 			t.Fatalf("read merged object %s: %v", object.id, refusal)
 		}

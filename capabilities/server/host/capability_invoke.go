@@ -13,7 +13,7 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvocation, now time.Time) (platform.CapabilityResult, *kernel.Error) {
+func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q platform.CapabilityInvocation, now time.Time) (platform.CapabilityResult, *kernel.Error) {
 	answer := platform.CapabilityResult{Ref: q.Ref}
 	if refusal := t.admits(m); refusal != nil {
 		return answer, refusal
@@ -27,7 +27,7 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 	if _, err := platform.DecodeValue(q.Inputs, 64<<10); err != nil {
 		return bad(err.Error())
 	}
-	prepared, refusal := recordRead(t, context.Background(), func() (capabilityPreparation, *kernel.Error) {
+	prepared, refusal := recordRead(t, ctx, func(t *Tenant) (capabilityPreparation, *kernel.Error) {
 		return t.prepareCapability(m, q, now)
 	})
 	if refusal != nil {
@@ -123,7 +123,7 @@ func (t *Tenant) prepareCapability(m platform.Member, q platform.CapabilityInvoc
 		if out.descriptor.Source == "tenant" && q.Version == 0 || q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Query takes only its declared inputs")
 		}
-		caller := platform.NewCaller(runtime{t}, m, q.Ref.App, false, false)
+		caller := platform.NewCaller(runtime{t: t}, m, q.Ref.App, false, false)
 		var refusal *kernel.Error
 		out.query, refusal = caller.ReadQueryVersion(q.Ref.App, q.Ref.Name, q.Version, q.Inputs, now)
 		return out, refusal

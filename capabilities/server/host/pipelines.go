@@ -52,7 +52,7 @@ func (t *Tenant) RunPipelines(now time.Time) {
 	t.mu.Unlock()
 	t.runSchedules(fixed, now)
 	for i, p := range fixed {
-		if current, refusal := coordinatedRecordRead(t, context.Background(), func() (build.Pipeline, *kernel.Error) {
+		if current, refusal := coordinatedRecordRead(t, context.Background(), func(t *Tenant) (build.Pipeline, *kernel.Error) {
 			row, _ := platform.Get[build.Pipeline](t.automation(build.ID, false), p.ID)
 			return row, nil
 		}); refusal == nil {

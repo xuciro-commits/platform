@@ -40,7 +40,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleaseDraftClosure{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/drafts/referenced", "read", []string{build.Builder}, true)); err != nil {
 		return releaseowner.ReleaseDraftClosure{}, err
 	}
@@ -72,7 +72,7 @@ func (t *Tenant) builderDrafts(m platform.Member, permission string) (build.Cons
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(c, permission, "read", []string{build.Builder}, true)); err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingSt
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleaseWorkingState{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/drafts/working", "read", []string{build.Builder}, true)); err != nil {
 		return releaseowner.ReleaseWorkingState{}, err
 	}
@@ -190,7 +190,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleasePreview{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/preview", "read", []string{build.Builder}, true)); err != nil {
 		return releaseowner.ReleasePreview{}, err
 	}

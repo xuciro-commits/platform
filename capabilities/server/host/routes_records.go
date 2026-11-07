@@ -49,7 +49,7 @@ func (h *Host) routesRecords(rt *routes) {
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/page-model/rules", Summary: "List original action criteria available to the builder model inspector", Answer: []PageModelRule{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 
-		c := platform.NewCaller(runtime{t}, m, "build", false, false)
+		c := platform.NewCaller(runtime{t: t}, m, "build", false, false)
 		if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/page-model/rules", "read", []string{"builder"}, true)); err != nil {
 			Reply(w, nil, err)
 			return
@@ -72,7 +72,7 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable"))
 			return
 		}
-		caller := platform.NewCaller(runtime{t}, m, info.App, false, false)
+		caller := platform.NewCaller(runtime{t: t}, m, info.App, false, false)
 		value, err := caller.ReadRecordSet(info.Type, r.PathValue("id"), r.PathValue("name"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)
@@ -90,7 +90,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		caller := platform.NewCaller(runtime{t}, m, binding.Ref.App, false, false)
+		caller := platform.NewCaller(runtime{t: t}, m, binding.Ref.App, false, false)
 		plan, err := t.relationMigrationPlan(t.records, caller, binding, h.Now())
 		if err != nil {
 			Reply(w, nil, err)

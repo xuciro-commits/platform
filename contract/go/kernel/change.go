@@ -147,6 +147,12 @@ func (l *ChangeLog) Fork() *ChangeLog {
 	return copy
 }
 
+func (l *ChangeLog) ForkWithSchemas(schemas interface{ Accepts(*pb.SchemaRef) bool }) *ChangeLog {
+	fork := l.Fork()
+	fork.schemas = schemas
+	return fork
+}
+
 func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 	if saved == nil || saved.GetSubmission() == nil || saved.GetRecordedTime() == nil || saved.GetValidTime() == nil {
 		return false, fmt.Errorf("accepted change is incomplete")

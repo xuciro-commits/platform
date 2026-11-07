@@ -202,7 +202,7 @@ func branchRefuse(message string, args ...any) *kernel.Error {
 }
 
 func (t *Tenant) branchCaller(m platform.Member) platform.Caller {
-	return platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	return platform.NewCaller(runtime{t: t, scoped: true}, m, build.ID, false, false)
 }
 
 func (t *Tenant) readBranch(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {

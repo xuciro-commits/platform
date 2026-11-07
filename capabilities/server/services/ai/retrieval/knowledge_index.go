@@ -28,11 +28,11 @@ func (k *Index) Sync(load func(bool) ([]Source, map[string]bool)) {
 	if walked && len(changed) == 0 {
 		return
 	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
 	if k.docs == nil {
 		k.docs, k.chunks = map[string]string{}, map[string][]*chunk{}
 	}
-	k.mu.Lock()
-	defer k.mu.Unlock()
 	seen := map[string]bool{}
 	for _, s := range srcs {
 		seen[s.Key] = true

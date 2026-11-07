@@ -83,7 +83,7 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	if resource := resourceRecord(t, target, objectRef); !resource.Archived {
 		t.Fatalf("retirement did not archive the package resource: %+v", resource)
 	}
-	view, refusal := target.RecordOf(target.member(t), "build.alpha", "A1", invariantClock)
+	view, refusal := target.RecordOf(t.Context(), target.member(t), "build.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read customer record after retirement: %v", refusal)
 	}
@@ -97,7 +97,7 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	if resource := resourceRecord(t, target, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID {
 		t.Fatalf("reinstall did not restore the package resource: %+v", resource)
 	}
-	view, refusal = target.RecordOf(target.member(t), "build.alpha", "A1", invariantClock)
+	view, refusal = target.RecordOf(t.Context(), target.member(t), "build.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read customer record after reinstall: %v", refusal)
 	}
@@ -113,7 +113,7 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	if resource := resourceRecord(t, replayed, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID {
 		t.Fatalf("replay did not preserve the restored package resource: %+v", resource)
 	}
-	view, refusal = replayed.RecordOf(replayed.member(t), "build.alpha", "A1", invariantClock)
+	view, refusal = replayed.RecordOf(t.Context(), replayed.member(t), "build.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read customer record after replay: %v", refusal)
 	}

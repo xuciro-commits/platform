@@ -22,6 +22,7 @@ func StoredJSONEqual(a, b json.RawMessage) bool {
 }
 
 type ChangeArchive struct {
+	ctx         context.Context
 	store       AcceptedStateReader
 	tenant, app string
 }
@@ -30,7 +31,7 @@ func (a ChangeArchive) read(tenant, key, id string, through int) []*pb.ChangeRec
 	if tenant != a.tenant {
 		return nil
 	}
-	rows, err := a.store.StateChanges(context.Background(), tenant, a.app, key, id, through)
+	rows, err := a.store.StateChanges(a.ctx, tenant, a.app, key, id, through)
 	if err != nil {
 		panic(fmt.Errorf("change history read: %w", err))
 	}
@@ -61,8 +62,8 @@ func (a ChangeArchive) Contains(tenant, id string, through int) bool {
 	return len(a.read(tenant, "", id, through)) > 0
 }
 
-func NewChangeArchive(store AcceptedStateReader, tenant, app string) ChangeArchive {
-	return ChangeArchive{store: store, tenant: tenant, app: app}
+func NewChangeArchive(ctx context.Context, store AcceptedStateReader, tenant, app string) ChangeArchive {
+	return ChangeArchive{ctx: ctx, store: store, tenant: tenant, app: app}
 }
 
 type SQLCheckpoint struct {

@@ -84,8 +84,8 @@ type lineageSnapshot struct {
 	builtAt    time.Time
 }
 
-func (t *Tenant) lineage(m platform.Member, request LineageRequest) (Lineage, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (Lineage, *kernel.Error) {
+func (t *Tenant) lineage(ctx context.Context, m platform.Member, request LineageRequest) (Lineage, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (Lineage, *kernel.Error) {
 		return t.lineageLocked(m, request)
 	})
 }

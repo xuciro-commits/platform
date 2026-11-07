@@ -137,6 +137,15 @@ func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Decl
 
 func (f *Flows) AcceptedLedger() *platform.Ledger { return f.ledger }
 
+func (f *Flows) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	fork, err := f.ForkDecision()
+	if err != nil {
+		return nil, err
+	}
+	fork.(*Flows).ledger = ledger
+	return fork, nil
+}
+
 func (f *Flows) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (f *Flows) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }

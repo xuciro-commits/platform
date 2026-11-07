@@ -307,7 +307,7 @@ func (t *Tenant) operationAuthorization(member platform.Member, owner string, bi
 	if binding.Build != nil {
 		permission, allowed, declared = "build.code.compile", []string{"builder"}, binding.Build.Input.Check() == nil && binding.Build.Output.Check() == nil
 	}
-	c := platform.NewCaller(runtime{t}, member, owner, false, false)
+	c := platform.NewCaller(runtime{t: t, scoped: true}, member, owner, false, false)
 	return t.authorizeCapability(c, owner, permission, allowed, declared, authorizationDetails{At: at, Sources: binding.Call.Sources, Definition: binding.Call.Definition})
 }
 
@@ -483,7 +483,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			}
 		}
 		if op.Rules != nil {
-			why, refusal := recordRead(t, ctx, func() (string, *kernel.Error) {
+			why, refusal := recordRead(t, ctx, func(t *Tenant) (string, *kernel.Error) {
 				for _, set := range op.Rules.Reads.Collections {
 					query, _, ok := t.memberQueryVersion(member, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, set.Version)
 					if !ok || query.Object != set.Object {

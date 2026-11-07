@@ -83,6 +83,9 @@ func (t *Tenant) health(now time.Time) TenantHealth {
 }
 
 func (t *Tenant) laneHealth(now time.Time, outside bool) LaneHealth {
+	if source := t.scopeSource(); source != nil {
+		return source.laneHealth(now, true)
+	}
 	state := t.mu.State()
 	lane := LaneHealth{Waiters: state.Waiters, LastSlow: t.laneLastSlow.Load()}
 	if outside && !state.Since.IsZero() {

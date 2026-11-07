@@ -22,24 +22,24 @@ import (
 var tracer = otel.Tracer("platformserver")
 
 func (t *Tenant) begin(name string, parent trace.SpanContext, attrs ...attribute.KeyValue) func(outcome string) {
-	ctx := t.ctx
+	ctx := t.readContext()
 	if ctx == nil || parent.IsValid() {
 		ctx = trace.ContextWithSpanContext(context.Background(), parent)
 	}
 	ctx, span := tracer.Start(ctx, name, trace.WithAttributes(append(attrs, attribute.String("platform.tenant", t.ID))...))
-	previous := t.ctx
-	t.ctx = ctx
+	previous := t.readScope
+	t.readScope = &recordReadScope{ctx: ctx, err: t.readError()}
 	return func(outcome string) {
 		end(span, outcome)
-		t.ctx = previous
+		t.readScope = previous
 	}
 }
 
 func (t *Tenant) current() trace.SpanContext {
-	if t.ctx == nil {
+	if t.readScope == nil {
 		return trace.SpanContext{}
 	}
-	return trace.SpanContextFromContext(t.ctx)
+	return trace.SpanContextFromContext(t.readContext())
 }
 
 func outside(parent trace.SpanContext, name string, attrs ...attribute.KeyValue) trace.Span {

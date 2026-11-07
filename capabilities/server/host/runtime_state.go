@@ -104,16 +104,20 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 }
 
 func (t *Tenant) installRuntimeHistory(store runtimekernel.AcceptedStateReader, position func() int64) {
+	ctx := context.Background()
+	if t.records.Current().View() != nil {
+		ctx = t.records.Current().Context()
+	}
 	for _, a := range t.apps {
-		a.AcceptedLedger().UseChangeArchive(runtimekernel.NewChangeArchive(store, t.ID, a.Manifest().ID))
+		a.AcceptedLedger().UseChangeArchive(runtimekernel.NewChangeArchive(ctx, store, t.ID, a.Manifest().ID))
 		if owner, ok := a.(platform.AcceptedHistoryApp); ok {
 			id := a.Manifest().ID
 			owner.UseAcceptedHistory(func() (json.RawMessage, error) {
-				return store.StateValue(context.Background(), t.ID, "app-state", id, -1)
+				return store.StateValue(ctx, t.ID, "app-state", id, -1)
 			})
 		}
 	}
-	t.committed.UseStorage(store, t.ID, position)
+	t.committed.UseStorage(ctx, store, t.ID, position)
 }
 
 func (t *Tenant) installRuntimeRecords(store persistence.RuntimeState, position func() int64) {

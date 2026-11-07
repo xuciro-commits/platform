@@ -21,7 +21,7 @@ func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	answered := make(chan *kernel.Error, 1)
 	go func() {
-		_, refusal := coordinatedRecordRead(live.Tenant, ctx, func() (struct{}, *kernel.Error) { return struct{}{}, nil })
+		_, refusal := coordinatedRecordRead(live.Tenant, ctx, func(t *Tenant) (struct{}, *kernel.Error) { return struct{}{}, nil })
 		answered <- refusal
 	}()
 	deadline := time.Now().Add(2 * time.Second)
@@ -48,7 +48,7 @@ func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
 		t.Fatalf("cancelled waiter still counted: %d", waiters)
 	}
 	live.mu.Unlock()
-	if _, refusal := coordinatedRecordRead(live.Tenant, context.Background(), func() (struct{}, *kernel.Error) { return struct{}{}, nil }); refusal != nil {
+	if _, refusal := coordinatedRecordRead(live.Tenant, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { return struct{}{}, nil }); refusal != nil {
 		t.Fatalf("read after release: %v", refusal)
 	}
 }
@@ -80,5 +80,56 @@ func TestInvariantK13BackgroundRoundReleasesLaneBetweenTasks(t *testing.T) {
 	defer mu.Unlock()
 	if holds["work"] < 2 {
 		t.Fatalf("background work held the lane %d times; want one hold per task and job: %v", holds["work"], holds)
+	}
+}
+
+func TestInvariantK13ReadScopesKeepOneStateAndOwnContext(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-read-scopes")
+	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
+	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
+	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "before"})
+	member := live.member(t)
+	leftContext, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	live.mu.Lock()
+	left, leftError := live.forkReadState(leftContext)
+	right, rightError := live.forkReadState(t.Context())
+	live.mu.Unlock()
+	if leftError != nil || rightError != nil {
+		t.Fatalf("prepare independent scopes: %v, %v", leftError, rightError)
+	}
+	var readers sync.WaitGroup
+	started := make(chan struct{})
+	for _, scope := range []*Tenant{left, right} {
+		readers.Go(func() {
+			<-started
+			for range 32 {
+				view, refusal := scope.RecordOf(scope.readContext(), member, "build.alpha", "A1", invariantClock)
+				if refusal != nil {
+					t.Errorf("read retained scope: %v", refusal)
+					return
+				}
+				var record map[string]any
+				if json.Unmarshal(platform.Raw(view.Record), &record) != nil || record["note"] != "before" {
+					t.Errorf("read scope mixed current and retained state: %v", view.Record)
+					return
+				}
+			}
+		})
+	}
+	close(started)
+	live.accept(t, "build.alpha.edit", "build.alpha", "A1", map[string]any{"note": "after"})
+	readers.Wait()
+	cancel()
+	if _, refusal := left.RecordOf(leftContext, member, "build.alpha", "A1", invariantClock); refusal == nil {
+		t.Fatal("cancelled scope continued reading")
+	}
+	if _, refusal := right.RecordOf(t.Context(), member, "build.alpha", "A1", invariantClock); refusal != nil || right.readContext().Err() != nil {
+		t.Fatalf("one scope's cancellation affected another: %v", refusal)
+	}
+	view, refusal := live.RecordOf(t.Context(), member, "build.alpha", "A1", invariantClock)
+	var record map[string]any
+	if refusal != nil || json.Unmarshal(platform.Raw(view.Record), &record) != nil || record["note"] != "after" {
+		t.Fatalf("current tenant lost its accepted change: %v, %v", view.Record, refusal)
 	}
 }

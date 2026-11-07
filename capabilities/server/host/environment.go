@@ -177,7 +177,7 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 	key := "migration:" + hex.EncodeToString(sum[:8])
 	result := platform.MigrationResult{From: from.ID, To: to.ID, Key: key, Types: []platform.MigrationType{}}
 	for _, typ := range sorted {
-		data, refusal := from.Export(source, typ, platform.Query{}, now)
+		data, refusal := from.Export(context.Background(), source, typ, platform.Query{}, now)
 		if refusal != nil {
 			return result, fmt.Errorf("export %s from %s: %s", typ, from.ID, refusal.Code)
 		}

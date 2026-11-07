@@ -12,7 +12,7 @@ import (
 )
 
 func (t *Tenant) listenerInput(ctx context.Context, m platform.Member, path, secret, origin string, body []byte, now time.Time) (any, *kernel.Error) {
-	return coordinatedRecordRead(t, ctx, func() (any, *kernel.Error) {
+	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *kernel.Error) {
 		if t.businessStopped() {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}

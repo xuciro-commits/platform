@@ -30,7 +30,7 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 	if err := t.admits(builder); err != nil {
 		return empty, err
 	}
-	caller := platform.NewCaller(runtime{t}, builder, build.ID, false, false)
+	caller := platform.NewCaller(runtime{t: t}, builder, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}, true)); err != nil {
 		return empty, err
 	}

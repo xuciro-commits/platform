@@ -179,7 +179,7 @@ func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time
 	if refusal := t.admits(member); refusal != nil {
 		return nil, refusal
 	}
-	caller := platform.NewCaller(runtime{t}, member, build.ID, false, false)
+	caller := platform.NewCaller(runtime{t: t}, member, build.ID, false, false)
 	run, found := platform.Get[platform.DispatchRun](caller, id)
 	if !found || member.Agent || !member.Holds(build.ID, run.Definition.ReviewerRole) || !(hostView{t: t}).Readable(member, run.Subject, at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the current dispatch reviewer may choose an external target")

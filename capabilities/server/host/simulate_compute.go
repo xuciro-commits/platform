@@ -53,7 +53,7 @@ func settleComputeFixture(t *Tenant, actor platform.Member, fixture platform.Com
 	if t.quarantined() {
 		return false, fmt.Errorf("compute fixture settlement failed")
 	}
-	result, refusal := t.operationResult(platform.NewCaller(runtime{t}, actor, controlowner.PlatformApp, false, false), claimed.ID)
+	result, refusal := t.operationResult(platform.NewCaller(runtime{t: t, scoped: true}, actor, controlowner.PlatformApp, false, false), claimed.ID)
 	if refusal != nil {
 		return false, refusal
 	}

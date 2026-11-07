@@ -29,7 +29,7 @@ type packagePreparationSource interface {
 
 func (h *Host) routesPackagePreparation(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "GET /v1/packages/{id}/preparation", Summary: "Describe every application and target-environment prerequisite before creating or publishing a package", Answer: packages.PackagePreparation{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		value, err := t.PackagePreparation(m, r.PathValue("id"), r.URL.Query().Get("version"), h.Now())
+		value, err := t.PackagePreparation(r.Context(), m, r.PathValue("id"), r.URL.Query().Get("version"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return
@@ -41,8 +41,8 @@ func (h *Host) routesPackagePreparation(rt *routes) {
 	})
 }
 
-func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at time.Time) (packages.PackagePreparation, *kernel.Error) {
-	return coordinatedRecordRead(t, context.Background(), func() (packages.PackagePreparation, *kernel.Error) {
+func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, version string, at time.Time) (packages.PackagePreparation, *kernel.Error) {
+	return coordinatedRecordRead(t, ctx, func(t *Tenant) (packages.PackagePreparation, *kernel.Error) {
 		fail := func(err error) (packages.PackagePreparation, *kernel.Error) {
 			return packages.PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 		}
@@ -137,13 +137,15 @@ func (t *Tenant) inspectPackage(ctx context.Context, request platform.PackageIns
 		send = guarded
 	}
 	return packages.Inspect(ctx, t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (platform.Precheck, error) {
-		owner, ok := t.app(controlowner.PlatformApp).(interface {
-			Precheck(platform.PackageDescriptor) platform.Precheck
+		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (platform.Precheck, *kernel.Error) {
+			owner, ok := t.app(controlowner.PlatformApp).(interface {
+				Precheck(platform.PackageDescriptor) platform.Precheck
+			})
+			if !ok {
+				return platform.Precheck{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package management is unavailable")
+			}
+			return owner.Precheck(descriptor), nil
 		})
-		if !ok {
-			return platform.Precheck{}, fmt.Errorf("Package management is unavailable")
-		}
-		precheck, refusal := recordRead(t, ctx, func() (platform.Precheck, *kernel.Error) { return owner.Precheck(descriptor), nil })
 		if refusal != nil {
 			return platform.Precheck{}, fmt.Errorf("The package dependencies could not be inspected")
 		}

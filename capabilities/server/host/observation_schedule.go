@@ -30,7 +30,7 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 		publisher  string
 		scopes     []string
 	}
-	sources, _ := coordinatedRecordRead(t, context.Background(), func() ([]scheduled, *kernel.Error) {
+	sources, _ := coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]scheduled, *kernel.Error) {
 		var sources []scheduled
 		definitions, err := t.ownedAssetDefinitions(t.definitions)
 		if err != nil {
@@ -78,7 +78,7 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 		seconds := int64(source.definition.WindowSeconds)
 		until := time.Unix(at.Unix()/seconds*seconds, 0).UTC()
 		for offset := 0; ; {
-			page, refusal := t.Records(member, source.definition.Object.Name, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, at)
+			page, refusal := t.Records(context.Background(), member, source.definition.Object.Name, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, at)
 			if refusal != nil {
 				break
 			}

@@ -153,7 +153,7 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
-		if refusal := owner.CheckProcess(platform.NewCaller(runtime{world}, m, build.ID, false, false), p); refusal != nil {
+		if refusal := owner.CheckProcess(platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p); refusal != nil {
 			answer.Valid = false
 			message := refusal.Message
 			node := ""

@@ -8,7 +8,12 @@ import (
 	"platformserver/platform"
 )
 
-type runtime struct{ t *Tenant }
+type runtime struct {
+	t      *Tenant
+	scoped bool
+}
+
+func (r runtime) ReadScoped() bool { return r.scoped || r.t != nil && r.t.readOrigin != nil }
 
 var _ platform.Runtime = runtime{}
 

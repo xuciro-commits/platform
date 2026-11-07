@@ -24,7 +24,7 @@ func (t *Tenant) runSchedules(pipelines []build.Pipeline, now time.Time) {
 			_ = json.Unmarshal([]byte(pipeline.RunnerScopes), &member.Scopes)
 		}
 		id := "pipeline-" + pipeline.ID
-		exists, _ := coordinatedRecordRead(t, context.Background(), func() (bool, *kernel.Error) {
+		exists, _ := coordinatedRecordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
 			_, ok := platform.Get[platform.Schedule](t.automation(build.ID, false), id)
 			return ok, nil
 		})
@@ -43,7 +43,7 @@ func (t *Tenant) runSchedules(pipelines []build.Pipeline, now time.Time) {
 			}
 		}
 	}
-	schedules, refusal := coordinatedRecordRead(t, context.Background(), func() ([]platform.Schedule, *kernel.Error) {
+	schedules, refusal := coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]platform.Schedule, *kernel.Error) {
 		rows, _, err := platform.Find[platform.Schedule](t.automation(build.ID, false), platform.Query{Sort: []string{"id"}, Limit: 1000})
 		if err != nil {
 			return nil, err

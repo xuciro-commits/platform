@@ -24,6 +24,17 @@ type Breakers struct {
 	m  map[string]*breaker
 }
 
+func (b *Breakers) Fork() Breakers {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	values := make(map[string]*breaker, len(b.m))
+	for key, value := range b.m {
+		copy := *value
+		values[key] = &copy
+	}
+	return Breakers{m: values}
+}
+
 func (b *Breakers) Allow(dest string, now time.Time, claim bool) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()

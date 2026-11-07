@@ -18,7 +18,7 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 	id := "invariant-work-view-state"
 	live := newInvariantTenantWithApps(t, id, []platform.App{workapp.New(id)})
 	member := live.member(t)
-	caller := platform.NewCaller(runtime{live.Tenant}, member, workapp.ID, false, false)
+	caller := platform.NewCaller(runtime{t: live.Tenant}, member, workapp.ID, false, false)
 	if _, ok := live.app(workapp.ID).(*workapp.Work); !ok {
 		t.Fatal("the work owner is not attached")
 	}
@@ -35,7 +35,7 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 	}
 	views := func() ([]workapp.SavedView, *kernel.Error) {
 		t.Helper()
-		value, refusal := live.Read(member, "views")
+		value, refusal := live.Read(t.Context(), member, "views")
 		if refusal != nil {
 			return nil, refusal
 		}

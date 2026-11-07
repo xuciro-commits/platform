@@ -29,6 +29,7 @@ type CommittedState struct {
 }
 
 type Committed struct {
+	ctx                 context.Context
 	position            func() int64
 	appliedPosition     int64
 	pending             map[string]bool
@@ -41,6 +42,12 @@ type Committed struct {
 	inputs              map[string]json.RawMessage
 	compositeAnswers    map[string]json.RawMessage
 	composites          map[string]string
+}
+
+func (c *Committed) Fork() Committed {
+	return Committed{ctx: c.ctx, position: c.position, appliedPosition: c.appliedPosition, pending: maps.Clone(c.pending), storage: c.storage, tenant: c.tenant,
+		decisionDefinitions: maps.Clone(c.decisionDefinitions), schemaVersions: maps.Clone(c.schemaVersions), refusals: maps.Clone(c.refusals),
+		answers: maps.Clone(c.answers), inputs: maps.Clone(c.inputs), compositeAnswers: maps.Clone(c.compositeAnswers), composites: maps.Clone(c.composites)}
 }
 
 func (c *Committed) SaveAnswer(key string, raw json.RawMessage) {
@@ -134,7 +141,8 @@ func (c *Committed) SaveSchemaVersion(app, key string, binding *platform.SchemaV
 	c.schemaVersions[app+"/"+key] = *binding
 }
 
-func (c *Committed) UseStorage(s AcceptedValueReader, tenant string, position func() int64) {
+func (c *Committed) UseStorage(ctx context.Context, s AcceptedValueReader, tenant string, position func() int64) {
+	c.ctx = ctx
 	c.storage, c.tenant = s, tenant
 	c.position = position
 	c.advance()
@@ -154,7 +162,7 @@ func (c *Committed) stored(owner, key string) json.RawMessage {
 	if c.storage == nil {
 		return nil
 	}
-	raw, err := c.storage.StateValue(context.Background(), c.tenant, owner, key, c.appliedPosition)
+	raw, err := c.storage.StateValue(c.ctx, c.tenant, owner, key, c.appliedPosition)
 	if err != nil {
 		panic(err)
 	}
@@ -170,9 +178,9 @@ func storedValues[T any](c *Committed, owner string, memory map[string]T, field 
 	var values map[string]json.RawMessage
 	var err error
 	if selection, ok := c.storage.(persistence.StateValueSelection); ok && len(field) > 0 {
-		values, err = selection.StateValuesWithField(context.Background(), c.tenant, owner, field[0], c.appliedPosition)
+		values, err = selection.StateValuesWithField(c.ctx, c.tenant, owner, field[0], c.appliedPosition)
 	} else if c.storage != nil {
-		values, err = c.storage.StateValues(context.Background(), c.tenant, owner, c.appliedPosition)
+		values, err = c.storage.StateValues(c.ctx, c.tenant, owner, c.appliedPosition)
 	}
 	if err != nil {
 		panic(err)

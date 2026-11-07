@@ -55,6 +55,15 @@ func (k *Knowledge) Manifest() platform.Manifest {
 
 func (k *Knowledge) AcceptedLedger() *platform.Ledger { return k.ledger }
 
+func (k *Knowledge) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	fork, err := k.ForkDecision()
+	if err != nil {
+		return nil, err
+	}
+	fork.(*Knowledge).ledger = ledger
+	return fork, nil
+}
+
 func (k *Knowledge) Declarations() []*pb.AuthorityDeclaration { return k.ledger.Declarations() }
 func (k *Knowledge) SnapshotFormat() string                   { return "platform.ledger.v1" }
 

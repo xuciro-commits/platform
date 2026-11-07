@@ -148,8 +148,8 @@ func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
 		t.Fatal("listener has no asset lifecycle owner")
 	}
 	var original platform.ReleaseAsset
-	_, refusal := coordinatedRecordRead(live.Tenant, context.Background(), func() (any, *kernel.Error) {
-		assets, err := owner.ReleaseAssets()
+	_, refusal := coordinatedRecordRead(live.Tenant, context.Background(), func(view *Tenant) (any, *kernel.Error) {
+		assets, err := view.app(build.ID).(*build.Build).ReleaseAssets()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -195,8 +195,8 @@ func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
 	if response := request(http.MethodPost, "/v1/listeners/incoming-token", "sender", "shared-value", body); response.Code == http.StatusOK {
 		t.Fatal("old published path remained active after release installation")
 	}
-	_, refusal = coordinatedRecordRead(live.Tenant, context.Background(), func() (any, *kernel.Error) {
-		retained, err := owner.ResolvePinned(original.Ref, original.SourceVersion)
+	_, refusal = coordinatedRecordRead(live.Tenant, context.Background(), func(view *Tenant) (any, *kernel.Error) {
+		retained, err := view.app(build.ID).(*build.Build).ResolvePinned(original.Ref, original.SourceVersion)
 		if err != nil || !bytes.Equal(retained.Body, original.Body) {
 			t.Fatalf("original listener version not retained: %v", err)
 		}
@@ -230,7 +230,7 @@ func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
 			t.Fatalf("another owner's view changed: %v", err)
 		}
 	}
-	page, recordRefusal := live.Records(other, monitoring.ViewType, platform.Query{}, invariantClock)
+	page, recordRefusal := live.Records(t.Context(), other, monitoring.ViewType, platform.Query{}, invariantClock)
 	if recordRefusal != nil || len(page.Records) != 1 || page.Records[0].(platform.MonitoringView).Owner != "other" {
 		t.Fatalf("generic records leaked a view: %+v: %v", page, recordRefusal)
 	}
@@ -249,8 +249,8 @@ func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
 	if differing := differingTypes(live.recordImage(t), restored.recordImage(t)); len(differing) != 0 {
 		t.Fatalf("replay changed records: %v", differing)
 	}
-	_, refusal = coordinatedRecordRead(restored.Tenant, context.Background(), func() (any, *kernel.Error) {
-		record, found := platform.Get[listenerProbeRecord](restored.automation("listenerprobe", false), "event1")
+	_, refusal = coordinatedRecordRead(restored.Tenant, context.Background(), func(view *Tenant) (any, *kernel.Error) {
+		record, found := platform.Get[listenerProbeRecord](view.automation("listenerprobe", false), "event1")
 		if !found || record.Title != "Inbound payload" {
 			t.Fatal("accepted connector payload was not restored")
 		}

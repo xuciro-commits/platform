@@ -14,7 +14,7 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 	if t.ai == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
-	c := platform.NewCaller(runtime{t}, m, platform.AIApp, false, false)
+	c := platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false)
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/ai/providers/{provider}/models", "read", []string{platform.AIAdmin}, true)); err != nil {
 		return nil, err, nil
 	}

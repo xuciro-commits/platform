@@ -31,7 +31,7 @@ func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submi
 	}
 	m := member
 	if as != "" && as != member.ID || branch != "" {
-		caller := platform.NewCaller(runtime{t}, member, build.ID, false, false)
+		caller := platform.NewCaller(runtime{t: t, scoped: true}, member, build.ID, false, false)
 		if refusal := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate", "action", []string{build.Builder}, true)); refusal != nil {
 			return trialowner.Simulation{}, refusal
 		}

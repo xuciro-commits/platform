@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"platformkernel/kernel"
@@ -170,6 +171,6 @@ type ModelToolHost interface {
 	AgentObjects(Member, string, json.RawMessage, time.Time) (AgentObservation, *kernel.Error)
 	Catalog(Member) []Action
 	ModelToolReads(Member) []string
-	Read(Member, string, ...json.RawMessage) (any, *kernel.Error)
+	Read(context.Context, Member, string, ...json.RawMessage) (any, *kernel.Error)
 	ProposeModelTool(Member, ModelToolProposal, time.Time) *kernel.Error
 }

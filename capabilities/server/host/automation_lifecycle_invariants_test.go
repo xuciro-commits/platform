@@ -58,7 +58,7 @@ func TestInvariantK1K2K4AutomationNotificationsAndOwner(t *testing.T) {
 	if notices := live.notices.ForMember("builder"); len(notices) != 2 {
 		t.Fatalf("manual run produced %d notices; want 2 total", len(notices))
 	}
-	before, refusal := live.RecordOf(live.member(t), build.ProcessType, "PROCESS", invariantClock)
+	before, refusal := live.RecordOf(t.Context(), live.member(t), build.ProcessType, "PROCESS", invariantClock)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}

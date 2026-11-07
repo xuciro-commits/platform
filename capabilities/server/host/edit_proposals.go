@@ -16,16 +16,16 @@ type ApplyEditsRequest struct {
 	Step string `json:"step,omitempty"`
 }
 
-func (t *Tenant) readEditProposal(member platform.Member, engine, id, step string) (platform.EditProposal, *kernel.Error) {
+func (t *Tenant) readEditProposal(ctx context.Context, member platform.Member, engine, id, step string) (platform.EditProposal, *kernel.Error) {
 	var result platform.OperationResult
 	var refusal *kernel.Error
 	switch engine {
 	case "compute":
-		result, refusal = t.ReadOperation(member, id)
+		result, refusal = t.ReadOperation(ctx, member, id)
 	case "ai":
-		result, refusal = t.ReadCapabilityAI(member, id, Now())
+		result, refusal = t.ReadCapabilityAI(ctx, member, id, Now())
 	case "flow":
-		return recordRead(t, context.Background(), func() (platform.EditProposal, *kernel.Error) {
+		return recordRead(t, ctx, func(t *Tenant) (platform.EditProposal, *kernel.Error) {
 			view, refusal := t.recordOf(member, platform.FlowInstanceType, id, Now())
 			if refusal != nil {
 				return platform.EditProposal{}, refusal
@@ -65,7 +65,7 @@ func (t *Tenant) readEditProposal(member platform.Member, engine, id, step strin
 
 func (h *Host) routesEditProposals(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/capabilities/calls/{engine}/{id}/edits", Summary: "Review the original pure function's proposed actions without executing them", Answer: platform.EditProposal{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		proposal, refusal := t.readEditProposal(m, r.PathValue("engine"), r.PathValue("id"), r.URL.Query().Get("step"))
+		proposal, refusal := t.readEditProposal(r.Context(), m, r.PathValue("engine"), r.PathValue("id"), r.URL.Query().Get("step"))
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
@@ -78,7 +78,7 @@ func (h *Host) routesEditProposals(rt *routes) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a stable request key"))
 			return
 		}
-		proposal, refusal := t.readEditProposal(m, r.PathValue("engine"), r.PathValue("id"), request.Step)
+		proposal, refusal := t.readEditProposal(r.Context(), m, r.PathValue("engine"), r.PathValue("id"), request.Step)
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return

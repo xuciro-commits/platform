@@ -17,6 +17,15 @@ import (
 
 func (a *AI) AcceptedLedger() *platform.Ledger { return a.ledger }
 
+func (a *AI) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	fork, err := a.ForkAcceptedState()
+	if err != nil {
+		return nil, err
+	}
+	fork.(*AI).ledger = ledger
+	return fork, nil
+}
+
 func (a *AI) ForkAcceptedState() (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

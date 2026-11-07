@@ -220,9 +220,18 @@ func (s *System) Manifest() platform.Manifest {
 
 func (s *System) Declarations() []*pb.AuthorityDeclaration { return s.ledger.Declarations() }
 func (s *System) AcceptedLedger() *platform.Ledger         { return s.ledger }
-func (s *System) SnapshotFormat() string                   { return "platform.ledger.v1" }
-func (s *System) Snapshot() (json.RawMessage, error)       { return s.ledger.Snapshot() }
-func (s *System) Restore(raw json.RawMessage) error        { return s.ledger.Restore(raw) }
+
+func (s *System) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	fork, err := s.ForkDecision()
+	if err != nil {
+		return nil, err
+	}
+	fork.(*System).ledger = ledger
+	return fork, nil
+}
+func (s *System) SnapshotFormat() string             { return "platform.ledger.v1" }
+func (s *System) Snapshot() (json.RawMessage, error) { return s.ledger.Snapshot() }
+func (s *System) Restore(raw json.RawMessage) error  { return s.ledger.Restore(raw) }
 
 func (s *System) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return s.ReadInput(c, name, nil)

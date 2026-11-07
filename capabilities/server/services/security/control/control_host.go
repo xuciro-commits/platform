@@ -240,6 +240,15 @@ func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.De
 
 func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
 
+func (d *Console) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	fork, err := d.ForkAcceptedState()
+	if err != nil {
+		return nil, err
+	}
+	fork.(*Console).ledger = ledger
+	return fork, nil
+}
+
 func (d *Console) ForkAcceptedState() (platform.App, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

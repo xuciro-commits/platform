@@ -70,6 +70,7 @@
 ## 易错点
 
 - HTTP 读取记录的路由必须用 `rt.recordRead`；`rt.handle` 读记录会因“no consistent view”崩溃。
+- 读取闭包使用参数中的 Tenant 与调用者上下文；不要捕获活动 Tenant、拥有者或 SQL 视图。`runtime.scoped` 只用于已持有车道或独立读取范围的内部调用，不能用“租户有打开的视图”判断当前调用者持有范围。
 - 授权的集合读取与单条读取都经 `authorizeDepth`；`held=true` 时调用者已持有存储锁，不得再加锁。
 - 模块加载时不调用 `t()`（切换语言不会更新）：模块级文案写英文原文，读取时翻译；动态键要在字典里列全取值。
 - zsh 中 `ls` 被别名为 eza，用 `command ls`；通配符加引号。

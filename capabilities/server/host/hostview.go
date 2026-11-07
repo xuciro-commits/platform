@@ -194,7 +194,7 @@ func (h hostView) As(c platform.Caller, app string) platform.Caller {
 
 func (h hostView) Caller(parent platform.Caller, m platform.Member, app string) platform.Caller {
 	if !parent.Staging() {
-		return platform.NewCaller(runtime{h.t}, m, app, parent.Replaying, false)
+		return platform.NewCaller(runtime{t: h.t, scoped: true}, m, app, parent.Replaying, false)
 	}
 	return platform.ActingCaller(parent, m, app, false)
 }
@@ -403,7 +403,7 @@ func (h hostView) Stored(tenant, hash string) bool {
 
 func (h hostView) Record(ref string) (any, bool) {
 	if h.decision != nil {
-		return (&Tenant{records: h.decision.records}).Held(ref)
+		return (&Tenant{records: h.decision.records}).held(ref)
 	}
 	return h.t.held(ref)
 }

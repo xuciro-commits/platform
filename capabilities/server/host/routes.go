@@ -61,14 +61,14 @@ func (rt *routes) authorized(route transport.Route, app string, roles []string, 
 		if r.Method == http.MethodGet {
 			kind = "read"
 		}
-		authorize := func() (platform.AuthzDecision, *kernel.Error) {
-			c := platform.NewCaller(runtime{t}, m, app, false, false)
+		authorize := func(t *Tenant) (platform.AuthzDecision, *kernel.Error) {
+			c := platform.NewCaller(runtime{t: t}, m, app, false, false)
 			return t.authorizeNative(c, route.Pattern, kind, roles, true), nil
 		}
 		var decision platform.AuthzDecision
 		var err *kernel.Error
 		if t.quarantined() {
-			decision, err = authorize()
+			decision, err = authorize(t)
 		} else {
 			decision, err = recordRead(t, r.Context(), authorize)
 		}
@@ -93,7 +93,7 @@ func (rt *routes) recordRead(route transport.Route, f func(http.ResponseWriter, 
 			return
 		}
 		buffered := &laneBuffer{target: w}
-		_, err := coordinatedRecordRead(t, withLaneHolder(r.Context(), route.Pattern), func() (struct{}, *kernel.Error) {
+		_, err := coordinatedRecordRead(t, withLaneHolder(r.Context(), route.Pattern), func(t *Tenant) (struct{}, *kernel.Error) {
 			f(buffered, r, m, t)
 			return struct{}{}, nil
 		})

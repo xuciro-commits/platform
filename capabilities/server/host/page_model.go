@@ -173,7 +173,7 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 	}
 	var page platform.Page
 	if request.Draft != nil {
-		caller := platform.NewCaller(runtime{t}, member, "build", false, false)
+		caller := platform.NewCaller(runtime{t: t, scoped: true}, member, "build", false, false)
 		if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/page-model/preview", "read", []string{"builder"}, true)); err != nil {
 			return result, err
 		}
@@ -244,7 +244,7 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 	if !known {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Model object is unavailable")
 	}
-	caller := platform.NewCaller(runtime{t}, member, info.App, false, false)
+	caller := platform.NewCaller(runtime{t: t, scoped: true}, member, info.App, false, false)
 	visibleLookup := t.modelVisibleLookup(member)
 	visibleInfo, readable := visibleLookup(model.Type)
 	if !readable {
@@ -521,7 +521,7 @@ func (t *Tenant) pageModelRows(c platform.Caller, page platform.Page, section pl
 	var filter *pageModelFilter
 	if criteria != nil || len(model.Where) > 0 {
 		filter = &pageModelFilter{
-			caller: platform.NewCaller(pageModelRuntime{runtime{t}}, c.Member, c.App, c.Replaying, c.Automation),
+			caller: platform.NewCaller(pageModelRuntime{runtime{t: t, scoped: true}}, c.Member, c.App, c.Replaying, c.Automation),
 			model:  model, criteria: criteria, inputs: inputs, at: at,
 			lookup: func(typ string) (platform.EntityInfo, bool) {
 				info, ok := allEntities[typ]

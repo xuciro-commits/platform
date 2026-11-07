@@ -124,7 +124,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 		return plan, observationUnavailable(fmt.Errorf("observation object is unavailable"))
 	}
 	plan.entity = entity
-	caller := platform.NewCaller(runtime{t}, m, ref.App, false, false)
+	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, ref.App, false, false)
 	permission := ref.Name
 	kind := "read"
 	if evaluate {

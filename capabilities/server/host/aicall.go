@@ -109,9 +109,9 @@ func (t *Tenant) chatForStage(m platform.Member, req platform.ChatRequest, now t
 	}
 	var model platform.AIModel
 	var pv platform.AIProvider
-	_, refusal := recordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
+	_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
 		if stage == platform.AIStageDesign {
-			c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+			c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 			if refusal := authorizationRefusal(t.authorizeNative(c, "POST /v1/build/ai/chat", "action", []string{build.Builder}, true)); refusal != nil {
 				return struct{}{}, refusal
 			}
@@ -124,7 +124,7 @@ func (t *Tenant) chatForStage(m platform.Member, req platform.ChatRequest, now t
 		if err != nil {
 			return struct{}{}, err
 		}
-		c := platform.NewCaller(runtime{t}, m, platform.AIApp, false, false)
+		c := platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false)
 		decision := t.authorizeNative(c, "model:"+req.Model, "action", []string{platform.AnyMember}, true)
 		if refusal := authorizationRefusal(decision); refusal != nil {
 			return struct{}{}, refusal
@@ -334,7 +334,7 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "rejected", "the model "+model+" is not enabled"
 		return out, nil
 	}
-	c := platform.NewCaller(runtime{t}, m, x.App, false, true)
+	c := platform.NewCaller(runtime{t: t}, m, x.App, false, true)
 	if refusal := authorizationRefusal(t.authorizeNative(c, "model:"+model, "action", nil, true)); refusal != nil {
 		out.Result, out.Detail = "rejected", refusal.Message
 		return out, nil

@@ -253,7 +253,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 		if !found || action.Target != typ || action.SchemaVersion == nil || run.Status != "failed" {
 			return
 		}
-		c := platform.NewCaller(runtime{t}, m, "", false, false)
+		c := platform.NewCaller(runtime{t: t, scoped: true}, m, "", false, false)
 		decision := t.authorizeFrom(t.records, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: schema, Type: typ, Record: id}, now, false)
 		if !decision.Allow || t.delegatedBound(m, &pb.Submission{Schema: &pb.SchemaRef{Name: schema}, Target: &pb.EntityRef{Type: typ, Id: id}}) != nil {
 			return
@@ -332,7 +332,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 	compilations := map[string]time.Time{}
 	coverage = MonitoringCoverage{Source: "compute", Basis: "retained", Readable: true, Limitation: "caller-only"}
 	for _, effect := range operations {
-		result, refused := t.operationResult(platform.NewCaller(runtime{t}, m, controlowner.PlatformApp, false, false), effect.ID)
+		result, refused := t.operationResult(platform.NewCaller(runtime{t: t, scoped: true}, m, controlowner.PlatformApp, false, false), effect.ID)
 		if refused != nil {
 			if refused.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED && refused.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
 				coverage.Limitation = "input-unavailable"
