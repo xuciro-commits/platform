@@ -1,6 +1,21 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Lifecycle impact": "生命周期影响",
+  "Work in flight": "在飞工作",
+  "Retained outputs": "保留的输出",
+  "Connection requirements": "连接前提",
+  "Configured": "已配置",
+  "Business records, datasets, media and their history remain after retirement.": "退役后保留业务记录、数据集、媒体及其历史。",
+  "Package impact could not be inspected: {reason}": "无法检查产品影响：{reason}",
+  "Transfer resource ownership": "转移资源所有权",
+  "Transfer existing resources…": "迁移现有资源…",
+  "Transfer ownership": "转移所有权",
+  "Resources to transfer": "待迁移资源",
+  "Customer project": "客户项目",
+  "Ownership is ready. Continue with installation in Marketplace.": "所有权已归位，请在 Marketplace 继续安装。",
+  "Transfer existing definitions to this product before installing it. Resource identities, business data, connections and history stay. Install each product separately after transferring all shared resources; retire the previous product last.": "安装前将现有定义迁入此产品。资源身份、业务数据、连接配置和历史都会保留。先迁移共享资源，再分别安装各产品，最后退役原产品。",
+  "The destination project is archived": "目标项目已归档",
   "Product version guide": "产品版本指南",
   "Add product version": "添加产品版本",
   "Review a product version": "审查产品版本",

@@ -412,9 +412,18 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		state := "draining"
-		removal := d.packageRemoval(p.ID)
+		removal := &platform.PackageRemoval{ID: p.ID}
+		impact, err := d.LifecycleImpact(c, p.ID, nil)
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package impact could not be inspected: {reason}", err.Error())
+		}
+		removal.Blockers = impact.Dependencies
 		if schema == SchemaPackageDrain {
-			removal.Blockers = d.packageDependents(p.ID)
+			removal.OK = len(impact.Dependencies) == 0
+		} else {
+			for _, run := range impact.Runs {
+				removal.Blockers = append(removal.Blockers, "Work is still in flight: "+run.Kind+"/"+run.ID)
+			}
 			removal.OK = len(removal.Blockers) == 0
 		}
 		if !removal.OK {

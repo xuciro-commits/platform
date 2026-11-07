@@ -179,7 +179,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 				if item.Version != resource.Version {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The resource ownership request is stale")
 				}
-				if resource.Type == AppType && item.Project != resource.Project {
+				if resource.Type == AppType && resource.Draft == resource.Project && item.Project != resource.Project {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A project application keeps its project identity")
 				}
 				if resource.Folder != "" && item.Project != resource.Project {

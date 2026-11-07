@@ -284,12 +284,47 @@ type PackageRemoval struct {
 	Blockers []string `json:"blockers"`
 }
 
+type PackageImpactReference struct {
+	Resource AssetRef `json:"resource"`
+	Consumer AssetRef `json:"consumer"`
+}
+
+type PackageImpactExtension struct {
+	Type          string       `json:"type"`
+	Base          AssetBinding `json:"base"`
+	TargetVersion string       `json:"targetVersion"`
+	Fields        []string     `json:"fields"`
+	Issue         string       `json:"issue,omitempty"`
+}
+
+type PackageImpactOutput struct {
+	Resource AssetRef `json:"resource"`
+	Records  int      `json:"records"`
+	Retained bool     `json:"retained"`
+}
+
+type PackageImpactConnection struct {
+	Resource   AssetRef `json:"resource"`
+	Configured bool     `json:"configured"`
+	Credential bool     `json:"credential"`
+}
+
+type PackageLifecycleImpact struct {
+	Dependencies []string                  `json:"dependencies"`
+	References   []PackageImpactReference  `json:"references"`
+	Extensions   []PackageImpactExtension  `json:"extensions"`
+	Runs         []ApplicationRun          `json:"runs"`
+	Connections  []PackageImpactConnection `json:"connections"`
+	Outputs      []PackageImpactOutput     `json:"outputs"`
+}
+
 type PackageState struct {
 	Packages map[string]*InstalledPackage
 	Sources  map[string]PackageSource
 }
 
 type PackageHost interface {
+	PackageLifecycleImpact(Caller, string, []ReleaseAsset) (PackageLifecycleImpact, error)
 	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *kernel.Error)
 	Apps() []App
 	CodeReleaseAssets() ([]ReleaseAsset, error)
@@ -300,6 +335,7 @@ type PackageHost interface {
 }
 
 type ConsolePackages interface {
+	LifecycleImpact(Caller, string, []ReleaseAsset) (PackageLifecycleImpact, error)
 	BlueprintCatalog
 	Attach(PackageHost)
 	BindPackageIndex(*PackageIndex)

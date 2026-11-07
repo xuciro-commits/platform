@@ -56,6 +56,8 @@ read-when: 改动产品包、Marketplace 安装、升级、卸载、重装、产
 4. 审阅列出失效的客户引用，但不级联删除客户资源；引用 owner 负责修复或迁移。
 5. 永久删除（purge）另设管理员危险路径，只删除包拥有的归档物和安装记录，不删除租户数据。
 
+安装审阅、版本切换、标记卸载与退役共用生命周期影响查询：以资源引用连接产品依赖、客户扩展、客户引用、原应用运行记录、连接配置和保留输出。运行证据复用原应用运行查询，分页完整读取；读取失败拒绝审阅，不当成没有在飞工作。退役时仍有在飞工作则拒绝，标记卸载只提示工作清单；升级仍保留已有版本运行。退役审阅中的扩展失效是提示，不级联删除；升级中的扩展不兼容是阻断项。
+
 ### 重装
 
 1. 退役包保留在独立的 Retired 页签，显示最后安装版本、时间、保留制品和依赖状态。
@@ -85,17 +87,17 @@ read-when: 改动产品包、Marketplace 安装、升级、卸载、重装、产
 
 ## 6.26 ERP/MES 拆包
 
-当前 `application.manufacturing` 是一个包、两个应用根，不能独立升级或卸载。拆分的目标边界是所有权的拆分，不是文件拆分：
+`manufacturing.core`、`manufacturing.erp` 和 `manufacturing.mes` 分别安装到受管项目。`application.manufacturing` 的旧版本字节保留，供存量安装核验和重装；新租户选择拆分产品。拆分边界是所有权：
 
 | 包 | 责任 |
 |---|---|
-| `manufacturing.core` | 共享本体、公共值类型、版本化协议和共享查询；不承载采购、会计或车间执行页面 |
+| `manufacturing.core` | 共享供应商询问本体、连接、回写和查询；Foundation app 承载共享询问视图，不承载采购、会计或车间执行页面 |
 | `manufacturing.erp` | 物料、采购、库存、会计、生产订单、库存和会计过账 |
 | `manufacturing.mes` | 工艺路线、工单执行、质量、设备、停机、现场动作和执行记录 |
 
 依赖是 `erp -> core`、`mes -> core`。ERP 与 MES 不通过对方内部资源协作；MES 通过对象接口、动作或版本化查询绑定上游生产事实。
 
-当前包模型要求每个包有 app root；不能表达纯契约包。若需要 `manufacturing.core`，使用一个最小的 Foundation app，或单独扩展包格式，不另建包注册表。
+每个包保留 app root，core 使用 Foundation app，不扩展包格式。
 
 `productionorder.confirm` 当前在一个动作事务中创建 ERP 收货、生产批次、库存过账、生产过账和日记账。已确定的边界是：
 
@@ -105,14 +107,12 @@ read-when: 改动产品包、Marketplace 安装、升级、卸载、重装、产
 - ERP 包通过 `productionorderupstream` 和 `productionbatchupstream` 命名查询向 MES 提供生产订单与生产批次；MES 不轮询 ERP 内部记录地址。
 - 只有 ERP 内部需要强同步；MES 与 ERP 之间不得把库存或会计拆成独立异步步骤，也不能用新的幂等键重试已接收批次。
 
-存量租户不能直接安装拆分包。`build.resource.rehome` 提供管理员接受结果，只改变资源的 `Project / ManagedBy` 和资源修订号，保留 RID、类型名、应用身份、记录、媒体和历史；项目应用自身不能改变项目 ID，带文件夹的资源必须先移出文件夹，批量请求用资源修订号拒绝陈旧写入。完成 rehome 后再归档旧包。未完成迁移前，旧单体包保留为兼容伞，新租户使用拆分包。拆包顺序固定为 ERP base、MES dependent；当前所有 blueprint asset 仍属于 `build`，拆包只改变所有权与依赖，不产生第二套事务权威。
+Marketplace 的精确产品版本提供“Transfer existing resources…”：审阅原拥有者和资源修订号，创建目标受管项目，再经 `build.resource.rehome` 转移。重试只列尚未归位的资源；保留 RID、类型名、业务应用身份、记录、媒体和历史。项目容器自身保持项目 ID，带文件夹的资源先移出文件夹，陈旧资源修订被拒绝。先迁移并安装 core，再分别迁移并安装 ERP、MES，最后退役旧包；旧包仅归档尚归它所有的资源。业务应用可以跨项目归位，项目容器不能移动。所有 blueprint asset 仍属于 `build`，拆包只改变所有权与依赖，不产生第二套事务权威。
 
 ## 6.27 现存差距
 
 - `draining` 只设置状态，静态代码没有阻止新使用；界面明确标为“标记卸载”，不宣称运行排空已完成。
 - `Uninstall` 实际是 archive；永久删除、输出 detach、制品 GC 未实现。
-- `productionorder.confirm` 仍跨 ERP 库存、生产批次和会计过账，拆包边界未决定。
-- 没有真正的 drain 和永久删除。
 
 ## 相关
 

@@ -102,6 +102,7 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   await panel.getByRole("button",{name:"Mark for uninstall",exact:true}).click();
   await panel.getByRole("button",{name:"Retire",exact:true}).click();
   const uninstall=page.getByRole("dialog",{name:"Review retirement",exact:true});
+  await expect(uninstall.getByRole("region",{name:"Lifecycle impact"})).toBeVisible();
   await uninstall.getByRole("button",{name:"Retire",exact:true}).click();
   await expect(uninstall).toBeHidden();
   expect((await customer.read<{record:{note:string}}>(`/v1/records/${customerType}/${extensionRecord}`)).record.note).toBe("Keep my extension");

@@ -485,6 +485,7 @@ type AppCatalog interface {
 }
 
 type ConsoleHost interface {
+	PackageLifecycleImpact(Caller, string, []ReleaseAsset) (PackageLifecycleImpact, error)
 	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *kernel.Error)
 	AppCatalog
 	CodeReleaseAssets() ([]ReleaseAsset, error)

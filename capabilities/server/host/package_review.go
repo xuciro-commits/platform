@@ -20,6 +20,7 @@ type PackageReview struct {
 	Extensions []releaseowner.ReleaseExtensionReview `json:"extensions"`
 	Removals   []PackageRemovalImpact                `json:"removals"`
 	Problems   []string                              `json:"problems,omitempty"`
+	Impact     platform.PackageLifecycleImpact       `json:"impact"`
 }
 
 type PackageRemovalImpact struct {
@@ -57,7 +58,10 @@ func (h *Host) routesPackageReview(rt *routes) {
 			Reply(w, nil, refusal)
 			return
 		}
-		catalog := t.app("platform").(interface{ PackageViews() []platform.PackageView })
+		catalog := t.app("platform").(interface {
+			PackageViews() []platform.PackageView
+			LifecycleImpact(platform.Caller, string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
+		})
 		views := catalog.PackageViews()
 		var chosen *platform.PackageView
 		for i, view := range views {
@@ -104,38 +108,38 @@ func (h *Host) routesPackageReview(rt *routes) {
 				assets[i] = complete
 				after[complete.Ref] = complete
 			}
-			extensions, err := t.releaseExtensionReview(platform.ReleaseCandidate{Assets: assets})
-			if err != nil {
-				answer.Problems = append(answer.Problems, err.Error())
-			} else {
-				for _, extension := range extensions {
-					_, provided := after[extension.Base.Ref]
-					_, owned := before[extension.Base.Ref]
-					if provided || owned {
-						if owned && (!provided || uninstall) {
-							extension.Issue = "The product removes this extension's base"
-						}
-						answer.Extensions = append(answer.Extensions, extension)
-						if extension.Issue != "" && !uninstall {
-							answer.Problems = append(answer.Problems, extension.Issue)
-						}
-					}
-				}
-			}
 		}
 		if uninstall {
 			after = map[platform.AssetRef]platform.ReleaseAsset{}
 		}
-		removed, replaced := map[platform.AssetRef]bool{}, map[platform.AssetRef]bool{}
-		for ref := range before {
-			if _, provided := after[ref]; !provided {
-				removed[ref] = true
+		next := make([]platform.ReleaseAsset, 0, len(after))
+		for _, asset := range after {
+			next = append(next, asset)
+		}
+		impact, impactErr := catalog.LifecycleImpact(c, chosen.Descriptor.ID, next)
+		if impactErr != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": impactErr.Error()})
+			return
+		}
+		answer.Impact = impact
+		answer.Extensions = impact.Extensions
+		if !uninstall {
+			for _, extension := range impact.Extensions {
+				if extension.Issue != "" {
+					answer.Problems = append(answer.Problems, extension.Issue)
+				}
 			}
 		}
-		for ref := range after {
-			replaced[ref] = true
+		answer.Removals = make([]PackageRemovalImpact, 0, len(impact.References))
+		for _, ref := range impact.References {
+			answer.Removals = append(answer.Removals, PackageRemovalImpact(ref))
 		}
-		answer.Removals = t.packageRemovalImpacts(removed, replaced)
+		if uninstall {
+			answer.Problems = append(answer.Problems, impact.Dependencies...)
+			for _, run := range impact.Runs {
+				answer.Problems = append(answer.Problems, "Work is still in flight: "+run.Kind+"/"+run.ID)
+			}
+		}
 		if !uninstall {
 			for _, impact := range answer.Removals {
 				answer.Problems = append(answer.Problems, "Remove references to "+impact.Resource.String()+" from "+impact.Consumer.String()+" before upgrading the product")

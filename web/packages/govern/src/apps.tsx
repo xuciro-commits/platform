@@ -5,6 +5,8 @@ import { Fragment, useState } from "react";
 import { when, type AppInfo, type ProtocolInfo } from "./shared";
 import { PackageSources } from "./package-sources";
 import { PackageRequirements } from "./package-preparation";
+import { PackageOwnership } from "./package-ownership";
+import { PackageImpact } from "./package-impact";
 
 export function Apps({tab="catalog"}:{tab?:string}) {
   const { holds} = useHost(), { open } = useWorkspace();
@@ -33,6 +35,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
   const [search, setSearch] = useState("");
   const [versions, setVersions] = useState<Record<string, string>>({});
   const [progress,setProgress]=useState<Record<string,string>>({});
+  const [ownership, setOwnership] = useState<{ id: string; version: string }>();
   const [review,setReview]=useState<{schema:string;id:string;payload:unknown;view:Api.PackageView;details:Api.PackageReview[]}>();
   if (!items.length) return null;
   const act = async (schema: string, id: string, payload: unknown, confirmed=false) => {
@@ -68,6 +71,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
   const shown = ids.filter(id => items.some(item => (item.descriptor.id || item.installed?.id) === id && `${id} ${item.descriptor.title ?? item.installed?.title ?? ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())));
   return (
     <div className="grid min-w-0 items-start gap-5 md:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
+      {ownership && <PackageOwnership {...ownership} onClose={() => setOwnership(undefined)} />}
       <Panel variant="plain" aria-label={t("Package library")} className={selected ? "hidden min-w-0 md:block" : "min-w-0"}>
         <Input type="search" aria-label={t("Find a package")} placeholder={t("Find a package")} value={search} onChange={event => setSearch(event.target.value)} className="mb-3 w-full" />
         <div className="grid gap-1">{shown.map(id => {
@@ -141,6 +145,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
             </div>}
             {can("platform.package.install") && <div className="flex flex-wrap gap-2">
               {next === "install" && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} title={installable ? undefined : t("Fix the precheck first")} onClick={() => void act("platform.package.install", id, { id, version: d.version })}>{t(reinstall ? "Reinstall" : "Install")}</Button>}
+              {next === "install" && chosen && <Button size="sm" disabled={busy === id} onClick={() => setOwnership({ id, version: d.version })}>{t("Transfer existing resources…")}</Button>}
               {different && chosen?.update && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} onClick={() => void act("platform.package.upgrade", id, { id, version: d.version })}>{t("Upgrade to {v}", { v: d.version })}</Button>}
               {different && chosen?.rollback && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} onClick={() => void act("platform.package.rollback", id, { id, version: d.version })}>{t("Roll back to {v}", { v: d.version })}</Button>}
               {different && chosen?.downgrade && !chosen?.rollback && <Button size="sm" variant="primary" disabled={!chosen || !installable || busy === id} onClick={() => void act("platform.package.downgrade", id, { id, version: d.version })}>{t("Downgrade to {v}", { v: d.version })}</Button>}
@@ -164,6 +169,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
           <strong>{review.view.descriptor.title||review.id} · {review.view.descriptor.version}</strong>
           <PropertyList items={[[t("Installed version"),review.view.installed?.version||"—"],[t("Required products"),review.view.descriptor.requires?.join(", ")||t("None")]]}/>
           <p className="text-muted">{t(review.schema==="platform.package.retire"?"Retire archives managed resources and preserves customer data and extensions.":"Review the product resources before confirming this exact version.")}</p>
+          {review.details.map(detail => <PackageImpact key={detail.id} impact={detail.impact} />)}
           {review.schema!=="platform.package.retire" && <ol aria-label={t("Installation order")} className="divide-y divide-border">{review.view.plan.steps.map(step=>{
             const status=progress[step.id]??step.status;
             return <li key={step.id} className="grid gap-1 py-2"><div className="flex flex-wrap justify-between gap-2"><span>{step.title||step.id}</span><span className="flex items-center gap-2"><Tag label={t(status==="installed"?"Installed":status==="failed"?"Failed":"Pending")} tone={status==="installed"?"success":status==="failed"?"danger":"warning"} />{status!=="installed" && <span>{t(step.action==="platform.package.upgrade"?"Upgrade":step.action==="platform.package.downgrade"?"Downgrade":"Install")} · {step.version}</span>}</span></div>{step.installedVersion&&step.installedVersion!==step.version&&<span className="text-xs text-muted">{t("Installed version")}: {step.installedVersion}</span>}{step.problem&&<span className="text-xs text-[var(--tone-danger)]">{step.problem}</span>}</li>;
@@ -174,7 +180,7 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
           {review.details.flatMap(detail=>detail.problems??[]).map(problem=><Notice key={problem} tone="danger" message={t(problem)}/>)}
           {review.view.plan.problems?.map(problem=><Notice key={problem} tone="warning" message={t(problem)}/>)}
           {refused[review.id] && <Notice tone="danger" role="alert" message={refused[review.id]!}/>}
-          <div className="flex justify-end gap-2"><Button disabled={busy===review.id} onClick={()=>setReview(undefined)}>{t("Cancel")}</Button><Button variant="primary" disabled={busy===review.id || !!review.view.plan.problems?.length || review.view.plan.steps.some(step=>(progress[step.id]??step.status)==="failed") || review.schema!=="platform.package.retire" && review.details.some(detail=>detail.problems?.length)} onClick={()=>void act(review.schema,review.id,review.payload,true)}>{t(review.schema==="platform.package.retire"?"Retire":review.schema==="platform.package.upgrade"?"Upgrade":review.schema==="platform.package.downgrade"?"Downgrade":review.schema==="platform.package.rollback"?"Roll back":"Install")}</Button></div>
+          <div className="flex justify-end gap-2"><Button disabled={busy===review.id} onClick={()=>setReview(undefined)}>{t("Cancel")}</Button><Button variant="primary" disabled={busy===review.id || !!review.view.plan.problems?.length || review.view.plan.steps.some(step=>(progress[step.id]??step.status)==="failed") || review.details.some(detail=>detail.problems?.length)} onClick={()=>void act(review.schema,review.id,review.payload,true)}>{t(review.schema==="platform.package.retire"?"Retire":review.schema==="platform.package.upgrade"?"Upgrade":review.schema==="platform.package.downgrade"?"Downgrade":review.schema==="platform.package.rollback"?"Roll back":"Install")}</Button></div>
         </div>}
       </Dialog>
     </div>

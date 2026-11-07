@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	build "platformserver/services/resources/authoring"
 )
 
 func (d *Owner) installedDescriptors(index *platform.PackageIndex) (map[string]platform.PackageDescriptor, error) {
@@ -162,7 +163,27 @@ func (d *Owner) prerequisiteAssets(root platform.PackageDescriptor, index *platf
 			continue
 		}
 		if descriptor.Blueprint != nil {
-			available = append(available, descriptor.Blueprint.Assets...)
+			var owner build.ConstructionDrafts
+			for _, app := range d.host.Apps() {
+				if app.Manifest().ID == build.ID {
+					owner, _ = app.(build.ConstructionDrafts)
+					break
+				}
+			}
+			if owner == nil {
+				return nil, fmt.Errorf("application blueprints need the Build owner")
+			}
+			assets, err := owner.CompleteBlueprintAssets(descriptor.Blueprint.Assets)
+			if err != nil {
+				return nil, err
+			}
+			for _, asset := range assets {
+				complete, err := platform.WithDependencies(asset)
+				if err != nil {
+					return nil, err
+				}
+				available = append(available, complete)
+			}
 		}
 		pending = append(pending, descriptor.Requires...)
 	}

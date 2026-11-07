@@ -3606,6 +3606,31 @@ export type PackageDescriptor = {
   description?: string;
 };
 
+export type PackageImpactConnection = {
+  resource: AssetRef;
+  configured: boolean;
+  credential: boolean;
+};
+
+export type PackageImpactExtension = {
+  type: string;
+  base: AssetBinding;
+  targetVersion: string;
+  fields: string[];
+  issue?: string;
+};
+
+export type PackageImpactOutput = {
+  resource: AssetRef;
+  records: number;
+  retained: boolean;
+};
+
+export type PackageImpactReference = {
+  resource: AssetRef;
+  consumer: AssetRef;
+};
+
 export type PackageInspectRequest = {
   url?: string;
   content?: unknown;
@@ -3624,6 +3649,35 @@ export type PackageInstallStep = {
   status: string;
   installedVersion?: string;
   problem?: string;
+};
+
+export type PackageLifecycleImpact = {
+  dependencies: string[];
+  references: PackageImpactReference[];
+  extensions: PackageImpactExtension[];
+  runs: ApplicationRun[];
+  connections: PackageImpactConnection[];
+  outputs: PackageImpactOutput[];
+};
+
+export type PackageOwnership = {
+  id: string;
+  version: string;
+  project: string;
+  name: string;
+  title: string;
+  createProject: boolean;
+  entries: PackageOwnershipEntry[];
+  problems: string[];
+};
+
+export type PackageOwnershipEntry = {
+  id: string;
+  project: string;
+  managedBy: string;
+  version: number;
+  ref: AssetRef;
+  from: string;
 };
 
 export type PackagePreparation = {
@@ -3668,9 +3722,10 @@ export type PackageReview = {
   id: string;
   version: string;
   changes: PackageResourceChange[];
-  extensions: ReleaseExtensionReview[];
+  extensions: PackageImpactExtension[];
   removals: PackageRemovalImpact[];
   problems?: string[];
+  impact: PackageLifecycleImpact;
 };
 
 export type PackageRoleRequirement = {
@@ -4702,14 +4757,6 @@ export type ReleaseEvaluationStarted = {
   id: string;
 };
 
-export type ReleaseExtensionReview = {
-  type: string;
-  base: AssetBinding;
-  targetVersion: string;
-  fields: string[];
-  issue?: string;
-};
-
 export type ReleaseFieldAddition = {
   type: string;
   field: string;
@@ -4897,7 +4944,7 @@ export type SavedReleaseReview = {
   canActivate: boolean;
   activationDiagnostic?: string;
   upgradePlan?: ReleaseUpgradePlan;
-  extensions?: ReleaseExtensionReview[];
+  extensions?: PackageImpactExtension[];
   from?: string;
   promotedAt?: string;
   promotedTo?: PromotionTarget[];

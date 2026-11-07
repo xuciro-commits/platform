@@ -29,7 +29,7 @@ type LiveQueryFrame struct {
 const liveReadBudget = 8 << 20
 
 func liveReadAllowed(p string) bool {
-	if strings.HasPrefix(p, "/v1/packages/") && strings.HasSuffix(p, "/preparation") {
+	if strings.HasPrefix(p, "/v1/packages/") && (strings.HasSuffix(p, "/preparation") || strings.HasSuffix(p, "/ownership")) {
 		return true
 	}
 	if strings.HasPrefix(p, "/v1/queries/") || strings.HasPrefix(p, "/v1/object-sets/") {
@@ -201,7 +201,7 @@ func (t *Tenant) liveVersion(query string) string {
 	if p == "/v1/ai/model-selection" {
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
 	}
-	if strings.HasPrefix(p, "/v1/packages/") && strings.HasSuffix(p, "/preparation") {
+	if strings.HasPrefix(p, "/v1/packages/") && (strings.HasSuffix(p, "/preparation") || strings.HasSuffix(p, "/ownership")) {
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
 	}
 	if strings.HasPrefix(p, "/v1/queries/") {

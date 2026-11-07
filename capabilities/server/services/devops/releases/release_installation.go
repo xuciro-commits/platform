@@ -96,13 +96,7 @@ func CompatibleStoredRemoval(old, next platform.EntityInfo) bool {
 	return true
 }
 
-type ReleaseExtensionReview struct {
-	Type          string                `json:"type"`
-	Base          platform.AssetBinding `json:"base"`
-	TargetVersion string                `json:"targetVersion"`
-	Fields        []string              `json:"fields"`
-	Issue         string                `json:"issue,omitempty"`
-}
+type ReleaseExtensionReview = platform.PackageImpactExtension
 
 func InstallationPlan(registry *platform.AssetRegistry, installation platform.ReleaseInstallation) (platform.AssetInstallation, error) {
 	app := build.ID
@@ -255,7 +249,7 @@ func AssetShapes(apps []platform.App, available []platform.ReleaseAsset) (map[st
 		}
 		assets := []platform.ReleaseAsset{}
 		for _, asset := range available {
-			if asset.Ref.App == owner.Manifest().ID {
+			if asset.Ref.App == owner.Manifest().ID && asset.Ref.Kind == platform.AssetObject {
 				assets = append(assets, asset)
 			}
 		}

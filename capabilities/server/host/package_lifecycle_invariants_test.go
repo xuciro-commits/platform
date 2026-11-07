@@ -69,6 +69,10 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	}
 
 	target.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "Keep my data"})
+	impact, err := target.packageLifecycleImpact(admin, descriptor.ID, nil)
+	if err != nil || len(impact.Outputs) != 1 || impact.Outputs[0].Records != 1 || !impact.Outputs[0].Retained {
+		t.Fatalf("lifecycle impact must retain customer output: %+v: %v", impact, err)
+	}
 	objectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}
 	if resource := resourceRecord(t, target, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID || resource.Project != "package:"+descriptor.ID {
 		t.Fatalf("installed resource is not managed: %+v", resource)

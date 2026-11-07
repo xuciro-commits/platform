@@ -1,0 +1,225 @@
+{
+  "id": "manufacturing.core",
+  "version": "1.0.0",
+  "namespace": "manufacturing.core",
+  "title": "Manufacturing Foundation",
+  "description": "Shared manufacturing contracts and supplier inquiry service.",
+  "blueprint": {
+    "roots": [
+      {
+        "app": "build",
+        "kind": "app",
+        "name": "manufacturingfoundation"
+      }
+    ],
+    "assets": [
+      {
+        "ref": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.mesleadtime"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "body": {
+          "name": "mesleadtime",
+          "type": "build.mesleadtime",
+          "title": "Supplier inquiry",
+          "plural": "Supplier inquiries",
+          "description": "An authorized supplier inquiry and the original external answer; delivery alone is not a promised lead time.",
+          "fields": [
+            {
+              "name": "product",
+              "title": "Product or material",
+              "type": "text",
+              "required": true
+            },
+            {
+              "name": "question",
+              "title": "Question",
+              "type": "longtext",
+              "required": true
+            },
+            {
+              "name": "answer",
+              "title": "Supplier answer",
+              "type": "longtext",
+              "sourceType": "external-input",
+              "write": [
+                "integrator"
+              ]
+            }
+          ],
+          "access": [
+            {
+              "role": "supervisor",
+              "read": "own",
+              "create": true,
+              "edit": false
+            },
+            {
+              "role": "buyer",
+              "read": "own",
+              "create": true,
+              "edit": false
+            },
+            {
+              "role": "integrator",
+              "read": "all",
+              "create": false,
+              "edit": true
+            }
+          ]
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "connection",
+          "name": "supplieragent"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.connection-1",
+        "body": {
+          "name": "supplieragent",
+          "title": "Supplier agent",
+          "kind": "http"
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "writeback",
+          "name": "supplierinquiry"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.writeback-1",
+        "body": {
+          "name": "supplierinquiry",
+          "title": "Ask the supplier agent",
+          "connection": "supplieragent",
+          "object": "build.mesleadtime",
+          "on": "create",
+          "transport": "a2a",
+          "method": "POST",
+          "path": "rpc",
+          "mapping": [
+            {
+              "from": "product",
+              "to": "product"
+            },
+            {
+              "from": "question",
+              "to": "message"
+            }
+          ],
+          "result": [
+            {
+              "from": "artifacts.0.parts.0.text",
+              "to": "answer"
+            },
+            {
+              "from": "parts.0.text",
+              "to": "answer"
+            }
+          ]
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "query",
+          "name": "supplieranswers"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.query-1",
+        "body": {
+          "name": "supplieranswers",
+          "title": "Supplier inquiry answers",
+          "description": "Current readable inquiries and original supplier answers, without invented delivery dates.",
+          "object": "build.mesleadtime",
+          "sort": [
+            "id"
+          ],
+          "limit": 50
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "page",
+          "name": "mesleadtime"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "body": {
+          "name": "mesleadtime",
+          "title": "Supplier inquiries",
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "build.mesleadtime"
+          },
+          "layout": "list-detail",
+          "listFields": [
+            "product",
+            "question",
+            "answer"
+          ],
+          "detailFields": [
+            "product",
+            "question",
+            "answer"
+          ],
+          "actions": [
+            {
+              "app": "build",
+              "kind": "action",
+              "name": "build.mesleadtime.create"
+            }
+          ]
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "app",
+          "name": "manufacturingfoundation"
+        },
+        "body": {
+          "name": "manufacturingfoundation",
+          "title": "Manufacturing Foundation",
+          "icon": "boxes",
+          "pages": [
+            "mesleadtime"
+          ],
+          "resources": [
+            {
+              "app": "build",
+              "kind": "object",
+              "name": "build.mesleadtime"
+            },
+            {
+              "app": "build",
+              "kind": "connection",
+              "name": "supplieragent"
+            },
+            {
+              "app": "build",
+              "kind": "writeback",
+              "name": "supplierinquiry"
+            },
+            {
+              "app": "build",
+              "kind": "query",
+              "name": "supplieranswers"
+            }
+          ]
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1"
+      }
+    ],
+    "guide": "Configure supplieragent after installation. Installation grants no roles and creates no business data."
+  }
+}

@@ -69,7 +69,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [canActivate, setCanActivate] = useState(false);
   const [activationDiagnostic, setActivationDiagnostic] = useState("");
   const [upgradePlan, setUpgradePlan] = useState<Api.ReleaseUpgradePlan>();
-  const [extensions, setExtensions] = useState<Api.ReleaseExtensionReview[]>([]);
+  const [extensions, setExtensions] = useState<Api.PackageImpactExtension[]>([]);
   const [origin, setOrigin] = useState<{ from: string; at?: string }>();
   const [promotedTo, setPromotedTo] = useState<Api.PromotionTarget[]>([]);
   const [confirmedUpgrade, setConfirmedUpgrade] = useState("");
