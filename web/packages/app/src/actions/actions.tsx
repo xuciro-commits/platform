@@ -237,8 +237,10 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
 export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void, { essential = false, fixed }: { essential?: boolean; fixed?: Record<string, unknown> } = {}) {
   const { catalog } = useHost();
   const [taking, setTaking] = useState<{ declared: ActionDeclaration; initial?: Record<string, unknown>; fixed?: Record<string, unknown> }>();
+  const [created, setCreated] = useState<{ type: string; id: string }>();
+  useEffect(() => { if (created) { setCreated(undefined); onCreated?.(created); } }, [created, onCreated]);
   const offered = catalog.filter((a) => a.target === type && a.new);
-  const dialog = taking ? <ActionDialog frame="drawer" declared={taking.declared} initial={taking.initial} fixed={taking.fixed} type={type} essential={essential} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
+  const dialog = taking ? <ActionDialog frame="drawer" declared={taking.declared} initial={taking.initial} fixed={taking.fixed} type={type} essential={essential} onClose={() => setTaking(undefined)} onCompleted={setCreated} /> : null;
   return { offered, available: offered.length > 0, take: (schema?: string, initial?: Record<string, unknown>, at?: Record<string, unknown>) => {
     const declared = schema ? offered.find(action => action.schema === schema) : offered[0];
     setTaking(declared ? { declared, initial: initial && structuredClone(initial), fixed: at ?? fixed } : undefined);
