@@ -39,6 +39,8 @@ type Tenant struct {
 	readOrigin            *Tenant
 	readImage             atomic.Pointer[tenantReadImage]
 	stateEpoch            atomic.Uint64
+	workEpoch             atomic.Uint64
+	preparedResult        *preparedAccepted
 	startupSnapshot       *snapshotCompatibility
 	runtimePosition       func() int64
 	snapshotPosition      int64

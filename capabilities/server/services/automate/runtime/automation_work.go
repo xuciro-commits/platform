@@ -274,7 +274,7 @@ func Ready(q []*Task, now time.Time) *Task {
 
 func (task *Task) DueAt(now time.Time) bool { return !task.Due.After(now) && !task.NextRun.After(now) }
 
-func (s WorkLoop) Round(now time.Time, budget int) bool {
+func (s WorkLoop) Round(now time.Time, budget int) (bool, int) {
 	took, n := 0, len(s.Apps)
 	for progressed := true; progressed && took < budget; {
 		progressed = false
@@ -300,7 +300,6 @@ func (s WorkLoop) Round(now time.Time, budget int) bool {
 			took, progressed = took+1, true
 		}
 	}
-	s.Quota.Next(n)
 	for _, j := range s.Board.Jobs {
 		if s.Active(j.App) && j.DueAt(now) && took < budget && !s.Quota.Over(j.App, s.Limit, now) {
 			s.Run(j, now, false)
@@ -308,7 +307,10 @@ func (s WorkLoop) Round(now time.Time, budget int) bool {
 			took++
 		}
 	}
-	return s.Pending(now)
+	if took > 0 {
+		s.Quota.Next(n)
+	}
+	return s.Pending(now), took
 }
 
 func (s WorkLoop) Pending(now time.Time) bool {

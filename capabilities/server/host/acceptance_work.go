@@ -220,13 +220,21 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	principal, _ := json.Marshal(c.Member)
-	committed, err := t.acceptResult(Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()},
-		result.Key, result.RequestHash)
+	entry := Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()}
+	if t.preparedResult != nil {
+		*t.preparedResult = preparedAccepted{entry: entry, key: result.Key, hash: result.RequestHash}
+		return result.Outcome
+	}
+	committed, err := t.acceptResult(entry, result.Key, result.RequestHash)
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
+	return t.finishCommittedWork(task.App, result.Key, result.RequestHash, committed)
+}
+
+func (t *Tenant) finishCommittedWork(app, key, hash string, committed []byte) string {
 	saved, err := acceptedformat.DecodeWork(committed)
-	if err != nil || saved.Tenant != t.ID || saved.App != task.App || saved.Key != result.Key || saved.RequestHash != result.RequestHash {
+	if err != nil || saved.Tenant != t.ID || saved.App != app || saved.Key != key || saved.RequestHash != hash {
 		t.quarantine(fmt.Errorf("committed work differs from input: %v", err))
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}

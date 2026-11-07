@@ -128,18 +128,50 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 }
 
 func (t *Tenant) step(now time.Time) (more bool) {
-	_ = t.mu.Hold(context.Background(), "work")
-	defer t.mu.Unlock()
-	if t.businessStopped() {
-		return false
-	}
 	defer func() {
 		if failure := recover(); failure != nil {
 			t.quarantine(fmt.Errorf("owned work panicked: %v", failure))
 			more = false
 		}
 	}()
-	return t.workLoop().Round(now, 1)
+	type progress struct {
+		more  bool
+		took  int
+		scope *Tenant
+	}
+	result, refusal := decideOnImage(t, context.Background(), "work", func(scope *Tenant) (progress, *kernel.Error) {
+		more, took := scope.workLoop().Round(now, 1)
+		if scope.readOrigin == nil && took > 0 {
+			scope.workEpoch.Add(1)
+		}
+		return progress{more: more, took: took, scope: scope}, nil
+	}, func(t *Tenant, candidate preparedAccepted, value progress, refusal *kernel.Error) (progress, *kernel.Error) {
+		if value.took == 0 {
+			return value, refusal
+		}
+		if len(candidate.entry.Body) > 0 {
+			committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+			if err != nil {
+				return progress{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			}
+			t.finishCommittedWork(candidate.entry.App, candidate.key, candidate.hash, committed)
+			if t.quarantined() {
+				return progress{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			}
+		}
+		t.opsMu.Lock()
+		t.quota = value.scope.quota.Fork()
+		for _, job := range value.scope.work.Jobs {
+			if current := t.work.Job(job.ID); current != nil {
+				current.NextRun = job.NextRun
+			}
+		}
+		t.opsMu.Unlock()
+		t.workEpoch.Add(1)
+		value.more = t.workLoop().Pending(now)
+		return value, refusal
+	})
+	return refusal == nil && result.more
 }
 
 func (t *Tenant) overQuota(app string, now time.Time) bool { return t.quota.Over(app, t.Quota, now) }

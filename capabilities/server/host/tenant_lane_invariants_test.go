@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -287,5 +289,79 @@ func TestInvariantK13SQLReadsRetryWithoutMixingPositions(t *testing.T) {
 	})
 	if refusal == nil || executed || !live.quarantined() {
 		t.Fatal("SQL behind the applied image was served as a consistent read")
+	}
+}
+
+func TestInvariantK13ConcurrentSubmissionsKeepOneSerialHistory(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-concurrent-submit")
+	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
+	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
+	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "before"})
+	member := live.member(t)
+	submissions := []*pb.Submission{
+		live.submission("build.alpha.edit", "build.alpha", "A1", map[string]any{"note": "first"}),
+		live.submission("build.alpha.edit", "build.alpha", "A1", map[string]any{"note": "second"}),
+	}
+	for _, submission := range submissions {
+		revision := uint32(1)
+		submission.ExpectedRevision = &revision
+	}
+	type answer struct {
+		index   int
+		record  *pb.ChangeRecord
+		refusal *kernel.Error
+	}
+	answered := make(chan answer, len(submissions))
+	live.mu.Lock()
+	for index, submission := range submissions {
+		go func() {
+			record, refusal := live.Submit(member, submission, invariantClock)
+			answered <- answer{index: index, record: record, refusal: refusal}
+		}()
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for live.mu.State().Waiters != 2 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	waiters := live.mu.State().Waiters
+	live.mu.Unlock()
+	if waiters != 2 {
+		t.Fatal("both decisions did not reach commit while the lane was held")
+	}
+	accepted, refused, note := 0, 0, ""
+	for range submissions {
+		var result answer
+		select {
+		case result = <-answered:
+		case <-time.After(10 * time.Second):
+			t.Fatal("concurrent submissions did not finish")
+		}
+		repeated, refusal := live.Submit(member, submissions[result.index], invariantClock)
+		if result.refusal == nil {
+			accepted++
+			if refusal != nil || !proto.Equal(result.record, repeated) {
+				t.Fatalf("accepted retry differs: %v", refusal)
+			}
+			var payload map[string]string
+			_ = json.Unmarshal(result.record.GetSubmission().GetPayload(), &payload)
+			note = payload["note"]
+		} else {
+			refused++
+			if result.refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT || refusal == nil || refusal.Code != result.refusal.Code {
+				t.Fatalf("stale write or retry was not refused consistently: %v, %v", result.refusal, refusal)
+			}
+		}
+	}
+	view, refusal := live.RecordOf(t.Context(), member, "build.alpha", "A1", invariantClock)
+	var record struct {
+		Revision uint32
+		Note     string
+	}
+	if accepted != 1 || refused != 1 || refusal != nil || json.Unmarshal(platform.Raw(view.Record), &record) != nil || record.Revision != 2 || record.Note != note {
+		t.Fatalf("concurrent writes are not one serial history: accepted=%d refused=%d record=%+v refusal=%v", accepted, refused, record, refusal)
+	}
+	restored := live.restore(t, live.entries)
+	if differing := differingTypes(live.recordImage(t), restored.recordImage(t)); len(differing) != 0 {
+		t.Fatalf("concurrent accepted history replays differently: %v", differing)
 	}
 }

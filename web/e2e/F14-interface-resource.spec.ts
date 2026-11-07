@@ -32,12 +32,14 @@ test("F14 a builder creates and publishes a tenant interface, then an object typ
   const interfaceID = (await readDirectory()).resources.find(resource => resource.ref.kind === "interface" && resource.ref.name === interfaceName)!.draft!;
   const readInterface = () => client.read<{ record: { name: string; state: string; version?: number; published?: string } }>(`/v1/records/build.interface/${interfaceID}`);
   await expect.poll(async () => (await readInterface()).record.name).toBe(interfaceName);
+  await expect(page).toHaveURL(/#\/interfaces\/ri\./);
 
   const publish = page.getByRole("button", { name: "Publish interface", exact: true });
   await expect(publish).toBeEnabled();
   await publish.click();
   await expect.poll(async () => (await readInterface()).record.state).toBe("published");
   expect((await readInterface()).record.published).toBeTruthy();
+  await expect(page.getByRole("status").filter({ hasText: "Saved as draft" })).toBeVisible();
 
   await client.submit("build.object", objectID, "create", {
     name: objectName, title: "UI object", project,

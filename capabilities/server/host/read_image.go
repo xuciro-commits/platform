@@ -23,6 +23,7 @@ import (
 type tenantReadImage struct {
 	state       *Tenant
 	epoch       uint64
+	work        uint64
 	definitions uint64
 	records     uint64
 	operations  int64
@@ -56,11 +57,11 @@ func (t *Tenant) endLane() {
 	t.change.mu.Lock()
 	operations := t.change.seq + int64(len(t.change.pendingData))
 	t.change.mu.Unlock()
-	epoch, definitions, position := t.stateEpoch.Load(), t.defGen.Load(), t.records.Current().Applied()
+	epoch, work, definitions, position := t.stateEpoch.Load(), t.workEpoch.Load(), t.defGen.Load(), t.records.Current().Applied()
 	t.records.Lock()
 	generation := t.records.Generation()
 	t.records.Unlock()
-	if previous := t.readImage.Load(); previous != nil && previous.epoch == epoch && previous.definitions == definitions && previous.records == generation && previous.operations == operations && previous.position == position {
+	if previous := t.readImage.Load(); previous != nil && previous.epoch == epoch && previous.work == work && previous.definitions == definitions && previous.records == generation && previous.operations == operations && previous.position == position {
 		return
 	}
 	state, err := t.forkReadState(context.Background())
@@ -68,7 +69,7 @@ func (t *Tenant) endLane() {
 		t.quarantine(fmt.Errorf("publish read image: %w", err))
 		return
 	}
-	image := &tenantReadImage{state: state, epoch: epoch, definitions: definitions, records: generation, operations: operations, position: position, next: make(chan struct{})}
+	image := &tenantReadImage{state: state, epoch: epoch, work: work, definitions: definitions, records: generation, operations: operations, position: position, next: make(chan struct{})}
 	if previous := t.readImage.Swap(image); previous != nil {
 		close(previous.next)
 	}
@@ -186,6 +187,11 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, job := range t.work.Jobs {
+		if current := view.work.Job(job.ID); current != nil {
+			current.NextRun = job.NextRun
+		}
+	}
 	view.readScope = &recordReadScope{ctx: ctx}
 	view.readOrigin = t
 	if t.readOrigin != nil {
@@ -198,6 +204,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.records = t.records.ForkRecords()
 	view.records.Current().Detach()
 	view.definitions = slices.Clone(t.definitions)
+	view.listeners = slices.Clone(t.listeners)
 	view.disabledOwners = maps.Clone(t.disabledOwners)
 	view.apps = make([]platform.App, len(t.apps))
 	view.owner = make(map[string]platform.App, len(t.owner))
@@ -215,6 +222,9 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 			return nil, err
 		}
 		view.apps[i] = fork
+		if observer, ok := fork.(platform.Observer); ok {
+			view.observers = append(view.observers, observer)
+		}
 		if identity, ok := fork.(platform.IdentityDirectory); ok {
 			view.identity = identity
 		}

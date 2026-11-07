@@ -1,6 +1,6 @@
 ---
 level: 7 系统架构
-covers: [capabilities/server/kernel/tenant_lane.go, capabilities/server/host/record_read_scope.go, capabilities/server/host/read_image.go, capabilities/server/host/runtime.go, capabilities/server/host/submit.go, capabilities/server/host/staged_decision.go, capabilities/server/host/operations.go, capabilities/server/kernel/records/**, capabilities/server/kernel/store/postgres.go, capabilities/server/services/automate/runtime/automation_work.go]
+covers: [capabilities/server/kernel/tenant_lane.go, capabilities/server/host/record_read_scope.go, capabilities/server/host/read_image.go, capabilities/server/host/runtime.go, capabilities/server/host/submit.go, capabilities/server/host/staged_decision.go, capabilities/server/host/optimistic_decision.go, capabilities/server/host/operations.go, capabilities/server/kernel/records/**, capabilities/server/kernel/store/postgres.go, capabilities/server/services/automate/runtime/automation_work.go]
 read-when: 改动租户车道、协调读取、暂存决定、接受结果提交与应用、后台工作轮次，或在车道内新增任何工作
 ---
 
@@ -98,13 +98,15 @@ SQL 来源行仍从 PostgreSQL 可重复读事务读取：
 | 应用与发布 | 车道内 | 从已提交字节应用；应用后断言 SQL 位置 = 内存位置，不一致即隔离；发布映像 N+1 |
 | 事件与副作用 | 车道外 | 入队投递、自动化、外部副作用 |
 
+- `host/optimistic_decision.go` 是前台提交与后台任务的共用实现：准备阶段在原接受边界产出原格式的候选字节，不应用、不追加；基准有效时复用原提交和应用函数。早期拒绝与幂等命中也经过相同基准校验。
+- 内存模式没有 SQL 位置时，以接受轮次校验；定义、记录代数与系统投影一并校验；工作选择另校验调度代数，不让空作业的调度推进使业务动作反复作废。任务的配额与轮转、无变化作业的下次运行时间只在基准有效后更新；读取映像保留这些内存运行状态，不写成伪造历史。
 - 校验粒度是整个租户位置：任何插入的提交都使候选作废。这自然覆盖跨对象唯一性、库存汇总、权限撤销、包退役等约束，不需要拥有者声明读集合。
 - 细粒度校验（对象版本、读集合）不在本规格内；只有在 C8 指标显示冲突重算成为瓶颈时，才另写规格，由内核统一记录读集合，拥有者不手写。
 - 决定必须确定且无副作用：同一映像、同一提交得到同一候选字节。依赖外部结果的决定只读 C-R6 的预留或准备输入（现有 `preparedOperationInput`、模型预留即此模式）。
 
 ### C6 后台工作
 
-- `Tenant.Round` 每个任务、每个作业各取一次车道（`WorkLoop.Round(now, 1)`），任务之间读取与前台提交可以进入；车道内仍包含该任务的决定，直到 C5 落地。
+- `Tenant.Round` 每个任务、每个作业在映像分叉上决定（`WorkLoop.Round(now, 1)`），提交各取一次车道，任务之间前台提交可以进入。冲突与回退复用 C5；无变化作业只推进内存调度时间，不追加空接受结果。
 - `WorkLoop` 的配额、轮转与 `opsMu` 不变；轮转按任务推进。
 - 投递、同步、构建、管道运行、智能体步骤：外部部分按 C-R6 在车道外执行；结果以接受结果回到 C5。
 - 调度器按租户轮转不变；一个租户的长任务只延迟该租户的下一任务，不占用其他租户的车道。
@@ -132,11 +134,11 @@ SQL 来源行仍从 PostgreSQL 可重复读事务读取：
 ## 现存差距
 
 - 读取：C3 原子发布与 C4 位置校验、等待新映像、两次重试及车道回退已实现；生产拥有者均支持 `ReadForkApp`，未实现该契约的测试或扩展拥有者暂留车道。
-- 提交：`host/submit.go` 的 `submit` 从准入后整段持有车道，决定在车道内计算；`newStagedDecision` 分叉的是可变的当前存储，序列、通知、连接器与拥有者账本取自活动状态。
+- 提交：普通 `submit` 与后台任务已执行 C5；专用的发布、分支、控制及集成提交仍需在 T5 清点其准备工作，不把这些路径等同于已完成的普通动作路径。
 - 车道内：56 个文件共 129 处直接调用 `t.mu.Lock`（`continuous_frames.go`、`agent_host.go`、`release_candidate.go`、`branches.go`、`aicall.go` 等），持有范围未逐一核对是否符合 C-R2；`agent_host.go` 的 `BeginAgentRead` 以车道代替读取映像。
 - 车道内：`host/files.go` 的 `SweepUploads` 在车道内删除对象存储字节；移出需要先有“待删除”标记协议，否则与附件引用竞争会丢字节。
-- 指标：`platform.read_image.retries` 已上线；`platform.decision.conflicts` 随 C5 落地。
-- 验证：K13 已覆盖 C2、C3、C4、C6、独立读取范围和发布后通知；C5 的并发提交随实现补齐。
+- 指标：`platform.read_image.retries` 与 `platform.decision.conflicts` 均已上线。
+- 验证：K13 已覆盖 C2、C3、C4、C6、独立读取范围和发布后通知；并发动作在同一记录上竞争时恰有一个接受、一个稳定拒绝，幂等答案与重放结果一致。
 
 ## 相关
 

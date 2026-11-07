@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,7 +30,7 @@ func (t *Tenant) submitSource(m platform.Member, s *pb.Submission, now time.Time
 func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
 	record, err := t.submit(m, s, now, func(_ *kernel.Error, found []platform.FieldIssue) {
-		issues = t.readableFieldIssues(m, found, now)
+		issues = found
 	}, nil)
 	return record, err, issues
 }
@@ -54,8 +55,38 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 			return record, refusal
 		}
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	type answer struct {
+		record *pb.ChangeRecord
+		issues []platform.FieldIssue
+	}
+	result, refusal := decideOnImage(t, context.Background(), "submit", func(scope *Tenant) (answer, *kernel.Error) {
+		var found []platform.FieldIssue
+		record, refusal := scope.submitHeld(m, s, now, func(_ *kernel.Error, issues []platform.FieldIssue) {
+			found = scope.readableFieldIssues(m, issues, now)
+		}, source, contentVersion...)
+		return answer{record: record, issues: found}, refusal
+	}, func(t *Tenant, candidate preparedAccepted, value answer, refusal *kernel.Error) (answer, *kernel.Error) {
+		if len(candidate.entry.Body) == 0 {
+			return value, refusal
+		}
+		committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+		if err != nil {
+			if err == errAcceptedConflict {
+				return answer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+			}
+			return answer{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
+		}
+		record, refusal := t.finishCommittedResult(t.app(candidate.entry.App), m, candidate.hash, committed)
+		value.record = record
+		return value, refusal
+	})
+	if refusal != nil && report != nil {
+		report(refusal, result.issues)
+	}
+	return result.record, refusal
+}
+
+func (t *Tenant) submitHeld(m platform.Member, s *pb.Submission, now time.Time, report func(*kernel.Error, []platform.FieldIssue), source *sourceSubmission, contentVersion ...string) (record *pb.ChangeRecord, err *kernel.Error) {
 	if refusal := t.recordReadRefusal(); refusal != nil {
 		return nil, refusal
 	}
@@ -123,7 +154,9 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	defer func() { end(outcomeOf(err)) }()
 	record, err = t.submitAcceptedVersion(a, m, s, now, false, binding, schemaRefusal, nil, claim)
 	if report != nil && err != nil {
-		if prior, ok := t.committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
+		if t.preparedResult != nil && len(t.preparedResult.entry.Body) > 0 {
+			report(err, t.preparedResult.issues)
+		} else if prior, ok := t.committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
 			hash, _ := acceptedformat.SubmissionHash(s, binding)
 			if prior.RequestHash == hash {
 				report(err, prior.Issues)
@@ -260,8 +293,12 @@ func (t *Tenant) submitAcceptedWith(a platform.App, m platform.Member, s *pb.Sub
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
 	}
 	member, _ := json.Marshal(m)
-	committed, err := t.acceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
-		Principal: member, Body: raw, At: now}, s.GetIdempotencyKey(), hash)
+	entry := Entry{App: a.Manifest().ID, Kind: "accepted-result", Principal: member, Body: raw, At: now}
+	if t.preparedResult != nil {
+		*t.preparedResult = preparedAccepted{entry: entry, key: s.GetIdempotencyKey(), hash: hash, issues: draft.inputIssues[refusal]}
+		return record, refusal
+	}
+	committed, err := t.acceptResult(entry, s.GetIdempotencyKey(), hash)
 	if err != nil {
 		if err == errAcceptedConflict {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}

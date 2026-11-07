@@ -137,7 +137,7 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 func (t *Tenant) submitSchemaDiagnosed(member platform.Member, sub *pb.Submission, content string, at time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
 	record, refusal := t.submit(member, sub, at, func(_ *kernel.Error, found []platform.FieldIssue) {
-		issues = t.readableFieldIssues(member, found, at)
+		issues = found
 	}, nil, strings.TrimSpace(content))
 	return record, refusal, issues
 }

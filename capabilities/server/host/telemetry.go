@@ -56,9 +56,9 @@ func end(span trace.Span, outcome string) {
 }
 
 var meters = struct {
-	attempts, failures metric.Int64Counter
-	laneWait, laneHold metric.Float64Histogram
-	readImages         metric.Int64Counter
+	attempts, failures    metric.Int64Counter
+	laneWait, laneHold    metric.Float64Histogram
+	readImages, decisions metric.Int64Counter
 }{}
 
 const laneHoldBudget = 200 * time.Millisecond
@@ -69,6 +69,7 @@ func init() {
 	meters.failures, _ = m.Int64Counter("platform.work.failures", metric.WithDescription("Attempts of owned work that did not succeed"))
 	meters.laneWait, _ = m.Float64Histogram("platform.lane.wait", metric.WithUnit("s"), metric.WithDescription("Time spent waiting for the tenant lane, per holder kind"))
 	meters.laneHold, _ = m.Float64Histogram("platform.lane.hold", metric.WithUnit("s"), metric.WithDescription("Time the tenant lane was held, per holder kind"))
+	meters.decisions, _ = m.Int64Counter("platform.decision.conflicts", metric.WithDescription("Optimistic decision retries and lane fallbacks"))
 	meters.readImages, _ = m.Int64Counter("platform.read_image.retries", metric.WithDescription("Read image consistency retries, fallbacks and quarantine decisions"))
 }
 
