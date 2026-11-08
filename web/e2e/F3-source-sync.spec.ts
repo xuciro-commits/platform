@@ -198,6 +198,8 @@ test("F3 an integrator connects an external system, syncs it into a dataset vers
         && r.request().postDataJSON().schema.name === "build.source.save");
       await page.getByRole("button", { name: "Create", exact: true }).click();
       expect((await created).ok(), await (await created).text()).toBeTruthy();
+      await expect(page).toHaveURL(/#\/data-source\/ri\./);
+      await expect(page.getByRole("heading", { name: sourceTitle, level: 1 })).toBeVisible();
 
       await expect.poll(async () => {
         const list = await read<{ records: { id: string; name: string }[] }>("/v1/records/build.source?limit=200");
