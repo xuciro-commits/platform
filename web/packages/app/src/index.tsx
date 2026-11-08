@@ -181,6 +181,11 @@ export function resourceEntryRoute(resource: Api.ResourceEntry, opens: ReadonlyM
     : { view: "definition", params: { ...resource.ref, id: resource.id } };
 }
 
+export function recordEntryRoute(type: string, id: string, opens: ReadonlyMap<string, string>): Route {
+  const view = opens.get(type);
+  return view ? { view, params: { id } } : { view: "record", params: { type, id } };
+}
+
 export function useOpenRecord(): (ref: string | { type: string; id: string; resource?: Api.ResourceEntry }, options?: { window: "tab" | "beside" | "popout" | "inspect"; from?: string }) => void {
   const { opens } = useHost();
   const { open } = useWorkspace();
@@ -197,7 +202,7 @@ export function useOpenRecord(): (ref: string | { type: string; id: string; reso
     const work = ["work.approval", "work.task", "flow.instance", "agent.run"].includes(type);
     if (options?.window === "inspect" || !options && !work) {
       open({ view: "record", params: { type, id, inspect: "true" } }, { window: "inspect" });
-    } else open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, options ?? { window: "tab" });
+    } else open(recordEntryRoute(type, id, opens), options ?? { window: "tab" });
   };
 }
 

@@ -1,5 +1,5 @@
 import "./i18n";
-import { ApplicationSessionsProvider, HostContext, resourceEntryRoute, withApp, type AppUI, type AppView, type Host, type Me, type SavedView } from "@platform/app";
+import { ApplicationSessionsProvider, HostContext, recordEntryRoute, resourceEntryRoute, withApp, type AppUI, type AppView, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, OfflineReadError, accounts, forgetAccount, keepFresh, signIn, signOut, switchAccount, type Api, type OidcConfig, type OidcSession } from "@platform/api";
 import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, type SearchResult, type SearchScope, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -180,7 +180,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         id: `member:${hit.id}`,
         label,
         detail: hit.typeTitle ?? hit.type,
-        route: { view: recordRoutes.current?.get(hit.type) ?? "member", params: { id: hit.id } },
+        route: recordEntryRoute("platform.member", hit.id, recordRoutes.current ?? new Map()),
       };
       if (hit.resource) return {
         kind: "resource",
@@ -214,7 +214,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       id: `member:${member.id}`,
       label: member.profile?.displayName || member.id,
       detail: member.profile?.displayName ? member.id : member.subjects.join(", "),
-      route: { view: recordRoutes.current?.get("platform.member") ?? "member", params: { id: member.id } },
+      route: recordEntryRoute("platform.member", member.id, recordRoutes.current ?? new Map()),
     }));
     return [...filtered, ...resources, ...memberHits];
   }, [client, identityScope, host?.holds, host?.opens, host?.source.scope]);
@@ -225,15 +225,12 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       const slash = document.indexOf("/");
       if (slash < 1) return [];
       const type = document.slice(0, slash), id = document.slice(slash + 1);
-      const view = recordRoutes.current?.get(type);
       return [{
         kind: "knowledge",
         id: `knowledge:${document}#${passage.chunk}`,
         label: passage.title,
         detail: passage.text,
-        route: type === "platform.member"
-          ? { view: recordRoutes.current?.get(type) ?? "member", params: { id } }
-          : view ? { view, params: { id } } : { view: "record", params: { type, id } },
+        route: recordEntryRoute(type, id, recordRoutes.current ?? new Map()),
       }];
     });
   }, [client, identityScope, host?.opens, host?.source.scope]);

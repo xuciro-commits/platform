@@ -241,16 +241,6 @@ func containsDot(value string) bool {
 	return false
 }
 
-func (g Graph) withNodes(nodes []Node) Graph {
-	g.Nodes = nodes
-	return g
-}
-
-func (g Graph) withEdges(edges []Edge) Graph {
-	g.Edges = edges
-	return g
-}
-
 func (g Graph) visible() Graph {
 	nodes := make([]Node, 0, len(g.Nodes))
 	for _, node := range g.Nodes {

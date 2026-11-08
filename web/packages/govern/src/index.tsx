@@ -80,7 +80,7 @@ function ControlPanelOverview() {
 
 function controlPanelViewAllowed(view: string, host: Host): boolean {
   if (view === "account" || view === "control-panel") return true;
-  if (view === "members" || view === "permissions" || view === "markings" || view === "audit") return admin(host) || auditor(host);
+  if (view === "members" || view === "member" || view === "permissions" || view === "markings" || view === "marking" || view === "audit") return admin(host) || auditor(host);
   if (view === "self-hosting") return !!host.role("system");
   if (view === "ai-playground" || view === "ai-usage") return !!host.role("ai") || host.holds("ai", "admin");
   if (view === "ai-configuration" || view === "ai-providers") return host.holds("ai", "admin");

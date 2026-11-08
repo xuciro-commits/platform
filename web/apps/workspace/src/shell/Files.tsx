@@ -1,8 +1,8 @@
 import { resourceEntryRoute, useHost, useNewRecord, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/api";
-import { Button, DataTable, Dialog, Input, Notice, PageHeader, Select, Tag, routeToHash, t, useWorkspace } from "@platform/ui";
+import { Button, DataTable, Dialog, Input, Notice, PageHeader, Select, Tag, t, useCanonicalRoute, useWorkspace } from "@platform/ui";
 import { ChevronDown, File, Folder, FolderPlus, FolderTree, MoveRight, Plus } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 export function Files({ project: initialProject = "", folder: initialFolder = "" }: { project?: string; folder?: string }) {
   const host = useHost(), { open } = useWorkspace();
@@ -12,10 +12,7 @@ export function Files({ project: initialProject = "", folder: initialFolder = ""
   const projects = resources.filter(item => item.ref.kind === "app" && item.state !== "archived");
   const projectResource = projects.find(item => item.id === initialProject || item.draft === initialProject);
   const project = projectResource?.draft ?? "";
-  useEffect(() => {
-    if (!initialProject || initialProject.startsWith("ri.") || !projectResource) return;
-    history.replaceState(history.state, "", `${location.pathname}${location.search}${routeToHash({ view: "files", params: { id: projectResource.id, ...(initialFolder ? { folder: initialFolder } : {}) } })}`);
-  }, [initialProject, initialFolder, projectResource?.id]);
+  useCanonicalRoute(projectResource ? { view: "files", params: { id: projectResource.id, ...(initialFolder ? { folder: initialFolder } : {}) } } : undefined);
   const [search, setSearch] = useState(""), [state, setState] = useState("current");
   const [newFolder, setNewFolder] = useState(false), [name, setName] = useState("");
   const [moving, setMoving] = useState<Api.ResourceEntry>(), [destination, setDestination] = useState(""), [destinationFolder, setDestinationFolder] = useState("");
@@ -48,7 +45,7 @@ export function Files({ project: initialProject = "", folder: initialFolder = ""
     <PageHeader title={projectResource?.title || t("Files")} description={project ? t("Resources in this project") : t("Projects and their resources")} actions={<>
       {project && projectResource?.canEdit && <Button size="sm" onClick={() => { setNewFolder(true); setName(""); }}><FolderPlus />{t("New folder")}</Button>}
       {create.available && <Button size="sm" onClick={() => create.take()}><Plus />{t("New project")}</Button>}
-      {projectResource?.canOpen && host.opens.has("build.app") && <Button size="sm" onClick={() => open({ view: "project", params: { id: projectResource.id } })}>{t("Open project")}</Button>}
+      {projectResource?.canOpen && host.opens.has("build.app") && <Button size="sm" onClick={() => open(resourceEntryRoute(projectResource, host.opens))}>{t("Open project")}</Button>}
     </>} />
     {error && <Notice tone="warning" message={error} />}
     {query.isError && <><Notice tone="danger" message={t("Resource directory could not be loaded.")} /><Button onClick={() => void query.refetch()}>{t("Retry")}</Button></>}

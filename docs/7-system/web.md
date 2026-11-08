@@ -47,7 +47,9 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 ## 路由
 
-- 目标：`#/<app>/<RID>/<分区>`（3-information §3.6）。路由对象为 `{ app, rid?, section?, params? }`，由外壳序列化。
+- 资源地址为 `#/<拥有者视图>/<RID>[/<分区>]`（3-information §3.6）；`opens` 决定拥有者视图。路由对象为 `{ view, params? }`，由外壳的 `routeToHash` / `routeFromHash` 统一序列化。
+- 旧原生 ID 地址由同一个 `useCanonicalRoute` 收敛到可解析的 RID；仅当前主视图替换地址，不新增浏览记录，不让隐藏页面或侧窗改写主地址。
+- 成员等原生身份保留原主键，文件夹只是 Files 的位置参数；不为统一地址另造资源或 Object Type。成员、标记和构建资源都从唯一 `opens` 注册解析编辑入口；对象 Inspector 保留对象视图语义。
 - 侧窗与 transfer 的状态不进入可分享的 URL。
 
 资源入口共享资源目录的 RID、位置和原生记录身份；Search、Files 与依赖图复用拥有者注册的打开路由。依赖图不再逐种读取所有草稿来猜编辑器。业务门户与扩展页面使用已授权发布定义的 RID。
@@ -72,5 +74,4 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 
 ## 现存差距
 
-- 治理资源尚未全面采用同一路由入口。
 - Workspace 的业务工具分块与布局引擎仍有大于 500 kB 的产物；布局引擎已经按需加载并在浏览器使用 Worker。保留构建器默认大小告警，不以拆成任意小文件或放宽阈值作为性能完成标准；后续按真实任务的加载链、传输与交互时间验证。

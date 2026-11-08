@@ -1,7 +1,7 @@
 import { useInputDrafts } from "../fields/draft";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
-import type { Route } from "./route";
+import { routeToHash, type Route } from "./route";
 
 export type View = {
   id: string;
@@ -63,6 +63,16 @@ export function useWorkspace(): WorkspaceApi {
   const panel = useContext(PanelContext);
   if (!api) throw new Error("useWorkspace outside <Workspace>");
   return { ...api, open: (route, options) => api.open(route, { ...options, from: panel }), close: route => api.close(route, panel), closeAll: () => api.closeAll(panel), confirmLeave: (run: () => void) => api.confirmLeave(run, panel), transfer: api.transfer && panel ? (_from, route, input, result) => api.transfer!(panel, route, input, result) : undefined };
+}
+
+export function useCanonicalRoute(route: Route | undefined) {
+  const workspace = useContext(WorkspaceContext);
+  const panel = useContext(PanelContext);
+  const hash = route && routeToHash(route);
+  const active = !!panel && panel === workspace?.activePanel;
+  useEffect(() => {
+    if (active && hash && location.hash !== hash) history.replaceState(history.state, "", `${location.pathname}${location.search}${hash}`);
+  }, [active, hash]);
 }
 
 export function useViewTitle(name?: string) {

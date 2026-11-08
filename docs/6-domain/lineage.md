@@ -158,7 +158,6 @@ read-when: 改动血缘推导、生效标记与保护标记、影响分析、列
 | `coverage` | `markingsComplete`、`statusComplete`、`fieldsComplete`，以及不完整的原因码 |
 
 - `errorCode` 是可翻译的安全原因码（如 `connection-check-failed`、`pull-failed`、`run-failed`、`delivery-failed`）；原始错误文本不进入血缘响应，在运行详情与 Monitoring 中查看。
-- 旧字段 `marking`、`compartments`、`effective`（字符串）、`effectiveCompartments`、`error`、`stale`、`version` 在前端迁移完成的同一批删除。
 - 非法 focus 与无权 focus 返回同一个“不存在或无权打开”拒绝，不暴露存在性。
 
 ### L8 分支与版本
@@ -185,15 +184,7 @@ read-when: 改动血缘推导、生效标记与保护标记、影响分析、列
 
 ## 现存差距
 
-2026-11-06 复核：规范 L1–L6、L9、L10 已实现，K12、F19–F24 通过。
-
-- Guard 的执行定义解析失败时已 fail-closed：受影响节点标为 `unknown`、`markingsComplete=false`，Guard 提升到 `restricted` 并沿边传播；正常版本化记录不受影响。
-- 分支 `branch` 参数复用 Branch 暂存世界，只读、按 branch revision + main generation 缓存，不混入 main 的运行证据或标记索引；节点展示保存/执行/数据集/已消费版本。
-- 构图按 Generation 缓存；1200 个资源的构图与 Scope 不变量通过。项目聚合提供跨项目出入边、未连接与更新时间。
-- 成员私有的保存视图复用 `work.view`，只保存查询参数；打开时重新鉴权、重新构图。字段图、`FormulaExpr`、join/lookup 键、回写请求/结果与项目隔离均有验收。
-- 仍保留的保守边界：无法静态解析的公式或管道模式显示 `unverified`/`derived`，不伪造来源。
-- 产品化收尾：F22 导出、F23 键盘路径与 F24 聚焦/展开/返回已验收；导出只覆盖当前已加载的可见子图与现有影响列表，不对未返回节点或不可读资源作推断。
-- 残余验证边界：1200 资源构图与 Scope 不变量已覆盖，但尚未做真实 1200 节点浏览器的帧率与长时交互测量；F23 在桌面视口完成纯键盘路径，尚未做屏幕阅读器人工走查与窄屏键盘走查。
+- 1200 资源构图与 Scope 有内核不变量覆盖；真实 1200 节点浏览器的帧率与长时交互测量、屏幕阅读器人工走查和窄屏键盘走查尚未完成。
 
 ## 相关
 

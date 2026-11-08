@@ -518,5 +518,5 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   );
 }
 
-export {useViewCall, WorkspaceContext, useWorkspace, useViewTitle, useUnsavedChanges, useLeaveFlush, notify, type View, type ShellCommand, type Session, type PlatformApplication, type Applications, type Rail, type RecentEntry} from "./WorkspaceContext";
+export {useViewCall, WorkspaceContext, useWorkspace, useViewTitle, useCanonicalRoute, useUnsavedChanges, useLeaveFlush, notify, type View, type ShellCommand, type Session, type PlatformApplication, type Applications, type Rail, type RecentEntry} from "./WorkspaceContext";
 export {ResourceNavigation, ResourceSections, type ResourceSection} from "./ResourceNavigation";

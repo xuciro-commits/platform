@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { resourceEntryRoute, useHost, useReadQuery } from "@platform/app";
+import { recordEntryRoute, resourceEntryRoute, useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/api";
-import { Button, DataTable, Input, Notice, PageHeader, Panel, Tag, Toggles, t, useWorkspace } from "@platform/ui";
+import { Button, DataTable, Input, Notice, PageHeader, Panel, Tag, Toggles, t, useCanonicalRoute, useWorkspace } from "@platform/ui";
 import type { Member } from "./shared";
 
 export const markings = ["confidential", "restricted"];
@@ -16,7 +16,7 @@ export function Markings() {
   return <div className="grid gap-3">
     <PageHeader title={t("Markings")} help={t("Grant classification and compartment clearances to members or teams. Every marking is required, including for administrators.")} actions={host.can("platform.marking.save") && <Button onClick={() => open({ view: "marking", params: { id: "new" } })}>{t("New marking")}</Button>} />
     {query.isError && <Notice tone="danger" message={t("Markings could not be loaded.")} />}
-    <DataTable data={query.data ?? []} getRowId={row => row.id} loading={query.isLoading} onRowClick={row => open({ view: "marking", params: { id: row.rid } })} columns={[
+    <DataTable data={query.data ?? []} getRowId={row => row.id} loading={query.isLoading} onRowClick={row => open(recordEntryRoute("platform.marking", row.rid, host.opens))} columns={[
       { accessorKey: "title", header: t("Marking") },
       { id: "kind", header: t("Kind"), cell: ({ row }) => t(row.original.classification ? "Classification" : "Compartment") },
       { id: "members", header: t("Cleared members"), accessorFn: row => (members.data ?? []).filter(member => member.markings?.includes(row.id)).length },
@@ -33,6 +33,7 @@ export function MarkingEditor({ id }: { id: string }) {
   const host = useHost(), { open } = useWorkspace();
   const query = useReadQuery<Api.Marking[]>("/v1/markings");
   const current = query.data?.find(marking => marking.id === id || marking.rid === id);
+  useCanonicalRoute(current ? recordEntryRoute("platform.marking", current.rid, host.opens) : undefined);
   const resources = useReadQuery<Api.ResourceEntry[]>(`/v1/markings/${encodeURIComponent(current?.id ?? "")}/resources`, undefined, !!current && host.holds("platform", "admin", "auditor"));
   const members = useReadQuery<Member[]>("/v1/members", undefined, host.holds("platform", "admin", "auditor"));
   const access = useReadQuery<Api.AccessConfig>("/v1/access", undefined, host.holds("platform", "admin", "auditor"));

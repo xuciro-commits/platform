@@ -1,4 +1,4 @@
-import { useHost, useReadQuery as useRead } from "@platform/app";
+import { recordEntryRoute, useHost, useReadQuery as useRead } from "@platform/app";
 import { ContextHelp, Button, Form, DataTable, Dialog, Sheet, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, useWorkspace, type ColumnDef, t, formatStamp} from "@platform/ui";
 import { useState } from "react";
 import { z } from "zod";
@@ -10,7 +10,7 @@ const clearance = (g: Grant, roles: ReadonlySet<string>) => g.app === "platform"
 import { ProfileForm, type Account, type TenantRecord } from "./account";
 
 export function Members() {
-  const { can, decide } = useHost();
+  const { can, decide, opens } = useHost();
   const members = useRead<Member[]>("/v1/members");
   const { open } = useWorkspace();
   const [adding, setAdding] = useState(false);
@@ -33,7 +33,7 @@ export function Members() {
         </span>} />
       {members.error ? <p className="text-sm text-[var(--tone-danger)]">{String(members.error)} {t("— administrators only.")}</p> :
         <DataTable storageKey="control-panel:members" data={members.data ?? []} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 190px)"
-          onRowClick={(m) => open({ view: "member", params: { id: m.id } }, { window: "inspect" })} />}
+          onRowClick={(m) => open(recordEntryRoute("platform.member", m.id, opens), { window: "inspect" })} />}
       {can("platform.member.add") && <Sheet isolated open={adding} onOpenChange={setAdding} title={t("Add member")}>
         <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, t(t("Lower case, digits, dashes"))), subject: z.string().regex(/^(user|client):.+/, t("user:<email> or client:<id>")), agent: z.boolean() })}
           defaultValues={{ id: "", subject: "", agent: false }} submitLabel={t("Add")} onCancel={() => setAdding(false)}

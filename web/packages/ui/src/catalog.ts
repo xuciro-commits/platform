@@ -190,7 +190,7 @@ asset("ui/edit-lane","Edit lane rule","Choose the editing lane by form need: no 
 export const api = ["ActionParameterOptions", "AnalysisStepOptions", "ButtonOptions", "DetailPresentationOptions", "EventToneOptions", "LayoutSizeOptions", "LeaderboardOptions", "MetricAnnotationOptions", "MetricPresentationOptions", "RecordCardOptions", "RecordEventsOptions", "RecordGanttOptions", "RecordLinkOptions", "RecordScatterOptions", "RegionPresentationOptions", "SceneConfigOptions", "SceneLayerOptions", "SceneMappingOptions", "StatusTrackerOptions", "TableColumnOptions", "TablePresentationOptions",
   "iconGlyphs", "iconGroups",
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
-  "useDraftInput", "useInputBuffers", "useInputDrafts", "defineEntity", "columnsFor", "recordSchema", "inputIssues", "activeValues", "applyFilters", "valueOf", "useWorkspace", "navigationLinks", "useViewCall", "useViewVisible", "ViewVisibilityContext", "useViewTitle", "useUnsavedChanges", "notify",
+  "useDraftInput", "useInputBuffers", "useInputDrafts", "defineEntity", "columnsFor", "recordSchema", "inputIssues", "activeValues", "applyFilters", "valueOf", "useWorkspace", "navigationLinks", "useViewCall", "useViewVisible", "ViewVisibilityContext", "useViewTitle", "useCanonicalRoute", "useUnsavedChanges", "notify",
   "routeKey", "routeToHash", "routeFromHash", "layeredLayout", "laneBands", "relationLayout", "relationLayouts", "neighborhoodPositions", "relationNodeSize",
   "arrangeFlow", "useFlowArrangement", "useCanvasLayout",
   "relationNodeClasses", "relationNodeClassOf", "relationNodeCaption",

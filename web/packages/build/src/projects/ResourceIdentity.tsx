@@ -1,7 +1,6 @@
 import { useReadQuery } from "@platform/app";
 import type { Api } from "@platform/api";
-import { Notice, t, routeToHash, useWorkspace, type View } from "@platform/ui";
-import { useEffect } from "react";
+import { Notice, t, useCanonicalRoute, useWorkspace, type View } from "@platform/ui";
 import { BranchDecisions } from "../branches/decisions";
 import { ApplicationScope } from "./application-scope";
 import { WorkingState } from "../session/WorkingState";
@@ -13,19 +12,11 @@ export function ResourceIdentity({ view, params }: { view: View; params: Record<
   const nativeID=params.page||params.id;
   const directory=useReadQuery<Api.ResourceDirectory>("/v1/resources",undefined,!!nativeType && !!nativeID && nativeID!=="new" && !nativeID.startsWith("ri."));
   const native=directory.data?.resources.find(resource=>resource.type===nativeType && resource.draft===nativeID);
-  useEffect(()=>{
-    if(!native || !nativeID || nativeID.startsWith("ri."))return;
-    const { application: _application, page: _page, ...rest } = params;
-    const canonical: Record<string,string>={...rest,id:native.id};
-    history.replaceState(history.state,"",`${location.pathname}${location.search}${routeToHash({view:view.id,params:canonical})}`);
-  },[native?.id,nativeID,view.id]);
   const rid = params.id?.startsWith("ri.") ? params.id : params.page?.startsWith("ri.") ? params.page : undefined;
   const query = useReadQuery<Api.ResourceEntry>(`/v1/resources/${encodeURIComponent(rid ?? "")}`, undefined, !!rid);
-  useEffect(()=>{
-    if(!rid || !query.data || !(params.application || params.page))return;
-    const { application: _application, page: _page, ...rest } = params;
-    history.replaceState(history.state,"",`${location.pathname}${location.search}${routeToHash({view:view.id,params:{...rest,id:rid}})}`);
-  },[query.data?.id,rid,view.id]);
+  const canonicalID = native?.id ?? (query.data ? rid : undefined);
+  const { application: _application, page: _page, ...rest } = params;
+  useCanonicalRoute(canonicalID ? { view: view.id, params: { ...rest, id: canonicalID } } : undefined);
   const scoped = (resolved: Record<string,string>) => {
     const type = view.id==="project" || view.id==="module" && !resolved.page ? "build.app" : resourceKinds.find(kind=>kind.view===view.id)?.type;
     const id=resolved.page || resolved.id;

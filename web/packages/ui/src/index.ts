@@ -59,7 +59,7 @@ export {AIResult,type AIResultProps,type AIResultTurn} from "./components/AIResu
 export {ExternalFrame,validExternalFrame,type ExternalFrameProps,type ExternalFrameConfig} from "./components/ExternalFrame";
 export {StaticImage,validStaticImage,validStaticImageURL,type StaticImageProps,type StaticImageConfig} from "./components/StaticImage";
 export { Sheet } from "./primitives/sheet";
-export { Workspace, ResourceNavigation, ResourceSections, useWorkspace, useViewCall, useViewTitle, useUnsavedChanges, useLeaveFlush, notify, type Applications, type PlatformApplication, type Rail, type RecentEntry, type View, type NavSection, type ShellCommand, type Session, type ResourceSection } from "./shell/Workspace";
+export { Workspace, ResourceNavigation, ResourceSections, useWorkspace, useViewCall, useViewTitle, useCanonicalRoute, useUnsavedChanges, useLeaveFlush, notify, type Applications, type PlatformApplication, type Rail, type RecentEntry, type View, type NavSection, type ShellCommand, type Session, type ResourceSection } from "./shell/Workspace";
 export { SearchContext, searchKindOrder, searchReady, searchScopes, searchTerm, useSearch, useSearchController, type SearchAnswer, type SearchApi, type SearchGroup, type SearchKind, type SearchResult, type SearchScope, type SearchSource, type SearchWindow } from "./shell/search";
 export { navigationLinks, routeCovers, type NavItem, type NavLink } from "./shell/Navigation";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";

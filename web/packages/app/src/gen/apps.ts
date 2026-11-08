@@ -800,6 +800,19 @@ export const registeredApplications = {
       {
         "type": "platform.marking",
         "view": "marking"
+      },
+      {
+        "type": "platform.member",
+        "view": "member",
+        "when": [
+          {
+            "app": "platform",
+            "roles": [
+              "admin",
+              "auditor"
+            ]
+          }
+        ]
       }
     ]
   },

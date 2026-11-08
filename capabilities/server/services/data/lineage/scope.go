@@ -2,7 +2,6 @@ package lineage
 
 import (
 	"slices"
-	"strings"
 )
 
 type Params struct {
@@ -268,34 +267,6 @@ func boolInt(value bool) int {
 		return 1
 	}
 	return 0
-}
-
-func (g Graph) focusNode() (Node, bool) {
-	for _, node := range g.Nodes {
-		if node.Distance == 0 && node.ID != "" {
-			return node, true
-		}
-	}
-	return Node{}, false
-}
-
-func (g Graph) names() []string {
-	out := make([]string, 0, len(g.Nodes))
-	for _, node := range g.Nodes {
-		out = append(out, node.Title)
-	}
-	slices.Sort(out)
-	return out
-}
-
-func (g Graph) find(title string) (Node, bool) {
-	title = strings.ToLower(title)
-	for _, node := range g.Nodes {
-		if strings.Contains(strings.ToLower(node.Title), title) || strings.Contains(strings.ToLower(node.Name), title) {
-			return node, true
-		}
-	}
-	return Node{}, false
 }
 
 const impactLimit = 200

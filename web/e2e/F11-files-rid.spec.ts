@@ -154,4 +154,29 @@ test("F11 Files reaches viewer and discoverer scopes without the builder package
       await routePage.context().close();
     }
   });
+
+  await test.step("an auditor opens read-only member details and legacy marking links resolve to their RID", async () => {
+    const auditor = unique("f11auditor"), subject = `user:${auditor}@example.test`;
+    await submit("platform.member", auditor, "invite", { subject }, null);
+    await submit("platform.member", auditor, "grant", { app: "platform", role: "auditor" }, null);
+    const auditPage = await browser.newPage();
+    try {
+      await signIn(auditPage, subject, "/members");
+      await auditPage.getByRole("row").filter({ has: auditPage.getByRole("cell", { name: "admin-1", exact: true }) }).click();
+      await expect(auditPage.getByRole("heading", { name: "Roles", exact: true })).toBeVisible();
+      await expect(auditPage.getByRole("button", { name: "Add role", exact: true })).toHaveCount(0);
+      expect(new URL(auditPage.url()).hash).toBe("#/members");
+      await auditPage.getByRole("button", { name: "Open as page", exact: true }).click();
+      await expect(auditPage).toHaveURL(/#\/member\?id=admin-1$/);
+      const marking = (await acceptedClient(auditPage, subject).read<{ id: string; rid: string }[]>("/v1/markings")).find(item => item.id === "confidential")!;
+      await auditPage.goto("/#/marking?id=confidential");
+      await expect.poll(() => new URL(auditPage.url()).hash).toBe(`#/marking/${marking.rid}`);
+      await expect(auditPage.getByRole("heading", { name: "Confidential", exact: true, level: 1 })).toBeVisible();
+      await expect(auditPage.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+      await expect(auditPage.getByRole("textbox", { name: "Marking title", exact: true })).toBeDisabled();
+    } finally {
+      await auditPage.context().close();
+      await submit("platform.member", auditor, "offboard", { reason: "F11 acceptance cleanup", successor: "" }, null);
+    }
+  });
 });
