@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@platform/app": "workspace:*",
-    "@platform/kernel": "workspace:*",
+    "@platform/api": "workspace:*",
     "@platform/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
     "lucide-react": "^1.47.0",

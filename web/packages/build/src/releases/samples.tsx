@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useHost } from "@platform/app";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { Button, Card, ContextHelp, Input, InputDraftProvider, InputProblems, PageHeader, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import type { Project } from "../projects/project";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";

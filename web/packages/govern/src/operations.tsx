@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, DataTable, Sheet, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, humanizeKernelError, useWorkspace } from "@platform/ui";
 import { type UseQueryResult } from "@tanstack/react-query";

@@ -1,6 +1,6 @@
 import type {PageUI} from "@platform/app";
 import { variableAccessible } from "../page-layout";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost, pageUIProfile, assetKey } from "@platform/app";
 import { Button, Card, Checkbox, Input, Select, t } from "@platform/ui";
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";

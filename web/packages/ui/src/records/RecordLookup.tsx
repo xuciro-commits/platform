@@ -3,7 +3,7 @@ import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
 import { t } from "../i18n";
 import { useViewVisible } from "../shell/ViewVisibility";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { EntityRecord, InterfaceRecordData, InterfaceRecordIdentity, RecordSource, RecordList } from "./Records";
 
 const pageSize = 25;

@@ -5,7 +5,7 @@ import {isDecimal} from "./decimal";
 import type {PropertyReader} from "./variables";
 import type {ScalarValue} from "./decimal";
 import type { EntityRecord, InterfaceRecordData, InterfaceRecordPageData, RecordPageData, RecordQuery, RecordSource, RecordView } from "@platform/ui";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {interfaceWindowSignature} from "./ontology-interface";
 
 export type RecordReference = { object: string; id: string };

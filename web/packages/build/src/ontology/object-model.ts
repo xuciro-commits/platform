@@ -1,7 +1,7 @@
 import { transactionIssues, transactionIssueText } from "./transaction-edit";
 import { recordPaths } from "./record-paths";
 import { stateInputValid, ruleInputValid } from "./process-rules";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { t, type EntityInfo } from "@platform/ui";
 
 export type Field = { name: string; title: string; type: string; aiInput?:boolean;sourceType?:string; property?:Api.AssetBinding; valueType?:Api.AssetBinding; format?:Api.FormatRule[]; choices?: string; required?: boolean; search?: boolean; readOnly?: boolean; aliasOf?: string; formula?: string; formulaExpr?:Api.Expr; when?: string; ref?: string; stereotype?:string; stereotypes?:string[]; inverse?: string; read?: string[]; write?: string[] };

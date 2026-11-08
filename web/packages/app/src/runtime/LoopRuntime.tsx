@@ -2,7 +2,7 @@ import {pageUIManifest} from "../pageui/manifest";
 import type * as PageUI from "../pageui/types";
 import {scalarAssignable,type ScalarValue} from "./decimal";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import {type Api} from "@platform/kernel";
+import {type Api} from "@platform/api";
 import { Panel, VirtualStack, t, type EntityRecord, type RecordSource } from "@platform/ui";
 import {usePageQueries} from "./PageQueries";
 import { PageSessionStore, type RecordReference, type PageSessionSnapshot } from "./Session";

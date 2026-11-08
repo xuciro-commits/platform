@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useRef,useState,type ReactNode} from "react";
-import type {Api,Entry,EdgeClient} from "@platform/kernel";
+import type {Api,Entry,EdgeClient} from "@platform/api";
 import {useQuery} from "@tanstack/react-query";
 import {useHost,useReadQuery} from "@platform/app";
 import {t as translate,Panel,Button,Form,Input,Disclosure,DataTable} from "@platform/ui";

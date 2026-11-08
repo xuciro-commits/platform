@@ -2,7 +2,7 @@ import type {PageUI} from "@platform/app";
 import {pageRuleKind, ruleDependencies} from "@platform/app/rules";
 import {ExpressionEditor, literalExpression, type ExpressionChoice} from "@platform/app";
 import {originalRecordObject} from "./record-binding";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { parsePageDecimal,SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
 import { Button, Card, Checkbox, Input, PropertyList, Select, t, type EntityInfo } from "@platform/ui";
 import { useState } from "react";

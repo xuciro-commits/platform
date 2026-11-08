@@ -1,5 +1,5 @@
 import { useHost, useReadQuery } from "@platform/app";
-import { type Api } from "@platform/kernel";
+import { type Api } from "@platform/api";
 import { Button, Checkbox, Disclosure, PageHeader, Panel, PropertyList, Tag, t, useWorkspace } from "@platform/ui";
 import { useState } from "react";
 

@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost, useReadQuery } from "@platform/app";
 import {
   Button, DataTable, Disclosure, EmptyState, Input, Notice, PageHeader, PropertyList, Select, Sheet, StatusTag, Switch, Tag,

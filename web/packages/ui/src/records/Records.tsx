@@ -18,7 +18,7 @@ import { Pivot } from "../charts/Pivot";
 import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/spec";
 import { t } from "../i18n";
 import { humanizeKernelError } from "../lib/errors";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import {entityFrom, groupable, listed, measurable} from "./RecordEntity";
 
 export type FieldInfo = Api.FieldInfo;

@@ -4,7 +4,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { useMemo, useRef, useState } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { EditProposalReview, useHost, useInvokeCapability, useReadQuery } from "@platform/app";
 import { Button, DataTable, Input, InputDraftProvider, PageHeader, Panel, SegmentedChoice, Select, Textarea, t, type ColumnDef } from "@platform/ui";
 import { JSONEditor } from "../automate/workflow-binding";

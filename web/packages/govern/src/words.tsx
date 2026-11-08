@@ -1,5 +1,5 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import {useDraftInput,useInputDrafts,useUnsavedChanges, Button, Checkbox, Form, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { useEffect, useState } from "react";
 

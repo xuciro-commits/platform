@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Notice, Tag, formatStamp, t } from "@platform/ui";
 import { resourceKey, type Titles } from "./diff";
 import { resourceKindLabel } from "./labels";

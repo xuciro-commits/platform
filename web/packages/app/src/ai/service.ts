@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type {Host} from "../index";
 import {confirmedDecision} from "../collaboration/decision";
 

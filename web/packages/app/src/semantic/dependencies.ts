@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useReadQuery } from "../index";
 
 export type ProvidedCapability = Api.ProvidedCapability;

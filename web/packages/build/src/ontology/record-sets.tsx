@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { LinkTypePicker, useHost } from "@platform/app";
 import { ContextHelp, Button, Checkbox, Input, InputDraftProvider, Panel, Select, t, type EntityInfo } from "@platform/ui";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "@platform/app";

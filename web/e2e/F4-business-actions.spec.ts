@@ -1,5 +1,5 @@
 import { expect, signIn, test, unique } from "./kit";
-import type { ReleasePreview } from "../packages/kernel/src/gen/host";
+import type { ReleasePreview } from "../packages/api/src/gen/host";
 
 test.use({ actionTimeout: 15_000 });
 

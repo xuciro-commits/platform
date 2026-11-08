@@ -1,6 +1,6 @@
 import type {Definition as WorkspaceDefinition} from "../index";
 import type * as PageUI from "../pageui/types";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type {EntityInfo,EntityRecord,RecordPageData,RecordSource} from "@platform/ui";
 
 export type RecordExplorationReader={source:RecordSource;definitions:readonly WorkspaceDefinition[];active:()=>boolean};

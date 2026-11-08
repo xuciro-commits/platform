@@ -8,7 +8,7 @@ import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workb
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { usePrivateDraft,useWorkingState } from "../session/WorkingState";
 import { useDraftRecord } from "../branches/draft-record";
-import { apiErrorMessage, editProposalSchema, type Api } from "@platform/kernel";
+import { apiErrorMessage, editProposalSchema, type Api } from "@platform/api";
 import { Button, Card, Checkbox, Disclosure, Input, Panel, Select, Textarea, Workbench, DraftInputs, useInputBuffers, InputDraftProvider, useInputDrafts, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { JSONEditor, SchemaEditor, schemaDefault } from "../automate/workflow-binding";

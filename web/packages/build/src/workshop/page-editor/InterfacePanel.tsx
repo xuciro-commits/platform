@@ -1,5 +1,5 @@
 import type {PageUI} from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { pageUIProfile, SemanticObjectSelect } from "@platform/app";
 import { ContextHelp, Button, Card, Checkbox, Input, Select, t } from "@platform/ui";
 import { layoutID } from "../page-layout";

@@ -1,5 +1,5 @@
 import { useHost, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { t, useWorkspace, type Route } from "@platform/ui";
 import { ArrowLeft } from "lucide-react";
 import { BranchControls } from "../branches/BranchControls";

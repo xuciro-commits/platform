@@ -1,5 +1,5 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, Card, Dialog, Input, PageHeader, Select, Tag, t } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import type { Provider } from "./shared";

@@ -3,7 +3,7 @@ import {ResourceListFields,explorationAssets} from "./ExplorationFields";
 import {Button,Checkbox,Input,Select,Toggles,t} from "@platform/ui";
 import {useHost} from "@platform/app";
 import {ruleDependencies} from "@platform/app/rules";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type {AuthoringSection} from "../draft";
 import type {TableInspectorPorts} from "./TableInspector";
 import {retainedExplorationLink} from "../exploration-views";

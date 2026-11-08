@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useReadQuery } from "@platform/app";
 import { Button, Card, EmptyState, PageHeader, PropertyList, Select, Tag, formatStamp, t, useWorkspace } from "@platform/ui";
 import { useMemo, useState } from "react";

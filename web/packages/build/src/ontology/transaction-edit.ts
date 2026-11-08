@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 
 export type TransactionIssue = { path: number[]; step: string; ref: string; reason: "missing" | "forward" | "unavailable" | "name" };
 const producesResult = (step: Api.TxnStep) => step.kind === "create" || step.kind === "post" || step.kind === "sequence" || !!step.call;

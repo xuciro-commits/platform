@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch, type DefaultValues, type FieldValues, type Path } from "react-hook-form";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type { z } from "zod";
 import { useEffect, useId, useRef, useState } from "react";
 import {InputDraftProvider,useInputDrafts,InputProblems} from "../fields/draft";

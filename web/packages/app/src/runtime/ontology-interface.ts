@@ -1,5 +1,5 @@
 import type * as PageUI from "../pageui/types";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 
 type InterfaceSection=Pick<PageUI.Section,"id"|"widget"|"collectionVariable"|"recordVariable">;
 export function interfaceQueryForSection(page:Pick<PageUI.Page,"document">&{sections?:readonly InterfaceSection[]},section:InterfaceSection):Api.PageQuery|undefined {

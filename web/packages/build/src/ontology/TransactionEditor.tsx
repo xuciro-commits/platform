@@ -1,5 +1,5 @@
 import type {Definition as WorkspaceDefinition} from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost, useReadQuery, useProvidedCapabilities, useRecordInventory } from "@platform/app";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { ContextHelp, Button, Checkbox, Input, InputDraftProvider, Panel, Select, Textarea, t, useInputDrafts, type EntityInfo , AdvancedJson } from "@platform/ui";

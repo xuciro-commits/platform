@@ -1,5 +1,5 @@
 import type {Definition as WorkspaceDefinition} from "../index";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 
 export type PropertyRef = { object: Api.AssetRef; field: string };
 export type ReferenceRelationRef = { kind: "reference"; object: Api.AssetRef; field: string; direction: "outbound" | "inbound" };

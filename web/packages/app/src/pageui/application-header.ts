@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {validStaticImageURL} from "@platform/ui";
 
 export function validApplicationHeader(header: Api.ApplicationHeader | undefined, pages: readonly string[]): boolean {

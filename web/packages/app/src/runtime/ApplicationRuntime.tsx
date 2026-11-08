@@ -4,7 +4,7 @@ import {pageUIManifest} from "../pageui/manifest";
 import type {ScalarValue} from "./decimal";
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ApplicationHeader,Button, Panel, Select, t, useWorkspace,useTheme, type Route } from "@platform/ui";
-import {type Api} from "@platform/kernel";
+import {type Api} from "@platform/api";
 import { useHost } from "../index";
 import { ApplicationSessionHub, type ApplicationSession } from "./ApplicationSessions";
 import { useApplicationQueries } from "./ApplicationQueries";

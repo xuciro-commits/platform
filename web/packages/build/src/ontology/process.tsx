@@ -16,7 +16,7 @@ import { useWorkingState } from "../session/WorkingState";
 import { useObjectDraft } from "./object-draft";
 import { ConstraintsEditor } from "./constraints";
 import { RuleCollectionsEditor } from "./RuleCollectionsEditor";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { TransactionEditor } from "./TransactionEditor";
 import { RecordSetsEditor } from "./record-sets";
 import { ObjectDataSourcesEditor } from "./object-datasources";

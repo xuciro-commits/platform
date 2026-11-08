@@ -1,6 +1,6 @@
 import {useHost} from "@platform/app";
 import {Button,Checkbox,Input,Select,Textarea,t,type SceneConfig,type SceneMapping,type SceneLayer} from "@platform/ui";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type {AuthoringSection} from "../draft";
 import {collaborationRecordSource} from "../collaboration";
 import {CollaborationInspector} from "./CollaborationInspector";

@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Disclosure, PropertyList, Tag, t } from "@platform/ui";
 
 export function PackageImpact({ impact }: { impact: Api.PackageLifecycleImpact }) {

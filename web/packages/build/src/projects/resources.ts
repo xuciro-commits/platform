@@ -1,5 +1,5 @@
 import type {Definition as WorkspaceDefinition} from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { Route } from "@platform/ui";
 import { draftResourcePresentations, releaseResourcePresentations, type ReleaseKind as GeneratedReleaseKind, type ResourceKind as GeneratedResourceKind, type ResourceRouteMode } from "../gen/resources";
 

@@ -9,7 +9,7 @@ import { ReviewDialog, useOpenProposal } from "./ReviewDialog";
 import { useWorkingDrafts } from "./working-state";
 import { flushWorkingStates } from "../session/WorkingState";
 import { WorkingReview, usePrivateWorkingStates } from "./WorkingReview";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { releaseDraftsValue } from "../releases/selection";
 
 const branchStates = defineStatuses({ open: { label: "Open", tone: "info" }, proposed: { label: "Proposed", tone: "purple" }, merged: { label: "Merged", tone: "success" }, closed: { label: "Archived", tone: "neutral" } });

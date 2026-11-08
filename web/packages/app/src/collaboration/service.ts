@@ -2,7 +2,7 @@ import type {Host} from "../index";
 import type {AttachedFile,EntityRecord} from "@platform/ui";
 import {confirmedDecision} from "./decision";
 import {validImageRegions} from "@platform/ui/image-regions";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 export type CollaborationTarget={type:string;id:string};
 export type CollaborationHost=Pick<Host,"client"|"source"|"can"|"decide"|"resend"|"me">;
 export function createRecordCollaboration(host:CollaborationHost,target:CollaborationTarget,active:()=>boolean,id:(prefix:string)=>string) {

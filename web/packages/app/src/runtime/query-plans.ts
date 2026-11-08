@@ -6,7 +6,7 @@ import {collectionInput} from "./collection-input";
 import {validCollectionInput,collectionFieldsVisible,collectionQuery} from "./collection-input";
 import {validCivilDate,validTimestamp} from "@platform/ui/date";
 import {isStringSet,parseDecimal,isDecimal,type NumberValue,type DecimalValue} from "./decimal";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
 import type { QueryView } from "./Session";

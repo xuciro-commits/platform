@@ -5,7 +5,7 @@ import {ConfirmationEditor} from "./ConfirmationEditor";
 import { DispatchEditor } from "./DispatchEditor";
 import {RefusalEditor} from "./RefusalEditor";
 import { PayloadFields, SemanticObjectSelect, assetKey, useHost, type Definition } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { projectGroup, useProjectIndex } from "../projects/membership";
 import { Button, Card, Checkbox, GroupedList, Input, PageHeader, Panel, ProblemList, ResourceNavigation, Select, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";

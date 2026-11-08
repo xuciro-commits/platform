@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, ContextHelp, Disclosure, Input, Select, useWorkspace, t } from "@platform/ui";
 import { useReadQuery as useRead } from "../index";
 

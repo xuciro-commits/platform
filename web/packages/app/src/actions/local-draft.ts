@@ -1,4 +1,4 @@
-import type {ActionDeclaration,LocalFormDraft} from "@platform/kernel";
+import type {ActionDeclaration,LocalFormDraft} from "@platform/api";
 import type {Host} from "../index";
 import {actionInputSignature} from "./refusal";
 

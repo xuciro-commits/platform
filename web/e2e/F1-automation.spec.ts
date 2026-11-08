@@ -1,5 +1,5 @@
 import { acceptedClient, expect, signIn, test, unique } from "./kit";
-import type * as Api from "../packages/kernel/src/gen/host";
+import type * as Api from "../packages/api/src/gen/host";
 
 test.use({ actionTimeout: 15_000, viewport:{width:1680,height:1050} });
 

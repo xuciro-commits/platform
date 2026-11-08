@@ -6,7 +6,7 @@ import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../edit
 import { assetKey, useDependencies, newId, OpenLineage, pageDocumentFromSections, semanticModelView, useHost, type Definition, type SemanticRelation } from "@platform/app";
 import { ContextHelp, Button, Checkbox, DataTable, EmptyState, Form, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, Tag,
   t, type ColumnDef, ResourceSections } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Link2 } from "lucide-react";
 import { projectGroup, useProjectIndex } from "../projects/membership";
 import { useMemo, useState } from "react";

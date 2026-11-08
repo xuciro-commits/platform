@@ -1,6 +1,6 @@
 import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type {PageUI} from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { ApplicationUIInfo } from "@platform/app";
 import type { Project } from "./project";
 import type { AuthoringSection } from "../workshop/page-editor/draft";

@@ -1,5 +1,5 @@
 import { useHost } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, ContextHelp, PanelSection, Select, t } from "@platform/ui";
 import { refKey } from "./resources";
 import { applicationViewOptions } from "./studio-applications";

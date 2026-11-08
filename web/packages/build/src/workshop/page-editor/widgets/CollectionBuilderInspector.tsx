@@ -1,5 +1,5 @@
 import {Button,Select,Toggles,t} from '@platform/ui';
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 import type {AuthoringSection} from '../draft';
 import {TableInspector,type TableInspectorPorts} from './TableInspector';
 type Props=Omit<TableInspectorPorts,'section'|'onChange'>&{section:AuthoringSection;onChange:(patch:Partial<AuthoringSection>)=>void;onResourcesChange?:(patch:Partial<AuthoringSection>,variables:Record<string,Api.PageVariable>)=>void};

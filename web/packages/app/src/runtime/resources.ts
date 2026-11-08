@@ -1,5 +1,5 @@
 import type * as PageUI from "../pageui/types";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { PageSessionSnapshot } from "./Session";
 import { variablePlan } from "./query-plans";
 import type { VariableResult } from "./variables";

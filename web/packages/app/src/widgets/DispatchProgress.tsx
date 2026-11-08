@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, Card, ContextHelp, DataTable, Disclosure, PropertyList, Select, Tag, Textarea, t, type ColumnDef, formatStamp} from "@platform/ui";
 import { useState } from "react";
 import { useHost, useOpenRecord, useReadQuery } from "../index";

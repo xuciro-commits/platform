@@ -74,15 +74,15 @@ check:
 	node scripts/check-boundaries.mjs
 	node scripts/check-invariants.mjs
 	@mkdir -p .build/contract
-	@cp web/packages/kernel/src/gen/host.ts .build/contract/host.ts
-	@cp web/packages/kernel/src/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts
+	@cp web/packages/api/src/gen/host.ts .build/contract/host.ts
+	@cp web/packages/api/src/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts
 	@cp web/packages/app/src/pageui/safety.ts .build/contract/safety.ts
 	@cp web/packages/app/src/gen/apps.ts .build/contract/apps.ts
 	@cp web/packages/build/src/gen/resources.ts .build/contract/resources.ts
 	@cp capabilities/server/platform/page_compat.json .build/contract/page_compat.json
 	$(MAKE) contract
-	@cmp .build/contract/host.ts web/packages/kernel/src/gen/host.ts
-	@cmp .build/contract/enterprise-sdk.ts web/packages/kernel/src/gen/enterprise-sdk.ts
+	@cmp .build/contract/host.ts web/packages/api/src/gen/host.ts
+	@cmp .build/contract/enterprise-sdk.ts web/packages/api/src/gen/enterprise-sdk.ts
 	@cmp .build/contract/safety.ts web/packages/app/src/pageui/safety.ts
 	@cmp .build/contract/apps.ts web/packages/app/src/gen/apps.ts
 	@cmp .build/contract/resources.ts web/packages/build/src/gen/resources.ts

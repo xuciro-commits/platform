@@ -1,7 +1,7 @@
 import {pageUIManifest} from "../pageui/manifest";
 import type * as PageUI from "../pageui/types";
 
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 import type {EntityInfo} from '@platform/ui';
 
 export const modelBindingContract=pageUIManifest.runtime.modelBinding;

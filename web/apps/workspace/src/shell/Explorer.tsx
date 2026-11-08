@@ -1,6 +1,6 @@
 import { newId, objectSetResultType, SetBuilder, useHost, useOpenRecord, useRead, OpenIn, type SavedView } from "@platform/app";
 import { Button, Dialog, EmptyState, Form, Input, PageHeader, Panel, RecordList, Select, cn, useWorkspace, t, type EntityRecord, type ListState } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Compass } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 

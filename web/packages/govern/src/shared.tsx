@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { formatStamp, t } from "@platform/ui";
 
 export type Member = Api.MemberView;

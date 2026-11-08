@@ -1,5 +1,5 @@
 import { resourceEntryRoute, useHost, useNewRecord, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, DataTable, Dialog, Input, Notice, PageHeader, Select, Tag, routeToHash, t, useWorkspace } from "@platform/ui";
 import { ChevronDown, File, Folder, FolderPlus, FolderTree, MoveRight, Plus } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";

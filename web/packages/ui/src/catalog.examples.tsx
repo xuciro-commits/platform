@@ -13,7 +13,7 @@ import {InputDraftProvider} from "./fields/draft";
 import { IconPicker, IconGlyph } from "./components/IconPicker";
 import { GroupedList } from "./components/GroupedList";
 import { z } from "zod";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Tooltip } from "./primitives/tooltip";
 import { PanelGroup } from "./primitives/card";
 import { ValueSchemaForm, schemaValue } from "./components/ValueSchemaForm";

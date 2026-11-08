@@ -1,6 +1,6 @@
 import type {PageUI} from "@platform/app";
 import {Input,Select,Toggles,t} from "@platform/ui";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type {AuthoringSection} from "../draft";
 import {TableInspector,type TableInspectorPorts} from "./TableInspector";
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Layers, Plus, Trash2 } from "lucide-react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost } from "@platform/app";
 import { Button, EmptyState, Input, PageHeader, Panel, ResourceSections, Select, StructuredEditor, Tag, Textarea, Workbench, t } from "@platform/ui";
 import { useDraftInventory } from "../branches/records";

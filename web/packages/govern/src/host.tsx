@@ -1,5 +1,5 @@
 import {useInputDrafts, PanelGroup , Notice } from "@platform/ui";
-import {apiErrorMessage,type Api} from "@platform/kernel";
+import {apiErrorMessage,type Api} from "@platform/api";
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Checkbox, ContextHelp, DataTable, Dialog, Sheet, Disclosure, Form, Input, PageHeader, Panel, PropertyList, Select, Tag, Textarea, notify, useUnsavedChanges, useWorkspace, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";

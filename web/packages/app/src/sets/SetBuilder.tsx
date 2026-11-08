@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { objectSetPath, type Api } from "@platform/kernel";
+import { objectSetPath, type Api } from "@platform/api";
 import { Button, Checkbox, DataTable, Input, Select, Textarea, columnsFor, entityFrom, humanizeKernelError, t, useDraftInput, type AggregateData, type EntityInfo, type EntityRecord } from "@platform/ui";
 import { useHost, useReadQuery } from "../index";
 import { ObjectSetFilter, type ObjectSetFilterProps } from "./ObjectSetFilter";

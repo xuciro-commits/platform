@@ -1,6 +1,6 @@
 import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type {PageUI} from "@platform/app";
-import type {ActionDeclaration} from "@platform/kernel";
+import type {ActionDeclaration} from "@platform/api";
 import type {EntityInfo} from "@platform/ui";
 import {actionTableParameters} from "@platform/app/action-table";
 import {loopOwner,overlayOwner} from "../page-layout";

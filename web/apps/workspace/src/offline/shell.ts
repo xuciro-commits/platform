@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {savePreparedSignIn} from "./signin";
 let registration:Promise<ServiceWorkerRegistration>|undefined;
 function register(){

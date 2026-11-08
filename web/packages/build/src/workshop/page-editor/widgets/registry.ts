@@ -2,7 +2,7 @@ import type {PageUI} from "@platform/app";
 import { createWidgetDefinitions,widgetContracts } from "@platform/app";
 import {lazyInspector} from "./lazy-inspector";
 import type {ComponentType} from "react";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type {EntityInfo} from "@platform/ui";
 import type {AuthoringSection} from "../draft";
 import type {ButtonInspectorPorts} from "./ButtonInspector";

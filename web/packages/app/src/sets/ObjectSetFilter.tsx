@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, t, type EntityInfo } from "@platform/ui";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../expr/ExpressionEditor";
 

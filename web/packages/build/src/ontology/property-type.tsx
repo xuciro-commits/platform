@@ -2,7 +2,7 @@ import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {useHost,semanticPropertyTypes} from "@platform/app";
 import {Button,Input,PageHeader,Panel,Select,Textarea,t} from "@platform/ui";
 import { DraftStatus, ResourceControls as AssetControls } from "../editor/workbench";

@@ -1,5 +1,5 @@
 import type * as PageUI from "../pageui/types";
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 import {Button,DataTable,FlowSteps,t,type ColumnDef,type EntityRecord,type FlowStepNode,type FlowStepEdge,type Tone} from '@platform/ui';
 import {useMemo} from 'react';
 

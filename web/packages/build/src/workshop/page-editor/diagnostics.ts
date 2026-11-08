@@ -1,6 +1,6 @@
 import {pageUIManifest} from "@platform/app/page-contract";
 import type {Definition,PageUI} from "@platform/app";
-import type { Api, ActionDeclaration } from "@platform/kernel";
+import type { Api, ActionDeclaration } from "@platform/api";
 import { pageLayoutDiagnostics, pageVariableContract, pageVariableDiagnostics, parsePageDecimal, widgetContract } from "@platform/app";
 import { searchInputObjects } from "@platform/app/search";
 import { validActionDefaults } from "@platform/app/action-defaults";

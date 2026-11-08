@@ -2,7 +2,7 @@ import { useHost, ModelPicker, ModelOptionsEditor, MemberSelect, useReadQuery as
 import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Panel, Checkbox, DataTable, Dialog, Sheet, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, useWorkspace, t , SegmentedChoice } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { CredentialEditor } from "./credentials";
 import { modelReferenceTitle, when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
 

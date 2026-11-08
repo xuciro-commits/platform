@@ -10,7 +10,7 @@ import { removeWorkflowSteps, renameWorkflowStep, replaceReferences, workflowBin
 import {workflowRunMatches} from "./workflow-session";
 import { useProcessDraft } from "./process-draft";
 import { useHost, useReadQuery } from "@platform/app";
-import { apiErrorMessage } from "@platform/kernel";
+import { apiErrorMessage } from "@platform/api";
 import { Button, FLOW_NODE_DROP, FlowCanvas, Input, Panel, ProblemList, StructureRow, Workbench,
   flowBlockHeight, flowNodeIcon, flowNodeWidth, flowPlacement, flowPortFits, useFlowArrangement, loops, notationOf, t,
   type FlowAddContext, type FlowBoundary, type FlowCatalog, type FlowEdge, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort, type WorkbenchProblem } from "@platform/ui";

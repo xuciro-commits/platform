@@ -1,4 +1,4 @@
-import type { EdgeClient, Api } from "@platform/kernel";
+import type { EdgeClient, Api } from "@platform/api";
 import { Button, Card, t } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";

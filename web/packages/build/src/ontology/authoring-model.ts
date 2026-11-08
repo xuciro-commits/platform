@@ -1,7 +1,7 @@
 import { useHost, useReadQuery } from "@platform/app";
 import { useDraftInventory } from "../branches/records";
 import { t, type EntityInfo } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { ActionTypeRecord } from "./action-draft";
 import type { ObjectRecord } from "./object-model";
 import { actionDestinations, actionStateInput } from "./process-rules";

@@ -1,5 +1,5 @@
 import {timestampNanoseconds,type RecordSource,type RecordQuery,type AggregateData,type ObservationStatisticsValue} from "@platform/ui";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 
 export type ObservationStatisticsRequest={object:string;query:RecordQuery;window:Api.AggregateWindowQuery};
 export type ObservationStatisticsRead={scope:string;statistics:ObservationStatisticsValue;window:Api.AggregateWindowResult};

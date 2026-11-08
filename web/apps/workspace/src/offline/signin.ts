@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 type PublicSignIn=Pick<Api.SignIn,"issuer"|"client">;
 const key="prepared:sign-in";
 export function savePreparedSignIn(value:Api.SignIn){

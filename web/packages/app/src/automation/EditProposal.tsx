@@ -1,5 +1,5 @@
 import { useHost } from "../index";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import { Button, Dialog, Notice, t } from "@platform/ui";
 import { useState } from "react";
 

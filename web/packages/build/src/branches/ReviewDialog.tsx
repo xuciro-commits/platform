@@ -1,5 +1,5 @@
 import { useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, Checkbox, Dialog, EmptyState, Notice, Rejection, Tag, Textarea, t, useWorkspace } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { CheckSummary, checkFailure } from "./CheckSummary";

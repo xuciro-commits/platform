@@ -1,6 +1,6 @@
 import type {ActionParameterOptions} from "../presentation";
 import {useMemo} from "react";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {columnsFor} from "../fields/entity";
 import {EditableRecordGrid,type RecordEditPort} from "./EditableRecordGrid";
 import {entityFrom,type EntityInfo,type EntityRecord,type RecordSource} from "./Records";

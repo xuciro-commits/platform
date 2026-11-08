@@ -1,5 +1,5 @@
 import { useRunControl } from "./use-run-control";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, ContextHelp, DataTable, Disclosure, PageHeader, Panel, PropertyList, Input, Select, Tag, t, useWorkspace, type ColumnDef, formatStamp, Notice } from "@platform/ui";
 import { useState, type ReactNode } from "react";
 import { ChainGraph, useHost, useOpenRecord, useReadQuery, useRecordInventory } from "../index";

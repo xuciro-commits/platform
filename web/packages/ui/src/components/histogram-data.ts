@@ -1,5 +1,5 @@
 import {renderingLimits} from "../gen/presentation-limits";
-import {type Api} from "@platform/kernel";
+import {type Api} from "@platform/api";
 type Rational={n:bigint;d:bigint};
 function bound(text:unknown):Rational|undefined{
  if(typeof text!=="string"||text.length>1024)return;let m=/^(-?(?:0|[1-9][0-9]*))\/([1-9][0-9]*)$/.exec(text);if(m)return {n:BigInt(m[1]!),d:BigInt(m[2]!)};m=/^(-?)(0|[1-9][0-9]*)(?:\.([0-9]+))?$/.exec(text);if(!m)return;return {n:BigInt(`${m[1]}${m[2]}${m[3]??""}`),d:10n**BigInt(m[3]?.length??0)};

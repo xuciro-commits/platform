@@ -232,9 +232,9 @@ importers:
       '@platform/govern':
         specifier: workspace:*
         version: link:../../packages/govern
-      '@platform/kernel':
+      '@platform/api':
         specifier: workspace:*
-        version: link:../../packages/kernel
+        version: link:../../packages/api
       '@platform/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -290,9 +290,9 @@ importers:
       '@platform/catalog':
         specifier: workspace:*
         version: link:../catalog
-      '@platform/kernel':
+      '@platform/api':
         specifier: workspace:*
-        version: link:../kernel
+        version: link:../api
       '@platform/ui':
         specifier: workspace:*
         version: link:../ui
@@ -318,9 +318,9 @@ importers:
       '@platform/catalog':
         specifier: workspace:*
         version: link:../catalog
-      '@platform/kernel':
+      '@platform/api':
         specifier: workspace:*
-        version: link:../kernel
+        version: link:../api
       '@platform/ui':
         specifier: workspace:*
         version: link:../ui
@@ -352,9 +352,9 @@ importers:
       '@platform/app':
         specifier: workspace:*
         version: link:../app
-      '@platform/kernel':
+      '@platform/api':
         specifier: workspace:*
-        version: link:../kernel
+        version: link:../api
       '@platform/ui':
         specifier: workspace:*
         version: link:../ui
@@ -381,7 +381,7 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
-  packages/kernel:
+  packages/api:
     dependencies:
       '@bufbuild/protobuf':
         specifier: ^2.15.0
@@ -408,9 +408,9 @@ importers:
       '@platform/catalog':
         specifier: workspace:*
         version: link:../catalog
-      '@platform/kernel':
+      '@platform/api':
         specifier: workspace:*
-        version: link:../kernel
+        version: link:../api
       '@tanstack/react-table':
         specifier: ^8.21.3
         version: 8.21.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)

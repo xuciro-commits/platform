@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, Card, Checkbox, Disclosure, Input, PropertyList, Select, Tag, t, formatStamp} from "@platform/ui";
 import { useState, type ReactNode } from "react";
 import { useHost, useReadQuery } from "../index";

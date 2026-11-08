@@ -1,5 +1,5 @@
 import {renderingLimits} from "../gen/presentation-limits";
-import {type Api} from "@platform/kernel";
+import {type Api} from "@platform/api";
 import {File,Folder} from "lucide-react";
 import {Button} from "../primitives/button";
 import {t} from "../i18n";

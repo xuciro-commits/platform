@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 
 export function formulaText(e:Api.Expr):string{
  if(e.ref)return e.ref;

@@ -1,5 +1,5 @@
 import {renderingLimits} from "../gen/presentation-limits";
-import {type Api} from "@platform/kernel";
+import {type Api} from "@platform/api";
 import {Button} from "../primitives/button";
 import {Tag} from "../components/StatusTag";
 import {t} from "../i18n";

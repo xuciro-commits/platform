@@ -1,6 +1,6 @@
 import { encodePage } from "@platform/app/page-contract";
 import { pageDocumentFromSections, type PageUI } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { t, type EntityInfo } from "@platform/ui";
 import { useDraftInventory } from "../branches/records";
 import type { Project } from "../projects/project";

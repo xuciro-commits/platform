@@ -1,5 +1,5 @@
 import type {PageUI} from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 
 type Document = PageUI.PageDocument;
 export type LayoutKind = "rows" | "columns" | "tabs" | "flow" | "toolbar" | "loop";

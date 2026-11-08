@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { Api } from '@platform/kernel';
+import type { Api } from '@platform/api';
 import { Button } from '../primitives/button';
 import { Select, Textarea } from '../primitives/input';
 import { useDraftInput, useInputDrafts } from '../fields/draft';

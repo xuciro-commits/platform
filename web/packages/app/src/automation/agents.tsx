@@ -2,7 +2,7 @@ import { useRunControl } from "./use-run-control";
 import "../i18n";
 import { Button, Card, Disclosure, inputIssues, useWorkspace, Form, FlowSteps, Input, PageHeader, Panel, PropertyList, RelationCanvas, relationNodeClasses, Select, StatusTag, Tag, Textarea, defineStatuses, t, language,
   type FlowStepEdge, type FlowStepNode, type RelationEdge, type RelationNode } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useState } from "react";
 import { PayloadFields,payloadSchema } from "../actions/actions";
 import { newId, useHost, useOpenRecord, useRead, useReadQuery } from "../index";

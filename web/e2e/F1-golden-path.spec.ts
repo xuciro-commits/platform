@@ -1,5 +1,5 @@
 import { expect, signIn, test, unique } from "./kit";
-import type { ObjectView, PageInputSchema, ReleaseDraftRestore, ReleasePreview } from "../packages/kernel/src/gen/host";
+import type { ObjectView, PageInputSchema, ReleaseDraftRestore, ReleasePreview } from "../packages/api/src/gen/host";
 import { pageUIManifest } from "../packages/app/src/pageui/manifest";
 
 test.use({ actionTimeout: 15_000 });

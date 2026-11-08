@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { ActionMenu, Button, t, useWorkspace, type ContextCommand } from "@platform/ui";
 import { assetKey, useHost, useReadQuery } from "../index";
 

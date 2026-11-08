@@ -51,6 +51,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `host` | HTTP 路由、身份接入、租户装配、部署、后台调度 | `kernel`、`platform`、`apps/*`、全部 services |
 | `cmd/*` | 二进制入口、契约生成器与受控辅助进程；只做装配 | 全部 |
 
+- `contract/go/kernel` 是可移植的协议接收与账本部件，`capabilities/server/kernel` 装配租户、存储与历史投影，属于同一个内核；浏览器客户端由 `@platform/api` 单独命名。协议包名和已有历史映像不随目录整理改名。
 - 服务之间的调用面在被调服务的 `api.go` 中声明为接口；装配在 `host` 完成。
 - 产品包中的行业逻辑不进入任何 Go 包。
 
@@ -118,14 +119,14 @@ apps、function、integration 与 automation 的发布步骤已并入各自 owne
 
 ## 7.6 协议与版本
 
-- `contract/proto` 是协议的唯一来源；Go 与 TypeScript 类型由它与宿主类型生成（`go run ./cmd/api-types` 生成 `web/packages/kernel/src/gen/host.ts`），生成文件不手改。
+- `contract/proto` 是协议的唯一来源；Go 与 TypeScript 类型由它与宿主类型生成（`go run ./cmd/api-types` 生成 `web/packages/api/src/gen/host.ts`），生成文件不手改。
 - `web/packages/app/src/pageui/manifest.ts` 手写，是页面组件契约的唯一来源；`capabilities/server/platform/page_compat.json` 与 `web/packages/app/src/pageui/safety.ts` 由 `go run ./cmd/page-contract` 生成，服务器专用规则在 `capabilities/server/platform/page_compat_rules.json`。
 - 每个提交带模式版本头；接受结果格式带版本；存储格式演进只经版本化迁移，迁移本身是接受结果。
 - 错误带错误码与可翻译的英文原因；原因字符串是翻译键。
 
 ## 7.7 代码规范
 
-- 手写文件 ≤ 800 行（Go）/ 600 行（TS）；超出按职责拆分，不按“工具函数”拆。只含字面量的数据文件（各包 `i18n.ts`、`zh-CN.ts`、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`kernel/src/gen/*.ts`）不计。
+- 手写文件 ≤ 800 行（Go）/ 600 行（TS）；超出按职责拆分，不按“工具函数”拆。只含字面量的数据文件（各包 `i18n.ts`、`zh-CN.ts`、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`api/src/gen/*.ts`）不计。
 - 生成文件在 `.gitattributes` 标为 generated 且不出文本 diff（要看内容用 `git diff --text`）；纯数据生成物另列在 `.ignore`，不进代码搜索。新增生成物同步这两份清单；只改生成器或其源，不手改生成物。
 - 包名表达职责；同一名字不指两样东西（如 `kernel`、`agents`）。
 - 不留兼容分支，除非存储格式需要（且写明版本）。页面 `format` 0/3 属此类：三个产品包的页面仍以 document 或 documentless 的旧格式交付，且历史接受映像按原字节恢复，退役需要先迁移产品包与已接受映像。

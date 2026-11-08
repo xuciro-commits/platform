@@ -4,7 +4,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
 import { EditProposalReview, useHost, useInvokeCapability, ModelPicker, ModelOptionsEditor, useRecordInventory, useReadQuery } from "@platform/app";
-import { type Api } from "@platform/kernel";
+import { type Api } from "@platform/api";
 import { Button, Card, Checkbox, Input, FlowCanvas, Panel, RecordLookup, Select, Textarea, Workbench, t,
   type FlowNode, type FlowCatalog } from "@platform/ui";
 import { useState } from "react";

@@ -1,4 +1,4 @@
-import type { Api } from '@platform/kernel';
+import type { Api } from '@platform/api';
 import {t} from '@platform/ui';
 import { useHost } from '../index';
 

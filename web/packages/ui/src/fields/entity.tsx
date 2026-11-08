@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {validCivilDate,validTimestamp,timestampNanoseconds} from "../components/date";
 import type { CellContext, ColumnDef } from "@tanstack/react-table";
 import { Plus, X } from "lucide-react";

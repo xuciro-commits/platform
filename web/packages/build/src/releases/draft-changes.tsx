@@ -1,5 +1,5 @@
 import { useHost } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import { Button, Dialog, GroupedList, Tag, t } from "@platform/ui";
 import { useState } from "react";
 import { Value } from "../branches/diff";

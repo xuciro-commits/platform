@@ -4,7 +4,7 @@ import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useEffect, useRef, useState } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { ObservationRead, SemanticObjectSelect, SemanticPropertySelect, useHost, useProvidedCapabilities, useReadQuery, useTransition } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, ResourceSections, Select, Textarea, Toggles, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "@platform/app";

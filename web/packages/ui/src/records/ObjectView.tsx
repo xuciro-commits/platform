@@ -1,6 +1,6 @@
 import { MoreHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { ActionMenu } from "../components/ActionMenu";
 import type { ContextCommand } from "../components/CommandMenu";
 import { IconGlyph } from "../components/IconPicker";

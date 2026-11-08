@@ -16,7 +16,7 @@ read-when: 运行或新增检查、验收用例、钩子；判断一项改动需
 - R2 必须恒成立的约束由钩子或用例保证，不靠文字提醒。
 - R3 测试只有两类：`capabilities/server` 中的内核不变量测试，`web/e2e/` 中按 F1–F24 编号的验收用例。
 - R4 验收在隔离的宿主上运行：内存日志、开发令牌席位（`web/e2e/tenants.json`），不依赖 `make local`、数据库或真实账号。
-- R5 创建与保存的验收等待界面完成：创建请求成功后，仍须断言已进入新资源 URL，再进行下一次导航或后台发布。单个 HTTP 响应不代表项目归属保存与离开保护已完成。
+- R5 创建与保存的验收等待界面完成：创建请求成功后，仍须断言已进入新资源 URL，再进行下一次导航或后台发布。单个 HTTP 响应不代表项目归属保存与离开保护已完成。后台多阶段任务须等待最终运行映像；输出数据已写入不代表运行结算已完成。
 
 ## 7.8 静态检查
 
@@ -24,7 +24,7 @@ read-when: 运行或新增检查、验收用例、钩子；判断一项改动需
 |---|---|
 | Go | `cd capabilities/server && go build ./... && go vet ./...`；`gofmt -l` 为空 |
 | Go 包边界 | `node scripts/check-boundaries.mjs`：`go list` 的实际导入与 [README §7.2](README.md#72-包结构) 依赖列一致；不符的导入只能是该文件“现存差距”中登记的条目，条目消除后必须删除 |
-| 宿主类型与页面契约 | `make contract` 前后 `kernel/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json` 逐字节一致 |
+| 宿主类型与页面契约 | `make contract` 前后 `api/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json` 逐字节一致 |
 | Web | 改动包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 文案 | `node scripts/check-i18n.mjs` 检查 `t("...")` 字面量与 `defineApp` 说明都在字典中；动态键取值齐全 |
 | 全部 | `git diff --check` |

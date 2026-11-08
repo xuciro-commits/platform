@@ -1,7 +1,7 @@
 import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type {PageUI} from "@platform/app";
 import {originalRecordObject} from "./record-binding";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type {EntityInfo} from "@platform/ui";
 import {loopOwner,overlayOwner} from "../page-layout";
 import type {AuthoringSection} from "./draft";

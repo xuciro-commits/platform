@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { acceptedClient, expect, signIn, test } from "./kit";
-import type { PackageDescriptor, PackageOwnership, PackagePreview, PackageView, ResourceDirectory } from "../packages/kernel/src/gen/host";
+import type { PackageDescriptor, PackageOwnership, PackagePreview, PackageView, ResourceDirectory } from "../packages/api/src/gen/host";
 
 test.use({ viewport: { width: 1680, height: 1050 } });
 

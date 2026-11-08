@@ -1,5 +1,5 @@
 import { useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Select, Tag, Toggles, t } from "@platform/ui";
 
 const MARKINGS = ["", "internal", "confidential", "restricted"] as const;

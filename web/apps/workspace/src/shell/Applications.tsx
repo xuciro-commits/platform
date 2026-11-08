@@ -1,5 +1,5 @@
 import { useHost, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, EmptyState, Input, PageHeader, useWorkspace, t, type PlatformApplication } from "@platform/ui";
 import { Star } from "lucide-react";
 import { useMemo, useState } from "react";

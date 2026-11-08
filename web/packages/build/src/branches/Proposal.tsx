@@ -1,5 +1,5 @@
 import { useHost } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, EmptyState, Notice, PageHeader, Panel, Rejection, StatusTag, Textarea, defineStatuses, formatStamp, notify, t, useWorkspace } from "@platform/ui";
 import { useState } from "react";
 import { BranchFailure, branchPath, branchTitles, useBranchActions, useBranchChanges, useBranchDetail, useBranchRead } from "./api";

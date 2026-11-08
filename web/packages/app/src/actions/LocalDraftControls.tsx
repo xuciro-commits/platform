@@ -1,6 +1,6 @@
 import {useState} from "react";
 import {Button,t, formatStamp} from "@platform/ui";
-import type {ActionDeclaration,LocalFormDraft} from "@platform/kernel";
+import type {ActionDeclaration,LocalFormDraft} from "@platform/api";
 import {useHost} from "../index";
 import {actionDraftKey,type actionDraftContext} from "./local-draft";
 import {actionInputSignature} from "./refusal";

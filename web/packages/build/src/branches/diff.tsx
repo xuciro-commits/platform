@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost } from "@platform/app";
 import { Button, Disclosure, SegmentedChoice, Tag, t } from "@platform/ui";
 import { ChevronDown, ChevronRight } from "lucide-react";

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { assetKey, definitionPresentation, useDependencies, resourceEntryRoute, useHost, useReadQuery } from "@platform/app";
 import { Button, EmptyState, IconGlyph, Input, Notice, PageHeader, PanelSection, RelationCanvas, SegmentedChoice, Tag, Toggles, relationNodeClasses, t, toneNames, type RelationEdge, type RelationNode, type Route, type Tone } from "@platform/ui";
 import { useApplicationWorkspace } from "./application-scope";

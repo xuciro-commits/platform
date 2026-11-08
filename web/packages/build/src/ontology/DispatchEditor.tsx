@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost, useRecordInventory } from "@platform/app";
 import { Button, Checkbox, Disclosure, Input, Panel, Select, Tag, t } from "@platform/ui";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "@platform/app";

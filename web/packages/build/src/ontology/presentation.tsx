@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { ArrowDown, ArrowUp, Check, Plus, Trash2 } from "lucide-react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, IconPicker, Input, Notice, ObjectIcon, Select, Tag, cn, t, toneNames, type EntityInfo, type Tone , Tooltip } from "@platform/ui";
 import { SemanticValueTypeSelect } from "@platform/app";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "@platform/app";

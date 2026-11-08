@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { Binding, WorkflowDraft, WorkflowStep } from "./workflow-model";
 
 export const alwaysCondition = (): Api.Expr => ({ op: "", kind: "boolean", lit: { value: true } });

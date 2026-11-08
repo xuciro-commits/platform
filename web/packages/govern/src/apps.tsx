@@ -1,5 +1,5 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import { Dialog, Notice, PropertyList, ContextHelp, Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
 import { Fragment, useState } from "react";
 import { when, type AppInfo, type ProtocolInfo } from "./shared";

@@ -1,5 +1,5 @@
 import {useState} from "react";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {t} from "../i18n";
 import {validHistogram} from "./histogram-data";
 export function Histogram({value,label}:{value:Api.HistogramResult;label:string}){

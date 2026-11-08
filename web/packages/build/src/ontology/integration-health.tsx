@@ -1,6 +1,6 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useHost, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, DataTable, PageHeader, Panel, Tag, t, type ColumnDef } from "@platform/ui";
 import { useIntegrationEvidence } from "./lineage";
 

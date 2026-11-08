@@ -3,7 +3,7 @@
     "@platform/app": "workspace:*",
     "@platform/build": "workspace:*",
     "@platform/catalog-app": "workspace:*",
-    "@platform/kernel": "workspace:*",
+    "@platform/api": "workspace:*",
     "@platform/govern": "workspace:*",
     "@platform/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",

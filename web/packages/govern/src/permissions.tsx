@@ -1,6 +1,6 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { PropertyList, Button, Form, Checkbox, DataTable, type ColumnDef, Sheet, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Member } from "./shared";

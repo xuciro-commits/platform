@@ -1,7 +1,7 @@
 import type * as PageUI from "../pageui/types";
 import {validCollectionInput} from "./collection-input";
 import {isDecimal} from "./decimal";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { VariableResult } from "./variables";
 
 type Ports = Record<string, Api.PagePort>;

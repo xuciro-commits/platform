@@ -1,6 +1,6 @@
 import type {Host} from "../index";
 import type {EntityInfo,KanbanMove} from "@platform/ui";
-import type {ActionDeclaration} from "@platform/kernel";
+import type {ActionDeclaration} from "@platform/api";
 import {confirmedDecision} from "../collaboration/decision";
 type OriginalActionHost=Pick<Host,"client"|"decide"|"resend"|"can">;
 const locks=new WeakMap<object,Set<string>>();

@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost, useOpenRecord, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, DataTable, Disclosure, EmptyState, Input, Notice, PageHeader, Sheet, StatusTag, defineStatuses, t, formatStamp, useWorkspace, type ColumnDef } from "@platform/ui";
 import { useState } from "react";

@@ -1,6 +1,6 @@
 import { Button, Checkbox, Input, Panel, Select, t, type EntityInfo } from "@platform/ui";
 import type { Process } from "./object-model";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 
 export function BusinessVersionEditor({process,entities,onChange}:{process:Process;entities:EntityInfo[];onChange:(next:Process)=>void}) {
   const versioning=process.versioning;

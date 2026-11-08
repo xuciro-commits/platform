@@ -1,6 +1,6 @@
 import { resourceSaveEdit, useWorkingState } from "../session/WorkingState";
 import { HostContext, type Host } from "@platform/app";
-import { apiErrorMessage, type Api, type Entry } from "@platform/kernel";
+import { apiErrorMessage, type Api, type Entry } from "@platform/api";
 import { notify, t } from "@platform/ui";
 import { useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { resourceKinds } from "../projects/resources";

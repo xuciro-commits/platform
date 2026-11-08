@@ -1,5 +1,5 @@
 import { ContextHelp, Button, Checkbox, ContentTabs, Disclosure, Input, Select, Tag, Textarea, t } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { ArrowDownToLine, Plus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { BindingEditor, JSONEditor, SchemaEditor } from "./workflow-binding";

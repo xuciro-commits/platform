@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, DataTable, PageHeader, StatusTag, formatStamp, t, useWorkspace, type ColumnDef } from "@platform/ui";
 import { useState } from "react";
 import { useBranches } from "./api";

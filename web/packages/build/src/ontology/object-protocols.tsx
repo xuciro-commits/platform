@@ -1,5 +1,5 @@
 import { ProtocolSelect, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, Input, InputDraftProvider, Notice, Select, t } from "@platform/ui";
 import { useState } from "react";
 import { nameOf, type Process, type ProtocolBinding } from "./object-model";

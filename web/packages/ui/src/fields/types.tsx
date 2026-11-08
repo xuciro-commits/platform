@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import { Check, Copy, ExternalLink, Paperclip, Star, X } from "lucide-react";
 import { useContext, type ReactNode } from "react";
 import { z } from "zod";

@@ -1,5 +1,5 @@
 import { useHost, useRead, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, EmptyState, Panel, Tag, routeKey, t, useWorkspace, type InboxTask, type PlatformApplication } from "@platform/ui";
 import { ArrowRight, Bell, ClipboardList, FolderKanban, GitBranch, Inbox, Search } from "lucide-react";
 import type { ReactNode } from "react";

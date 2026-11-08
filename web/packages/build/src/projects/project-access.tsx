@@ -1,5 +1,5 @@
 import { useHost, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, ContextHelp, DataTable, Notice, Select, t } from "@platform/ui";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";

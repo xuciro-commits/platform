@@ -1,7 +1,7 @@
 import { History, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Popover } from "radix-ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Notice } from "../components/Notice";
 import { Tag } from "../components/StatusTag";
 import { t } from "../i18n";

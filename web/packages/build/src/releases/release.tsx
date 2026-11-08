@@ -1,7 +1,7 @@
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, DataTable, Disclosure, Notice, PageHeader, Panel, PropertyList, Select, StatusTag, t, useUnsavedChanges, useViewCall, notify, type ColumnDef } from "@platform/ui";
 import { Plus, RefreshCw } from "lucide-react";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { matchesResourceKind, refKey, releaseResources, resourceKinds, resourceRef } from "../projects/resources";
 import { branchRefusal } from "../branches/decisions";

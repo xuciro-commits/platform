@@ -1,6 +1,6 @@
 import { useWorkingState } from "../session/WorkingState";
 import { useHost } from "@platform/app";
-import { apiErrorMessage } from "@platform/kernel";
+import { apiErrorMessage } from "@platform/api";
 import { t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { useDraftRecord } from "../branches/draft-record";

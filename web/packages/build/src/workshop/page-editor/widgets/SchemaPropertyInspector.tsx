@@ -1,6 +1,6 @@
 import {Checkbox,ContextHelp,Input,Select,Textarea,t} from '@platform/ui';
 import {widgetContract} from '@platform/app';
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 import type {AuthoringSection} from '../draft';
 
 type PropertySchema=Api.ValueSchema&{title?:string;presenceTitle?:string;editor?:string;minimum?:number;maximum?:number;properties?:Record<string,PropertySchema>};

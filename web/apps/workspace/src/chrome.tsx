@@ -1,6 +1,6 @@
 import "./i18n";
 import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, PagePreview, PageWorkspace, ObjectRecordView, Records, RunView, appRegistration, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
-import type { Entry, Api } from "@platform/kernel";
+import type { Entry, Api } from "@platform/api";
 import {
   Button, DataTable, Disclosure, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
   useWorkspace, type ColumnDef, type InboxTask, type Route, type View,

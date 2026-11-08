@@ -2,7 +2,7 @@ import {t,validExternalFrame,validStaticImage,validSceneConfig,validCivilDate,va
 import {pageLayoutDiagnostics} from "../pages/layout";
 import type * as PageUI from "./types";
 import {parseDecimal} from "../runtime/decimal";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {pageUIManifest} from "./manifest";
 import {decodePage} from "./wire";
 import {pageSafetyContract} from "./safety";

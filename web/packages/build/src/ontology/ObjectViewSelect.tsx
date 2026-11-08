@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Notice, Select, t } from "@platform/ui";
 import { objectViewKey, useObjectViews } from "../workshop/object-views-model";
 

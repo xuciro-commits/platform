@@ -1,5 +1,5 @@
 import { Select, t } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost, useReadQuery } from "../index";
 
 type Option = { value: string; label: string };

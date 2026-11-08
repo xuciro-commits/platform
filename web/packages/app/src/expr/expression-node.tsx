@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { RuleSchema } from "@platform/app/rules";
 import { Button, Checkbox, Input, Select, t, type EntityInfo } from "@platform/ui";
 import { ModelFieldPicker } from "./ModelFieldPicker";

@@ -54,6 +54,7 @@ test("F3 an integrator updates keyed rows without changing old versions and sche
     await expect.poll(async () => (await read<{ record: { version?: number } }>(`/v1/records/build.dataset/${output}`)).record.version ?? 0, { timeout: 45_000 }).toBe(2);
     expect(await version(output, 2)).toEqual(await version(input, 3));
     expect((await read<{ record: { lastRun?: string } }>(`/v1/records/build.schedule/${schedule}`)).record.lastRun).toEqual(expect.any(String));
+    await expect.poll(async () => (await read<{ record: { last?: { outputVersion?: number } } }>(`/v1/records/build.pipeline/${pipeline}`)).record.last?.outputVersion).toBe(2);
     const built = await read<{ record: { last?: { written: number; error?: string } } }>(`/v1/records/build.pipeline/${pipeline}`);
     expect(built.record.last?.error ?? "").toBe("");
     expect(built.record.last?.written).toBe(2);

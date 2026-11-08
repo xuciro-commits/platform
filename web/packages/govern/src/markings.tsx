@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { resourceEntryRoute, useHost, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, DataTable, Input, Notice, PageHeader, Panel, Tag, Toggles, t, useWorkspace } from "@platform/ui";
 import type { Member } from "./shared";
 

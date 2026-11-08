@@ -1,5 +1,5 @@
 import type {PageUI} from "@platform/app";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 
 type Producer=Pick<PageUI.Section,"id"|"widget"|"collectionVariable"|"graphExplorer"|"observation">&{object?:string|Api.AssetRef};
 export function originalRecordObject(document:PageUI.PageDocument,sections:Producer[],variable:string,root?:Api.AssetRef):Api.AssetRef|undefined {

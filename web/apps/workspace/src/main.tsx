@@ -1,4 +1,4 @@
-import { currentSession, type Api, type OidcConfig } from "@platform/kernel";
+import { currentSession, type Api, type OidcConfig } from "@platform/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

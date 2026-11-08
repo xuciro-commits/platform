@@ -1,7 +1,7 @@
 import { Records, ModelPicker, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
 import { ContextHelp, Button, Checkbox, DataTable, Form, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, t, Chart, Tooltip } from "@platform/ui";
 import { useState } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 
 export function Agents() {
   const agents = useRead<AgentInfo[]>("/v1/agents").data ?? [];

@@ -1,7 +1,7 @@
 import type {PageUI} from "@platform/app";
 import {useHost,useProvidedCapabilities} from "@platform/app";
 import {Select,Textarea,t} from "@platform/ui";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type {AuthoringSection} from "../draft";
 import type {TableInspectorPorts} from "./TableInspector";
 type Props=Omit<TableInspectorPorts,"section"|"onChange">&{section:AuthoringSection;onChange:(patch:Partial<AuthoringSection>)=>void};

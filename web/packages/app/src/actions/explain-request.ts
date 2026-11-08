@@ -1,4 +1,4 @@
-import type { Api, Entry } from "@platform/kernel";
+import type { Api, Entry } from "@platform/api";
 
 export function authzExplainRequest(submission: Entry["submission"], fallbackPrincipal: string, tenant: string): Api.AuthzRequest {
   const target = submission.target;

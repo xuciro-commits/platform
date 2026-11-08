@@ -7,7 +7,7 @@ import { useApplicationScope, useApplicationWorkspace } from "../projects/applic
 import { useAuthoringModel } from "./authoring-model";
 import { DeclaredByObject, declaringObject } from "./object-datasources";
 
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { OpenLineage, useHost, useReadQuery } from "@platform/app";
 import { Button, Checkbox, DataTable, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";

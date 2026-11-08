@@ -1,5 +1,5 @@
 import type * as PageUI from "../pageui/types";
-import type {ActionDeclaration} from "@platform/kernel";
+import type {ActionDeclaration} from "@platform/api";
 import type {EntityInfo} from "@platform/ui";
 export function actionTableParameters(info:EntityInfo|undefined,action:ActionDeclaration|undefined,parameters:PageUI.PageActionParameter[]):PageUI.PageActionParameter[]|undefined {
  if(!info||!action||action.target!==info.type||action.new||action.automation||parameters.length<1||parameters.length>16||parameters.length!==action.payload.length||new Set(parameters.map(p=>p.parameter)).size!==parameters.length)return;

@@ -3,7 +3,7 @@ import type {PageUI} from "@platform/app";
 import {useHost} from "@platform/app";
 import {useQuery} from "@tanstack/react-query";
 import {Checkbox,Input,Select,t} from "@platform/ui";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type {AuthoringSection} from "../draft";
 import type {TableInspectorPorts} from "./TableInspector";
 

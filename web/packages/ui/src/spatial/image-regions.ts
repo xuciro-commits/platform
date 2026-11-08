@@ -1,4 +1,4 @@
-import {imageRegionLimits,type ImageRegion} from "@platform/kernel/host-contract";
+import {imageRegionLimits,type ImageRegion} from "@platform/api/host-contract";
 export function validImageRegions(value:unknown):value is ImageRegion[]{
  if(!Array.isArray(value)||value.length>imageRegionLimits.maxRegions)return false;
  const seen=new Set<string>(),bytes=(text:string)=>new TextEncoder().encode(text).length;

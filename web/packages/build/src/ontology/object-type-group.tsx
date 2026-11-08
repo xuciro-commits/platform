@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Boxes, Trash2 } from "lucide-react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { assetKey, useHost, useRecordInventory } from "@platform/app";
 import { Button, DataTable, EmptyState, Form, Input, Notice, PageHeader, Panel, ResourceSections, Select, Sheet, Textarea, Workbench, t } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";

@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { RuleSchema } from "@platform/app/rules";
 import { Button, Input, Select, Tag, t, type EntityInfo } from "@platform/ui";
 import { useEffect, useState, type KeyboardEvent } from "react";

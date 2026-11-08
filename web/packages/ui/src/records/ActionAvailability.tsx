@@ -1,5 +1,5 @@
 import { useEffect, useReducer, type ReactNode } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Tooltip } from "../primitives/tooltip";
 import type { RecordSource } from "./Records";
 

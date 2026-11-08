@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Eye, Plus } from "lucide-react";
 import { newId, useHost } from "@platform/app";
-import type { Entry } from "@platform/kernel";
+import type { Entry } from "@platform/api";
 import { Button, DataTable, Dialog, Form, Input, Notice, PageHeader, Select, t, useUnsavedChanges, useWorkspace, type ColumnDef } from "@platform/ui";
 import { useDraftRecord } from "../branches/draft-record";
 import type { Project } from "../projects/project";

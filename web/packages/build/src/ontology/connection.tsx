@@ -4,7 +4,7 @@ import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { useId } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { OpenLineage, useHost, useReadQuery } from "@platform/app";
 import { CompartmentField, MarkingField } from "./marking";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";

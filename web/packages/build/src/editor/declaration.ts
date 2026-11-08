@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 
 export function declarationValue(value: object, fields: readonly Api.FieldInfo[]): Record<string, unknown> {
   const names = new Set(fields.filter(field => !field.readOnly).map(field => field.name));

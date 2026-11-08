@@ -4,7 +4,7 @@ import {activeQueryPlans} from "./query-inventory";
 import {collectionInput, type CollectionInput} from "./collection-input";
 import {usePageAggregates} from "./PageAggregates";
 import { useEffect, useRef, useState } from "react";
-import {type Api} from "@platform/kernel";
+import {type Api} from "@platform/api";
 import { findDefinition, useHost } from "../index";
 import type { PageSessionStore, PageSessionSnapshot, QueryView } from "./Session";
 import type { VariableResult } from "./variables";

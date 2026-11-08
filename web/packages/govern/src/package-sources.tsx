@@ -1,5 +1,5 @@
 import { useHost } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import { Button, ContentTabs, Disclosure, Input, Panel, PropertyList, Select, t, useWorkspace } from "@platform/ui";
 import { BookOpen, Plus } from "lucide-react";
 import { useRef, useState } from "react";

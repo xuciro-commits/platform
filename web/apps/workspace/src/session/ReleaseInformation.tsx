@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, Dialog, t } from "@platform/ui";
 import type { UseQueryResult } from "@tanstack/react-query";
 

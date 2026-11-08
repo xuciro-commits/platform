@@ -1,5 +1,5 @@
 import { alwaysCondition, conditionOperand, workflowBindings } from "./workflow-edit";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { t, type FlowEdge, type FlowDiagnostic, type FlowNodeClass, type Tone } from "@platform/ui";
 
 export type ValueSchema = Api.ValueSchema;

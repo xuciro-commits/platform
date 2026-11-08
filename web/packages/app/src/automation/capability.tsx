@@ -1,4 +1,4 @@
-import { type Api } from "@platform/kernel";
+import { type Api } from "@platform/api";
 import { InputDraftProvider,InputProblems,useInputDrafts,Button, JsonValueEditor, Panel, t, type EntityRecord } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { useInvokeCapability, useReadQuery } from "../index";

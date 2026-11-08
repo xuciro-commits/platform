@@ -1,4 +1,4 @@
-import { credentialSignIn, signIn, type OidcConfig } from "@platform/kernel";
+import { credentialSignIn, signIn, type OidcConfig } from "@platform/api";
 import { Button, Card, ContentTabs, Input, language, languages, Notice, setLanguage, t, useLanguage } from "@platform/ui";
 import { Boxes, Building2, History, KeyRound, Languages, LayoutGrid, Lock, Rocket, ScrollText, ShieldCheck, Workflow } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";

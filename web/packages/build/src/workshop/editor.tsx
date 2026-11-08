@@ -22,7 +22,7 @@ import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
 import { WidgetLibrary } from "./page-editor/WidgetLibrary";
 import { DraftStatus, ResourceControls, WorkbenchMessage } from "../editor/workbench";
-import type { Api as HostApi } from "@platform/kernel";
+import type { Api as HostApi } from "@platform/api";
 import { overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, layoutID, stashWidget, restoreWidget, setLayoutKind } from "./page-layout";
 import { QueriesPanel } from "./page-editor/QueriesPanel";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";

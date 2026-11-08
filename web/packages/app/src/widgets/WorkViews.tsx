@@ -1,7 +1,7 @@
 import {pageUIManifest} from "../pageui/manifest";
 import {useEffect,useRef,useState} from "react";
 import {ApprovalInbox,NotificationList,notify,Panel,t,useViewVisible,type ApprovalInboxRow,type RecordSource} from "@platform/ui";
-import {type Api} from "@platform/kernel";
+import {type Api} from "@platform/api";
 import {useHost,useOpenRecord,useReadQuery} from "../index";
 import {approvalDecisionReason,approvalTasks,createWorkViews,originalNotifications} from "../work/service";
 

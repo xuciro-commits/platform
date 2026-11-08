@@ -1,7 +1,7 @@
 import {pageUIManifest} from "../pageui/manifest";
 import type * as PageUI from "../pageui/types";
 import {useEffect} from "react";
-import {type Api} from "@platform/kernel";
+import {type Api} from "@platform/api";
 import type {PageSessionStore} from "./Session";
 import type {QueryPlanResult} from "./query-plans";
 import {planKey} from "./query-plans";

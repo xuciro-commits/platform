@@ -1,5 +1,5 @@
 import { ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, ContextHelp, DataTable, Disclosure, Input, Notice, PanelSection, PropertyList, Select, Workbench, t, useWorkspace, type ColumnDef, type NavSection, type Route } from "@platform/ui";
 import { useRef, useState } from "react";
 import type { Project } from "./project";

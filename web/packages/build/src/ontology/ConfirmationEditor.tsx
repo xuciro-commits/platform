@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {useRecordInventory} from "@platform/app";
 import {Button,Checkbox,Input,JsonValueEditor,Panel,Select,t} from "@platform/ui";
 

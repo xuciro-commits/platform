@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { StatusTag, defineStatuses } from "../../components/StatusTag";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";

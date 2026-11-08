@@ -1,5 +1,5 @@
 import { newId, useHost, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { ActionMenu, Button, DataTable, Dialog, EmptyState, Form, Input, Notice, Panel, PropertyList, RelationCanvas, SegmentedChoice, Select, Tag, ViewVisibilityContext, Workbench, t, useWorkspace, type ColumnDef, type RelationEdge, type RelationNode, type Tone } from "@platform/ui";
 import { ArrowLeftRight, ChevronLeft, Copy, Crosshair, Download, Expand, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";

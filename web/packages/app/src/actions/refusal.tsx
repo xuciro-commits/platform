@@ -1,4 +1,4 @@
-import {apiErrorMessage,type Api,type Entry} from "@platform/kernel";
+import {apiErrorMessage,type Api,type Entry} from "@platform/api";
 import {Button, Disclosure, Rejection, language, t, useWorkspace} from "@platform/ui";
 import {useQuery} from "@tanstack/react-query";
 import {useState} from "react";

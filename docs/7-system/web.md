@@ -1,6 +1,6 @@
 ---
 level: 7 系统架构
-covers: [web/package.json, web/apps/**, web/packages/*/package.json, web/packages/*/src/index.ts, web/packages/*/src/index.tsx, web/packages/kernel/**, web/packages/app/src/runtime/**]
+covers: [web/package.json, web/apps/**, web/packages/*/package.json, web/packages/*/src/index.ts, web/packages/*/src/index.tsx, web/packages/api/**, web/packages/app/src/runtime/**]
 read-when: 新建前端包或目录、改动路由、数据获取、写入、i18n 机制、代码生成、构建配置
 ---
 
@@ -16,24 +16,24 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 - R2 一个工具应用一个目录，一个 `defineApp`；资源类型只在一个应用的 `opens` 中声明。
 - R3 读取只经 `useReadQuery`、ObjectSet 客户端与宿主客户端；写入只经 `decide(schema, target, payload)`。组件里不直接 `fetch`。
 - R4 共享组件只来自 `@platform/ui`；应用不复制或包装出第二个同类组件（新需要先进 ui 并在 4-interaction/patterns 登记）。
-- R5 生成的类型（`packages/kernel/src/gen`）不手改；改宿主类型后重新生成。
+- R5 生成的类型（`packages/api/src/gen`）不手改；改宿主类型后重新生成。
 - R6 每个包一个 i18n 字典；英文原文是键；动态键的所有取值都在字典中。模块加载时不调用 `t()`：模块级文案写英文原文，由 `defineApp`、`defineStatuses` 或 getter 在读取时翻译；复制应用对象用 `withApp` 保留读取时翻译。切换语言不刷新页面，工作区按语言重新挂载。
-- R7 手写文件 ≤ 600 行；超出按职责拆分。只含字面量的数据文件（翻译字典、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`kernel/src/gen/*.ts`）不计。
-- R8 未登录时工作区渲染平台登录页（`apps/workspace/src/session/SignIn.tsx`）；登录与令牌只经 `@platform/kernel` 的 OIDC 函数，页面组件不直接 `fetch`。
+- R7 手写文件 ≤ 600 行；超出按职责拆分。只含字面量的数据文件（翻译字典、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`api/src/gen/*.ts`）不计。
+- R8 未登录时工作区渲染平台登录页（`apps/workspace/src/session/SignIn.tsx`）；登录与令牌只经 `@platform/api` 的 OIDC 函数，页面组件不直接 `fetch`。
 
 ## 包
 
 | 包 | 职责 | 不放 |
 |---|---|---|
 | `@platform/ui` | 外壳（导航轨、视图栈、侧栏、侧窗）、组件、令牌、i18n 机制 | 业务概念、宿主调用 |
-| `@platform/kernel` | 生成的 API 类型与宿主客户端 | 界面 |
+| `@platform/api` | 生成的 API 类型与宿主客户端 | 界面 |
 | `@platform/app` | 运行时：宿主上下文、读取钩子、ObjectSet 与 Expr 客户端（WASM）、对象视图、动作表单、Workshop 组件 | 构建工具 |
 | `@platform/build` | 构建类工具应用，每个应用一个目录 | 治理应用 |
 | `@platform/govern` | 治理应用：Control Panel、DevOps、Marketplace、Monitoring | 构建工具 |
 | `apps/workspace` | 装配：加载各包的应用、Home、Files 外壳、Applications、Search、Notifications | 工具应用的内部视图 |
 | `apps/catalog` | 开发态组件与资产目录，不进入产品门户 | 产品功能 |
 
-目标中 `@platform/kernel` 改名为 `@platform/api`，避免与宿主 `kernel` 混淆（路线图漂移项）。
+客户端统一命名为 `@platform/api`；`kernel` 只用于后端接受与重放内核。
 
 ## 应用注册
 
@@ -73,5 +73,4 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 ## 现存差距
 
 - 治理资源尚未全面采用同一路由入口。
-- `@platform/kernel` 未改名（路线图“已知漂移”）。
-- Workspace 仍有大于 500 kB 的构建分块，`actions`、`capability`、`EmbeddedPage` 的动态导入仍被静态依赖抵消；`catalog` 已改为按需加载。2026-11-05 在隔离本地宿主、全新建浏览器上下文中复测：builder 首绘 140ms、传输 1.54MB；user 首绘 112ms、传输 0.95MB。builder 多出的 `workflow` 分块属于构建应用本身，不是可安全移出首屏的共享依赖；暂不做机械拆包，后续以真实任务路径和网络条件变化再测。
+- Workspace 的业务工具分块与布局引擎仍有大于 500 kB 的产物；布局引擎已经按需加载并在浏览器使用 Worker。保留构建器默认大小告警，不以拆成任意小文件或放宽阈值作为性能完成标准；后续按真实任务的加载链、传输与交互时间验证。

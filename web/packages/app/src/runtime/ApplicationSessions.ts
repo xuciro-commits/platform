@@ -1,5 +1,5 @@
 import {scalarAssignable,type ScalarValue} from "./decimal";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { RecordSource } from "@platform/ui";
 import { PageSessionStore, type RecordReference } from "./Session";
 export type ApplicationReads = {source:RecordSource;queries:Record<string,Api.PageQuery>};

@@ -20,7 +20,7 @@ export function TenantReferencesExample() {
   </div></CatalogFixture>;
 }
 import { ObservationWindowResult, DependencyGraph, ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 import {ObservationStatistics,type EntityInfo} from "@platform/ui";
 import {createObservationStatisticsReader,type ObservationStatisticsRead} from "./exploration/observation-reader";

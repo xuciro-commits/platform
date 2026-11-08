@@ -1,6 +1,6 @@
 import type {PageUI} from "@platform/app";
 import {useState} from 'react';
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 import {widgetContract,type Definition} from '@platform/app';
 import {Button,Checkbox,Input,Select,t,type EntityInfo} from '@platform/ui';
 import {ModelBindingInspector} from './ModelBindingInspector';

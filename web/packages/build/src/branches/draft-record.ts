@@ -1,6 +1,6 @@
 import { useWorkingState } from "../session/WorkingState";
 import { useHost, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { t, type EntityRecord } from "@platform/ui";
 import { useMemo } from "react";
 import { resourcePath, useBranchActions, useBranchRead, useBranches } from "./api";

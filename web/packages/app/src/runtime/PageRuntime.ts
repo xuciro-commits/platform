@@ -3,7 +3,7 @@ import {scalarAssignable,type ScalarValue} from "./decimal";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { RecordSource } from "@platform/ui";
 import { PageSessionStore, type SelectionPlan } from "./Session";
-import {type Api} from "@platform/kernel";
+import {type Api} from "@platform/api";
 import { compileVariables, evaluateVariables, type VariableResult } from "./variables";
 import {initializeRules} from "./rule-engine";
 

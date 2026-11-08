@@ -1,14 +1,14 @@
 import type * as PageUI from "../pageui/types";
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
-import {OfflineReadError,type Api} from "@platform/kernel";
-import type { ActionDeclaration } from "@platform/kernel";
+import {OfflineReadError,type Api} from "@platform/api";
+import type { ActionDeclaration } from "@platform/api";
 import { Button, ContextHelp, Reasoned, useActionAvailability, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, MediaAttachment, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate, formatStamp} from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
 import {actionEntryInputs, actionInputSignature, ActionRefusal} from "./refusal";
-import type {Entry} from "@platform/kernel";
-import type {LocalFormDraft} from "@platform/kernel";
+import type {Entry} from "@platform/api";
+import type {LocalFormDraft} from "@platform/api";
 import {actionDraftContext,actionDraftKey,actionDrafts,completedLocalDraft} from "./local-draft";
 import {LocalDraftControls} from "./LocalDraftControls";
 

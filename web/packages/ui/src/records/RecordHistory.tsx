@@ -2,7 +2,7 @@ import { renderingLimits } from "../gen/presentation-limits";
 import { History as HistoryIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { t } from "../i18n";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type {EntityInfo, FieldInfo, Money, RecordChange} from "./Records";
 
 export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[];heading?:boolean;label?:string;limit?:number;total?:number;loadedCount?:number;recordID?:string;recordRevision?:number};

@@ -17,7 +17,7 @@ import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { AppSelect, ModelPicker, useHost } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, JsonTextEditor, Notice, Panel, PageHeader, PropertyList, Select, StatusTag, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import { installedObjects, parameterSchema, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
 import { organizationSchema } from "./organization";
 import { useEffect, useRef, useState } from "react";

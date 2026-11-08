@@ -1,5 +1,5 @@
 import { isAlias, isMap, isScalar, isSeq, parseAllDocuments, stringify } from 'yaml';
-import type { Api } from '@platform/kernel';
+import type { Api } from '@platform/api';
 import { inputIssues } from './entity';
 import { applies } from './types';
 import { t } from '../i18n';

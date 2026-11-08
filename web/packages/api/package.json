@@ -1,5 +1,5 @@
 {
-  "name": "@platform/kernel",
+  "name": "@platform/api",
   "private": true,
   "type": "module",
   "exports": {

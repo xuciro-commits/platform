@@ -51,7 +51,7 @@
 |---|---|
 | 本地运行 | `make local`（入口 http://localhost:8495，热更新；宿主日志 `.build/dev/platform-api.log`） |
 | Go 检查 | `cd capabilities/server && GOPROXY=https://goproxy.cn,direct go build ./... && go vet ./...`；`gofmt -l .` |
-| 宿主类型与页面契约 | `make contract`（生成 `kernel/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json`） |
+| 宿主类型与页面契约 | `make contract`（生成 `api/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json`） |
 | Web 检查 | 改动的包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 空白 | `git diff --check` |
 | 快速检查 | `make check`（≤60 秒：构建、包边界、并行内核不变量、契约、类型、空白；提交钩子自动运行） |

@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, Dialog, Input, Rejection, Textarea, t } from "@platform/ui";
 import { useState } from "react";
 import { useBranchActions } from "./api";

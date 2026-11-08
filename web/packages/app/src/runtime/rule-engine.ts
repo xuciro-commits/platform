@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 
 export type RuleSchema={refs:Record<string,Api.Type>;sets?:Record<string,{element:Api.Type;policy:string}>;windows?:Record<string,{unit:string}>};
 export type RuleValue={kind:string;status:string;value?:unknown};

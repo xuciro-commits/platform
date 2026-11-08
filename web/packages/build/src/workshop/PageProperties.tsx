@@ -9,7 +9,7 @@ import { SemanticObjectSelect, pageVariableContract, widgetContract, useHost, us
 import { Button, Checkbox, InspectorSection, type WorkbenchTab, Input, MarkdownEditor, Select, Textarea, Toggles, t, type EntityInfo } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Api as HostApi } from "@platform/kernel";
+import type { Api as HostApi } from "@platform/api";
 import { BindingEditor } from "../automate/workflow-binding";
 import { variableAccessible, overlayOwner, loopOwner } from "./page-layout";
 import { widgetBindingInspector } from "./page-editor/widgets/registry";

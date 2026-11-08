@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 export type RuleInput={name:string;type:string;choices?:string;required?:boolean;ref?:string;stereotype?:string;stereotypes?:string[];minLength?:number};
 export type StateAction={from:string[];to?:string;toInput?:string;inputs?:RuleInput[];approval?:unknown;transaction?:Api.BusinessTxn};
 const ruleChoices=(value:string|undefined)=>[...new Set((value??'').split(',').map(v=>v.trim()).filter(Boolean))];

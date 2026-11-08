@@ -1,6 +1,6 @@
 import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type {PageUI} from "@platform/app";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {loopOwner,overlayOwner} from "../page-layout";
 import {collaborationRecordSource} from "./collaboration";
 import type {AuthoringSection} from "./draft";

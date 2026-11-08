@@ -1,6 +1,6 @@
-export type * from "@platform/kernel/host-contract";
+export type * from "@platform/api/host-contract";
 
-import type {AssetBinding, AssetRef, Binding, ModelBinding, ModelViewBinding, Expr, PageEventBinding, PageInterface, PageQuery, PageVariable} from "@platform/kernel/host-contract";
+import type {AssetBinding, AssetRef, Binding, ModelBinding, ModelViewBinding, Expr, PageEventBinding, PageInterface, PageQuery, PageVariable} from "@platform/api/host-contract";
 
 import type {ActionParameterOptions, AnalysisStepOptions, ButtonOptions, DetailPresentationOptions, EventToneOptions, LayoutSizeOptions, LeaderboardOptions, MetricAnnotationOptions, MetricPresentationOptions, RecordCardOptions, RecordEventsOptions, RecordGanttOptions, RecordLinkOptions, RecordScatterOptions, RegionPresentationOptions, SceneConfigOptions, SceneLayerOptions, SceneMappingOptions, StatusTrackerOptions, TableColumnOptions, TablePresentationOptions} from "@platform/ui";
 

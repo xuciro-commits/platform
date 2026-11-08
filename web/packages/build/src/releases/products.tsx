@@ -1,5 +1,5 @@
 import { useHost, useRecordInventory, useReadQuery } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import { Button, Checkbox, Dialog, Input, Notice, PageHeader, Panel, PropertyList, Tag, t, useWorkspace } from "@platform/ui";
 import { useState } from "react";
 import { kindOfType } from "../projects/resources";

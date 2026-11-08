@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {Button,Checkbox,Input,Select,Textarea,t} from "@platform/ui";
 
 export function HeaderEditor({value,pages,onChange}:{value?:Api.ApplicationHeader;pages:string[];onChange:(header:Api.ApplicationHeader|undefined)=>void}){

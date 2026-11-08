@@ -1,5 +1,5 @@
 import { categoryOf, type AppUI, type Host, type PlatformAppCategory } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { t, type PlatformApplication } from "@platform/ui";
 
 export const categories: { id: PlatformAppCategory; label: () => string }[] = [

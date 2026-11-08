@@ -1,4 +1,4 @@
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import type { Host } from "@platform/app";
 import { t } from "@platform/ui";
 import { BranchFailure, resourcePath } from "./api";

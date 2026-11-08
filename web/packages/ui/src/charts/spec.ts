@@ -1,5 +1,5 @@
 import type {MetricPresentationOptions} from "../presentation";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 
 export type MeasureType = "nominal" | "ordinal" | "temporal" | "quantitative";
 export type AggregateOp = "count" | "sum" | "avg" | "min" | "max";

@@ -1,6 +1,6 @@
 import { Printer } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { DetailPresentationOptions } from "../presentation";
 import { PropertyList } from "../components/EntityCard";
 import { StructuredEditor } from "../components/StructuredEditor";

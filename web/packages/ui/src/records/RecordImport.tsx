@@ -4,7 +4,7 @@ import { Dialog } from "../primitives/dialog";
 import { FilePicker } from "../primitives/controls";
 import { humanizeKernelError } from "../lib/errors";
 import { t } from "../i18n";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type { RecordSource } from "./Records";
 
 export function RecordImportDialog({ source, type, open, onOpenChange, onImported }: {

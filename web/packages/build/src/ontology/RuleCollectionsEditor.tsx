@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {useHost,useRecordInventory} from "@platform/app";
 import {Button,Disclosure,Input,Select,t,type EntityInfo} from "@platform/ui";
 import {nameOf,type Input_} from "./object-model";

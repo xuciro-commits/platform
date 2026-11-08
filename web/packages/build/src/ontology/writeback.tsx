@@ -6,7 +6,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useAuthoringModel } from "./authoring-model";
 
 import { OpenLineage, useHost, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 
 type Field = { from: string; to: string; convert?: string };

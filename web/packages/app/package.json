@@ -22,7 +22,7 @@
     "build": "true"
   },
   "dependencies": {
-    "@platform/kernel": "workspace:*",
+    "@platform/api": "workspace:*",
     "@platform/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
     "react": "^19.3.0",

@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {useHost} from "@platform/app";
 import {Button,Checkbox,Input,Panel,Select,t,type EntityInfo} from "@platform/ui";
 import {useState} from "react";

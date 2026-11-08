@@ -3,7 +3,7 @@ import { ContextHelp, Button, Form, DataTable, Dialog, Sheet, EntityCard, Entity
 import { useState } from "react";
 import { z } from "zod";
 import { active, kind, today, type Chart, type Member } from "./shared";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { markingHelp, markingLabels, markings } from "./markings";
 type Grant = Api.Grant;
 const clearance = (g: Grant, roles: ReadonlySet<string>) => g.app === "platform" && roles.has(g.role);

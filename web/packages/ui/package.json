@@ -24,7 +24,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
     "@platform/catalog": "workspace:*",
-    "@platform/kernel": "workspace:*",
+    "@platform/api": "workspace:*",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.13",
     "@xyflow/react": "^12.12.0",

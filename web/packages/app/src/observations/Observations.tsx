@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import { ActionMenu, Button, Chart, DataTable, DateTimeInput, Disclosure, Input, Notice, PageHeader, Panel, PropertyList, RecordLookup, Select, t, useUnsavedChanges, useWorkspace, formatStamp} from "@platform/ui";
 import { assetKey, useHost, useProvidedCapabilities, useReadQuery } from "../index";
 

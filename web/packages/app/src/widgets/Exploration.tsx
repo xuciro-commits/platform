@@ -2,7 +2,7 @@ import type {Definition as WorkspaceDefinition} from "../index";
 import type * as PageUI from "../pageui/types";
 import {useEffect,useMemo,useRef,useState} from "react";
 import {AssetDirectory,Panel,RecordNeighborhood,RecordResourceList,SearchAround,t,type EntityInfo,type EntityRecord,type RecordSource,type SearchAroundPathEntry} from "@platform/ui";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {createRecordExploration,originalDirectoryItems,type ExplorationWindow} from "../exploration/reader";
 import type {QueryWindow} from "./QueryWindowFrame";
 import type {VariableResult} from "../runtime/variables";

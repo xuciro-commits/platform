@@ -1,7 +1,7 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { ContextHelp, Button, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
-import { queryElements, resolveElements } from "@platform/kernel";
+import { queryElements, resolveElements } from "@platform/api";
 import { useState } from "react";
 import type { AppSettings, SettingValue } from "./shared";
 import type { TenantRecord } from "./account";

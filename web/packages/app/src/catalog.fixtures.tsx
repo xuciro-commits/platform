@@ -1,4 +1,4 @@
-import { EdgeClient, type ActionDeclaration, type Api } from "@platform/kernel";
+import { EdgeClient, type ActionDeclaration, type Api } from "@platform/api";
 import { Panel, t, type EntityInfo, type EntityRecord, type RecordSource, type RecordView } from "@platform/ui";
 import { PreviewWorkspace } from "@platform/ui/catalog/examples";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

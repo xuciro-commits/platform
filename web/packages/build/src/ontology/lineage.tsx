@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { DependencyGraph, OpenLineage, useReadQuery } from "@platform/app";
 import { Button, DataTable, Panel, t, type Route } from "@platform/ui";

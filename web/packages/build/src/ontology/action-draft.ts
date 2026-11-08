@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost } from "@platform/app";
 import { useEffect } from "react";
 import { t } from "@platform/ui";

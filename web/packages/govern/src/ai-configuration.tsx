@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { modelOptionLabel, ModelOptionsEditor, ModelPicker, useHost, useReadQuery as useRead, type ModelPurpose } from "@platform/app";
 import { Button, Dialog, Sheet, Input, PageHeader, Panel, PropertyList, ResourceSections, Select, Tag, useWorkspace, t } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import {modelReferenceTitle} from "./shared";
 import { ReadResult } from "./operations";
 import { AIProviders, AIUsage } from "./ai";

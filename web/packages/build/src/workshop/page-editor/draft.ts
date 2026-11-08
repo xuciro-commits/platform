@@ -1,5 +1,5 @@
 import type {PageUI} from "@platform/app";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 
 export type AuthoringSection = Omit<PageUI.Section, "object" | "query" | "actions" | "function" | "inlineEdit"> & {
   object?: string; query?: string; querySourceVersion?:string; actions?: string[];

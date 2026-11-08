@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 
 const text: Api.ValueSchema = { type: "string" };
 const record = (properties: Record<string, Api.ValueSchema>, required: string[]): Api.ValueSchema => ({ type: "object", properties, required });

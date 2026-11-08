@@ -1,5 +1,5 @@
 import type * as PageUI from "../pageui/types";
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 
 type Source={type:string;fields:Api.FieldInfo[];records:Record<string,unknown>[]};
 type Configuration={page:PageUI.Page;sources:Record<string,Source>;answer:Api.PageCompositeResult};

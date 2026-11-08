@@ -1,5 +1,5 @@
 import { sourceFieldInput } from "@platform/app";
-import { apiErrorMessage } from "@platform/kernel";
+import { apiErrorMessage } from "@platform/api";
 import { useActionTrial, useHost } from "@platform/app";
 import { t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";

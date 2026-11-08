@@ -1,7 +1,7 @@
 import type {PageUI} from "@platform/app";
 import {modelBindingContract,materializeModelSection,modelField} from '@platform/app/model';
-import type {Api} from '@platform/kernel';
-import {apiErrorMessage} from '@platform/kernel';
+import type {Api} from '@platform/api';
+import {apiErrorMessage} from '@platform/api';
 import {SemanticObjectSelect,useHost,useReadQuery,type Definition} from '@platform/app';
 import {Button,Checkbox,Select,t,type EntityInfo} from '@platform/ui';
 import {ModelFieldPicker,ExpressionEditor,literalExpression} from '@platform/app';

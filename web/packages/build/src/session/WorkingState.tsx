@@ -1,5 +1,5 @@
 import { useHost, useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Button, Dialog, Notice, flushSync, t, useInputDrafts } from "@platform/ui";
 import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useCurrentBranch } from "../branches/current";

@@ -1,6 +1,6 @@
 import {encodePage} from "../pageui/wire";
 import {useEffect,useRef,useState} from 'react';
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 import type {EntityRecord,RecordQuery,RecordSource} from '@platform/ui';
 import {useHost} from '../index';
 import type {WidgetBindingContext} from '../widgets/bindings';

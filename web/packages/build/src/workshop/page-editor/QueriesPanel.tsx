@@ -1,7 +1,7 @@
 import type {PageUI} from "@platform/app";
 import type {AuthoringSection} from "./draft";
 import { useEffect, useState } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { parsePageDecimal,isPageDecimalDraft,SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, useProvidedCapabilities, type PageVariableValue } from "@platform/app";
 import { ContextHelp, Button, Card, Checkbox, Input, PropertyList, Select, t } from "@platform/ui";
 import type { EntityInfo } from "@platform/ui";

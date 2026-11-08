@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useEffect, useState } from "react";
 import { SetBuilder } from "@platform/app";
 

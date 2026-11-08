@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { t, type EntityInfo } from "@platform/ui";
 import { kindOfType } from "../projects/resources";
 

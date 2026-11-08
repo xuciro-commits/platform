@@ -1,6 +1,6 @@
 import {InputDraftProvider,InputProblems,useInputDrafts} from "../fields/draft";
 import {useEffect,useRef,useState} from "react";
-import {imageRegionLimits,type Api} from "@platform/kernel";
+import {imageRegionLimits,type Api} from "@platform/api";
 import {Button} from "../primitives/button";
 import {Input} from "../primitives/input";
 import {t} from "../i18n";

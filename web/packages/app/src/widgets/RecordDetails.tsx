@@ -1,6 +1,6 @@
 import type * as PageUI from "../pageui/types";
 import {ObjectView,Panel,RecordStatus,RecordLinks,objectViewSections,t,type EntityRecord,type RecordSection,type RecordSource} from '@platform/ui';
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 import {NewActions,RecordActions} from '../actions/actions';
 import {RecordDetail,useOpenRecord} from '../index';
 import {pageVariableContract} from '../runtime/PageRuntime';

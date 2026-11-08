@@ -1,6 +1,6 @@
 import type * as PageUI from "../pageui/types";
 import {collectionInput,collectionQuery,validCollectionInput,type CollectionInput} from './collection-input';
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 import type {EntityInfo,Filter} from '@platform/ui';
 import {parseDecimal} from './decimal';
 

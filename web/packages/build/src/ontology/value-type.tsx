@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { semanticValueTypes, useHost } from "@platform/app";
 import { Button, Checkbox, DateInput, DateTimeInput, EmptyState, Input, Notice, PageHeader, PanelSection, PropertyList, Select, StructuredEditor, Tag, Textarea, Workbench, inputIssues, t } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";

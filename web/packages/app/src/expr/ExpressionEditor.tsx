@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { checkRule, initializeRules, type RuleSchema } from "@platform/app/rules";
 import { Button, Textarea, t, useDraftInput, useInputDrafts, type EntityInfo } from "@platform/ui";
 import { ConditionBuilder } from "./ConditionBuilder";

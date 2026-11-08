@@ -17,7 +17,7 @@ import { Button } from "../primitives/button";
 import { RecordReadContext } from "./RecordChip";
 import { t } from "../i18n";
 import { humanizeKernelError } from "../lib/errors";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import {StatusBar, displayOf, entityFrom, listed} from "./RecordEntity";
 import {RecordHistory} from "./RecordHistory";
 import {ApprovalGraph, Approvals, Comments, Files, Processes, Tasks} from "./RecordPanels";

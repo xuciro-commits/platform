@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {useState,type ReactNode} from "react";
 import {PanelLeftClose,PanelLeftOpen,Boxes} from "lucide-react";
 import {Button} from "../primitives/button";

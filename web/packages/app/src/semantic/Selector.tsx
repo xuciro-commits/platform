@@ -1,6 +1,6 @@
 import type {Definition as WorkspaceDefinition} from "../index";
 import { Select, t } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost } from "../index";
 import { assetBindingKey, semanticModelView, semanticPropertyTypes, semanticValueTypes, type PropertyRef, type SemanticPropertyType, type SemanticValueType } from "./model";
 

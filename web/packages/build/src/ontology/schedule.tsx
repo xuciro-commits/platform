@@ -1,7 +1,7 @@
 import { useReadQuery } from "@platform/app";
 import { Button, Checkbox, DataTable, Input, PageHeader, Panel, PropertyList, Select, StructuredEditor, t } from "@platform/ui";
 import { ResourceControls } from "../editor/workbench";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { PERIODS, periodLabel } from "../automate/workflow-model";

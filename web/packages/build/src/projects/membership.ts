@@ -1,5 +1,5 @@
 import { useReadQuery, type Host } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { t } from "@platform/ui";
 import { useMemo } from "react";
 import { resourcePath } from "../branches/api";

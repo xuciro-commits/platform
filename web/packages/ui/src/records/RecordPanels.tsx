@@ -5,7 +5,7 @@ import { Tag } from "../components/StatusTag";
 import { Button } from "../primitives/button";
 import { FlowSteps, type FlowStepEdge, type FlowStepNode } from "../graph/flow/FlowSteps";
 import { t } from "../i18n";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import type {AttachedFile, EntityRecord, RecordComment, RecordSource, RecordView} from "./Records";
 
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1 << 20 ? `${Math.round(n / 1024)} KB` : `${(n / (1 << 20)).toFixed(1)} MB`);

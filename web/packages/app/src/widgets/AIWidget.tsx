@@ -3,7 +3,7 @@ import {ProposalReview} from "./ProposalReview";
 import {useEffect,useRef,useState} from "react";
 import {useQueries} from "@tanstack/react-query";
 import {AIResult,Panel,RecordList,t,type AIResultTurn,type EntityRecord} from "@platform/ui";
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {useHost,useOpenRecord} from "../index";
 import {createAIReader,type AIRequest} from "../ai/service";
 import type {VariableResult} from "../runtime/variables";

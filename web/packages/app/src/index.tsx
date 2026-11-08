@@ -23,7 +23,7 @@ export {confirmedDecision} from "./collaboration/decision";
 export {createWorkViews,type WorkViewsHost} from "./work/service";
 export {searchInputObjects} from "./widgets/search-input";
 import "./i18n";
-import {apiErrorMessage, OfflineReadError, type ActionDeclaration, type Api, type EdgeClient, type Entry} from "@platform/kernel";
+import {apiErrorMessage, OfflineReadError, type ActionDeclaration, type Api, type EdgeClient, type Entry} from "@platform/api";
 import {
   Button, Chart, Disclosure, ObjectView, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSection, type RecordSource, type Route, type ShellCommand, type View,

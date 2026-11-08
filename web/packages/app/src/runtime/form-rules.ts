@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import {evaluateRule,ruleDependencies,type RuleContext,type RuleSchema,type RuleValue} from "./rule-engine";
 
 type LocalResult=RuleValue&{error?:string};

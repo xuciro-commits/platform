@@ -1,5 +1,5 @@
 import { useHost, useReadQuery } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { t } from "@platform/ui";
 import { useApplicationScope } from "../projects/application-scope";

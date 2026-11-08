@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Card, ContextHelp, Disclosure, PropertyList, Select, t } from "@platform/ui";
-import type { Api, ActionDeclaration } from "@platform/kernel";
+import type { Api, ActionDeclaration } from "@platform/api";
 import { useHost } from "../index";
 import { DeclaredActionForm } from "../actions/actions";
 

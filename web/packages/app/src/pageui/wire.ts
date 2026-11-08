@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {Api} from "@platform/api";
 import type * as UI from "./types";
 import {pageSafetyContract} from "./safety";
 

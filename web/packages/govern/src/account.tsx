@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import {useUnsavedChanges, Button, Form, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t, formatStamp, PanelGroup } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";

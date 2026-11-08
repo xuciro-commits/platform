@@ -1,5 +1,5 @@
 import { definitionPresentation, useDefinitions, useHost, useRecordInventory } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useMemo } from "react";
 import { useBranchTouched, overlayRecords } from "../branches/records";
 import { useCurrentBranch } from "../branches/current";
@@ -8,7 +8,7 @@ import { kindOfType, matchesResourceKind, publishedResourceKind, refKey, resourc
 export type OwnedResource = { kind: ResourceKindInfo; record?: ResourceRecord; ref: Api.AssetRef; title: string; installed: boolean; missing: boolean };
 const inventoryTypes = [...new Set(resourceKinds.map(kind => kind.type))];
 
-export function useProjectResources(project?: Pick<import("@platform/kernel").Api.Application, "pages" | "resources" | "concepts">, owner = "build", editable = true, options: { enabledKinds?: readonly string[] } = {}) {
+export function useProjectResources(project?: Pick<import("@platform/api").Api.Application, "pages" | "resources" | "concepts">, owner = "build", editable = true, options: { enabledKinds?: readonly string[] } = {}) {
   const { holds} = useHost();
   const enabledKinds = options.enabledKinds;
   const kindEnabled = (kind: ResourceKindInfo) => !enabledKinds || enabledKinds.includes(kind.ref ?? kind.kind);

@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { useReadQuery } from "@platform/app";
 import { Button, ContextHelp, EmptyState, Input, InputDraftProvider, Notice, Panel, Rejection, Select, t, type EntityInfo } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";

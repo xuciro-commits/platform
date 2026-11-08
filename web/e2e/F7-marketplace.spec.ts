@@ -1,4 +1,4 @@
-import type { PackageDescriptor, PackagePreview, PackageView, ResourceDirectory } from "../packages/kernel/src/gen/host";
+import type { PackageDescriptor, PackagePreview, PackageView, ResourceDirectory } from "../packages/api/src/gen/host";
 import { acceptedClient, expect, signIn, test, unique } from "./kit";
 
 test.use({actionTimeout:15_000});

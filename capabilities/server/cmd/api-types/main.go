@@ -14,8 +14,8 @@ import (
 )
 
 func main() {
-	out := flag.String("out", "../../web/packages/kernel/src/gen/host.ts", "the TypeScript file to write")
-	sdk := flag.String("sdk", "../../web/packages/kernel/src/gen/enterprise-sdk.ts", "the enterprise SDK TypeScript file to write")
+	out := flag.String("out", "../../web/packages/api/src/gen/host.ts", "the TypeScript file to write")
+	sdk := flag.String("sdk", "../../web/packages/api/src/gen/enterprise-sdk.ts", "the enterprise SDK TypeScript file to write")
 	flag.Parse()
 	h := platformserver.NewHost(nil)
 	h.Handler()

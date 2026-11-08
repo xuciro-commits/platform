@@ -1,5 +1,5 @@
 import { PayloadFields } from "@platform/app";
-import type { ActionDeclaration } from "@platform/kernel";
+import type { ActionDeclaration } from "@platform/api";
 import { ContextHelp, JsonTextEditor, t } from "@platform/ui";
 
 export function TestPayload({ fields, payload, onChange }: { fields?: ActionDeclaration["payload"]; payload: string; onChange: (payload: string) => void }) {

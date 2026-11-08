@@ -1,4 +1,4 @@
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { StructuredValueInput } from "../fields/StructuredValueInput";
 import { t } from "../i18n";
 import { Button } from "../primitives/button";

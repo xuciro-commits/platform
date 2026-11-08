@@ -1,5 +1,5 @@
 import { HostContext, type AppUI, type Host, type Me } from "@platform/app";
-import type { EdgeClient } from "@platform/kernel";
+import type { EdgeClient } from "@platform/api";
 import { Button, Workspace, language, notify, t } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
 

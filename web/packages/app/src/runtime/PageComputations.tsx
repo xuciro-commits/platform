@@ -1,6 +1,6 @@
 import type * as PageUI from "../pageui/types";
 import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
-import type {Api} from '@platform/kernel';
+import type {Api} from '@platform/api';
 import {useHost,useInvokeCapability} from '../index';
 import {recordResourceSlot} from './resources';
 import type {PageSessionStore,PageSessionSnapshot} from './Session';

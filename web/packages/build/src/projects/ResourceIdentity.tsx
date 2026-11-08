@@ -1,5 +1,5 @@
 import { useReadQuery } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import type { Api } from "@platform/api";
 import { Notice, t, routeToHash, useWorkspace, type View } from "@platform/ui";
 import { useEffect } from "react";
 import { BranchDecisions } from "../branches/decisions";
