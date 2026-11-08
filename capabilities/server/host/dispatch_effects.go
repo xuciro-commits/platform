@@ -19,13 +19,11 @@ func (t *Tenant) beginDispatchAttempt(x platform.Effect, at time.Time) bool {
 	if request.SafeRetry {
 		return true
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if t.businessStopped() {
 		return false
 	}
 	const reason = "Dispatch attempt started; awaiting delivery evidence"
-	t.settleAccepted(x.ID, platform.Outcome{Effect: x.ID, Result: "unknown", Detail: reason}, nil, at)
+	t.settleWithUsage(x.ID, platform.Outcome{Effect: x.ID, Result: "unknown", Detail: reason}, nil, at)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, current := range t.outbound {

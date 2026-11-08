@@ -200,10 +200,17 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 
 func (h *Host) tenantView(t *Tenant) HostTenantView {
 	now := h.Now()
-	t.mu.Lock()
-	view := HostTenantView{ID: t.ID, Lifecycle: t.console.State(), ActiveRelease: t.releases.Active(),
-		Candidates: t.releases.Count()}
-	t.mu.Unlock()
+	state := t
+	image := t.readImage.Load()
+	if image != nil {
+		state = image.state
+	} else {
+		t.mu.Lock()
+	}
+	view := HostTenantView{ID: t.ID, Lifecycle: t.console.State(), ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}
+	if image == nil {
+		t.mu.Unlock()
+	}
 	health := t.Health(now)
 	view.Started, view.FailedWork, view.Connectors = health.Started, health.Failed, health.Connectors
 	view.Apps = []string{}
@@ -359,12 +366,18 @@ type HostArtifactView struct {
 }
 
 func (t *Tenant) hostArtifacts() []HostArtifactView {
-	t.mu.Lock()
-	ids := t.releases.Ids()
+	state := t
+	if image := t.readImage.Load(); image != nil {
+		state = image.state
+	} else {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+	}
+	ids := state.releases.Ids()
 	out := []HostArtifactView{}
 	for _, id := range ids {
-		raw := t.releases.Raw(id)
-		view := HostArtifactView{Candidate: id, Active: id == t.releases.Active(), Size: len(raw)}
+		raw := state.releases.Raw(id)
+		view := HostArtifactView{Candidate: id, Active: id == state.releases.Active(), Size: len(raw)}
 		if candidate, err := platform.ReadCandidate(id, raw); err == nil {
 			view.Digest, view.Assets, view.Verified = candidate.ID, len(candidate.Assets), true
 		} else {
@@ -372,7 +385,6 @@ func (t *Tenant) hostArtifacts() []HostArtifactView {
 		}
 		out = append(out, view)
 	}
-	t.mu.Unlock()
 	slices.SortStableFunc(out, func(a, b HostArtifactView) int {
 		if a.Active != b.Active {
 			if a.Active {

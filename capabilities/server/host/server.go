@@ -133,26 +133,29 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	return platform.Member{}, nil, false
 }
 
-func (h *Host) join(t *Tenant, d platform.IdentitySessions, subject string, now time.Time) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.quarantined() {
-		return false
+func (h *Host) join(t *Tenant, _ platform.IdentitySessions, subject string, now time.Time) bool {
+	_, refusal := decideOnImage(t, context.Background(), "identity:join", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+		d, ok := t.app(controlowner.PlatformApp).(platform.IdentitySessions)
+		if !ok {
+			return nil, unknown()
+		}
+		if _, known := d.MemberBySubject(subject); known {
+			return nil, nil
+		}
+		if !d.JoinableSubject(subject) || !d.JoinsSubject(subject) {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+		payload, _ := json.Marshal(map[string]string{"subject": subject})
+		caller := t.automation(controlowner.PlatformApp, false)
+		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: controlowner.PlatformApp, IdempotencyKey: "join:" + subject, Target: &pb.EntityRef{Type: controlowner.MemberType, Id: d.JoinID(subject)}, Schema: &pb.SchemaRef{Name: controlowner.SchemaJoin, Version: 1}, Payload: payload}
+		return t.submitAccepted(d, caller.Member, sub, now, true)
+	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+		return t.finishPreparedSubmission(platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, candidate, record, refusal)
+	})
+	if refusal != nil {
+		log.Printf("join %s to %s: %s", subject, t.ID, refusal.Error())
 	}
-	if _, ok := d.MemberBySubject(subject); ok {
-		return true
-	}
-	if !d.JoinableSubject(subject) || !d.JoinsSubject(subject) {
-		return false
-	}
-	id := d.JoinID(subject)
-	payload, _ := json.Marshal(map[string]string{"subject": subject})
-	err := t.submitAutomated(d, t.automation(controlowner.PlatformApp, false), &pb.Submission{TenantId: t.ID, Authority: controlowner.PlatformApp, IdempotencyKey: "join:" + subject,
-		Target: &pb.EntityRef{Type: controlowner.MemberType, Id: id}, Schema: &pb.SchemaRef{Name: controlowner.SchemaJoin, Version: 1}, Payload: payload}, now)
-	if err != nil {
-		log.Printf("join %s to %s: %s", subject, t.ID, err.Error())
-	}
-	return err == nil
+	return refusal == nil
 }
 
 func (h *Host) tenantsOf(r *http.Request) []MeTenant {

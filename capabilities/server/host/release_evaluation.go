@@ -1,8 +1,10 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"platformkernel/kernel"
 	"platformserver/services/ai/gateway"
 
 	"reflect"
@@ -27,6 +29,22 @@ type ReleaseEvaluationStarted struct {
 }
 
 func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationRequest, now time.Time) (string, error) {
+	result, refusal := decideOnImage(t, context.Background(), "release:evaluate", func(t *Tenant) (readAnswer[string], *kernel.Error) {
+		id, err := t.prepareEvaluateRelease(m, request, now)
+		return readAnswer[string]{value: id, err: err}, nil
+	}, func(t *Tenant, candidate preparedAccepted, result readAnswer[string], refusal *kernel.Error) (readAnswer[string], *kernel.Error) {
+		if len(candidate.entry.Body) != 0 {
+			_, refusal = t.finishPreparedSubmission(platform.Member{ID: "app:" + candidate.entry.App, Tenant: t.ID}, candidate, nil, refusal)
+		}
+		return result, refusal
+	})
+	if refusal != nil {
+		return "", refusal
+	}
+	return result.value, result.err
+}
+
+func (t *Tenant) prepareEvaluateRelease(m platform.Member, request ReleaseEvaluationRequest, now time.Time) (string, error) {
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
@@ -35,9 +53,6 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		return "", fmt.Errorf("a builder, saved candidate, test plan or agent, and idempotency key are required")
 	}
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	defer t.enqueue(now)
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}

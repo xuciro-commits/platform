@@ -20,43 +20,53 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	}
 	q.Sources = slices.Clone(q.Sources)
 	var prepared *preparedOperationInput
-	t.mu.Lock()
-	current, seated := t.Member(member.ID)
-	app := t.app(q.App)
-	var op platform.Operation
-	var version int
-	var declared bool
-	if app != nil {
-		op, version, declared = operationDefinition(app, q.Name, q.Version)
+	type setup struct {
+		member    platform.Member
+		operation platform.Operation
+		version   int
+		id        string
+		seal      bool
 	}
-	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, q.App, q.Key, acceptedformat.OperationEndpoint)
-	t.opsMu.Lock()
-	for _, x := range t.outbound {
-		if x.ID == id {
-			var previous operationBinding
-			if json.Unmarshal([]byte(x.Body), &previous) == nil && previous.SealedInput != nil {
-				op, version, declared = previous.Definition, previous.Call.Version, true
+	initial, refusal := recordRead(t, context.Background(), func(t *Tenant) (setup, *kernel.Error) {
+		current, seated := t.Member(member.ID)
+		app := t.app(q.App)
+		var op platform.Operation
+		var version int
+		var declared bool
+		if app != nil {
+			op, version, declared = operationDefinition(app, q.Name, q.Version)
+		}
+		callID := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, q.App, q.Key, acceptedformat.OperationEndpoint)
+		t.opsMu.Lock()
+		for _, x := range t.outbound {
+			if x.ID == callID {
+				var previous operationBinding
+				if json.Unmarshal([]byte(x.Body), &previous) == nil && previous.SealedInput != nil {
+					op, version, declared = previous.Definition, previous.Call.Version, true
+				}
+				break
 			}
-			break
 		}
+		t.opsMu.Unlock()
+		seal := declared && op.Limits.DataInputBytes > 0
+		if seal {
+			if !seated || member.Tenant != t.ID || t.quarantined() {
+				return setup{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot prepare the operation input")
+			}
+			c := platform.NewCaller(runtime{t: t, scoped: true}, current, q.App, false, false)
+			if refusal := authorizationRefusal(t.authorizeCapability(c, q.App, op.Name, op.Roles, op.Check() == nil, authorizationDetails{At: now, Sources: q.Sources})); refusal != nil {
+				return setup{}, refusal
+			}
+			var frozen platform.Operation
+			_ = json.Unmarshal(platform.Raw(op), &frozen)
+			op = frozen
+		}
+		return setup{current, op, version, callID, seal}, nil
+	})
+	if refusal != nil {
+		return platform.OperationCall{}, refusal
 	}
-	t.opsMu.Unlock()
-	seal := declared && op.Limits.DataInputBytes > 0
-	if seal {
-		if !seated || member.Tenant != t.ID || t.quarantined() {
-			t.mu.Unlock()
-			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot prepare the operation input")
-		}
-		c := platform.NewCaller(runtime{t: t, scoped: true}, current, q.App, false, false)
-		if refusal := authorizationRefusal(t.authorizeCapability(c, q.App, op.Name, op.Roles, op.Check() == nil, authorizationDetails{At: now, Sources: q.Sources})); refusal != nil {
-			t.mu.Unlock()
-			return platform.OperationCall{}, refusal
-		}
-		var frozen platform.Operation
-		_ = json.Unmarshal(platform.Raw(op), &frozen)
-		op = frozen
-	}
-	t.mu.Unlock()
+	current, op, version, id, seal := initial.member, initial.operation, initial.version, initial.id, initial.seal
 	if seal {
 
 		if len(q.Inputs) > op.Limits.DataInputBytes {
@@ -94,26 +104,30 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			return platform.OperationCall{}, err
 		}
 	} else {
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		latest, ok := t.Member(current.ID)
-		if !ok || t.quarantined() || t.admits(latest) != nil {
-			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The operation member is unavailable")
-		}
-		owner, ok := t.app(controlowner.PlatformApp).(platform.App)
-		if !ok {
-			return platform.OperationCall{}, unknown()
-		}
-		_, refusedBefore := t.committed.Refusal(controlowner.PlatformApp + "/" + q.Key)
-		known := refusedBefore || len(t.committed.Answer(controlowner.PlatformApp+"/"+q.Key)) > 0 || owner.AcceptedLedger().AcceptedFor(t.ID, q.Key) != nil
-		retained = !known
-		if _, err := t.submitAccepted(owner, latest, s, now, false, prepared); err != nil {
-			if _, rejected := t.committed.Refusal(controlowner.PlatformApp + "/" + q.Key); rejected {
-				retained = false
+		keep, refusal := decideOnImage(t, context.Background(), "operation:call", func(t *Tenant) (bool, *kernel.Error) {
+			latest, ok := t.Member(current.ID)
+			if !ok || t.quarantined() || t.admits(latest) != nil {
+				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The operation member is unavailable")
 			}
-			return platform.OperationCall{}, err
+			owner, ok := t.app(controlowner.PlatformApp).(platform.App)
+			if !ok {
+				return false, unknown()
+			}
+			_, refusedBefore := t.committed.Refusal(controlowner.PlatformApp + "/" + q.Key)
+			known := refusedBefore || len(t.committed.Answer(controlowner.PlatformApp+"/"+q.Key)) > 0 || owner.AcceptedLedger().AcceptedFor(t.ID, q.Key) != nil
+			_, refusal := t.submitAccepted(owner, latest, s, now, false, prepared)
+			return !known, refusal
+		}, func(t *Tenant, candidate preparedAccepted, keep bool, refusal *kernel.Error) (bool, *kernel.Error) {
+			_, refusal = t.finishPreparedSubmission(current, candidate, nil, refusal)
+			if _, rejected := t.committed.Refusal(controlowner.PlatformApp + "/" + q.Key); rejected {
+				keep = false
+			}
+			return keep, refusal
+		})
+		retained = keep
+		if refusal != nil {
+			return platform.OperationCall{}, refusal
 		}
-		t.enqueue(now)
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()

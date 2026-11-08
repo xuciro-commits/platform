@@ -88,9 +88,16 @@ func (s flowFrameStore) Discard(ref platform.FlowStateArtifact) error {
 }
 
 func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *kernel.Error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.continuousSnapshotLocked(m, id, now)
+	type snapshot struct {
+		owner    platform.ContinuousFlowOwner
+		instance platform.FlowInstance
+		member   platform.Member
+	}
+	v, refusal := recordRead(t, context.Background(), func(t *Tenant) (snapshot, *kernel.Error) {
+		owner, instance, member, refusal := t.continuousSnapshotLocked(m, id, now)
+		return snapshot{owner, instance, member}, refusal
+	})
+	return v.owner, v.instance, v.member, refusal
 }
 
 func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time.Time) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *kernel.Error) {
@@ -118,19 +125,14 @@ func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time
 }
 
 func (t *Tenant) cleanupFlowArtifactsFor(m platform.Member, id string, now time.Time) *kernel.Error {
-	t.mu.Lock()
-	f, before, _, refusal := t.continuousSnapshotLocked(m, id, now)
-	if refusal != nil {
-		t.mu.Unlock()
-		return refusal
-	}
-	if !before.CleanupPending {
-		t.mu.Unlock()
-		return nil
-	}
-	plan, refusal := f.PlanArtifactCleanup(before, now)
-	t.mu.Unlock()
-	if refusal != nil {
+	plan, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowArtifactCleanupPreparation, *kernel.Error) {
+		f, before, _, refusal := t.continuousSnapshotLocked(m, id, now)
+		if refusal != nil || !before.CleanupPending {
+			return nil, refusal
+		}
+		return f.PlanArtifactCleanup(before, now)
+	})
+	if refusal != nil || plan == nil {
 		return refusal
 	}
 	return t.retireContinuousArtifacts(plan, now)
@@ -139,9 +141,7 @@ func (t *Tenant) cleanupFlowArtifactsFor(m platform.Member, id string, now time.
 func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.FlowBatch, now time.Time) (platform.FlowBatchOutcome, *kernel.Error) {
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
-	t.mu.Lock()
-	f, before, _, refusal := t.continuousSnapshotLocked(m, id, now)
-	t.mu.Unlock()
+	f, before, _, refusal := t.continuousSnapshot(m, id, now)
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
@@ -163,19 +163,19 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 			return platform.FlowBatchOutcome{}, refusal
 		}
 	}
-	var current platform.Member
-	var plan platform.FlowBatchPreparation
-	t.mu.Lock()
-	f, before, current, refusal = t.continuousSnapshotLocked(m, id, now)
-	if refusal == nil {
-		plan, refusal = f.PlanBatch(before, t.automation(platform.FlowApp, false))
-	}
-	t.mu.Unlock()
-	if refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
-	}
+	current := m
 	store := flowFrameStore{tenant: t.ID, files: t.files()}
-	prepared, refusal := plan.Prepare(batch, now, store)
+	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedBatch, *kernel.Error) {
+		f, latest, _, refusal := t.continuousSnapshotLocked(m, id, now)
+		if refusal != nil {
+			return nil, refusal
+		}
+		plan, refusal := f.PlanBatch(latest, t.automation(platform.FlowApp, false))
+		if refusal != nil {
+			return nil, refusal
+		}
+		return plan.Prepare(batch, now, store)
+	})
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
@@ -200,26 +200,44 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 			t.staged.DiscardInput(preparedInput.ref)
 		}
 	}()
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	_, latest, current, refusal := t.continuousSnapshotLocked(current, id, now)
+	member := platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}
+	_, refusal = decideOnImage(t, context.Background(), "flow:batch", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+		f, latest, current, refusal := t.continuousSnapshotLocked(m, id, now)
+		if refusal != nil {
+			return nil, refusal
+		}
+		if !prepared.Matches(latest) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
+		}
+		if batch.Source != nil {
+			plan, refusal := f.PlanBatch(latest, t.automation(platform.FlowApp, false))
+			if refusal != nil {
+				return nil, refusal
+			}
+			if refusal := t.checkStreamSourceLocked(current, plan, latest, *batch.Source, batch.Tick, now); refusal != nil {
+				return nil, refusal
+			}
+		}
+		return t.submitAccepted(prepared.Decision(f), member, prepared.Submission(t.ID), now, true, preparedInput)
+	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+		if len(candidate.entry.Body) != 0 {
+			retained, inputRetained = true, true
+		}
+		return t.finishPreparedSubmission(member, candidate, record, refusal)
+	})
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
-	if !prepared.Matches(latest) {
-		return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
-	}
-	if batch.Source != nil {
-		if refusal := t.checkStreamSourceLocked(current, plan, latest, *batch.Source, batch.Tick, now); refusal != nil {
-			return platform.FlowBatchOutcome{}, refusal
+	x, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowInstance, *kernel.Error) {
+		x, ok := platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), id)
+		if !ok {
+			return x, unknown()
 		}
-	}
-	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
-		retained, inputRetained = true, true
+		return x, nil
+	})
+	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
-	t.enqueue(now)
-	x, _ := platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), id)
 	retained = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket
 	inputRetained = preparedInput != nil
 	return platform.FlowBatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
@@ -228,78 +246,94 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Submission, now time.Time, contentVersion ...string) (*pb.ChangeRecord, *kernel.Error, bool) {
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
-	t.mu.Lock()
-	var binding *platform.SchemaVersion
-	if owner, ok := t.procs.(platform.ContinuousFlowOwner); ok {
-		var schemaRefusal *kernel.Error
-		if len(contentVersion) > 0 {
-			binding, schemaRefusal = t.submissionSchemaVersion(owner, sub, contentVersion[0])
-			if schemaRefusal != nil && schemaRefusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
-				t.mu.Unlock()
-				return nil, schemaRefusal, true
-			}
-		} else {
-			sub = t.currentSubmissionSchema(owner, sub)
-		}
-		_, refused := t.committed.Refusal(owner.Manifest().ID + "/" + sub.GetIdempotencyKey())
-		if schemaRefusal != nil || refused || owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
-			record, err := t.submitAcceptedVersion(owner, m, sub, now, false, binding, schemaRefusal, nil, nil)
-			t.mu.Unlock()
-			return record, err, true
-		}
+	type preflight struct {
+		sub     *pb.Submission
+		binding *platform.SchemaVersion
+		record  *pb.ChangeRecord
+		handled bool
 	}
-	view, err := t.recordOf(m, "flow.dead-letter", sub.GetTarget().GetId(), now)
+	first, err := decideOnImage(t, context.Background(), "flow:replay-preflight", func(t *Tenant) (preflight, *kernel.Error) {
+		value := preflight{sub: sub}
+		if owner, ok := t.procs.(platform.ContinuousFlowOwner); ok {
+			var refusal *kernel.Error
+			if len(contentVersion) > 0 {
+				value.binding, refusal = t.submissionSchemaVersion(owner, sub, contentVersion[0])
+				if refusal != nil && refusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+					return value, refusal
+				}
+			} else {
+				value.sub = t.currentSubmissionSchema(owner, sub)
+			}
+			_, refused := t.committed.Refusal(owner.Manifest().ID + "/" + sub.GetIdempotencyKey())
+			if refusal != nil || refused || owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+				value.handled = true
+				value.record, refusal = t.submitAcceptedVersion(owner, m, value.sub, now, false, value.binding, refusal, nil, nil)
+				return value, refusal
+			}
+		}
+		return value, nil
+	}, func(t *Tenant, candidate preparedAccepted, value preflight, refusal *kernel.Error) (preflight, *kernel.Error) {
+		value.record, refusal = t.finishPreparedSubmission(m, candidate, value.record, refusal)
+		return value, refusal
+	})
+	if err != nil || first.handled {
+		return first.record, err, true
+	}
+	sub = first.sub
+	type replayContext struct {
+		asset    platform.FlowDeadLetterAsset
+		member   platform.Member
+		instance platform.FlowInstance
+	}
+	load := func(t *Tenant) (replayContext, *kernel.Error) {
+		view, refusal := t.recordOf(m, "flow.dead-letter", sub.GetTarget().GetId(), now)
+		if refusal != nil {
+			return replayContext{}, refusal
+		}
+		asset, ok := view.Record.(platform.FlowDeadLetterAsset)
+		if !ok || asset.Withheld {
+			return replayContext{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dead letter's protected source is unavailable")
+		}
+		if asset.Action != "" {
+			return replayContext{asset: asset}, nil
+		}
+		_, instance, current, refusal := t.continuousSnapshotLocked(m, asset.Instance, now)
+		return replayContext{asset, current, instance}, refusal
+	}
+	initial, err := recordRead(t, context.Background(), load)
 	if err != nil {
-		t.mu.Unlock()
 		return nil, err, true
 	}
-	asset, ok := view.Record.(platform.FlowDeadLetterAsset)
-	if !ok || asset.Withheld {
-		t.mu.Unlock()
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dead letter's protected source is unavailable"), true
-	}
-	if asset.Action != "" {
-		t.mu.Unlock()
+	if initial.asset.Action != "" {
 		return nil, nil, false
 	}
-	f, before, current, err := t.continuousSnapshotLocked(m, asset.Instance, now)
-	var plan platform.FlowDeadLetterReplayPreparation
-	if err == nil {
-		plan, err = f.PlanDeadLetterReplay(before, t.automation(platform.FlowApp, false), asset)
-	}
-	t.mu.Unlock()
-	if err != nil {
-		return nil, err, true
-	}
-	if before.CleanupPending {
-		if err := t.cleanupFlowArtifactsFor(current, before.ID, now); err != nil {
-			return nil, err, true
-		}
-		t.mu.Lock()
-		f, before, current, err = t.continuousSnapshotLocked(current, before.ID, now)
-		if err == nil {
-			plan, err = f.PlanDeadLetterReplay(before, t.automation(platform.FlowApp, false), asset)
-		}
-		t.mu.Unlock()
-		if err != nil {
+	if initial.instance.CleanupPending {
+		if err := t.cleanupFlowArtifactsFor(initial.member, initial.instance.ID, now); err != nil {
 			return nil, err, true
 		}
 	}
 	store := flowFrameStore{tenant: t.ID, files: t.files()}
-	prepared, err := plan.Prepare(sub, now, store)
+	var preparedContext replayContext
+	prepared, err := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedBatch, *kernel.Error) {
+		var refusal *kernel.Error
+		preparedContext, refusal = load(t)
+		if refusal != nil {
+			return nil, refusal
+		}
+		if preparedContext.asset.Action != "" {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dead letter changed while its replay was prepared")
+		}
+		f := t.procs.(platform.ContinuousFlowOwner)
+		plan, refusal := f.PlanDeadLetterReplay(preparedContext.instance, t.automation(platform.FlowApp, false), preparedContext.asset)
+		if refusal != nil {
+			return nil, refusal
+		}
+		return plan.Prepare(sub, now, store)
+	})
 	if err != nil {
 		return nil, err, true
 	}
 	var preparedInput *preparedOperationInput
-	if request, ok := prepared.OperationRequest(); ok {
-		preparedInput, err = t.prepareContinuousOperationInput(current, before.ID, request)
-		if err != nil {
-			for _, artifact := range prepared.Artifacts() {
-				_ = store.Discard(artifact)
-			}
-			return nil, err, true
-		}
-	}
 	retained, inputRetained := false, false
 	defer func() {
 		if !retained {
@@ -311,31 +345,40 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			t.staged.DiscardInput(preparedInput.ref)
 		}
 	}()
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	_, latest, current, err := t.continuousSnapshotLocked(current, before.ID, now)
-	if err != nil {
-		return nil, err, true
+	if request, ok := prepared.OperationRequest(); ok {
+		preparedInput, err = t.prepareContinuousOperationInput(preparedContext.member, preparedContext.instance.ID, request)
+		if err != nil {
+			return nil, err, true
+		}
 	}
-	if !prepared.Matches(latest) {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original Flow changed while dead-letter replay was prepared"), true
-	}
-	if latest.Batch.Source != nil {
-		batchPlan, refusal := f.PlanBatch(latest, t.automation(platform.FlowApp, false))
+	record, err := decideOnImage(t, context.Background(), "flow:replay", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+		f, latest, current, refusal := t.continuousSnapshotLocked(preparedContext.member, preparedContext.instance.ID, now)
 		if refusal != nil {
-			return nil, refusal, true
+			return nil, refusal
 		}
-		if refusal := t.checkStreamSourceLocked(current, batchPlan, latest, *latest.Batch.Source, true, now); refusal != nil {
-			return nil, refusal, true
+		if !prepared.Matches(latest) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original Flow changed while dead-letter replay was prepared")
 		}
-	}
-	record, err := t.submitAcceptedVersion(prepared.Decision(), current, sub, now, false, binding, nil, nil, nil, preparedInput)
-	_, refused := t.committed.Refusal(platform.FlowApp + "/" + sub.GetIdempotencyKey())
-	retained = err == nil || !refused
-	inputRetained = preparedInput != nil && retained
-	if err == nil {
-		t.enqueue(now)
-	}
+		if latest.Batch.Source != nil {
+			plan, refusal := f.PlanBatch(latest, t.automation(platform.FlowApp, false))
+			if refusal != nil {
+				return nil, refusal
+			}
+			if refusal := t.checkStreamSourceLocked(current, plan, latest, *latest.Batch.Source, true, now); refusal != nil {
+				return nil, refusal
+			}
+		}
+		return t.submitAcceptedVersion(prepared.Decision(f), current, sub, now, false, first.binding, nil, nil, nil, preparedInput)
+	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+		if len(candidate.entry.Body) > 0 {
+			retained, inputRetained = true, preparedInput != nil
+		}
+		record, refusal = t.finishPreparedSubmission(preparedContext.member, candidate, record, refusal)
+		if _, rejected := t.committed.Refusal(platform.FlowApp + "/" + sub.GetIdempotencyKey()); rejected {
+			retained, inputRetained = false, false
+		}
+		return record, refusal
+	})
 	return record, err, true
 }
 
@@ -357,24 +400,34 @@ func (t *Tenant) retireContinuousArtifacts(plan platform.FlowArtifactCleanupPrep
 		}
 	}
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	latest, ok := platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), plan.Instance())
-	if !ok {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow artifact cleanup owner is unavailable")
-	}
-	if !plan.Matches(latest) {
-		return nil
-	}
-	if _, refusal := t.submitAccepted(plan.Decision(), platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}, plan.Submission(t.ID), now, true); refusal != nil {
-		return refusal
-	}
-	t.enqueue(now)
-	return nil
+	member := platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}
+	_, refusal := decideOnImage(t, context.Background(), "flow:cleanup", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+		latest, ok := platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), plan.Instance())
+		if !ok {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow artifact cleanup owner is unavailable")
+		}
+		if !plan.Matches(latest) {
+			return nil, nil
+		}
+		return t.submitAccepted(plan.Decision(t.app(platform.FlowApp)), member, plan.Submission(t.ID), now, true)
+	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+		return t.finishPreparedSubmission(member, candidate, record, refusal)
+	})
+	return refusal
 }
 
 func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.FlowComputeRetryPreparation, now time.Time) {
-	prepared, refusal := plan.Prepare(now, flowFrameStore{tenant: t.ID, files: t.files()})
+	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedComputeRetry, *kernel.Error) {
+		f, latest, _, refusal := t.continuousSnapshotLocked(member, plan.Instance(), now)
+		if refusal != nil {
+			return nil, refusal
+		}
+		fresh, refusal := f.PlanComputeRetry(latest, t.automation(platform.FlowApp, false), now)
+		if refusal != nil {
+			return nil, refusal
+		}
+		return fresh.Prepare(now, flowFrameStore{tenant: t.ID, files: t.files()})
+	})
 	if refusal != nil {
 		log.Printf("continuous Compute retry %s refused: %s", plan.Instance(), refusal.Code)
 		return
@@ -392,22 +445,26 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.Fl
 			t.staged.DiscardInput(preparedInput.ref)
 		}
 	}()
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	_, latest, _, refusal := t.continuousSnapshotLocked(member, instance, now)
-	if refusal != nil || !prepared.Matches(latest) {
-		if refusal == nil {
-			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its Compute retry was prepared")
+	actor := platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}
+	_, refusal = decideOnImage(t, context.Background(), "flow:retry", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+		f, latest, _, refusal := t.continuousSnapshotLocked(member, instance, now)
+		if refusal != nil {
+			return nil, refusal
 		}
+		if !prepared.Matches(latest) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its Compute retry was prepared")
+		}
+		return t.submitAccepted(prepared.Decision(f), actor, prepared.Submission(t.ID), now, true, preparedInput)
+	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+		if len(candidate.entry.Body) != 0 {
+			inputRetained = true
+		}
+		return t.finishPreparedSubmission(actor, candidate, record, refusal)
+	})
+	if refusal != nil {
 		log.Printf("continuous Compute retry %s refused: %s", instance, refusal.Code)
 		return
 	}
-	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
-		inputRetained = true
-		log.Printf("continuous Compute retry %s refused: %s", instance, refusal.Code)
-		return
-	}
-	t.enqueue(now)
 	inputRetained = preparedInput != nil
 }
 
@@ -418,24 +475,31 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 	if request.App == "" || request.Name == "" || request.Key == "" || request.OnBehalf != member.ID || request.Target != platform.FlowInstanceType+"/"+instance {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window names an invalid Compute operation")
 	}
-	t.mu.Lock()
-	current, ok := t.Member(member.ID)
-	owner := t.app(request.App)
-	if !ok || current.Tenant != t.ID || owner == nil {
-		t.mu.Unlock()
-		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared window Compute owner or member is unavailable")
+	type binding struct {
+		operation  platform.Operation
+		definition string
+		budget     int
 	}
-	op, version, ok := operationDefinition(owner, request.Name, request.Version)
-	if !ok || op.Check() != nil {
-		t.mu.Unlock()
-		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The prepared window Compute operation is not retained")
+	bound, refusal := recordRead(t, context.Background(), func(t *Tenant) (binding, *kernel.Error) {
+		current, ok := t.Member(member.ID)
+		owner := t.app(request.App)
+		if !ok || current.Tenant != t.ID || owner == nil {
+			return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared window Compute owner or member is unavailable")
+		}
+		op, version, ok := operationDefinition(owner, request.Name, request.Version)
+		if !ok || op.Check() != nil {
+			return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The prepared window Compute operation is not retained")
+		}
+		definition, err := platform.CanonicalDigest([]any{request.App, op, version})
+		if err != nil {
+			return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute definition cannot be bound")
+		}
+		return binding{op, definition, op.Limits.DataInputBytes}, nil
+	})
+	if refusal != nil {
+		return nil, refusal
 	}
-	definition, err := platform.CanonicalDigest([]any{request.App, op, version})
-	budget := op.Limits.DataInputBytes
-	t.mu.Unlock()
-	if err != nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute definition cannot be bound")
-	}
+	op, definition, budget := bound.operation, bound.definition, bound.budget
 	if budget == 0 {
 		return nil, nil
 	}

@@ -72,28 +72,38 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	if refusal := t.cleanupFlowArtifactsFor(m, id, now); refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
-	t.mu.Lock()
-	f, before, current, refusal := t.continuousSnapshotLocked(m, id, now)
+	var before platform.FlowInstance
+	var current platform.Member
 	var plan platform.FlowBatchPreparation
-	if refusal == nil {
-		plan, refusal = f.PlanBatch(before, t.automation(platform.FlowApp, false))
-	}
-	if refusal != nil {
-		t.mu.Unlock()
-		return platform.FlowBatchOutcome{}, refusal
-	}
-	name, intake, budget := plan.Intake()
-	source, connection, hash, refusal := t.streamSourceLocked(current, name, intake, now)
-	latestBootstrap := refusal == nil && intake.Offset == "latest" && (before.Batch == nil || before.Batch.Source == nil)
-	if refusal == nil && before.Batch != nil && before.Batch.Source != nil {
-		checkpoint := before.Batch.Source
-		if checkpoint.Record != source.ID || checkpoint.Config != hash || checkpoint.Initialized && checkpoint.Offset != intake.Offset || intake.Offset == "latest" && !checkpoint.Initialized {
-			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source changed after this Flow began consuming it")
-		} else {
-			source.Cursor = checkpoint.Cursor
+	var name, hash string
+	var intake *platform.StreamIntake
+	var budget int
+	var source build.Source
+	var connection build.Connection
+	var latestBootstrap bool
+	_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+		f, instance, member, refusal := t.continuousSnapshotLocked(m, id, now)
+		if refusal != nil {
+			return struct{}{}, refusal
 		}
-	}
-	t.mu.Unlock()
+		before, current = instance, member
+		plan, refusal = f.PlanBatch(before, t.automation(platform.FlowApp, false))
+		if refusal != nil {
+			return struct{}{}, refusal
+		}
+		name, intake, budget = plan.Intake()
+		source, connection, hash, refusal = t.streamSourceLocked(current, name, intake, now)
+		latestBootstrap = refusal == nil && intake.Offset == "latest" && (before.Batch == nil || before.Batch.Source == nil)
+		if refusal == nil && before.Batch != nil && before.Batch.Source != nil {
+			checkpoint := before.Batch.Source
+			if checkpoint.Record != source.ID || checkpoint.Config != hash || checkpoint.Initialized && checkpoint.Offset != intake.Offset || intake.Offset == "latest" && !checkpoint.Initialized {
+				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source changed after this Flow began consuming it")
+			} else {
+				source.Cursor = checkpoint.Cursor
+			}
+		}
+		return struct{}{}, refusal
+	})
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
@@ -191,22 +201,23 @@ func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowIns
 	}
 	cursor, initialized := source.Cursor, !latestBootstrap
 	checkOriginal := func() *kernel.Error {
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		owner, latest, current, refusal := t.continuousSnapshotLocked(m, before.ID, now)
-		if refusal == nil && !bytes.Equal(platform.Raw(latest), platform.Raw(before)) {
-			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
-		}
-		if refusal == nil {
-			_, refusal = owner.PlanBatch(latest, t.automation(platform.FlowApp, false))
-		}
-		if refusal == nil {
-			freshSource, freshConnection, freshHash, err := t.streamSourceLocked(current, name, intake, now)
-			refusal = err
-			if refusal == nil && (freshHash != hash || freshSource.DefinitionVersion != source.DefinitionVersion || freshSource.Published != source.Published || freshConnection.DefinitionVersion != connection.DefinitionVersion || freshConnection.Published != connection.Published) {
-				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source changed after this Flow began consuming it")
+		_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+			owner, latest, current, refusal := t.continuousSnapshotLocked(m, before.ID, now)
+			if refusal == nil && !bytes.Equal(platform.Raw(latest), platform.Raw(before)) {
+				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
 			}
-		}
+			if refusal == nil {
+				_, refusal = owner.PlanBatch(latest, t.automation(platform.FlowApp, false))
+			}
+			if refusal == nil {
+				freshSource, freshConnection, freshHash, err := t.streamSourceLocked(current, name, intake, now)
+				refusal = err
+				if refusal == nil && (freshHash != hash || freshSource.DefinitionVersion != source.DefinitionVersion || freshSource.Published != source.Published || freshConnection.DefinitionVersion != connection.DefinitionVersion || freshConnection.Published != connection.Published) {
+					refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source changed after this Flow began consuming it")
+				}
+			}
+			return struct{}{}, refusal
+		})
 		return refusal
 	}
 	var readErr error
@@ -292,14 +303,6 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 	if t.businessStopped() {
 		return
 	}
-	t.mu.Lock()
-	instances, total, queryErr := platform.Find[platform.FlowInstance](t.automation(platform.FlowApp, false), platform.Query{Sort: []string{"id"}})
-	if queryErr != nil || total != len(instances) {
-		t.mu.Unlock()
-		log.Printf("continuous Flow inventory unavailable; no artifacts retired")
-		return
-	}
-	f, ok := t.procs.(platform.ContinuousFlowOwner)
 	var pending []platform.FlowInstance
 	type retry struct {
 		plan   platform.FlowComputeRetryPreparation
@@ -312,46 +315,60 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 	}
 	var retries []retry
 	var cleanups []cleanup
-	if ok {
-		for _, instance := range instances {
-			if instance.CleanupPending {
-				plan, err := f.PlanArtifactCleanup(instance, now)
-				if err != nil {
-					cleanups = append(cleanups, cleanup{instance: instance.ID, refusal: err})
-				} else {
-					cleanups = append(cleanups, cleanup{plan: plan, instance: instance.ID})
-				}
-				continue
-			}
-			if instance.State != "waiting" {
-				continue
-			}
-			member, exists := t.Member(instance.OnBehalf)
-			if !exists {
-				continue
-			}
-			if plan, err := f.PlanComputeRetry(instance, t.automation(platform.FlowApp, false), now); err == nil {
-				retries = append(retries, retry{plan: plan, member: member})
-				continue
-			}
-			if plan, err := f.PlanBatch(instance, t.automation(platform.FlowApp, false)); err == nil {
-				if _, intake, _ := plan.Intake(); intake != nil {
-					source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
-					if exists {
-						var err error
-						source, err = t.dataOwner().ExecutionSource(source)
-						if err != nil {
-							exists = false
-						}
+	_, queryErr := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+		instances, total, queryErr := platform.Find[platform.FlowInstance](t.automation(platform.FlowApp, false), platform.Query{Sort: []string{"id"}})
+		if queryErr != nil {
+			return struct{}{}, queryErr
+		}
+		if total != len(instances) {
+			return struct{}{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Continuous Flow inventory is incomplete")
+		}
+		f, ok := t.procs.(platform.ContinuousFlowOwner)
+		if ok {
+			for _, instance := range instances {
+				if instance.CleanupPending {
+					plan, err := f.PlanArtifactCleanup(instance, now)
+					if err != nil {
+						cleanups = append(cleanups, cleanup{instance: instance.ID, refusal: err})
+					} else {
+						cleanups = append(cleanups, cleanup{plan: plan, instance: instance.ID})
 					}
-					if exists && source.Stream && source.State == "published" {
-						pending = append(pending, instance)
+					continue
+				}
+				if instance.State != "waiting" {
+					continue
+				}
+				member, exists := t.Member(instance.OnBehalf)
+				if !exists {
+					continue
+				}
+				if plan, err := f.PlanComputeRetry(instance, t.automation(platform.FlowApp, false), now); err == nil {
+					retries = append(retries, retry{plan: plan, member: member})
+					continue
+				}
+				if plan, err := f.PlanBatch(instance, t.automation(platform.FlowApp, false)); err == nil {
+					if _, intake, _ := plan.Intake(); intake != nil {
+						source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
+						if exists {
+							var err error
+							source, err = t.dataOwner().ExecutionSource(source)
+							if err != nil {
+								exists = false
+							}
+						}
+						if exists && source.Stream && source.State == "published" {
+							pending = append(pending, instance)
+						}
 					}
 				}
 			}
 		}
+		return struct{}{}, nil
+	})
+	if queryErr != nil {
+		log.Printf("continuous Flow inventory unavailable; no artifacts retired")
+		return
 	}
-	t.mu.Unlock()
 	for _, cleanup := range cleanups {
 		if cleanup.refusal != nil {
 			log.Printf("continuous Flow artifact cleanup %s refused: %s", cleanup.instance, cleanup.refusal.Code)
@@ -365,8 +382,14 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 		t.retryContinuousCompute(retry.member, retry.plan, now)
 	}
 	for _, instance := range pending {
-		member, exists := t.Member(instance.OnBehalf)
-		if !exists {
+		member, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.Member, *kernel.Error) {
+			member, exists := t.Member(instance.OnBehalf)
+			if !exists {
+				return member, unknown()
+			}
+			return member, nil
+		})
+		if refusal != nil {
 			continue
 		}
 		for round := 0; round < 8; round++ {

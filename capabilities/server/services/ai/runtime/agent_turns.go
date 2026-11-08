@@ -64,14 +64,9 @@ func (a *Agents) AgentOverview() []platform.AgentOverview {
 
 func (a *Agents) DueAgentTurns(now time.Time) []platform.AgentTurn {
 	h := a.host
-	endRead := h.BeginAgentRead()
-	defer endRead()
 	c := a.automation(platform.AgentApp, false)
 	var out []platform.AgentTurn
 	for _, run := range a.runs(c, "running") {
-		if a.busy[run.ID] {
-			continue
-		}
 		x := platform.AgentTurn{Run: run}
 		d := a.def(run.Agent)
 		reader := a.reader(run)
@@ -119,7 +114,6 @@ func (a *Agents) DueAgentTurns(now time.Time) []platform.AgentTurn {
 			x.Request.RunTokens = d.Budget.Tokens - run.TokensUsed
 			x.Request.Binding = run.ModelBinding
 		}
-		a.busy[run.ID] = true
 		out = append(out, x)
 	}
 	return out

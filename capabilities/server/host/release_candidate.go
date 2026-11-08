@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"platformkernel/kernel"
@@ -12,9 +13,7 @@ import (
 )
 
 func (t *Tenant) ReleaseCandidate(roots []platform.AssetRef) (platform.ReleaseCandidate, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.releaseCandidateLocked(roots)
+	return readWithError(t, context.Background(), func(t *Tenant) (platform.ReleaseCandidate, error) { return t.releaseCandidateLocked(roots) })
 }
 
 func (t *Tenant) releaseCandidateLocked(roots []platform.AssetRef) (platform.ReleaseCandidate, error) {
@@ -37,6 +36,12 @@ func (t *Tenant) draftWorldLocked(m platform.Member, branch string, now time.Tim
 }
 
 func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id, branch string, now time.Time) (releaseowner.ReleaseDraftClosure, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleaseDraftClosure, error) {
+		return t.scopedReferencedDrafts(m, kind, id, branch, now)
+	})
+}
+
+func (t *Tenant) scopedReferencedDrafts(m platform.Member, kind platform.AssetKind, id, branch string, now time.Time) (releaseowner.ReleaseDraftClosure, error) {
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleaseDraftClosure{}, err
 	}
@@ -44,8 +49,6 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/drafts/referenced", "read", []string{build.Builder}, true)); err != nil {
 		return releaseowner.ReleaseDraftClosure{}, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	world, refusal := t.draftWorldLocked(m, branch, now)
 	if refusal != nil {
 		return releaseowner.ReleaseDraftClosure{}, refusal
@@ -84,12 +87,14 @@ func (t *Tenant) builderDrafts(m platform.Member, permission string) (build.Cons
 }
 
 func (t *Tenant) DraftChange(m platform.Member, kind platform.AssetKind, id string) (build.DraftChange, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) (build.DraftChange, error) { return t.scopedDraftChange(m, kind, id) })
+}
+
+func (t *Tenant) scopedDraftChange(m platform.Member, kind platform.AssetKind, id string) (build.DraftChange, error) {
 	owner, err := t.builderDrafts(m, "GET /v1/releases/drafts/change")
 	if err != nil {
 		return build.DraftChange{}, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	change, found, err := owner.DraftChangeOf(m, kind, id)
 	if err == nil && !found {
 		err = fmt.Errorf("The draft has no working changes")
@@ -98,12 +103,16 @@ func (t *Tenant) DraftChange(m platform.Member, kind platform.AssetKind, id stri
 }
 
 func (t *Tenant) DraftRestore(m platform.Member, kind platform.AssetKind, id string, now time.Time) (releaseowner.ReleaseDraftRestore, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleaseDraftRestore, error) {
+		return t.scopedDraftRestore(m, kind, id, now)
+	})
+}
+
+func (t *Tenant) scopedDraftRestore(m platform.Member, kind platform.AssetKind, id string, now time.Time) (releaseowner.ReleaseDraftRestore, error) {
 	owner, err := t.builderDrafts(m, "GET /v1/releases/drafts/restore")
 	if err != nil {
 		return releaseowner.ReleaseDraftRestore{}, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	typ, published, found, err := owner.DraftPublished(kind, id)
 	if err != nil || !found {
 		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The draft is unavailable")
@@ -162,6 +171,10 @@ func (t *Tenant) DraftRestore(m platform.Member, kind platform.AssetKind, id str
 }
 
 func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingState, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleaseWorkingState, error) { return t.scopedWorkingDrafts(m) })
+}
+
+func (t *Tenant) scopedWorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingState, error) {
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleaseWorkingState{}, err
 	}
@@ -169,8 +182,6 @@ func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingSt
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/drafts/working", "read", []string{build.Builder}, true)); err != nil {
 		return releaseowner.ReleaseWorkingState{}, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
 		return releaseowner.ReleaseWorkingState{}, fmt.Errorf("tenant has no builder")
@@ -187,6 +198,12 @@ func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingSt
 }
 
 func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef, branch string, now time.Time) (releaseowner.ReleasePreview, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleasePreview, error) {
+		return t.scopedPreviewReleaseDrafts(m, drafts, branch, now)
+	})
+}
+
+func (t *Tenant) scopedPreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef, branch string, now time.Time) (releaseowner.ReleasePreview, error) {
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleasePreview{}, err
 	}
@@ -194,8 +211,6 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/preview", "read", []string{build.Builder}, true)); err != nil {
 		return releaseowner.ReleasePreview{}, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	world, refusal := t.draftWorldLocked(m, branch, now)
 	if refusal != nil {
 		return releaseowner.ReleasePreview{}, refusal

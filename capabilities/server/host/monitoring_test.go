@@ -388,7 +388,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			{Run: "failed", Stop: "the model failed 3 times"},
 			{Run: "private-agent", Stop: "no model is set for agents"},
 		} {
-			if !live.applyAgentStep(step, now.Add(time.Second), false) {
+			if !live.applyAgentStep(step, now.Add(time.Second)) {
 				t.Fatalf("the Agent result was not accepted: %+v", step)
 			}
 		}

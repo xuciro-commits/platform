@@ -410,31 +410,22 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	t.mu.Lock()
-	member, ok := t.Member(b.Member)
-	if !ok || member.Tenant != t.ID {
-		t.mu.Unlock()
-		out.Detail = "Operation member is no longer authorised"
-		return out
-	}
-	if t.recordReadRefusal() != nil {
-		t.mu.Unlock()
-		out.Detail = "Operation access could not be read"
-		return out
-	}
-	if !t.operationCurrent(x.ID, x.Generation) {
-		t.mu.Unlock()
-		out.Detail = "Operation was cancelled"
-		return out
-	}
-	if refusal := authorizationRefusal(t.operationAuthorization(member, x.App, b, now)); refusal != nil {
-		t.mu.Unlock()
+	t.cancels.Add(x.ID, cancel)
+	defer t.cancels.Remove(x.ID)
+	member, refusal := recordRead(t, ctx, func(t *Tenant) (platform.Member, *kernel.Error) {
+		member, ok := t.Member(b.Member)
+		if !ok || member.Tenant != t.ID {
+			return member, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation member is no longer authorised")
+		}
+		if !t.operationCurrent(x.ID, x.Generation) {
+			return member, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation was cancelled")
+		}
+		return member, authorizationRefusal(t.operationAuthorization(member, x.App, b, now))
+	})
+	if refusal != nil {
 		out.Detail = refusal.Message
 		return out
 	}
-	t.cancels.Add(x.ID, cancel)
-	t.mu.Unlock()
-	defer t.cancels.Remove(x.ID)
 	var output json.RawMessage
 	var err error
 	if b.Build != nil {
@@ -473,11 +464,11 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 				out.Detail = err.Error()
 				return out
 			}
-			t.mu.Lock()
-			latest, authorised := t.Member(b.Member)
-			authorised = authorised && t.operationAuthorization(latest, x.App, b, now).Allow && t.operationCurrent(x.ID, x.Generation)
-			t.mu.Unlock()
-			if !authorised {
+			authorised, refusal := recordRead(t, ctx, func(t *Tenant) (bool, *kernel.Error) {
+				latest, ok := t.Member(b.Member)
+				return ok && t.operationAuthorization(latest, x.App, b, now).Allow && t.operationCurrent(x.ID, x.Generation), nil
+			})
+			if refusal != nil || !authorised {
 				out.Detail = "Operation permission or generation changed while its input was read"
 				return out
 			}

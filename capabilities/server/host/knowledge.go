@@ -101,21 +101,6 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []knowledgeindex.Source {
 	return out
 }
 
-func (t *Tenant) dirtyRecords(walked bool) map[string]bool {
-	s := t.records
-	s.Lock()
-	defer s.Unlock()
-	out := s.TakeDirty()
-	if !walked {
-		return nil
-	}
-	changed := make(map[string]bool, out.Len())
-	for ref, dirty := range out.All() {
-		changed[ref] = dirty
-	}
-	return changed
-}
-
 func (t *Tenant) knowledgeSourceReadable(store *records.Store, m platform.Member, id, field string) bool {
 	if m.Tenant != t.ID || field != "" && field != "title" && field != "text" {
 		return false
@@ -129,9 +114,15 @@ func (t *Tenant) knowledgeSourceReadable(store *records.Store, m platform.Member
 }
 
 func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32, error) {
-	t.mu.Lock()
-	model, pv, err := t.ai.Model(name)
-	t.mu.Unlock()
+	type configured struct {
+		model    platform.AIModel
+		provider platform.AIProvider
+	}
+	value, err := recordRead(t, context.Background(), func(t *Tenant) (configured, *kernel.Error) {
+		model, provider, refusal := t.ai.Model(name)
+		return configured{model: model, provider: provider}, refusal
+	})
+	model, pv := value.model, value.provider
 	if err != nil {
 		return nil, fmt.Errorf("the model %s is not enabled", name)
 	}
@@ -373,9 +364,19 @@ func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []s
 }
 
 func (t *Tenant) knowledgeContext() knowledgeindex.Context {
-	return knowledgeindex.Context{Tenant: t.ID, Store: t.store(), Sync: t.sync,
-		Read: func(read func()) {
-			_, _ = lockedRecordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { read(); return struct{}{}, nil })
+	source := t
+	if t.readOrigin != nil {
+		source = t.readOrigin
+	}
+	setting := func(name string) string {
+		value, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
+			return t.setting(t.automation(platform.KnowledgeApp, false), name), nil
+		})
+		return value
+	}
+	return knowledgeindex.Context{Tenant: t.ID, Store: t.store(), Sync: source.syncRecords,
+		Read: func(read func(knowledgeindex.Context)) {
+			_, _ = recordRead(source, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { read(t.knowledgeContext()); return struct{}{}, nil })
 		},
 		Visible: t.knowledgePassageReadableInLane,
 		ScopeReadable: func(reader *platform.Member, scope string, at time.Time) bool {
@@ -385,26 +386,56 @@ func (t *Tenant) knowledgeContext() knowledgeindex.Context {
 			}
 			return t.readable(member, scope, at)
 		},
-		Active: func() string {
-			return t.setting(t.automation(platform.KnowledgeApp, false), platform.SettingKnowledgeEmbeddingModel)
+		Active:    func() string { return setting(platform.SettingKnowledgeEmbeddingModel) },
+		Preparing: func() string { return setting(platform.SettingKnowledgeEmbeddingNext) },
+		NeedsRebuild: func(name string) bool {
+			value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) { return t.embeddingNeedsRebuild(name), nil })
+			return value
 		},
-		Preparing: func() string {
-			return t.setting(t.automation(platform.KnowledgeApp, false), platform.SettingKnowledgeEmbeddingNext)
+		Space: func(name string) string {
+			value, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) { return t.vectorSpace(name), nil })
+			return value
 		},
-		NeedsRebuild: t.embeddingNeedsRebuild, Space: t.vectorSpace, Embed: t.embed, Stopped: t.businessStopped, Changed: func() { t.operationsChanged(platform.KnowledgeApp) }}
+		Embed: source.embed, Stopped: source.businessStopped, Changed: func() { source.operationsChanged(platform.KnowledgeApp) },
+	}
 }
-func (t *Tenant) sync() {
-	_, _ = lockedRecordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { t.syncRecords(); return struct{}{}, nil })
-}
+
 func (t *Tenant) syncRecords() {
-	t.index.Sync(func(walked bool) ([]knowledgeindex.Source, map[string]bool) {
-		changed := t.dirtyRecords(walked)
-		if walked {
-			return t.sourcesOf(changed), changed
+	source := t
+	if t.readOrigin != nil {
+		source = t.readOrigin
+	}
+	source.index.Sync(func(walked bool) ([]knowledgeindex.Source, map[string]bool, bool) {
+		source.records.Lock()
+		image := source.readImage.Load()
+		if image == nil || image.records != source.records.Generation() {
+			source.records.Unlock()
+			return nil, nil, false
 		}
-		return t.sources(), changed
+		dirty := source.records.TakeDirty()
+		source.records.Unlock()
+		changed := map[string]bool{}
+		for ref, marked := range dirty.All() {
+			changed[ref] = marked
+		}
+		values, refusal := recordRead(source, context.Background(), func(t *Tenant) ([]knowledgeindex.Source, *kernel.Error) {
+			if walked {
+				return t.sourcesOf(changed), nil
+			}
+			return t.sources(), nil
+		})
+		if refusal != nil {
+			source.records.Lock()
+			for ref := range changed {
+				source.records.MarkDirty(ref)
+			}
+			source.records.Unlock()
+			return nil, nil, false
+		}
+		return values, changed, true
 	})
 }
+
 func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, at time.Time) []platform.Passage {
 	if t.knowledge == nil {
 		return []platform.Passage{}

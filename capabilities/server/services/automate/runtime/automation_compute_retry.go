@@ -105,11 +105,10 @@ func (plan *ComputeRetryPreparation) Prepare(now time.Time, store platform.FlowF
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The retained Compute retry must name its operation and member")
 	}
 	digest := sha256.Sum256(platform.Raw(request))
-	return &PreparedComputeRetry{owner: plan.owner, before: x, entry: plan.entry, token: plan.token, request: request, at: now, digest: fmt.Sprintf("sha256:%x", digest)}, nil
+	return &PreparedComputeRetry{before: x, entry: plan.entry, token: plan.token, request: request, at: now, digest: fmt.Sprintf("sha256:%x", digest)}, nil
 }
 
 type PreparedComputeRetry struct {
-	owner   *Flows
 	before  FlowInstance
 	entry   string
 	token   int
@@ -142,8 +141,8 @@ func (p *PreparedComputeRetry) OperationRequest() platform.OperationRequest {
 	return request
 }
 
-func (p *PreparedComputeRetry) Decision() platform.App {
-	return preparedComputeRetryDecision{Flows: p.owner, prepared: p}
+func (p *PreparedComputeRetry) Decision(owner platform.App) platform.App {
+	return preparedComputeRetryDecision{Flows: owner.(*Flows), prepared: p}
 }
 
 type preparedComputeRetryDecision struct {

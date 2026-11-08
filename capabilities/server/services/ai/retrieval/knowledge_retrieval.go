@@ -25,7 +25,7 @@ type Context struct {
 	Tenant        string
 	Store         VectorStore
 	Sync          func()
-	Read          func(func())
+	Read          func(func(Context))
 	Visible       func(document, scope string, apps []string, reader *platform.Member, app string, at time.Time) bool
 	ScopeReadable func(*platform.Member, string, time.Time) bool
 	Active        func() string
@@ -49,6 +49,7 @@ type chunk struct {
 
 type Index struct {
 	mu             sync.Mutex
+	syncMu         sync.Mutex
 	vectorMu       sync.Mutex
 	vectorModel    string
 	embeddingError string
@@ -284,7 +285,7 @@ func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limi
 	}
 	k.mu.Unlock()
 	var all []*chunk
-	ctx.Read(func() {
+	ctx.Read(func(ctx Context) {
 		allowed := map[string]bool{}
 		for _, c := range candidates {
 			visible, known := allowed[c.scope]
@@ -357,7 +358,7 @@ func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limi
 		}
 		fuse(cos)
 	}
-	ctx.Read(func() {
+	ctx.Read(func(ctx Context) {
 		for c, r := range ranks {
 			if !k.currentInLane(ctx, c, reader, app, now) {
 				continue

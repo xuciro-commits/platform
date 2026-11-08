@@ -107,7 +107,7 @@ type AgentHost interface {
 	ExternalAgentMembers() []Member
 	AgentDecisionMembers() []string
 	AgentUsage() []AIUsage
-	BeginAgentRead() func()
+	WithAgentRead(func(AgentEvaluationRuntime) *kernel.Error) *kernel.Error
 	ScopeAgentRun(string) func()
 	ResolveAgentModel(string, ModelOptions, string) (AIModelBinding, AIProvider, *kernel.Error)
 	AgentModel(string) (AIModel, AIProvider, *kernel.Error)
@@ -368,6 +368,7 @@ type AgentRuntime interface {
 	App
 	DeclareAgentApp(App) error
 	DueAgentTurns(time.Time) []AgentTurn
+	ClaimAgentTurn(string) bool
 	IdleAgentTurn(string)
 	AgentPrincipal(string) Member
 	AllowsAgentRun(AgentRunRecord) bool

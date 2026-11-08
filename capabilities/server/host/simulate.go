@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -14,11 +15,15 @@ import (
 )
 
 func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submission, now time.Time) (trialowner.Simulation, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.Simulation, *kernel.Error) {
+		return t.scopedSimulate(member, as, branch, s, now)
+	})
+}
+
+func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb.Submission, now time.Time) (trialowner.Simulation, *kernel.Error) {
 	if err := t.admits(member); err != nil {
 		return trialowner.Simulation{}, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	member = t.authorizationMember(member)
 	if !member.Active() {
 		return trialowner.Simulation{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}

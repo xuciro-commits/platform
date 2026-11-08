@@ -136,7 +136,20 @@ func (a *Agents) def(id string) *platform.CompiledAgent {
 	return a.defs[id]
 }
 
-func (a *Agents) IdleAgentTurn(run string) { delete(a.busy, run) }
+func (a *Agents) ClaimAgentTurn(run string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.busy[run] {
+		return false
+	}
+	a.busy[run] = true
+	return true
+}
+func (a *Agents) IdleAgentTurn(run string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.busy, run)
+}
 
 func (a *Agents) each(fn func(id string, d *platform.CompiledAgent)) {
 	for id, d := range a.defs {
@@ -267,7 +280,7 @@ func (a *Agents) ForkDecision() (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return &Agents{tenant: a.tenant, host: a.host, ledger: a.ledger, defs: maps.Clone(a.defs),
-		buildStamp: a.buildStamp, busy: maps.Clone(a.busy)}, nil
+		buildStamp: a.buildStamp, busy: map[string]bool{}}, nil
 }
 
 var _ platform.DecisionForkApp = (*Agents)(nil)

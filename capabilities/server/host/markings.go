@@ -2,12 +2,18 @@ package host
 
 import (
 	"reflect"
+	"sync"
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/data/lineage"
 	"platformserver/services/resources/authoring"
 )
+
+type readMarkingCache struct {
+	mu    sync.Mutex
+	index markingIndex
+}
 
 type markingIndex struct {
 	store               *records.Store
@@ -61,6 +67,15 @@ func (t *Tenant) markingsIn(store *records.Store, held bool) markingIndex {
 		store.Lock()
 		defer store.Unlock()
 	}
+	var shared *readMarkingCache
+	if store == t.records && t.readMarkings != nil {
+		shared = t.readMarkings
+		shared.mu.Lock()
+		defer shared.mu.Unlock()
+		if shared.index.types != nil {
+			return shared.index
+		}
+	}
 	t.markingMu.Lock()
 	defer t.markingMu.Unlock()
 	if t.markings.store == store && t.markings.generation == store.Generation() && t.markings.types != nil {
@@ -79,6 +94,10 @@ func (t *Tenant) markingsIn(store *records.Store, held bool) markingIndex {
 		}
 	}
 	t.markings = index
+	if shared != nil {
+		shared.index = index
+		shared.index.store = nil
+	}
 	return index
 }
 

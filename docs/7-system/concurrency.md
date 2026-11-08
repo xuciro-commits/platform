@@ -1,6 +1,6 @@
 ---
 level: 7 系统架构
-covers: [capabilities/server/kernel/tenant_lane.go, capabilities/server/host/record_read_scope.go, capabilities/server/host/read_image.go, capabilities/server/host/runtime.go, capabilities/server/host/submit.go, capabilities/server/host/staged_decision.go, capabilities/server/host/optimistic_decision.go, capabilities/server/host/operations.go, capabilities/server/kernel/records/**, capabilities/server/kernel/store/postgres.go, capabilities/server/services/automate/runtime/automation_work.go]
+covers: [capabilities/server/kernel/tenant_lane.go, capabilities/server/host/record_read_scope.go, capabilities/server/host/read_image.go, capabilities/server/host/runtime.go, capabilities/server/host/submit.go, capabilities/server/host/staged_decision.go, capabilities/server/host/optimistic_decision.go, capabilities/server/host/operations.go, capabilities/server/host/files.go, capabilities/server/host/agent_host.go, capabilities/server/host/acceptance_pipeline.go, capabilities/server/host/knowledge.go, capabilities/server/services/apps/application_runtime*.go, capabilities/server/services/data/blobs/resource_files.go, capabilities/server/kernel/records/**, capabilities/server/kernel/store/postgres.go, capabilities/server/services/automate/runtime/automation_work.go]
 read-when: 改动租户车道、协调读取、暂存决定、接受结果提交与应用、后台工作轮次，或在车道内新增任何工作
 ---
 
@@ -62,16 +62,16 @@ read-when: 改动租户车道、协调读取、暂存决定、接受结果提交
 | 当前范围与 SQL 来源行的位置 | `records.Current()` | 映像记录 N；SQL 读取经 C4 校验 |
 | 授权上下文：成员、团队、许可、标记索引、项目授权 | `services/security`、`host/markings.go` | 发布时冻结或改为持久结构 |
 | 资源目录与工作状态 | `host/resource_directory.go` | 同上 |
-| 拥有者命名读取所需的账本状态 | 各 `platform.Ledger` | 逐个纳入；未纳入的命名读取暂留车道（现存差距） |
+| 拥有者命名读取所需的账本状态 | 各 `platform.Ledger` | 生产拥有者全部实现 `ReadForkApp`；未实现的测试或扩展拥有者回退车道 |
 | 已应用位置、隔离标记、业务停止标记 | `Tenant` | 原子值 |
 
 - 发布：车道内应用完成后，以原子指针替换“当前映像”。读取者 `Load` 一次，整次读取只用这一份。没有状态变化的持有不重复发布；状态变化以接受轮次、定义与记录代数、工作通知和 SQL 位置判定。
 - 实时刷新：数据版本与通知在映像发布后推进；查询版本读取该映像的记录代数，不能提前读取活动投影。工作通知可即时发出，发布映像后再次唤醒，并把已发布工作版本纳入工作查询版本。
-- 缓存：同一映像复用原有有界、互斥保护的元数据缓存；按次读取拥有独立错误与 SQL 视图，不重复构造同一映像的目录。
+- 缓存：同一映像复用原有有界、互斥保护的元数据缓存与生效标记索引；标记缓存只用于未修改的映像记录，暂存决定仍按自己的记录代数重建。记录和定义代数未变时，新工作通知不重建标记图。按次读取拥有独立错误与 SQL 视图，不重复构造同一映像的目录。
 - 映像内容清单写在一处（`host` 的映像构造函数），读取闭包只经它取状态；新增读取依赖必须先加进清单。
 - 前提是读取范围按次持有：一次读取的 SQL 视图、读取错误、系统定义投影和追踪上下文属于这次读取的值，经调用者传递，不再是租户级字段；在此之前任何两次读取都不能并发。
 - `host/read_image.go` 是状态清单与唯一构造处：复用持久记录根、分叉拥有者状态与账本，复制控制、发布、授权、通知及运行前提；分叉的拥有者重新绑定该范围的 Host。`runtime.ReadScoped` 显式表明已有范围，不以租户中恰好打开了某个 SQL 视图来推断当前调用者持有范围。
-- 会话、个人令牌列表及令牌的一次性密钥交付读取原 Console，由其自身互斥保护；它们是即时会话状态，不从已接受位置的映像复制或消费。索引同步、上传清理等修改状态的操作也不得走只读范围。
+- 会话、个人令牌列表、令牌的一次性密钥交付与连接器心跳使用原拥有者，由其自身互斥保护；它们是即时状态，不从已接受位置的映像复制或消费。Agent 的在途标记只在原拥有者领取与释放，映像只列出候选轮次，不用复制的在途标记决定是否执行。索引同步、上传清理等派生状态修改由源拥有者执行，记录与授权仍从映像读取。
 - 内存：持久结构共享未改动部分；旧映像随最后一个读取者释放。不得为发布深拷贝全量行。
 
 ### C4 读取一致性
@@ -98,10 +98,11 @@ SQL 来源行仍从 PostgreSQL 可重复读事务读取：
 | 应用与发布 | 车道内 | 从已提交字节应用；应用后断言 SQL 位置 = 内存位置，不一致即隔离；发布映像 N+1 |
 | 事件与副作用 | 车道外 | 入队投递、自动化、外部副作用 |
 
-- `host/optimistic_decision.go` 是前台提交与后台任务的共用实现：准备阶段在原接受边界产出原格式的候选字节，不应用、不追加；基准有效时复用原提交和应用函数。早期拒绝与幂等命中也经过相同基准校验。
+- `host/optimistic_decision.go` 是前台提交与后台任务的共用实现：准备阶段在原接受边界产出原格式的候选字节，不应用、不追加；基准有效时复用原提交和应用函数。早期拒绝与幂等命中也经过相同基准校验。发布与激活、环境晋级、分支合并、组合提交、集成与观测结算、模型预留与用量、Agent 步骤、Compute 领取与结算、连续 Flow 批次与清理确认均复用此处；各自在原接受边界捕获原格式字节，再调用原应用函数，不引入按信封种类分发的新写入网关。
 - 内存模式没有 SQL 位置时，以接受轮次校验；定义、记录代数与系统投影一并校验；工作选择另校验调度代数，不让空作业的调度推进使业务动作反复作废。任务的配额与轮转、无变化作业的下次运行时间只在基准有效后更新；读取映像保留这些内存运行状态，不写成伪造历史。
 - 校验粒度是整个租户位置：任何插入的提交都使候选作废。这自然覆盖跨对象唯一性、库存汇总、权限撤销、包退役等约束，不需要拥有者声明读集合。
 - 细粒度校验（对象版本、读集合）不在本规格内；只有在 C8 指标显示冲突重算成为瓶颈时，才另写规格，由内核统一记录读集合，拥有者不手写。
+- C-R5 的车道回退仍建立独立的当前状态分叉并捕获候选，再应用到源；不让嵌套读取重新获取同一车道。未实现 `ReadForkApp` 的测试或扩展拥有者保留旧串行执行。
 - 决定必须确定且无副作用：同一映像、同一提交得到同一候选字节。依赖外部结果的决定只读 C-R6 的预留或准备输入（现有 `preparedOperationInput`、模型预留即此模式）。
 
 ### C6 后台工作
@@ -111,11 +112,25 @@ SQL 来源行仍从 PostgreSQL 可重复读事务读取：
 - 投递、同步、构建、管道运行、智能体步骤：外部部分按 C-R6 在车道外执行；结果以接受结果回到 C5。
 - 调度器按租户轮转不变；一个租户的长任务只延迟该租户的下一任务，不占用其他租户的车道。
 
+| 路径 | 车道外 | 车道内 |
+|---|---|---|
+| 源、管道与投影 | 读取接受定义与输入、转换、凭据解析、网络与文件字节 | 校验候选并提交结果 |
+| Dispatch、Confirmation、Observation | 扫描待办、准入、读取凭据、取证与规则求值；回读节奏由独立互斥保护 | 校验最新版本与权限基准、结算 |
+| Agent 与模型 | `WithAgentRead` 只在回调内提供读取范围；提示词与工具读取在映像内，模型与知识取证在车道外 | 预留、步骤与用量候选的提交和应用 |
+| 连续 Flow | 在独立读取范围中建立计划并完成帧/输入准备，范围结束后不得再用其 Caller；字节封存、读取、退役及重试等待均不取车道 | 将准备结果绑定到本次决定的拥有者账本，校验实例、源配置与权限后提交 |
+| 知识索引 | 索引自己的同步锁串行化加载与更新；只在源记录代数已发布后领取 dirty，读取失败重新标脏；读取文档字节与嵌入不取车道 | 无索引构建 |
+| 上传清理 | 扫描包含归档的附件与媒体版本引用；预留后删除字节，失败解除标记等待重试 | 验证扫描基准并标记待删除、推进运行代数 |
+
+- 上传写入与删除按哈希互斥：写入期间不选作清理，待删除期间不接受重传或新引用；附件决定记录它检查过的哈希，提交时再次检查待删除标记。已引用与归档文件保留；删除成功后重新上传可正常引用。不为临时上传状态制造接受历史。
+- `ApplicationRuntimeOf`、应用运行列表与诊断在宿主建立同一个读取范围；应用服务只消费传入上下文，不再持有或切换宿主车道。
+
 ### C7 启动、快照、隔离与重放
 
-- 启动恢复、快照保存、维护操作仍可整段持有车道（holder 为 `startup`、`snapshot`、`admin:*`），期间读取按 C4 第 4 步回退并等待；这些路径不在前台请求热路径上。
+- 启动恢复、快照保存、维护操作仍可整段持有车道（holder 为 `startup`、`snapshot`、`admin:*`），需要等待恢复位置的读取按 C4 第 4 步回退；已有一致映像的读取继续使用原位置。这些路径不在前台请求热路径上。
 - 重放只应用已接受映像（README R6），与本规格无关；K1 不变。
 - 隔离判定集中在两处：车道内应用后位置断言（C5）与读取 S < N（C4）。
+
+车道调用的剩余归属：C5 提交与有界回退；C4 未发布或不支持分叉的读取回退；本节的启动迁移、资源目录初始化、系统投影恢复、快照与重放；宿主管理的生命周期、支持与迁移接受；封存完成后的摘要登记与映像发布。候选、制品和跨环境发布元数据直接读取已发布映像；无映像时只在启动或隔离诊断中串行读取。隔离健康响应也先缓冲，释放车道后再写网络。普通工作台读取、授权扫描、批次准备、模型调用和对象存储字节不再以直接获取车道包住整个函数。
 
 ### C8 指标与诊断
 
@@ -133,12 +148,8 @@ SQL 来源行仍从 PostgreSQL 可重复读事务读取：
 
 ## 现存差距
 
-- 读取：C3 原子发布与 C4 位置校验、等待新映像、两次重试及车道回退已实现；生产拥有者均支持 `ReadForkApp`，未实现该契约的测试或扩展拥有者暂留车道。
-- 提交：普通 `submit` 与后台任务已执行 C5；专用的发布、分支、控制及集成提交仍需在 T5 清点其准备工作，不把这些路径等同于已完成的普通动作路径。
-- 车道内：56 个文件共 129 处直接调用 `t.mu.Lock`（`continuous_frames.go`、`agent_host.go`、`release_candidate.go`、`branches.go`、`aicall.go` 等），持有范围未逐一核对是否符合 C-R2；`agent_host.go` 的 `BeginAgentRead` 以车道代替读取映像。
-- 车道内：`host/files.go` 的 `SweepUploads` 在车道内删除对象存储字节；移出需要先有“待删除”标记协议，否则与附件引用竞争会丢字节。
-- 指标：`platform.read_image.retries` 与 `platform.decision.conflicts` 均已上线。
-- 验证：K13 已覆盖 C2、C3、C4、C6、独立读取范围和发布后通知；并发动作在同一记录上竞争时恰有一个接受、一个稳定拒绝，幂等答案与重放结果一致。
+- 扩展：未实现 `ReadForkApp` 的测试或扩展拥有者仍使用串行读取与决定；生产拥有者已全部纳入映像。新增拥有者必须实现该契约后才能获得并发读取。
+- 预算：200 ms 是诊断预算，不是强制超时。大定义集的应用与映像发布、启动恢复仍可能超过预算，持续记录持有者与时长；不通过放宽预算或取消提交掩盖耗时。
 
 ## 相关
 

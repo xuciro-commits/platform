@@ -2,8 +2,10 @@ package host
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"platformkernel/kernel"
 
 	"slices"
 	"strings"
@@ -19,10 +21,10 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 	if t.quarantined() || t.app(build.ID) == nil {
 		return
 	}
-	t.mu.Lock()
-	runs, err := platform.PendingConfirmations(t.automation(build.ID, false))
+	runs, err := recordRead(t, context.Background(), func(t *Tenant) ([]platform.ConfirmationRun, *kernel.Error) {
+		return platform.PendingConfirmations(t.automation(build.ID, false))
+	})
 	if err != nil {
-		t.mu.Unlock()
 		return
 	}
 	active := map[string]bool{}
@@ -50,7 +52,6 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 		return earliest
 	}
 	slices.SortStableFunc(runs, func(a, b platform.ConfirmationRun) int { return due(a).Compare(due(b)) })
-	t.mu.Unlock()
 	reads := 0
 	for _, saved := range runs {
 		if !slices.Contains([]string{"pending", "partial", "expired"}, saved.State) || saved.Completion != "" {
@@ -58,36 +59,43 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 		}
 		for i := range saved.Parties {
 			slot := saved.ID + ":" + saved.Parties[i].Name
-			t.mu.Lock()
-			run, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), saved.ID)
-			valid := exists && i < len(run.Parties) && i < len(run.Definition.Parties) && run.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, run.State)
-			if valid {
-				valid = (hostView{t: t}).CheckConfirmationRead(run, i, at) == nil
+			type plan struct {
+				run        platform.ConfirmationRun
+				stamp      string
+				source     build.Source
+				connection build.Connection
+				valid      bool
 			}
-			var stamp string
-			var source build.Source
-			var connection build.Connection
-			if valid {
-				party, policy := run.Parties[i], run.Definition.Parties[i].Reconcile
-				valid = policy != nil && (party.State == "pending" || party.State == "unknown")
-				valid = valid && json.Unmarshal(party.Source, &source) == nil && json.Unmarshal(party.Connection, &connection) == nil
+			prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (plan, *kernel.Error) {
+
+				run, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), saved.ID)
+				valid := exists && i < len(run.Parties) && i < len(run.Definition.Parties) && run.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, run.State)
 				if valid {
-					stamp, valid = t.statusReadStamp(run.Revision, run.Member, party.Source, party.Connection, false)
+					valid = (hostView{t: t}).CheckConfirmationRead(run, i, at) == nil
 				}
-			}
-			if !valid {
-				t.mu.Unlock()
+				var stamp string
+				var source build.Source
+				var connection build.Connection
+				if valid {
+					party, policy := run.Parties[i], run.Definition.Parties[i].Reconcile
+					valid = policy != nil && (party.State == "pending" || party.State == "unknown")
+					valid = valid && json.Unmarshal(party.Source, &source) == nil && json.Unmarshal(party.Connection, &connection) == nil
+					if valid {
+						stamp, valid = t.statusReadStamp(run.Revision, run.Member, party.Source, party.Connection, false)
+					}
+				}
+				return plan{run: run, stamp: stamp, source: source, connection: connection, valid: valid}, nil
+			})
+			run, stamp, source, connection, valid := prepared.run, prepared.stamp, prepared.source, prepared.connection, prepared.valid
+			if refusal != nil || !valid {
 				continue
 			}
 			if reads >= statusReadLimit {
-				t.mu.Unlock()
 				return
 			}
 			if !t.confirmationReads.start(slot, run.Parties[i].ReconcileDue, at, &reads) {
-				t.mu.Unlock()
 				continue
 			}
-			t.mu.Unlock()
 			p := run.Parties[i]
 			policy := run.Definition.Parties[i].Reconcile
 			diff := platform.ConfirmationDifference{At: at}
@@ -146,41 +154,38 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			if diff.Matched {
 				outcome = "accepted"
 			}
-			t.mu.Lock()
 			t.confirmationReads.finished(slot, at.Add(time.Duration(policy.EverySeconds)*time.Second))
-			current, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), run.ID)
-			valid = exists && current.Revision == run.Revision && i < len(current.Parties) && current.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, current.State)
-			if valid {
-				valid = (current.Parties[i].State == "pending" || current.Parties[i].State == "unknown") && (hostView{t: t}).CheckConfirmationRead(current, i, at) == nil
+			_, _ = decideOnImage(t, context.Background(), "confirmation:answer", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+				current, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), run.ID)
+				valid := exists && current.Revision == run.Revision && i < len(current.Parties) && current.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, current.State)
 				if valid {
-					currentStamp, stable := t.statusReadStamp(current.Revision, current.Member, current.Parties[i].Source, current.Parties[i].Connection, false)
-					valid = stable && currentStamp == stamp
+					valid = (current.Parties[i].State == "pending" || current.Parties[i].State == "unknown") && (hostView{t: t}).CheckConfirmationRead(current, i, at) == nil
+					if valid {
+						currentStamp, stable := t.statusReadStamp(current.Revision, current.Member, current.Parties[i].Source, current.Parties[i].Connection, false)
+						valid = stable && currentStamp == stamp
+					}
 				}
-			}
-			if !valid {
-				t.mu.Unlock()
-				continue
-			}
-			party := current.Parties[i]
-			state := "unknown"
-			if diff.Matched {
-				state = "confirmed"
-			}
-			if prior := party.Differences; party.State == state && len(prior) > 0 {
-				last := prior[len(prior)-1]
-				if last.Matched == diff.Matched && last.Error == diff.Error && bytes.Equal(last.Observed, diff.Observed) {
-					t.mu.Unlock()
-					continue
+				if !valid {
+					return nil, nil
 				}
-			}
-			payload := map[string]any{"party": p.Name, "revision": run.Revision, "outcome": outcome, "reason": "Source reconciliation", "difference": diff, "answer": diff.Observed}
-			caller := t.automation(build.ID, false).Member
-			submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: "reconcile:" + run.ID + ":" + p.Name + ":" + at.UTC().Format(time.RFC3339Nano), Target: &pb.EntityRef{Type: platform.ConfirmationType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.ConfirmationAnswerSchema, Version: 1}, Payload: platform.Raw(payload)}
-			_, refusal := t.submitAccepted(t.app(build.ID), caller, submission, at, true)
-			t.mu.Unlock()
-			if refusal != nil {
-				continue
-			}
+				party := current.Parties[i]
+				state := "unknown"
+				if diff.Matched {
+					state = "confirmed"
+				}
+				if prior := party.Differences; party.State == state && len(prior) > 0 {
+					last := prior[len(prior)-1]
+					if last.Matched == diff.Matched && last.Error == diff.Error && bytes.Equal(last.Observed, diff.Observed) {
+						return nil, nil
+					}
+				}
+				payload := map[string]any{"party": p.Name, "revision": run.Revision, "outcome": outcome, "reason": "Source reconciliation", "difference": diff, "answer": diff.Observed}
+				caller := t.automation(build.ID, false).Member
+				submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: "reconcile:" + run.ID + ":" + p.Name + ":" + at.UTC().Format(time.RFC3339Nano), Target: &pb.EntityRef{Type: platform.ConfirmationType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.ConfirmationAnswerSchema, Version: 1}, Payload: platform.Raw(payload)}
+				return t.submitAccepted(t.app(build.ID), caller, submission, at, true)
+			}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+				return t.finishPreparedSubmission(platform.Member{ID: "app:" + build.ID, Tenant: t.ID}, candidate, record, refusal)
+			})
 		}
 	}
 }

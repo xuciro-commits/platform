@@ -90,8 +90,11 @@ func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now
 }
 
 func (t *Tenant) integrationPending(typ, id string, execution *dataowner.IntegrationExecution) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) { return t.integrationPendingRead(typ, id, execution), nil })
+	return value
+}
+
+func (t *Tenant) integrationPendingRead(typ, id string, execution *dataowner.IntegrationExecution) bool {
 	c := t.automation(build.ID, false)
 	var current *dataowner.IntegrationExecution
 	switch typ {
@@ -285,6 +288,18 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 }
 
 func (t *Tenant) declaredRows(object, kind, source string, input []map[string]any, now time.Time) ([]build.SourceRow, *platform.DataSourceBinding, error) {
+	type answer struct {
+		rows    []build.SourceRow
+		binding *platform.DataSourceBinding
+	}
+	value, err := readWithError(t, context.Background(), func(t *Tenant) (answer, error) {
+		rows, binding, err := t.declaredRowsRead(object, kind, source, input, now)
+		return answer{rows: rows, binding: binding}, err
+	})
+	return value.rows, value.binding, err
+}
+
+func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[string]any, now time.Time) ([]build.SourceRow, *platform.DataSourceBinding, error) {
 	t.records.Lock()
 	et := t.records.Type(object)
 	var binding *platform.DataSourceBinding
@@ -305,8 +320,6 @@ func (t *Tenant) declaredRows(object, kind, source string, input []map[string]an
 		return nil, binding, fmt.Errorf("the answer holds %d rows; a pull takes at most %d", len(input), build.ValueSourceRows)
 	}
 	rows := make([]build.SourceRow, 0, len(input))
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	for _, values := range input {
 		id := platform.IntegrationScalar(values[binding.Key])
 		at := now.UTC()
@@ -375,8 +388,11 @@ func (t *Tenant) prepareRows(member platform.Member, object, producer string, ro
 }
 
 func (t *Tenant) integrationRefused(authority, key string) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) { return t.integrationRefusedRead(authority, key), nil })
+	return value
+}
+
+func (t *Tenant) integrationRefusedRead(authority, key string) bool {
 	_, ok := t.committed.Refusal(authority + "/" + key)
 	return ok
 }
@@ -488,17 +504,14 @@ func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer string
 func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 	var conn *build.Connection
 	if s.Connection != "" {
-		t.mu.Lock()
-		c, ok := platform.Get[build.Connection](t.automation(build.ID, false), s.Connection)
-		if ok {
-			var err error
-			c, err = t.dataOwner().ExecutionConnection(c)
-			if err != nil {
-				ok = false
+		c, failure := readWithError(t, context.Background(), func(t *Tenant) (build.Connection, error) {
+			current, ok := platform.Get[build.Connection](t.automation(build.ID, false), s.Connection)
+			if !ok {
+				return current, fmt.Errorf("the connection is not ready")
 			}
-		}
-		t.mu.Unlock()
-		if !ok || c.State != "ready" {
+			return t.dataOwner().ExecutionConnection(current)
+		})
+		if failure != nil || c.State != "ready" {
 			return nil, fmt.Errorf("the connection is not ready")
 		}
 		conn = &c

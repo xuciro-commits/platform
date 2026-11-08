@@ -3,6 +3,7 @@ package host
 import records "platformserver/kernel/records"
 
 import (
+	"context"
 	"encoding/json"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/services/actions"
@@ -36,12 +37,16 @@ func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, 
 }
 
 func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (platform.BusinessRefusalPage, *kernel.Error) {
+		return t.scopedBusinessRefusals(m, typ, id, offset, limit, at, keys...)
+	})
+}
+
+func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *kernel.Error) {
 	out := platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}
 	if err := t.admits(m); err != nil {
 		return out, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if typ == "" || id == "" {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the original business record")
 	}

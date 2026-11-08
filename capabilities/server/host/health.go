@@ -1,6 +1,8 @@
 package host
 
 import (
+	"context"
+	"platformkernel/kernel"
 	"platformserver/platform"
 	"runtime/debug"
 	"slices"
@@ -66,13 +68,14 @@ type QueueHealth struct {
 }
 
 func (t *Tenant) Health(now time.Time) TenantHealth {
-	lane := t.laneHealth(now, true)
-	t.mu.Lock()
-	h := t.healthState(now)
-	t.mu.Unlock()
-	t.finishHealth(&h, now)
-	h.Lane = lane
-	return h
+	if t.quarantined() {
+		return t.health(now)
+	}
+	health, refusal := recordRead(t, context.Background(), func(t *Tenant) (TenantHealth, *kernel.Error) { return t.health(now), nil })
+	if refusal != nil {
+		return TenantHealth{Status: "degraded", Readiness: []HealthCondition{{Name: "journal", Ready: false, Detail: refusal.Error()}}, Lane: t.laneHealth(now, true)}
+	}
+	return health
 }
 
 func (t *Tenant) health(now time.Time) TenantHealth {

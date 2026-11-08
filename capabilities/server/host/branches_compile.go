@@ -54,13 +54,19 @@ func (t *Tenant) BranchCompile(m platform.Member, id, typ, draft string, now tim
 	_ = json.Unmarshal(spec, &saved)
 	saved[codeBuildKey], _ = json.Marshal(artifact)
 	raw, _ := json.Marshal(saved)
-	t.mu.Lock()
-	current, refusal := t.mainDraft(m, typ, draft, now)
-	t.mu.Unlock()
+	type basis struct {
+		draft   mainDraft
+		project string
+	}
+	base, refusal := recordRead(t, context.Background(), func(t *Tenant) (basis, *kernel.Error) {
+		current, refusal := t.mainDraft(m, typ, draft, now)
+		return basis{draft: current, project: t.resourceProject(typ, draft)}, refusal
+	})
+	current := base.draft
 	if refusal != nil {
 		return BranchDetail{}, refusal
 	}
-	project := t.resourceProject(typ, draft)
+	project := base.project
 	if latestChange, found := branch.Latest(typ, draft); found && latestChange.Project != "" {
 		project = latestChange.Project
 	}
@@ -69,9 +75,7 @@ func (t *Tenant) BranchCompile(m platform.Member, id, typ, draft string, now tim
 
 func (t *Tenant) branchCodeSource(m platform.Member, branch build.Branch, draft string, now time.Time) (platform.CodeBuildRequest, build.CodeArtifact, json.RawMessage, *kernel.Error) {
 	none := platform.CodeBuildRequest{}
-	t.mu.Lock()
-	current, refusal := t.mainDraft(m, build.CodeType, draft, now)
-	t.mu.Unlock()
+	current, refusal := recordRead(t, context.Background(), func(t *Tenant) (mainDraft, *kernel.Error) { return t.mainDraft(m, build.CodeType, draft, now) })
 	if refusal != nil {
 		return none, build.CodeArtifact{}, nil, refusal
 	}

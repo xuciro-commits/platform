@@ -1,8 +1,10 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	controlowner "platformserver/services/security/control"
 
@@ -75,8 +77,29 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedformat.OperationClaim,
 	return saved, nil
 }
 func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	type claim struct {
+		effect  platform.Effect
+		claimed bool
+	}
+	value, refusal := decideOnImage(t, context.Background(), "operation:claim", func(t *Tenant) (claim, *kernel.Error) {
+		effect, claimed := t.prepareOperationClaim(id, now)
+		return claim{effect, claimed}, nil
+	}, func(t *Tenant, candidate preparedAccepted, value claim, refusal *kernel.Error) (claim, *kernel.Error) {
+		if len(candidate.entry.Body) > 0 {
+			t.opsMu.Lock()
+			busy := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id && x.sending })
+			t.opsMu.Unlock()
+			if busy || t.overQuota(value.effect.App, now) {
+				return claim{}, nil
+			}
+			value.claimed = t.finishOperationClaim(candidate)
+		}
+		return value, refusal
+	})
+	return value.effect, value.claimed && refusal == nil
+}
+
+func (t *Tenant) prepareOperationClaim(id string, now time.Time) (platform.Effect, bool) {
 	if t.businessStopped() {
 		return platform.Effect{}, false
 	}
@@ -114,18 +137,27 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 	r.Digest, _ = acceptedformat.OperationClaimDigest(r)
 	raw, _ := json.Marshal(r)
 	principal, _ := json.Marshal(t.automation(controlowner.PlatformApp, false).Member)
-	saved, err := t.acceptResult(Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: now}, r.Key, r.RequestHash)
-	if err != nil {
-		return platform.Effect{}, false
+	candidate := preparedAccepted{entry: Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: now}, key: r.Key, hash: r.RequestHash}
+	if t.preparedResult != nil {
+		*t.preparedResult = candidate
+		return after, true
 	}
-	raw = saved
-	if _, err := t.applyOperationClaim(raw); err != nil {
+	return after, t.finishOperationClaim(candidate)
+}
+
+func (t *Tenant) finishOperationClaim(candidate preparedAccepted) bool {
+	saved, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+	if err != nil {
+		return false
+	}
+	claim, err := t.applyOperationClaim(saved)
+	if err != nil {
 		t.quarantine(err)
-		return platform.Effect{}, false
+		return false
 	}
 	t.acceptedResultApplied()
-	t.spend(before.App, now)
-	return after, true
+	t.spend(claim.Before.App, candidate.entry.At)
+	return true
 }
 func (t *Tenant) operationCurrent(id string, generation uint32) bool {
 	work, err := t.works.Get(id)

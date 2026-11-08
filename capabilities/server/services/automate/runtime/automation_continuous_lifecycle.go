@@ -16,7 +16,6 @@ import (
 )
 
 type PreparedBatch struct {
-	owner            *Flows
 	before           FlowInstance
 	frame            *BatchFrame
 	artifacts        []platform.FlowStateArtifact
@@ -407,7 +406,7 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform
 	}
 	artifacts = append(artifacts, ref)
 	frame.State, frame.DeadLetters, frame.Sealed = nil, nil, &ref
-	return &PreparedBatch{owner: plan.owner, before: x, frame: frame, artifacts: artifacts, retired: retired, outputs: outputs, sources: sources, batch: batch, at: now,
+	return &PreparedBatch{before: x, frame: frame, artifacts: artifacts, retired: retired, outputs: outputs, sources: sources, batch: batch, at: now,
 		entry: plan.entry, windowInput: windowInput, resumeInput: resumeInput, operation: operationRequest, assets: assets}, nil
 }
 
@@ -425,8 +424,8 @@ func projectOperatorOutputs(outputs map[string]json.RawMessage, instance string,
 	}
 }
 
-func (p *PreparedBatch) Decision() platform.App {
-	return preparedDecision{Flows: p.owner, prepared: p}
+func (p *PreparedBatch) Decision(owner platform.App) platform.App {
+	return preparedDecision{Flows: owner.(*Flows), prepared: p}
 }
 
 func (p *PreparedBatch) Submission(tenant string) *pb.Submission {

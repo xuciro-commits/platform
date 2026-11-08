@@ -116,62 +116,71 @@ func (a *AgentEvaluator) Evaluate(ctx platform.AgentEvaluationRuntime, ev platfo
 		a.mu.Unlock()
 		return false
 	}
-	h := a.context.Host
-	endRead := h.BeginAgentRead()
-	c := a.context.Automation(platform.AgentApp, false)
-	d := a.context.Definition(ev.Agent)
+	var d *platform.CompiledAgent
 	var definitionErr error
-	digest := ""
-	if ev.Candidate != "" {
-		d, digest, definitionErr = a.context.Compile(ev.Candidate, ev.Agent)
-	} else if d != nil {
-		digest = a.context.Version(d)
-	}
-	if ev.Binding == nil || ev.Binding.Stage != platform.AIStageDesign {
-		definitionErr = fmt.Errorf("the evaluation has no trusted execution stage; start a new evaluation")
-	}
-	if definitionErr == nil && ev.DefinitionDigest != "" && digest != ev.DefinitionDigest {
-		definitionErr = fmt.Errorf("the evaluation's saved declaration differs")
-	}
-	model, pv, err := h.AgentModel(ev.Model)
-	config := ""
-	if err == nil {
-		var problem error
-		if ev.Binding != nil {
-			options := platform.ModelOptions{}
-			if d != nil {
-				options = d.ModelOptions
-			}
-			current, _, refusal := h.ResolveAgentModel(ev.Model, options, platform.AIStageDesign)
-			if refusal != nil {
-				definitionErr = fmt.Errorf("the evaluation model options are invalid")
-			}
-			config, problem = a.context.Host.AgentModelConfigurationDigest(model, pv, &current)
-			model.Defaults = ev.Binding.Options
-		} else {
-			config, problem = a.context.Host.AgentModelConfigurationDigest(model, pv, nil)
+	var model platform.AIModel
+	var pv platform.AIProvider
+	var err *kernel.Error
+	var who platform.Member
+	digest, config, initialize := "", "", false
+	if refusal := a.read(func() {
+		h := a.context.Host
+		c := a.context.Automation(platform.AgentApp, false)
+		d = a.context.Definition(ev.Agent)
+		digest = ""
+		if ev.Candidate != "" {
+			d, digest, definitionErr = a.context.Compile(ev.Candidate, ev.Agent)
+		} else if d != nil {
+			digest = a.context.Version(d)
 		}
-		if problem != nil || ev.ModelConfig != "" && config != ev.ModelConfig {
-			definitionErr = fmt.Errorf("the evaluation's model configuration changed")
+		if ev.Binding == nil || ev.Binding.Stage != platform.AIStageDesign {
+			definitionErr = fmt.Errorf("the evaluation has no trusted execution stage; start a new evaluation")
 		}
-	}
-	who, _ := h.Member(ev.Created.By)
-	initialize := ev.DefinitionDigest == "" || ev.ModelConfig == ""
-	if !ev.Suite && ev.Inputs == nil {
-		domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
-		past, _, _ := platform.Find[platform.AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
-		ev.Inputs = []platform.EvaluationInput{}
-		for _, run := range past {
-			if len(run.Signals) != 0 {
-				ev.Inputs = append(ev.Inputs, platform.EvaluationInput{Run: run.ID, Revision: run.Revision})
-				if len(ev.Inputs) == evaluationRuns {
-					break
+		if definitionErr == nil && ev.DefinitionDigest != "" && digest != ev.DefinitionDigest {
+			definitionErr = fmt.Errorf("the evaluation's saved declaration differs")
+		}
+		model, pv, err = h.AgentModel(ev.Model)
+		config = ""
+		if err == nil {
+			var problem error
+			if ev.Binding != nil {
+				options := platform.ModelOptions{}
+				if d != nil {
+					options = d.ModelOptions
+				}
+				current, _, refusal := h.ResolveAgentModel(ev.Model, options, platform.AIStageDesign)
+				if refusal != nil {
+					definitionErr = fmt.Errorf("the evaluation model options are invalid")
+				}
+				config, problem = a.context.Host.AgentModelConfigurationDigest(model, pv, &current)
+				model.Defaults = ev.Binding.Options
+			} else {
+				config, problem = a.context.Host.AgentModelConfigurationDigest(model, pv, nil)
+			}
+			if problem != nil || ev.ModelConfig != "" && config != ev.ModelConfig {
+				definitionErr = fmt.Errorf("the evaluation's model configuration changed")
+			}
+		}
+		who, _ = h.Member(ev.Created.By)
+		initialize = ev.DefinitionDigest == "" || ev.ModelConfig == ""
+		if !ev.Suite && ev.Inputs == nil {
+			domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
+			past, _, _ := platform.Find[platform.AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
+			ev.Inputs = []platform.EvaluationInput{}
+			for _, run := range past {
+				if len(run.Signals) != 0 {
+					ev.Inputs = append(ev.Inputs, platform.EvaluationInput{Run: run.ID, Revision: run.Revision})
+					if len(ev.Inputs) == evaluationRuns {
+						break
+					}
 				}
 			}
+			initialize = true
 		}
-		initialize = true
+	}); refusal != nil {
+		definitionErr = refusal
 	}
-	endRead()
+
 	if definitionErr != nil || d == nil || err != nil {
 		reason := "the agent is not declared, or the model " + ev.Model + " is not enabled"
 		if definitionErr != nil {
@@ -192,9 +201,13 @@ func (a *AgentEvaluator) Evaluate(ctx platform.AgentEvaluationRuntime, ev platfo
 		return a.suite(ev, d, model, pv, who, now, save)
 	}
 	for _, input := range ev.Inputs[len(ev.Cases):] {
-		endRead := h.BeginAgentRead()
-		run, known := platform.Get[platform.AgentRunRecord](c, input.Run)
-		endRead()
+		var run platform.AgentRunRecord
+		var known bool
+		if refusal := a.read(func() {
+			run, known = platform.Get[platform.AgentRunRecord](a.context.Automation(platform.AgentApp, false), input.Run)
+		}); refusal != nil {
+			return ev
+		}
 		x := platform.EvalCase{Run: input.Run, Verdict: "fails", Candidate: "the evaluation's historical run revision changed"}
 		if known && run.Revision == input.Revision {
 			x = a.rerun(ev.ID, d, run, model, pv, who, now)
@@ -248,7 +261,9 @@ func evaluationScore(ev *platform.Evaluation) {
 }
 
 func (a *AgentEvaluator) rerun(evaluation string, d *platform.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) platform.EvalCase {
-	d = a.context.Compiled(run, d)
+	if refusal := a.read(func() { d = a.context.Compiled(run, d) }); refusal != nil {
+		return platform.EvalCase{Run: run.ID, Verdict: "fails", Candidate: refusal.Error()}
+	}
 	last := run.Signals[len(run.Signals)-1]
 	x := platform.EvalCase{Run: run.ID, Signal: last.Kind}
 	changed := func(i int) string {
@@ -304,7 +319,9 @@ func (a *AgentEvaluator) rerun(evaluation string, d *platform.CompiledAgent, run
 }
 
 func (a *AgentEvaluator) suite(ev platform.Evaluation, d *platform.CompiledAgent, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
-	d = a.context.Compiled(platform.AgentRunRecord{Agent: ev.Agent, OnBehalf: who.ID}, d)
+	if refusal := a.read(func() { d = a.context.Compiled(platform.AgentRunRecord{Agent: ev.Agent, OnBehalf: who.ID}, d) }); refusal != nil {
+		return ev
+	}
 	ceiling, spent := evalBudget(d.Budget, len(d.Cases)*suiteRuns), platform.Budget{}
 	for _, x := range ev.Cases {
 		spent.Steps += x.Steps
@@ -377,9 +394,12 @@ func (a *AgentEvaluator) dryRun(evaluation string, d *platform.CompiledAgent, ru
 		}
 	}
 	for dry.StepsUsed < room.Steps && dry.TokensUsed < room.Tokens {
-		endRead := h.BeginAgentRead()
-		req := a.context.Prompt(a.context.Automation(platform.AgentApp, false), d, dry, model.Name(), now)
-		endRead()
+		var req platform.ChatRequest
+		if refusal := a.read(func() {
+			req = a.context.Prompt(a.context.Automation(platform.AgentApp, false), d, dry, model.Name(), now)
+		}); refusal != nil {
+			return dry, refusal.Error()
+		}
 		req.Run = evaluation + ":" + run.ID + ":evaluation"
 		binding, _, problem := h.ResolveAgentModel(model.Name(), model.Defaults, platform.AIStageDesign)
 		if problem != nil {
@@ -472,9 +492,15 @@ func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.Age
 	if tool.Kind == "knowledge" {
 		return string(a.context.ObserveKnowledge(dry, raw, now))
 	}
+	answer := ""
+	if refusal := a.read(func() { answer = a.dryUseScoped(d, run, dry, tool, args, raw, now, observes) }); refusal != nil {
+		return refusal.Error()
+	}
+	return answer
+}
+
+func (a *AgentEvaluator) dryUseScoped(d *platform.CompiledAgent, run, dry platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time, observes bool) string {
 	h := a.context.Host
-	endRead := h.BeginAgentRead()
-	defer endRead()
 	c := a.context.Automation(platform.AgentApp, true)
 	if observes && tool.Kind != "knowledge" {
 		out, _ := a.context.Use(c, d, &dry, tool, args, raw, &platform.RunStep{}, now)
@@ -521,4 +547,14 @@ func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.Age
 		}
 	}
 	return "would do: " + tool.Schema + " " + target
+}
+
+func (a *AgentEvaluator) read(work func()) *kernel.Error {
+	return a.context.Host.WithAgentRead(func(current platform.AgentEvaluationRuntime) *kernel.Error {
+		previous := a.context
+		a.context = current
+		defer func() { a.context = previous }()
+		work()
+		return nil
+	})
 }

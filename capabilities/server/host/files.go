@@ -26,10 +26,19 @@ type Upload struct {
 }
 
 func (t *Tenant) Upload(m platform.Member, name, contentType string, body io.Reader, now time.Time) (Upload, int, error) {
-	if t.app(platform.FileApp) == nil {
-		return Upload{}, http.StatusNotFound, fmt.Errorf("the tenant runs no files app")
+	limit, refusal := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) {
+		if t.app(platform.FileApp) == nil {
+			return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		return platform.MaxFileSize(t.automation(platform.FileApp, false)), nil
+	})
+	if refusal != nil {
+		status := http.StatusServiceUnavailable
+		if refusal.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+			status = http.StatusNotFound
+		}
+		return Upload{}, status, refusal
 	}
-	limit := platform.MaxFileSize(t.automation(platform.FileApp, false))
 	data, err := io.ReadAll(io.LimitReader(body, int64(limit)+1))
 	if err != nil {
 		return Upload{}, http.StatusBadRequest, err
@@ -42,10 +51,15 @@ func (t *Tenant) Upload(m platform.Member, name, contentType string, body io.Rea
 	}
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
+	if !t.uploads.BeginPut(hash) {
+		return Upload{}, http.StatusConflict, fmt.Errorf("the previous unattached upload is being removed; retry the upload")
+	}
+	stored := false
+	defer func() { t.uploads.EndPut(hash, now, stored) }()
 	if err := t.files().Put(context.Background(), t.ID+"/"+hash, data, contentType); err != nil {
 		return Upload{}, http.StatusServiceUnavailable, err
 	}
-	t.uploads.Add(hash, now)
+	stored = true
 	return Upload{Hash: hash, Size: len(data), ContentType: contentType, Name: name}, http.StatusOK, nil
 }
 
@@ -54,11 +68,11 @@ func (t *Tenant) SweepUploads(now time.Time) {
 	if len(old) == 0 {
 		return
 	}
-	_, _ = lockedRecordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+	pending, refusal := decideOnImage(t, context.Background(), "uploads:reserve", func(t *Tenant) (map[string]bool, *kernel.Error) {
 		retained := map[string]bool{}
 		if t.app(platform.FileApp) != nil {
 			if !retainUploadHashes[platform.File](t.automation(platform.FileApp, false), func(file platform.File) { retained[file.Hash] = true }) {
-				return struct{}{}, nil
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 		}
 		if t.app("build") != nil {
@@ -68,21 +82,42 @@ func (t *Tenant) SweepUploads(now time.Time) {
 				}
 			}
 			caller := t.automation("build", false)
-			if !retainUploadHashes[platform.MediaSet](caller, func(set platform.MediaSet) { keep(set.Items) }) ||
-				!retainUploadHashes[platform.MediaSetVersion](caller, func(version platform.MediaSetVersion) { keep(version.Items) }) {
-				return struct{}{}, nil
+			if !retainUploadHashes[platform.MediaSet](caller, func(set platform.MediaSet) { keep(set.Items) }) || !retainUploadHashes[platform.MediaSetVersion](caller, func(version platform.MediaSetVersion) { keep(version.Items) }) {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 		}
-		for _, hash := range old {
-			if !retained[hash] {
-				if err := t.files().Delete(context.Background(), t.ID+"/"+hash); err != nil {
-					continue
-				}
-			}
-			t.uploads.Forget(hash)
+		if t.readOrigin == nil {
+			return t.reserveUploadDeletes(old, retained, now), nil
 		}
-		return struct{}{}, nil
+		return retained, nil
+	}, func(t *Tenant, _ preparedAccepted, retained map[string]bool, refusal *kernel.Error) (map[string]bool, *kernel.Error) {
+		if refusal != nil {
+			return nil, refusal
+		}
+		return t.reserveUploadDeletes(old, retained, now), nil
 	})
+	if refusal != nil {
+		return
+	}
+	for hash := range pending {
+		err := t.files().Delete(context.Background(), t.ID+"/"+hash)
+		t.uploads.EndDelete(hash, err == nil)
+	}
+}
+
+func (t *Tenant) reserveUploadDeletes(old []string, retained map[string]bool, now time.Time) map[string]bool {
+	pending := map[string]bool{}
+	for _, hash := range old {
+		if retained[hash] {
+			t.uploads.Forget(hash)
+		} else if t.uploads.BeginDelete(hash, now, 24*time.Hour) {
+			pending[hash] = true
+		}
+	}
+	if len(pending) > 0 {
+		t.stateEpoch.Add(1)
+	}
+	return pending
 }
 
 func (t *Tenant) downloadBytes(w http.ResponseWriter, hash, name, contentType string) {

@@ -69,9 +69,9 @@ func (h *Host) routesBuild(rt *routes) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an action target and optional inputs"))
 			return
 		}
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		result, refusal := t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
+		result, refusal := recordRead(t, r.Context(), func(t *Tenant) (ActionCheckResult, *kernel.Error) {
+			return t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
+		})
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
@@ -140,33 +140,37 @@ func (h *Host) routesBuild(rt *routes) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		world, refusal := t.draftWorldLocked(m, r.URL.Query().Get("branch"), h.Now())
+		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (ProcessDiagnostics, *kernel.Error) {
+
+			world, refusal := t.draftWorldLocked(m, r.URL.Query().Get("branch"), h.Now())
+			if refusal != nil {
+				return ProcessDiagnostics{}, refusal
+			}
+			owner, ok := world.app(build.ID).(build.ConstructionDrafts)
+			if !ok {
+				return ProcessDiagnostics{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			}
+			answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
+			if refusal := owner.CheckProcess(platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p); refusal != nil {
+				answer.Valid = false
+				message := refusal.Message
+				node := ""
+				parts := strings.SplitN(message, ": ", 2)
+				if len(parts) == 2 {
+					if strings.HasPrefix(parts[0], "step ") {
+						node = strings.TrimPrefix(parts[0], "step ")
+					}
+					if strings.HasPrefix(parts[0], "Node ") {
+						node = strings.TrimPrefix(parts[0], "Node ")
+					}
+				}
+				answer.Issues = append(answer.Issues, ProcessDiagnostic{Node: node, Code: refusal.Code.String(), Message: message})
+			}
+			return answer, nil
+		})
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
-		}
-		owner, ok := world.app(build.ID).(build.ConstructionDrafts)
-		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
-		if refusal := owner.CheckProcess(platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p); refusal != nil {
-			answer.Valid = false
-			message := refusal.Message
-			node := ""
-			parts := strings.SplitN(message, ": ", 2)
-			if len(parts) == 2 {
-				if strings.HasPrefix(parts[0], "step ") {
-					node = strings.TrimPrefix(parts[0], "step ")
-				}
-				if strings.HasPrefix(parts[0], "Node ") {
-					node = strings.TrimPrefix(parts[0], "Node ")
-				}
-			}
-			answer.Issues = append(answer.Issues, ProcessDiagnostic{Node: node, Code: refusal.Code.String(), Message: message})
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})

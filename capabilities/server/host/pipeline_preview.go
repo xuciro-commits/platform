@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	transform "platformserver/services/data/transform"
@@ -33,30 +34,29 @@ type PipelinePreview struct {
 }
 
 func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreviewRequest, at time.Time) (PipelinePreview, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (PipelinePreview, *kernel.Error) { return t.scopedPreviewPipeline(member, request, at) })
+}
+
+func (t *Tenant) scopedPreviewPipeline(member platform.Member, request PipelinePreviewRequest, at time.Time) (PipelinePreview, *kernel.Error) {
 	out := PipelinePreview{Rows: []map[string]any{}, Quarantine: []platform.QuarantinedRow{}}
 	if problem := t.admits(member); problem != nil {
 		return out, problem
 	}
-	t.mu.Lock()
 	if t.quarantined() || t.app(build.ID) == nil {
-		t.mu.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Pipeline trial is unavailable")
 	}
 	caller := t.caller(member, t.app(build.ID), false)
 	if problem := authorizationRefusal(t.authorizeCapability(caller, build.ID, "build.pipeline.preview", []string{build.Builder, build.Integrator}, true, authorizationDetails{At: at})); problem != nil {
-		t.mu.Unlock()
 		return out, problem
 	}
 	p := request.Pipeline
 	raw, err := json.Marshal(p)
 	if err != nil || len(raw) > 1<<20 || len(p.Steps) > 64 || len(p.Expectations) > 64 {
-		t.mu.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Pipeline trial accepts at most 64 steps, 64 expectations and 1 MiB of definition")
 	}
 	p = dataowner.Pipeline{}
 	_ = json.Unmarshal(raw, &p)
 	if err := p.NormalizeFormulaRules(); err != nil {
-		t.mu.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 	}
 	inputs := map[string][]map[string]any{}
@@ -67,24 +67,20 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		}
 		data, problem := caller.ReadRecord(dataowner.DatasetType, id, at)
 		if problem != nil {
-			t.mu.Unlock()
 			return out, problem
 		}
 		var dataset dataowner.Dataset
 		if json.Unmarshal(data, &dataset) != nil || dataset.Version < 1 {
-			t.mu.Unlock()
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The input dataset has no rows yet")
 		}
 		versionID := dataowner.VersionID(id, dataset.Version)
 		data, problem = caller.ReadRecord(dataowner.DatasetVersionType, versionID, at)
 		if problem != nil {
-			t.mu.Unlock()
 			return out, problem
 		}
 		var version dataowner.DatasetVersion
 		var rows []map[string]any
 		if json.Unmarshal(data, &version) != nil || version.Archived || json.Unmarshal(version.Data, &rows) != nil {
-			t.mu.Unlock()
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The input dataset version is unavailable")
 		}
 		sources = append(sources, dataowner.DatasetType+"/"+id, dataowner.DatasetVersionType+"/"+versionID+"#data")
@@ -99,7 +95,6 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		inputs[id] = rows
 	}
 	problem := t.dataOwner().CheckPipeline(caller, p)
-	t.mu.Unlock()
 	if problem != nil {
 		return out, problem
 	}
@@ -123,9 +118,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 	if raw, err := json.Marshal(out); err != nil || len(raw) > 1<<20 {
 		return PipelinePreview{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Pipeline trial output exceeds 1 MiB")
 	}
-	t.mu.Lock()
 	problem = authorizationRefusal(t.authorizeCapability(caller, build.ID, "build.pipeline.preview", []string{build.Builder, build.Integrator}, true, authorizationDetails{At: at, Sources: sources}))
-	t.mu.Unlock()
 	if problem != nil {
 		return PipelinePreview{}, problem
 	}

@@ -3,6 +3,7 @@ package host
 import automation "platformserver/services/automate/runtime"
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	controlowner "platformserver/services/security/control"
@@ -25,6 +26,12 @@ func (t *Tenant) PageView(m platform.Member, app, owner, page string) (platform.
 	return appowner.PageView(t.Definitions(m), t.Entities(m), t.Catalog(m), app, owner, page)
 }
 func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationRunPage, *kernel.Error) {
+		return t.scopedApplicationRuns(m, ref, offset, limit, now, filters...)
+	})
+}
+
+func (t *Tenant) scopedApplicationRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error) {
 	if ref.Kind != platform.AssetApp || ref.Check() != nil || offset < 0 || limit < 1 || limit > 100 {
 		return platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an application and a run page of 1–100")
 	}
@@ -163,7 +170,12 @@ func applicationRunSummary(runs []platform.ApplicationRun) platform.ApplicationR
 	return out
 }
 func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *kernel.Error) {
-	return t.applicationContext().Runtime(m, ref, now)
+	if t.quarantined() {
+		return t.applicationContext().Runtime(m, ref, now)
+	}
+	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationRuntime, *kernel.Error) {
+		return t.applicationContext().Runtime(m, ref, now)
+	})
 }
 func (t *Tenant) bindApplications(resource platform.AssetRef, release, dependencies string, jobOwner ...string) ([]platform.AssetBinding, error) {
 	return t.applicationContext().Bind(resource, release, dependencies, jobOwner...)
@@ -187,6 +199,12 @@ func (h hostView) ApplicationBindings(resource platform.AssetRef, release, depen
 	return h.t.bindApplications(resource, release, dependencies)
 }
 func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationDiagnostic, *kernel.Error) {
+		return t.scopedApplicationRecordDiagnostic(m, ref, typ, id, now)
+	})
+}
+
+func (t *Tenant) scopedApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *kernel.Error) {
 	out := platform.ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []platform.ApplicationDecisionTrace{}, Runs: []platform.ApplicationRun{}}
 	runtime, refusal := t.ApplicationRuntimeOf(m, ref, now)
 	if refusal != nil {
@@ -201,7 +219,6 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 	if refusal != nil {
 		return out, refusal
 	}
-	t.mu.Lock()
 	owner := t.records.Type(typ).Info().App
 	ledger := t.app(owner).AcceptedLedger()
 	receipts := ledger.RecordsFor(t.ID)
@@ -236,7 +253,6 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 		}
 		out.Decisions = append(out.Decisions, trace)
 	}
-	t.mu.Unlock()
 	for skip := 0; ; skip += 100 {
 		page, refusal := t.ApplicationRuns(m, ref, skip, 100, now, platform.ApplicationRunFilter{Subject: fmt.Sprintf("%s/%s", typ, id)})
 		if refusal != nil {
@@ -254,7 +270,7 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 	return out, nil
 }
 func (t *Tenant) applicationContext() appowner.Context {
-	return appowner.Context{Tenant: t.ID, Lock: t.mu.Lock, Unlock: t.mu.Unlock, Admit: t.admits, Definitions: t.Definitions, Entity: t.entity, App: t.app,
+	return appowner.Context{Tenant: t.ID, Admit: t.admits, Definitions: t.Definitions, Entity: t.entity, App: t.app,
 		Assets: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) }, Candidate: t.releases.Candidate,
 		Candidates: func() map[string]json.RawMessage { return t.releases.Candidates() }, CloseCandidate: t.candidateWithBindings,
 		Rows: func(m platform.Member, typ string, q platform.Query, at time.Time) ([]any, *kernel.Error) {

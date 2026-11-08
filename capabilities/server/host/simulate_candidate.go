@@ -22,10 +22,22 @@ type stagedCandidate struct {
 }
 
 func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.CandidateSimulation, *kernel.Error) {
+		return t.scopedSimulateCandidate(builder, request)
+	})
+}
+
+func (t *Tenant) scopedSimulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *kernel.Error) {
 	return t.simulateCandidate(builder, request, nil)
 }
 
 func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest, staged *stagedCandidate) (trialowner.CandidateSimulation, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.CandidateSimulation, *kernel.Error) {
+		return t.simulateStagedCandidateRead(builder, request, staged)
+	})
+}
+
+func (t *Tenant) simulateStagedCandidateRead(builder platform.Member, request trialowner.CandidateSimulationRequest, staged *stagedCandidate) (trialowner.CandidateSimulation, *kernel.Error) {
 	var empty trialowner.CandidateSimulation
 	if err := t.admits(builder); err != nil {
 		return empty, err
@@ -62,9 +74,7 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 	if roots != 1 || len(request.Model) > 256 || request.At.IsZero() || len(request.Steps) == 0 || len(request.Steps) > 20 || len(request.Actors) > 3 || len(request.Sample) > 64 || len(request.Actors) > 0 && request.As != "" {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one saved application, object, process, function or candidate, a fixed time and 1–20 test steps")
 	}
-	t.mu.Lock()
 	if t.quarantined() {
-		t.mu.Unlock()
 		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	m := builder
@@ -75,7 +85,6 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 		var ok bool
 		m, ok = t.member(request.As)
 		if !ok {
-			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", request.As)
 		}
 	}
@@ -83,12 +92,10 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 	seenActors := map[string]bool{}
 	for _, id := range request.Actors {
 		if seenActors[id] {
-			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose distinct known members for role comparison")
 		}
 		seenActors[id] = true
 		if id == "" {
-			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose known members for role comparison")
 		}
 		if slices.ContainsFunc(members, func(m platform.Member) bool { return m.ID == id }) {
@@ -96,32 +103,26 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 		}
 		actor, ok := t.member(id)
 		if !ok {
-			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", id)
 		}
 		members = append(members, actor)
 	}
 	for _, step := range request.Steps {
 		if len(request.Actors) > 0 && step.As != "" {
-			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Role comparisons use the same member for every scenario step")
 		}
 		if step.Compute != nil && !step.Compute.Check() {
-			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded compute fixture with a completed or failed outcome")
 		}
 		if step.Function != nil && !step.Function.Check() {
-			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded function fixture with a ready or rejected outcome")
 		}
 		if step.AdvanceSeconds < 0 || step.AdvanceSeconds > 86400 {
-			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Advance each test step by 0–86400 fixed seconds")
 		}
 		if step.As != "" && !slices.ContainsFunc(members, func(m platform.Member) bool { return m.ID == step.As }) {
 			actor, ok := t.member(step.As)
 			if !ok {
-				t.mu.Unlock()
 				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", step.As)
 			}
 			members = append(members, actor)
@@ -213,7 +214,6 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 	if err == nil {
 		err = environmentErr
 	}
-	t.mu.Unlock()
 	if err != nil {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}

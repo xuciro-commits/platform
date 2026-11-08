@@ -87,9 +87,9 @@ func (rt *routes) authorized(route transport.Route, app string, roles []string, 
 func (rt *routes) recordRead(route transport.Route, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
 	rt.handle(route, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if t.quarantined() && r.Method == http.MethodGet && r.URL.Path == "/v1/health" {
-			t.mu.Lock()
-			defer t.mu.Unlock()
-			f(w, r, m, t)
+			buffered := &laneBuffer{target: w}
+			func() { t.mu.Lock(); defer t.mu.Unlock(); f(buffered, r, m, t) }()
+			buffered.release()
 			return
 		}
 		buffered := &laneBuffer{target: w}

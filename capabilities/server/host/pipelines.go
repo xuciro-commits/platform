@@ -22,34 +22,44 @@ func (t *Tenant) RunPipelines(now time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) {
 		return
 	}
-	t.mu.Lock()
-	c := t.automation(build.ID, false)
-	query := publishedPipelineQuery()
-	query.Limit = 200
-	pipelines, _, _ := platform.Find[build.Pipeline](c, query)
-	versions := map[string]int{}
-	changed := map[string]bool{}
-	owner := t.dataOwner()
-	var fixed []build.Pipeline
-	for _, p := range pipelines {
-		p, err := owner.ExecutionPipeline(p)
-		if err != nil {
-			log.Printf("pipeline definition refused: %v", err)
-			continue
-		}
-		fixed = append(fixed, p)
-		if ds, ok := platform.Get[build.Dataset](c, p.Input); ok {
-			versions[p.ID] = ds.Version
-		}
-		if p.Last != nil && p.Last.Execution != nil {
-			for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
-				if ds, ok := platform.Get[build.Dataset](c, id); ok && ds.Version != p.Last.Execution.Inputs[id] {
-					changed[p.ID] = true
+	type plan struct {
+		fixed    []build.Pipeline
+		versions map[string]int
+		changed  map[string]bool
+	}
+	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (plan, *kernel.Error) {
+		c := t.automation(build.ID, false)
+		query := publishedPipelineQuery()
+		query.Limit = 200
+		pipelines, _, _ := platform.Find[build.Pipeline](c, query)
+		versions := map[string]int{}
+		changed := map[string]bool{}
+		owner := t.dataOwner()
+		var fixed []build.Pipeline
+		for _, p := range pipelines {
+			p, err := owner.ExecutionPipeline(p)
+			if err != nil {
+				log.Printf("pipeline definition refused: %v", err)
+				continue
+			}
+			fixed = append(fixed, p)
+			if ds, ok := platform.Get[build.Dataset](c, p.Input); ok {
+				versions[p.ID] = ds.Version
+			}
+			if p.Last != nil && p.Last.Execution != nil {
+				for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
+					if ds, ok := platform.Get[build.Dataset](c, id); ok && ds.Version != p.Last.Execution.Inputs[id] {
+						changed[p.ID] = true
+					}
 				}
 			}
 		}
+		return plan{fixed: fixed, versions: versions, changed: changed}, nil
+	})
+	if refusal != nil {
+		return
 	}
-	t.mu.Unlock()
+	fixed, versions, changed := prepared.fixed, prepared.versions, prepared.changed
 	t.runSchedules(fixed, now)
 	for i, p := range fixed {
 		if current, refusal := coordinatedRecordRead(t, context.Background(), func(t *Tenant) (build.Pipeline, *kernel.Error) {
@@ -75,10 +85,8 @@ func (t *Tenant) pipelineResult(member platform.Member, p build.Pipeline, run bu
 	if run.Execution != nil {
 		key = "pipeline:" + run.Execution.ID + ":" + phase
 	}
-	t.mu.Lock()
-	_, err := t.submitAccepted(t.app(build.ID), member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, ExpectedRevision: revision,
-		Target: &pb.EntityRef{Type: build.PipelineType, Id: p.ID}, Schema: &pb.SchemaRef{Name: build.SchemaPipelineRan, Version: 1}, Payload: payload}, now, true)
-	t.mu.Unlock()
+	_, err := t.submitBackground(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, ExpectedRevision: revision,
+		Target: &pb.EntityRef{Type: build.PipelineType, Id: p.ID}, Schema: &pb.SchemaRef{Name: build.SchemaPipelineRan, Version: 1}, Payload: payload}, now)
 	if phase == "finished" {
 		status, detail := "ok", run.Error
 		if run.Error != "" || err != nil {
@@ -115,32 +123,46 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 	} else if !ok {
 		run.Error = "The execution member is no longer available"
 	} else {
-		t.mu.Lock()
-		c := t.automation(build.ID, false)
-		inputs := map[string]int{}
-		data := map[string][]map[string]any{}
-		var inputErr error
-		for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
-			if _, seen := inputs[id]; seen {
-				continue
-			}
-			rows, version, err := build.DatasetRows(c, id, 0)
-			if err != nil {
-				inputErr = err
-				break
-			}
-			inputs[id], data[id] = version, rows
-			if ds, ok := platform.Get[build.Dataset](c, id); ok {
-				fixed, err := t.dataOwner().ExecutionDataset(ds)
+		type snapshot struct {
+			inputs       map[string]int
+			data         map[string][]map[string]any
+			err          error
+			marking      string
+			compartments []string
+		}
+		captured, refusal := recordRead(t, context.Background(), func(t *Tenant) (snapshot, *kernel.Error) {
+			marking, compartments := run.Marking, run.Compartments
+			c := t.automation(build.ID, false)
+			inputs := map[string]int{}
+			data := map[string][]map[string]any{}
+			var inputErr error
+			for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
+				if _, seen := inputs[id]; seen {
+					continue
+				}
+				rows, version, err := build.DatasetRows(c, id, 0)
 				if err != nil {
 					inputErr = err
 					break
 				}
-				run.Marking = platform.HigherMarking(run.Marking, fixed.Marking)
-				run.Compartments = platform.JoinCompartments(run.Compartments, fixed.Compartments)
+				inputs[id], data[id] = version, rows
+				if ds, ok := platform.Get[build.Dataset](c, id); ok {
+					fixed, err := t.dataOwner().ExecutionDataset(ds)
+					if err != nil {
+						inputErr = err
+						break
+					}
+					marking = platform.HigherMarking(marking, fixed.Marking)
+					compartments = platform.JoinCompartments(compartments, fixed.Compartments)
+				}
 			}
+			return snapshot{inputs: inputs, data: data, err: inputErr, marking: marking, compartments: compartments}, nil
+		})
+		if refusal != nil {
+			return
 		}
-		t.mu.Unlock()
+		inputs, data, inputErr := captured.inputs, captured.data, captured.err
+		run.Marking, run.Compartments = captured.marking, captured.compartments
 		run.Input = inputs[p.Input]
 		if inputErr != nil {
 			run.Error = inputErr.Error()
@@ -254,11 +276,10 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 				run.Error = err.Message
 			} else {
 				run.Written = len(plan.Data)
-				t.mu.Lock()
-				versions, _, err := platform.Find[build.DatasetVersion](t.automation(build.ID, false), platform.Query{
-					Domain: platform.Raw([][]any{{"dataset", "=", plan.Dataset}, {"requestKey", "=", key}}), Archived: true, Limit: 1,
+				versions, err := recordRead(t, context.Background(), func(t *Tenant) ([]build.DatasetVersion, *kernel.Error) {
+					rows, _, refusal := platform.Find[build.DatasetVersion](t.automation(build.ID, false), platform.Query{Domain: platform.Raw([][]any{{"dataset", "=", plan.Dataset}, {"requestKey", "=", key}}), Archived: true, Limit: 1})
+					return rows, refusal
 				})
-				t.mu.Unlock()
 				if err != nil || len(versions) != 1 {
 					log.Printf("pipeline output version unavailable: %v", err)
 					return
@@ -282,6 +303,11 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 const pipelineQuarantineKept = 50
 
 func (t *Tenant) unguarded(object, marking string) []string {
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) ([]string, *kernel.Error) { return t.unguardedRead(object, marking), nil })
+	return value
+}
+
+func (t *Tenant) unguardedRead(object, marking string) []string {
 	if !build.Guarded(marking) {
 		return nil
 	}

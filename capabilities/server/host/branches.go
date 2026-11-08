@@ -206,9 +206,7 @@ func (t *Tenant) branchCaller(m platform.Member) platform.Caller {
 }
 
 func (t *Tenant) readBranch(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.readBranchLocked(m, id, now)
+	return recordRead(t, context.Background(), func(t *Tenant) (build.Branch, *kernel.Error) { return t.readBranchLocked(m, id, now) })
 }
 
 func (t *Tenant) readBranchLocked(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {
@@ -341,10 +339,12 @@ func (t *Tenant) branchRID(typ, id string, spec map[string]json.RawMessage) stri
 }
 
 func (t *Tenant) branchDetail(m platform.Member, branch build.Branch, now time.Time) (BranchDetail, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (BranchDetail, *kernel.Error) { return t.branchDetailRead(m, branch, now) })
+}
+
+func (t *Tenant) branchDetailRead(m platform.Member, branch build.Branch, now time.Time) (BranchDetail, *kernel.Error) {
 	detail := BranchDetail{ID: branch.ID, Name: branch.Name, Title: branch.Title, Description: branch.Description, State: branch.State, Revision: branch.Revision,
 		Created: branch.Created, Changed: branch.Changed, Changes: len(branch.Changes), Resources: []BranchResourceStatus{}, Proposal: branch.Proposal, Check: decodeBranchCheck(branch), Merge: branch.Merge}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if detail.Check != nil && (branch.State == build.BranchOpen || branch.State == build.BranchProposed) {
 		detail.CheckStale = detail.Check.Base != t.branchBaseLocked()
 	}
@@ -376,7 +376,10 @@ func (t *Tenant) branchDetail(m platform.Member, branch build.Branch, now time.T
 }
 
 func (t *Tenant) ListBranches(m platform.Member, now time.Time) ([]BranchDetail, *kernel.Error) {
-	t.mu.Lock()
+	return recordRead(t, context.Background(), func(t *Tenant) ([]BranchDetail, *kernel.Error) { return t.scopedListBranches(m, now) })
+}
+
+func (t *Tenant) scopedListBranches(m platform.Member, now time.Time) ([]BranchDetail, *kernel.Error) {
 	page, refusal := t.recordsFrom(t.records, m, build.BranchType, platform.Query{Limit: 500, Sort: []string{"id"}}, now)
 	var ids []string
 	if refusal == nil {
@@ -390,7 +393,6 @@ func (t *Tenant) ListBranches(m platform.Member, now time.Time) ([]BranchDetail,
 			}
 		}
 	}
-	t.mu.Unlock()
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -440,6 +442,10 @@ func (t *Tenant) CreateBranch(m platform.Member, request BranchCreateRequest, no
 }
 
 func (t *Tenant) BranchDetail(m platform.Member, id string, now time.Time) (BranchDetail, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (BranchDetail, *kernel.Error) { return t.branchDetailByIDRead(m, id, now) })
+}
+
+func (t *Tenant) branchDetailByIDRead(m platform.Member, id string, now time.Time) (BranchDetail, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
 		return BranchDetail{}, refusal
@@ -448,6 +454,10 @@ func (t *Tenant) BranchDetail(m platform.Member, id string, now time.Time) (Bran
 }
 
 func (t *Tenant) BranchChanges(m platform.Member, id string, specs bool, now time.Time) ([]BranchChangeEntry, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) ([]BranchChangeEntry, *kernel.Error) { return t.scopedBranchChanges(m, id, specs, now) })
+}
+
+func (t *Tenant) scopedBranchChanges(m platform.Member, id string, specs bool, now time.Time) ([]BranchChangeEntry, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
 		return nil, refusal
@@ -463,19 +473,34 @@ func (t *Tenant) BranchChanges(m platform.Member, id string, specs bool, now tim
 	return out, nil
 }
 
+type branchSavePreparation struct {
+	branch      build.Branch
+	current     mainDraft
+	op, project string
+	spec        json.RawMessage
+}
+
 func (t *Tenant) SaveBranchResource(m platform.Member, id, typ, draft string, request BranchSaveRequest, now time.Time) (BranchDetail, *kernel.Error) {
+	plan, refusal := recordRead(t, context.Background(), func(t *Tenant) (branchSavePreparation, *kernel.Error) {
+		return t.prepareBranchSave(m, id, typ, draft, request, now)
+	})
+	if refusal != nil {
+		return BranchDetail{}, refusal
+	}
+	return t.appendBranchSave(m, plan.branch, plan.current, typ, draft, plan.op, plan.project, plan.spec, now)
+}
+
+func (t *Tenant) prepareBranchSave(m platform.Member, id, typ, draft string, request BranchSaveRequest, now time.Time) (branchSavePreparation, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branchSavePreparation{}, refusal
 	}
 	if branch.State != build.BranchOpen {
-		return BranchDetail{}, branchRefuse("The branch is {state}; only an open branch takes saves", branch.State)
+		return branchSavePreparation{}, branchRefuse("The branch is {state}; only an open branch takes saves", branch.State)
 	}
-	t.mu.Lock()
 	current, refusal := t.mainDraft(m, typ, draft, now)
-	t.mu.Unlock()
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branchSavePreparation{}, refusal
 	}
 	_, touched := branch.Latest(typ, draft)
 	previous, _ := branch.Latest(typ, draft)
@@ -493,27 +518,27 @@ func (t *Tenant) SaveBranchResource(m platform.Member, id, typ, draft string, re
 	switch op {
 	case "create":
 		if existsOnBranch {
-			return BranchDetail{}, branchRefuse("{resource} already exists; save it as an update", typ+"/"+draft)
+			return branchSavePreparation{}, branchRefuse("{resource} already exists; save it as an update", typ+"/"+draft)
 		}
 	case "update", "delete":
 		if !existsOnBranch {
-			return BranchDetail{}, branchRefuse("{resource} does not exist; save it as a create", typ+"/"+draft)
+			return branchSavePreparation{}, branchRefuse("{resource} does not exist; save it as a create", typ+"/"+draft)
 		}
 	default:
-		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch change creates, updates or deletes")
+		return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch change creates, updates or deletes")
 	}
 	if op != "delete" {
 		fields, refusal := t.draftFields(typ)
 		if refusal != nil {
-			return BranchDetail{}, refusal
+			return branchSavePreparation{}, refusal
 		}
 		var spec map[string]json.RawMessage
 		if json.Unmarshal(request.Spec, &spec) != nil || spec == nil {
-			return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A saved spec is one JSON object")
+			return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A saved spec is one JSON object")
 		}
 		for name := range spec {
 			if !fields[name] && !(typ == build.CodeType && name == codeBuildKey) {
-				return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is not an authored field of {type}", name, typ)
+				return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is not an authored field of {type}", name, typ)
 			}
 		}
 		if typ == build.CodeType {
@@ -535,27 +560,27 @@ func (t *Tenant) SaveBranchResource(m platform.Member, id, typ, draft string, re
 			authoritative = previous.Project
 		}
 		if authoritative == "" {
-			return BranchDetail{}, branchRefuse("The resource has no authoritative project")
+			return branchSavePreparation{}, branchRefuse("The resource has no authoritative project")
 		}
 		if project != "" && project != authoritative {
-			return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A resource stays in the project where it is registered")
+			return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A resource stays in the project where it is registered")
 		}
 		project = authoritative
 	}
 	if project == "" {
-		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the project that owns this resource")
+		return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the project that owns this resource")
 	}
 	if previousProject := previous.Project; touched && previousProject != "" && previousProject != project {
-		return BranchDetail{}, branchRefuse("A resource keeps the project recorded by its first branch change")
+		return branchSavePreparation{}, branchRefuse("A resource keeps the project recorded by its first branch change")
 	}
 	if op == "create" && typ == build.AppType {
 		if !m.Holds("platform", "admin") && !holdsIndependentBuildRole(m, build.Builder) {
-			return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Creating a project needs an independent builder")
+			return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Creating a project needs an independent builder")
 		}
 	} else if !t.canEditProjectResource(m, project) {
-		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Editing this resource requires its project")
+		return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Editing this resource requires its project")
 	}
-	return t.appendBranchSave(m, branch, current, typ, draft, op, project, request.Spec, now)
+	return branchSavePreparation{branch: branch, current: current, op: op, project: project, spec: request.Spec}, nil
 }
 
 const codeBuildKey = "build"
@@ -607,14 +632,18 @@ func effectiveSpec(branch build.Branch, typ, id string) (spec json.RawMessage, d
 }
 
 func (t *Tenant) BranchResource(m platform.Member, id, typ, draft string, now time.Time) (BranchResourceView, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (BranchResourceView, *kernel.Error) {
+		return t.scopedBranchResource(m, id, typ, draft, now)
+	})
+}
+
+func (t *Tenant) scopedBranchResource(m platform.Member, id, typ, draft string, now time.Time) (BranchResourceView, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
 		return BranchResourceView{}, refusal
 	}
 	latest, touched := branch.Latest(typ, draft)
-	t.mu.Lock()
 	current, refusal := t.mainDraft(m, typ, draft, now)
-	t.mu.Unlock()
 	if refusal != nil {
 		return BranchResourceView{}, refusal
 	}
@@ -653,9 +682,9 @@ func resolutionsFor(requested []BranchResolution, typ, id string) []branches.Res
 }
 
 func (t *Tenant) planBranch(m platform.Member, branch build.Branch, resolutions []BranchResolution, now time.Time) ([]resourcePlan, *kernel.Error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.planBranchLocked(m, branch, resolutions, now)
+	return recordRead(t, context.Background(), func(t *Tenant) ([]resourcePlan, *kernel.Error) {
+		return t.planBranchLocked(m, branch, resolutions, now)
+	})
 }
 
 func (t *Tenant) planBranchLocked(m platform.Member, branch build.Branch, resolutions []BranchResolution, now time.Time) ([]resourcePlan, *kernel.Error) {
@@ -695,6 +724,10 @@ func (t *Tenant) planBranchLocked(m platform.Member, branch build.Branch, resolu
 }
 
 func (t *Tenant) BranchDiff(m platform.Member, id string, now time.Time) (BranchDiff, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (BranchDiff, *kernel.Error) { return t.scopedBranchDiff(m, id, now) })
+}
+
+func (t *Tenant) scopedBranchDiff(m platform.Member, id string, now time.Time) (BranchDiff, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
 		return BranchDiff{}, refusal

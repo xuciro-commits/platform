@@ -1,7 +1,6 @@
 package host
 
 import (
-	"context"
 	"fmt"
 	"maps"
 	pageowner "platformserver/services/apps/pages"
@@ -398,7 +397,17 @@ func (h hostView) Readable(m platform.Member, ref string, now time.Time) bool {
 }
 
 func (h hostView) Stored(tenant, hash string) bool {
-	return h.t.files().Exists(context.Background(), tenant+"/"+hash)
+	t := h.t
+	if t.readOrigin != nil {
+		t = t.readOrigin
+	}
+	if tenant != t.ID || t.uploads.Unavailable(hash) {
+		return false
+	}
+	if h.t.preparedResult != nil {
+		h.t.preparedResult.uploads = append(h.t.preparedResult.uploads, hash)
+	}
+	return h.t.files().Exists(h.t.readContext(), tenant+"/"+hash)
 }
 
 func (h hostView) Record(ref string) (any, bool) {

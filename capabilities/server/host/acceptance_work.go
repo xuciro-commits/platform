@@ -69,12 +69,21 @@ func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Erro
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage cannot be accepted")
 	}
 	principal, _ := json.Marshal(m)
-	committed, err := t.acceptResult(Entry{App: platform.AIApp, Kind: "accepted-result", Principal: principal, Body: raw, At: r.At}, r.Key, r.RequestHash)
+	candidate := preparedAccepted{entry: Entry{App: platform.AIApp, Kind: "accepted-result", Principal: principal, Body: raw, At: r.At}, key: r.Key, hash: r.RequestHash}
+	if t.preparedResult != nil {
+		*t.preparedResult = candidate
+		return nil
+	}
+	return t.finishUsage(candidate)
+}
+
+func (t *Tenant) finishUsage(candidate preparedAccepted) *kernel.Error {
+	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage was not accepted")
 	}
 	saved, err := acceptedformat.DecodeUsage(committed)
-	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
+	if err != nil || saved.Key != candidate.key || saved.RequestHash != candidate.hash {
 		t.quarantine(fmt.Errorf("committed model usage differs: %v", err))
 		return unknown()
 	}
@@ -222,7 +231,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	principal, _ := json.Marshal(c.Member)
 	entry := Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()}
 	if t.preparedResult != nil {
-		*t.preparedResult = preparedAccepted{entry: entry, key: result.Key, hash: result.RequestHash}
+		*t.preparedResult = preparedAccepted{entry: entry, key: result.Key, hash: result.RequestHash, uploads: t.preparedResult.uploads}
 		return result.Outcome
 	}
 	committed, err := t.acceptResult(entry, result.Key, result.RequestHash)

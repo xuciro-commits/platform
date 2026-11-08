@@ -29,7 +29,9 @@ func (t *Tenant) runSchedules(pipelines []build.Pipeline, now time.Time) {
 			return ok, nil
 		})
 		if !exists {
-			project := t.resourceProject(build.PipelineType, pipeline.ID)
+			project, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
+				return t.resourceProject(build.PipelineType, pipeline.ID), nil
+			})
 			if project == "" {
 				log.Printf("schedule migration refused: pipeline %s has no project", pipeline.ID)
 				continue

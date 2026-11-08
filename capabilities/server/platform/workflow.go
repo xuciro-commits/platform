@@ -563,7 +563,7 @@ type FlowBatchPreparation interface {
 	Prepare(FlowBatch, time.Time, FlowFrameStore) (FlowPreparedBatch, *kernel.Error)
 }
 type FlowPreparedDecision interface {
-	Decision() App
+	Decision(App) App
 	Submission(tenant string) *pb.Submission
 	Matches(FlowInstance) bool
 }

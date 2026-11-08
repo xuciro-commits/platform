@@ -7,6 +7,7 @@ import (
 	pgx "github.com/jackc/pgx/v5"
 	"log"
 	"net/url"
+	"platformkernel/kernel"
 	"slices"
 	"strconv"
 	"strings"
@@ -250,9 +251,10 @@ func (t *Tenant) CheckConnections(now time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) {
 		return
 	}
-	t.mu.Lock()
-	conns, _, _ := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["requested","=",true]]`), Sort: []string{"id"}, Limit: 50})
-	t.mu.Unlock()
+	conns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]build.Connection, *kernel.Error) {
+		rows, _, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["requested","=",true]]`), Sort: []string{"id"}, Limit: 50})
+		return rows, refusal
+	})
 	for _, c := range conns {
 		check := build.ConnectionCheck{At: now}
 		detail, err := t.checkConnection(c)
@@ -264,17 +266,9 @@ func (t *Tenant) CheckConnections(now time.Time) {
 		caller := t.automation(build.ID, false)
 		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: fmt.Sprintf("checked:%s:%d:%s", c.ID, c.Revision, now.UTC().Format(time.RFC3339Nano)),
 			Target: &pb.EntityRef{Type: build.ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: build.SchemaConnectionChecked, Version: 1}, Payload: payload}
-		func() {
-			t.mu.Lock()
-			defer t.mu.Unlock()
-			if t.quarantined() {
-				return
-			}
-			app := t.app(build.ID)
-			if _, err := t.submitAccepted(app, caller.Member, sub, now, true); err != nil {
-				log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
-			}
-		}()
+		if _, err := t.submitBackground(caller.Member, sub, now); err != nil {
+			log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
+		}
 	}
 }
 

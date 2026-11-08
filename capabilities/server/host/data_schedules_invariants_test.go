@@ -56,7 +56,10 @@ func TestInvariantK1K2ScheduleMigrationHasOneTimer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := live.commitReleaseLocked(live.member(t), saved); err != nil {
+	live.mu.Lock()
+	_, err = live.commitReleaseLocked(live.member(t), saved)
+	live.mu.Unlock()
+	if err != nil {
 		t.Fatal(err)
 	}
 	live.RunPipelines(invariantClock)

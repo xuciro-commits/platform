@@ -179,9 +179,8 @@ func (t *Tenant) overQuota(app string, now time.Time) bool { return t.quota.Over
 func (t *Tenant) spend(app string, now time.Time) { t.quota.Spend(app, now) }
 
 func (t *Tenant) Deferred(now time.Time) []string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.workLoop().Deferred(now)
+	out, _ := recordRead(t, context.Background(), func(t *Tenant) ([]string, *kernel.Error) { return t.workLoop().Deferred(now), nil })
+	return out
 }
 
 func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) string {

@@ -80,12 +80,21 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 		return
 	}
 	principal, _ := json.Marshal(member)
-	committed, err := t.acceptResult(Entry{App: platform.AgentApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, r.Key, r.RequestHash)
+	candidate := preparedAccepted{entry: Entry{App: platform.AgentApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, key: r.Key, hash: r.RequestHash, uploads: draft.tenant.preparedUploads()}
+	if t.preparedResult != nil {
+		*t.preparedResult = candidate
+		return
+	}
+	t.finishAgentStep(candidate)
+}
+
+func (t *Tenant) finishAgentStep(candidate preparedAccepted) {
+	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
 	if err != nil {
 		return
 	}
 	saved, err := acceptedformat.DecodeAgent(committed)
-	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
+	if err != nil || saved.Key != candidate.key || saved.RequestHash != candidate.hash {
 		t.quarantine(fmt.Errorf("committed agent answer differs: %v", err))
 		return
 	}
@@ -364,19 +373,33 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		return
 	}
 	principal, _ := json.Marshal(t.automation(controlowner.PlatformApp, false).Member)
-	committed, err := t.acceptResult(Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, result.Key, result.RequestHash)
+	candidate := preparedAccepted{entry: Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, key: result.Key, hash: result.RequestHash, uploads: draft.tenant.preparedUploads()}
+	if t.preparedResult != nil {
+		*t.preparedResult = candidate
+		return
+	}
+	t.finishEffect(id, candidate)
+}
+
+func (t *Tenant) finishEffect(id string, candidate preparedAccepted) {
+	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
 	if err != nil {
 		if errors.Is(err, errAcceptedConflict) {
 			t.quarantine(fmt.Errorf("effect %s conflicts with a previously committed outcome", id))
 			return
 		}
 		t.opsMu.Lock()
-		pending.sending = false
+		for _, pending := range t.outbound {
+			if pending.ID == id {
+				pending.sending = false
+				break
+			}
+		}
 		t.opsMu.Unlock()
 		return
 	}
 	saved, applied, err := t.applyAcceptedEffect(committed)
-	if err != nil || saved.Key != result.Key || saved.RequestHash != result.RequestHash || !applied {
+	if err != nil || saved.Key != candidate.key || saved.RequestHash != candidate.hash || !applied {
 		t.quarantine(fmt.Errorf("apply committed effect %s: %v (applied=%t)", id, err, applied))
 		return
 	}

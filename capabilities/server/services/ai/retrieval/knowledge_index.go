@@ -20,11 +20,16 @@ const (
 	embedBatch   = 32
 )
 
-func (k *Index) Sync(load func(bool) ([]Source, map[string]bool)) {
+func (k *Index) Sync(load func(bool) ([]Source, map[string]bool, bool)) {
+	k.syncMu.Lock()
+	defer k.syncMu.Unlock()
 	k.mu.Lock()
 	walked := k.walked
 	k.mu.Unlock()
-	srcs, changed := load(walked)
+	srcs, changed, ready := load(walked)
+	if !ready {
+		return
+	}
 	if walked && len(changed) == 0 {
 		return
 	}
@@ -133,7 +138,7 @@ func (k *Index) Nearest(ctx Context, model string, query []float32, reader *plat
 
 func (k *Index) current(ctx Context, c *chunk, reader *platform.Member, app string, at time.Time) bool {
 	allowed := false
-	ctx.Read(func() { allowed = k.currentInLane(ctx, c, reader, app, at) })
+	ctx.Read(func(ctx Context) { allowed = k.currentInLane(ctx, c, reader, app, at) })
 	return allowed
 }
 func (k *Index) currentInLane(ctx Context, c *chunk, reader *platform.Member, app string, at time.Time) bool {

@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -15,6 +16,10 @@ func (h *Host) mcp(w http.ResponseWriter, r *http.Request, m platform.Member, t 
 	gateway.Serve(w, r, m)
 }
 func (t *Tenant) ModelToolReads(m platform.Member) []string {
+	if t.readOrigin == nil {
+		values, _ := recordRead(t, context.Background(), func(t *Tenant) ([]string, *kernel.Error) { return t.ModelToolReads(m), nil })
+		return values
+	}
 	var out []string
 	for _, app := range t.liveApps() {
 		for _, read := range app.Manifest().Reads {
@@ -26,15 +31,24 @@ func (t *Tenant) ModelToolReads(m platform.Member) []string {
 	return out
 }
 func (t *Tenant) ProposeModelTool(m platform.Member, proposal platform.ModelToolProposal, at time.Time) *kernel.Error {
-	raw := platform.Raw(map[string]any{"owner": t.authorityOf(proposal.Action.Target), "action": proposal.Action.Schema, "target": proposal.Target, "payload": proposal.Payload, "rationale": "Proposed through MCP"})
-	_, refusal := t.Submit(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: platform.AgentApp, Target: &pb.EntityRef{Type: platform.RunType, Id: proposal.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaToolPropose, Version: 1}, IdempotencyKey: proposal.Key, Payload: raw}, at)
+	owner, refusal := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) { return t.authorityOf(proposal.Action.Target), nil })
+	if refusal != nil {
+		return refusal
+	}
+	raw := platform.Raw(map[string]any{"owner": owner, "action": proposal.Action.Schema, "target": proposal.Target, "payload": proposal.Payload, "rationale": "Proposed through MCP"})
+	_, refusal = t.Submit(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: platform.AgentApp, Target: &pb.EntityRef{Type: platform.RunType, Id: proposal.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaToolPropose, Version: 1}, IdempotencyKey: proposal.Key, Payload: raw}, at)
 	return refusal
 }
 
 func (t *Tenant) ModelToolSurface(m platform.Member) platform.AgentSurface {
-	return (hostView{t: t}).AgentSurface(m, "")
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) (platform.AgentSurface, *kernel.Error) {
+		return (hostView{t: t}).AgentSurface(m, ""), nil
+	})
+	return value
 }
 
 func (t *Tenant) AgentObjects(m platform.Member, op string, raw json.RawMessage, now time.Time) (platform.AgentObservation, *kernel.Error) {
-	return (hostView{t: t}).AgentObjects(m, op, raw, now)
+	return recordRead(t, context.Background(), func(t *Tenant) (platform.AgentObservation, *kernel.Error) {
+		return (hostView{t: t}).AgentObjects(m, op, raw, now)
+	})
 }

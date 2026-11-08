@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"fmt"
 	"platformserver/kernel/systemscope"
 	"platformserver/platform"
@@ -15,10 +16,18 @@ func (h *Host) promotionsOf(source, candidate string) []releaseowner.PromotionTa
 		if other.ID == source {
 			continue
 		}
-		other.mu.Lock()
-		origin, ok := other.releases.Origin(candidate)
-		active := other.releases.Active() == candidate
-		other.mu.Unlock()
+		state := other
+		image := other.readImage.Load()
+		if image != nil {
+			state = image.state
+		} else {
+			other.mu.Lock()
+		}
+		origin, ok := state.releases.Origin(candidate)
+		active := state.releases.Active() == candidate
+		if image == nil {
+			other.mu.Unlock()
+		}
 		if ok && origin.From == source {
 			out = append(out, releaseowner.PromotionTarget{Tenant: other.ID, Member: origin.Member, At: origin.At, Active: active})
 		}
@@ -34,6 +43,12 @@ func (h *Host) withPromotions(source string, page releaseowner.ReleasePage) rele
 }
 
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application ...string) (releaseowner.ReleasePage, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleasePage, error) {
+		return t.scopedSavedReleases(m, offset, limit, application...)
+	})
+}
+
+func (t *Tenant) scopedSavedReleases(m platform.Member, offset, limit int, application ...string) (releaseowner.ReleasePage, error) {
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleasePage{}, err
 	}
@@ -41,8 +56,6 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
 		return releaseowner.ReleasePage{}, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	var ref *platform.AssetRef
 	if len(application) > 0 && application[0] != "" {
 		ref = &platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: application[0]}
@@ -51,6 +64,10 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 }
 
 func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (releaseowner.SavedReleaseReview, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.SavedReleaseReview, error) { return t.scopedReviewSavedRelease(m, id) })
+}
+
+func (t *Tenant) scopedReviewSavedRelease(m platform.Member, id string) (releaseowner.SavedReleaseReview, error) {
 	if err := t.admits(m); err != nil {
 		return releaseowner.SavedReleaseReview{}, err
 	}
@@ -58,8 +75,6 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (releaseowner.
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates/{id}", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
 		return releaseowner.SavedReleaseReview{}, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 
 	context := releaseowner.ReviewContext{
 		AI: func(assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, error) {

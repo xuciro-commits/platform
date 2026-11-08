@@ -62,8 +62,10 @@ type observationReadPlan struct {
 }
 
 func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	return recordRead(t, context.Background(), func(t *Tenant) ([]ObservationInfo, *kernel.Error) { return t.scopedObservations(m) })
+}
+
+func (t *Tenant) scopedObservations(m platform.Member) ([]ObservationInfo, *kernel.Error) {
 	if refusal := t.admits(m); refusal != nil {
 		return nil, refusal
 	}
@@ -371,9 +373,9 @@ func (t *Tenant) ReadObservation(ctx context.Context, m platform.Member, ref pla
 	if err := checkObservationRead(&q, now); err != nil {
 		return platform.ObservationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	t.mu.Lock()
-	plan, refusal := t.prepareObservation(m, ref, q.Record, now, false)
-	t.mu.Unlock()
+	plan, refusal := recordRead(t, ctx, func(t *Tenant) (observationReadPlan, *kernel.Error) {
+		return t.prepareObservation(m, ref, q.Record, now, false)
+	})
 	if refusal != nil {
 		return platform.ObservationResult{}, refusal
 	}
@@ -384,9 +386,9 @@ func (t *Tenant) ReadObservation(ctx context.Context, m platform.Member, ref pla
 	if err != nil {
 		return platform.ObservationResult{}, observationUnavailable(err)
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	current, refusal := t.prepareObservation(m, ref, q.Record, now, false)
+	current, refusal := recordRead(t, ctx, func(t *Tenant) (observationReadPlan, *kernel.Error) {
+		return t.prepareObservation(m, ref, q.Record, now, false)
+	})
 	if refusal != nil {
 		return platform.ObservationResult{}, refusal
 	}

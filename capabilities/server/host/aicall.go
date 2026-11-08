@@ -47,8 +47,30 @@ func (t *Tenant) limits() platform.AIDefaults {
 }
 
 func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req platform.ChatRequest, input, output int, now time.Time) *platform.AIError {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	failure, refusal := decideOnImage(t, context.Background(), "model:reserve", func(t *Tenant) (*platform.AIError, *kernel.Error) {
+		return t.prepareReserveCall(m, model, req, input, output, now), nil
+	}, func(t *Tenant, candidate preparedAccepted, failure *platform.AIError, refusal *kernel.Error) (*platform.AIError, *kernel.Error) {
+		_, refusal = t.finishPreparedInput(platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, candidate, nil, refusal)
+		if refusal != nil {
+			return modelReservationFailure(refusal), nil
+		}
+		return failure, nil
+	})
+	if refusal != nil {
+		return modelReservationFailure(refusal)
+	}
+	return failure
+}
+
+func modelReservationFailure(refusal *kernel.Error) *platform.AIError {
+	failure := &platform.AIError{Status: 503, Detail: cmp.Or(refusal.Message, refusal.Error())}
+	if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+		failure.Status, failure.Quota = 429, true
+	}
+	return failure
+}
+
+func (t *Tenant) prepareReserveCall(m platform.Member, model platform.AIModel, req platform.ChatRequest, input, output int, now time.Time) *platform.AIError {
 	if t.businessStopped() || t.recordReadRefusal() != nil {
 		return &platform.AIError{Status: 503, Detail: "Model dispatch is stopped until the tenant recovers"}
 	}
@@ -66,24 +88,23 @@ func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req plat
 	}
 	_, refusal := t.inputAccepted(owner, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
 	if refusal != nil {
-		failure := &platform.AIError{Status: 503, Detail: cmp.Or(refusal.Message, refusal.Error())}
-		if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-			failure.Status, failure.Quota = 429, true
-		}
-		return failure
+		return modelReservationFailure(refusal)
 	}
 	return nil
 }
 
 func (t *Tenant) releaseCall(call string, now time.Time) *kernel.Error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	r, ok := t.ai.Reservation(call)
-	if !ok {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model reservation is unavailable")
-	}
-	body, _ := json.Marshal(platform.AIReserveInput{Reservation: r, Cancel: true})
-	_, refusal := t.inputAccepted(t.ai.(platform.AcceptedInputApp), platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
+	member := platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}
+	_, refusal := decideOnImage(t, context.Background(), "model:release", func(t *Tenant) (any, *kernel.Error) {
+		r, ok := t.ai.Reservation(call)
+		if !ok {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model reservation is unavailable")
+		}
+		body, _ := json.Marshal(platform.AIReserveInput{Reservation: r, Cancel: true})
+		return t.inputAccepted(t.ai.(platform.AcceptedInputApp), member, platform.AIReserveCall, body, now)
+	}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *kernel.Error) (any, *kernel.Error) {
+		return t.finishPreparedInput(member, platform.AIReserveCall, candidate, answer, refusal)
+	})
 	return refusal
 }
 
@@ -168,7 +189,8 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 	if t.services.AIInference != nil {
 		policy = *t.services.AIInference
 	}
-	gateway := aigateway.Calls{Inference: policy, MostTokens: t.mostTokens, Reserve: t.reserveCall, Release: t.releaseCall,
+	ceiling, _ := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) { return t.mostTokens(), nil })
+	gateway := aigateway.Calls{Inference: policy, MostTokens: func() int { return ceiling }, Reserve: t.reserveCall, Release: t.releaseCall,
 		Available: func(provider string, at time.Time, claim bool) bool {
 			return t.breakers.Allow("ai:"+provider, at, claim)
 		},
@@ -192,12 +214,15 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 }
 
 func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *kernel.Error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.quarantined() {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This tenant is isolated until its accepted results recover")
-	}
-	return t.acceptUsage(m, u)
+	_, refusal := decideOnImage(t, context.Background(), "model:usage", func(t *Tenant) (struct{}, *kernel.Error) {
+		return struct{}{}, t.acceptUsage(m, u)
+	}, func(t *Tenant, candidate preparedAccepted, value struct{}, refusal *kernel.Error) (struct{}, *kernel.Error) {
+		if len(candidate.entry.Body) == 0 {
+			return value, refusal
+		}
+		return value, t.finishUsage(candidate)
+	})
+	return refusal
 }
 
 func (t *Tenant) modelProvider(pv platform.AIProvider, dispatch ...func()) providers.Client {
@@ -300,70 +325,79 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "rejected", "The saved model request is invalid"
 		return out, nil
 	}
-	if ask.Function != nil {
-		t.mu.Lock()
-		allowed := t.functionAllowed(x.App, ask, now)
-		t.mu.Unlock()
-		if !allowed {
-			out.Result, out.Detail = "rejected", "The AI function input is no longer authorised"
-			return out, nil
-		}
-	}
-	if ask.ConfigurationError != "" {
-		out.Result, out.Detail = "rejected", ask.ConfigurationError
-		return out, nil
-	}
-	if t.ai == nil {
-		out.Result, out.Detail = "rejected", "The model capability is unavailable"
-		return out, nil
-	}
 	model := ask.Model
-	if model == "" {
-		out.Result, out.Detail = "rejected", "no model is set for apps"
+	m := platform.Member{ID: "app:" + x.App, Tenant: t.ID}
+	var enabled platform.AIModel
+	var pv platform.AIProvider
+	ready, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
+		if ask.Function != nil {
+			allowed := t.functionAllowed(x.App, ask, now)
+			if !allowed {
+				out.Result, out.Detail = "rejected", "The AI function input is no longer authorised"
+				return false, nil
+			}
+		}
+		if ask.ConfigurationError != "" {
+			out.Result, out.Detail = "rejected", ask.ConfigurationError
+			return false, nil
+		}
+		if t.ai == nil {
+			out.Result, out.Detail = "rejected", "The model capability is unavailable"
+			return false, nil
+		}
+		if model == "" {
+			out.Result, out.Detail = "rejected", "no model is set for apps"
+			return false, nil
+		}
+		var err *kernel.Error
+		enabled, pv, err = t.ai.Model(model)
+		if err != nil {
+			out.Result, out.Detail = "rejected", "the model "+model+" is not enabled"
+			return false, nil
+		}
+		c := platform.NewCaller(runtime{t: t}, m, x.App, false, true)
+		if refusal := authorizationRefusal(t.authorizeNative(c, "model:"+model, "action", nil, true)); refusal != nil {
+			out.Result, out.Detail = "rejected", refusal.Message
+			return false, nil
+		}
+		if ask.Evaluation {
+			if ask.EvaluationFunction == nil || ask.EvaluationFunction.Check() != nil || ask.Prompt.System != ask.EvaluationFunction.SystemPrompt() ||
+				ask.Prompt.MaxTokens != ask.EvaluationFunction.MaxTokens || len(ask.Prompt.User) > ask.EvaluationFunction.MaxInputBytes {
+				out.Result, out.Detail = "rejected", "the evaluation function binding changed"
+				return false, nil
+			}
+			var evaluatedBinding *platform.AIModelBinding
+			if ask.Binding != nil {
+				current, _, refusal := t.resolveModel("generation", model, ask.EvaluationFunction.ModelOptions.Override(platform.ModelOptions{MaxTokens: ask.EvaluationFunction.MaxTokens}))
+				if refusal != nil {
+					out.Result, out.Detail = "rejected", refusal.Message
+					return false, nil
+				}
+				current, refusal = t.modelStage(current, pv, platform.AIStageDesign)
+				if refusal != nil {
+					out.Result, out.Detail = "rejected", refusal.Message
+					return false, nil
+				}
+				evaluatedBinding = &current
+			}
+			config, digestErr := aigateway.ConfigurationDigest(enabled, pv, evaluatedBinding)
+			if digestErr != nil || ask.EvaluationConfig == "" || ask.EvaluationConfig != config {
+				out.Result, out.Detail = "rejected", "the evaluation model configuration changed"
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	if refusal != nil {
+		out.Result, out.Detail = "rejected", refusal.Message
+		return out, nil
+	}
+	if !ready {
 		return out, nil
 	}
 	messages := []platform.Message{{Role: "user", Content: ask.Prompt.User}}
 	if ask.Prompt.System != "" {
 		messages = append([]platform.Message{{Role: "system", Content: ask.Prompt.System}}, messages...)
-	}
-	m := platform.Member{ID: "app:" + x.App, Tenant: t.ID}
-	t.mu.Lock()
-	enabled, pv, err := t.ai.Model(model)
-	t.mu.Unlock()
-	if err != nil {
-		out.Result, out.Detail = "rejected", "the model "+model+" is not enabled"
-		return out, nil
-	}
-	c := platform.NewCaller(runtime{t: t}, m, x.App, false, true)
-	if refusal := authorizationRefusal(t.authorizeNative(c, "model:"+model, "action", nil, true)); refusal != nil {
-		out.Result, out.Detail = "rejected", refusal.Message
-		return out, nil
-	}
-	if ask.Evaluation {
-		if ask.EvaluationFunction == nil || ask.EvaluationFunction.Check() != nil || ask.Prompt.System != ask.EvaluationFunction.SystemPrompt() ||
-			ask.Prompt.MaxTokens != ask.EvaluationFunction.MaxTokens || len(ask.Prompt.User) > ask.EvaluationFunction.MaxInputBytes {
-			out.Result, out.Detail = "rejected", "the evaluation function binding changed"
-			return out, nil
-		}
-		var evaluatedBinding *platform.AIModelBinding
-		if ask.Binding != nil {
-			current, _, refusal := t.resolveModel("generation", model, ask.EvaluationFunction.ModelOptions.Override(platform.ModelOptions{MaxTokens: ask.EvaluationFunction.MaxTokens}))
-			if refusal != nil {
-				out.Result, out.Detail = "rejected", refusal.Message
-				return out, nil
-			}
-			current, refusal = t.modelStage(current, pv, platform.AIStageDesign)
-			if refusal != nil {
-				out.Result, out.Detail = "rejected", refusal.Message
-				return out, nil
-			}
-			evaluatedBinding = &current
-		}
-		config, digestErr := aigateway.ConfigurationDigest(enabled, pv, evaluatedBinding)
-		if digestErr != nil || ask.EvaluationConfig == "" || ask.EvaluationConfig != config {
-			out.Result, out.Detail = "rejected", "the evaluation model configuration changed"
-			return out, nil
-		}
 	}
 	answer, failure := t.call(pv, enabled, m, platform.ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, Binding: ask.Binding, Run: x.ID, Call: fmt.Sprintf("effect:%s:%d", x.ID, x.Attempts)}, now)
 	switch {

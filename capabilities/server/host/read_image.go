@@ -69,6 +69,9 @@ func (t *Tenant) endLane() {
 		t.quarantine(fmt.Errorf("publish read image: %w", err))
 		return
 	}
+	if previous := t.readImage.Load(); previous != nil && previous.records == generation && previous.definitions == definitions {
+		state.readMarkings = previous.state.readMarkings
+	}
 	image := &tenantReadImage{state: state, epoch: epoch, work: work, definitions: definitions, records: generation, operations: operations, position: position, next: make(chan struct{})}
 	if previous := t.readImage.Swap(image); previous != nil {
 		close(previous.next)
@@ -102,7 +105,7 @@ func (t *Tenant) countReadImage(ctx context.Context, outcome string) {
 	meters.readImages.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
 }
 
-func readPublishedImage[T any](t *Tenant, image *tenantReadImage, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {
+func readImageState[T any](t *Tenant, state *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			if err, ok := recovered.(error); ok {
@@ -118,7 +121,7 @@ func readPublishedImage[T any](t *Tenant, image *tenantReadImage, ctx context.Co
 			panic(recovered)
 		}
 	}()
-	view, err := image.state.forkReadState(ctx)
+	view, err := state.forkReadState(ctx)
 	if err != nil {
 		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read scope could not be prepared: {reason}", err.Error()), err
 	}
@@ -149,7 +152,7 @@ func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T,
 		if source := t.systemDefinitionState.source.Load(); source != nil && source.systemDefinitions.Load() != image.state.systemDefinitionState.published.Load() {
 			break
 		}
-		value, refusal, err := readPublishedImage(t, image, ctx, read)
+		value, refusal, err := readImageState(t, image.state, ctx, read)
 		if err == nil {
 			return value, refusal
 		}
@@ -197,8 +200,10 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	if t.readOrigin != nil {
 		view.readOrigin = t.readOrigin
 		view.readViews = t.viewCache()
+		view.readMarkings = t.readMarkings
 	} else {
 		view.readViews = &view.views
+		view.readMarkings = &readMarkingCache{}
 	}
 	view.currentReadScopes = t.currentReadScopes
 	view.records = t.records.ForkRecords()

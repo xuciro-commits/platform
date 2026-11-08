@@ -13,6 +13,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -174,17 +175,23 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	run := func(id string) (platform.AgentRunRecord, string, bool) {
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		x, ok := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
-		if !ok || x.OnBehalf != m.ID || x.Agent != agent {
-			return x, "", false
+		type answer struct {
+			run      platform.AgentRunRecord
+			question string
+			known    bool
 		}
-		question := ""
-		if x.State == "waiting" && len(x.Steps) > 0 {
-			question = strings.TrimPrefix(x.Steps[len(x.Steps)-1].Outcome, "asked: ")
-		}
-		return x, question, true
+		value, refusal := recordRead(t, r.Context(), func(t *Tenant) (answer, *kernel.Error) {
+			x, ok := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
+			if !ok || x.OnBehalf != m.ID || x.Agent != agent {
+				return answer{}, nil
+			}
+			question := ""
+			if x.State == "waiting" && len(x.Steps) > 0 {
+				question = strings.TrimPrefix(x.Steps[len(x.Steps)-1].Outcome, "asked: ")
+			}
+			return answer{x, question, true}, nil
+		})
+		return value.run, value.question, value.known && refusal == nil
 	}
 	decide := func(schema, typ, id, key string, payload any) error {
 		raw, _ := json.Marshal(payload)

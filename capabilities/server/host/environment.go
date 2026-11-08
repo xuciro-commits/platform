@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"slices"
 	"strings"
@@ -27,9 +28,10 @@ type PromotionResult struct {
 }
 
 func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifact, error) {
-	t.mu.Lock()
-	raw := slices.Clone(t.releases.Raw(id))
-	t.mu.Unlock()
+	raw, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]byte, *kernel.Error) { return slices.Clone(t.releases.Raw(id)), nil })
+	if refusal != nil {
+		return platform.SealedArtifact{}, refusal
+	}
 	if raw == nil {
 		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not saved", id)
 	}
@@ -48,6 +50,8 @@ func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifac
 	if err := t.releases.Seal(candidate.ID, artifact); err != nil {
 		return platform.SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", candidate.ID)
 	}
+	t.stateEpoch.Add(1)
+	t.changedOwner(build.ID)
 	return artifact, nil
 }
 
@@ -56,11 +60,18 @@ func sealedKey(tenant, candidate string) string {
 }
 
 func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	for _, a := range t.releases.Sealed() {
-		if a.Candidate == id {
-			return a, true
+	state := t
+	if t.readOrigin == nil {
+		if image := t.readImage.Load(); image != nil {
+			state = image.state
+		} else {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+		}
+	}
+	for _, artifact := range state.releases.Sealed() {
+		if artifact.Candidate == id {
+			return artifact, true
 		}
 	}
 	return platform.SealedArtifact{}, false
@@ -114,47 +125,52 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if err != nil {
 		return PromotionResult{}, err
 	}
-	for _, asset := range candidate.Assets {
-		if to.app(asset.Ref.App) == nil {
-			return PromotionResult{}, fmt.Errorf("%s does not host %s, which %s belongs to", to.ID, asset.Ref.App, asset.Ref.Name)
-		}
-	}
 	result := PromotionResult{From: from.ID, To: to.ID, Candidate: candidate.ID, Digest: artifact.Digest, Active: activate, Key: key, Assets: len(candidate.Assets)}
-
-	to.mu.Lock()
-	defer to.mu.Unlock()
-	if to.quarantined() {
-		return result, fmt.Errorf("tenant %s is quarantined", to.ID)
-	}
-	if prior, ok := to.releases.Request("promotion:" + key); ok {
-		hash, hashErr := acceptedformat.ReleaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
-		if hashErr != nil || prior != hash {
-			return result, fmt.Errorf("promotion key belongs to another request")
+	return decideWithError(to, "release:promote", func(to *Tenant) (PromotionResult, error) {
+		for _, asset := range candidate.Assets {
+			if to.app(asset.Ref.App) == nil {
+				return result, fmt.Errorf("%s does not host %s, which %s belongs to", to.ID, asset.Ref.App, asset.Ref.Name)
+			}
 		}
-		return result, nil
-	}
-	if prior := to.releases.Raw(candidate.ID); prior != nil && !bytes.Equal(prior, raw) {
-		return result, fmt.Errorf("candidate %s exists in %s with different bytes", candidate.ID, to.ID)
-	}
-	var installations []platform.ReleaseInstallation
-	var bootstrap json.RawMessage
-	if activate {
-		if installations, bootstrap, err = to.prepareReleaseLifecycleLocked(candidate, member, now, false); err != nil {
+
+		if to.quarantined() {
+			return result, fmt.Errorf("tenant %s is quarantined", to.ID)
+		}
+		if prior, ok := to.releases.Request("promotion:" + key); ok {
+			hash, hashErr := acceptedformat.ReleaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
+			if hashErr != nil || prior != hash {
+				return result, fmt.Errorf("promotion key belongs to another request")
+			}
+			return result, nil
+		}
+		if prior := to.releases.Raw(candidate.ID); prior != nil && !bytes.Equal(prior, raw) {
+			return result, fmt.Errorf("candidate %s exists in %s with different bytes", candidate.ID, to.ID)
+		}
+		var installations []platform.ReleaseInstallation
+		var bootstrap json.RawMessage
+		if activate {
+			if installations, bootstrap, err = to.prepareReleaseLifecycleLocked(candidate, member, now, false); err != nil {
+				return result, err
+			}
+		}
+		saved := acceptedformat.Release{Version: 2, Kind: "release-result", Tenant: to.ID, App: build.ID, Member: member.ID,
+			Key: "promotion:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: slices.Clone(raw), Active: activate, Installations: installations, Bootstrap: bootstrap, From: from.ID}
+		if activate {
+			saved.Version = 4
+		}
+		if saved.RequestHash, err = acceptedformat.ReleaseRequestHash(to.ID, member.ID, saved.Key, candidate.ID, activate); err != nil {
 			return result, err
 		}
-	}
-	saved := acceptedformat.Release{Version: 2, Kind: "release-result", Tenant: to.ID, App: build.ID, Member: member.ID,
-		Key: "promotion:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: slices.Clone(raw), Active: activate, Installations: installations, Bootstrap: bootstrap, From: from.ID}
-	if activate {
-		saved.Version = 4
-	}
-	if saved.RequestHash, err = acceptedformat.ReleaseRequestHash(to.ID, member.ID, saved.Key, candidate.ID, activate); err != nil {
-		return result, err
-	}
-	if _, err := to.commitReleaseLocked(member, saved); err != nil {
-		return result, err
-	}
-	return result, nil
+		if _, err := to.commitReleaseLocked(member, saved); err != nil {
+			return result, err
+		}
+		return result, nil
+	}, func(to *Tenant, prepared preparedAccepted) (PromotionResult, error) {
+		if _, err := to.applyPreparedRelease(member, prepared); err != nil {
+			return result, err
+		}
+		return result, nil
+	})
 }
 
 func MigrateRecords(from, to *Tenant, source, target platform.Member, types []string, now time.Time) (platform.MigrationResult, error) {

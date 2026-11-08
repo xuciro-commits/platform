@@ -26,8 +26,6 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 	if len(filter.State) > 64 || len(filter.Subject) > 512 || !filter.Since.IsZero() && !filter.Until.IsZero() && filter.Since.After(filter.Until) {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a valid application run time range")
 	}
-	ctx.Lock()
-	defer ctx.Unlock()
 	if err := ctx.Admit(m); err != nil {
 		return out, err
 	}

@@ -48,20 +48,16 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 	if ref.Kind != platform.AssetApp || ref.Check() != nil {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a published application")
 	}
-	ctx.Lock()
 	if err := ctx.Admit(m); err != nil {
-		ctx.Unlock()
 		return out, err
 	}
 	if ctx.Quarantined() {
 		if refusal := ctx.RecoveryAllowed(m); refusal != nil {
-			ctx.Unlock()
 			return out, refusal
 		}
 		out.State = "isolated"
 		out.Artifact = platform.ApplicationArtifact{Ref: ref, Model: []platform.AssetBinding{}, Rules: []platform.AssetBinding{}, Pages: []platform.AssetBinding{}, Flows: []platform.AssetBinding{}, AI: []platform.AssetBinding{}, Integrations: []platform.AssetBinding{}, Roles: []platform.ApplicationRole{}, Depends: []platform.AssetBinding{}, Environment: []platform.ApplicationBinding{}}
 		out.Recovery = platform.ApplicationRecovery{State: "isolated", Predecessors: "unverified", Quarantined: true, Scope: "tenant"}
-		ctx.Unlock()
 		return out, nil
 	}
 	visible := map[platform.AssetRef]bool{}
@@ -83,22 +79,18 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		}
 	}
 	if !visible[ref] {
-		ctx.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Application is unavailable to this member")
 	}
 	assets, err := ctx.Assets()
 	if err != nil {
-		ctx.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
 	}
 	candidate, err := ctx.CloseCandidate([]platform.AssetRef{ref}, assets, []platform.AssetRef{ref})
 	if err != nil {
-		ctx.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
 	}
 	artifact, err := platform.ArtifactOfApplication(ref, candidate.Assets)
 	if err != nil {
-		ctx.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
 	}
 	out.Artifact = artifact
@@ -112,7 +104,6 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		}
 		var descriptor platform.AgentReleaseDescriptor
 		if err := json.Unmarshal(asset.Body, &descriptor); err != nil {
-			ctx.Unlock()
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
 		}
 		out.Monitoring.AgentBudgets = append(out.Monitoring.AgentBudgets, platform.ApplicationAgentBudget{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Budget: descriptor.Budget})
@@ -191,7 +182,6 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		}
 		version, err := platform.ArtifactOfApplication(ref, candidate.Assets)
 		if err != nil {
-			ctx.Unlock()
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application version history is unavailable")
 		}
 		out.Versions = append(out.Versions, platform.ApplicationVersion{Version: version.Version, Release: candidate.ID, At: release.At, Active: version.Version == artifact.Version})
@@ -243,10 +233,8 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 	var refusal *kernel.Error
 	out.AI, refusal = ctx.AI(m, candidate.Assets, visible)
 	if refusal != nil {
-		ctx.Unlock()
 		return out, refusal
 	}
-	ctx.Unlock()
 	out.AI = ctx.AIUsage(m, ref, out.AI)
 	for _, binding := range out.Artifact.Model {
 		if binding.Ref.Kind != platform.AssetObject {

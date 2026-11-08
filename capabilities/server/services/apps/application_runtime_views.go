@@ -12,7 +12,6 @@ import (
 
 type Context struct {
 	Tenant          string
-	Lock, Unlock    func()
 	Admit           func(platform.Member) *kernel.Error
 	Definitions     func(platform.Member) []platform.Definition
 	Entity          func(string) (platform.EntityInfo, bool)

@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"sync"
 
 	"platformserver/platform"
 	"time"
@@ -11,42 +12,57 @@ import (
 
 const statusReadLimit = 64
 
-type statusReadSchedule map[string]statusReadAttempt
+type statusReadSchedule struct {
+	mu       sync.Mutex
+	attempts map[string]statusReadAttempt
+}
 
 type statusReadAttempt struct {
 	Due  time.Time
 	Busy bool
 }
 
-func (s statusReadSchedule) retain(active map[string]bool) {
-	for key, attempt := range s {
+func (s *statusReadSchedule) retain(active map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, attempt := range s.attempts {
 		if !active[key] && !attempt.Busy {
-			delete(s, key)
+			delete(s.attempts, key)
 		}
 	}
 }
 
-func (s statusReadSchedule) next(key string, saved time.Time) time.Time {
-	if cached := s[key].Due; cached.After(saved) {
+func (s *statusReadSchedule) next(key string, saved time.Time) time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nextLocked(key, saved)
+}
+
+func (s *statusReadSchedule) nextLocked(key string, saved time.Time) time.Time {
+	if cached := s.attempts[key].Due; cached.After(saved) {
 		return cached
 	}
 	return saved
 }
 
 func (s *statusReadSchedule) start(key string, saved, at time.Time, reads *int) bool {
-	if *reads >= statusReadLimit || (*s)[key].Busy || s.next(key, saved).After(at) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if *reads >= statusReadLimit || s.attempts[key].Busy || s.nextLocked(key, saved).After(at) {
 		return false
 	}
-	if *s == nil {
-		*s = statusReadSchedule{}
+	if s.attempts == nil {
+		s.attempts = map[string]statusReadAttempt{}
 	}
-	(*s)[key] = statusReadAttempt{Busy: true}
+	s.attempts[key] = statusReadAttempt{Busy: true}
 	*reads++
 	return true
 }
 
-func (s statusReadSchedule) finished(key string, next time.Time) {
-	s[key] = statusReadAttempt{Due: next}
+func (s *statusReadSchedule) finished(key string, next time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.attempts[key] = statusReadAttempt{Due: next}
 }
 
 func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, connectionRaw json.RawMessage, localRecords bool) (string, bool) {

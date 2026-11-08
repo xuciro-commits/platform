@@ -52,7 +52,6 @@ func cloneArtifacts(refs []platform.FlowStateArtifact) []platform.FlowStateArtif
 }
 
 type ArtifactCleanupPreparation struct {
-	owner  *Flows
 	before FlowInstance
 	refs   []platform.FlowStateArtifact
 	digest string
@@ -70,7 +69,7 @@ func (f *Flows) PlanArtifactCleanup(x FlowInstance, at time.Time) (platform.Flow
 	refs := cloneArtifacts(x.ArtifactCleanup)
 	raw := platform.Raw([]any{x.ID, x.Version, refs})
 	digest := fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
-	return &ArtifactCleanupPreparation{owner: f, before: x, refs: refs, digest: digest, at: at, tenant: refs[0].Tenant}, nil
+	return &ArtifactCleanupPreparation{before: x, refs: refs, digest: digest, at: at, tenant: refs[0].Tenant}, nil
 }
 
 func (p *ArtifactCleanupPreparation) Instance() string {
@@ -96,8 +95,8 @@ func (p *ArtifactCleanupPreparation) Submission(tenant string) *pb.Submission {
 		Payload: platform.Raw(map[string]string{"digest": p.digest})}
 }
 
-func (p *ArtifactCleanupPreparation) Decision() platform.App {
-	return preparedArtifactCleanupDecision{Flows: p.owner, prepared: p}
+func (p *ArtifactCleanupPreparation) Decision(owner platform.App) platform.App {
+	return preparedArtifactCleanupDecision{Flows: owner.(*Flows), prepared: p}
 }
 
 type preparedArtifactCleanupDecision struct {

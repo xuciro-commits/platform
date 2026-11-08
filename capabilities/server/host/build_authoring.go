@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -11,6 +12,10 @@ import (
 )
 
 func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]platform.CapabilityDescriptor, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) ([]platform.CapabilityDescriptor, error) { return t.scopedDraftActionCapabilities(m) })
+}
+
+func (t *Tenant) scopedDraftActionCapabilities(m platform.Member) ([]platform.CapabilityDescriptor, error) {
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
@@ -18,8 +23,6 @@ func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]platform.Capabili
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/build/drafts/actions", "read", []string{build.Builder}, true)); err != nil {
 		return nil, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
 		return nil, fmt.Errorf("tenant has no builder")

@@ -71,7 +71,6 @@ func (t *Tenant) packageLifecycleImpact(m platform.Member, id string, after []pl
 		out.Extensions = append(out.Extensions, extension)
 	}
 	ctx := t.applicationContext()
-	ctx.Lock, ctx.Unlock = func() {}, func() {}
 	seen := map[string]bool{}
 	for ref := range owned {
 		if ref.Kind != platform.AssetApp {

@@ -228,13 +228,9 @@ func (t *Tenant) collectUnacceptedFlowArtifacts(ctx context.Context, now time.Ti
 	if len(candidates) == 0 {
 		return nil
 	}
-	t.mu.Lock()
-	if t.quarantined() {
-		t.mu.Unlock()
-		return nil
-	}
-	keep, err := flowArtifactReferences(t.records, flowFrameStore{tenant: t.ID, files: t.files()})
-	t.mu.Unlock()
+	keep, err := readWithError(t, ctx, func(t *Tenant) (map[string]bool, error) {
+		return flowArtifactReferences(t.records, flowFrameStore{tenant: t.ID, files: t.files()})
+	})
 	if err != nil {
 		return err
 	}

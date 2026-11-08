@@ -187,33 +187,72 @@ func (h hostView) AgentDecisionMembers() []string {
 	}
 	return out
 }
-func (h hostView) AgentUsage() []platform.AIUsage {
-	if h.t.ai == nil {
-		return nil
+func readAgentHost[T any](h hostView, read func(*Tenant) (T, *kernel.Error)) (T, *kernel.Error) {
+	if h.decision != nil {
+		return read(h.t)
 	}
-	return h.t.ai.Usage()
+	return recordRead(h.t, context.Background(), read)
 }
-func (h hostView) BeginAgentRead() func() { h.t.mu.Lock(); return h.t.mu.Unlock }
+
+func (h hostView) AgentUsage() []platform.AIUsage {
+	values, _ := readAgentHost(h, func(t *Tenant) ([]platform.AIUsage, *kernel.Error) {
+		if t.ai == nil {
+			return nil, nil
+		}
+		return t.ai.Usage(), nil
+	})
+	return values
+}
+
+func (h hostView) WithAgentRead(read func(platform.AgentEvaluationRuntime) *kernel.Error) *kernel.Error {
+	source := h.t
+	if source.readOrigin != nil {
+		source = source.readOrigin
+	}
+	_, refusal := recordRead(source, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+		if t.agents == nil {
+			return struct{}{}, unknown()
+		}
+		return struct{}{}, read(t.agents.AgentEvaluationRuntime())
+	})
+	return refusal
+}
+
 func (h hostView) ScopeAgentRun(run string) func() {
 	previous := h.t.agentRun
 	h.t.agentRun = run
 	return func() { h.t.agentRun = previous }
 }
+
 func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, stage string) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
-	binding, provider, refusal := h.t.resolveModel("agent", name, options)
-	if refusal != nil {
-		return binding, provider, refusal
+	type selection struct {
+		binding  platform.AIModelBinding
+		provider platform.AIProvider
 	}
-	binding, refusal = h.t.modelStage(binding, provider, stage)
-	return binding, provider, refusal
+	value, refusal := readAgentHost(h, func(t *Tenant) (selection, *kernel.Error) {
+		binding, provider, refusal := t.resolveModel("agent", name, options)
+		if refusal == nil {
+			binding, refusal = t.modelStage(binding, provider, stage)
+		}
+		return selection{binding: binding, provider: provider}, refusal
+	})
+	return value.binding, value.provider, refusal
+}
+func (h hostView) AgentModel(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {
+	type selection struct {
+		model    platform.AIModel
+		provider platform.AIProvider
+	}
+	value, refusal := readAgentHost(h, func(t *Tenant) (selection, *kernel.Error) {
+		if t.ai == nil {
+			return selection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "AI capability unavailable")
+		}
+		model, provider, refusal := t.ai.Model(name)
+		return selection{model: model, provider: provider}, refusal
+	})
+	return value.model, value.provider, refusal
 }
 
-func (h hostView) AgentModel(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {
-	if h.t.ai == nil {
-		return platform.AIModel{}, platform.AIProvider{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "AI capability unavailable")
-	}
-	return h.t.ai.Model(name)
-}
 func (h hostView) AgentProviderAvailable(provider string, now time.Time) bool {
 	return h.t.breakers.Allow("ai:"+provider, now, false)
 }
@@ -369,8 +408,13 @@ func (t *Tenant) turns(now time.Time) []func() {
 		return nil
 	}
 	var out []func()
-	for _, x := range t.agents.DueAgentTurns(now) {
+	turns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]platform.AgentTurn, *kernel.Error) { return t.agents.DueAgentTurns(now), nil })
+	for _, x := range turns {
+		if !t.agents.ClaimAgentTurn(x.Run.ID) {
+			continue
+		}
 		out = append(out, func() {
+			defer t.agents.IdleAgentTurn(x.Run.ID)
 			if !t.businessStopped() {
 				t.take(x, now)
 			}
@@ -380,11 +424,11 @@ func (t *Tenant) turns(now time.Time) []func() {
 }
 
 func (t *Tenant) stillRunning(id string) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
-	if !known || run.State != "running" {
-		t.agents.IdleAgentTurn(id)
+	running, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
+		run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
+		return known && run.State == "running", nil
+	})
+	if !running || refusal != nil {
 		return false
 	}
 	return true
@@ -397,7 +441,8 @@ func (t *Tenant) take(x platform.AgentTurn, now time.Time) {
 			return
 		}
 		if x.Run.OnBehalf != "" {
-			if !t.agents.AllowsAgentRun(x.Run) {
+			allowed, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) { return t.agents.AllowsAgentRun(x.Run), nil })
+			if refusal != nil || !allowed {
 				t.agentStep(platform.AgentResultStep{Run: x.Run.ID, Stop: "the person no longer has access to this agent's app"}, now)
 				return
 			}
@@ -438,12 +483,7 @@ func (t *Tenant) take(x platform.AgentTurn, now time.Time) {
 }
 
 func (t *Tenant) continueAgentCalls(run platform.AgentRunRecord, now time.Time) {
-	defer func() {
-		t.mu.Lock()
-		t.agents.IdleAgentTurn(run.ID)
-		t.mu.Unlock()
-		wakeWork()
-	}()
+	defer wakeWork()
 	calls := run.Pending[:1]
 	if calls[0].Name == "knowledge" {
 		for len(calls) < len(run.Pending) && run.Pending[len(calls)].Name == "knowledge" {
@@ -469,27 +509,34 @@ func (t *Tenant) continueAgentCalls(run platform.AgentRunRecord, now time.Time) 
 	}
 	for i, call := range calls {
 		if !t.applyAgentStep(platform.AgentResultStep{Run: run.ID, CallID: call.ID, Tool: call.Name, Arguments: call.Arguments,
-			Observation: observations[i]}, now, false) {
+			Observation: observations[i]}, now) {
 			break
 		}
 	}
 }
 
 func (t *Tenant) agentStep(b platform.AgentResultStep, now time.Time) {
-	t.applyAgentStep(b, now, true)
+	t.applyAgentStep(b, now)
 }
 
-func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time, releaseTurn bool) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool {
+	applied, refusal := decideOnImage(t, context.Background(), "agent:settle", func(t *Tenant) (bool, *kernel.Error) {
+		return t.prepareAgentStep(b, now), nil
+	}, func(t *Tenant, candidate preparedAccepted, applied bool, refusal *kernel.Error) (bool, *kernel.Error) {
+		if len(candidate.entry.Body) != 0 {
+			t.finishAgentStep(candidate)
+		}
+		return applied && !t.quarantined(), refusal
+	})
+	return applied && refusal == nil
+}
+
+func (t *Tenant) prepareAgentStep(b platform.AgentResultStep, now time.Time) bool {
 	if t.quarantined() {
 		return false
 	}
 	if t.recordsAcceptedResults() {
 		now = now.Truncate(time.Microsecond)
-	}
-	if releaseTurn {
-		t.agents.IdleAgentTurn(b.Run)
 	}
 	run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), b.Run)
 	if b.Evaluation != nil {
@@ -519,22 +566,27 @@ func (t *Tenant) Evaluate(now time.Time) {
 		return
 	}
 	for {
-		t.mu.Lock()
 		if t.businessStopped() {
-			t.mu.Unlock()
 			return
 		}
-		evals, _, _ := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
-		t.mu.Unlock()
-		if len(evals) == 0 {
+		evals, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]platform.Evaluation, *kernel.Error) {
+			evals, _, refusal := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
+			return evals, refusal
+		})
+		if refusal != nil || len(evals) == 0 {
 			return
 		}
 		report := t.agentEvaluator.Evaluate(t.agents.AgentEvaluationRuntime(), evals[0], now, func(ev *platform.Evaluation) bool {
 			revision := ev.Revision
 			t.agentStep(platform.AgentResultStep{Run: ev.ID, Evaluation: ev}, now)
-			t.mu.Lock()
-			current, known := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), ev.ID)
-			t.mu.Unlock()
+			current, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.Evaluation, *kernel.Error) {
+				current, known := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), ev.ID)
+				if !known {
+					return current, unknown()
+				}
+				return current, nil
+			})
+			known := refusal == nil
 			if !known || current.Revision != revision+1 {
 				return false
 			}
@@ -545,9 +597,14 @@ func (t *Tenant) Evaluate(now time.Time) {
 			return
 		}
 		t.agentStep(platform.AgentResultStep{Run: report.ID, Evaluation: &report}, now)
-		t.mu.Lock()
-		current, known := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), report.ID)
-		t.mu.Unlock()
+		current, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.Evaluation, *kernel.Error) {
+			current, known := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), report.ID)
+			if !known {
+				return current, unknown()
+			}
+			return current, nil
+		})
+		known := refusal == nil
 		if !known || current.State == "queued" {
 			return
 		}

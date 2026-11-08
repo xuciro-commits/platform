@@ -1,10 +1,12 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"log"
+	"platformkernel/kernel"
 	"slices"
 	"time"
 
@@ -18,14 +20,20 @@ func (t *Tenant) ProjectDatasets(now time.Time) {
 		return
 	}
 	type projection struct{ object, app, dataset string }
-	var wanted []projection
-	for _, et := range t.records.SortedTypes() {
-		info := et.Info()
-		for _, binding := range info.DataSources {
-			if binding.Kind == "dataset" {
-				wanted = append(wanted, projection{info.Type, info.App, binding.Source})
+	wanted, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]projection, *kernel.Error) {
+		var wanted []projection
+		for _, et := range t.records.SortedTypes() {
+			info := et.Info()
+			for _, binding := range info.DataSources {
+				if binding.Kind == "dataset" {
+					wanted = append(wanted, projection{info.Type, info.App, binding.Source})
+				}
 			}
 		}
+		return wanted, nil
+	})
+	if refusal != nil {
+		return
 	}
 	for _, p := range wanted {
 		t.projectDataset(p.object, p.app, p.dataset, now)
@@ -33,22 +41,36 @@ func (t *Tenant) ProjectDatasets(now time.Time) {
 }
 
 func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
-	t.mu.Lock()
-	c := t.automation(build.ID, false)
-	ds, ok := platform.Get[build.Dataset](c, dataset)
-	previous, known := ds.Projection(object)
-	if !ok || ds.Version == 0 || known && previous.Version == ds.Version && previous.Paused == "" && previous.MergeVersion == 1 {
-		t.mu.Unlock()
+	type preparation struct {
+		dataset  build.Dataset
+		previous build.DatasetProjection
+		known    bool
+		data     []map[string]any
+		version  int
+		marking  string
+		member   platform.Member
+		err      error
+	}
+	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (preparation, *kernel.Error) {
+		c := t.automation(build.ID, false)
+		ds, ok := platform.Get[build.Dataset](c, dataset)
+		previous, known := ds.Projection(object)
+		if !ok || ds.Version == 0 || known && previous.Version == ds.Version && previous.Paused == "" && previous.MergeVersion == 1 {
+			return preparation{}, nil
+		}
+		data, version, err := build.DatasetRows(c, dataset, ds.Version)
+		marking := ds.Marking
+		if fixed, refused := t.dataOwner().ExecutionDataset(ds); refused == nil {
+			marking = fixed.Marking
+		}
+		member := c.Member
+		member.Roles = map[string]string{build.ID: build.Builder}
+		return preparation{dataset: ds, previous: previous, known: known, data: data, version: version, marking: marking, member: member, err: err}, nil
+	})
+	if refusal != nil || prepared.dataset.ID == "" {
 		return
 	}
-	data, version, err := build.DatasetRows(c, dataset, ds.Version)
-	marking := ds.Marking
-	if fixed, refused := t.dataOwner().ExecutionDataset(ds); refused == nil {
-		marking = fixed.Marking
-	}
-	member := c.Member
-	member.Roles = map[string]string{build.ID: build.Builder}
-	t.mu.Unlock()
+	ds, previous, known, data, version, marking, member, err := prepared.dataset, prepared.previous, prepared.known, prepared.data, prepared.version, prepared.marking, prepared.member, prepared.err
 	result := build.DatasetProjection{Object: object, Version: ds.Version, At: now, Rows: len(data), MergeVersion: 1, Marking: marking, Compartments: slices.Clone(ds.Compartments)}
 	pause := func(reason string) {
 		result.Paused = reason
@@ -138,8 +160,11 @@ func (t *Tenant) recordProjection(member platform.Member, dataset string, previo
 }
 
 func (t *Tenant) integrationAnswered(app, key string) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) { return t.integrationAnsweredRead(app, key), nil })
+	return value
+}
+
+func (t *Tenant) integrationAnsweredRead(app, key string) bool {
 	_, refused := t.committed.Refusal(app + "/" + key)
 	return refused || len(t.committed.Answer(app+"/"+key)) > 0
 }

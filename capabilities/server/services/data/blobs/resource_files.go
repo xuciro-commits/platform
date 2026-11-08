@@ -433,17 +433,10 @@ func FileStoreManifest(ctx context.Context, store platform.FileStore) (map[strin
 }
 
 type Uploads struct {
-	mu sync.Mutex
-	at map[string]time.Time
-}
-
-func (u *Uploads) Add(hash string, now time.Time) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	if u.at == nil {
-		u.at = map[string]time.Time{}
-	}
-	u.at[hash] = now
+	mu       sync.Mutex
+	at       map[string]time.Time
+	deleting map[string]bool
+	writing  map[string]int
 }
 
 func (u *Uploads) OlderThan(now time.Time, age time.Duration) []string {
@@ -462,4 +455,57 @@ func (u *Uploads) Forget(hash string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	delete(u.at, hash)
+}
+
+func (u *Uploads) BeginPut(hash string) bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.deleting[hash] {
+		return false
+	}
+	if u.writing == nil {
+		u.writing = map[string]int{}
+	}
+	u.writing[hash]++
+	return true
+}
+func (u *Uploads) EndPut(hash string, now time.Time, saved bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.writing[hash]--
+	if u.writing[hash] == 0 {
+		delete(u.writing, hash)
+	}
+	if saved {
+		if u.at == nil {
+			u.at = map[string]time.Time{}
+		}
+		u.at[hash] = now
+	}
+}
+func (u *Uploads) BeginDelete(hash string, now time.Time, age time.Duration) bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	at, found := u.at[hash]
+	if !found || now.Sub(at) <= age || u.deleting[hash] || u.writing[hash] > 0 {
+		return false
+	}
+	if u.deleting == nil {
+		u.deleting = map[string]bool{}
+	}
+	u.deleting[hash] = true
+	return true
+}
+func (u *Uploads) EndDelete(hash string, removed bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	delete(u.deleting, hash)
+	if removed {
+		delete(u.at, hash)
+	}
+}
+func (u *Uploads) Unavailable(hash string) bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.deleting[hash]
 }

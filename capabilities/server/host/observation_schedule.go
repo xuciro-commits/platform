@@ -94,25 +94,25 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 					continue
 				}
 				slot := source.ref.String() + "/" + row.ID
-				t.mu.Lock()
+				t.observationScheduleMu.Lock()
 				prior := t.observationWindows[slot]
 				if prior.Busy || prior.Key == identity {
-					t.mu.Unlock()
+					t.observationScheduleMu.Unlock()
 					continue
 				}
 				if t.observationWindows == nil {
 					t.observationWindows = map[string]observationWindowAttempt{}
 				}
 				t.observationWindows[slot] = observationWindowAttempt{Key: prior.Key, Busy: true}
-				t.mu.Unlock()
+				t.observationScheduleMu.Unlock()
 				_, problem := t.EvaluateObservation(context.Background(), member, source.ref, ObservationEvaluate{Record: row.ID, Until: until, Key: "scheduled-" + identity}, at)
-				t.mu.Lock()
+				t.observationScheduleMu.Lock()
 				if problem == nil {
 					t.observationWindows[slot] = observationWindowAttempt{Key: identity}
 				} else {
 					t.observationWindows[slot] = observationWindowAttempt{Key: prior.Key}
 				}
-				t.mu.Unlock()
+				t.observationScheduleMu.Unlock()
 			}
 			offset += len(page.Records)
 			if len(page.Records) == 0 || offset >= page.Total {

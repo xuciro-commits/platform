@@ -2,8 +2,10 @@ package host
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/systemscope"
 	"platformserver/platform"
@@ -120,6 +122,14 @@ func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind
 }
 
 func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDraftRef, candidateID, key string, now time.Time) (string, error) {
+	return decideWithError(t, "release", func(t *Tenant) (string, error) {
+		return t.prepareSaveReleaseCandidates(m, drafts, candidateID, key, now)
+	}, func(t *Tenant, candidate preparedAccepted) (string, error) {
+		return t.applyPreparedRelease(m, candidate)
+	})
+}
+
+func (t *Tenant) prepareSaveReleaseCandidates(m platform.Member, drafts []build.JointDraftRef, candidateID, key string, now time.Time) (string, error) {
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
@@ -132,8 +142,6 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("candidate ID and idempotency key are required")
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}
@@ -174,6 +182,14 @@ const (
 )
 
 func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key, upgradeID string, now time.Time) (string, error) {
+	return decideWithError(t, "release", func(t *Tenant) (string, error) {
+		return t.prepareActivateReleaseWithUpgrade(m, candidateID, key, upgradeID, now)
+	}, func(t *Tenant, candidate preparedAccepted) (string, error) {
+		return t.applyPreparedRelease(m, candidate)
+	})
+}
+
+func (t *Tenant) prepareActivateReleaseWithUpgrade(m platform.Member, candidateID, key, upgradeID string, now time.Time) (string, error) {
 	if t.ID == systemscope.Tenant {
 		return "", fmt.Errorf("%s", systemReleaseActivationDiagnostic)
 	}
@@ -186,8 +202,6 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("candidate ID and idempotency key are required")
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}
@@ -330,9 +344,14 @@ func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 }
 
 func (t *Tenant) ActiveRelease() string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.releases.Active()
+	if t.readOrigin != nil {
+		return t.releases.Active()
+	}
+	if image := t.readImage.Load(); image != nil {
+		return image.state.releases.Active()
+	}
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) { return t.releases.Active(), nil })
+	return value
 }
 
 func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedformat.Release) (string, error) {
@@ -365,6 +384,10 @@ func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedformat.Rel
 	if _, applied := t.releases.AppliedDigest(saved.Key); applied && t.AcceptResult == nil {
 		return "", fmt.Errorf("historical release request needs its journal receipt")
 	}
+	if t.preparedResult != nil {
+		*t.preparedResult = preparedAccepted{entry: entry, key: saved.Key, hash: saved.RequestHash, uploads: t.preparedResult.uploads}
+		return candidateID, nil
+	}
 	committed, err := t.acceptResult(entry, saved.Key, saved.RequestHash)
 	if err != nil {
 		return "", err
@@ -390,4 +413,16 @@ func (t *Tenant) finishCommittedRelease(m platform.Member, saved acceptedformat.
 	t.acceptedResultApplied()
 	t.changed()
 	return applied.CandidateID, nil
+}
+
+func (t *Tenant) applyPreparedRelease(m platform.Member, candidate preparedAccepted) (string, error) {
+	saved, err := acceptedformat.DecodeRelease(candidate.entry.Body)
+	if err != nil {
+		return "", err
+	}
+	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+	if err != nil {
+		return "", err
+	}
+	return t.finishCommittedRelease(m, saved, committed)
 }

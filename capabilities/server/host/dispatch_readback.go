@@ -11,6 +11,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -19,10 +20,10 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) || t.app(build.ID) == nil {
 		return
 	}
-	t.mu.Lock()
-	runs, refusal := platform.PendingDispatches(t.automation(build.ID, false))
+	runs, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]platform.DispatchRun, *kernel.Error) {
+		return platform.PendingDispatches(t.automation(build.ID, false))
+	})
 	if refusal != nil {
-		t.mu.Unlock()
 		return
 	}
 	active := make(map[string]bool, len(runs))
@@ -34,67 +35,72 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		return t.dispatchReads.next(run.Intent, run.ReadDue)
 	}
 	slices.SortStableFunc(runs, func(a, b platform.DispatchRun) int { return due(a).Compare(due(b)) })
-	t.mu.Unlock()
 	reads := 0
 	for _, saved := range runs {
 		if saved.ReadDue.After(at) {
 			continue
 		}
-		t.mu.Lock()
-		run, exists := platform.Get[platform.DispatchRun](t.automation(build.ID, false), saved.ID)
-		valid := exists && !slices.Contains([]string{"completed", "cancelled", "compensated"}, run.State)
-		var stamp string
-		if valid {
-			valid = (hostView{t: t}).CheckDispatchRead(run, at) == nil
+		type plan struct {
+			run   platform.DispatchRun
+			stamp string
+			valid bool
+		}
+		prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (plan, *kernel.Error) {
+
+			run, exists := platform.Get[platform.DispatchRun](t.automation(build.ID, false), saved.ID)
+			valid := exists && !slices.Contains([]string{"completed", "cancelled", "compensated"}, run.State)
+			var stamp string
 			if valid {
-				stamp, valid = t.statusReadStamp(run.Revision, run.Member, run.Source, run.Connection, run.Definition.Readback.Record != "")
-			}
-		}
-		if !valid || reads >= statusReadLimit {
-			t.mu.Unlock()
-			if reads >= statusReadLimit {
-				return
-			}
-			continue
-		}
-		if !t.dispatchReads.start(run.Intent, run.ReadDue, at, &reads) {
-			t.mu.Unlock()
-			continue
-		}
-		t.mu.Unlock()
-		reading := t.readDispatchStatus(run, at)
-		t.mu.Lock()
-		t.dispatchReads.finished(run.Intent, at.Add(time.Duration(run.Definition.Readback.EverySeconds)*time.Second))
-		current, found := platform.Get[platform.DispatchRun](t.automation(build.ID, false), run.ID)
-		currentStamp, valid := t.statusReadStamp(current.Revision, current.Member, current.Source, current.Connection, current.Definition.Readback.Record != "")
-		if !found || current.Revision != run.Revision || !valid || currentStamp != stamp || (hostView{t: t}).CheckDispatchRead(current, at) != nil {
-			t.mu.Unlock()
-			continue
-		}
-		if n := len(current.Readback); n > 0 {
-			last := current.Readback[n-1]
-			state := reading.State
-			if !at.Before(current.Deadline) && state != "unknown" && state != "failed" && state != "completed" {
-				state = "stuck"
-			}
-			started := current.StartedAt
-			for _, attempt := range current.Attempts {
-				if attempt.Intent == current.Intent {
-					started = attempt.At
+				valid = (hostView{t: t}).CheckDispatchRead(run, at) == nil
+				if valid {
+					stamp, valid = t.statusReadStamp(run.Revision, run.Member, run.Source, run.Connection, run.Definition.Readback.Record != "")
 				}
 			}
-			if current.ReadDue.After(started) && !last.At.Before(started) && current.State == state && last.State == reading.State && last.Value == reading.Value && last.Reason == reading.Reason && bytes.Equal(last.Observed, reading.Observed) {
-				t.mu.Unlock()
-				continue
-			}
+			return plan{run: run, stamp: stamp, valid: valid}, nil
+		})
+		run, stamp, valid := prepared.run, prepared.stamp, prepared.valid
+		if refusal != nil || !valid {
+			continue
 		}
-		caller := t.automation(build.ID, false).Member
-		submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID,
-			IdempotencyKey: fmt.Sprintf("dispatch-read:%s:%d:%s", run.ID, run.Revision, at.UTC().Format(time.RFC3339Nano)),
-			Target:         &pb.EntityRef{Type: platform.DispatchType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.DispatchAnswerSchema, Version: 1},
-			Payload: platform.Raw(map[string]any{"revision": run.Revision, "intent": run.Intent, "outcome": reading.State, "reason": reading.Reason, "reading": reading, "answer": reading.Observed})}
-		_, _ = t.submitAccepted(t.app(build.ID), caller, submission, at, true)
-		t.mu.Unlock()
+		if reads >= statusReadLimit {
+			return
+		}
+		if !t.dispatchReads.start(run.Intent, run.ReadDue, at, &reads) {
+			continue
+		}
+		reading := t.readDispatchStatus(run, at)
+		t.dispatchReads.finished(run.Intent, at.Add(time.Duration(run.Definition.Readback.EverySeconds)*time.Second))
+		_, _ = decideOnImage(t, context.Background(), "dispatch:answer", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+			current, found := platform.Get[platform.DispatchRun](t.automation(build.ID, false), run.ID)
+			currentStamp, valid := t.statusReadStamp(current.Revision, current.Member, current.Source, current.Connection, current.Definition.Readback.Record != "")
+			if !found || current.Revision != run.Revision || !valid || currentStamp != stamp || (hostView{t: t}).CheckDispatchRead(current, at) != nil {
+				return nil, nil
+			}
+			if n := len(current.Readback); n > 0 {
+				last := current.Readback[n-1]
+				state := reading.State
+				if !at.Before(current.Deadline) && state != "unknown" && state != "failed" && state != "completed" {
+					state = "stuck"
+				}
+				started := current.StartedAt
+				for _, attempt := range current.Attempts {
+					if attempt.Intent == current.Intent {
+						started = attempt.At
+					}
+				}
+				if current.ReadDue.After(started) && !last.At.Before(started) && current.State == state && last.State == reading.State && last.Value == reading.Value && last.Reason == reading.Reason && bytes.Equal(last.Observed, reading.Observed) {
+					return nil, nil
+				}
+			}
+			caller := t.automation(build.ID, false).Member
+			submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID,
+				IdempotencyKey: fmt.Sprintf("dispatch-read:%s:%d:%s", run.ID, run.Revision, at.UTC().Format(time.RFC3339Nano)),
+				Target:         &pb.EntityRef{Type: platform.DispatchType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.DispatchAnswerSchema, Version: 1},
+				Payload: platform.Raw(map[string]any{"revision": run.Revision, "intent": run.Intent, "outcome": reading.State, "reason": reading.Reason, "reading": reading, "answer": reading.Observed})}
+			return t.submitAccepted(t.app(build.ID), caller, submission, at, true)
+		}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+			return t.finishPreparedSubmission(platform.Member{ID: "app:" + build.ID, Tenant: t.ID}, candidate, record, refusal)
+		})
 	}
 }
 

@@ -26,7 +26,7 @@ func enterpriseApp(t *Tenant) platform.EnterpriseQueries {
 }
 
 func (h *Host) routesRecords(rt *routes) {
-	rt.handle(transport.Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: PageModelRead{}, Answer: PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: PageModelRead{}, Answer: PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request *PageModelRead
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 		decoder.DisallowUnknownFields()
@@ -34,8 +34,6 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A model read needs one bounded request"))
 			return
 		}
-		t.mu.Lock()
-		defer t.mu.Unlock()
 		value, err := t.readPageModel(m, *request, h.Now())
 		if err != nil {
 			Reply(w, nil, err)
@@ -80,7 +78,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, value)
 	})
-	rt.handle(transport.Route{Pattern: "POST /v1/relation-migrations/preview", Summary: "Preview an explicit migration of historical links into their endpoint owner's records", Body: platform.AssetBinding{}, Answer: platform.RelationMigrationPlan{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "POST /v1/relation-migrations/preview", Summary: "Preview an explicit migration of historical links into their endpoint owner's records", Body: platform.AssetBinding{}, Answer: platform.RelationMigrationPlan{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var binding platform.AssetBinding
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
@@ -88,8 +86,6 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid relationship binding"))
 			return
 		}
-		t.mu.Lock()
-		defer t.mu.Unlock()
 		caller := platform.NewCaller(runtime{t: t}, m, binding.Ref.App, false, false)
 		plan, err := t.relationMigrationPlan(t.records, caller, binding, h.Now())
 		if err != nil {

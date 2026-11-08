@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +17,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	releaseowner "platformserver/services/devops/releases"
 	trialowner "platformserver/services/devops/trials"
 	"platformserver/services/resources/authoring"
 )
@@ -344,11 +346,15 @@ func failedSimulation(message string) *BranchSimulationCheck {
 }
 
 func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resolutions []BranchResolution, sim *trialowner.CandidateSimulationRequest, now time.Time) (branchEvaluation, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (branchEvaluation, *kernel.Error) {
+		return t.evaluateBranchRead(m, branch, resolutions, sim, now)
+	})
+}
+
+func (t *Tenant) evaluateBranchRead(m platform.Member, branch build.Branch, resolutions []BranchResolution, sim *trialowner.CandidateSimulationRequest, now time.Time) (branchEvaluation, *kernel.Error) {
 	var out branchEvaluation
-	t.mu.Lock()
 	plans, refusal := t.planBranchLocked(m, branch, resolutions, now)
 	if refusal != nil {
-		t.mu.Unlock()
 		return out, refusal
 	}
 	out.conflicts = conflictsOf(plans)
@@ -360,7 +366,6 @@ func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resoluti
 	} else {
 		actions, refusal := t.branchActions(plans)
 		if refusal != nil {
-			t.mu.Unlock()
 			return out, refusal
 		}
 		stage := t.stageBranchLocked(m, branch.ID, actions, now)
@@ -371,7 +376,6 @@ func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resoluti
 			check.Graph.Messages = append(check.Graph.Messages, "Not evaluated: a resource would be refused in the merged world")
 		}
 	}
-	t.mu.Unlock()
 	if sim != nil {
 		switch {
 		case staged == nil:
@@ -545,9 +549,22 @@ type mergedCandidate struct {
 }
 
 func (t *Tenant) applyBranch(m platform.Member, id string, request BranchMergeRequest, now time.Time) (mergedCandidate, []BranchResourceCheck, *kernel.Error) {
+	type prepared struct {
+		merged mergedCandidate
+		checks []BranchResourceCheck
+	}
+	value, refusal := decideOnImage(t, context.Background(), "branch:merge", func(t *Tenant) (prepared, *kernel.Error) {
+		merged, checks, refusal := t.prepareBranchMerge(m, id, request, now)
+		return prepared{merged: merged, checks: checks}, refusal
+	}, func(t *Tenant, candidate preparedAccepted, value prepared, refusal *kernel.Error) (prepared, *kernel.Error) {
+		_, refusal = t.finishPreparedSubmission(m, candidate, nil, refusal)
+		return value, refusal
+	})
+	return value.merged, value.checks, refusal
+}
+
+func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request BranchMergeRequest, now time.Time) (mergedCandidate, []BranchResourceCheck, *kernel.Error) {
 	var none mergedCandidate
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if t.quarantined() {
 		return none, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
@@ -627,15 +644,21 @@ func (t *Tenant) applyBranch(m platform.Member, id string, request BranchMergeRe
 }
 
 func (t *Tenant) saveBranchCandidate(m platform.Member, branchID string, merged mergedCandidate, now time.Time) (string, error) {
-	t.mu.Lock()
-	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
-	if !ok {
-		t.mu.Unlock()
-		return "", fmt.Errorf("the tenant has no builder")
+	type preparation struct {
+		drafts    []build.JointDraftRef
+		preview   releaseowner.ReleasePreview
+		candidate platform.ReleaseCandidate
 	}
-	drafts := branchDraftSet(owner, merged.actions)
-	preview, candidate, err := t.previewReleaseLocked(drafts, m)
-	t.mu.Unlock()
+	prepared, err := readWithError(t, context.Background(), func(t *Tenant) (preparation, error) {
+		owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+		if !ok {
+			return preparation{}, fmt.Errorf("the tenant has no builder")
+		}
+		drafts := branchDraftSet(owner, merged.actions)
+		preview, candidate, err := t.previewReleaseLocked(drafts, m)
+		return preparation{drafts: drafts, preview: preview, candidate: candidate}, err
+	})
+	drafts, preview, candidate := prepared.drafts, prepared.preview, prepared.candidate
 	if err == nil && preview.Diagnostic != "" {
 		err = fmt.Errorf("%s", preview.Diagnostic)
 	}

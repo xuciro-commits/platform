@@ -2,6 +2,7 @@ package host
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -246,11 +247,6 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		span     trace.SpanContext
 	}
 	var jobs []job
-	t.mu.Lock()
-	if t.businessStopped() {
-		t.mu.Unlock()
-		return nil
-	}
 	t.opsMu.Lock()
 	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), &Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
 		if ep.Kind != acceptedformat.ModelEndpoint && !t.breakers.Allow("endpoint:"+ep.ID, now, true) {
@@ -270,7 +266,6 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		jobs = append(jobs, job{t.outbound[i].Effect, *ep, t.outbound[i].span})
 	}
 	t.opsMu.Unlock()
-	t.mu.Unlock()
 	var sends []func()
 	for _, j := range jobs {
 		sends = append(sends, func() {
@@ -394,8 +389,18 @@ func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
 }
 
 func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platform.AIUsage, now time.Time) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	_, _ = decideOnImage(t, context.Background(), "effect:settle", func(t *Tenant) (struct{}, *kernel.Error) {
+		t.prepareEffectSettlement(effect, o, usage, now)
+		return struct{}{}, nil
+	}, func(t *Tenant, candidate preparedAccepted, value struct{}, refusal *kernel.Error) (struct{}, *kernel.Error) {
+		if len(candidate.entry.Body) != 0 {
+			t.finishEffect(effect, candidate)
+		}
+		return value, refusal
+	})
+}
+
+func (t *Tenant) prepareEffectSettlement(effect string, o platform.Outcome, usage *platform.AIUsage, now time.Time) {
 	if t.quarantined() {
 		return
 	}

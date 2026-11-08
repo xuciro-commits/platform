@@ -18,6 +18,20 @@ import (
 )
 
 func (t *Tenant) Composite(m platform.Member, key string, edits []platform.CompositeEdit, now time.Time) (platform.CompositeAnswer, error) {
+	return decideWithError(t, "composite", func(t *Tenant) (platform.CompositeAnswer, error) { return t.prepareComposite(m, key, edits, now) }, func(t *Tenant, candidate preparedAccepted) (platform.CompositeAnswer, error) {
+		saved, err := acceptedformat.DecodeComposite(candidate.entry.Body)
+		if err != nil {
+			return platform.CompositeAnswer{}, err
+		}
+		committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+		if err != nil {
+			return platform.CompositeAnswer{}, err
+		}
+		return t.finishCommittedComposite(m, saved, committed)
+	})
+}
+
+func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platform.CompositeEdit, now time.Time) (platform.CompositeAnswer, error) {
 	if err := t.admits(m); err != nil {
 		return platform.CompositeAnswer{}, err
 	}
@@ -27,8 +41,6 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []platform.Compo
 	if t.app(build.ID) == nil {
 		return platform.CompositeAnswer{}, fmt.Errorf("this tenant runs no builder")
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if t.quarantined() {
 		return platform.CompositeAnswer{}, fmt.Errorf("tenant is quarantined")
 	}
@@ -97,7 +109,12 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []platform.Compo
 		return platform.CompositeAnswer{}, err
 	}
 	principal, _ := json.Marshal(m)
-	committed, err := t.acceptResult(Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()}, saved.Key, saved.RequestHash)
+	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()}
+	if t.preparedResult != nil {
+		*t.preparedResult = preparedAccepted{entry: entry, key: saved.Key, hash: saved.RequestHash, uploads: t.preparedResult.uploads}
+		return compositeAnswer(saved)
+	}
+	committed, err := t.acceptResult(entry, saved.Key, saved.RequestHash)
 	if err != nil {
 		return platform.CompositeAnswer{}, err
 	}

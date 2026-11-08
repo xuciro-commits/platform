@@ -66,10 +66,15 @@ func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *kernel.E
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 func (h hostView) ConnectorHeartbeat(c platform.Caller, now time.Time) *kernel.Error {
-	h.t.opsMu.Lock()
-	defer h.t.opsMu.Unlock()
-	return h.t.connectors.kernel.Heartbeat(c.Tenant, c.ID, now)
+	t := h.t
+	if source := t.scopeSource(); source != nil {
+		t = source
+	}
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	return t.connectors.kernel.Heartbeat(c.Tenant, c.ID, now)
 }
+
 func (h hostView) PutPackageArtifact(key string, raw []byte) error {
 	return h.t.files().Put(context.Background(), key, raw, "application/json")
 }

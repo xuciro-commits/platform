@@ -149,8 +149,12 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 	if t.procs != nil {
 		versions = draft.flowVersions()
 	}
-	committed, err := t.acceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
-		Principal: principal, Body: raw, At: now, Versions: versions}, key, hash)
+	entryResult := Entry{App: a.Manifest().ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: versions}
+	if t.preparedResult != nil {
+		*t.preparedResult = preparedAccepted{entry: entryResult, key: key, hash: hash, uploads: t.preparedResult.uploads}
+		return answer, refusal
+	}
+	committed, err := t.acceptResult(entryResult, key, hash)
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
@@ -247,4 +251,15 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, err
 	}
 	t.committed.SaveInput(result.App+"/"+result.Key, raw)
 	return result, true, nil
+}
+
+func (t *Tenant) finishPreparedInput(m platform.Member, name string, candidate preparedAccepted, answer any, refusal *kernel.Error) (any, *kernel.Error) {
+	if len(candidate.entry.Body) == 0 {
+		return answer, refusal
+	}
+	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+	if err != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
+	return t.finishCommittedInput(t.app(candidate.entry.App).(platform.AcceptedInputApp), m, name, candidate.key, candidate.hash, committed)
 }

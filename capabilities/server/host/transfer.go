@@ -2,6 +2,7 @@ package host
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
@@ -102,18 +103,16 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 				return err
 			}
 			key := fmt.Sprintf("import:%s:%d", file, r.Row)
-			verb := func() string {
-				t.mu.Lock()
-				defer t.mu.Unlock()
+			verb, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
 				ledger := t.app(view.Info().App).AcceptedLedger()
 				if ledger.AcceptedFor(t.ID, key) != nil {
-					return ".create"
+					return ".create", nil
 				}
 				if ledger.AcceptedFor(t.ID, key+":edit") != nil || t.readable(m, typ+"/"+r.ID, now) {
-					return ".edit"
+					return ".edit", nil
 				}
-				return ".create"
-			}()
+				return ".create", nil
+			})
 			requestKey := key
 			if verb == ".edit" {
 				requestKey += ":edit"
@@ -133,16 +132,17 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 }
 
 func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*kernel.Error, []platform.FieldIssue) {
-	a := t.owner["action:"+s.GetSchema().GetName()]
-	if a == nil {
-		return unknown(), nil
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	draft := t.newStagedDecision()
-	draft.probing = true
-	_, err := decideAcceptedAs(a, draft, m, s, now, false)
-	return err, draft.inputIssues[err]
+	issues, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]platform.FieldIssue, *kernel.Error) {
+		app := t.owner["action:"+s.GetSchema().GetName()]
+		if app == nil {
+			return nil, unknown()
+		}
+		draft := t.newStagedDecision()
+		draft.probing = true
+		_, refusal := decideAcceptedAs(app, draft, m, s, now, false)
+		return t.readableFieldIssues(m, draft.inputIssues[refusal], now), refusal
+	})
+	return refusal, issues
 }
 
 func fromCSV(f platform.FieldInfo, value, currency string) (any, error) {

@@ -18,15 +18,24 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 	if t.businessStopped() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.businessStopped() {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
-	}
-	if refusal := t.recordReadRefusal(); refusal != nil {
+	accepted, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
+		owner := t.owner["input:"+name]
+		if owner == nil {
+			return false, unknown()
+		}
+		return owner.Manifest().Inputs[name], nil
+	})
+	if refusal != nil {
 		return nil, refusal
 	}
-	return t.input(m, name, body, now)
+	if accepted {
+		return decideOnImage(t, context.Background(), "input", func(t *Tenant) (any, *kernel.Error) {
+			return t.input(m, name, body, now)
+		}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *kernel.Error) (any, *kernel.Error) {
+			return t.finishPreparedInput(m, name, candidate, answer, refusal)
+		})
+	}
+	return recordRead(t, context.Background(), func(t *Tenant) (any, *kernel.Error) { return t.input(m, name, body, now) })
 }
 
 func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
@@ -48,7 +57,6 @@ func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Tim
 		}
 		return t.inputAccepted(accepted, m, name, body, now)
 	}
-	defer t.enqueue(now)
 	out, err = inputApp(a, t.caller(m, a, false), name, body, now)
 	if err != nil {
 		t.refused(m.ID, name, err, now)

@@ -3,6 +3,7 @@ package host
 import transport "platformserver/kernel/transport"
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	controlowner "platformserver/services/security/control"
@@ -174,8 +175,10 @@ type DispatchTarget struct {
 }
 
 func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time) ([]DispatchTarget, *kernel.Error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	return recordRead(t, context.Background(), func(t *Tenant) ([]DispatchTarget, *kernel.Error) { return t.scopedDispatchTargets(member, id, at) })
+}
+
+func (t *Tenant) scopedDispatchTargets(member platform.Member, id string, at time.Time) ([]DispatchTarget, *kernel.Error) {
 	if refusal := t.admits(member); refusal != nil {
 		return nil, refusal
 	}

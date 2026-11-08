@@ -66,17 +66,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 		}, source, contentVersion...)
 		return answer{record: record, issues: found}, refusal
 	}, func(t *Tenant, candidate preparedAccepted, value answer, refusal *kernel.Error) (answer, *kernel.Error) {
-		if len(candidate.entry.Body) == 0 {
-			return value, refusal
-		}
-		committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
-		if err != nil {
-			if err == errAcceptedConflict {
-				return answer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
-			}
-			return answer{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
-		}
-		record, refusal := t.finishCommittedResult(t.app(candidate.entry.App), m, candidate.hash, committed)
+		record, refusal := t.finishPreparedSubmission(m, candidate, value.record, refusal)
 		value.record = record
 		return value, refusal
 	})
@@ -295,7 +285,7 @@ func (t *Tenant) submitAcceptedWith(a platform.App, m platform.Member, s *pb.Sub
 	member, _ := json.Marshal(m)
 	entry := Entry{App: a.Manifest().ID, Kind: "accepted-result", Principal: member, Body: raw, At: now}
 	if t.preparedResult != nil {
-		*t.preparedResult = preparedAccepted{entry: entry, key: s.GetIdempotencyKey(), hash: hash, issues: draft.inputIssues[refusal]}
+		*t.preparedResult = preparedAccepted{entry: entry, key: s.GetIdempotencyKey(), hash: hash, issues: draft.inputIssues[refusal], uploads: t.preparedResult.uploads}
 		return record, refusal
 	}
 	committed, err := t.acceptResult(entry, s.GetIdempotencyKey(), hash)
@@ -451,4 +441,30 @@ func outcomeOf(err *kernel.Error) string {
 		return err.Code.String()
 	}
 	return "ok"
+}
+
+func (t *Tenant) finishPreparedSubmission(m platform.Member, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+	if len(candidate.entry.Body) == 0 {
+		return record, refusal
+	}
+	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+	if err != nil {
+		if err == errAcceptedConflict {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+		}
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
+	}
+	return t.finishCommittedResult(t.app(candidate.entry.App), m, candidate.hash, committed)
+}
+
+func (t *Tenant) submitBackground(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return decideOnImage(t, context.Background(), "submit:background", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+		app := t.app(s.GetAuthority())
+		if app == nil {
+			return nil, unknown()
+		}
+		return t.submitAccepted(app, m, s, now, true)
+	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+		return t.finishPreparedSubmission(m, candidate, record, refusal)
+	})
 }

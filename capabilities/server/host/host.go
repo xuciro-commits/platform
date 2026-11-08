@@ -29,6 +29,7 @@ import (
 
 type Tenant struct {
 	agentEvaluator        platform.AgentEvaluator
+	agentRun              string
 	services              platform.RuntimeCapabilities
 	disabledOwners        map[string]bool
 	systemDefinitions     atomic.Pointer[systemDefinitionProjection]
@@ -47,6 +48,7 @@ type Tenant struct {
 	simulation            bool
 	simulationTrace       func(platform.DecisionTrace)
 	observationWindows    map[string]observationWindowAttempt
+	observationScheduleMu sync.Mutex
 	confirmationReads     statusReadSchedule
 	dispatchReads         statusReadSchedule
 	observationMu         sync.Mutex
@@ -77,11 +79,11 @@ type Tenant struct {
 	knowledge             platform.Glossary
 	index                 *knowledgeindex.Index
 	i18n                  transport.Translator
-	agentRun              string
 	mu                    runtimekernel.Lane
 	laneLastSlow          atomic.Pointer[LaneHold]
 	views                 transport.ViewCache
 	readViews             *transport.ViewCache
+	readMarkings          *readMarkingCache
 	defGen                atomic.Uint64
 	streamMu              sync.Mutex
 	markingMu             sync.Mutex
