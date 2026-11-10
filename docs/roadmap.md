@@ -10,16 +10,56 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 ## 当前批次
 
-当前没有已排期、尚未完成的批次。
+本轮是结构收敛：内核回到 `kernel`、领域只留一套模型、平台开始自举。四段按顺序做，前一段的完成标准成立才进入下一段。收敛期间产品矩阵冻结（[2-product §2.2](2-product.md)）：不新增工具应用与资源类型，只修缺陷。每条完成时 `make check` 通过，K1、K2、K3、K13 的断言不改写（删除纪元前断言除外）。
+
+### 一、棘轮与格式纪元
+
+目标规范：[7-system §7.6–7.7](7-system/README.md)、[7-system/verification §7.8](7-system/verification.md)、[6-domain R9](6-domain/README.md)、[1-enterprise §1.2](1-enterprise.md)。先锁住形状不再变坏，再删掉为不存在的历史保留的路径，让后面要搬的代码变少。
+
+- [ ] G1 形状棘轮：`scripts/check-boundaries.mjs` 增加行数、租户类型字段数、类型断言数、包名与目录名一致四项，基线写入 `scripts/shape-baseline.json`。完成标准：任一项变大时 `make check` 失败；`make check` 仍在 60 秒内。
+- [ ] E1 日志声明纪元 1：租户日志记录纪元，宿主拒绝装载纪元不符的日志；K1 增加纪元断言。开发与演示租户重建。
+- [ ] E2 页面只留格式 4：把产品包中的页面转为格式 4，删除 `format` 0/3 的读取与投影。完成标准：`deploy/packages/*.json` 不含旧格式页面；F 系列中打开产品包页面的用例通过。
+- [ ] E3 删除纪元前记录路径：`work.view` v0、对象草稿内嵌动作迁出、`build.testplan` 缺 `variant` 推断、旧告警迁移、Predicate v1、`apps/history` 与旧 core 种子恢复、`build_transactions_legacy.go`、`data_compat.go`、单体 `manufacturing.json`；逐项核对 `kernel/store/postgres_state_upgrade.go`。完成标准：6-domain 与 7-system 的“纪元前”差距条目删除。
+- [ ] E4 取消特殊租户：删除 `system` 租户的源码与发布记录、`kernel/systemscope`、`services/apps/system`、界面的“平台自身”与只读 Releases 视图；先核对 `cmd/platform-updater` 对 `systemscope` 的依赖并把宿主升级留在 Host Console。完成标准：7-system 现存差距中两处 `kernel/systemscope` 依赖消除。
+
+### 二、内核回到 kernel
+
+目标规范：[7-system §7.2–7.3](7-system/README.md)、[concurrency](7-system/concurrency.md)。完成标准（整段）：`host` 不超过 1.5 万行且没有 `acceptance_*.go`；`kernel` 不导入任何服务；K1、K2、K3、K13（含 `-race`）不改断言通过。
+
+- [ ] N1 核对 `contract/go/kernel`：逐项列出 Receiver、ChangeLog、FactLog、Authorities 在宿主中的实际调用；用到的并入 `kernel`，没用到的删除。
+- [ ] N2 租户类型进 `kernel`：车道、日志、已提交状态、记录存储、读取映像、位置、隔离状态组成一个类型（约 20 个字段）；`host.Tenant` 的其余字段按拥有者移入各服务。
+- [ ] N3 一个拥有者接口：决定、应用、分叉、读取四个方法；替换 6 个可选 `*App` 接口与 38 个 `*Runtime` 接口，删除调用点的类型断言探测。
+- [ ] N4 一个提交入口：`submit` 五层合为一个函数加选项结构；幂等只留映像预检与车道内提交两处；`quarantine` 只留应用不一致与位置不一致两处，其余改为拒绝或运行失败。
+- [ ] N5 接受路径迁入 `kernel`：`host/acceptance_*.go` 中属于接受语义的部分进 `kernel`，属于某类资源的部分进它的服务；`host` 只剩 HTTP、身份、租户装配与后台调度。
+
+### 三、领域模型收敛
+
+目标规范：[6-domain R8](6-domain/README.md)、[7-system §7.2、§7.5.1、§7.7](7-system/README.md)。完成标准（整段）：`platform` 不超过 8 千行且只含 SDK 契约；7-system 的十条依赖差距清零；包名与目录名不一致为 0。
+
+- [ ] U1 动作引擎归位：`platform/ledger.go` 的规则引擎与 `entity.go` 的转换移入 `services/actions`，按动作类型的规则与提交条件表达；`Entity`、`Transition`、`Ledger` 不再是公开类型。
+- [ ] U2 业务事务出平台：`platform/transaction.go` 的 `BusinessTxn`、`TxnPost`、`TxnJournal` 改由产品包的本体与动作表达，平台只留通用的原子编辑集。
+- [ ] U3 页面模型归位：`platform/page_*` 移入 `services/apps`；`platform` 只留页面组件契约的生成入口。
+- [ ] U4 发布路径一张表：record 族与 versioned 族的发布步骤移入拥有它的服务并实现同一组钩子；`services/resources` 只编排，删除 Build 的“兼容公共类型”。
+- [ ] U5 拆散 `build`：`services/resources/authoring` 中各资源类型的编辑移入拥有它的服务；`resources` 只留 RID、项目、文件夹、工作状态、分支、提案。
+- [ ] U6 改名：16 个包改为目录名；内核与服务的公开标识改用术语表的词，`candidate` 只留给发布候选。纯改名，单独成批，不夹带行为改动。
+
+### 四、自举
+
+目标规范：[1-enterprise §1.1](1-enterprise.md)、[2-product R8](2-product.md)、[verification K8](7-system/verification.md)。前三段完成后解除产品矩阵冻结。
+
+- [ ] S1 自举一级：在构建租户里用 Ontology Manager、Workshop、Logic、DevOps 重新产出 heating、hospitality、manufacturing 三线产品包并发布版本，替换手工维护的 JSON。做不出来的地方登记为平台差距，不在 JSON 里绕过。完成标准：`deploy/packages/` 的每个文件都是 DevOps 导出的产品版本。
+- [ ] S2 自举二级：工作项、审批、通知收件箱、监控视图改为系统产品包并随宿主预装，删除对应 Go 与手写前端；K8 改为预装断言。逐个做，每个先在包里做到与现有界面等价再删代码。
 
 ## 条件触发
 
 目标规范见 [6-domain/packages](6-domain/packages.md)。以下能力等待真实需求，不作为本轮待交付工作。
 
 - C12 只在真实需求出现后实现 purge/detach、输出保留、制品 GC、自动升级、维护窗口和多安装实例；默认保留数据、手动升级。
+- C26 第一个客户租户装载前冻结格式纪元：此后任何格式变化只经版本化迁移（[7-system §7.6](7-system/README.md)）。
 
 ## 已知漂移
 
 代码中与规范冲突、尚未排期的小项；顺手修掉即删除。
 
-无。
+- “隔离”一词指三件事：租户数据隔离、租户因不一致转为只读、函数的隔离计算；规范与界面文案尚未分开命名。
+- [5-experience](5-experience.md) 与 [6-domain/packages §6.26](6-domain/packages.md) 的“存量拆包”路径仍以单体制造包为起点；E3 删除该包后改写为通用的所有权转移。

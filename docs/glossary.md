@@ -76,7 +76,7 @@ Home、Search、Files、Applications、Notifications、Data Connection、Pipelin
 | Proposal | 提案 | 请求把分支合并到 main | 6-domain §6.20 |
 | Working state | 工作状态 | 个人未保存到分支的编辑 | 4-interaction §4.5 |
 | Product | 产品 | 可交付的资源集合 | DevOps |
-| Candidate | 候选 | 产品的待审阅快照 | DevOps |
+| Candidate | 候选 | 产品的待审阅快照；不指内核中未提交的决定 | DevOps |
 | Product version | 产品版本 | 不可变的已发布候选 | DevOps |
 | Test plan | 测试计划 | 发布前运行的业务测试 | DevOps |
 | Installation | 安装 | 产品版本在租户中的实例 | Marketplace |
@@ -105,7 +105,13 @@ Home、Search、Files、Applications、Notifications、Data Connection、Pipelin
 | Capability matrix | 能力矩阵 | 角色到动作与字段的授权总览 | Control Panel |
 | Independent builder | 独立构建者 | 直接被授予构建者角色、而非经项目角色获得的成员 | 6-domain/security |
 | Support access | 支持授权 | 成员开启的限时支持访问 | Control Panel |
+| Service | 服务 | 拥有一组资源类型或记录、对其写入作出决定的 Go 包 | 7-system §7.2 |
+| Submission | 提交 | 请求一次权威写入的协议消息 | 7-system §7.3 |
+| Decision | 决定 | 服务对一次提交算出的待提交结果（编辑、意图或拒绝），带基准位置 | 7-system/concurrency |
 | Accepted result | 接受结果 | 权威写入的唯一形式 | 7-system §7.3 |
+| Format epoch | 格式纪元 | 宿主保证逐字节可读的存储格式代际；纪元之前的格式不读取 | 7-system §7.6 |
+| Self-hosting | 自举 | 行业应用与内置应用都用平台工具构建并经 Marketplace 安装 | 1-enterprise §1.1 |
+| System product | 系统产品包 | 随宿主预装、交付内置应用的产品 | 2-product R8 |
 | Lane | 车道 | 每个租户唯一的提交序列锁，可取消、按到达排队 | 7-system/concurrency |
 | Read image | 读取映像 | 某个已应用位置上读取所需租户状态的不可变快照 | 7-system/concurrency |
 

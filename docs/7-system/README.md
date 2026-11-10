@@ -52,6 +52,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `cmd/*` | 二进制入口、契约生成器与受控辅助进程；只做装配 | 全部 |
 
 - `contract/go/kernel` 是可移植的协议接收与账本部件，`capabilities/server/kernel` 装配租户、存储与历史投影，属于同一个内核；浏览器客户端由 `@platform/api` 单独命名。协议包名和已有历史映像不随目录整理改名。
+- 租户的提交序列是 `kernel` 的一个类型，只持有车道、日志、已提交状态、记录存储、读取映像、位置与隔离状态。每个服务经同一个拥有者接口（决定、应用、分叉、读取）向它注册自己的状态；`host` 不持有服务状态，也不实现接受路径的任何一步（接受路径散在装配层时，每个调用点都会各自补一遍校验）。
 - 服务之间的调用面在被调服务的 `api.go` 中声明为接口；装配在 `host` 完成。
 - 产品包中的行业逻辑不进入任何 Go 包。
 
@@ -70,7 +71,9 @@ POST /v1/submissions
 ```
 
 - 拥有者只返回编辑与意图，不直接写存储；应用发生在提交之后、且只从已提交字节解码。
-- 应用结果与提交字节不一致时隔离租户，停止写入，等待运维处理。
+- 提交入口只有一个函数，可选项经一个选项结构传入；不按参数组合分出多层入口。
+- 幂等只判定两处：读取映像上的预检（重复请求不必排队）与车道内的提交（权威）。接受路径的其余步骤信任这两处的结论，不再查询。
+- 应用结果与提交字节不一致时隔离租户，停止写入，等待运维处理。隔离只在 7.5 列出的两种不一致上触发；其他错误是拒绝或运行失败，不隔离租户。
 - 副作用至少一次投递，以请求键幂等。
 - 标记定义及成员、团队许可保存为控制面的接受映像；读取成员时构造当前许可，记录读取和对象集共用标记检查。管道运行结果由宿主内部接受，外部不能提交运行结果来伪造解除记录。
 - 外部源与管道在保留输入制品中固定本批更新行和删除行，再逐行形成接受结果；中断恢复使用同一制品及幂等键，不重新推断该批删除范围。数据源删除只撤销本来源的存在事实，对象是否归档和属性回退经统一合并规则决定。
@@ -94,42 +97,34 @@ POST /v1/submissions
 | 隔离 | 应用不一致、位置不一致时租户进入隔离，只读 |
 | 后台工作 | 同步、构建、自动化、投递经工作队列；每项有运行记录与重试 |
 | 隔离计算 | 函数在独立进程的 WASM 中执行：内存页上限、并发槽、模块大小上限、摘要校验；构建在无网络容器中 |
-| AI 网关 | 预留额度 → 车道外调用供应商 → 结算；预留、用量与 Agent 步骤经同一映像候选校验，推断许可由部署环境指定 |
+| AI 网关 | 预留额度 → 车道外调用供应商 → 结算；预留、用量与 Agent 步骤经同一基准校验，推断许可由部署环境指定 |
 | 可观测 | 运行中心的日志、追踪、指标与健康；审计独立；详见 [observability](observability.md) |
 
 ## 7.5.1 发布路径
 
-候选构建经 `Build.PrepareReleaseAssets` 产出安装计划，现分七族：
+产品链路只保留一条事实源：`build.product` 保存项目 Contents 与依赖，候选由 release preview/save 冻结；`build.productversion` 保存候选引用、内容哈希与 `PackageDescriptor` 版本字节。Marketplace 的目录从这些版本合并，导入文件也只接受产品版本；安装使用受管项目接受结果。`PackageDescriptor` 不是第二个产品定义。
 
-产品链路只保留一条事实源：`build.product` 保存项目 Contents 与依赖，候选仍由现有 release preview/save 冻结；`build.productversion` 保存候选引用、内容哈希与 `PackageDescriptor` 版本字节。Marketplace 的目录从这些版本合并，导入文件也只接受产品版本；安装继续使用既有受管项目接受结果。`PackageDescriptor` 格式不变，它不是第二个产品定义。
-
-| 族 | 入口 | 资源类型 | 形态 |
-|---|---|---|---|
-| record | `build_artifacts.go` 的 `prepareReleasePublications` | object、action-type（独立版本，随 object 选择） | 一个 switch，逐类型手写冻结与版本规则 |
-| definition | `build_kinds.go` 的 `definitionKinds` + `prepareDefinitionPublications` | query、property-type、value-type、link-type、interface、object-type-group | 表驱动泛型，新增类型只加一条 |
-| apps | `services/apps/authoring` 的 owner；Build 的 `prepareReleasePublications` 只编排并委托 | page、app | 页面与应用实体、校验、发布字节、历史与安装契约都在 owner；Build 保留跨资源编排与兼容公共类型 |
-| function | `services/functions/authoring` 的 owner；Build 的 `prepareReleasePublications` 只编排并委托 | function | 函数实体、校验、发布版本与安装契约在 owner；Build 保留跨资源编排与兼容公共类型 |
-| integration | `services/data/release_registry.go` 的注册表；Build 的 `PrepareReleaseAssets` 只编排并委托 data owner | connection、listener、source、dataset、mediaset、schedule、pipeline、writeback、observation、matching | data owner 持有实体、校验、提交、发布与安装契约；Build 保留跨族编排与兼容公共类型 |
-| automation | `services/automate/authoring` 的 owner；Build 的 `prepareReleasePublications` 只编排并委托 | flow、alert | Process 与旧告警的实体、校验、提交、迁移、发布字节与安装契约都在 owner；Build 保留跨资源编排与兼容公共类型 |
-| versioned | `prepareAgentReleasePublications`、`prepareTestPlanPublications`、`PrepareCodeReleasePublications`、`prepareTablePublications`、`prepareSampleSetInstallations` | agent、evaluation-set、test-plan、compute、sample-set | 函数骨架相同（盘库存、找草稿、保留字节校验、版本推进），保留与冻结规则各异 |
-
-资源类型、asset kind、发布 schema、安装记录、release 可选性与前端 route/view/label/resource kind 由 `build_resource_metadata.go` 的 descriptor 表统一描述；`AssetKinds`、`draftAssetRef`、`AcceptedPublicationSchemas` 与安装解码从该表派生。`cmd/page-contract` 经 `ResourceMetadata` 生成 `web/packages/build/src/gen/resources.ts`，并校验应用登记的 `opens` 与 descriptor 的 view 一致。
-
-apps、function、integration 与 automation 的发布步骤已并入各自 owner。versioned 族的保留规则各异（agent 版本表、evaluation/test-plan 版本前缀、compute 构建摘要、sample-set），共用回调框架会比这些显式函数更难读，故保留现状；新增 versioned 类型在 `prepareReleasePublications` 的调用列表加一项。Confirmation 有补偿与状态，Dispatch 是单向派发，二者语义不同，保持各自状态机。
+- 一张 descriptor 表登记每种资源类型：asset kind、发布 schema、安装记录、release 可选性、拥有它的服务与前端 route/view/label/resource kind。`AssetKinds`、`draftAssetRef`、`AcceptedPublicationSchemas`、安装解码与 `web/packages/build/src/gen/resources.ts` 都从该表派生；`cmd/page-contract` 校验应用登记的 `opens` 与表中的 view 一致。
+- 每种资源类型的发布步骤由拥有它的服务实现同一组钩子：盘点草稿、校验、冻结字节、推进版本、安装契约。保留与冻结规则的差异写在该类型的钩子里（新增资源类型只加一行登记和一组钩子，不改编排）。
+- `services/resources` 只做跨资源编排：按表逐类型调用钩子并汇总安装计划，不认识任何具体资源类型的实体。
+- Confirmation 有补偿与状态，Dispatch 是单向派发，二者语义不同，保持各自状态机。
 
 ## 7.6 协议与版本
 
 - `contract/proto` 是协议的唯一来源；Go 与 TypeScript 类型由它与宿主类型生成（`go run ./cmd/api-types` 生成 `web/packages/api/src/gen/host.ts`），生成文件不手改。
 - `web/packages/app/src/pageui/manifest.ts` 手写，是页面组件契约的唯一来源；`capabilities/server/platform/page_compat.json` 与 `web/packages/app/src/pageui/safety.ts` 由 `go run ./cmd/page-contract` 生成，服务器专用规则在 `capabilities/server/platform/page_compat_rules.json`。
 - 每个提交带模式版本头；接受结果格式带版本；存储格式演进只经版本化迁移，迁移本身是接受结果。
+- 格式纪元：宿主声明一个格式纪元，当前为 1；租户日志记录自己的纪元，宿主只打开纪元相同的日志，不同则拒绝装载并提示重建。纪元内的接受结果、记录与发布字节逐字节保留。纪元之前的格式不读取、不迁移、不留解码分支：产品包按当前格式重新产出，开发与演示租户重建（尚无客户租户；为不存在的历史保留解码路径，只会让每条读取都多一组防御分支）。第一个客户租户装载后纪元不再重置，此后格式只经迁移演进。
 - 错误带错误码与可翻译的英文原因；原因字符串是翻译键。
 
 ## 7.7 代码规范
 
 - 手写文件 ≤ 800 行（Go）/ 600 行（TS）；超出按职责拆分，不按“工具函数”拆。只含字面量的数据文件（各包 `i18n.ts`、`zh-CN.ts`、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`api/src/gen/*.ts`）不计。
 - 生成文件在 `.gitattributes` 标为 generated 且不出文本 diff（要看内容用 `git diff --text`）；纯数据生成物另列在 `.ignore`，不进代码搜索。新增生成物同步这两份清单；只改生成器或其源，不手改生成物。
-- 包名表达职责；同一名字不指两样东西（如 `kernel`、`agents`）。
-- 不留兼容分支，除非存储格式需要（且写明版本）。页面 `format` 0/3 属此类：三个产品包的页面仍以 document 或 documentless 的旧格式交付，且历史接受映像按原字节恢复，退役需要先迁移产品包与已接受映像。
+- 包名表达职责，并等于目录名；同一名字不指两样东西（如 `kernel`、`agents`）。
+- 内核与服务的公开标识只用 [glossary](../glossary.md) 的词：资源、对象、动作、提交、决定、接受结果、服务。写入的拥有者叫服务；“应用”只指 Workshop 模块与 `apps/*` 的内置应用；“候选”只指产品的发布候选。不用 App、Ledger、Entity、Candidate 指代内核概念（规范与代码各说一套词时，每次阅读都要翻译一遍）。
+- 能力是否存在由注册时的类型决定，不在调用点用类型断言探测可选接口；可选参数经选项结构传入，不用可变参数冒充。
+- 不留兼容分支。当前格式纪元内的存储格式演进只经版本化迁移（7.6）；纪元之前的格式没有读取路径。
 - 注释、删除旧路径、新依赖的规则见 AGENTS.md 硬规则。
 
 ## 现存差距
@@ -145,7 +140,17 @@ apps、function、integration 与 automation 的发布步骤已并入各自 owne
 - 依赖差距：`services/objects` → `kernel/acceptedformat`、`kernel/records`、`services/apps/pages`、`services/security`。
 - 依赖差距：`services/resources` → `kernel/systemscope`、`services/apps/authoring`、`services/automate/authoring`、`services/data`、`services/functions/authoring`、`services/ontology`。
 - 依赖差距：`services/security` → `kernel/records`。
-- `apps/history` 只声明旧 `core.*` 记录形状，供既有接受结果解码与重放；它没有动作、规则、角色或面向用户的新写入路径。启动恢复只为 SQL 状态中已经存在的旧 core 种子补回对应记录，新租户不会生成这些种子。新产品主数据与会计记录由产品包拥有。
+- 内核位置（7.2）：提交序列在 `host` 而不在 `kernel`。`host` 是一个 4.5 万行的包；`host/host.go` 的 `Tenant` 有 112 个字段、约 820 个方法，同时持有车道、日志与全部服务状态；接受路径在 `host/acceptance_*.go` 12 个文件中；`kernel` 顶层只有约 850 行。
+- 三处内核（7.2）：`contract/go/kernel`（Receiver、ChangeLog、FactLog、Authorities）、`kernel` 与 `platform/ledger.go` 的规则引擎各持一部分接受语义；`contract/go/kernel` 在宿主中的实际使用面尚未逐项核对。
+- 提交入口（7.3）：`host/submit.go` 有 `submit → submitHeld → submitAccepted → submitAcceptedVersion → submitAcceptedWith` 五层，末层 11 个参数；幂等在 `committed.Answer`、`ledger.AcceptedFor`、`committed.Refusal` 上重复判定（后两者各约 20 处调用），身份与权威校验同 `Receiver.Receive` 重复；`t.quarantine(` 约 67 处，远多于两种不一致。
+- 服务注册（7.2、7.7）：`platform/app.go` 的 `Runtime` 接口有 30 余个方法并嵌入 8 个接口；另有 38 个 `*Runtime` 接口与 6 个可选 `*App` 接口，经约 390 处类型断言探测；约 200 个函数用可变参数表达可选项。
+- `platform` 不是叶层 SDK（7.2）：约 2.4 万行，含动作规则引擎（`ledger.go`）、页面模型（`page_*`，约 5 千行）与实体—转换—业务事务模型（`entity.go`、`transaction.go`，见 [6-domain 现存差距](../6-domain/README.md#现存差距)）。
+- `services/resources/authoring`（包名 `build`，约 1.35 万行，被 104 个 `host` 文件导入）编辑所有资源类型；`services/actions` 只有约 1200 行，动作执行实际在 `platform` 与 `host`。
+- 发布路径（7.5.1）：record 族（object、action-type）与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）的发布步骤仍手写在 `services/resources/authoring`；definition 族在 `build_kinds.go`；apps、function、integration、automation 已在各自服务，但经 Build 的“兼容公共类型”转接。
+- 包名与目录名不一致 16 处（7.7）：`services/actions`→business、`services/apps`→applications、`services/apps/system/build`→systembuild、`services/automate/runtime`→automation、`services/ai/runtime` 与 `ai/evaluation`→agents、`ai/retrieval` 与 `ai/sources`→knowledge、`ai/gateway`→aigateway、`ai/state`→aistate、`services/data/blobs`→resources、`data/transform`→integrations、`services/functions/runtime`→compute、`services/resources/authoring`→build、`resources/merge`→branches、`services/work/activity`→relations。
+- 内核用词（7.7）：代码以 App、Ledger、Entity、Authority 指代服务与接受语义；candidate 一词在 Go 中约 1200 处，多数指决定而非发布候选。
+- 纪元前路径（7.6、7.7）：日志尚未记录纪元。仍在的解码与迁移：页面 `format` 0/3 的读取与投影、`apps/history` 的旧 `core.*` 记录形状与旧 core 种子恢复、`services/resources/authoring` 的 `build_transactions_legacy.go` 与 `data_compat.go`、`kernel/store/postgres_state_upgrade.go`（待核对）；领域层的见 [6-domain 现存差距](../6-domain/README.md#现存差距)。
+- 特殊租户（[1-enterprise §1.2](../1-enterprise.md)）：`system` 租户的源码与只读发布记录、`kernel/systemscope`、`services/apps/system` 与 `host/system_definitions.go` 仍在；`cmd/platform-updater` 也使用 `systemscope`，删除前须核对宿主升级是否依赖它。
 
 ## 相关
 

@@ -87,7 +87,7 @@ read-when: 改动产品包、Marketplace 安装、升级、卸载、重装、产
 
 ## 6.26 ERP/MES 拆包
 
-`manufacturing.core`、`manufacturing.erp` 和 `manufacturing.mes` 分别安装到受管项目。`application.manufacturing` 的旧版本字节保留，供存量安装核验和重装；新租户选择拆分产品。拆分边界是所有权：
+`manufacturing.core`、`manufacturing.erp` 和 `manufacturing.mes` 分别安装到受管项目；不保留拆分前的单体 `application.manufacturing` 包。拆分边界是所有权：
 
 | 包 | 责任 |
 |---|---|

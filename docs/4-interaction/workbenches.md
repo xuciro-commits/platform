@@ -119,7 +119,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 
 - 侧栏：Products、Releases、Test plans。
 - 产品页面：Contents（从项目选资源，显示依赖闭包）→ 保存的候选 → Versions（从候选冻结语义版本）→ Test plans。
-- Releases：候选表（原型 A）；选中候选打开发布审阅（M18：内容差异、检查、测试计划结果）；“New candidate”在页内组合。保存的候选在 Products 中按 Contents 与依赖冻结为语义版本；Marketplace 只消费这些产品版本。`system` 租户的发布记录只读：保留已有候选审查，不显示 “New candidate”，也不能保存或激活；平台自身维护走静态维护，业务发布在业务租户完成。
+- Releases：候选表（原型 A）；选中候选打开发布审阅（M18：内容差异、检查、测试计划结果）；“New candidate”在页内组合。保存的候选在 Products 中按 Contents 与依赖冻结为语义版本；Marketplace 只消费这些产品版本。
 
 ## Marketplace
 
