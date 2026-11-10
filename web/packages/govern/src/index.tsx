@@ -23,7 +23,6 @@ import { Agents, AgentRuns, AgentMemories, Evaluations } from "./processes";
 import { HostMigrations, HostOverview, HostPromotions, HostTenant } from "./host";
 import { dataLineage } from "./lineage";
 
-import {SystemConsole} from "./system";
 
 const admin = (host: Host) => host.holds("platform", "admin");
 const auditor = (host: Host) => host.holds("platform", "auditor");
@@ -34,7 +33,7 @@ function controlPanelAreas(host: Host): Record<Area, { view: string; title: stri
   return {
     permissions: shown([["permissions", "Roles and permissions", admin(host) || auditor(host)], ["matrix", "Capability matrix", admin(host)], ["protocols", "Protocols", admin(host)]]),
     ai: shown([["ai-playground", "AI playground", !!host.role("ai")], ["ai-usage", "AI usage", !!host.role("ai")], ["ai-configuration", "AI configuration", host.holds("ai", "admin")], ["ai-providers", "Providers and models", host.holds("ai", "admin")]]),
-    settings: shown([["words", "Languages and words", admin(host)], ["app-settings", "App settings", admin(host)], ["credentials", "Credentials", admin(host)], ["integrations", "Connectors", admin(host)], ["self-hosting", "System history", !!host.role("system")]]),
+    settings: shown([["words", "Languages and words", admin(host)], ["app-settings", "App settings", admin(host)], ["credentials", "Credentials", admin(host)], ["integrations", "Connectors", admin(host)]]),
   };
 }
 
@@ -81,14 +80,12 @@ function ControlPanelOverview() {
 function controlPanelViewAllowed(view: string, host: Host): boolean {
   if (view === "account" || view === "control-panel") return true;
   if (view === "members" || view === "member" || view === "permissions" || view === "markings" || view === "marking" || view === "audit") return admin(host) || auditor(host);
-  if (view === "self-hosting") return !!host.role("system");
   if (view === "ai-playground" || view === "ai-usage") return !!host.role("ai") || host.holds("ai", "admin");
   if (view === "ai-configuration" || view === "ai-providers") return host.holds("ai", "admin");
   return admin(host);
 }
 
 const controlPanelViewList: AppView[] = [
-  { id: "self-hosting", title: () => t("System history"), render: () => <SystemConsole /> },
   { id: "credentials", title: () => t("Credentials"), render: () => <Credentials /> },
   { id: "markings", title: () => t("Markings"), render: () => <Markings /> },
   { id: "marking", title: () => t("Marking"), render: params => <MarkingEditor key={params.id} id={params.id ?? "new"} /> },

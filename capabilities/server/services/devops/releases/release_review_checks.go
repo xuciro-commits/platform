@@ -153,10 +153,6 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 			return reply, err
 		}
 	}
-	if context.ActivationDiagnostic != "" {
-		reply.ActivationDiagnostic = context.ActivationDiagnostic
-		return reply, nil
-	}
 	if reply.RunningMatches {
 		err = context.CheckExisting(id, raw)
 	} else {
@@ -175,11 +171,10 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 }
 
 type ReviewContext struct {
-	AI                   func([]platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, error)
-	Extensions           func(platform.ReleaseCandidate) ([]ReleaseExtensionReview, error)
-	Running              func(platform.ReleaseCandidate) (platform.ReleaseCandidate, error)
-	CheckExisting        func(string, []byte) error
-	Prepare              func(platform.ReleaseCandidate, bool) error
-	Upgrade              func(platform.ReleaseCandidate) (*ReleaseUpgradePlan, error)
-	ActivationDiagnostic string
+	AI            func([]platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, error)
+	Extensions    func(platform.ReleaseCandidate) ([]ReleaseExtensionReview, error)
+	Running       func(platform.ReleaseCandidate) (platform.ReleaseCandidate, error)
+	CheckExisting func(string, []byte) error
+	Prepare       func(platform.ReleaseCandidate, bool) error
+	Upgrade       func(platform.ReleaseCandidate) (*ReleaseUpgradePlan, error)
 }

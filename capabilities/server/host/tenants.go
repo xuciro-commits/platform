@@ -6,11 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
-	"platformserver/kernel/systemscope"
 	controlowner "platformserver/services/security/control"
 	"regexp"
 	"slices"
@@ -27,54 +25,14 @@ func (d *Deployment) Tenants(development platform.TenantSpec) []platform.TenantS
 	if err := d.specs.Load(d.TenantsFile, development); err != nil {
 		log.Fatalf("tenants: %v", err)
 	}
-	d.system = d.systemSpec(development)
-	list := d.specs.All()
-	if _, ok := d.specs.Get(systemscope.Tenant); ok {
-		return list
-	}
-	return append(list, d.system)
-}
-
-func (d *Deployment) systemSpec(development platform.TenantSpec) platform.TenantSpec {
-	roles := map[string]string{
-		"platform": controlowner.Admin, "system": "publisher", "build": "builder",
-		platform.AIApp: platform.AIAdmin, platform.AgentApp: platform.AgentAdmin,
-	}
-	seats := []platform.Seat{}
-	if d.HostAdmins != "" {
-		for _, subject := range strings.Split(d.HostAdmins, ",") {
-			subject = strings.TrimSpace(subject)
-			if subject == "" {
-				continue
-			}
-			seats = append(seats, platform.Seat{Subjects: []string{subject}, Member: platform.Member{ID: "operator", Roles: roles}})
-		}
-	}
-	if len(seats) == 0 {
-		for _, seat := range development.Seats {
-			merged := platform.Member{ID: seat.Member.ID, Roles: maps.Clone(seat.Member.Roles)}
-			if merged.Roles == nil {
-				merged.Roles = map[string]string{}
-			}
-			for app, role := range roles {
-				if _, held := merged.Roles[app]; !held {
-					merged.Roles[app] = role
-				}
-			}
-			seats = append(seats, platform.Seat{Subjects: seat.Subjects, Member: merged})
-		}
-	}
-	return platform.TenantSpec{ID: systemscope.Tenant, Name: "Platform", Seats: seats}
+	return d.specs.All()
 }
 
 func (d *Deployment) SeatsFor(id string) []platform.Seat {
 	if d.specs == nil {
 		return nil
 	}
-	spec, found := d.specs.Get(id)
-	if !found && id == systemscope.Tenant {
-		return d.system.Seats
-	}
+	spec, _ := d.specs.Get(id)
 	return spec.Seats
 }
 

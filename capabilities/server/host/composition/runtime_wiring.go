@@ -6,9 +6,6 @@ func bindOwner(app platform.App, roles platform.OwnerBindings) {
 	if owner, ok := app.(platform.AttachedAITraining); ok {
 		owner.AttachAITraining(roles.Training)
 	}
-	if owner, ok := app.(platform.AttachedSystemDefinitions); ok {
-		owner.AttachSystemDefinitions(roles.System)
-	}
 	if owner, ok := app.(platform.AttachedAgent); ok {
 		owner.AttachAgent(roles.Agent)
 	}

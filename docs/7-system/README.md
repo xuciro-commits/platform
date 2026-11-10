@@ -132,13 +132,12 @@ POST /v1/submissions
 - 依赖差距：以下导入违反 7.2 的依赖列，由 `scripts/check-boundaries.mjs` 棘轮检查；新增违规或已消除而未删除的条目都会失败。消除一条就删一条。
 - 依赖差距：`kernel` → `services/security/control`。
 - 依赖差距：`services/ai` → `kernel/store`。
-- 依赖差距：`services/apps` → `kernel/systemscope`。
 - 依赖差距：`services/automate` → `services/ontology`。
 - 依赖差距：`services/data` → `services/ontology`、`kernel/store`。
 - 依赖差距：`services/devops` → `services/data`。
 - 依赖差距：`services/functions` → `services/ai/evaluation`、`services/ontology`、`services/resources/publication`。
 - 依赖差距：`services/objects` → `kernel/acceptedformat`、`kernel/records`、`services/apps/pages`、`services/security`。
-- 依赖差距：`services/resources` → `kernel/systemscope`、`services/apps/authoring`、`services/automate/authoring`、`services/data`、`services/functions/authoring`、`services/ontology`。
+- 依赖差距：`services/resources` → `services/apps/authoring`、`services/automate/authoring`、`services/data`、`services/functions/authoring`、`services/ontology`。
 - 依赖差距：`services/security` → `kernel/records`。
 - 内核位置（7.2）：提交序列在 `host` 而不在 `kernel`。`host` 是一个 4.5 万行的包；`host/host.go` 的 `Tenant` 有 112 个字段、约 820 个方法，同时持有车道、日志与全部服务状态；接受路径在 `host/acceptance_*.go` 12 个文件中；`kernel` 顶层只有约 850 行。
 - 三处内核（7.2）：`contract/go/kernel`（Receiver、ChangeLog、FactLog、Authorities）、`kernel` 与 `platform/ledger.go` 的规则引擎各持一部分接受语义；`contract/go/kernel` 在宿主中的实际使用面尚未逐项核对。
@@ -147,9 +146,8 @@ POST /v1/submissions
 - `platform` 不是叶层 SDK（7.2）：约 2.4 万行，含动作规则引擎（`ledger.go`）、页面模型（`page_*`，约 5 千行）与实体—转换—业务事务模型（`entity.go`、`transaction.go`，见 [6-domain 现存差距](../6-domain/README.md#现存差距)）。
 - `services/resources/authoring`（包名 `build`，约 1.35 万行，被 104 个 `host` 文件导入）编辑所有资源类型；`services/actions` 只有约 1200 行，动作执行实际在 `platform` 与 `host`。
 - 发布路径（7.5.1）：record 族（object、action-type）与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）的发布步骤仍手写在 `services/resources/authoring`；definition 族在 `build_kinds.go`；apps、function、integration、automation 已在各自服务，但经 Build 的“兼容公共类型”转接。
-- 包名与目录名不一致 16 处（7.7）：`services/actions`→business、`services/apps`→applications、`services/apps/system/build`→systembuild、`services/automate/runtime`→automation、`services/ai/runtime` 与 `ai/evaluation`→agents、`ai/retrieval` 与 `ai/sources`→knowledge、`ai/gateway`→aigateway、`ai/state`→aistate、`services/data/blobs`→resources、`data/transform`→integrations、`services/functions/runtime`→compute、`services/resources/authoring`→build、`resources/merge`→branches、`services/work/activity`→relations。
+- 包名与目录名不一致 15 处（7.7）：`services/actions`→business、`services/apps`→applications、`services/automate/runtime`→automation、`services/ai/runtime` 与 `ai/evaluation`→agents、`ai/retrieval` 与 `ai/sources`→knowledge、`ai/gateway`→aigateway、`ai/state`→aistate、`services/data/blobs`→resources、`data/transform`→integrations、`services/functions/runtime`→compute、`services/resources/authoring`→build、`resources/merge`→branches、`services/work/activity`→relations。
 - 内核用词（7.7）：代码以 App、Ledger、Entity、Authority 指代服务与接受语义；candidate 一词在 Go 中约 1200 处，多数指决定而非发布候选。
-- 特殊租户（[1-enterprise §1.2](../1-enterprise.md)）：`system` 租户的源码与只读发布记录、`kernel/systemscope`、`services/apps/system` 与 `host/system_definitions.go` 仍在；`cmd/platform-updater` 也使用 `systemscope`，删除前须核对宿主升级是否依赖它。
 
 ## 相关
 

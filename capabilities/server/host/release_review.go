@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	"fmt"
-	"platformserver/kernel/systemscope"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
@@ -97,9 +96,6 @@ func (t *Tenant) scopedReviewSavedRelease(m platform.Member, id string) (release
 		Upgrade: func(saved platform.ReleaseCandidate) (*releaseowner.ReleaseUpgradePlan, error) {
 			return t.releaseUpgradePlanLocked(saved, m)
 		},
-	}
-	if t.ID == systemscope.Tenant {
-		context.ActivationDiagnostic = systemReleaseActivationDiagnostic
 	}
 	return t.releases.Review(id, context)
 }

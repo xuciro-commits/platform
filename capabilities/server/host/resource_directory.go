@@ -518,3 +518,16 @@ func (h *Host) routesResources(rt *routes) {
 		Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The resource is unavailable"))
 	})
 }
+
+func (h hostView) ManagedDefinition(ref platform.AssetRef) bool {
+	store := h.t.records
+	if h.decision != nil {
+		store = h.decision.records
+	}
+	directory := store.Type(build.ResourceType)
+	if directory == nil {
+		return false
+	}
+	row := directory.Rows().Get(platform.ResourceID(h.t.ID, ref))
+	return row != nil && row.Value.Interface().(build.Resource).ManagedBy != ""
+}

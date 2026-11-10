@@ -541,9 +541,6 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		return err
 	}
 	t.releases.Restore(releases.State{ReleaseRequests: s.ReleaseRequests, ReleaseCandidates: s.ReleaseCandidates, ReleaseApplied: s.ReleaseApplied, ActiveRelease: s.ActiveRelease, Sealed: s.Sealed, ReleaseOrigins: s.ReleaseOrigins})
-	if err := t.restoreSystemDefinitionProjection(); err != nil {
-		return err
-	}
 	for protocol, provider := range s.Bindings {
 		if !t.rebind(protocol, provider) {
 			return fmt.Errorf("tenant %s: %s is not a provider of %s", t.ID, provider, protocol)

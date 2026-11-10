@@ -16,7 +16,7 @@ type BuildHost interface {
 	ProjectApprovals(string) int
 	CheckResourceSchema(string, *SchemaVersion) *kernel.Error
 	TransactionRuntime(BusinessRuntimeContext) TransactionExecutor
-	SystemDefinitionReadOnly(AssetRef) bool
+	ManagedDefinition(AssetRef) bool
 	Action(schema string) (app string, a Action, ok bool)
 	Automation(parent Caller, app string) Caller
 	BindInterfaceQuery(NamedQuery, ...EntityInfo) (NamedQuery, error)

@@ -367,7 +367,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     chosen.current = { id, from: activeRoute && routeToHash(activeRoute) };
     select(id);
   };
-  const tenantLabel = (tenant: { id: string; name?: string }) => tenant.id === "system" ? t("The platform itself") : tenant.name || tenant.id;
+  const tenantLabel = (tenant: { id: string; name?: string }) => tenant.name || tenant.id;
   const tenantOptions = me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant.id}`, label: tenantLabel(tenant) })) : [];
   const identityOptions = !signedIn ? identities.filter((i) => i.tenant === me!.tenantId).map((i) => ({ id: `as:${i.token}`, label: `${i.member} · ${Object.entries(i.roles).map(([a, r]) => `${a} ${r}`).join(", ")}` })) : [];
   const sessionOptions = [...tenantOptions, ...identityOptions];

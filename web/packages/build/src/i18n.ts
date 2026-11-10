@@ -3195,13 +3195,6 @@ register("zh-CN", {
   "Candidate saved. Activate it to publish the application.": "候选已保存。还需激活，应用才会发布。",
   "Release activated.": "发布已激活。",
   "Evaluation started.": "评测已启动。",
-  "System self-hosting is frozen. Existing release records are read-only; new candidates cannot be saved or activated. Maintain the platform itself through static maintenance. To publish a business application, switch to a business workspace using the account menu.": "系统自举已冻结。现有发布记录只读，不能新建、保存或激活候选。平台自身请通过静态维护更新；发布业务应用请从账号菜单切换到业务工作区。",
-  "System release records are read-only. No candidate can be saved or activated here.": "系统发布记录只读；这里不能保存或激活候选。",
-  "Review only": "仅供审查",
-  "This candidate is retained for review only; it is not an active release.": "此候选仅供审查，不是活跃发布。",
-  "System self-hosting is frozen; release records are read-only. Publish business applications in a business workspace.": "系统自举已冻结；发布记录只读。业务应用请在业务工作区发布。",
-  "System self-hosting is frozen; this candidate is a retained review record and cannot be activated. Publish business applications in a business workspace.": "系统自举已冻结；此候选仅作为审查记录保留，不能激活。业务应用请在业务工作区发布。",
-  "Open self-hosting": "打开系统自举",
 });
 
 register("zh-CN", {
@@ -3651,7 +3644,6 @@ register("zh-CN", {
   "Automations that run when records change; logic flows for branching work; the runs of both.": "记录变化时运行的自动化；用于分支工作的逻辑流程；以及两者的运行记录。",
   "See what changed, review what a release would do and activate it; look back at the history.": "查看变更、审查一次发布会做什么并激活；回顾历史。",
   "Changes": "变更",
-  "Release history": "发布历史",
   "The applications under design: each project owns its object types, module, automations and functions, and releases them together.": "设计中的应用：每个项目拥有自己的对象类型、模块、自动化与函数，并一起发布。",
   "Project": "项目",
   "The object type could not be loaded.": "无法加载对象类型。",

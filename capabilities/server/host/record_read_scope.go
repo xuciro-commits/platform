@@ -41,9 +41,6 @@ func (t *Tenant) scopeSource() *Tenant {
 func (t *Tenant) beginRecordRead(ctx context.Context) {
 	t.readScope = &recordReadScope{ctx: ctx}
 	t.openRecordRead(ctx)
-	if t.readError() == nil && !t.quarantined() {
-		t.readScope.err = t.applySystemDefinitionProjection()
-	}
 }
 
 func (t *Tenant) enableCurrentReadScopes() {

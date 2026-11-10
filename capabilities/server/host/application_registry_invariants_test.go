@@ -5,14 +5,13 @@ import (
 	"testing"
 
 	"platformserver/host/composition"
-	"platformserver/kernel/systemscope"
 	"platformserver/platform"
 )
 
 func TestInvariantApplicationRegistryMatchesBuiltinManifests(t *testing.T) {
 	actual := map[string]string{}
 	manifests := map[string]platform.Manifest{}
-	for _, app := range composition.BuiltinApps(systemscope.Tenant, nil) {
+	for _, app := range composition.BuiltinApps("workspace") {
 		manifest := app.Manifest()
 		if manifest.ID == "" || manifest.Title == "" {
 			t.Fatalf("built-in app %T has an empty manifest identity", app)

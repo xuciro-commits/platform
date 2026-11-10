@@ -18,7 +18,6 @@ import (
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	"platformserver/services/security/idp"
-	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -30,7 +29,6 @@ type Deployment struct {
 	IdentityProxy                     string
 	HostAdmins                        string
 	TenantsFile, TemplatesDir         string
-	system                            platform.TenantSpec
 	Release                           int
 	ReleaseDigest                     string
 	specs                             *controlowner.Specs
@@ -160,18 +158,7 @@ func (d *Deployment) lightweightState() (Journals, platform.FileStore, *idp.Loca
 }
 
 func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string, tenants []*Tenant, restored map[string]int64, fresh map[string]bool) error {
-	ordered := slices.Clone(tenants)
-	slices.SortStableFunc(ordered, func(a, b *Tenant) int {
-		if a.ID == "system" && b.ID != "system" {
-			return -1
-		}
-		if b.ID == "system" && a.ID != "system" {
-			return 1
-		}
-		return 0
-	})
-	(&Host{}).bindSystemDefinitions(ordered)
-	for _, t := range ordered {
+	for _, t := range tenants {
 		t.Store = j
 		recoveryStarted := time.Now().UTC()
 		var statePosition int64

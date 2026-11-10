@@ -166,7 +166,6 @@ func ResolveComposition(modules []CapabilityModule, selected map[string]string) 
 
 type OwnerBindings struct {
 	Training  AITrainingHost
-	System    SystemDefinitionHost
 	Agent     AgentHost
 	Console   ConsoleHost
 	Build     BuildHost

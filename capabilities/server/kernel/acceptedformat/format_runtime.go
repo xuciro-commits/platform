@@ -10,7 +10,6 @@ import (
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	persistence "platformserver/kernel/store"
-	"platformserver/kernel/systemscope"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 	"slices"
@@ -265,19 +264,6 @@ func DecodeOperationClaim(raw []byte) (OperationClaim, error) {
 func (r Work) ChangePlan() ChangePlan {
 	return ChangePlan{At: r.At, Changes: r.Changes, States: r.States,
 		Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 3}
-}
-
-func SystemDefinitionInstallation(schema string, image json.RawMessage) (json.RawMessage, error) {
-	if schema != systemscope.SchemaActivate && schema != systemscope.SchemaFinished && schema != systemscope.SchemaRollback {
-		return nil, nil
-	}
-	var saved struct {
-		Installation json.RawMessage `json:"installation"`
-	}
-	if err := json.Unmarshal(image, &saved); err != nil {
-		return nil, err
-	}
-	return saved.Installation, nil
 }
 
 type Composite struct {

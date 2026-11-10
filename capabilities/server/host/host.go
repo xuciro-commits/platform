@@ -32,8 +32,6 @@ type Tenant struct {
 	agentRun              string
 	services              platform.RuntimeCapabilities
 	disabledOwners        map[string]bool
-	systemDefinitions     atomic.Pointer[systemDefinitionProjection]
-	systemDefinitionState systemDefinitionState
 	installingSet         bool
 	currentReadScopes     bool
 	readScope             *recordReadScope

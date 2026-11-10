@@ -58,7 +58,6 @@ func (h hostView) installationDraft() *Tenant {
 func (h hostView) installationView(recordView *records.Store) *Tenant {
 	draft := &Tenant{services: h.t.services, disabledOwners: h.t.disabledOwners, ID: h.t.ID, apps: h.t.apps, appIndex: h.t.appIndex, owner: maps.Clone(h.t.owner),
 		identity: h.t.identity, directory: h.Directory(), records: recordView, definitions: slices.Clone(h.t.definitions), includeArchivedDefinitions: h.t.includeArchivedDefinitions, Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
-	draft.systemDefinitionState.published.Store(h.t.systemDefinitionState.published.Load())
 	return draft
 }
 
@@ -471,7 +470,7 @@ func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
 }
 
 func (h hostView) ownerBindings() platform.OwnerBindings {
-	return platform.OwnerBindings{Training: h, System: h, Agent: h, Console: h, Build: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
+	return platform.OwnerBindings{Training: h, Agent: h, Console: h, Build: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
 }
 func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }
 

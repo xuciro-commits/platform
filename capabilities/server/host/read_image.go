@@ -149,9 +149,6 @@ func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T,
 		if image == nil {
 			break
 		}
-		if source := t.systemDefinitionState.source.Load(); source != nil && source.systemDefinitions.Load() != image.state.systemDefinitionState.published.Load() {
-			break
-		}
 		value, refusal, err := readImageState(t, image.state, ctx, read)
 		if err == nil {
 			return value, refusal
@@ -286,10 +283,6 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.claims.Restore(t.ID, t.claims.Records(t.ID))
 	view.entityIDs = t.services.Kernel.Identity(nil)
 	view.entityIDs.Restore(t.entityIDs.State())
-	view.systemDefinitions.Store(t.systemDefinitions.Load())
-	view.systemDefinitionState.source.Store(t.systemDefinitionState.source.Load())
-	view.systemDefinitionState.published.Store(t.systemDefinitionState.published.Load())
-	view.systemDefinitionState.applied = t.systemDefinitionState.applied
 	view.defGen.Store(t.defGen.Load())
 	view.runIndexGen.Store(t.runIndexGen.Load())
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions

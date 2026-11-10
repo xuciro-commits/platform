@@ -281,7 +281,7 @@ func ValidateCodeAsset(owner platform.App, code []platform.ReleaseAsset, asset p
 	return nil
 }
 
-func NewRegistry(apps []platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error), sharedAssets func(string) []platform.ReleaseAsset, nativeFlow func(platform.App, platform.AssetRef, string) (platform.ReleaseAsset, error), systemUpdate bool) (*platform.AssetRegistry, error) {
+func NewRegistry(apps []platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error), nativeFlow func(platform.App, platform.AssetRef, string) (platform.ReleaseAsset, error)) (*platform.AssetRegistry, error) {
 	registry, err := platform.NewAssetRegistry()
 	if err != nil {
 		return nil, err
@@ -290,12 +290,6 @@ func NewRegistry(apps []platform.App, codeAssets func(platform.App) ([]platform.
 		code, err := codeAssets(app)
 		if err != nil {
 			return nil, err
-		}
-		if systemUpdate {
-			shared := sharedAssets(app.Manifest().ID)
-			code = slices.DeleteFunc(code, func(asset platform.ReleaseAsset) bool {
-				return slices.ContainsFunc(shared, func(original platform.ReleaseAsset) bool { return original.Ref == asset.Ref })
-			})
 		}
 		lifecycle, _ := app.(platform.AssetLifecycleOwner)
 		owner := runtimeAssetOwner{App: app, lifecycle: lifecycle, code: code, nativeFlow: func(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {

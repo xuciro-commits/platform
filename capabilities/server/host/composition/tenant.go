@@ -2,13 +2,11 @@ package composition
 
 import (
 	platformserver "platformserver/host"
-	"platformserver/kernel/systemscope"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai"
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/ai/sources"
-	"platformserver/services/apps/system"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/devops/packages"
 	"platformserver/services/functions/authoring"
@@ -22,21 +20,18 @@ import (
 	"platformserver/services/work/activity"
 )
 
-func NewTenantWithSourceAndCapabilities(id string, source *platform.SystemSource, services platform.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
+func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
 	services.BindOwner = bindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
 	services.NewTransactionExecutor = business.NewRuntime
-	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, source, seats...)...)
+	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, seats...)...)
 }
 
-func BuiltinApps(id string, source *platform.SystemSource, seats ...platform.Seat) []platform.App {
+func BuiltinApps(id string, seats ...platform.Seat) []platform.App {
 	apps := []platform.App{
 		NewConsole(id, seats...),
 		enterprise.New(id, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id), ai.New(id), work.New(id), monitoring.New(id), automation.New(id), knowledge.New(id),
 		agentowner.New(id), files.New(id), build.New(id),
-	}
-	if id == systemscope.Tenant {
-		apps = append(apps, system.New(id, source))
 	}
 	return apps
 }

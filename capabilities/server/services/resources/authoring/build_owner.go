@@ -7,7 +7,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 
-	"platformserver/kernel/systemscope"
 	"platformserver/platform"
 	appsauthoring "platformserver/services/apps/authoring"
 	automationauthoring "platformserver/services/automate/authoring"
@@ -188,9 +187,6 @@ const (
 
 func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Error {
 	directInstall := directInstallSchemas()
-	if c.Tenant == systemscope.Tenant && slices.Contains(directInstall, schema) {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "System definitions are published through an approved Platform change")
-	}
 	if c.Setting(SettingReleaseProfile) != ProfileProduction || !slices.Contains(directInstall, schema) {
 		return nil
 	}
@@ -330,7 +326,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		return b.submitResource(c, s, now)
 	}
 	if !c.Replaying && !c.Automation {
-		if err := b.checkSystemDefinitionWrite(s); err != nil {
+		if err := b.checkManagedDefinitionWrite(s); err != nil {
 			return nil, err
 		}
 	}

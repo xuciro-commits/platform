@@ -14,13 +14,11 @@ function PreparationReadProblem({ error, retry }: { error: Error; retry: () => v
 }
 
 export function PackageRequirements({ id, version }: { id: string; version: string }) {
-  const { me } = useHost();
   const read = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, !!version);
   if (read.isError) return <PreparationReadProblem error={read.error} retry={() => void read.refetch()} />;
   if (!read.data) return <p role="status" className="text-sm text-muted">{t("Loading application requirements…")}</p>;
   const plan = read.data;
   return <div className="grid gap-2 text-sm" aria-label={t("Before using this product version")}>
-    {me.tenantId === "system" && <p role="status">{t("This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.")}</p>}
     <p className="font-medium">{t("Before using this product version")}</p>
     <p>{t("Applications: {names}", { names: plan.applications.map(app => app.title).join(", ") })}</p>
     <p>{plan.connections.length ? t("Configure {count} external connections in this environment.", { count: plan.connections.length }) : t("No external connection is required.")}</p>
@@ -31,7 +29,6 @@ export function PackageRequirements({ id, version }: { id: string; version: stri
 
 export function PackagePreparation({ id, version }: { id: string; version: string }) {
   const host = useHost(), { client, decide, can } = host, { open } = useWorkspace();
-  const systemScope = host.me.tenantId === "system";
   const query = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, !!version);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [reviewedSetup, setReviewedSetup] = useState(false);
@@ -65,10 +62,6 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
   const setupStatus = (state?: string) => state === "SUBMISSION_STATE_CONFIRMED" ? "Completed" : ["SUBMISSION_STATE_PENDING", "SUBMISSION_STATE_SENDING", "SUBMISSION_STATE_UNKNOWN"].includes(state ?? "") ? "Awaiting confirmation" : state ? "Needs attention" : "Not started";
   return <div className="grid min-w-0 grid-cols-1 gap-5 break-words">
     <PageHeader title={t("Prepare product applications")} description={`${id} · ${version}`} actions={<div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={() => void query.refetch()}>{t("Refresh readiness")}</Button><Button onClick={() => open({ view: "apps" })}>{t("Marketplace")}</Button></div>} />
-    {systemScope && <Panel role="status" className="grid gap-2 text-sm">
-      <p>{t("This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.")}</p>
-      <div><Button onClick={() => open({ view: "self-hosting" })}>{t("Open self-hosting")}</Button></div>
-    </Panel>}
     {query.isError && <PreparationReadProblem error={query.error} retry={() => void query.refetch()} />}
     {query.isLoading && <p role="status">{t("Loading application requirements…")}</p>}
     {error && <Panel role="alert" className="break-words text-danger">{error}</Panel>}

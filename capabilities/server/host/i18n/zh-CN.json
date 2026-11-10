@@ -6,8 +6,6 @@
   "application translations exceed 10000 entries": "应用翻译超过 10000 项",
   "PullerScopes": "拉取者令牌范围",
   "RunnerScopes": "执行者令牌范围",
-  "System self-hosting is frozen; release records are read-only. Publish business applications in a business workspace.": "系统自举已冻结；发布记录只读。业务应用请在业务工作区发布。",
-  "System self-hosting is frozen; this candidate is a retained review record and cannot be activated. Publish business applications in a business workspace.": "系统自举已冻结；此候选仅作为审查记录保留，不能激活。业务应用请在业务工作区发布。",
   "Expressions": "表达式",
   "Application {app} is not active in this tenant.": "应用 {app} 尚未在此租户启用。",
   "Role {role} is not declared by application {app}. Publish its definitions before granting business roles.": "应用 {app} 尚未声明角色 {role}。请先发布其定义，再授予业务角色。",

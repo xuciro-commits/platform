@@ -54,7 +54,6 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	}
 	fresh.Files, fresh.Secrets, fresh.Outbound, fresh.AIClient = old.Files, old.Secrets, old.Outbound, old.AIClient
 	fresh.Store = journal
-	fresh.systemDefinitionState.source.Store(old.systemDefinitionState.source.Load())
 	entries, err := journal.Entries(ctx, id, 0)
 	if err != nil {
 		return fmt.Errorf("read tenant %s from the beginning: %w", id, err)
@@ -98,7 +97,6 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	if err := registry.Replace(id, old, fresh); err != nil {
 		return err
 	}
-	(&Host{}).bindSystemDefinitions(registry.List())
 	if projection != nil {
 		d.runProjection(registry, fresh, projection)
 	}

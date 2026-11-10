@@ -39,10 +39,6 @@ export const registeredManifests = {
     "id": "relations",
     "title": "Relations"
   },
-  "system": {
-    "id": "system",
-    "title": "Platform"
-  },
   "work": {
     "id": "work",
     "title": "Work"

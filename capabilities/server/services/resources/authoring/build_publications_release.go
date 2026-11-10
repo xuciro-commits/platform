@@ -131,7 +131,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 
 var _ platform.ReleaseExecutionOwner = (*Build)(nil)
 
-func (b *Build) checkSystemDefinitionWrite(s *pb.Submission) *kernel.Error {
+func (b *Build) checkManagedDefinitionWrite(s *pb.Submission) *kernel.Error {
 	typ, id := s.GetTarget().GetType(), s.GetTarget().GetId()
 	schema := s.GetSchema().GetName()
 	if schema != typ+".create" && schema != typ+".edit" && schema != typ+".archive" && !slices.Contains(b.AcceptedPublicationSchemas(), schema) {
@@ -154,8 +154,8 @@ func (b *Build) checkSystemDefinitionWrite(s *pb.Submission) *kernel.Error {
 			continue
 		}
 		original, _ := draftAssetRef(typ, name)
-		if b.host.SystemDefinitionReadOnly(original) {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "System definition {name} is read-only in this tenant; edit it in Platform", original.String())
+		if b.host.ManagedDefinition(original) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Managed resources are read-only; create an extension")
 		}
 	}
 	return nil

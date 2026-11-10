@@ -179,7 +179,6 @@ register("zh-CN", {
   "Field": "字段",
   "Every entity type of the apps you hold a role in, with the host's search, sort and pages. Records change only through their apps' actions.": "你有角色的各应用的所有实体类型，带宿主提供的搜索、排序和分页。记录只能通过所属应用的动作修改。",
   "Host unreachable": "无法连接宿主",
-  "The platform itself": "平台自身",
   "Switch tenant": "切换租户",
   "Switch identity": "切换身份",
   "Tenant recovery": "租户恢复",

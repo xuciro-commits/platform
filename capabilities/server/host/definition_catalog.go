@@ -46,7 +46,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, includeArchived bool) ([]platform.Definition, error) {
 	base = slices.Clone(base)
 	base = slices.DeleteFunc(base, func(definition platform.Definition) bool {
-		return !t.ownerActive(definition.Ref.App) || definition.Ref.Kind == platform.AssetAgent && definition.Source != "code" && definition.Source != "system"
+		return !t.ownerActive(definition.Ref.App) || definition.Ref.Kind == platform.AssetAgent && definition.Source != "code"
 	})
 	datasets := map[platform.AssetRef]platform.ReleaseAsset{}
 	for _, owner := range t.liveApps() {
@@ -59,11 +59,6 @@ func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, i
 			return nil, err
 		}
 		for _, asset := range assets {
-			if slices.ContainsFunc(base, func(definition platform.Definition) bool {
-				return definition.Ref == asset.Ref && definition.Source == "system"
-			}) {
-				continue
-			}
 			if asset.Ref.Kind == platform.AssetDataset {
 				datasets[asset.Ref] = asset
 			}

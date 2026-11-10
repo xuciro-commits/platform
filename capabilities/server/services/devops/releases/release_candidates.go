@@ -558,7 +558,7 @@ func (p Planner) Assets(builderAssets []platform.ReleaseAsset, replaceBuilder bo
 	return append(out, builderAssets...), nil
 }
 
-func CodeAssets(app platform.App, allDefinitions []platform.Definition, definitionAsset func(platform.Definition) (platform.ReleaseAsset, error), nativeFlow func(platform.App, string, int) (platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error), shared func(string) []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
+func CodeAssets(app platform.App, allDefinitions []platform.Definition, definitionAsset func(platform.Definition) (platform.ReleaseAsset, error), nativeFlow func(platform.App, string, int) (platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error)) ([]platform.ReleaseAsset, error) {
 	manifest := app.Manifest()
 	definitions := []platform.Definition{}
 	special := map[platform.AssetRef]platform.ReleaseAsset{}
@@ -595,7 +595,7 @@ func CodeAssets(app platform.App, allDefinitions []platform.Definition, definiti
 			return nil, err
 		}
 	}
-	return append(assets, shared(manifest.ID)...), nil
+	return assets, nil
 }
 
 func (p Planner) Candidate(selected []platform.AssetRef, builderAssets []platform.ReleaseAsset, additionalRoots []platform.AssetRef) (platform.ReleaseCandidate, error) {

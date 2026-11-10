@@ -71,7 +71,6 @@ func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 
 func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
 	h := &Host{tenants: tenants, authenticate: authenticate, Now: Now, RuntimeProviders: platform.DefaultRuntimeProviders(security.Standard{}), AuthorizationEngine: security.Standard{}}
-	h.bindSystemDefinitions(tenants)
 	return h
 }
 
@@ -80,7 +79,6 @@ func (h *Host) currentTenants() []*Tenant {
 	if h.tenantsFrom != nil {
 		tenants = h.tenantsFrom()
 	}
-	h.bindSystemDefinitions(tenants)
 	return tenants
 }
 

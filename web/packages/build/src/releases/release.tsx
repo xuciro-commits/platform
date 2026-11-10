@@ -49,8 +49,7 @@ function DiagnosticResource({ kind, name, application, locked, onAdd }: { kind: 
 }
 
 export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], selectionError, embedded = false, candidateID, applicationName }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; selectionError?: string; embedded?: boolean; candidateID?: string; applicationName?: string } = {}) {
-  const { client, me, refresh , holds} = useHost();
-  const systemScope = me.tenantId === "system";
+  const { client, refresh, holds } = useHost();
   const builder = holds("build", "builder");
   const mayRelease = builder || holds("build", "publisher");
   const scope = useApplicationScope(), { id: branchId } = useCurrentBranch();
@@ -276,19 +275,15 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     </div>
   );
   return <div className="grid gap-3">
-    {systemScope && <Panel role="status" className="grid gap-2 text-sm">
-      <p>{t("System self-hosting is frozen. Existing release records are read-only; new candidates cannot be saved or activated. Maintain the platform itself through static maintenance. To publish a business application, switch to a business workspace using the account menu.")}</p>
-      <div><Button onClick={() => open({ view: "self-hosting" })}>{t("Open self-hosting")}</Button></div>
-    </Panel>}
     {!embedded && <PageHeader title={t("Releases")} meta={inventory.isError ? t("Active release is unavailable.") : activeID ? t("Active release {id}", { id: activeID.split(":").at(-1)?.slice(0, 10) ?? activeID }) : t("No active release yet.")}
-      help={t(systemScope ? "System release records are read-only. No candidate can be saved or activated here." : builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
+      help={t(builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
       actions={<>
         {builder && scope && <Button onClick={() => open({ view: "project", params: { id: scope } })}>{t("Back to project")}</Button>}
         <Button size="icon" variant="ghost" aria-label={t("Refresh releases")} title={t("Refresh releases")} disabled={locked} onClick={() => void perform(async () => { await inventory.refetch(); if (savedID) await readSaved(savedID); })}><RefreshCw /></Button>
-        {builder && !systemScope && <Button variant="primary" disabled={locked || composing} onClick={() => setComposing(true)}><Plus />{t("New candidate")}</Button>}
+        {builder && <Button variant="primary" disabled={locked || composing} onClick={() => setComposing(true)}><Plus />{t("New candidate")}</Button>}
       </>} />}
     {scopeUnresolved && !builder && <Panel role="status" className="p-3 text-sm text-muted">{t("This handoff points at a builder draft, which a publisher does not read. Reopen release review from a saved candidate or a named application.")}</Panel>}
-    {inventory.isError ? <Notice tone="danger" role="alert" message={t("Saved releases could not be loaded.")} /> : <DataTable storageKey="releases:candidates" totalRows={inventory.data?.total} manualSorting data={candidates} columns={candidateColumns(activeID, systemScope)} getRowId={candidate => candidate.id} searchable={false} loading={inventory.isLoading}
+    {inventory.isError ? <Notice tone="danger" role="alert" message={t("Saved releases could not be loaded.")} /> : <DataTable storageKey="releases:candidates" totalRows={inventory.data?.total} manualSorting data={candidates} columns={candidateColumns(activeID)} getRowId={candidate => candidate.id} searchable={false} loading={inventory.isLoading}
       height={Math.max(120, Math.min(360, 34 + candidates.length * 36))} rowHeight={36} selectedId={savedReview ? savedID : undefined} onRowClick={candidate => { if (!locked) void loadSaved(candidate.id); }}
       empty={t("No saved candidates yet.")} />}
     {!inventory.isError && inventory.data && inventory.data.total > 20 && <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -296,7 +291,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       <Button size="sm" disabled={locked || offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>{t("Previous")}</Button>
       <Button size="sm" disabled={locked || offset + 20 >= inventory.data.total} onClick={() => setOffset(offset + 20)}>{t("Next")}</Button>
     </div>}
-    {builder && !systemScope && composing && <Card className="grid gap-3 p-3" aria-label={t("New candidate")}>
+    {builder && composing && <Card className="grid gap-3 p-3" aria-label={t("New candidate")}>
       <div className="flex items-center gap-2">
         <h2 className="min-w-0 flex-1 text-sm font-semibold">{t("New candidate")}</h2>
         <ContextHelp title={t("Deliver drafts together")}>{t("Checking an application includes its saved dependency drafts. Review the complete selection and resolve any connection or definition problems before saving; nothing has to be published separately.")}</ContextHelp>
@@ -354,7 +349,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     </Card>}
     {review && <Card className="grid gap-3 p-3" aria-live="polite">
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{savedReview ? t("Saved candidate review") : review.diagnostic ? t("Candidate rejected") : (review.drafts?.length ?? 0) > 1 ? t("Joint candidate ready for review") : t("Candidate ready for review")}</span>
-        {savedReview && <StatusTag status={activeID === savedID ? "active" : systemScope ? "review" : "saved"} registry={{ active: { label: t("Active"), tone: "success" }, review: { label: t("Review only"), tone: "info" }, saved: { label: t("Saved"), tone: "info" } }} />}
+        {savedReview && <StatusTag status={activeID === savedID ? "active" : "saved"} registry={{ active: { label: t("Active"), tone: "success" }, saved: { label: t("Saved"), tone: "info" } }} />}
         {savedReview && origin && <StatusTag status="promoted" registry={{ promoted: { label: t("Promoted from {tenant}", { tenant: origin.from }), tone: "info" } }} />}
         {savedReview && promotedTo.map((target) => <StatusTag key={target.tenant} status={target.active ? "live" : "held"} registry={{ live: { label: t("Active in {tenant}", { tenant: target.tenant }), tone: "success" }, held: { label: t("Awaiting review in {tenant}", { tenant: target.tenant }), tone: "warning" } }} />)}
       </div>
@@ -406,8 +401,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         </ul>
       </div>}
       {!review.diagnostic && review.candidateId && <div className="grid gap-2">
-        {!savedReview && !systemScope && <Button loading={busy} disabled={locked || Boolean(savedID) || !!branchId} title={branchId ? branchRefusal("publish") : undefined} onClick={save}>{t("Save immutable candidate")}</Button>}
-        {savedID && activeID !== savedID && <p className="break-all text-sm" role="status">{t(systemScope ? "This candidate is retained for review only; it is not an active release." : "Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
+        {!savedReview && <Button loading={busy} disabled={locked || Boolean(savedID) || !!branchId} title={branchId ? branchRefusal("publish") : undefined} onClick={save}>{t("Save immutable candidate")}</Button>}
+        {savedID && activeID !== savedID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
         {builder && savedID && functionNames.length > 0 && <div className="grid gap-2 rounded border border-border p-3">
           <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Measured function evaluation")}</h3><ContextHelp title={t("Measured function evaluation")}>{t("Measured evaluations call configured models. Missing or failed reports do not prevent application delivery.")}</ContextHelp></div>
           <label className="grid gap-1 text-xs">{t("Evaluation plan")}
@@ -434,7 +429,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
           {reportID && <p className="break-all text-xs">{t("Evaluation report")}: {reportID}</p>}
         </Panel>}
         {(functionNames.length > 0 || agentNames.length > 0) && !evaluated && <p role="status" className="text-sm text-warning">{t("This candidate is not fully evaluated. Configure models and run evaluations when needed; no quality result is claimed.")}</p>}
-        {savedID && !systemScope && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || activeID === savedID || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
+        {savedID && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || activeID === savedID || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
         {activeID === savedID && savedID && !runningMatches && (function () {
           const application = applications.data?.records.find((item) => joint.some((choice) => choice.kind === "app" && choice.id === item.id));
@@ -446,14 +441,13 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   </div>;
 }
 
-function candidateColumns(activeID: string, systemScope: boolean): ColumnDef<Api.ReleaseSummary>[] {
+function candidateColumns(activeID: string): ColumnDef<Api.ReleaseSummary>[] {
   return [
     { id: "title", header: t("Candidate"), meta: { width: 320 }, accessorFn: candidate => candidate.title, cell: ({ row: { original: candidate } }) => <span className="grid min-w-0"><span className="truncate font-medium">{candidate.title}</span><span className="truncate font-mono text-2xs text-muted">{candidate.id}</span></span> },
     { id: "assets", header: t("Assets"), meta: { width: 90 }, accessorFn: candidate => candidate.assets, cell: ({ getValue }) => <span className="tabular-nums text-muted">{getValue() as number}</span> },
-    { id: "state", header: t("Status"), meta: { width: 220 }, accessorFn: candidate => candidate.id === activeID ? "active" : candidate.from ? "promoted" : systemScope ? "review" : "saved", cell: ({ row: { original: candidate } }) => candidate.id === activeID
+    { id: "state", header: t("Status"), meta: { width: 220 }, accessorFn: candidate => candidate.id === activeID ? "active" : candidate.from ? "promoted" : "saved", cell: ({ row: { original: candidate } }) => candidate.id === activeID
       ? <StatusTag status="active" registry={{ active: { label: t("Active"), tone: "success" } }} />
       : candidate.from ? <StatusTag status="promoted" registry={{ promoted: { label: t("Promoted from {tenant}", { tenant: candidate.from }), tone: "warning" } }} />
-      : systemScope ? <StatusTag status="review" registry={{ review: { label: t("Review only"), tone: "info" } }} />
       : <StatusTag status="saved" registry={{ saved: { label: t("Saved"), tone: "info" } }} /> },
     { id: "promoted", header: t("Promoted to"), meta: { width: 220 }, accessorFn: candidate => (candidate.promotedTo ?? []).map(target => target.tenant).join(", "), cell: ({ row: { original: candidate } }) => <span className="truncate text-xs text-muted">{(candidate.promotedTo ?? []).map(target => `${target.tenant} (${target.active ? t("active") : t("awaiting review")})`).join(", ")}</span> },
   ];

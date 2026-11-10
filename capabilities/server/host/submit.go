@@ -11,7 +11,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
-	"platformserver/kernel/systemscope"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 	"time"
@@ -39,9 +38,6 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 
 	if err := t.admits(m); err != nil {
 		return nil, err
-	}
-	if t.ID != systemscope.Tenant && s.GetAuthority() == systemscope.App {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the system tenant may change system assets")
 	}
 	if t.quarantined() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}

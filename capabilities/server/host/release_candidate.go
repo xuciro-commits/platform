@@ -247,7 +247,7 @@ func (t *Tenant) releaseAssetsLocked(assets []platform.ReleaseAsset, replace boo
 	return t.releasePlannerLocked().Assets(assets, replace)
 }
 func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAsset, error) {
-	return releaseowner.CodeAssets(app, t.definitions, t.definitionAsset, t.nativeFlowAsset, t.describeOwnedAsset, t.sharedSystemAssets)
+	return releaseowner.CodeAssets(app, t.definitions, t.definitionAsset, t.nativeFlowAsset, t.describeOwnedAsset)
 }
 func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, member platform.Member) (releaseowner.ReleasePreview, platform.ReleaseCandidate, error) {
 	return t.releasePlannerLocked().Preview(drafts, member)
