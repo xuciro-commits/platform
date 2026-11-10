@@ -40,7 +40,7 @@ type PageCollectionBuilder struct {
 }
 
 func (p Page) collectionBuilderInput(id, owner string, object AssetRef) bool {
-	d := p.inputSchema()
+	d := p.InputSchema
 	sections := p.DataBindings
 	if !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.88") {
 		return false
@@ -68,7 +68,7 @@ func (p Page) collectionBuilderInput(id, owner string, object AssetRef) bool {
 }
 
 func (p Page) checkCollectionBuilderGraph() error {
-	d := p.inputSchema()
+	d := p.InputSchema
 	sections := p.DataBindings
 	c := pageWidgets.Runtime.Query
 	for root := range d.Queries {
@@ -137,72 +137,38 @@ func (p Page) CollectionInputObject(variable string) AssetRef {
 }
 
 func (p Page) collectionInputObject(variable string, seen map[string]bool) AssetRef {
-	if p.Format == 3 || p.Format == 4 {
-		if seen[variable] {
-			return AssetRef{}
-		}
-		seen[variable] = true
-		schema := p.InputSchema
-		v := schema.Variables[variable]
-		if v.Type != "object-set" {
-			return AssetRef{}
-		}
-		if v.Mode == "input" && schema.Interface != nil {
-			for _, port := range schema.Interface.Inputs {
-				if port.Variable == variable && port.Object != nil {
-					return *port.Object
-				}
-			}
-		}
-		if v.Source == nil {
-			return AssetRef{}
-		}
-		if v.Source.Object != nil && v.Mode == "shared" {
-			return *v.Source.Object
-		}
-		if v.Source.Kind == "plan" {
-			return schema.Queries[v.Source.Query].Object
-		}
-		if v.Source.Kind == "query" {
-			for _, binding := range p.DataBindings {
-				if binding.ID == v.Source.Section {
-					if source := binding.Ports["collectionVariable"]; source != "" && source != variable {
-						return p.collectionInputObject(source, seen)
-					}
-					return binding.ObjectRef(p)
-				}
-			}
-		}
-		return AssetRef{}
-	}
-
 	if seen[variable] {
 		return AssetRef{}
 	}
 	seen[variable] = true
-	v := p.DocumentVariables()[variable]
+	schema := p.InputSchema
+	v := schema.Variables[variable]
 	if v.Type != "object-set" {
 		return AssetRef{}
 	}
-	if v.Mode == "input" && p.Document != nil && p.Document.Interface != nil {
-		for _, port := range p.Document.Interface.Inputs {
+	if v.Mode == "input" && schema.Interface != nil {
+		for _, port := range schema.Interface.Inputs {
 			if port.Variable == variable && port.Object != nil {
 				return *port.Object
 			}
 		}
 	}
-	if v.Source != nil {
-		if v.Mode == "shared" && v.Source.Object != nil {
-			return *v.Source.Object
-		}
-		if v.Source.Kind == "plan" && p.Document != nil {
-			return p.Document.Queries[v.Source.Query].Object
-		}
-		if v.Source.Kind == "query" {
-			for _, s := range p.Sections {
-				if s.ID == v.Source.Section && s.CollectionVariable != variable {
-					return p.collectionInputObject(s.CollectionVariable, seen)
+	if v.Source == nil {
+		return AssetRef{}
+	}
+	if v.Source.Object != nil && v.Mode == "shared" {
+		return *v.Source.Object
+	}
+	if v.Source.Kind == "plan" {
+		return schema.Queries[v.Source.Query].Object
+	}
+	if v.Source.Kind == "query" {
+		for _, binding := range p.DataBindings {
+			if binding.ID == v.Source.Section {
+				if source := binding.Ports["collectionVariable"]; source != "" && source != variable {
+					return p.collectionInputObject(source, seen)
 				}
+				return binding.ObjectRef(p)
 			}
 		}
 	}
@@ -246,7 +212,7 @@ func (d PageInputSchema) checkComputeResource(v PageVariable) error {
 
 func (p Page) ComputeResources() map[string]PageComputeResource {
 	out := map[string]PageComputeResource{}
-	for id, v := range p.inputSchema().Variables {
+	for id, v := range p.InputSchema.Variables {
 		if v.Source != nil && v.Source.Kind == "compute" && v.Source.Compute != nil {
 			out[id] = *v.Source.Compute
 		}

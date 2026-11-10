@@ -96,7 +96,7 @@ func (b PageEventBinding) Reads() []string {
 }
 
 func (p Page) checkEvents() error {
-	d := p.inputSchema()
+	d := p.InputSchema
 	events := []PageEventBinding{}
 	overlays := map[string]PageScope{}
 	sources := map[string]bool{}
@@ -272,7 +272,7 @@ func (p Page) RecordVariableObject(variable string) string {
 }
 
 func CheckPageNavigation(source Page, target Page, nav PageNavigation) error {
-	sourceSchema, targetSchema := source.inputSchema(), target.inputSchema()
+	sourceSchema, targetSchema := source.InputSchema, target.InputSchema
 	version := 0
 	inputs, outputs := map[string]PagePort{}, map[string]PagePort{}
 	if targetSchema.Interface != nil {

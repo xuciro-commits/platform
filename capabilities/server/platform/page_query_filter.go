@@ -42,7 +42,7 @@ func (p Page) checkQueryFilter(filter Expr, object EntityInfo, engines ...RuleEn
 		if expression.Ref != "" {
 			if name, ok := strings.CutPrefix(expression.Ref, "root."); ok {
 				name, suffix, _ := strings.Cut(name, "#")
-				variable, exists := p.inputSchema().Variables[name]
+				variable, exists := p.InputSchema.Variables[name]
 				if !exists || !pageNodeID.MatchString(name) {
 					return fmt.Errorf("page query filter parameter is unavailable")
 				}
@@ -147,4 +147,20 @@ func (p Page) checkQueryFilter(filter Expr, object EntityInfo, engines ...RuleEn
 	}
 	_, err := ruleEngineOf(engines).CompileExpr(filter, schema)
 	return err
+}
+
+func (p Page) CheckQueryFilters(lookup func(string) (EntityInfo, bool)) error {
+	for id, query := range p.InputSchema.Queries {
+		if query.Filter == nil {
+			continue
+		}
+		object, ok := lookup(query.Object.Name)
+		if !ok || object.App != query.Object.App {
+			return fmt.Errorf("page query %s object is unavailable", id)
+		}
+		if err := p.checkQueryFilter(*query.Filter, object); err != nil {
+			return fmt.Errorf("page query %s: %w", id, err)
+		}
+	}
+	return nil
 }

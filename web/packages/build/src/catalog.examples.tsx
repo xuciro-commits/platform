@@ -8,12 +8,11 @@ import { ComposedPage } from "@platform/app";
 import { t } from "@platform/ui";
 import { ObjectTypeEditor } from "./ontology/process";
 import { FlowEditor } from "./automate/workflow";
-import { pageTemplates, recordHandlingDraft } from "./workshop/templates";
+import { templateSections } from "./workshop/templates";
 
 export const MasterDetailExample = PageWorkspaceExample;
 export function RecordHandlingExample() {
-  const draft = recordHandlingDraft(sampleObject, "sample", t("Record handling workspace"), ["title", "state", "quantity"], ["catalog.sample.review"], pageTemplates.find((item) => item.id === "build/record-handling")!.summary);
-  const sections = draft.sections.map((section) => ({ ...section, actions: section.actions?.map((name) => ({ app: "catalog", kind: "action", name })) }));
+  const sections = templateSections("build/record-handling", { object: sampleObject, name: "sample", title: t("Record handling workspace"), fields: ["title", "state", "quantity"], actions: ["catalog.sample.review"], description: "" }).map((section) => ({ ...section, actions: section.actions?.map((name) => ({ app: "catalog", kind: "action", name })) }));
   return <CatalogFixture><ComposedPage live={false} page={{ ...samplePage.page, layout: "composed", sections }} /></CatalogFixture>;
 }
 

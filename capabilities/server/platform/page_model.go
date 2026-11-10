@@ -72,16 +72,6 @@ func ModelObject(typ string) AssetRef {
 	return AssetRef{App: app, Kind: AssetObject, Name: typ}
 }
 
-func (s Section) ModelObject(page Page) AssetRef {
-	if model := s.PrimaryModel(); model != nil {
-		return ModelObject(model.Type)
-	}
-	if s.Object.Name != "" {
-		return s.Object
-	}
-	return page.Object
-}
-
 var modelScalarSlots = pageWidgets.Runtime.ModelBinding.FieldSlots
 
 func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) error {
@@ -303,23 +293,7 @@ func (b PageDataBinding) ObjectRef(p Page) AssetRef {
 	return p.Object
 }
 
-func (s Section) PrimaryModel() *ModelBinding { return s.Model }
-
-func (s Section) ModelBindings() []*ModelBinding {
-	if s.Model == nil {
-		return nil
-	}
-	return []*ModelBinding{s.Model}
-}
-
 func (p Page) RecordResourceObject(variable string) AssetRef {
-	if p.Format != 3 && p.Format != 4 {
-		safe, err := p.Safety()
-		if err != nil {
-			return AssetRef{}
-		}
-		return safe.RecordResourceObject(variable)
-	}
 	schema := p.InputSchema
 	v := schema.Variables[variable]
 	if schema.Interface != nil {
@@ -374,7 +348,7 @@ func (p Page) RecordResourceObject(variable string) AssetRef {
 }
 
 func (p Page) WindowVariableInterface(variable string) string {
-	schema := p.inputSchema()
+	schema := p.InputSchema
 	v := schema.Variables[variable]
 	if v.Source != nil && v.Source.Kind == "plan" {
 		return schema.Queries[v.Source.Query].Interface
@@ -418,22 +392,6 @@ func (b PageDataBinding) EffectiveFields(info EntityInfo) []FieldRef {
 		}
 	}
 	return fields
-}
-
-func (s Section) HasRecordOutput(port, variable string) bool {
-	resources := s.RuntimeResources
-	if resources == nil {
-		resources, _ = legacyPageResources(Raw(s), s.Widget)
-	}
-	for _, resource := range resources {
-		if resource.Kind == "record-output" && resource.ID == port && resource.Outputs["record"] == variable {
-			return true
-		}
-		if resource.Kind == "observation" && (port == "row" && resource.Outputs["row"] == variable || port == "asset" && resource.Outputs["asset"] == variable) {
-			return true
-		}
-	}
-	return false
 }
 
 const PageCompositeProfile = "platform.page.v2.111"
@@ -514,11 +472,10 @@ func ActionParameterCompatible(f FieldInfo, p Field) bool {
 	return false
 }
 
-func (s Section) CheckTableEdit(info EntityInfo, action Action) error {
-	if s.InlineEdit == nil {
+func (edit *PageInlineEdit) CheckTableEdit(info EntityInfo, action Action) error {
+	if edit == nil {
 		return nil
 	}
-	edit := s.InlineEdit
 	if edit.Action.App != info.App || edit.Action.Name != info.Type+".edit" || action.Schema != edit.Action.Name || action.Target != info.Type || action.New || action.NeedsApproval || action.Approval != nil || !slices.Contains(info.Standard, action.Schema) || slices.ContainsFunc(action.Payload, func(f Field) bool {
 		return f.Required
 	}) {
@@ -683,25 +640,18 @@ func (p Page) ResolveBindings(lookup func(string) (EntityInfo, bool)) Page {
 }
 
 type Page struct {
-	Format            int                 `json:"format,omitempty"`
-	DataBindings      []PageDataBinding   `json:"dataBindings,omitempty"`
-	ActionTriggers    []PageActionTrigger `json:"actionTriggers,omitempty"`
-	InputSchema       PageInputSchema     `json:"inputSchema,omitzero"`
-	ScopeVisibility   PageScopeVisibility `json:"scopeVisibility,omitzero"`
-	WidgetSpec        PageWidgetSpec      `json:"widgetSpec,omitzero"`
-	retainedVersion   string
-	PresentationWords map[string]string   `json:"presentationWords,omitempty"`
+	Format            int                 `json:"format"`
 	Name              string              `json:"name"`
 	Title             string              `json:"title"`
 	Description       string              `json:"description,omitempty"`
 	Object            AssetRef            `json:"object"`
-	Layout            string              `json:"layout" api:"retained"`
-	ListFields        []string            `json:"listFields" api:"retained"`
-	DetailFields      []string            `json:"detailFields" api:"retained"`
-	Actions           []AssetRef          `json:"actions" api:"retained"`
-	Sections          []Section           `json:"sections,omitempty" api:"retained"`
-	Document          *PageDocument       `json:"document,omitempty" api:"retained"`
-	Selections        []SelectionVariable `json:"selections,omitempty" api:"retained"`
+	DataBindings      []PageDataBinding   `json:"dataBindings"`
+	ActionTriggers    []PageActionTrigger `json:"actionTriggers"`
+	InputSchema       PageInputSchema     `json:"inputSchema"`
+	ScopeVisibility   PageScopeVisibility `json:"scopeVisibility"`
+	WidgetSpec        PageWidgetSpec      `json:"widgetSpec"`
+	PresentationWords map[string]string   `json:"presentationWords,omitempty"`
+	retainedVersion   string
 }
 
 type SelectionVariable struct {
@@ -718,40 +668,4 @@ type PageFacet struct {
 type PageInlineEdit struct {
 	Action AssetRef `json:"action"`
 	Fields []string `json:"fields"`
-}
-
-type Section struct {
-	RuntimeResources     []PageResourceBinding      `json:"-"`
-	RuntimePorts         map[string]string          `json:"-"`
-	LegacyVisual         map[string]json.RawMessage `json:"-"`
-	Model                *ModelBinding              `json:"model,omitempty"`
-	ActionDefaults       []PageActionParameter      `json:"actionDefaults,omitempty"`
-	InlineEdit           *PageInlineEdit            `json:"inlineEdit,omitempty"`
-	Facets               []PageFacet                `json:"facets,omitempty"`
-	FilterSearchVariable string                     `json:"filterSearchVariable,omitempty"`
-	ID                   string                     `json:"id,omitempty"`
-	ConfigVersion        int                        `json:"configVersion,omitempty"`
-	Widget               string                     `json:"widget"`
-	Object               AssetRef                   `json:"object,omitempty"`
-	Selection            string                     `json:"selection,omitempty"`
-	CollectionVariable   string                     `json:"collectionVariable,omitempty"`
-	RecordVariable       string                     `json:"recordVariable,omitempty"`
-	SelectionVariable    string                     `json:"selectionVariable,omitempty"`
-	FilterVariable       string                     `json:"filterVariable,omitempty"`
-	ParentSelection      string                     `json:"parentSelection,omitempty"`
-	Relation             string                     `json:"relation,omitempty"`
-	Query                AssetRef                   `json:"query,omitempty"`
-	Fields               []string                   `json:"fields,omitempty"`
-	Actions              []AssetRef                 `json:"actions,omitzero"`
-	Group                string                     `json:"group,omitempty"`
-	ColumnGroup          string                     `json:"columnGroup,omitempty"`
-	TimeStart            string                     `json:"timeStart,omitempty"`
-	TimeEnd              string                     `json:"timeEnd,omitempty"`
-	TimeLabel            string                     `json:"timeLabel,omitempty"`
-	TimeGroup            string                     `json:"timeGroup,omitempty"`
-	CardLabel            string                     `json:"cardLabel,omitempty"`
-	Measure              string                     `json:"measure,omitempty"`
-	Function             *AssetBinding              `json:"function,omitempty"`
-	Operation            *AssetBinding              `json:"operation,omitempty"`
-	Inputs               map[string]Binding         `json:"inputs,omitempty"`
 }

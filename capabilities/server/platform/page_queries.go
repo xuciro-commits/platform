@@ -8,17 +8,16 @@ import (
 )
 
 type PageQuery struct {
-	Input      string               `json:"input,omitempty"`
-	Direction  string               `json:"direction,omitempty"`
-	ItemOwner  string               `json:"itemOwner,omitempty"`
-	Set        *PageQuerySet        `json:"set,omitempty"`
-	Owner      string               `json:"owner,omitempty"`
-	Title      string               `json:"title,omitempty"`
-	Object     AssetRef             `json:"object"`
-	Interface  string               `json:"interface,omitempty"`
-	Query      *AssetBinding        `json:"query,omitempty"`
-	Filter     *Expr                `json:"filter,omitempty"`
-	Conditions []PageQueryCondition `json:"conditions,omitempty"`
+	Input     string        `json:"input,omitempty"`
+	Direction string        `json:"direction,omitempty"`
+	ItemOwner string        `json:"itemOwner,omitempty"`
+	Set       *PageQuerySet `json:"set,omitempty"`
+	Owner     string        `json:"owner,omitempty"`
+	Title     string        `json:"title,omitempty"`
+	Object    AssetRef      `json:"object"`
+	Interface string        `json:"interface,omitempty"`
+	Query     *AssetBinding `json:"query,omitempty"`
+	Filter    *Expr         `json:"filter,omitempty"`
 
 	Search *PageValue `json:"search,omitempty"`
 	For    *PageValue `json:"for,omitempty"`
@@ -32,21 +31,8 @@ type PageQuerySet struct {
 	Inputs []string `json:"inputs"`
 }
 
-type PageQueryCondition struct {
-	Optional   bool      `json:"optional,omitempty"`
-	AsDateTime bool      `json:"asDateTime,omitempty"`
-	AsDate     bool      `json:"asDate,omitempty"`
-	AsDecimal  bool      `json:"asDecimal,omitempty"`
-	Field      string    `json:"field"`
-	Op         string    `json:"op"`
-	Value      PageValue `json:"value"`
-}
-
 func (q PageQuery) Values() []PageValue {
 	values := []PageValue{}
-	for _, c := range q.Conditions {
-		values = append(values, c.Value)
-	}
 	if q.Search != nil {
 		values = append(values, *q.Search)
 	}
@@ -57,7 +43,7 @@ func (q PageQuery) Values() []PageValue {
 }
 
 func (p Page) checkQueries(inputScope string) error {
-	d := p.inputSchema()
+	d := p.InputSchema
 	sections := p.DataBindings
 	scopes := map[string]PageScope{}
 	for _, scope := range p.ScopeVisibility.Scopes {
@@ -91,13 +77,6 @@ func (p Page) checkQueries(inputScope string) error {
 					if s.ID == v.Source.Section && s.Ports["collectionVariable"] != "" {
 						return true
 					}
-				}
-			}
-		}
-		if v.Expression != nil {
-			for _, arg := range v.Expression.Args {
-				if dependsOnPlan(arg.Variable, seen) {
-					return true
 				}
 			}
 		}
@@ -141,12 +120,12 @@ func (p Page) checkQueries(inputScope string) error {
 		}
 		validSource := q.Object.Check() == nil && q.Object.Kind == AssetObject && q.Interface == ""
 		if q.Interface != "" {
-			validSource = PageUIProfileSupports(d.profileVersion(), c.InterfaceUIProfile) && pageNodeID.MatchString(q.Interface) && q.Object == (AssetRef{}) && q.Query != nil && q.Query.Ref.Kind == AssetQuery && q.Input == "" && q.For == nil && q.Set == nil && q.Direction == "" && q.ItemOwner == "" && len(q.Conditions) == 0 && q.Filter == nil && inputScope != "application"
+			validSource = PageUIProfileSupports(d.profileVersion(), c.InterfaceUIProfile) && pageNodeID.MatchString(q.Interface) && q.Object == (AssetRef{}) && q.Query != nil && q.Query.Ref.Kind == AssetQuery && q.Input == "" && q.For == nil && q.Set == nil && q.Direction == "" && q.ItemOwner == "" && q.Filter == nil && inputScope != "application"
 		}
-		if !pageNodeID.MatchString(id) || len(q.Title) > 1024 || !validSource || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Conditions) > c.MaxConditions || len(q.Sort) > c.MaxSort {
+		if !pageNodeID.MatchString(id) || len(q.Title) > 1024 || !validSource || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Sort) > c.MaxSort {
 			return fmt.Errorf("page query %s has an invalid identity, object or budget", id)
 		}
-		if q.Filter != nil && (q.Filter.Kind != "boolean" || len(q.Conditions) > 0) {
+		if q.Filter != nil && q.Filter.Kind != "boolean" {
 			return fmt.Errorf("page query %s needs one boolean Expr filter", id)
 		}
 		if q.Input != "" {
@@ -194,23 +173,6 @@ func (p Page) checkQueries(inputScope string) error {
 		}
 		if q.For != nil && q.Query == nil {
 			return fmt.Errorf("page query %s parent input requires a named query", id)
-		}
-		for _, term := range q.Conditions {
-			if (term.Optional || term.AsDecimal || term.Op == "in" || term.Op == "not in") && !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.30") {
-				return fmt.Errorf("optional/set query conditions require v2.30")
-			}
-			if term.AsDateTime && (!PageUIProfileSupports(d.profileVersion(), pageWidgets.Runtime.DateInput.DateTimeRequiredUIProfile) || term.AsDate || term.AsDecimal || term.Value.Variable == "" || d.Variables[term.Value.Variable].Type != "string") {
-				return fmt.Errorf("datetime condition needs its profile and exclusive string binding")
-			}
-			if term.AsDate && (!PageUIProfileSupports(d.profileVersion(), pageWidgets.Runtime.DateInput.RequiredUIProfile) || term.AsDecimal || term.Value.Variable == "" || d.Variables[term.Value.Variable].Type != "string") {
-				return fmt.Errorf("date text condition needs its profile and exclusive string binding")
-			}
-			if term.AsDecimal && (term.Value.Variable == "" || d.Variables[term.Value.Variable].Type != "string") {
-				return fmt.Errorf("decimal text condition needs a string variable")
-			}
-			if !pageNodeID.MatchString(term.Field) || !slices.Contains(c.Operators, term.Op) {
-				return fmt.Errorf("page query %s has an invalid condition", id)
-			}
 		}
 		for _, field := range q.Sort {
 			if !pageNodeID.MatchString(strings.TrimPrefix(field, "-")) {
@@ -305,7 +267,7 @@ func (p Page) checkQueries(inputScope string) error {
 
 func (p Page) QueryReferences() []AssetRef {
 	refs := []AssetRef{}
-	for _, q := range p.inputSchema().Queries {
+	for _, q := range p.InputSchema.Queries {
 		if q.Object.Name != "" {
 			refs = append(refs, q.Object)
 		}
@@ -313,7 +275,7 @@ func (p Page) QueryReferences() []AssetRef {
 			refs = append(refs, q.Query.Ref)
 		}
 	}
-	for _, v := range p.inputSchema().Variables {
+	for _, v := range p.InputSchema.Variables {
 		if v.Source != nil && v.Source.Object != nil {
 			refs = append(refs, *v.Source.Object)
 		}
@@ -321,40 +283,9 @@ func (p Page) QueryReferences() []AssetRef {
 	return refs
 }
 
-func (p Page) DocumentVariables() map[string]PageVariable {
-	if p.Format == 3 || p.Format == 4 {
-		return p.InputSchema.Variables
-	}
-	if p.Document == nil {
-		return nil
-	}
-	return p.Document.Variables
-}
+func (p Page) DocumentVariables() map[string]PageVariable { return p.InputSchema.Variables }
 
-func (p Page) WindowVariableObject(id string) string {
-	if p.Format == 3 || p.Format == 4 {
-		return p.CollectionInputObject(id).Name
-	}
-
-	v := p.DocumentVariables()[id]
-	if v.Source == nil {
-		return ""
-	}
-	if v.Mode == "shared" && v.Source.Object != nil {
-		return v.Source.Object.Name
-	}
-	if v.Source.Kind == "plan" && p.Document != nil {
-		return p.Document.Queries[v.Source.Query].Object.Name
-	}
-	if v.Source.Kind == "query" {
-		for _, s := range p.Sections {
-			if s.ID == v.Source.Section && s.PrimaryModel() != nil {
-				return s.PrimaryModel().Type
-			}
-		}
-	}
-	return ""
-}
+func (p Page) WindowVariableObject(id string) string { return p.CollectionInputObject(id).Name }
 
 func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition, engines ...RuleEngine) error {
 	if q.Interface != "" {
@@ -370,7 +301,7 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 	}
 	valueType := func(v PageValue) string {
 		if v.Variable != "" {
-			return p.inputSchema().Variables[v.Variable].Type
+			return p.InputSchema.Variables[v.Variable].Type
 		}
 		if typ := pageLiteralType(v.Literal); typ != "" {
 			return typ
@@ -404,25 +335,6 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 			return typ == "string"
 		}
 		return false
-	}
-	for _, term := range q.Conditions {
-		field, ok := fieldType(term.Field)
-		compatible := checkValue(field, term.Value)
-		if term.AsDate {
-			compatible = valueType(term.Value) == "string" && field.Type == "date" && !term.AsDecimal && !term.AsDateTime
-		}
-		if term.AsDateTime {
-			compatible = valueType(term.Value) == "string" && field.Type == "datetime" && !term.AsDate && !term.AsDecimal
-		}
-		if term.AsDecimal {
-			compatible = valueType(term.Value) == "string" && slices.Contains([]string{"integer", "decimal"}, field.Type) && !term.AsDate && !term.AsDateTime
-		}
-		if term.Op == "in" || term.Op == "not in" {
-			compatible = valueType(term.Value) == "string-set" && slices.Contains([]string{"text", "choice"}, field.Type)
-		}
-		if !ok || !compatible || term.Op == "like" && !slices.Contains([]string{"text", "choice"}, field.Type) || slices.Contains([]string{"boolean", "reference"}, field.Type) && term.Op != "=" && term.Op != "!=" {
-			return fmt.Errorf("query condition field or value type is unavailable")
-		}
 	}
 	if q.Search != nil && valueType(*q.Search) != "string" {
 		return fmt.Errorf("query search requires text")
@@ -485,7 +397,7 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 }
 
 func (p Page) recordContextQueryInput(query, variable string) bool {
-	d := p.inputSchema()
+	d := p.InputSchema
 	sections := p.DataBindings
 	q := d.Queries[query]
 	v := d.Variables[variable]
@@ -523,7 +435,7 @@ func (p Page) recordContextQueryInput(query, variable string) bool {
 }
 
 func (p Page) variableDependsOnQuery(variable, target string) bool {
-	d := p.inputSchema()
+	d := p.InputSchema
 	sections := p.DataBindings
 	seenVariables, seenQueries := map[string]bool{}, map[string]bool{}
 	var variableDepends func(string) bool
@@ -557,13 +469,6 @@ func (p Page) variableDependsOnQuery(variable, target string) bool {
 		}
 		seenVariables[id] = true
 		v := d.Variables[id]
-		if v.Expression != nil {
-			for _, value := range v.Expression.Args {
-				if variableDepends(value.Variable) {
-					return true
-				}
-			}
-		}
 		if v.Rule != nil {
 			for _, ref := range ConditionRefs(*v.Rule) {
 				if variableDepends(ref) {
@@ -612,7 +517,7 @@ func (p Page) CheckBoundQuery(id string, named *Definition) error {
 }
 
 func (d PageInputSchema) CheckApplicationQueries() error {
-	return (Page{Format: 3, InputSchema: d}).checkQueries("application")
+	return (Page{Format: 4, InputSchema: d}).checkQueries("application")
 }
 
 func frozenPageInterfaceQuery(q PageQuery, lookup map[AssetRef]ReleaseAsset) (*Definition, error) {
@@ -638,7 +543,7 @@ func (p Page) CheckInterfaceQuery(q PageQuery, named *Definition) error {
 	if q.Query == nil || named == nil || named.Ref != q.Query.Ref || named.Version != q.Query.SourceVersion || named.Query == nil || named.Query.Interface != q.Interface || named.Query.InterfaceShape == nil || named.Query.Check() != nil {
 		return fmt.Errorf("interface page query needs its exact published query and frozen shape")
 	}
-	if q.Object != (AssetRef{}) || q.For != nil || q.Input != "" || q.Set != nil || q.Direction != "" || q.ItemOwner != "" || len(q.Conditions) != 0 || q.Filter != nil {
+	if q.Object != (AssetRef{}) || q.For != nil || q.Input != "" || q.Set != nil || q.Direction != "" || q.ItemOwner != "" || q.Filter != nil {
 		return fmt.Errorf("interface page query cannot replace the published source or conditions")
 	}
 	for _, sort := range q.Sort {
@@ -665,7 +570,7 @@ func (p Page) CheckInterfaceQuery(q PageQuery, named *Definition) error {
 	if q.Search != nil {
 		typ := pageLiteralType(q.Search.Literal)
 		if q.Search.Variable != "" {
-			typ = p.inputSchema().Variables[q.Search.Variable].Type
+			typ = p.InputSchema.Variables[q.Search.Variable].Type
 		}
 		if typ != "string" {
 			return fmt.Errorf("interface query search requires text")
@@ -708,11 +613,6 @@ func (p Page) ActiveQueryPlans() map[string]bool {
 				}
 				if v.Source.Compute != nil {
 					visit(v.Source.Compute.RecordVariable)
-				}
-			}
-			if v.Expression != nil {
-				for _, arg := range v.Expression.Args {
-					visit(arg.Variable)
 				}
 			}
 			if v.Rule != nil {

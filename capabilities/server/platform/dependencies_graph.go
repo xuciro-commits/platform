@@ -326,14 +326,6 @@ func (g *DependencyGraph) CheckReadBindings(asset ReleaseAsset) error {
 	for _, compute := range page.ComputeResources() {
 		reads = append(reads, compute.Operation.Ref)
 	}
-	for _, section := range page.Sections {
-		if section.Operation != nil {
-			reads = append(reads, section.Operation.Ref)
-		}
-		if section.Query.Name != "" {
-			reads = append(reads, section.Query)
-		}
-	}
 	for _, ref := range reads {
 		if ref.Kind == AssetAction || ref.Kind == AssetFlow || ref.Kind == AssetFunction || ref.Kind == AssetWriteback || ref.Kind == AssetSource || ref.Kind == AssetPipeline {
 			return fmt.Errorf("%s read binding %s is not pure", asset.Ref, ref)

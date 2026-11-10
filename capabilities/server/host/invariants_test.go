@@ -74,21 +74,18 @@ func TestInvariantK1ObjectViewReleaseReplayPreservesHistory(t *testing.T) {
 	application := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "alphaworkspace"}
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJ1", map[string]any{})
-	live.accept(t, "build.page.create", build.PageType, "LIST1", map[string]any{
-		"name": list.Name, "title": "Alpha list", "object": object.Name, "list": []string{"note"}, "detail": []string{"note"},
-	})
-	detailDraft := map[string]any{
-		"name": detail.Name, "title": "Alpha detail", "object": object.Name,
-		"sections": []build.Section{{ID: "details", Widget: "detail", Fields: []string{"note"}, RecordVariable: "currentObject"}},
-		"document": platform.PageDocument{
-			FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root",
-			Nodes:     map[string]platform.PageLayoutNode{"root": {Kind: "section", Section: "details"}},
-			Variables: map[string]platform.PageVariable{"currentObject": {Scope: "page", Type: "record", Mode: "input"}},
-			Interface: &platform.PageInterface{Version: 1, Inputs: map[string]platform.PagePort{
-				"currentObject": {Variable: "currentObject", Type: "record", Object: &object, Required: true},
-			}},
-		},
+	live.accept(t, "build.page.create", build.PageType, "LIST1", invariantPageDraft(t,
+		platform.ListDetailPage(list.Name, "Alpha list", "", object, []string{"note"}, []string{"note"}, nil)))
+	var detailPage platform.Page
+	if err := json.Unmarshal([]byte(`{"format":4,"name":"alphadetail","title":"Alpha detail","object":{"app":"build","kind":"object","name":"build.alpha"},
+		"dataBindings":[{"id":"details","owner":"root","kind":"record","object":{"app":"build","kind":"object","name":"build.alpha"},"model":{"type":"build.alpha","fields":[{"name":"note"}]},"fields":[{"name":"note"}],"ports":{"recordVariable":"currentObject","selectionMode":"read","widget":"detail"}}],
+		"actionTriggers":[{"id":"page","binding":"page","actions":[]},{"id":"details","owner":"root","binding":"details"}],
+		"inputSchema":{"variables":{"currentObject":{"scope":"page","type":"record","mode":"input"}},"interface":{"version":1,"inputs":{"currentObject":{"variable":"currentObject","type":"record","object":{"app":"build","kind":"object","name":"build.alpha"},"required":true}}}},
+		"scopeVisibility":{"scopes":[{"id":"root","kind":"page","binding":"details","bindings":{"activeVariable":"","enabledWhen":"","valueVariable":"","visibleWhen":""}}],"owners":{"details":"root"},"root":"root"},
+		"widgetSpec":{"format":"platform.page.web.v1","body":{"document":{"formatVersion":2,"nodes":{"root":{"kind":"section","section":"details"}},"root":"root","uiProfile":"`+platform.PageUIProfile()+`"},"sections":[{"binding":"details","id":"details","triggers":["details"]}]}}}`), &detailPage); err != nil {
+		t.Fatal(err)
 	}
+	detailDraft := invariantPageDraft(t, detailPage)
 	live.accept(t, "build.page.create", build.PageType, "DETAIL1", detailDraft)
 	live.accept(t, "build.app.create", build.AppType, "APP1", map[string]any{
 		"name": application.Name, "title": "Alpha workspace", "pages": []string{list.Name, detail.Name}, "resources": []platform.AssetRef{object},
@@ -650,4 +647,18 @@ func TestInvariantResourceDirectoryTracksAcceptedSaveOnce(t *testing.T) {
 	if version := resource().Version; version != 2 {
 		t.Fatalf("one accepted save recorded resource version %d; want 2", version)
 	}
+}
+
+func invariantPageDraft(t *testing.T, page platform.Page) map[string]any {
+	t.Helper()
+	raw, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := map[string]any{}
+	if err := json.Unmarshal(raw, &draft); err != nil {
+		t.Fatal(err)
+	}
+	draft["object"] = page.Object.Name
+	return draft
 }

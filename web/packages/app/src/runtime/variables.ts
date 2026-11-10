@@ -1,5 +1,5 @@
 import type {pageUIManifest} from "../pageui/manifest";
-import {checkRule,evaluateRule,lowerPageRule,pageRuleKind,pageRuleFits,pageRuleSchema,ruleDependencies,type RuleContext,type RuleValue} from "./rule-engine";
+import {checkRule,evaluateRule,pageRuleFits,pageRuleSchema,ruleDependencies,type RuleContext,type RuleValue} from "./rule-engine";
 import {isNumber,isStringSet,isDecimal,parseDecimal,decimalDraft,type ScalarValue} from "./decimal";
 import type {Api} from "@platform/api";
 import type { QueryWindow, RecordReference } from "./Session";
@@ -40,34 +40,34 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if(variable.source?.fields?.length&&!(variable.scope==="application"&&variable.mode==="resource"&&variable.type==="filter"))fail(id,"Only an application filter declares fields");
     if(variable.source?.field&&variable.mode!=="property")fail(id,"Only a property source declares a field");
     if(variable.mode==="aggregate") {
-      const source=variable.source;if(!source||!((variable.type==="decimal"&&source.kind===contract.aggregate.source&&!source.measure)||(variable.type==="number"&&source.kind==="aggregate"&&/^(sum|avg|min|max):[A-Za-z][A-Za-z0-9._:-]{0,79}$/.test(source.measure??""))||(variable.type==="statistics"&&source.kind==="statistics"&&validID.test(source.measure??"")))||!validID.test(source.query??"")||source.section||source.node||source.variable||variable.initial!==undefined||variable.expression)fail(id,"Aggregate needs only a count query source");
+      const source=variable.source;if(!source||!((variable.type==="decimal"&&source.kind===contract.aggregate.source&&!source.measure)||(variable.type==="number"&&source.kind==="aggregate"&&/^(sum|avg|min|max):[A-Za-z][A-Za-z0-9._:-]{0,79}$/.test(source.measure??""))||(variable.type==="statistics"&&source.kind==="statistics"&&validID.test(source.measure??"")))||!validID.test(source.query??"")||source.section||source.node||source.variable||variable.initial!==undefined)fail(id,"Aggregate needs only a count query source");
     } else if(variable.mode==="property") {
-      const source=variable.source,parent=variables[source?.variable??""];if(!source||source.kind!=="property"||!validID.test(source.variable??"")||!validID.test(source.field??"")||!source.object||source.object.kind!=="object"||!source.object.app||!source.object.name||source.section||source.node||source.query||source.fields?.length||variable.expression||variable.initial!==undefined||!["string","boolean","decimal"].includes(variable.type))fail(id,"Property needs a typed record and field source");
+      const source=variable.source,parent=variables[source?.variable??""];if(!source||source.kind!=="property"||!validID.test(source.variable??"")||!validID.test(source.field??"")||!source.object||source.object.kind!=="object"||!source.object.app||!source.object.name||source.section||source.node||source.query||source.fields?.length||variable.initial!==undefined||!["string","boolean","decimal"].includes(variable.type))fail(id,"Property needs a typed record and field source");
       if(parent?.scope==="loop-item"&&(variable.scope!=="loop-item"||parent.owner!==variable.owner)||parent?.scope==="overlay"&&(variable.scope!=="overlay"||parent.owner!==variable.owner))fail(id,"Property source escapes its scope");if(visit(source?.variable??"")!=="record")fail(id,"Property source must be a record");
     } else if (variable.mode === "shared") {
       if(["record","filter","record-set"].includes(variable.type)&&(!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name))fail(id,"Shared record needs an object requirement");
       if(variable.type==="object-set"&&(variable.writable||!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name))fail(id,"Shared window needs a read-only object requirement");
-      if (variable.scope !== "application" || !variable.source || variable.source.kind !== "application" || !validID.test(variable.source.variable ?? "") || variable.source.section || variable.source.node || variable.source.query || variable.initial !== undefined || variable.expression) fail(id,"Shared binding needs only an application variable source");
+      if (variable.scope !== "application" || !variable.source || variable.source.kind !== "application" || !validID.test(variable.source.variable ?? "") || variable.source.section || variable.source.node || variable.source.query || variable.initial !== undefined) fail(id,"Shared binding needs only an application variable source");
      } else if(variable.mode==="resource"&&variable.source?.kind==="compute") {
       const source=variable.source,c=source.compute,parent=variables[c?.recordVariable??""];
-      if(!["number","decimal"].includes(variable.type)||variable.writable||!["page","overlay"].includes(variable.scope)||!c||!validID.test(c.recordVariable)||c.operation.ref.kind!=="compute"||!c.operation.ref.app||!c.operation.ref.name||!c.operation.sourceVersion||!Object.keys(c.inputs).length||Object.keys(c.inputs).length>64||c.outputField&&!validID.test(c.outputField)||source.section||source.node||source.query||source.variable||source.object||source.field||source.fields?.length||source.measure||source.port||variable.expression||variable.initial!==undefined)fail(id,"Compute needs its original typed resource");
+      if(!["number","decimal"].includes(variable.type)||variable.writable||!["page","overlay"].includes(variable.scope)||!c||!validID.test(c.recordVariable)||c.operation.ref.kind!=="compute"||!c.operation.ref.app||!c.operation.ref.name||!c.operation.sourceVersion||!Object.keys(c.inputs).length||Object.keys(c.inputs).length>64||c.outputField&&!validID.test(c.outputField)||source.section||source.node||source.query||source.variable||source.object||source.field||source.fields?.length||source.measure||source.port||variable.initial!==undefined)fail(id,"Compute needs its original typed resource");
       if(parent?.type!=="record"||!(parent.mode==="shared"&&parent.scope==="application"&&parent.source?.kind==="application"&&parent.source.object||parent.mode==="resource"&&parent.source?.kind==="record"&&parent.scope===variable.scope&&parent.owner===variable.owner))fail(id,"Compute input record escapes its owner");
       if(c){if(!Object.values(c.inputs).some(b=>b.source==="subject")||Object.values(c.inputs).some(b=>b.source!=="literal"&&!(b.source==="subject"&&b.path?.length===1&&validID.test(b.path[0]!))))fail(id,"Compute needs a protected scalar input");visit(c.recordVariable);}
     } else if (variable.mode === "resource" && variable.source?.kind === "plan") {
-      if (!["page","overlay","application","loop-item"].includes(variable.scope) || variable.type !== "object-set" || !validID.test(variable.source.query ?? "") || variable.source.section || variable.source.node || variable.source.variable || variable.initial !== undefined || variable.expression) fail(id,"Plan source needs a scoped query window");
+      if (!["page","overlay","application","loop-item"].includes(variable.scope) || variable.type !== "object-set" || !validID.test(variable.source.query ?? "") || variable.source.section || variable.source.node || variable.source.variable || variable.initial !== undefined) fail(id,"Plan source needs a scoped query window");
     } else if(variable.mode === "resource"&&variable.scope==="application"&&["record","filter","record-set"].includes(variable.source?.kind??"")) {
-      if(variable.type!==variable.source?.kind||!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name||variable.source.section||variable.source.node||variable.source.query||variable.source.variable||variable.initial!==undefined||variable.expression)fail(id,"Application record needs only an object source");
+      if(variable.type!==variable.source?.kind||!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name||variable.source.section||variable.source.node||variable.source.query||variable.source.variable||variable.initial!==undefined)fail(id,"Application record needs only an object source");
       if(variable.type==="filter"&&(!variable.source?.fields?.length||variable.source.fields.length>contract.application.maxFilterFields||new Set(variable.source.fields).size!==variable.source.fields.length||variable.source.fields.some((field)=>!validID.test(field))))fail(id,"Application filter needs bounded fields");
     } else if (variable.mode === "resource") {
-      if (!variable.source || variable.source.variable || variable.source.query || variable.scope === "application" || (variable.scope === contract.loop.scope ? variable.type !== "record" || variable.source.kind !== contract.loop.source || variable.source.node !== variable.owner || !!variable.source.section : !validID.test(variable.source.section ?? "") || !!variable.source.node) || variable.expression || variable.initial !== undefined || (variable.scope !== contract.loop.scope && !contract.resources.some((resource) => resource.kind === variable.source!.kind && resource.type === variable.type))) fail(id, "Resource source type mismatch");
+      if (!variable.source || variable.source.variable || variable.source.query || variable.scope === "application" || (variable.scope === contract.loop.scope ? variable.type !== "record" || variable.source.kind !== contract.loop.source || variable.source.node !== variable.owner || !!variable.source.section : !validID.test(variable.source.section ?? "") || !!variable.source.node) || variable.initial !== undefined || (variable.scope !== contract.loop.scope && !contract.resources.some((resource) => resource.kind === variable.source!.kind && resource.type === variable.type))) fail(id, "Resource source type mismatch");
     } else if (variable.mode === "input") {
-      if (variable.scope !== "page" || variable.source || variable.expression || !(contract.interface.valueTypes as readonly string[]).includes(variable.type) || variable.initial !== undefined && valueType(variable.initial, contract) !== variable.type) fail(id, "Invalid page input variable");
+      if (variable.scope !== "page" || variable.source || !(contract.interface.valueTypes as readonly string[]).includes(variable.type) || variable.initial !== undefined && valueType(variable.initial, contract) !== variable.type) fail(id, "Invalid page input variable");
     } else if (variable.mode === "state" || variable.mode === "constant") {
-      if (variable.expression || valueType(variable.initial, contract) !== variable.type) fail(id, "Initial value type mismatch");
+      if (valueType(variable.initial, contract) !== variable.type) fail(id, "Initial value type mismatch");
     } else if (variable.mode === "derived") {
       try{
-        if(variable.initial!==undefined||!!variable.rule===!!variable.expression)throw new Error("One rule expression required");
-        const schema=pageRuleSchema(variables),expr=variable.rule??lowerPageRule(variable.expression!,pageRuleKind(variable.type),schema);
+        if(variable.initial!==undefined||!variable.rule)throw new Error("One rule expression required");
+        const schema=pageRuleSchema(variables),expr=variable.rule;
         for(const ref of ruleDependencies(expr)){
           const dependency=variables[ref];
           if(dependency?.scope===contract.loop.scope&&(variable.scope!==contract.loop.scope||variable.owner!==dependency.owner)||dependency?.scope===contract.overlay.scope&&(variable.scope!==contract.overlay.scope||variable.owner!==dependency.owner))throw new Error("Rule dependency escapes its scope");
@@ -106,7 +106,7 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
       continue;
     }
     try {
-      const schema=pageRuleSchema(variables),expression=variable.rule??lowerPageRule(variable.expression!,pageRuleKind(variable.type),schema);
+      const schema=pageRuleSchema(variables),expression=variable.rule!;
       const context:RuleContext={refs:{},...property?.clock};
       for(const ref of ruleDependencies(expression)){
         const dependency=result[ref],kind=schema.refs[ref]!.kind;
@@ -139,7 +139,7 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
       const evaluated=evaluateRule(expression,schema,context),answer=evaluated.value;
       const value=(variable.type==="decimal"?{kind:"decimal",value:String(answer.value)}:variable.type==="number"?{kind:"number",value:Number(answer.value)}:variable.type==="string-set"?{kind:"string-set",values:answer.value}:answer.value) as Scalar;
       result[id]=valueType(value,contract)===variable.type?{status:"value",value,...(evaluated.reasons?.length?{reasons:evaluated.reasons}:{})}:{status:"error",code:"Variable result limit exceeded"};
-    }catch(error){const issue=(error as {issue?:{code:string}}).issue;result[id]=issue?.code==="pending"?{status:"pending"}:issue?.code==="missing"?{status:"empty"}:{status:"error",code:["parse-decimal","parse-number"].includes(variable.rule?.op??variable.expression?.op??"")?"Invalid numeric value.":error instanceof Error?error.message:"Variable evaluation failed"};}
+    }catch(error){const issue=(error as {issue?:{code:string}}).issue;result[id]=issue?.code==="pending"?{status:"pending"}:issue?.code==="missing"?{status:"empty"}:{status:"error",code:["parse-decimal","parse-number"].includes(variable.rule?.op??"")?"Invalid numeric value.":error instanceof Error?error.message:"Variable evaluation failed"};}
 
   }
   return result;

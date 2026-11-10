@@ -29,7 +29,6 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范：[7-system §7.6–7.7](7-system/README.md)、[7-system/verification §7.8](7-system/verification.md)、[6-domain R9](6-domain/README.md)、[1-enterprise §1.2](1-enterprise.md)。形状已由棘轮锁住（`scripts/shape-baseline.json`，每条完成时把基线调低）；本段删掉为不存在的历史保留的路径，让后面要搬的代码变少。
 
-- [ ] E2 页面只留格式 4：把产品包中的页面转为格式 4，删除 `format` 0/3 的读取与投影。完成标准：`deploy/packages/*.json` 不含旧格式页面；F 系列中打开产品包页面的用例通过。
 - [ ] E3 删除纪元前记录路径：`work.view` v0、对象草稿内嵌动作迁出、`build.testplan` 缺 `variant` 推断、旧告警迁移、Predicate v1、`apps/history` 与旧 core 种子恢复、`build_transactions_legacy.go`、`data_compat.go`、单体 `manufacturing.json`；逐项核对 `kernel/store/postgres_state_upgrade.go`。完成标准：6-domain 与 7-system 的“纪元前”差距条目删除。
 - [ ] E4 取消特殊租户：删除 `system` 租户的源码与发布记录、`kernel/systemscope`、`services/apps/system`、界面的“平台自身”与只读 Releases 视图；先核对 `cmd/platform-updater` 对 `systemscope` 的依赖并把宿主升级留在 Host Console。完成标准：7-system 现存差距中两处 `kernel/systemscope` 依赖消除。
 

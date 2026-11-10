@@ -1,4 +1,4 @@
-import { expect, signIn, test, unique } from "./kit";
+import { expect, listDetailPage, signIn, test, unique } from "./kit";
 import type { ObjectView, PageInputSchema, ReleaseDraftRestore, ReleasePreview } from "../packages/api/src/gen/host";
 import { pageUIManifest } from "../packages/app/src/pageui/manifest";
 
@@ -321,7 +321,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     const badPageTitle = `Invalid orders ${name}`;
     let pageCreated = false, objectEdited = false;
     try {
-      await submit("build.page", badPageID, "create", { name: badPageName, title: badPageTitle, object: `build.${objectName}`, list: ["customer"], detail: ["customer"] }, 0);
+      await submit("build.page", badPageID, "create", { name: badPageName, title: badPageTitle, ...listDetailPage(`build.${objectName}`, ["customer"]) }, 0);
       pageCreated = true;
       await expect.poll(async () => (await read<{ record: { revision: number } }>(`/v1/records/build.page/${badPageID}`)).record.revision).toBe(1);
       await submit("build.object", object.id, "edit", { fields: object.fields.filter(field => field.name !== "amount") }, object.revision);
@@ -389,7 +389,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     try {
       await submit("build.app", appID, "create", { name: unique("dependency"), title: "Unresolved resources", pages: [], resources: [{ app: "build", kind: "object", name: `build.${unique("missing")}` }] }, 0);
       created.push({ type: "build.app", id: appID });
-      await submit("build.page", pageID, "create", { name: unique("dependencyorders"), title: "Dependency review orders", object: `build.${objectName}`, list: ["customer"], detail: ["customer"] }, 0);
+      await submit("build.page", pageID, "create", { name: unique("dependencyorders"), title: "Dependency review orders", ...listDetailPage(`build.${objectName}`, ["customer"]) }, 0);
       created.push({ type: "build.page", id: pageID });
       await page.reload();
       await expect(page.getByRole("button", { name: "Review and save", exact: true })).toBeEnabled();

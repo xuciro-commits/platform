@@ -1,4 +1,4 @@
-import { acceptedClient, expect, signIn, test, unique } from "./kit";
+import { acceptedClient, expect, listDetailPage, signIn, test, unique } from "./kit";
 
 test("F18 an embedded object view keeps application navigation and loads its sections on demand", async ({ page }) => {
   test.setTimeout(120_000);
@@ -23,16 +23,25 @@ test("F18 an embedded object view keeps application navigation and loads its sec
     definition: { name: "close", title: "Close", from: ["open"], to: "" },
   }, 0);
   await client.submit("build.page", pageName, "create", {
-    project, name: pageName, title: "Debug objects", object: objectType,
-    list: ["subject"], detail: ["subject"], actions: [action],
+    project, name: pageName, title: "Debug objects", ...listDetailPage(objectType, ["subject"], [action]),
   }, 0);
+  const objectRef = { app: "build", kind: "object", name: objectType };
   await client.submit("build.page", composedPage, "create", {
-    project, name: composedPage, title: composedTitle, object: objectType,
-    sections: [
-      { id: "records", widget: "table", configVersion: 1, title: "Debug records", fields: ["subject"], selection: "current" },
-      { id: "record", widget: "record-view", configVersion: 1, title: "Debug record", fields: ["subject"], selection: "current" },
+    project, name: composedPage, title: composedTitle, format: 4, object: objectType,
+    dataBindings: [
+      { id: "records", owner: "binding:records", kind: "record", object: objectRef, model: { type: objectType, fields: [{ name: "subject" }] }, fields: [{ name: "subject" }],
+        ports: { parentable: "true", selection: "current", selectionMode: "write", widget: "table" } },
+      { id: "record", owner: "binding:record", kind: "record", object: objectRef, model: { type: objectType, fields: [{ name: "subject" }] }, fields: [{ name: "subject" }],
+        ports: { selection: "current", selectionMode: "read", widget: "record-view" } },
     ],
-    selections: [{ name: "current", object: { app: "build", kind: "object", name: objectType } }],
+    actionTriggers: [{ id: "page", binding: "page", actions: [] }, { id: "records", owner: "binding:records", binding: "records" }, { id: "record", owner: "binding:record", binding: "record" }],
+    inputSchema: { selections: [{ name: "current", object: objectRef }] },
+    scopeVisibility: { root: "page", owners: { records: "binding:records", record: "binding:record" },
+      scopes: [{ id: "page", kind: "page" }, { id: "binding:records", parent: "page", kind: "page", binding: "records" }, { id: "binding:record", parent: "page", kind: "page", binding: "record" }] },
+    widgetSpec: { format: "platform.page.web.v1", body: { document: null, sections: [
+      { binding: "records", configVersion: 1, id: "records", title: "Debug records", triggers: ["records"] },
+      { binding: "record", configVersion: 1, id: "record", title: "Debug record", triggers: ["record"] },
+    ] } },
   }, 0);
   const app = await client.read<{ record: { revision: number; resources?: unknown[]; pages?: string[] } }>(`/v1/records/build.app/${project}`);
   await client.submit("build.app", project, "edit", {

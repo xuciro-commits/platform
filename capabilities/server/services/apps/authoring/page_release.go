@@ -14,56 +14,11 @@ import (
 )
 
 func Descriptor(p Page, app, version string) platform.Page {
-	if p.Format == 3 || p.Format == 4 {
-		owner, _, _ := strings.Cut(p.Object, ".")
-		value := platform.Page{Format: p.Format, Name: p.Name, Title: p.Title, Description: p.Description, Object: platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: p.Object}, DataBindings: p.DataBindings, ActionTriggers: p.ActionTriggers, InputSchema: p.InputSchema, ScopeVisibility: p.ScopeVisibility, WidgetSpec: p.WidgetSpec}
-		raw, _ := json.Marshal(value)
-		_ = json.Unmarshal(raw, &value)
-		return value
-	}
-	appName, _, _ := strings.Cut(p.Object, ".")
-	actions := descriptorActions(p.Actions)
-	out := platform.Page{Name: p.Name, Title: p.Title, Description: p.Description, Layout: "list-detail",
-		Object:     platform.AssetRef{App: appName, Kind: platform.AssetObject, Name: p.Object},
-		ListFields: slices.Clone(p.List), DetailFields: slices.Clone(p.Detail), Actions: actions}
-	out.Selections = slices.Clone(p.Selections)
-	out.Document = p.Document
-	if len(p.Sections) == 0 {
-		return out
-	}
-	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
-	for _, s := range p.Sections {
-		values := map[string]json.RawMessage{}
-		raw, _ := json.Marshal(s)
-		_ = json.Unmarshal(raw, &values)
-		for _, key := range []string{"object", "query", "actions", "function", "inlineEdit"} {
-			delete(values, key)
-		}
-		raw, _ = json.Marshal(values)
-		var section platform.Section
-		_ = json.Unmarshal(raw, &section)
-
-		if s.InlineEdit != nil {
-			section.InlineEdit = &platform.PageInlineEdit{Action: platform.AssetRef{App: strings.SplitN(s.InlineEdit.Action, ".", 2)[0], Kind: platform.AssetAction, Name: s.InlineEdit.Action}, Fields: slices.Clone(s.InlineEdit.Fields)}
-		}
-		if s.Function != nil {
-			section.Function = &platform.AssetBinding{Ref: platform.AssetRef{App: app, Kind: platform.AssetFunction, Name: s.Function.Name},
-				SourceVersion: version + ".function-" + fmt.Sprint(s.Function.Version)}
-		}
-		if s.Object != "" {
-			owner, _, _ := strings.Cut(s.Object, ".")
-			section.Object = platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: s.Object}
-		}
-		if s.Query != "" {
-			owner, name, _ := strings.Cut(s.Query, ".")
-			section.Query = platform.AssetRef{App: owner, Kind: platform.AssetQuery, Name: name}
-		}
-		if s.Actions != nil {
-			section.Actions = descriptorActions(s.Actions)
-		}
-		out.Sections = append(out.Sections, section)
-	}
-	return out
+	owner, _, _ := strings.Cut(p.Object, ".")
+	value := platform.Page{Format: p.Format, Name: p.Name, Title: p.Title, Description: p.Description, Object: platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: p.Object}, DataBindings: p.DataBindings, ActionTriggers: p.ActionTriggers, InputSchema: p.InputSchema, ScopeVisibility: p.ScopeVisibility, WidgetSpec: p.WidgetSpec}
+	raw, _ := json.Marshal(value)
+	_ = json.Unmarshal(raw, &value)
+	return value
 }
 
 func (o *Owner) PageAsset(p Page, sourceVersion string) (platform.ReleaseAsset, error) {
@@ -177,56 +132,6 @@ func (o *Owner) PageFromDescriptor(pageDescriptor platform.Page) (Page, error) {
 		return Page{}, err
 	}
 	original["object"] = platform.Raw(pageDescriptor.Object.Name)
-	if pageDescriptor.Format != 3 && pageDescriptor.Format != 4 {
-		original["list"], original["detail"] = original["listFields"], original["detailFields"]
-		delete(original, "listFields")
-		delete(original, "detailFields")
-		if pageDescriptor.Actions != nil {
-			actions := make([]string, 0, len(pageDescriptor.Actions))
-			for _, action := range pageDescriptor.Actions {
-				actions = append(actions, action.Name)
-			}
-			original["actions"] = platform.Raw(actions)
-		}
-		sections := make([]map[string]json.RawMessage, 0, len(pageDescriptor.Sections))
-		for _, section := range pageDescriptor.Sections {
-			var value map[string]json.RawMessage
-			if err = json.Unmarshal(platform.Raw(section), &value); err != nil {
-				return Page{}, err
-			}
-			if section.Object.Name != "" {
-				value["object"] = platform.Raw(section.Object.Name)
-			} else {
-				delete(value, "object")
-			}
-			if section.Query.Name != "" {
-				value["query"] = platform.Raw(section.Query.App + "." + section.Query.Name)
-			} else {
-				delete(value, "query")
-			}
-			if section.Actions != nil {
-				actions := make([]string, 0, len(section.Actions))
-				for _, action := range section.Actions {
-					actions = append(actions, action.Name)
-				}
-				value["actions"] = platform.Raw(actions)
-			}
-			if section.InlineEdit != nil {
-				value["inlineEdit"] = platform.Raw(InlineEdit{Action: section.InlineEdit.Action.Name, Fields: section.InlineEdit.Fields})
-			}
-			if section.Function != nil {
-				var version int
-				if _, err = fmt.Sscanf(section.Function.SourceVersion, o.env.Version()+".function-%d", &version); err != nil || version < 1 {
-					return Page{}, fmt.Errorf("invalid saved function binding")
-				}
-				value["function"] = platform.Raw(platform.FunctionRef{Name: section.Function.Ref.Name, Version: version})
-			}
-			sections = append(sections, value)
-		}
-		if pageDescriptor.Sections != nil {
-			original["sections"] = platform.Raw(sections)
-		}
-	}
 	var frozen Page
 	if err = json.Unmarshal(platform.Raw(original), &frozen); err != nil {
 		return Page{}, err

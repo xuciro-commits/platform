@@ -149,7 +149,7 @@ func TestInvariantPageModelUsesObjectSetWindow(t *testing.T) {
 	model := &platform.ModelBinding{Type: "build.bulk", Visibility: "mark", Fields: []platform.FieldRef{{Name: "name"}, {Name: "rank"}, {Name: "secret"}}}
 	objectRef := platform.ModelObject(model.Type)
 	page := &platform.Page{
-		Format: 3, Name: "bulkpage", Title: "Bulk", Object: objectRef,
+		Format: 4, Name: "bulkpage", Title: "Bulk", Object: objectRef,
 		DataBindings: []platform.PageDataBinding{{
 			ID: "rows", Kind: "records", Object: objectRef, Model: model,
 			Fields: []platform.FieldRef{{Name: "name"}, {Name: "rank"}},

@@ -310,8 +310,8 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 				if err := json.Unmarshal(body, &page); err != nil {
 					return empty, err
 				}
-				if page.Document != nil {
-					for _, event := range page.Document.Events {
+				for _, trigger := range page.ActionTriggers {
+					for _, event := range trigger.Events {
 						for _, effect := range event.Effects {
 							if effect.Kind == "action" && effect.Action != nil {
 								asset, ok := lookup[effect.Action.Ref]

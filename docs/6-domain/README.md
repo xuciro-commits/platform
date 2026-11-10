@@ -165,5 +165,5 @@ read-when: 新增或改变资源类型、对象模型、动作、函数、自动
 
 - 授权上下文的来源装配仍在宿主，尚未收进 `services/security` 的窄端口；重放继续显式使用 `NativeRules`。
 - 两套模型（R8，`capabilities/server/platform`）：`entity.go` 的 `Entity` / `Transition`、`ledger.go` 的 `Ledger` 与规则引擎、`transaction.go` 的 `BusinessTxn` / `TxnPost` / `TxnJournal` 是与资源—对象—动作并行的模型；动作执行经它们完成，会计形状的类型位于平台（违反 2-product R4）。
-- 纪元前形状（R9）仍被读取或迁移：`work.view` 的 v0 状态（6.5）；对象草稿内嵌动作的迁出（6.7）；`build.testplan` 缺 `variant` 的推断（6.8）；旧告警迁移与 Predicate v1 的读取转换（6.9，`services/automate/authoring`）；页面 `format` 0/3 的读取投影（6.12）；单体 `application.manufacturing` 包（`deploy/packages/manufacturing.json`）。
+- 纪元前形状（R9）仍被读取或迁移：`work.view` 的 v0 状态（6.5）；对象草稿内嵌动作的迁出（6.7）；`build.testplan` 缺 `variant` 的推断（6.8）；旧告警迁移与 Predicate v1 的读取转换（6.9，`services/automate/authoring`）；单体 `application.manufacturing` 包（`deploy/packages/manufacturing.json`）。
 - 内置对象类型（6.10）：工作项、审批与通知由 `services/work` 的 Go 代码定义，不是系统产品包中的本体资源（2-product R8）。

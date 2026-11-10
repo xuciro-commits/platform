@@ -1,4 +1,9 @@
 import type { EntityInfo } from "@platform/ui";
+import { pageDocumentFromSections } from "@platform/app";
+import { encodePage } from "@platform/app/page-contract";
+import { canonicalModelSection } from "@platform/app/model";
+import { pageEditingProfile } from "./page-editor/compatibility";
+import { previewSection, type AuthoringSection } from "./page-editor/draft";
 
 export type TemplateId = "build/list-report" | "build/object-page" | "build/worklist" | "build/wizard" | "build/board" | "build/record-handling" | "build/metrics-overview" | "build/time-planner";
 
@@ -43,88 +48,88 @@ const dateFieldOf = (object: EntityInfo, fields: string[]) =>
 const label = (object: EntityInfo, fields: string[]) => fields.find((name) => object.fields.some((f) => f.name === name && f.type === "text")) ?? fields[0] ?? "id";
 const childFields = (child: EntityInfo) => child.fields.filter((f) => f.type !== "lines").slice(0, 5).map((f) => f.name);
 
-export function templateDraft(id: TemplateId, b: TemplateBindings) {
-  const { object, name, title, fields, actions, description } = b;
-  const base = { name, title, description, object: object.type, list: fields, detail: fields, actions };
-  const sections = ((): Section[] => {
-    switch (id) {
-      case "build/list-report": return [
-        ...filter(object, fields),
-        { widget: "metric", width: "half", measure: "count", title: "Records" },
-        ...(hasStates(object) ? [{ widget: "chart", width: "half", group: "state", measure: "count", title: "By state" } as Section] : []),
-        { widget: "table", width: "full", fields, showSearch: true },
-        { widget: "detail", width: "half", fields },
-        { widget: "actions", width: "half", actions },
-      ];
-      case "build/object-page": return [
-        { widget: "table", width: "full", fields: fields.slice(0, 3), showSearch: true, title: "Choose a record" },
+export function templateSections(id: TemplateId, b: TemplateBindings): Section[] {
+  const { object, title, fields, actions } = b;
+  switch (id) {
+    case "build/list-report": return [
+      ...filter(object, fields),
+      { widget: "metric", width: "half", measure: "count", title: "Records" },
+      ...(hasStates(object) ? [{ widget: "chart", width: "half", group: "state", measure: "count", title: "By state" } as Section] : []),
+      { widget: "table", width: "full", fields, showSearch: true },
+      { widget: "detail", width: "half", fields },
+      { widget: "actions", width: "half", actions },
+    ];
+    case "build/object-page": return [
+      { widget: "table", width: "full", fields: fields.slice(0, 3), showSearch: true, title: "Choose a record" },
+      ...(hasStates(object) ? [{ widget: "status-tracker", width: "full" } as Section] : []),
+      { widget: "detail", width: "half", fields },
+      { widget: "actions", width: "half", actions },
+      ...(b.child ? [{ widget: "table", width: "full", object: b.child.type, relation: b.relation, fields: childFields(b.child), title: b.child.plural ?? b.child.title } as Section,
+        { widget: "form", width: "half", object: b.child.type, relation: b.relation, fields: childFields(b.child), title: "Add" } as Section] : []),
+      { widget: "timeline", width: "half" },
+    ];
+    case "build/worklist": return [
+      ...filter(object, fields),
+      { widget: "table", width: "full", fields, showSearch: true, title: "Queue" },
+      { widget: "detail", width: "half", fields },
+      ...(actions.length ? [{ widget: "inline-action", width: "half", actions: [actions[0]] } as Section, ...(actions.length > 1 ? [{ widget: "actions", width: "half", actions: actions.slice(1) } as Section] : [])] : []),
+      { widget: "tasks", width: "half" },
+      { widget: "approval-inbox", width: "full" },
+    ];
+    case "build/wizard": {
+      const steps = Math.min(3, Math.max(1, Math.ceil(fields.length / 4)));
+      const per = Math.ceil(fields.length / steps);
+      return [
+        { widget: "heading", width: "full", text: title, headingLevel: "h2" },
+        { widget: "text", width: "full", text: "Fill in each step, then submit. Nothing is saved until you do." },
+        ...Array.from({ length: steps }, (_, i): Section[] => [
+          { widget: "heading", width: "full", text: `Step ${i + 1} of ${steps}`, headingLevel: "h3" },
+          { widget: "form", width: "full", fields: fields.slice(i * per, (i + 1) * per) },
+        ]).flat(),
         ...(hasStates(object) ? [{ widget: "status-tracker", width: "full" } as Section] : []),
-        { widget: "detail", width: "half", fields },
-        { widget: "actions", width: "half", actions },
-        ...(b.child ? [{ widget: "table", width: "full", object: b.child.type, relation: b.relation, fields: childFields(b.child), title: b.child.plural ?? b.child.title } as Section,
-          { widget: "form", width: "half", object: b.child.type, relation: b.relation, fields: childFields(b.child), title: "Add" } as Section] : []),
-        { widget: "timeline", width: "half" },
       ];
-      case "build/worklist": return [
-        ...filter(object, fields),
-        { widget: "table", width: "full", fields, showSearch: true, title: "Queue" },
-        { widget: "detail", width: "half", fields },
-        ...(actions.length ? [{ widget: "inline-action", width: "half", actions: [actions[0]] } as Section, ...(actions.length > 1 ? [{ widget: "actions", width: "half", actions: actions.slice(1) } as Section] : [])] : []),
-        { widget: "tasks", width: "half" },
-        { widget: "approval-inbox", width: "full" },
-      ];
-      case "build/wizard": {
-        const steps = Math.min(3, Math.max(1, Math.ceil(fields.length / 4)));
-        const per = Math.ceil(fields.length / steps);
-        return [
-          { widget: "heading", width: "full", text: title, headingLevel: "h2" },
-          { widget: "text", width: "full", text: "Fill in each step, then submit. Nothing is saved until you do." },
-          ...Array.from({ length: steps }, (_, i): Section[] => [
-            { widget: "heading", width: "full", text: `Step ${i + 1} of ${steps}`, headingLevel: "h3" },
-            { widget: "form", width: "full", fields: fields.slice(i * per, (i + 1) * per) },
-          ]).flat(),
-          ...(hasStates(object) ? [{ widget: "status-tracker", width: "full" } as Section] : []),
-        ];
-      }
-      case "build/board": return [
-        { widget: "metric", width: "half", measure: "count", title: "Records" },
-        ...(hasStates(object) ? [{ widget: "chart", width: "half", group: "state", measure: "count", title: "By state" } as Section] : []),
-        { widget: "kanban", width: "full", cardLabel: label(object, fields), fields, actions },
-        { widget: "detail", width: "half", fields },
-        { widget: "actions", width: "half", actions },
-      ];
-      case "build/record-handling": return [
-        ...filter(object, fields),
-        { widget: "table", width: "full", fields }, { widget: "detail", width: "half", fields },
-        { widget: "actions", width: "half", actions }, { widget: "timeline", width: "half" }, { widget: "tasks", width: "half" },
-      ];
-      case "build/metrics-overview": {
-        const measure = measureOf(object, fields);
-        const groups = groupableFields(object, fields).slice(0, 2);
-        return [
-          ...filter(object, fields),
-          { widget: "metric", width: "half", measure: "count", title: "Records" },
-          ...(measure ? [{ widget: "metric", width: "half", measure, title: `Total ${measure.slice(4)}` } as Section] : []),
-          ...groups.map((name) => ({ widget: "chart", width: "half", group: name, measure: "count", title: `By ${name}` } as Section)),
-          { widget: "table", width: "full", fields: fields.slice(0, 5), showSearch: true },
-        ];
-      }
-      case "build/time-planner": {
-        const dateField = dateFieldOf(object, fields);
-        const labelField = label(object, fields);
-        return [
-          ...filter(object, fields),
-          { widget: "metric", width: "half", measure: "count", title: "Records" },
-          ...(dateField ? [{ widget: "record-calendar", width: "full", object: object.type,
-            model: { type: object.type, fields: [{ name: dateField, slot: "recordCalendar.dateField" }, { name: labelField, slot: "recordCalendar.labelField" }] } } as Section] : []),
-          { widget: "table", width: "full", fields: fields.slice(0, 5), showSearch: true },
-        ];
-      }
     }
-  })();
-  return { ...base, sections };
+    case "build/board": return [
+      { widget: "metric", width: "half", measure: "count", title: "Records" },
+      ...(hasStates(object) ? [{ widget: "chart", width: "half", group: "state", measure: "count", title: "By state" } as Section] : []),
+      { widget: "kanban", width: "full", cardLabel: label(object, fields), fields, actions },
+      { widget: "detail", width: "half", fields },
+      { widget: "actions", width: "half", actions },
+    ];
+    case "build/record-handling": return [
+      ...filter(object, fields),
+      { widget: "table", width: "full", fields }, { widget: "detail", width: "half", fields },
+      { widget: "actions", width: "half", actions }, { widget: "timeline", width: "half" }, { widget: "tasks", width: "half" },
+    ];
+    case "build/metrics-overview": {
+      const measure = measureOf(object, fields);
+      const groups = groupableFields(object, fields).slice(0, 2);
+      return [
+        ...filter(object, fields),
+        { widget: "metric", width: "half", measure: "count", title: "Records" },
+        ...(measure ? [{ widget: "metric", width: "half", measure, title: `Total ${measure.slice(4)}` } as Section] : []),
+        ...groups.map((name) => ({ widget: "chart", width: "half", group: name, measure: "count", title: `By ${name}` } as Section)),
+        { widget: "table", width: "full", fields: fields.slice(0, 5), showSearch: true },
+      ];
+    }
+    case "build/time-planner": {
+      const dateField = dateFieldOf(object, fields);
+      const labelField = label(object, fields);
+      return [
+        ...filter(object, fields),
+        { widget: "metric", width: "half", measure: "count", title: "Records" },
+        ...(dateField ? [{ widget: "record-calendar", width: "full", object: object.type,
+          model: { type: object.type, fields: [{ name: dateField, slot: "recordCalendar.dateField" }, { name: labelField, slot: "recordCalendar.labelField" }] } } as Section] : []),
+        { widget: "table", width: "full", fields: fields.slice(0, 5), showSearch: true },
+      ];
+    }
+  }
 }
 
-export function recordHandlingDraft(object: EntityInfo, name: string, title: string, fields: string[], actions: string[], description: string) {
-  return templateDraft("build/record-handling", { object, name, title, fields, actions, description });
+export function templateDraft(id: TemplateId, b: TemplateBindings) {
+  const { object, name, title, description } = b;
+  const lifted = pageDocumentFromSections(templateSections(id, b) as AuthoringSection[]);
+  const document = { ...lifted.document, uiProfile: pageEditingProfile({ sections: lifted.sections, document: lifted.document, selections: [], title, description }) };
+  return { ...encodePage({ name, title, description, object: { app: object.app, kind: "object", name: object.type }, layout: "composed", listFields: [], detailFields: [], actions: [],
+    sections: lifted.sections.map(canonicalModelSection).map(previewSection), document }), object: object.type };
 }

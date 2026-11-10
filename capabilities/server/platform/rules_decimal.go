@@ -122,7 +122,3 @@ func stringsCutMeasure(measure string) (string, string, bool) {
 	op, field, ok := strings.Cut(measure, ":")
 	return op, field, ok && (op == "sum" || op == "avg" || op == "min" || op == "max") && pageNodeID.MatchString(field)
 }
-
-func (d *PageDocument) CheckAggregateScalar(v PageVariable, info EntityInfo) error {
-	return d.inputSchema().CheckAggregateScalar(v, info)
-}

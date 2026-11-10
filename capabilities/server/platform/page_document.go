@@ -6,56 +6,7 @@ import (
 	"regexp"
 )
 
-type PageUnusedWidget struct {
-	Node   string `json:"node"`
-	Parent string `json:"parent"`
-}
-
-type PageDocument struct {
-	UnusedWidgets []PageUnusedWidget `json:"unusedWidgets,omitempty"`
-
-	FormatVersion int                       `json:"formatVersion"`
-	UIProfile     string                    `json:"uiProfile"`
-	Root          string                    `json:"root"`
-	Nodes         map[string]PageLayoutNode `json:"nodes"`
-	Variables     map[string]PageVariable   `json:"variables,omitempty"`
-	Overlays      map[string]PageOverlay    `json:"overlays,omitempty"`
-	Events        []PageEventBinding        `json:"events,omitempty"`
-	Queries       map[string]PageQuery      `json:"queries,omitempty"`
-	Interface     *PageInterface            `json:"interface,omitempty"`
-	Device        string                    `json:"device,omitempty"`
-}
-
-type PageLayoutNode struct {
-	LegacyVisual   map[string]json.RawMessage `json:"-"`
-	Kind           string                     `json:"kind"`
-	Children       []string                   `json:"children,omitempty"`
-	Section        string                     `json:"section,omitempty"`
-	ValueVariable  string                     `json:"valueVariable,omitempty"`
-	ActiveVariable string                     `json:"activeVariable,omitempty"`
-	VisibleWhen    string                     `json:"visibleWhen,omitempty"`
-	EnabledWhen    string                     `json:"enabledWhen,omitempty"`
-	Loop           *PageLoop                  `json:"loop,omitempty"`
-}
-
 var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
-
-func (d *PageDocument) Check(sections []Section) error {
-	if d == nil {
-		return nil
-	}
-	return (Page{Sections: sections, Document: d}).CheckSafety()
-}
-
-func (n *PageLayoutNode) UnmarshalJSON(raw []byte) error {
-	type value PageLayoutNode
-	return RetainPageSection(raw, (*value)(n), &n.LegacyVisual)
-}
-
-func (n PageLayoutNode) MarshalJSON() ([]byte, error) {
-	type value PageLayoutNode
-	return MarshalPageSection(value(n), n.LegacyVisual)
-}
 
 type PageEmbedding struct {
 	ReadOnly         bool                 `json:"readOnly,omitempty"`

@@ -3770,17 +3770,17 @@ export type PackageView = {
 };
 
 export type Page = {
-  format?: number;
-  dataBindings?: PageDataBinding[];
-  actionTriggers?: PageActionTrigger[];
-  inputSchema?: PageInputSchema;
-  scopeVisibility?: PageScopeVisibility;
-  widgetSpec?: PageWidgetSpec;
-  presentationWords?: Record<string, string>;
+  format: number;
   name: string;
   title: string;
   description?: string;
   object: AssetRef;
+  dataBindings: PageDataBinding[];
+  actionTriggers: PageActionTrigger[];
+  inputSchema: PageInputSchema;
+  scopeVisibility: PageScopeVisibility;
+  widgetSpec: PageWidgetSpec;
+  presentationWords?: Record<string, string>;
 };
 
 export type PageActionEffect = {
@@ -3865,11 +3865,6 @@ export type PageEventBinding = {
   source: string;
   event: string;
   effects: PageEffect[];
-};
-
-export type PageExpression = {
-  op: string;
-  args: PageValue[];
 };
 
 export type PageInlineEdit = {
@@ -3963,22 +3958,11 @@ export type PageQuery = {
   interface?: string;
   query?: AssetBinding;
   filter?: Expr;
-  conditions?: PageQueryCondition[];
   search?: PageValue;
   for?: PageValue;
   sort?: string[];
   limit: number;
   offset?: number;
-};
-
-export type PageQueryCondition = {
-  optional?: boolean;
-  asDateTime?: boolean;
-  asDate?: boolean;
-  asDecimal?: boolean;
-  field: string;
-  op: string;
-  value: PageValue;
 };
 
 export type PageQuerySet = {
@@ -4054,7 +4038,6 @@ export type PageVariable = {
   type: string;
   mode: string;
   initial?: unknown;
-  expression?: PageExpression;
   source?: PageResourceSource;
 };
 

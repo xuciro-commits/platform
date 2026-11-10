@@ -90,7 +90,7 @@ func (t *Tenant) registerDefinitions() error {
 		manifest := app.Manifest()
 		for _, page := range manifest.Pages {
 			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetPage, Name: page.Name}
-			if len(page.DataBindings) != 0 || page.Format == 0 {
+			if len(page.DataBindings) != 0 {
 				if err := t.checkSections(page, objectInfo[page.Object.Name]); err != nil {
 					return err
 				}

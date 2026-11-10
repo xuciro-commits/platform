@@ -3,7 +3,6 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -29,59 +28,9 @@ type Page struct {
 	Title           string                       `json:"title" field:"required,search" title:"What people call it" example:"Visits"`
 	Description     string                       `json:"description,omitempty" type:"longtext" help:"What people do on this page"`
 	Object          string                       `json:"object" field:"required" title:"Object it shows" help:"An object this tenant has: one it defined, or an app's own" example:"build.visits"`
-	List            []string                     `json:"list" title:"Fields in the list" help:"The object's field names, in the order the list shows them" api:"retained"`
-	Detail          []string                     `json:"detail" title:"Fields in the detail" help:"The object's field names, in the order one record shows them" api:"retained"`
-	Actions         []string                     `json:"actions,omitempty" title:"Actions it offers" help:"Actions of that object, by their schema" example:"build.visits.close" api:"retained"`
-	Sections        []Section                    `json:"sections,omitempty" field:"aside" title:"What is on the page" api:"retained"`
-	Document        *platform.PageDocument       `json:"document,omitempty" field:"aside" type:"json" title:"Page layout" api:"retained"`
-	Selections      []platform.SelectionVariable `json:"selections,omitempty" field:"aside" title:"Record selections" api:"retained"`
 	State           string                       `json:"state" field:"readonly" choices:"draft,published"`
 	Published       string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
 	Versions        []string                     `json:"versions,omitempty" field:"readonly" type:"lines" title:"Published page contents"`
-}
-
-type InlineEdit struct {
-	Action string   `json:"action"`
-	Fields []string `json:"fields"`
-}
-
-type Section struct {
-	LegacyVisual         map[string]json.RawMessage     `json:"-"`
-	Model                *platform.ModelBinding         `json:"model,omitempty"`
-	ActionDefaults       []platform.PageActionParameter `json:"actionDefaults,omitempty"`
-	InlineEdit           *InlineEdit                    `json:"inlineEdit,omitempty"`
-	Facets               []platform.PageFacet           `json:"facets,omitempty"`
-	FilterSearchVariable string                         `json:"filterSearchVariable,omitempty"`
-	ID                   string                         `json:"id,omitempty"`
-	ConfigVersion        int                            `json:"configVersion,omitempty"`
-	Widget               string                         `json:"widget" field:"required" help:"What it shows; the shared page widget registry defines supported kinds"`
-	Title                string                         `json:"title,omitempty"`
-	Width                string                         `json:"width,omitempty" choices:"full,half"`
-	Object               string                         `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
-	Selection            string                         `json:"selection,omitempty"`
-	CollectionVariable   string                         `json:"collectionVariable,omitempty"`
-	RecordVariable       string                         `json:"recordVariable,omitempty"`
-	SelectionVariable    string                         `json:"selectionVariable,omitempty"`
-	FilterVariable       string                         `json:"filterVariable,omitempty"`
-	ParentSelection      string                         `json:"parentSelection,omitempty"`
-	Relation             string                         `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
-	Query                string                         `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like build.open-visits"`
-	Fields               []string                       `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
-	Actions              []string                       `json:"actions,omitzero" help:"For actions: the schemas it offers; omitted inherits the page, empty forbids section writes"`
-	Group                string                         `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
-	ChartVariant         string                         `json:"chartVariant,omitempty"`
-	Mark                 string                         `json:"mark,omitempty"`
-	ColumnGroup          string                         `json:"columnGroup,omitempty"`
-	TimeStart            string                         `json:"timeStart,omitempty" title:"Start time field"`
-	TimeEnd              string                         `json:"timeEnd,omitempty" title:"End time field"`
-	TimeLabel            string                         `json:"timeLabel,omitempty" title:"Timeline label field"`
-	TimeGroup            string                         `json:"timeGroup,omitempty" title:"Timeline resource field"`
-	CardLabel            string                         `json:"cardLabel,omitempty" title:"Card title field"`
-	Measure              string                         `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
-	Text                 string                         `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
-	Function             *platform.FunctionRef          `json:"function,omitempty" title:"Published AI function"`
-	Operation            *platform.AssetBinding         `json:"operation,omitempty" title:"Published code function" type:"json"`
-	Inputs               map[string]platform.Binding    `json:"inputs,omitempty" type:"json"`
 }
 
 func (o *Owner) PageEntity() platform.Entity {
@@ -149,14 +98,6 @@ func (o *Owner) publishPage(c platform.Caller, record any, _ json.RawMessage, _ 
 			}
 		}
 	}
-	if !c.Replaying && page.Document != nil {
-		if err := Descriptor(*page, o.env.AppID(), o.env.Version()).BindRuleTypes(o.env.Entity); err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		if err := page.Document.NormalizePageRules(c.Rules()); err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-	}
 	next := *page
 	if err := o.RetainPagePublication(&next); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -193,10 +134,9 @@ func (o *Owner) validatePageDocument(page *Page, lookup func(string) (platform.E
 	if err := d.BindRuleTypes(lookup); err != nil {
 		return err
 	}
-	if err := d.InputSchema.NormalizePageRules(engines...); err != nil {
+	if err := d.InputSchema.CheckVariables(engines...); err != nil {
 		return err
 	}
-	page.InputSchema = d.InputSchema
 	return Descriptor(*page, o.env.AppID(), o.env.Version()).CheckSafety()
 }
 
@@ -220,8 +160,7 @@ func (o *Owner) normalizePageModel(p *Page, lookup func(string) (platform.Entity
 	if err := d.NormalizeModelBindings(lookup); err != nil {
 		return err
 	}
-	d, err := d.UpgradeQueryConditions(lookup)
-	if err != nil {
+	if err := d.CheckQueryFilters(lookup); err != nil {
 		return err
 	}
 	for i, binding := range d.DataBindings {
@@ -249,30 +188,5 @@ func (o *Owner) normalizePageModel(p *Page, lookup func(string) (platform.Entity
 	p.InputSchema = d.InputSchema
 	p.ScopeVisibility = d.ScopeVisibility
 	p.WidgetSpec = d.WidgetSpec
-	p.Sections = nil
-	p.Document = nil
-	p.List = nil
-	p.Detail = nil
-	p.Actions = nil
-	p.Selections = nil
 	return nil
-}
-
-func (s *Section) UnmarshalJSON(raw []byte) error {
-	type value Section
-	return platform.RetainPageSection(raw, (*value)(s), &s.LegacyVisual)
-}
-
-func (s Section) MarshalJSON() ([]byte, error) {
-	type value Section
-	return platform.MarshalPageSection(value(s), s.LegacyVisual)
-}
-
-func descriptorActions(names []string) []platform.AssetRef {
-	actions := make([]platform.AssetRef, 0, len(names))
-	for _, schema := range names {
-		owner, _, _ := strings.Cut(schema, ".")
-		actions = append(actions, platform.AssetRef{App: owner, Kind: platform.AssetAction, Name: schema})
-	}
-	return actions
 }

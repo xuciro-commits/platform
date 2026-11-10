@@ -290,10 +290,6 @@ func ExprPresent(kind string, value any) ExprValue { return ruleexpr.Present(kin
 
 func CheckObservationDecimal(value string) error { return ruleexpr.CheckWindowDecimal(value) }
 
-func LowerPageExpr(raw json.RawMessage, kind string, schema ExprSchema) (Expr, error) {
-	return ruleexpr.LowerPage(raw, kind, schema)
-}
-
 func ruleEngineOf(engines []RuleEngine) RuleEngine {
 	if len(engines) > 0 {
 		return engines[0]

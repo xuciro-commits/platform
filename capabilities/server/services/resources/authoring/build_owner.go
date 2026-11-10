@@ -149,24 +149,25 @@ func (b *Build) Manifest() platform.Manifest {
 	}
 	provisions, reads := b.objectProtocols()
 	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: b.manifestRoles(), Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: definitionDeclarations(b.queries), Functions: b.functions.Declarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
-		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
-			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
-			ListFields:   []string{"title", "name", "state", "installed"},
-			DetailFields: []string{"title", "name", "plural", "description", "fields", "state", "installed"},
-			Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".create"},
-				{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: ObjectType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}},
-			{Name: "applications", Title: "Applications", Description: "The applications this organisation hands to its people. Each holds pages and appears in their launcher.",
-				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: AppType},
-				ListFields:   []string{"title", "name", "icon", "state"},
-				DetailFields: []string{"title", "name", "description", "icon", "pages", "groups", "state"},
-				Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: AppType + ".create"},
-					{App: ID, Kind: platform.AssetAction, Name: AppType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: AppType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaHandOver}}},
-			{Name: "pages", Title: "Pages", Description: "The pages this organisation composes over the objects it may read. Publish one to put it in the workspace.",
-				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: PageType},
-				ListFields:   []string{"title", "name", "object", "state"},
-				DetailFields: []string{"title", "name", "description", "object", "list", "detail", "actions", "state"},
-				Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: PageType + ".create"},
-					{App: ID, Kind: platform.AssetAction, Name: PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: PageType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaRelease}}}}}
+		Pages: []platform.Page{
+			platform.ListDetailPage("objects", "Objects", "The objects this organisation defines. Publish one to install it.",
+				platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
+				[]string{"title", "name", "state", "installed"},
+				[]string{"title", "name", "plural", "description", "fields", "state", "installed"},
+				[]platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".create"},
+					{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: ObjectType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}),
+			platform.ListDetailPage("applications", "Applications", "The applications this organisation hands to its people. Each holds pages and appears in their launcher.",
+				platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: AppType},
+				[]string{"title", "name", "icon", "state"},
+				[]string{"title", "name", "description", "icon", "pages", "groups", "state"},
+				[]platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: AppType + ".create"},
+					{App: ID, Kind: platform.AssetAction, Name: AppType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: AppType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaHandOver}}),
+			platform.ListDetailPage("pages", "Pages", "The pages this organisation composes over the objects it may read. Publish one to put it in the workspace.",
+				platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: PageType},
+				[]string{"title", "name", "object", "state"},
+				[]string{"title", "name", "description", "object", "state"},
+				[]platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: PageType + ".create"},
+					{App: ID, Kind: platform.AssetAction, Name: PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: PageType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaRelease}})}}
 }
 
 func sortedTypes(installed map[string]platform.Entity) []string {

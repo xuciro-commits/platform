@@ -43,14 +43,10 @@ import {Settings, widgetInspectorTabs} from "./PageProperties";
 
 type Api = NonNullable<Definition["page"]>;
 
-type PageRecord = Partial<Omit<HostApi.Page,"object"|"sections"|"document"|"actions">>&{
+type PageRecord = Partial<Omit<HostApi.Page,"object">>&{
   id: string; revision: number; name: string; title: string; description?: string; object: string; state: string;
-  list?: string[]; detail?: string[]; actions?: string[];
-  selections?: HostApi.SelectionVariable[];
-  document?: PageUI.PageDocument;
-  sections?: AuthoringSection[];
 };
-export type Draft = NonNullable<PageRecord["sections"]>[number];
+export type Draft = AuthoringSection;
 
 const widgets = widgetContracts.map((contract) => contract.componentID);
 const widgetTitles: Record<string, () => string> = Object.fromEntries(widgetContracts.map((contract) => [contract.componentID, () => t(contract.title)]));
@@ -58,23 +54,13 @@ const widgetTitles: Record<string, () => string> = Object.fromEntries(widgetCont
 type StudioSelection = { kind: "page" | "interface" } | { kind: "widget" | "container"; id: string };
 const emptyDraft = (): PageDraft => ({ sections: [], document: pageDocumentFromSections<Draft>([]).document, selections: [], title: "", description: "" });
 const loadDraft = (record: PageRecord,lookup:(type:string)=>EntityInfo|undefined=()=>undefined, fields: HostApi.FieldInfo[] = []): PageDraft => {
-  if(record.format===3||record.format===4){
-    const page=decodePage({...record,object:{app:record.object.split(".")[0],kind:"object",name:record.object}} as HostApi.Page);
-    const lifted=pageDocumentFromSections((page.sections??[]).map(authoringSection));
-    return {...declarationValue(record,fields),actions:page.actions.map(action=>action.name),sections:lifted.sections.map(section=>materializeModelSection(section,lookup,true)),document:page.document??lifted.document,selections:page.selections??[],title:record.title,description:record.description??""};
-  }
-  const shorthand: Draft[] = (record.list ?? []).length ? [
-    { widget: "table", title: t("Table"), width: "half", fields: record.list },
-    { widget: "detail", title: t("Detail"), width: "half", fields: record.detail },
-    ...((record.actions ?? []).length ? [{ widget: "actions", title: t("Actions"), actions: record.actions }] : []),
-  ] : [];
-  const lifted = pageDocumentFromSections(record.sections?.length ? record.sections : shorthand);
-  return { ...declarationValue(record, fields), sections: (record.document ? record.sections ?? [] : lifted.sections).map(s=>materializeModelSection(s,lookup,true)), document: record.document ?? lifted.document,
-    selections: record.selections ?? [], title: record.title, description: record.description ?? "" };
+  const page=decodePage({...record,object:{app:record.object.split(".")[0],kind:"object",name:record.object}} as HostApi.Page);
+  const lifted=pageDocumentFromSections((page.sections??[]).map(authoringSection));
+  return {...declarationValue(record,fields),actions:page.actions.map(action=>action.name),sections:lifted.sections.map(section=>materializeModelSection(section,lookup,true)),document:page.document??lifted.document,selections:page.selections??[],title:record.title,description:record.description??""};
 };
 export const filterable = ["choice", "boolean", "reference"];
 
-const asPage = (record: PageRecord, sections: Draft[], document?: PageUI.PageDocument): Api => ({
+const asPage = (record: PageRecord & { selections?: PageUI.SelectionVariable[] }, sections: Draft[], document?: PageUI.PageDocument): Api => ({
   name: record.name, title: record.title, description: record.description, layout: "composed",
   object: { app: record.object.split(".")[0] ?? "", kind: "object", name: record.object },
   listFields: [], detailFields: [], actions: [],
@@ -356,8 +342,8 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         </div> },
         { id: "widgets", title: t("Widgets"), content: <WidgetLibrary widgets={widgets} widgetTitles={widgetTitles} onAdd={(widget) => add(widget)} /> },
         { id: "data", title: t("Variables"), badge: (Object.keys(document.variables ?? {}).length + Object.keys(document.queries ?? {}).length) || undefined, content: <div className="grid content-start">
-          <InspectorSection title={t("Variables")}><VariablesPanel object={objectRef} entity={authoringEntity} onUpgrade={()=>setCompatibilityOpen(true)} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /></InspectorSection>
-          <InspectorSection title={t("Queries")}><QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} onUpgrade={()=>setCompatibilityOpen(true)} document={document} object={objectRef} entity={authoringEntity} values={variableValues} onChange={(document) => edit({ document })} /></InspectorSection>
+          <InspectorSection title={t("Variables")}><VariablesPanel object={objectRef} entity={authoringEntity} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /></InspectorSection>
+          <InspectorSection title={t("Queries")}><QueriesPanel sections={sections} onPreviewOwner={setQueryPreviewOwner} document={document} object={objectRef} entity={authoringEntity} values={variableValues} onChange={(document) => edit({ document })} /></InspectorSection>
         </div> },
       ] }}
       right={preview ? undefined : { label: t("Inspector"), heading: <span className="flex min-w-0 items-center gap-1.5">{canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : container ? <LayoutGlyph kind={document.nodes[container]?.kind ?? "rows"} /> : <Settings2 className="size-3.5 shrink-0" />}<span className="truncate" title={canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}>{canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}</span></span>, scope:inspectorKey,selection:nodeID,locate:()=>select(selection), value: inspectorValue, onChange: (next) => { if (next === "interface" && !canvasSelection && !container) select({ kind: "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
@@ -373,7 +359,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
       {!source.entity(page.object) && info && <p className="px-3 pt-2 text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}
       {compatibilityOpen && <CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={() => setCompatibilityOpen(false)} onLocate={(id) => { select({ kind: "widget", id }); setCompatibilityOpen(false); }} onApply={(review) => { if (lock.current || preview) return; const next = applyProfileUpgrade(session.draft, review); if (!next) return; session.edit(next, "profile-upgrade"); setCompatibilityOpen(false); setRefused(undefined); }} />}
-      <StructuredEditor validate={pageAuthoringIssues} expectedRevision={branch ? mainRevision : baseRevision.current} fieldInput={sourceFieldInput} value={incompatible&&(savedPage?.format===3||savedPage?.format===4)?declarationValue(savedPage,declarationFields):declarationValue({...encodePage(asPage({...savedPage!,...session.draft},sections.map(canonicalModelSection),document),definitions),object:savedPage!.object},declarationFields)} fields={declarationFields} scope={`build.page:${id}:${source.scope}`} disabled={busy || incompatible || preview} onChange={next => { if (preview) return; setSourceApplied(true); session.edit(() => loadDraft({...savedPage!,...next}as PageRecord,authoringEntity,declarationFields)); select({ kind: "page" }); }} onTrial={next => trial("build.page.edit", { type: "build.page", id }, declarationChanges(next, declarationValue(savedPage!, declarationFields)), branch ? mainRevision : baseRevision.current)}><fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <StructuredEditor validate={pageAuthoringIssues} expectedRevision={branch ? mainRevision : baseRevision.current} fieldInput={sourceFieldInput} value={incompatible&&savedPage?declarationValue(savedPage,declarationFields):declarationValue({...encodePage(asPage({...savedPage!,...session.draft},sections.map(canonicalModelSection),document),definitions),object:savedPage!.object},declarationFields)} fields={declarationFields} scope={`build.page:${id}:${source.scope}`} disabled={busy || incompatible || preview} onChange={next => { if (preview) return; setSourceApplied(true); session.edit(() => loadDraft({...savedPage!,...next}as PageRecord,authoringEntity,declarationFields)); select({ kind: "page" }); }} onTrial={next => trial("build.page.edit", { type: "build.page", id }, declarationChanges(next, declarationValue(savedPage!, declarationFields)), branch ? mainRevision : baseRevision.current)}><fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
         <CanvasEditor model={canvasModel(document, sections, { ...Object.fromEntries(Object.entries(widgetTitles).map(([id, title]) => [id, title()])), rows: t("Rows"), columns: t("Columns"), tabs: t("Tabs"), flow: t("Flow layout"), toolbar: t("Toolbar"), loop: t("Loop") })} selected={preview ? undefined : nodeID} revision={session.draft} zoom={zoom / 100} disabled={busy || incompatible || preview}
           commands={selectionCommands} icon={canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : <LayoutGlyph kind={document.nodes[nodeID ?? ""]?.kind ?? "rows"} />}
           onSelect={canvasSelect} onDrop={canvasCommitDrop} onMove={(id, delta) => canvasEdit(canvasMove(document, id, delta, sections))}

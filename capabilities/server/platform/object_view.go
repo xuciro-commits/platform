@@ -30,7 +30,7 @@ func checkObjectView(object AssetRef, view ObjectView, assets map[AssetRef]Relea
 	if asset, ok := assets[view.Page]; !ok || json.Unmarshal(asset.Body, &page) != nil || page.Object != object {
 		return fmt.Errorf("Object view page must read its bound object type")
 	}
-	schema := page.inputSchema()
+	schema := page.InputSchema
 	if schema.Interface == nil {
 		return fmt.Errorf("Object view page needs a required currentObject record input for its bound object type")
 	}

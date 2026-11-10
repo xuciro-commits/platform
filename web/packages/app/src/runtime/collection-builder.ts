@@ -3,12 +3,13 @@ import {collectionInput,collectionQuery,validCollectionInput,type CollectionInpu
 import type {Api} from '@platform/api';
 import type {EntityInfo,Filter} from '@platform/ui';
 import {parseDecimal} from './decimal';
+export type BuilderCondition={optional?:boolean;asDateTime?:boolean;asDate?:boolean;asDecimal?:boolean;field:string;op:string;value:Api.PageValue};
 
 export const builderOperators=(type:string)=>['integer','decimal'].includes(type)?['is','isNot','gte','lte']:['is','isNot',...type==='text'?['contains']:[]];
 const operators:Record<string,string>={is:'=',isNot:'!=',gte:'>=',lte:'<=',contains:'like'};
-export function builderConditions(filters:Filter[],fields:string[],info:EntityInfo):Api.PageQueryCondition[]|undefined {
+export function builderConditions(filters:Filter[],fields:string[],info:EntityInfo):BuilderCondition[]|undefined {
  if(filters.length>16)return;
- const result:Api.PageQueryCondition[]=[];
+ const result:BuilderCondition[]=[];
  for(const f of filters){
   const field=info.fields.find(v=>v.name===f.field);
   if(!fields.includes(f.field)||!field||!builderOperators(field.type).includes(f.operator)||!['text','choice','integer','decimal'].includes(field.type))return;
@@ -22,7 +23,7 @@ export function builderConditions(filters:Filter[],fields:string[],info:EntityIn
  }
  return result;
 }
-export function refineCollection(input:CollectionInput,conditions:Api.PageQueryCondition[]):CollectionInput|undefined {
+export function refineCollection(input:CollectionInput,conditions:BuilderCondition[]):CollectionInput|undefined {
  if(conditions.length>16||conditions.some(c=>!['=','!=','>=','<=','like'].includes(c.op)||!c.value||c.value.variable||c.value.literal===undefined))return;
  const query=collectionQuery(input,{domain:conditions.map(c=>[c.field,c.op,c.value.literal]),sort:input.sort,limit:1,offset:0});
  if(!query)return;

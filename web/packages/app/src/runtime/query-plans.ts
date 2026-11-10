@@ -1,7 +1,7 @@
 import type {Definition as WorkspaceDefinition} from "../index";
 import type {pageUIManifest} from "../pageui/manifest";
 import type * as PageUI from "../pageui/types";
-import {builderSection,refineCollection} from "./collection-builder";
+import {builderSection,refineCollection,type BuilderCondition} from "./collection-builder";
 import {collectionInput} from "./collection-input";
 import {validCollectionInput,collectionFieldsVisible,collectionQuery} from "./collection-input";
 import {validCivilDate,validTimestamp} from "@platform/ui/date";
@@ -35,7 +35,7 @@ type QueryGraph={id:string;plans:Record<string,Api.PageQuery>};
 function variableUsesPlan(id:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],seen=new Set<string>()):boolean {
   if(seen.has(id))return false;seen.add(id);
   const variable=variables[id];
-  return variable?.mode==="property"&&!!variable.source?.variable&&variableUsesPlan(variable.source.variable,variables,sections,seen)||variable?.source?.kind==="plan"||variable?.mode==="aggregate"||!!variable?.source?.section&&!!sections.find(s=>s.id===variable.source!.section)?.collectionVariable||!!variable?.expression?.args.some(arg=>!!arg.variable&&variableUsesPlan(arg.variable,variables,sections,seen))||!!variable?.rule&&ruleDependencies(variable.rule).some(ref=>variableUsesPlan(ref,variables,sections,seen));
+  return variable?.mode==="property"&&!!variable.source?.variable&&variableUsesPlan(variable.source.variable,variables,sections,seen)||variable?.source?.kind==="plan"||variable?.mode==="aggregate"||!!variable?.source?.section&&!!sections.find(s=>s.id===variable.source!.section)?.collectionVariable||!!variable?.rule&&ruleDependencies(variable.rule).some(ref=>variableUsesPlan(ref,variables,sections,seen));
 }
 
 function recordContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],graph:QueryGraph):boolean {
@@ -52,11 +52,11 @@ function variableDependsOnQuery(variable:string,target:string,variables:Record<s
  const queryDepends=(id:string):boolean=>{
   if(id===target)return true;if(seenQueries.has(id))return false;seenQueries.add(id);
   const plan=plans[id];if(!plan)return false;
-  return !!plan.input&&variableDepends(plan.input)||[...(plan.conditions??[]).map(condition=>condition.value),...(plan.search?[plan.search]:[]),...(plan.for?[plan.for]:[])].some(value=>!!value.variable&&variableDepends(value.variable))||!!plan.filter&&ruleDependencies(plan.filter).some(ref=>ref.startsWith("root.")&&variableDepends(ref.slice(5).split("#")[0]!))||!!plan.set?.inputs.some(queryDepends);
+  return !!plan.input&&variableDepends(plan.input)||[...(plan.search?[plan.search]:[]),...(plan.for?[plan.for]:[])].some(value=>!!value.variable&&variableDepends(value.variable))||!!plan.filter&&ruleDependencies(plan.filter).some(ref=>ref.startsWith("root.")&&variableDepends(ref.slice(5).split("#")[0]!))||!!plan.set?.inputs.some(queryDepends);
  };
  const variableDepends=(id:string):boolean=>{
   if(!id||seenVariables.has(id))return false;seenVariables.add(id);const input=variables[id];if(!input)return false;
-  if(input.expression?.args.some(value=>!!value.variable&&variableDepends(value.variable))||input.rule&&ruleDependencies(input.rule).some(variableDepends))return true;
+  if(input.rule&&ruleDependencies(input.rule).some(variableDepends))return true;
   const source=input.source;if(!source)return false;
   if(source.kind==="property"&&!!source.variable&&variableDepends(source.variable))return true;
   if((source.kind==="plan"||input.mode==="aggregate")&&!!source.query&&queryDepends(source.query))return true;
@@ -120,7 +120,7 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
   return {...base,query,signature:JSON.stringify([base.object,query])};
 }
 
-export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: WorkspaceDefinition | undefined, contract: Contract, sections:PageUI.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
+export function compileQueryPlan(plan: Api.PageQuery&{conditions?:BuilderCondition[]}, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: WorkspaceDefinition | undefined, contract: Contract, sections:PageUI.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
   if(plan.interface){
     const selected=boundQueryDefinition(named,plan.query),declared=selected?.query,ordering=declared?.sort?.length?declared.sort:["id"];
     if(!plan.query||selected?.ref.app!==plan.query.ref.app||selected.ref.name!==plan.query.ref.name||declared?.interface!==plan.interface||!declared.interfaceShape||plan.object.name||plan.object.app||plan.object.kind||plan.input||plan.for||plan.direction||plan.itemOwner||plan.set||plan.filter||plan.conditions?.length||!Number.isInteger(plan.limit)||plan.limit<1||plan.limit>Math.min(contract.maxLimit,declared.limit||contract.maxLimit)||!Number.isInteger(plan.offset??0)||(plan.offset??0)<0||(plan.offset??0)>contract.maxOffset||plan.sort?.length&&JSON.stringify(plan.sort)!==JSON.stringify(ordering))return failed("Interface query window is unavailable or incompatible.");
@@ -242,7 +242,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
   return { status: "value", object: info.type, query, signature: JSON.stringify([info.type, query]) };
 }
 
-export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>WorkspaceDefinition|undefined,contract:Contract,sections:PageUI.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined,builder?:(section:PageUI.Section,input:import("./collection-input").CollectionInput)=>Api.PageQueryCondition[]):ReadonlyArray<readonly [string,QueryPlanResult]> {
+export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>WorkspaceDefinition|undefined,contract:Contract,sections:PageUI.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined,builder?:(section:PageUI.Section,input:import("./collection-input").CollectionInput)=>BuilderCondition[]):ReadonlyArray<readonly [string,QueryPlanResult]> {
  const compile=(root:string):QueryPlanResult=>{
   let nodes=0;
   const target=plans[root];

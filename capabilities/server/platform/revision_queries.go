@@ -98,7 +98,7 @@ func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 			asset, ok := assets[trigger.InlineEdit.Action]
 			action, err := releaseActionDescriptor(asset.Body)
 			info, found := lookup(object)
-			if !ok || !found || err != nil || (Section{InlineEdit: trigger.InlineEdit}).CheckTableEdit(info, action) != nil {
+			if !ok || !found || err != nil || trigger.InlineEdit.CheckTableEdit(info, action) != nil {
 				return fmt.Errorf("page edit fields differ from original action")
 			}
 		}

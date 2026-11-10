@@ -29,7 +29,6 @@ func main() {
 	}
 	bind("platformRuleEval", ruleexpr.EvalJSON)
 	bind("platformRuleCompile", ruleexpr.CompileJSON)
-	bind("platformRulePage", ruleexpr.LowerPageJSON)
 	js.Global().Set("platformRuleVersion", ruleexpr.Version)
 	select {}
 }

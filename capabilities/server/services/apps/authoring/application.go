@@ -80,14 +80,12 @@ func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *kernel.E
 	if err := ApplicationDescriptor(*a).CheckConcepts(); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	d := platform.PageDocument{UIProfile: platform.PageUIProfile(), Variables: a.Variables}
-	if err := d.NormalizePageRules(c.Rules()); err != nil {
+	if err := (platform.PageInputSchema{Variables: a.Variables}).CheckVariables(c.Rules()); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	a.Variables = d.Variables
 	lookup := o.env.Entity
 	for _, query := range a.Queries {
-		if len(query.Conditions) > 0 || query.Filter != nil {
+		if query.Filter != nil {
 			draftLookup, err := o.env.DraftObjectLookup(c)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -96,11 +94,9 @@ func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *kernel.E
 			break
 		}
 	}
-	queries, err := ApplicationDescriptor(*a).QueryPage().UpgradeQueryConditions(lookup)
-	if err != nil {
+	if err := ApplicationDescriptor(*a).QueryPage().CheckQueryFilters(lookup); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	a.Queries = queries.InputSchema.Queries
 	if a.Profile != nil {
 		if err := a.Profile.Check(); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -291,15 +287,6 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 				} else {
 					_, ok := application.Queries[v.Source.Query]
 					missing = !ok
-				}
-			}
-			if v.Expression != nil {
-				for _, arg := range v.Expression.Args {
-					if arg.Variable != "" {
-						if _, ok := application.Variables[arg.Variable]; !ok {
-							missing = true
-						}
-					}
 				}
 			}
 			if missing {

@@ -288,8 +288,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			owner := t.owner["action:"+trigger.InlineEdit.Action.Name]
 			action, _ := owner.Manifest().Actions.Action(trigger.InlineEdit.Action.Name)
 			info, _ := t.entity(object)
-			section := platform.Section{InlineEdit: trigger.InlineEdit}
-			if err := section.CheckTableEdit(info, action); err != nil {
+			if err := trigger.InlineEdit.CheckTableEdit(info, action); err != nil {
 				return err
 			}
 		}

@@ -7,7 +7,6 @@ import type { Project } from "../projects/project";
 
 export type ObjectViewPage = Omit<Partial<Api.Page>, "object"> & {
   id: string; revision: number; name: string; title: string; object: string; state: string; archived?: boolean; changed?: Api.Stamp;
-  document?: PageUI.PageDocument;
 };
 
 export const objectViewKey = (view: Api.ObjectView) => JSON.stringify([view.application.app, view.application.kind, view.application.name, view.page.app, view.page.kind, view.page.name]);
@@ -18,7 +17,7 @@ export function useObjectViews() {
   const rows = (modules.data?.records ?? []).filter(module => !module.archived).flatMap(module =>
     (pages.data?.records ?? []).filter(page => {
       if (page.archived || !module.pages?.includes(page.name)) return false;
-      const inputs = page.format === 3 || page.format === 4 ? page.inputSchema?.interface?.inputs : page.document?.interface?.inputs;
+      const inputs = page.inputSchema?.interface?.inputs;
       const input = inputs?.currentObject;
       return input?.type === "record" && input.required === true && input.object?.kind === "object" && input.object.app === page.object.split(".")[0] && input.object.name === page.object && !Object.entries(inputs ?? {}).some(([name, port]) => name !== "currentObject" && port.required);
     }).map(page => ({ module, page, binding: {

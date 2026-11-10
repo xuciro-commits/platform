@@ -1,4 +1,4 @@
-import { expect, signIn, test, unique } from "./kit";
+import { expect, listDetailPage, signIn, test, unique } from "./kit";
 import type { ReleaseAsset, ReleasePreview, SavedReleaseReview } from "../packages/api/src/gen/host";
 
 test.use({ actionTimeout: 15_000 });
@@ -156,7 +156,7 @@ test("F8 a publisher reviews a product version, releases it, and the version is 
     const created: { type: string; id: string }[] = [];
     try {
       await submit({ type: "build.page", id: badPageID }, "create", {
-        name: badPageName, title: "Release gate page", project, object: type, list: ["subject"], detail: ["subject"],
+        name: badPageName, title: "Release gate page", project, ...listDetailPage(type, ["subject"]),
       }, 0);
       created.push({ type: "build.page", id: badPageID });
 

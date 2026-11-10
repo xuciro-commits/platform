@@ -1,7 +1,6 @@
 package platform
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -9,302 +8,17 @@ import (
 )
 
 func (p Page) Safety() (Page, error) {
-	if p.Format == 3 || p.Format == 4 {
-		if p.retainedVersion == "" {
-			version, err := PageContentVersion(p)
-			if err != nil {
-				return Page{}, err
-			}
-			p.retainedVersion = version
-		}
-		if p.Format == 3 {
-			legacy := false
-			for _, query := range p.InputSchema.Queries {
-				legacy = legacy || len(query.Conditions) > 0
-			}
-			if !legacy {
-				if upgraded, err := p.upgradePageVariableRules(); err == nil {
-					p = upgraded
-					p.Format = 4
-				}
-			}
-		}
-		return p, nil
-	}
-	if p.Format != 0 {
+	if p.Format != 4 {
 		return Page{}, fmt.Errorf("unsupported page format %d", p.Format)
 	}
-	if p.Document != nil && (p.Document.FormatVersion != 2 || !SupportsPageUIProfile(p.Document.UIProfile)) {
-		return Page{}, fmt.Errorf("unsupported retained page profile")
-	}
-	original := p
-	p.Format = 3
-	p.DataBindings = []PageDataBinding{}
-	p.ActionTriggers = []PageActionTrigger{{ID: "page", Binding: "page", Actions: original.Actions}}
-	p.InputSchema = PageInputSchema{Selections: original.Selections}
-	p.ScopeVisibility = PageScopeVisibility{Root: "page", Owners: map[string]string{}, Scopes: []PageScope{{ID: "page", Kind: "page"}}}
-	if original.Document != nil {
-		d := original.Document
-		p.ScopeVisibility.Scopes = nil
-		p.InputSchema.Variables, p.InputSchema.Queries, p.InputSchema.Interface = d.Variables, d.Queries, d.Interface
-		p.InputSchema.profile = d.UIProfile
-		parent := map[string]string{}
-		for id, node := range d.Nodes {
-			for _, child := range node.Children {
-				parent[child] = id
-			}
-		}
-		for id, overlay := range d.Overlays {
-			parent[overlay.Root] = id
-		}
-		for _, unused := range d.UnusedWidgets {
-			parent[unused.Node] = unused.Parent
-		}
-		p.ScopeVisibility.Root = d.Root
-		for _, id := range slices.Sorted(maps.Keys(d.Nodes)) {
-			node := d.Nodes[id]
-			scope := PageScope{ID: id, Parent: parent[id], Kind: "page", Binding: node.Section, Bindings: map[string]string{"valueVariable": node.ValueVariable, "activeVariable": node.ActiveVariable, "visibleWhen": node.VisibleWhen, "enabledWhen": node.EnabledWhen}}
-			if node.Loop != nil {
-				scope.Kind = "loop"
-				scope.MaxIterations = node.Loop.Limit
-				scope.Bindings["collection"], scope.Bindings["itemVariable"] = node.Loop.Collection, node.Loop.ItemVariable
-			}
-			for _, unused := range d.UnusedWidgets {
-				if unused.Node == id {
-					scope.Inactive = true
-				}
-			}
-			p.ScopeVisibility.Scopes = append(p.ScopeVisibility.Scopes, scope)
-			if node.Section != "" {
-				p.ScopeVisibility.Owners[node.Section] = id
-			}
-		}
-		for _, id := range slices.Sorted(maps.Keys(d.Overlays)) {
-			overlay := d.Overlays[id]
-			p.ScopeVisibility.Scopes = append(p.ScopeVisibility.Scopes, PageScope{ID: id, Kind: "overlay", Bindings: map[string]string{"root": overlay.Root, "openVariable": overlay.OpenVariable}})
-		}
-		for i, event := range d.Events {
-			p.ActionTriggers = append(p.ActionTriggers, PageActionTrigger{ID: fmt.Sprintf("event:%s:%d", event.Source, i), Binding: event.Source, Events: []PageEventBinding{event}})
-		}
-	}
-	visualSections := []map[string]any{}
-	sections := original.Sections
-	if len(sections) == 0 {
-		sections = []Section{{ID: "list", Widget: "table", Fields: original.ListFields, Object: original.Object}, {ID: "detail", Widget: "detail", Fields: original.DetailFields, Object: original.Object}}
-	}
-	for index, s := range sections {
-		id := s.ID
-		if id == "" {
-			id = fmt.Sprintf("section-%d", index+1)
-		}
-		d := PageDataBinding{ID: id, Owner: p.ScopeVisibility.Owners[id], Kind: "records", Object: s.ModelObject(original), Model: s.Model, Ports: map[string]string{}, FieldSlots: map[string][]FieldRef{}}
-		if original.Document == nil {
-			scopeID := "binding:" + id
-			p.ScopeVisibility.Scopes = append(p.ScopeVisibility.Scopes, PageScope{ID: scopeID, Parent: p.ScopeVisibility.Root, Kind: "page", Binding: id})
-			p.ScopeVisibility.Owners[id] = scopeID
-			d.Owner = scopeID
-		}
-		if original.Document != nil && s.CollectionVariable != "" {
-			variable := original.Document.Variables[s.CollectionVariable]
-			if variable.Source != nil && variable.Source.Kind == "plan" {
-				d.Limit = original.Document.Queries[variable.Source.Query].Limit
-			}
-		}
-		d.Ports["widget"] = s.Widget
-		if s.RecordVariable != "" || WidgetReadsSelection(s.Widget) {
-			d.Kind = "record"
-		}
-
-		if s.Query.Name != "" {
-			d.Query = &AssetBinding{Ref: s.Query}
-		}
-		for _, name := range s.Fields {
-			d.Fields = append(d.Fields, legacyFieldRef(name))
-		}
-		bytes, _ := json.Marshal(s)
-		if err := checkLegacyPageProfile(original.Document, s, bytes); err != nil {
-			return Page{}, err
-		}
-		var wire map[string]any
-		_ = json.Unmarshal(bytes, &wire)
-		if composite, ok := wire["composite"]; ok {
-			var value struct {
-				Bindings map[string]ModelViewBinding
-				Value    *Expr
-				Acyclic  bool
-			}
-			if err := json.Unmarshal(Raw(composite), &value); err != nil {
-				return Page{}, err
-			}
-			d.Kind = "composite"
-			d.Models = value.Bindings
-			d.Value = value.Value
-			d.Acyclic = value.Acyclic
-		}
-		for name, value := range s.variablePorts() {
-			d.Ports[name] = value
-		}
-		for _, key := range []string{"selection", "parentSelection", "relation", "filterSearchVariable", "collectionOutputVariable", "measure"} {
-			if value, ok := wire[key].(string); ok && value != "" {
-				d.Ports[key] = value
-			}
-		}
-		if contract := pageWidget(s.Widget); contract != nil && (contract.SelectionMode == "read" || contract.SelectionMode == "write") {
-			d.Ports["selectionMode"] = contract.SelectionMode
-		}
-		if slices.Contains([]string{"table", "chart", "metric", "form"}, s.Widget) {
-			d.Ports["parentable"] = "true"
-		}
-		if s.Widget == "form" {
-			d.Ports["creates"] = "true"
-		}
-		for _, path := range modelScalarSlots {
-			if _, already := d.FieldSlots[path]; already {
-				continue
-			}
-			for _, value := range legacyPagePathValues(wire, strings.Split(path, ".")) {
-				text, ok := value.(string)
-				if !ok || text == "" || path == "measure" && text == "count" {
-					continue
-				}
-				field := FieldRef{Name: text}
-				if left, right, ok := strings.Cut(text, ":"); ok {
-					if path == "measure" {
-						field.Name, field.Transform = right, left
-					} else {
-						field.Name, field.Transform = left, right
-					}
-				}
-				d.FieldSlots[path] = []FieldRef{field}
-			}
-		}
-		for _, path := range []string{"map.latitudeField", "map.longitudeField", "map.labelField", "map.colorField", "avatar.detailFields", "collectionBuilder.fields", "detailPresentation.barcode", "tableColumns.field", "scene.sampleTimeField", "scene.sampleAssetField", "scene.mappings.field"} {
-			fields := []FieldRef{}
-			for _, value := range legacyPagePathValues(wire, strings.Split(path, ".")) {
-				switch v := value.(type) {
-				case string:
-					if v != "" {
-						fields = append(fields, FieldRef{Name: v})
-					}
-				case []any:
-					for _, name := range v {
-						if text, ok := name.(string); ok && text != "" {
-							fields = append(fields, FieldRef{Name: text})
-						}
-					}
-				}
-			}
-			if len(fields) > 0 {
-				d.FieldSlots[path] = fields
-			}
-		}
-		if contract := pageWidget(s.Widget); contract != nil {
-			for _, role := range contract.FieldRoles {
-				for _, field := range legacyPagePathValues(wire, strings.Split(role.Path, ".")) {
-					if text, ok := field.(string); ok && text != "" {
-						d.FieldSlots[role.Path] = append(d.FieldSlots[role.Path], FieldRef{Name: text})
-					}
-				}
-			}
-		}
-		for index, facet := range s.Facets {
-			d.Resources = append(d.Resources, PageResourceBinding{ID: fmt.Sprintf("facet:%d", index), Kind: "filter", Source: facet.Kind, Fields: []FieldRef{{Name: facet.Field}}, Outputs: map[string]string{"value": facet.Variable}})
-		}
-		for _, path := range []string{"avatar.contextVariable", "avatar.contextCollectionVariable", "ai.questionVariable"} {
-			for _, value := range legacyPagePathValues(wire, strings.Split(path, ".")) {
-				if text, ok := value.(string); ok && text != "" {
-					d.Ports[path] = text
-				}
-			}
-		}
-		resources, err := legacyPageResources(bytes, s.Widget)
+	if p.retainedVersion == "" {
+		version, err := PageContentVersion(p)
 		if err != nil {
 			return Page{}, err
 		}
-		d.Resources = append(d.Resources, resources...)
-		if d.Model == nil && d.Models == nil && d.Object.Name != "" {
-			d.Model = &ModelBinding{Type: d.Object.Name, Fields: slices.Clone(d.Fields)}
-		}
-		for slot, fields := range d.FieldSlots {
-			for i, field := range fields {
-				if strings.Contains(field.Name, ".") {
-					field.Path = strings.Split(field.Name, ".")
-					field.Name = ""
-				}
-				fields[i] = field
-			}
-			d.FieldSlots[slot] = fields
-		}
-
-		if s.Model == nil && d.Models == nil && s.Object.Name == "" && s.Query.Name == "" && len(s.Fields) == 0 && s.CollectionVariable == "" && s.RecordVariable == "" && s.Selection == "" && len(d.FieldSlots) == 0 {
-			d.Object = AssetRef{}
-			d.Model = nil
-			d.Kind = "presentation"
-		}
-		p.DataBindings = append(p.DataBindings, d)
-		defaults := s.ActionDefaults
-		var actionTable struct{ Parameters []PageActionParameter }
-		if value, ok := wire["actionTable"]; ok {
-			if err := json.Unmarshal(Raw(value), &actionTable); err != nil {
-				return Page{}, err
-			}
-			defaults = actionTable.Parameters
-		}
-		p.ActionTriggers = append(p.ActionTriggers, PageActionTrigger{ID: id, Binding: id, Owner: d.Owner, Actions: s.Actions, Function: s.Function, Operation: s.Operation, Inputs: s.Inputs, Defaults: defaults, InlineEdit: s.InlineEdit})
-		paths := append(append([]string{}, pageCompatibility.Section.BindingPaths...), pageCompatibility.Section.ResourcePaths...)
-		paths = append(paths, pageCompatibility.ScalarFieldPaths...)
-		for path := range d.FieldSlots {
-			paths = append(paths, path)
-		}
-		for _, path := range paths {
-			stripLegacyPagePath(wire, strings.Split(path, "."))
-		}
-		for key := range d.Ports {
-			stripLegacyPagePath(wire, strings.Split(key, "."))
-		}
-		wire["id"], wire["binding"], wire["triggers"] = id, id, []string{id}
-		visualSections = append(visualSections, wire)
-	}
-	var visualDocument any
-	if original.Document != nil {
-		raw, _ := json.Marshal(original.Document)
-		var doc map[string]any
-		_ = json.Unmarshal(raw, &doc)
-		for _, key := range []string{"variables", "queries", "interface", "events"} {
-			delete(doc, key)
-		}
-		if nodes, ok := doc["nodes"].(map[string]any); ok {
-			for _, node := range nodes {
-				for _, path := range pageCompatibility.Scope.BindingPaths {
-					stripLegacyPagePath(node, strings.Split(path, "."))
-				}
-			}
-		}
-		if overlays, ok := doc["overlays"].(map[string]any); ok {
-			for _, overlay := range overlays {
-				for _, path := range pageCompatibility.Scope.OverlayPaths {
-					stripLegacyPagePath(overlay, strings.Split(path, "."))
-				}
-			}
-		}
-		visualDocument = doc
-	}
-	body := map[string]any{"sections": visualSections, "document": visualDocument}
-	if original.Layout == "list-detail" && len(original.Sections) == 0 {
-		body["layout"] = original.Layout
-	}
-	raw, err := json.Marshal(body)
-	if err != nil {
-		return Page{}, err
-	}
-	p.WidgetSpec = PageWidgetSpec{Format: "platform.page.web.v1", Body: raw}
-	if version, err := PageContentVersion(original); err == nil {
 		p.retainedVersion = version
 	}
-	p.Sections, p.Document, p.Selections = nil, nil, nil
-	p.ListFields, p.DetailFields, p.Actions = nil, nil, nil
-	p.Layout = ""
-	return p.Safety()
+	return p, nil
 }
 
 func (p Page) WithSafetyProjection(projected Page) Page {
@@ -350,14 +64,6 @@ func (p Page) VisibleSafety() Page {
 				scope, ok := scopes[v.Owner]
 				_, input := result.InputSchema.Variables[scope.Bindings["collection"]]
 				missing = missing || !ok || !input
-			}
-			if v.Expression != nil {
-				for _, arg := range v.Expression.Args {
-					if arg.Variable != "" {
-						_, ok := result.InputSchema.Variables[arg.Variable]
-						missing = missing || !ok
-					}
-				}
 			}
 			var reads func(Expr)
 			reads = func(e Expr) {
@@ -487,18 +193,6 @@ func (p Page) CheckSafety() error {
 	safe, err := p.Safety()
 	if err != nil {
 		return err
-	}
-	if safe.Format == 4 {
-		for _, query := range safe.InputSchema.Queries {
-			if len(query.Conditions) > 0 {
-				return fmt.Errorf("page format 4 requires Expr query filters")
-			}
-		}
-		for _, variable := range safe.InputSchema.Variables {
-			if variable.Expression != nil {
-				return fmt.Errorf("page format 4 requires Expr variable rules")
-			}
-		}
 	}
 	ids := map[string]bool{}
 	for _, binding := range safe.DataBindings {

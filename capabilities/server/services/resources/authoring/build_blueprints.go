@@ -332,41 +332,9 @@ func (c CodeDeclarations) Check() error {
 		}
 	}
 	for _, m := range c.Manifests {
-		for _, original := range m.Pages {
-			ref := platform.AssetRef{App: m.ID, Kind: platform.AssetPage, Name: original.Name}
-			if original.Format == 0 {
-				if original.Layout != "list-detail" && original.Layout != "composed" {
-					return fmt.Errorf("asset %s has unsupported layout %q", ref, original.Layout)
-				}
-				if original.Document != nil && original.Layout != "composed" {
-					return fmt.Errorf("asset %s: a structured layout needs composed sections", ref)
-				}
-				if len(original.Selections) != 0 && len(original.Sections) == 0 {
-					return fmt.Errorf("asset %s: selections need composed sections", ref)
-				}
-				if len(original.Sections) == 0 {
-					for _, fields := range [][]string{original.ListFields, original.DetailFields} {
-						if len(fields) == 0 {
-							return fmt.Errorf("asset %s needs list and detail fields", ref)
-						}
-						seen := map[string]bool{}
-						for _, field := range fields {
-							if seen[field] {
-								return fmt.Errorf("asset %s repeats field %s", ref, field)
-							}
-							seen[field] = true
-							if _, ok := infos[original.Object.Name].Field(field); !ok {
-								return fmt.Errorf("asset %s requires missing field %s on %s", ref, field, original.Object)
-							}
-						}
-					}
-				}
-			}
-			page, err := original.Safety()
-			if err != nil {
-				return fmt.Errorf("asset %s: %w", ref, err)
-			}
-			if err = page.Document.Check(page.Sections); err != nil {
+		for _, page := range m.Pages {
+			ref := platform.AssetRef{App: m.ID, Kind: platform.AssetPage, Name: page.Name}
+			if err := page.CheckSafety(); err != nil {
 				return fmt.Errorf("asset %s: %w", ref, err)
 			}
 			if page.Object.Kind != platform.AssetObject || objects[page.Object.Name] != page.Object {

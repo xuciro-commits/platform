@@ -1,14 +1,13 @@
 package platform
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 )
 
 func (p Page) BindRuleTypes(lookup func(string) (EntityInfo, bool)) error {
-	d := p.inputSchema()
+	d := p.InputSchema
 	for name, v := range d.Variables {
 		v.RuleType = nil
 		object := ""
@@ -335,26 +334,6 @@ func (d PageInputSchema) PageRuleSchema() ExprSchema {
 	return schema
 }
 
-func (d PageInputSchema) NormalizePageRules(engines ...RuleEngine) error {
-	if err := d.CheckVariables(engines...); err != nil {
-		return err
-	}
-	schema := d.PageRuleSchema()
-	for name, v := range d.Variables {
-		if v.Mode == "derived" && v.Expression != nil {
-			raw, _ := json.Marshal(v.Expression)
-			e, err := LowerPageExpr(raw, PageRuleKind(v.Type), schema)
-			if err != nil {
-				return fmt.Errorf("page variable %s: %w", name, err)
-			}
-			v.Rule = &e
-			v.Expression = nil
-			d.Variables[name] = v
-		}
-	}
-	return d.CheckVariables(engines...)
-}
-
 func PageRuleFits(carrier, kind string) bool {
 	if PageRuleKind(carrier) == kind {
 		return true
@@ -366,24 +345,4 @@ func PageRuleFits(carrier, kind string) bool {
 		return kind == "date" || kind == "datetime" || kind == "choice" || kind == "reference"
 	}
 	return false
-}
-
-func (d *PageDocument) inputSchema() PageInputSchema {
-	if d == nil {
-		return PageInputSchema{}
-	}
-	return PageInputSchema{profile: d.UIProfile, Variables: d.Variables, Queries: d.Queries, Interface: d.Interface}
-}
-
-func (p Page) inputSchema() PageInputSchema {
-	if p.Format == 3 || p.Format == 4 {
-		return p.InputSchema
-	}
-	return p.Document.inputSchema()
-}
-
-func (d PageDocument) PageRuleSchema() ExprSchema { return d.inputSchema().PageRuleSchema() }
-
-func (d *PageDocument) NormalizePageRules(engines ...RuleEngine) error {
-	return d.inputSchema().NormalizePageRules(engines...)
 }

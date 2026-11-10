@@ -152,12 +152,9 @@ export function presentPage<T extends {presentationWords?:Record<string,string>;
 }
 
 export function pageAuthoringIssues(value:Record<string,unknown>):Api.FieldIssue[]{
- if(value.format===3||value.format===4){
-  const spec=value.widgetSpec as {format?:string;body?:{sections?:unknown[];document?:unknown}}|undefined;
-  if(spec?.format!=="platform.page.web.v1"||!spec.body||typeof spec.body!=="object"||!Array.isArray(spec.body.sections))return [{path:["widgetSpec"],code:"schema",message:t("This page uses an unsupported format or UI profile. Your page draft is preserved.")}];
-  return pagePresentationIssues(decodePage(value as unknown as Api.Page));
- }
- return pagePresentationIssues(value as Parameters<typeof pagePresentationIssues>[0]);
+ const spec=value.widgetSpec as {format?:string;body?:{sections?:unknown[];document?:unknown}}|undefined;
+ if(spec?.format!=="platform.page.web.v1"||!spec.body||typeof spec.body!=="object"||!Array.isArray(spec.body.sections))return [{path:["widgetSpec"],code:"schema",message:t("This page uses an unsupported format or UI profile. Your page draft is preserved.")}];
+ return pagePresentationIssues(decodePage(value as unknown as Api.Page));
 }
 
 export {decodePage};

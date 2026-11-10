@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 )
 
 //go:embed page_compat.json
@@ -250,25 +249,6 @@ func widgetPort(id, field string) *pageWidgetPort {
 		}
 	}
 	return nil
-}
-
-func (s Section) variablePorts() map[string]string {
-	values := map[string]any{}
-	_ = json.Unmarshal(Raw(s), &values)
-	ports := map[string]string{}
-	for _, widget := range pageWidgets.Widgets {
-		for _, port := range append(slices.Clone(widget.InputPorts), widget.OutputPorts...) {
-			if port.BindingField == "enabledWhen" {
-				continue
-			}
-			for _, value := range legacyPagePathValues(values, strings.Split(port.BindingField, ".")) {
-				if text, ok := value.(string); ok && text != "" {
-					ports[port.BindingField] = text
-				}
-			}
-		}
-	}
-	return ports
 }
 
 func PageUIProfileSupports(profile, required string) bool {

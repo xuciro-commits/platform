@@ -27,6 +27,5 @@ func CompileObjectPage(o Object, app string) platform.Page {
 	if title == "" {
 		title = o.Title
 	}
-	return platform.Page{Name: o.Name, Title: title, Description: o.Description, Layout: "list-detail",
-		Object: platform.AssetRef{App: app, Kind: platform.AssetObject, Name: typ}, ListFields: list, DetailFields: names, Actions: actions}
+	return platform.ListDetailPage(o.Name, title, o.Description, platform.AssetRef{App: app, Kind: platform.AssetObject, Name: typ}, list, names, actions)
 }

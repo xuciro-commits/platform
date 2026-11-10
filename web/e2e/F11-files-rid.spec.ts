@@ -1,4 +1,4 @@
-import { acceptedClient, expect, signIn, test, unique } from "./kit";
+import { acceptedClient, expect, listDetailPage, signIn, test, unique } from "./kit";
 
 test.use({ actionTimeout: 15_000 });
 
@@ -65,8 +65,7 @@ test("F11 Files reaches viewer and discoverer scopes without the builder package
         definition: { name: "close", title: "Close", from: ["open"], to: "" },
       }, 0);
       await editorClient.submit("build.page", pageName, "create", {
-        project, name: pageName, title: `Editor page ${created}`, object: objectType,
-        list: ["subject"], detail: ["subject"], actions: [actionName],
+        project, name: pageName, title: `Editor page ${created}`, ...listDetailPage(objectType, ["subject"], [actionName]),
       }, 0);
       const before = await editorClient.read<{ record: { revision: number; resources?: { app: string; kind: string; name: string }[]; pages?: string[] } }>(`/v1/records/build.app/${project}`);
       await editorClient.submit("build.app", project, "edit", {

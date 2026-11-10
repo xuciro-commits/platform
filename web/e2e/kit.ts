@@ -8,6 +8,24 @@ let counter = 0;
 
 export const unique = (prefix: string) => `${prefix}${Date.now().toString(36)}${counter++}`;
 
+export function listDetailPage(object: string, fields: string[], actions: string[] = []) {
+  const ref = { app: object.split(".")[0]!, kind: "object", name: object };
+  const refs = fields.map(name => ({ name }));
+  const binding = (id: string, widget: string, ports: Record<string, string>) =>
+    ({ id, owner: `binding:${id}`, kind: "record", object: ref, model: { type: object, fields: refs }, fields: refs, ports: { ...ports, widget } });
+  return {
+    format: 4, object,
+    dataBindings: [binding("list", "table", { parentable: "true", selectionMode: "write" }), binding("detail", "detail", { selectionMode: "read" })],
+    actionTriggers: [{ id: "page", binding: "page", actions: actions.map(name => ({ app: name.split(".")[0]!, kind: "action", name })) },
+      { id: "list", owner: "binding:list", binding: "list" }, { id: "detail", owner: "binding:detail", binding: "detail" }],
+    inputSchema: {},
+    scopeVisibility: { root: "page", owners: { list: "binding:list", detail: "binding:detail" },
+      scopes: [{ id: "page", kind: "page" }, { id: "binding:list", parent: "page", kind: "page", binding: "list" }, { id: "binding:detail", parent: "page", kind: "page", binding: "detail" }] },
+    widgetSpec: { format: "platform.page.web.v1", body: { document: null, layout: "list-detail",
+      sections: [{ binding: "list", id: "list", triggers: ["list"] }, { binding: "detail", id: "detail", triggers: ["detail"] }] } },
+  };
+}
+
 export async function signIn(page: Page, subject: string, route = "") {
   await page.addInitScript(token => sessionStorage.setItem("workspace:identity", token), subject);
   await page.goto(`/#${route}`);
