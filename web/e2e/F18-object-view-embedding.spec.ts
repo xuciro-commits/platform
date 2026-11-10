@@ -1,4 +1,4 @@
-import { acceptedClient, expect, listDetailPage, signIn, test, unique } from "./kit";
+import { acceptedClient, expect, listDetailPage, signIn, test, unique, subjectUpdate } from "./kit";
 
 test("F18 an embedded object view keeps application navigation and loads its sections on demand", async ({ page }) => {
   test.setTimeout(120_000);
@@ -20,7 +20,7 @@ test("F18 an embedded object view keeps application navigation and loads its sec
   }, 0);
   await client.submit("build.actiontype", action, "create", {
     project, name: action, object: objectType,
-    definition: { name: "close", title: "Close", from: ["open"], to: "" },
+    definition: { name: "close", title: "Close", from: ["open"], transaction: subjectUpdate(objectType) },
   }, 0);
   await client.submit("build.page", pageName, "create", {
     project, name: pageName, title: "Debug objects", ...listDetailPage(objectType, ["subject"], [action]),

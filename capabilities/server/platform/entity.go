@@ -57,7 +57,6 @@ type Entity struct {
 	Compute           func(record any)
 	ComputeAt         func(c Caller, record any, now time.Time) *kernel.Error
 	Validate          func(c Caller, record any) *kernel.Error
-	ValidateAt        func(c Caller, record any, now time.Time) *kernel.Error
 
 	Type            string
 	Title           string
@@ -128,7 +127,6 @@ type State struct {
 
 type Transition struct {
 	ConfirmationOnly bool
-	LegacyReplay     *Transition       `json:"-"`
 	Adoption         *ProposalAdoption `json:"-"`
 	Criteria         *RuleCriteria     `json:"-"`
 	Name             string

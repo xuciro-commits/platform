@@ -11,19 +11,18 @@ import (
 )
 
 type TransactionContext struct {
-	App               string
-	BuilderRole       string
-	Lookup            func(string) (platform.EntityInfo, bool)
-	ObjectInfo        func() (platform.EntityInfo, error)
-	Saved             func(string) bool
-	ExplicitNumbering func(string) bool
-	Sequences         func() []platform.Sequence
-	Link              func(platform.AssetBinding) (platform.LinkType, error)
-	Confirm           func(*platform.Confirmation, Object) error
-	Dispatch          func(*platform.Dispatch, Object, Action, ...platform.RuleEngine) error
-	Writeback         func(platform.TxnStep, string) error
-	Call              func(platform.TxnCall) error
-	Reads             func(platform.RuleReadSpec, string, func(string) (platform.EntityInfo, bool)) error
+	App         string
+	BuilderRole string
+	Lookup      func(string) (platform.EntityInfo, bool)
+	ObjectInfo  func() (platform.EntityInfo, error)
+	Saved       func(string) bool
+	Sequences   func() []platform.Sequence
+	Link        func(platform.AssetBinding) (platform.LinkType, error)
+	Confirm     func(*platform.Confirmation, Object) error
+	Dispatch    func(*platform.Dispatch, Object, Action, ...platform.RuleEngine) error
+	Writeback   func(platform.TxnStep, string) error
+	Call        func(platform.TxnCall) error
+	Reads       func(platform.RuleReadSpec, string, func(string) (platform.EntityInfo, bool)) error
 }
 
 func checkTxnRef(ref platform.TxnRef, subject, row string, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), app string) error {
@@ -108,9 +107,6 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 	haveOwnInfo := false
 	for _, action := range object.Actions {
 		txn := action.Transaction
-		if txn == nil {
-			continue
-		}
 		proposalFields := map[string]bool{}
 		if action.Adoption != nil {
 			for _, field := range object.Fields {
@@ -129,14 +125,8 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 				return err
 			}
 		}
-		if object.Numbering != nil {
-			return fmt.Errorf("transaction sequence steps replace legacy record-count numbering")
-		}
 		if txn.Subject != subject || len(txn.Steps) == 0 {
 			return fmt.Errorf("transaction needs its subject and steps")
-		}
-		if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || action.Reverses != "" || len(action.Conditions) > 0 || action.To != "" || action.ToInput != "" {
-			return fmt.Errorf("transaction replaces legacy mutations and state routing")
 		}
 		spec := RuleSpec(object, ctx.App, action, txn.Reads)
 		var stateError error
@@ -369,9 +359,6 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 				if step.Target.Type != subject {
 					if !ctx.Saved(step.Target.Type) {
 						return fmt.Errorf("%s needs a saved builder object", where)
-					}
-					if ctx.ExplicitNumbering(step.Target.Type) {
-						return fmt.Errorf("%s needs explicit transaction numbering", where)
 					}
 				}
 				if step.Kind == "create" {

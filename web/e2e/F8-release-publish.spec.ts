@@ -1,4 +1,4 @@
-import { expect, listDetailPage, signIn, test, unique } from "./kit";
+import { expect, listDetailPage, signIn, test, unique, subjectUpdate } from "./kit";
 import type { ReleaseAsset, ReleasePreview, SavedReleaseReview } from "../packages/api/src/gen/host";
 
 test.use({ actionTimeout: 15_000 });
@@ -59,14 +59,14 @@ test("F8 a publisher reviews a product version, releases it, and the version is 
     expect(working.drafts.some(draft => draft.kind === "object" && draft.id === objectID)).toBe(true);
     await submit({ type: "build.actiontype", id: `${type}.resolve` }, "create", {
       name: `${type}.resolve`, object: type, project,
-      definition: { name: "resolve", title: "Resolve ticket", description: "Record how the ticket was resolved.", from: ["open"], to: "",
-        inputs: [{ name: "note", title: "Resolution note", type: "text", required: true }], sets: [{ field: "note", from: "note" }] },
+      definition: { name: "resolve", title: "Resolve ticket", description: "Record how the ticket was resolved.", from: ["open"],
+        inputs: [{ name: "note", title: "Resolution note", type: "text", required: true }], transaction: subjectUpdate(type, { note: { kind: "text", ref: "input.note" } }) },
     }, 0);
     await submit({ type: "build.actiontype", id: `${type}.escalate` }, "create", {
       name: `${type}.escalate`, object: type, project,
-      definition: { name: "escalate", title: "Escalate ticket", description: "Escalate a high-priority ticket.", from: ["open"], to: "",
-        conditions: [{ field: "priority", operator: "=", value: "high", message: "Only high-priority tickets can be escalated." }],
-        inputs: [{ name: "reason", title: "Escalation reason", type: "text", required: true }], sets: [{ field: "note", from: "reason" }] },
+      definition: { name: "escalate", title: "Escalate ticket", description: "Escalate a high-priority ticket.", from: ["open"],
+        inputs: [{ name: "reason", title: "Escalation reason", type: "text", required: true }],
+        transaction: subjectUpdate(type, { note: { kind: "text", ref: "input.reason" } }, { guard: { op: "=", kind: "boolean", args: [{ kind: "choice", ref: "priority" }, { kind: "choice", lit: { value: "high" } }] }, message: "Only high-priority tickets can be escalated." }) },
     }, 0);
   });
 

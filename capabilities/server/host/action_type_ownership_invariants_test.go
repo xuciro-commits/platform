@@ -80,7 +80,7 @@ func TestInvariantActionTypeSingleWriter(t *testing.T) {
 	live.accept(t, "build.object.edit", build.ObjectType, "OBJ1", map[string]any{"states": []build.State{{Name: "open", Title: "Open"}}})
 	live.accept(t, "build.actiontype.create", build.ActionTypeType, "ACTION1", map[string]any{
 		"name": "build.alpha.approve", "object": "build.alpha",
-		"definition": map[string]any{"name": "approve", "title": "Approve", "from": []string{"open"}},
+		"definition": map[string]any{"name": "approve", "title": "Approve", "from": []string{"open"}, "transaction": alphaTxn},
 	})
 
 	current := invariantReadObject(t, live, "OBJ1")
@@ -96,7 +96,7 @@ func TestInvariantActionTypeSingleWriter(t *testing.T) {
 	if next := invariantReadActionType(t, live, "ACTION1"); next.Version != action.Version {
 		t.Fatalf("object save changed the action version from %d to %d", action.Version, next.Version)
 	}
-	changed := []build.Action{{Name: "approve", Title: "Approve through the object", From: []string{"open"}}}
+	changed := []build.Action{{Name: "approve", Title: "Approve through the object", From: []string{"open"}, Transaction: &alphaTxn}}
 	if _, refusal := live.Submit(live.member(t), live.submission("build.object.edit", build.ObjectType, "OBJ1", map[string]any{"actions": changed}), invariantClock); refusal == nil {
 		t.Fatal("an object save carrying changed actions was accepted")
 	}
@@ -120,7 +120,7 @@ func TestInvariantActionTypeSingleWriter(t *testing.T) {
 
 	live.accept(t, "build.actiontype.edit", build.ActionTypeType, "ACTION1", map[string]any{
 		"name": "build.alpha.approve", "object": "build.alpha",
-		"definition": map[string]any{"name": "approve", "title": "Approve, revised", "from": []string{"open"}},
+		"definition": map[string]any{"name": "approve", "title": "Approve, revised", "from": []string{"open"}, "transaction": alphaTxn},
 	})
 	edited := invariantReadActionType(t, live, "ACTION1")
 	if edited.Version != 2 || len(edited.Versions) != 2 || edited.Definition.Title != "Approve, revised" {
@@ -158,7 +158,7 @@ func TestInvariantActionTypeResourceSaveEditsExistingResource(t *testing.T) {
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
 	created := live.accept(t, "build.actiontype.create", build.ActionTypeType, "ACTION1", map[string]any{
 		"name": "build.alpha.approve", "object": "build.alpha",
-		"definition": map[string]any{"name": "approve", "title": "Approve", "from": []string{"open"}},
+		"definition": map[string]any{"name": "approve", "title": "Approve", "from": []string{"open"}, "transaction": alphaTxn},
 	})
 	if stored := invariantReadActionType(t, live, "ACTION1").Record.Revision; stored != created.GetRevision() {
 		t.Fatalf("created actiontype record revision=%d stored revision=%d", created.GetRevision(), stored)
@@ -167,7 +167,7 @@ func TestInvariantActionTypeResourceSaveEditsExistingResource(t *testing.T) {
 	save := live.submission("build.actiontype.save", build.ActionTypeType, "ACTION1", map[string]any{
 		"spec": map[string]any{
 			"name": "build.alpha.approve", "object": "build.alpha",
-			"definition": map[string]any{"name": "approve", "title": "Approve, revised", "from": []string{"open"}},
+			"definition": map[string]any{"name": "approve", "title": "Approve, revised", "from": []string{"open"}, "transaction": alphaTxn},
 		},
 		"project": invariantProject,
 	})
@@ -184,3 +184,5 @@ func TestInvariantActionTypeResourceSaveEditsExistingResource(t *testing.T) {
 		t.Fatalf("resource save did not edit the action type: %+v", action)
 	}
 }
+
+var alphaTxn = platform.BusinessTxn{Subject: "build.alpha", Steps: []platform.TxnStep{{Name: "subject", Kind: "update", Target: platform.TxnRef{Type: "build.alpha", ID: "$subject"}}}}

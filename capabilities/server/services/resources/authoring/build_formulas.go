@@ -111,14 +111,6 @@ func ruleSpec(o Object, a Action, read *platform.RuleReadSpec) platform.RuleRead
 	return ontology.RuleSpec(o, ID, a, read)
 }
 
-func legacyOperand(o Object, a Action, name string, lookup func(string) (platform.EntityInfo, bool)) (platform.Expr, error) {
-	return ontology.LegacyOperand(o, TypeOf(o.Name), a, name, lookup)
-}
-
-func conditionExpr(o Object, a Action, cond Condition, lookup func(string) (platform.EntityInfo, bool)) (platform.Expr, error) {
-	return ontology.ConditionExpr(o, TypeOf(o.Name), a, cond, lookup)
-}
-
 func actionCriteria(o Object, a Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.RuleCriteria, error) {
 	return ontology.ActionCriteria(o, ID, Builder, a, lookup)
 }
@@ -144,76 +136,6 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 			f.FormulaExpr = &e
 			f.Formula = ""
 		}
-	}
-	for i := range o.Actions {
-		a := &o.Actions[i]
-		s := ruleSpec(*o, *a, a.Reads)
-		for j := range a.Conditions {
-			cond := &a.Conditions[j]
-			if cond.Expr == nil {
-				if cond.When != nil {
-					if cond.When.When != nil {
-						return fmt.Errorf("nested legacy guards require Expr")
-					}
-					if err := ontology.CheckActionCondition(*o, TypeOf(o.Name), *a, *cond.When, lookup, false); err != nil {
-						return err
-					}
-				}
-				if err := ontology.CheckActionCondition(*o, TypeOf(o.Name), *a, *cond, lookup, true); err != nil {
-					return err
-				}
-			}
-			e, err := conditionExpr(*o, *a, *cond, lookup)
-			if err != nil {
-				return err
-			}
-			*cond = Condition{Expr: &e, Message: cond.Message}
-		}
-		for j := range a.Sets {
-			set := &a.Sets[j]
-			f, err := ontology.ConditionField(*o, TypeOf(o.Name), *a, set.Field, lookup)
-			if err != nil {
-				return err
-			}
-			if set.Expr == nil {
-				if !strings.HasPrefix(set.From, "=") && set.From != "$me" && set.From != "$now" {
-					ix := -1
-					for k, in := range a.Inputs {
-						if in.Name == set.From {
-							ix = k
-							break
-						}
-					}
-					if ix < 0 {
-						return fmt.Errorf("action %s sets %s from %q, which is undeclared", a.Name, set.Field, set.From)
-					}
-					if !ontology.InputFits(a.Inputs[ix].Type, f.Type) {
-						return fmt.Errorf("action %s assignment input %s does not fit %s", a.Name, set.From, f.Type)
-					}
-					if f.Type == "choice" {
-						for _, option := range ontology.ValueChoices(a.Inputs[ix].Choices) {
-							found := false
-							for _, allowed := range f.Choices {
-								if option == allowed {
-									found = true
-								}
-							}
-							if !found {
-								return fmt.Errorf("input choice %s is not one of the field's choices", option)
-							}
-						}
-					}
-				}
-			}
-			e, err := platform.AssignmentExpr(f.Type, *set, s)
-			if err != nil {
-				return err
-			}
-			*set = Set{Field: set.Field, Expr: &e}
-		}
-	}
-	if err := b.migrateObjectTransactions(o); err != nil {
-		return err
 	}
 	for i := range o.Actions {
 		if err := b.normalizeTransaction(*o, &o.Actions[i], lookup); err != nil {
@@ -262,30 +184,6 @@ func (b *Build) checkObjectRules(o Object, engines ...platform.RuleEngine) error
 			}
 			if err := check(*f.FormulaExpr, ruleSpec(o, Action{}, o.Reads), "field "+f.Name); err != nil {
 				return err
-			}
-		}
-	}
-	for _, a := range o.Actions {
-		s := ruleSpec(o, a, a.Reads)
-		for _, cond := range a.Conditions {
-			if cond.Expr != nil {
-				if cond.Expr.Kind != "boolean" || cond.Message == "" {
-					return fmt.Errorf("action %s guard needs boolean and a refusal message", a.Name)
-				}
-				if err := check(*cond.Expr, s, "action "+a.Name); err != nil {
-					return err
-				}
-			}
-		}
-		for _, set := range a.Sets {
-			if set.Expr != nil {
-				f, err := ontology.ConditionField(o, TypeOf(o.Name), a, set.Field, lookup)
-				if err != nil || !platform.RuleAssignmentFits(f.Type, set.Expr.Kind) {
-					return fmt.Errorf("action %s assignment type differs", a.Name)
-				}
-				if err := check(*set.Expr, s, "action "+a.Name+" set "+set.Field); err != nil {
-					return err
-				}
 			}
 		}
 	}

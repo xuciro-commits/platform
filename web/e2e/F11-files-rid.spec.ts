@@ -1,4 +1,4 @@
-import { acceptedClient, expect, listDetailPage, signIn, test, unique } from "./kit";
+import { acceptedClient, expect, listDetailPage, signIn, test, unique, subjectUpdate } from "./kit";
 
 test.use({ actionTimeout: 15_000 });
 
@@ -62,7 +62,7 @@ test("F11 Files reaches viewer and discoverer scopes without the builder package
       }, 0);
       await editorClient.submit("build.actiontype", actionName, "create", {
         project, name: actionName, object: objectType,
-        definition: { name: "close", title: "Close", from: ["open"], to: "" },
+        definition: { name: "close", title: "Close", from: ["open"], transaction: subjectUpdate(objectType) },
       }, 0);
       await editorClient.submit("build.page", pageName, "create", {
         project, name: pageName, title: `Editor page ${created}`, ...listDetailPage(objectType, ["subject"], [actionName]),

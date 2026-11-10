@@ -7,6 +7,11 @@ export { expect, test };
 let counter = 0;
 
 export const unique = (prefix: string) => `${prefix}${Date.now().toString(36)}${counter++}`;
+type TxnExpr = { op?: string; kind: string; ref?: string; lit?: { value: unknown }; args?: TxnExpr[] };
+export const subjectUpdate = (type: string, changes: Record<string, TxnExpr> = {}, guard?: { guard: TxnExpr; message: string }) => ({
+  subject: type, ...guard,
+  steps: [{ name: "subject", kind: "update", target: { type, id: "$subject" }, changes: Object.entries(changes).map(([field, expr]) => ({ field, expr })) }],
+});
 
 export function listDetailPage(object: string, fields: string[], actions: string[] = []) {
   const ref = { app: object.split(".")[0]!, kind: "object", name: object };

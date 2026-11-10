@@ -234,10 +234,6 @@ func (b *Build) checkTransactions(object Object, engines ...platform.RuleEngine)
 			_, joint := b.jointEntities[typ]
 			return installed || joint
 		},
-		ExplicitNumbering: func(typ string) bool {
-			installed, exists := b.installed[typ]
-			return exists && installed.ValidateAt != nil
-		},
 		Sequences: b.transactionSequences,
 		Link:      b.transactionLink,
 		Confirm:   b.checkConfirmation,

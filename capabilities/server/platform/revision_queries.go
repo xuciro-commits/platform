@@ -245,8 +245,6 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 			Name        string       `json:"name"`
 			Title       string       `json:"title"`
 			From        []string     `json:"from"`
-			To          string       `json:"to"`
-			ToInput     string       `json:"toInput"`
 			Inputs      []struct {
 				Name     string `json:"name"`
 				Type     string `json:"type"`
@@ -332,31 +330,7 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 				l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to, ToInput: input})
 				continue
 			}
-			to := []string{}
-			if a.To != "" {
-				to = append(to, a.To)
-			}
-			if a.ToInput != "" {
-				to = nil
-				valid := false
-				for _, input := range a.Inputs {
-					if input.Name == a.ToInput && input.Type == "choice" && input.Required {
-						valid = true
-						for _, raw := range strings.Split(input.Choices, ",") {
-							state := strings.TrimSpace(raw)
-							if state != "" {
-								to = append(to, state)
-							}
-						}
-					}
-				}
-				if !valid || a.To != "" || len(to) == 0 || slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(choices, state) }) {
-					return EntityInfo{}, fmt.Errorf("frozen object destination input differs")
-				}
-			} else if a.To == "" {
-				to = slices.Clone(a.From)
-			}
-			l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to, ToInput: a.ToInput})
+			l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: slices.Clone(a.From)})
 		}
 		shape.Lifecycle = &l
 	}

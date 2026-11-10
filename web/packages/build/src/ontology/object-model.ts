@@ -16,20 +16,13 @@ export function actionInputFields(inputs: Input_[]): Api.Field[] {
     choices: input.type === "choice" ? (input.choices ?? "").split(",").map(value => value.trim()).filter(Boolean) : undefined,
   }));
 }
-type Set_ = { field: string; from: string;expr?:Api.Expr };
-type Condition = {expr?:Api.Expr; field: string; operator: string; value?: string; valueField?: string; message: string;when?:Condition };
 export type ApproverLevel = { title: string; role: string; all?: boolean };
 type Approval = { pending: string; rejected?: string; levels: ApproverLevel[] };
-type Create_ = { object: string; via: string; sets?: Set_[] };
-type Post_ = { object: string; match: Set_[]; field: string; amount: string; subtract?: boolean; floor?: boolean };
-type JournalLine_ = { account: string; debit?: string; credit?: string; text?: string; object?: string; partner?: string };
-type Journal_ = { date?: string; text?: string; lines: JournalLine_[] };
-export type Action = {confirmationOnly?:boolean;adoption?:Api.ProposalAdoption; name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[]; posts?: Post_[]; journal?: Journal_; reverses?: string; transaction?: Api.BusinessTxn; reads?: Api.RuleReadSpec };
-type Numbering_ = { field: string; prefix?: string; yearly?: boolean; width?: number };
+export type Action = {confirmationOnly?:boolean;adoption?:Api.ProposalAdoption; name: string; title: string; description?: string; from: string[]; inputs?: Input_[]; roles?: string[]; approval?: Approval; transaction?: Api.BusinessTxn };
 export type Access = { role: string; read: "all" | "below" | "unit" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
 export type ObjectScope = { owner?: string; unit?: string; structure?: string };
 export type ProtocolBinding = { contract?: Api.Protocol; name: string; version: number; actions: Record<string, string>; reads?: string[]; events?: Record<string, string> };
-export type ObjectRecord = { actionTypes?: Api.AssetBinding[]; id: string; revision: number; name: string; title: string; icon?: string; color?: string; display?: string; objectView?: Api.ObjectView; state: string; fields: Field[]; states?: State[]; actions?: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; protocols?: ProtocolBinding[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; extensionSource?: { base: Api.AssetBinding }; numbering?: Numbering_; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[]; enterpriseUse?:Api.Expr; datasources?: Api.DataSourceBinding[] };
+export type ObjectRecord = { actionTypes?: Api.AssetBinding[]; id: string; revision: number; name: string; title: string; icon?: string; color?: string; display?: string; objectView?: Api.ObjectView; state: string; fields: Field[]; states?: State[]; actions?: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; protocols?: ProtocolBinding[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; extensionSource?: { base: Api.AssetBinding };  constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[]; enterpriseUse?:Api.Expr; datasources?: Api.DataSourceBinding[] };
 export type Process = { icon?: string; color?: string; display?: string; objectView?: Api.ObjectView; states: State[]; actions: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; protocols?: ProtocolBinding[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[]; enterpriseUse?:Api.Expr; datasources?: Api.DataSourceBinding[] };
 export function objectChanges(draft: Process, saved: Process): Record<string, unknown> {
   const changes: Record<string, unknown> = {};

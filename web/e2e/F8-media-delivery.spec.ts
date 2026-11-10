@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { acceptedClient, expect, signIn, test, unique } from "./kit";
+import { acceptedClient, expect, signIn, test, unique, subjectUpdate } from "./kit";
 
 test.use({ actionTimeout: 15_000 });
 
@@ -42,7 +42,7 @@ test("F8 a released media set supports object attachments and retains their byte
   });
   await submit("build.actiontype", `${type}.attach`, "create", {
     name: `${type}.attach`, object: type, project,
-    definition: { name: "attach", title: "Attach document", from: ["open"], to: "", inputs: [{ name: "document", title: "Document", type: "attachment", required: true }], sets: [{ field: "document", from: "document" }] },
+    definition: { name: "attach", title: "Attach document", from: ["open"], inputs: [{ name: "document", title: "Document", type: "attachment", required: true }], transaction: subjectUpdate(type, { document: { kind: "json", ref: "input.document" } }) },
   });
   const candidate = await publish([{ kind: "mediaset", id: mediaSet }, { kind: "object", id: object }]);
   await submit(type, record, "create", { subject: `Document ${name}` });

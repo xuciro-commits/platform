@@ -95,7 +95,7 @@ func checkRefusalDeclarations(ctx TransactionContext, object Object, action Acti
 			if !ok || info.App != ctx.App || !strings.HasPrefix(record.Target.Type, ctx.App+".") {
 				return fmt.Errorf("refusal record must belong to its transaction authority")
 			}
-			if !ctx.Saved(record.Target.Type) || ctx.ExplicitNumbering(record.Target.Type) {
+			if !ctx.Saved(record.Target.Type) {
 				return fmt.Errorf("refusal record needs a saved builder object with explicit transaction numbering")
 			}
 			seen, linked := map[string]bool{}, false

@@ -1,7 +1,6 @@
 package ontology
 
 import (
-	"fmt"
 	"slices"
 
 	"platformserver/platform"
@@ -37,7 +36,6 @@ type Object struct {
 	Extends           string                       `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
 	ExtensionSource   *platform.ExtensionSource    `json:"extensionSource,omitempty" field:"readonly,aside" type:"json" title:"Extension source" help:"The original base package version and field shape captured at publication"`
 	SchemaVersions    []platform.SchemaVersion     `json:"schemaVersions,omitempty" field:"readonly,aside" type:"json" title:"Schema versions" help:"Retained content versions and compatible schema families captured at publication"`
-	Numbering         *Numbering                   `json:"numbering,omitempty" field:"aside" type:"json" title:"Document numbering"`
 	State             string                       `json:"state" field:"readonly" choices:"draft,published"`
 	Installed         string                       `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
 	Published         string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -82,41 +80,10 @@ type Action struct {
 	Title            string                     `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
 	Description      string                     `json:"description,omitempty" help:"What it does, for people and agents"`
 	From             []string                   `json:"from" title:"Taken from" help:"The states it takes a record from"`
-	ToInput          string                     `json:"toInput,omitempty" title:"State from input"`
-	To               string                     `json:"to,omitempty" title:"Leaves it in" help:"The state it leaves the record in; empty: where it was"`
 	Inputs           []Input                    `json:"inputs,omitempty" title:"What people give"`
 	Transaction      *platform.BusinessTxn      `json:"transaction,omitempty"`
-	Reads            *platform.RuleReadSpec     `json:"reads,omitempty" type:"json" field:"aside"`
-	Sets             []Set                      `json:"sets,omitempty" title:"What it sets"`
-	Conditions       []Condition                `json:"conditions,omitempty" title:"What it needs"`
 	Roles            []string                   `json:"roles,omitempty" title:"Taken by"`
 	Approval         *ActionApproval            `json:"approval,omitempty" title:"Approval"`
-	Creates          []Create                   `json:"creates,omitempty" title:"What it creates"`
-	Posts            []Post                     `json:"posts,omitempty" title:"What it posts"`
-	Journal          *JournalPost               `json:"journal,omitempty" title:"What it books"`
-	Reverses         string                     `json:"reverses,omitempty" title:"Reverses action"`
-}
-
-type JournalPost struct {
-	ClosedPeriod string            `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
-	Date         string            `json:"date,omitempty" example:"record.receivedOn"`
-	Text         string            `json:"text,omitempty" help:"A literal or a source for the entry's text"`
-	Lines        []JournalPostLine `json:"lines" title:"Lines"`
-}
-
-type JournalPostLine struct {
-	Account string `json:"account" help:"=<account code> or a source holding one" example:"=1403"`
-	Debit   string `json:"debit,omitempty" example:"amount"`
-	Credit  string `json:"credit,omitempty" example:"amount"`
-	Text    string `json:"text,omitempty"`
-	Object  string `json:"object,omitempty" help:"What the line is about, e.g. record.material"`
-	Partner string `json:"partner,omitempty" example:"record.supplier"`
-}
-
-type Create struct {
-	Object string `json:"object" field:"required" help:"A defined object of this builder whose reference points at this one" example:"build.followup"`
-	Via    string `json:"via" field:"required" help:"That object's reference field to this record" example:"visit"`
-	Sets   []Set  `json:"sets,omitempty" title:"What it sets"`
 }
 
 type ActionApproval struct {
@@ -159,16 +126,6 @@ func (in Input) Field() platform.Field {
 
 type Set = platform.TxnSet
 
-type Condition struct {
-	Expr       *platform.Expr `json:"expr,omitempty" type:"json" field:"aside"`
-	When       *Condition     `json:"when,omitempty" title:"Only when"`
-	Field      string         `json:"field,omitempty" help:"A declared record path through references, or input.<name>"`
-	Operator   string         `json:"operator,omitempty" choices:"=,!=,<,<=,>,>=,empty,not empty"`
-	Value      string         `json:"value,omitempty" help:"What it is compared with; $me is the person taking the action"`
-	ValueField string         `json:"valueField,omitempty" help:"Compare with another declared record path or input; excludes value"`
-	Message    string         `json:"message" field:"required" help:"What a person reads when it does not hold"`
-}
-
 type Access struct {
 	Role    string `json:"role" field:"required" help:"A role of the builder app, lower-case letters and digits" example:"desk"`
 	Read    string `json:"read" field:"required" choices:"all,below,unit,own,none" help:"all: every record; below: those of the member's units and the units under them; unit: those of the member's own units; own: their own; none: not the object at all"`
@@ -181,69 +138,6 @@ type ObjectScope struct {
 	Owner     string `json:"owner,omitempty" help:"The field holding the member a record belongs to; empty: whoever created it"`
 	Unit      string `json:"unit,omitempty" help:"The field holding the record's organisation (a reference to enterprise.element, or its id)"`
 	Structure string `json:"structure,omitempty" help:"The relationship kind \"below\" follows in the enterprise model, e.g. management"`
-}
-
-type Numbering struct {
-	Field  string `json:"field" help:"The text field that takes the number" example:"number"`
-	Prefix string `json:"prefix,omitempty" example:"GR"`
-	Yearly bool   `json:"yearly,omitempty" help:"Restart at 1 every year and put the year in the number"`
-	Width  int    `json:"width,omitempty" help:"Digits, zero-padded; default 6"`
-}
-
-func (n Numbering) Check(o Object) error {
-	if n.Field == "" {
-		return fmt.Errorf("the numbering names the field that takes the number")
-	}
-	for _, f := range o.Fields {
-		if f.Name == n.Field {
-			if f.Type != "text" {
-				return fmt.Errorf("the numbering field %q is not a text field", n.Field)
-			}
-			return nil
-		}
-	}
-	return fmt.Errorf("the numbering field %q is not a field of the object", n.Field)
-}
-
-func (n Numbering) Format(seq, year int) string {
-	width := n.Width
-	if width <= 0 {
-		width = 6
-	}
-	if n.Yearly {
-		return fmt.Sprintf("%s%d-%0*d", n.Prefix, year, width, seq)
-	}
-	return fmt.Sprintf("%s%0*d", n.Prefix, width, seq)
-}
-
-type Post struct {
-	Object   string `json:"object" field:"required" help:"A defined object of this builder that keeps the balance" example:"build.stockbalance"`
-	Match    []Set  `json:"match" title:"Balance identified by"`
-	Field    string `json:"field" field:"required" help:"The balance's integer, decimal or money field" example:"onhand"`
-	Amount   string `json:"amount" field:"required" example:"quantity"`
-	Subtract bool   `json:"subtract,omitempty" title:"Subtract"`
-	Floor    bool   `json:"floor,omitempty" title:"Never below zero"`
-}
-
-func (a Action) Reversal(of Action) []Post {
-	posts := make([]Post, len(of.Posts))
-	for i, p := range of.Posts {
-		p.Subtract, p.Floor = !p.Subtract, false
-		posts[i] = p
-	}
-	return posts
-}
-
-func (o Object) EffectivePosts(a Action) []Post {
-	if a.Reverses == "" {
-		return a.Posts
-	}
-	for _, of := range o.Actions {
-		if of.Name == a.Reverses {
-			return a.Reversal(of)
-		}
-	}
-	return nil
 }
 
 type PropertyType struct {

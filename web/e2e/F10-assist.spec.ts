@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { acceptedClient, expect, signIn, test, unique } from "./kit";
+import { acceptedClient, expect, signIn, test, unique, subjectUpdate } from "./kit";
 
 test.use({ actionTimeout: 20_000 });
 
@@ -70,7 +70,7 @@ test("F10 an assistant reads only authorized context and writes only after the m
     });
     await admin.submit("build.actiontype", action, "create", {
       name: action, object: `build.${typeName}`, project,
-      definition: { name: "approve", title: "Approve", from: ["open"], to: "approved" },
+      definition: { name: "approve", title: "Approve", from: ["open"], transaction: subjectUpdate(`build.${typeName}`, { state: { kind: "choice", lit: { value: "approved" } } }) },
     });
     await admin.publish([{ kind: "object", id: objectID }]);
     await admin.submit(`build.${typeName}`, record, "create", { title: `Visible ${tag}` });

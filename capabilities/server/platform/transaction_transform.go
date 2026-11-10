@@ -9,7 +9,6 @@ import (
 	"math"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -210,70 +209,6 @@ func TableInput(reads RuleReadSpec, legacy bool, values map[string]any) ExprCont
 		}
 	}
 	return facts
-}
-
-func ConditionValue(kind, raw string) (any, error) {
-	switch kind {
-	case "integer":
-		return strconv.ParseInt(raw, 10, 64)
-	case "decimal":
-		x, err := strconv.ParseFloat(raw, 64)
-		if err == nil && (math.IsInf(x, 0) || math.IsNaN(x)) {
-			err = fmt.Errorf("a finite number is required")
-		}
-		return x, err
-	case "date":
-		if day, err := time.Parse(time.DateOnly, raw); err == nil {
-			return day, nil
-		}
-		instant, err := time.Parse(time.RFC3339, raw)
-		if err != nil {
-			return time.Time{}, err
-		}
-		return time.Parse(time.DateOnly, instant.UTC().Format(time.DateOnly))
-	case "datetime":
-		return time.Parse(time.RFC3339, raw)
-	case "boolean":
-		return strconv.ParseBool(raw)
-	default:
-		return raw, nil
-	}
-}
-
-func TextOf(v any) string {
-	if v != nil {
-		rv := reflect.ValueOf(v)
-		for rv.Kind() == reflect.Pointer {
-			if rv.IsNil() {
-				return ""
-			}
-			rv = rv.Elem()
-		}
-		v = rv.Interface()
-	}
-	switch x := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return x
-	case bool:
-		return strconv.FormatBool(x)
-	case float64:
-		return strconv.FormatFloat(x, 'f', -1, 64)
-	case int:
-		return strconv.Itoa(x)
-	case time.Time:
-		if x.IsZero() {
-			return ""
-		}
-		return x.UTC().Format(time.RFC3339)
-	case Money:
-		if x.Currency == "" && x.Amount == 0 {
-			return ""
-		}
-		return strconv.FormatInt(x.Amount, 10)
-	}
-	return fmt.Sprint(v)
 }
 
 type BusinessRuntimeContext struct {

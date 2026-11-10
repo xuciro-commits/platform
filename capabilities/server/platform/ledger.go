@@ -430,9 +430,6 @@ func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed fu
 		}
 		if i := slices.IndexFunc(e.Lifecycle.Transitions, func(t Transition) bool { return t.Name == verb }); i >= 0 {
 			tr := e.Lifecycle.Transitions[i]
-			if c.Replaying && tr.LegacyReplay != nil {
-				tr = *tr.LegacyReplay
-			}
 			var failure *kernel.Error
 			if tr.Txn != nil {
 				if !c.Staging() || c.Replaying || tr.ApplyTxn == nil || tr.After != nil {
@@ -531,11 +528,6 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 			return nil, err
 		}
 	}
-	if e.ValidateAt != nil {
-		if err := e.ValidateAt(c, v.Interface(), now); err != nil {
-			return nil, err
-		}
-	}
 	value := v.Elem().Interface()
 	if err := c.rt.Check(c, value); err != nil {
 		return nil, err
@@ -618,11 +610,6 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 	}
 	if e.Validate != nil {
 		if err := e.Validate(c, v.Interface()); err != nil {
-			return nil, err
-		}
-	}
-	if e.ValidateAt != nil {
-		if err := e.ValidateAt(c, v.Interface(), now); err != nil {
 			return nil, err
 		}
 	}

@@ -14,110 +14,6 @@ import (
 	ontology "platformserver/services/ontology"
 )
 
-func (b *Build) checkCreates(o Object) error {
-	for _, a := range o.Actions {
-		for _, cr := range a.Creates {
-			where := fmt.Sprintf("the action %q creates %q", a.Name, cr.Object)
-			if !strings.HasPrefix(cr.Object, ID+".") {
-				return fmt.Errorf("%s, which is another app's object; change it through that app's actions", where)
-			}
-			if cr.Object == TypeOf(o.Name) {
-				return fmt.Errorf("%s, which is this object itself", where)
-			}
-			if b.host == nil {
-				continue
-			}
-			info, known := b.lookupEntity(cr.Object)
-			if !known {
-				return fmt.Errorf("%s, which this tenant has not published", where)
-			}
-			via, ok := info.Field(cr.Via)
-			if !ok || via.Type != "reference" || via.Ref != TypeOf(o.Name) {
-				return fmt.Errorf("%s through %q, which is not its reference to %s", where, cr.Via, TypeOf(o.Name))
-			}
-			for _, set := range cr.Sets {
-				if set.Field == cr.Via {
-					return fmt.Errorf("%s and sets %q, which the action fills with this record", where, set.Field)
-				}
-				field, ok := info.Field(set.Field)
-				if !ok {
-					return fmt.Errorf("%s and sets %q, which it has no field for", where, set.Field)
-				}
-				for _, input := range a.Inputs {
-					if input.Name == set.From && input.Type == "reference" && (field.Type != "reference" || field.Ref != input.Ref) {
-						return fmt.Errorf("%s reference input %s does not match field %s", where, input.Name, field.Name)
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error) {
-	if b.host == nil || !strings.HasPrefix(cr.Object, ID+".") {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} is not an object of this builder", cr.Object)
-	}
-	related, known := b.installed[cr.Object]
-	if !known {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} is not published", cr.Object)
-	}
-	info, err := platform.Describe(ID, related, func(reflect.Type) string { return "" })
-	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	if f, ok := info.Field(cr.Via); !ok || f.Type != "reference" || f.Ref != parentType {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} has no reference {field} to {parent}", cr.Object, cr.Via, parentType)
-	}
-	creators := related.Standard.CreateRoles
-	if creators == nil {
-		creators = related.Standard.Roles
-	}
-	if !related.Standard.Create || !c.Holds(c.App, Builder) && !c.May(c.App, "create", creators).Allow {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not create {object}", c.ID, cr.Object)
-	}
-	v := reflect.New(reflect.TypeOf(related.Model)).Elem()
-	v.Field(0).Set(reflect.ValueOf(platform.Record{ID: id}))
-	if err := assign(v.FieldByName(ontology.GoName(cr.Via)), parent); err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	for _, set := range cr.Sets {
-		f, _ := info.Field(set.Field)
-		var x any
-		switch {
-		case set.From == "$me":
-			x = c.ID
-		case set.From == "$now" && f.Type == "date":
-			x = c.Today(now)
-		case set.From == "$now":
-			x = now.UTC()
-		case strings.HasPrefix(set.From, "="):
-			x, _ = platform.Literal(f.Type, strings.TrimPrefix(set.From, "="))
-		default:
-			given, ok := inputs[set.From]
-			if !ok || given == nil {
-				continue
-			}
-			x = given
-		}
-		if err := assign(v.FieldByName(ontology.GoName(set.Field)), x); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{object} cannot set {field}: {why}", cr.Object, set.Field, err.Error())
-		}
-	}
-	if related.Lifecycle != nil {
-		v.FieldByName("State").SetString(related.Lifecycle.Initial)
-	}
-	value := v.Interface()
-	if err := c.Check(value); err != nil {
-		return nil, err
-	}
-	return value, nil
-}
-
-func relatedID(rec platform.Record, a Action, n int) string {
-	return fmt.Sprintf("%s-%s-%d-%d", rec.ID, a.Name, rec.Revision, n+1)
-}
-
 func (b *Build) captureExtensionSource(object *Object) error {
 	if object.Extends == "" {
 		object.ExtensionSource = nil
@@ -299,15 +195,6 @@ func (b *Build) Check(o Object, id string, engine platform.RuleEngine) error {
 	if err := b.checkTransactions(o, engine); err != nil {
 		return err
 	}
-	if err := b.checkCreates(o); err != nil {
-		return err
-	}
-	if err := ontology.CheckActionPosts(o); err != nil {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	if err := b.checkPosts(o); err != nil {
-		return err
-	}
 	if err := b.checkShape(o); err != nil {
 		return err
 	}
@@ -419,10 +306,6 @@ func (b *Build) entity(o Object) platform.Entity {
 
 func entityWith(o Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
 	creation := o.CreateTransaction
-	var creationError error
-	if creation == nil && o.Numbering != nil {
-		creation, creationError = compileLegacyNumbering(o)
-	}
 	entity := ontology.CompileObjectShape(o, ID, Builder)
 	entity.DataSources = slices.Clone(o.DataSources)
 	model := entity.Model
@@ -431,28 +314,10 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	entity.Lifecycle = lifecycle(o, roles, creates, lookup)
 	entity.ComputeAt = computeRulesOf(o, lookup)
 	entity.Validate = validateOf(o, model, lookup)
-	entity.ValidateAt = numberingOf(o, model)
 	entity.CreateTxn = creation
 	entity.EnterpriseUse = o.EnterpriseUse
 	entity.Protocols = objectProvisions(o, entity)
-	if creationError != nil {
-		legacy := entity.ValidateAt
-		entity.ValidateAt = func(c platform.Caller, record any, now time.Time) *kernel.Error {
-			if c.Replaying && legacy != nil {
-				return legacy(c, record, now)
-			}
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", creationError.Error())
-		}
-	}
 	if creation != nil {
-		if legacy := entity.ValidateAt; legacy != nil {
-			entity.ValidateAt = func(c platform.Caller, record any, now time.Time) *kernel.Error {
-				if c.Replaying {
-					return legacy(c, record, now)
-				}
-				return nil
-			}
-		}
 		entity.ApplyCreateTxn = func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *kernel.Error {
 			if creates == nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions need their original owner")
@@ -461,4 +326,43 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		}
 	}
 	return entity
+}
+
+func validateOf(o Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *kernel.Error {
+	if o.Extends == "" {
+		return nil
+	}
+	typ := reflect.TypeOf(model)
+	return func(c platform.Caller, record any) *kernel.Error {
+		if !c.Replaying && lookup != nil {
+			base, exists := lookup(o.Extends)
+			if !exists {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Extension base {type} is unavailable", o.Extends)
+			}
+			shape := platform.EntityInfo{Type: TypeOf(o.Name), Extends: o.Extends, ExtensionSource: o.ExtensionSource}
+			for _, field := range o.Fields {
+				shape.Fields = append(shape.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type, Ref: field.Ref, Required: field.Required, ReadOnly: field.ReadOnly, AliasOf: field.AliasOf})
+			}
+			if err := platform.CheckExtension(shape, base); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+			}
+		}
+		v := reflect.ValueOf(record).Elem()
+		base := v.FieldByName(ontology.GoName(BaseField))
+		if !base.IsValid() || base.String() == "" {
+			return nil
+		}
+		id := v.Field(0).Interface().(platform.Record).ID
+		domain, _ := json.Marshal([][]any{{BaseField, "=", base.String()}})
+		found, _, err := c.FindOf(typ, platform.Query{Domain: domain})
+		if err != nil {
+			return nil
+		}
+		for _, f := range found {
+			if other := reflect.ValueOf(f).Field(0).Interface().(platform.Record); other.ID != id && !other.Archived {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{base} already has its {object} record", base.String(), o.Title)
+			}
+		}
+		return nil
+	}
 }

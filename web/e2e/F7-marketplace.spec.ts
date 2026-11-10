@@ -1,5 +1,5 @@
 import type { PackageDescriptor, PackagePreview, PackageView, ResourceDirectory } from "../packages/api/src/gen/host";
-import { acceptedClient, expect, signIn, test, unique } from "./kit";
+import { acceptedClient, expect, signIn, test, unique, subjectUpdate } from "./kit";
 
 test.use({actionTimeout:15_000});
 
@@ -15,7 +15,7 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   const ref=(kind:string,name:string)=>({app:"build",kind,name});
   const products=new Set<string>();
   const fields=[{name:"code",title:"Code",type:"text",required:true}];
-  const confirm={name:"confirm",title:"Confirm provider",from:["open"],inputs:[{name:"description",title:"Description",type:"text",required:true}],sets:[{field:"description",from:"description"}]};
+  const confirm={name:"confirm",title:"Confirm provider",from:["open"],inputs:[{name:"description",title:"Description",type:"text",required:true}],transaction:subjectUpdate(baseType,{description:{kind:"text",ref:"input.description"}})};
   await source.submit("build.app",publisherProject,"create",{name:publisherProject,title:"Publisher project"});
   await customer.submit("build.app",customerProject,"create",{name:customerProject,title:"Customer project"});
   await source.submit("build.object",providerObject,"create",{name:provider,title:providerTitle,project:publisherProject,fields:[...fields,{name:"description",title:"Description",type:"text"}],states:[{name:"open",title:"Open"}]});
