@@ -186,10 +186,6 @@ func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 	return true, nil
 }
 
-func (l *ChangeLog) Submit(s *pb.Submission, now time.Time) (*pb.ChangeRecord, *Error) {
-	return l.SubmitChecked(s, now, nil)
-}
-
 func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() *Error) (*pb.ChangeRecord, *Error) {
 	required := []string{s.GetTenantId(), s.GetPrincipalId(), s.GetAuthority(), s.GetIdempotencyKey(),
 		s.GetTarget().GetType(), s.GetTarget().GetId(), s.GetSchema().GetName()}
@@ -241,31 +237,3 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() 
 }
 
 func schemaKey(s *pb.SchemaRef) string { return fmt.Sprintf("%s@%d", s.GetName(), s.GetVersion()) }
-
-func (l *ChangeLog) Adopt(records []*pb.ChangeRecord) *Error {
-	conflict := errorf(pb.ErrorCode_ERROR_CODE_CONFLICT)
-	if len(records) == 0 {
-		return nil
-	}
-	tenant := records[0].GetSubmission().GetTenantId()
-	if len(l.logs[tenant]) > 0 || l.tail[tenant] != nil {
-		return conflict
-	}
-	ids, keys := map[string]bool{}, map[string]bool{}
-	for i, r := range records {
-		s := r.GetSubmission()
-		if s.GetTenantId() != tenant || ids[r.GetChangeId()] || keys[s.GetIdempotencyKey()] ||
-			i > 0 && r.GetRecordedTime().AsTime().Before(records[i-1].GetRecordedTime().AsTime()) {
-			return conflict
-		}
-		ids[r.GetChangeId()], keys[s.GetIdempotencyKey()] = true, true
-	}
-	l.logs[tenant] = append([]*pb.ChangeRecord(nil), records...)
-	l.byKey[tenant] = map[string]*pb.ChangeRecord{}
-	l.byID[tenant] = map[string]bool{}
-	for _, r := range records {
-		l.index(r)
-		l.revs[[3]string{tenant, r.GetSubmission().GetTarget().GetType(), r.GetSubmission().GetTarget().GetId()}]++
-	}
-	return nil
-}

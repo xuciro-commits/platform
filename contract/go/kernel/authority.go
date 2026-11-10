@@ -3,34 +3,15 @@ package kernel
 import (
 	"slices"
 
-	"google.golang.org/protobuf/proto"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
 type Authorities struct {
-	edge    string
 	current map[[2]string]*pb.AuthorityDeclaration
-	outbox  map[[2]string]*outboxEntry
 }
 
-type outboxEntry struct {
-	submission *pb.Submission
-	state      pb.SubmissionState
-}
-
-var transitions = map[string]map[pb.SubmissionState]pb.SubmissionState{
-	"send":        {pb.SubmissionState_SUBMISSION_STATE_PENDING: pb.SubmissionState_SUBMISSION_STATE_SENDING},
-	"confirm":     {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_CONFIRMED},
-	"conflict":    {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_CONFLICT},
-	"reject":      {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_REJECTED},
-	"timeout":     {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_UNKNOWN},
-	"undelivered": {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_PENDING},
-	"retry":       {pb.SubmissionState_SUBMISSION_STATE_UNKNOWN: pb.SubmissionState_SUBMISSION_STATE_SENDING},
-}
-
-func NewAuthorities(edge string) *Authorities {
-	return &Authorities{edge: edge, current: map[[2]string]*pb.AuthorityDeclaration{}, outbox: map[[2]string]*outboxEntry{}}
+func NewAuthorities() *Authorities {
+	return &Authorities{current: map[[2]string]*pb.AuthorityDeclaration{}}
 }
 
 func (a *Authorities) Declare(d *pb.AuthorityDeclaration) *Error {
@@ -60,48 +41,4 @@ func (a *Authorities) Authorize(s *pb.Submission) *Error {
 		err = errorf(pb.ErrorCode_ERROR_CODE_NOT_AUTHORITY)
 	}
 	return err
-}
-
-func (a *Authorities) Enqueue(s *pb.Submission) (pb.SubmissionState, *Error) {
-	d, err := a.declaration(s)
-	if err != nil {
-		return 0, err
-	}
-	key := [2]string{s.GetTenantId(), s.GetIdempotencyKey()}
-	if existing := a.outbox[key]; existing != nil {
-		if !proto.Equal(existing.submission, s) {
-			return 0, errorf(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT)
-		}
-		return existing.state, nil
-	}
-	state := pb.SubmissionState_SUBMISSION_STATE_PENDING
-	if d.GetAuthorityId() == a.edge {
-		state = pb.SubmissionState_SUBMISSION_STATE_CONFIRMED
-	}
-	a.outbox[key] = &outboxEntry{submission: s, state: state}
-	return state, nil
-}
-
-func (a *Authorities) Transition(tenant, idempotencyKey, event string) (pb.SubmissionState, *Error) {
-	entry := a.outbox[[2]string{tenant, idempotencyKey}]
-	if entry == nil {
-		return 0, errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
-	}
-	next, ok := transitions[event][entry.state]
-	if !ok {
-		return 0, errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
-	}
-	entry.state = next
-	return next, nil
-}
-
-func (a *Authorities) Answer(tenant, idempotencyKey string, code pb.ErrorCode) (pb.SubmissionState, *Error) {
-	event := "reject"
-	switch code {
-	case pb.ErrorCode_ERROR_CODE_UNSPECIFIED:
-		event = "confirm"
-	case pb.ErrorCode_ERROR_CODE_CONFLICT, pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT:
-		event = "conflict"
-	}
-	return a.Transition(tenant, idempotencyKey, event)
 }

@@ -11,20 +11,11 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-type FactArchive interface {
-	Records(tenant string, through int) []*pb.FactRecord
-	Accepted(tenant, key string, through int) *pb.FactRecord
-	Contains(tenant, id string, through int) bool
-}
-
 type FactLog struct {
-	schemas  interface{ Accepts(*pb.SchemaRef) bool }
-	logs     map[string][]*pb.FactRecord
-	byKey    map[string]map[string]*pb.FactRecord
-	next     int
-	archive  FactArchive
-	archived map[string]int
-	last     map[string]time.Time
+	schemas interface{ Accepts(*pb.SchemaRef) bool }
+	logs    map[string][]*pb.FactRecord
+	byKey   map[string]map[string]*pb.FactRecord
+	next    int
 }
 
 func NewFactLog(schemas interface{ Accepts(*pb.SchemaRef) bool }) *FactLog {
@@ -33,42 +24,15 @@ func NewFactLog(schemas interface{ Accepts(*pb.SchemaRef) bool }) *FactLog {
 }
 
 func (l *FactLog) Records(tenant string) []*pb.FactRecord {
-	if l.archive == nil {
-		return l.logs[tenant]
-	}
-	return append(l.archive.Records(tenant, l.archived[tenant]), l.logs[tenant]...)
+	return l.logs[tenant]
 }
 
 func (l *FactLog) Accepted(tenant, key string) *pb.FactRecord {
-	if record := l.byKey[tenant][key]; record != nil {
-		return record
-	}
-	if l.archive != nil {
-		return l.archive.Accepted(tenant, key, l.archived[tenant])
-	}
-	return nil
-}
-
-func (l *FactLog) Compact(archive FactArchive) {
-	if l.archived == nil {
-		l.archived = map[string]int{}
-	}
-	if l.last == nil {
-		l.last = map[string]time.Time{}
-	}
-	for tenant, records := range l.logs {
-		l.archived[tenant] += len(records)
-		if len(records) > 0 {
-			l.last[tenant] = records[len(records)-1].GetRecordedTime().AsTime()
-		}
-	}
-	l.archive = archive
-	l.logs = map[string][]*pb.FactRecord{}
-	l.byKey = map[string]map[string]*pb.FactRecord{}
+	return l.byKey[tenant][key]
 }
 
 func (l *FactLog) Contains(tenant, id string) bool {
-	return slices.ContainsFunc(l.logs[tenant], func(r *pb.FactRecord) bool { return r.GetFactId() == id }) || l.archive != nil && l.archive.Contains(tenant, id, l.archived[tenant])
+	return slices.ContainsFunc(l.logs[tenant], func(r *pb.FactRecord) bool { return r.GetFactId() == id })
 }
 
 func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
@@ -93,9 +57,6 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 	}
 	existing := l.byKey[f.GetTenantId()][f.GetIdempotencyKey()]
-	if existing == nil && l.archive != nil {
-		existing = l.archive.Accepted(f.GetTenantId(), f.GetIdempotencyKey(), l.archived[f.GetTenantId()])
-	}
 	if existing != nil {
 		if !proto.Equal(existing.GetFact(), f) {
 			return nil, errorf(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT)
@@ -109,9 +70,6 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 		}
 	}
 	recorded := now
-	if l.last[f.GetTenantId()].After(recorded) {
-		recorded = l.last[f.GetTenantId()]
-	}
 	if n := len(log); n > 0 && log[n-1].GetRecordedTime().AsTime().After(now) {
 		recorded = log[n-1].GetRecordedTime().AsTime()
 	}

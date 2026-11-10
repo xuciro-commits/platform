@@ -15,7 +15,7 @@ import (
 type KernelFactory interface {
 	Changes(SchemaRegistry) ChangeLog
 	Schemas([]*pb.SchemaRef) SchemaRegistry
-	Authorities(string) Authorities
+	Authorities() Authorities
 	Works() Works
 	Connectors() Connectors
 	Identity([]*pb.EntityRef) Identity
@@ -42,14 +42,11 @@ type ChangeLog interface {
 	ApplyAccepted(*pb.ChangeRecord) (bool, error)
 	SubmitChecked(*pb.Submission, time.Time, func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error)
 	Restore(string, []*pb.ChangeRecord)
-	Adopt([]*pb.ChangeRecord) *kernel.Error
 }
 type Works interface {
 	Start(string, string) (uint32, string, *kernel.Error)
-	Checkpoint(string, uint32, uint32, string) *kernel.Error
 	Finish(string, uint32, bool) *kernel.Error
 	Cancel(string) *kernel.Error
-	CloseOwner(string)
 	Get(string) (*pb.Work, *kernel.Error)
 	All() []*pb.Work
 	Restore([]*pb.Work)
@@ -98,10 +95,10 @@ func (n nativeChanges) ForkLogWithSchemas(s SchemaRegistry) ChangeLog {
 }
 func (n nativeChanges) SetFacts(f func(string, string) bool) { n.Facts = f }
 func (NativeKernel) Schemas(refs []*pb.SchemaRef) SchemaRegistry {
-	return kernel.NewSchemaRegistry(refs, nil)
+	return kernel.NewSchemaRegistry(refs)
 }
 func (NativeKernel) Changes(s SchemaRegistry) ChangeLog         { return nativeChanges{kernel.NewChangeLog(s)} }
-func (NativeKernel) Authorities(id string) Authorities          { return kernel.NewAuthorities(id) }
+func (NativeKernel) Authorities() Authorities                   { return kernel.NewAuthorities() }
 func (NativeKernel) Works() Works                               { return kernel.NewWorks() }
 func (NativeKernel) Connectors() Connectors                     { return kernel.NewConnectors() }
 func (NativeKernel) Identity(entities []*pb.EntityRef) Identity { return kernel.NewIdentity(entities) }
@@ -140,7 +137,7 @@ func NewLedgerWithKernel(engine KernelFactory, tenant, authority string, catalog
 	}
 	registry := engine.Schemas(schemas)
 	l := &Ledger{tenant: tenant, authority: authority, changes: engine.Changes(registry), schemas: registry,
-		kernel: engine, schemaRefs: slices.Clone(schemas), authorities: engine.Authorities(authority), Catalog: catalog}
+		kernel: engine, schemaRefs: slices.Clone(schemas), authorities: engine.Authorities(), Catalog: catalog}
 	for _, class := range classes {
 		d := &pb.AuthorityDeclaration{TenantId: tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: authority, Epoch: 1}
 		l.authorities.Declare(d)
@@ -156,7 +153,7 @@ func (l *Ledger) BindKernel(engine KernelFactory) error {
 		return fmt.Errorf("kernel binding requires an unstarted ledger")
 	}
 	registry := engine.Schemas(l.schemaRefs)
-	changes, authorities := engine.Changes(registry), engine.Authorities(l.authority)
+	changes, authorities := engine.Changes(registry), engine.Authorities()
 	for _, declaration := range l.declarations {
 		if err := authorities.Declare(declaration); err != nil {
 			return err
@@ -246,7 +243,7 @@ func (l *Ledger) ForkRead() (*Ledger, error) {
 	fork := &Ledger{tenant: l.tenant, authority: l.authority, declarations: slices.Clone(l.declarations),
 		kernel: l.kernel, schemaRefs: slices.Clone(l.schemaRefs), schemas: registry,
 		changes: l.changes.ForkLogWithSchemas(registry), archive: l.archive,
-		authorities: l.kernel.Authorities(l.authority), Catalog: NewCatalog(l.Catalog.All()...)}
+		authorities: l.kernel.Authorities(), Catalog: NewCatalog(l.Catalog.All()...)}
 	for _, declaration := range fork.declarations {
 		if err := fork.authorities.Declare(declaration); err != nil {
 			return nil, err
