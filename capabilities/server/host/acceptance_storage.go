@@ -1,7 +1,6 @@
 package host
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -312,47 +311,4 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		}
 		return b.plan(acceptedformat.ChangePlan{Unique: result.Unique})
 	}
-}
-
-func LegacyStatePreimages(ctx context.Context, j persistence.Journals, tenant string, through int64) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
-	entries, err := j.Entries(ctx, tenant, 0)
-	if err != nil {
-		return nil, nil, err
-	}
-	initialAI, err := json.Marshal(aistate.State{})
-	if err != nil {
-		return nil, nil, err
-	}
-	values := map[string]json.RawMessage{"app-state/" + platform.AIApp: initialAI}
-	ordinary := map[string]json.RawMessage{}
-	installed := map[string]json.RawMessage{}
-	for index, entry := range entries {
-		if int64(index+1) > through {
-			break
-		}
-		if entry.Kind != "accepted-result" {
-			continue
-		}
-		delta, err := StorageDelta(entry.Body)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, value := range delta.Values {
-			if value.Owner == "app-state" && value.Key == platform.AIApp {
-				values[value.Owner+"/"+value.Key] = value.Image
-			}
-		}
-		for _, record := range delta.Records {
-			key := record.Type + "/" + record.ID
-			ordinary[key] = record.Image
-			delete(installed, key)
-		}
-		for _, replacement := range delta.Replacements {
-			key := replacement.Type + "/" + replacement.ID
-			if image := ordinary[key]; len(image) != 0 {
-				installed[key] = image
-			}
-		}
-	}
-	return installed, values, nil
 }

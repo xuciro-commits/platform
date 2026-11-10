@@ -67,13 +67,24 @@ func (j *Postgres) InitializeState(ctx context.Context, tenant string, position 
 	} else if saved != position {
 		return fmt.Errorf("tenant %s SQL state is at %d, journal at %d", tenant, saved, position)
 	}
-	if err = j.upgradeStateInstallations(ctx, tx, tenant, position, delta); err != nil {
+	if err = requireStateFormat(ctx, tx, tenant); err != nil {
 		return err
 	}
 	if err = j.compareState(ctx, tx, tenant, position, delta); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func requireStateFormat(ctx context.Context, tx pgx.Tx, tenant string) error {
+	var format int
+	if err := tx.QueryRow(ctx, `select format from runtime_tenants where tenant=$1`, tenant).Scan(&format); err != nil {
+		return err
+	}
+	if format != 3 {
+		return fmt.Errorf("tenant %s has SQL state format %d; this host reads format 3", tenant, format)
+	}
+	return nil
 }
 
 func (j *Postgres) StatePosition(ctx context.Context, tenant string) (int64, bool, error) {
@@ -105,7 +116,7 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 		return err
 	}
 	if saved == position {
-		if err = j.upgradeStateInstallations(ctx, tx, tenant, position, full); err != nil {
+		if err = requireStateFormat(ctx, tx, tenant); err != nil {
 			return err
 		}
 		if err = j.compareState(ctx, tx, tenant, position, full); err != nil {
@@ -116,7 +127,7 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 	if saved != prefix.Position || saved < 0 || saved >= position {
 		return fmt.Errorf("tenant %s SQL recovery predecessor differs: %d/%d/%d", tenant, saved, prefix.Position, position)
 	}
-	if err = j.upgradeStateInstallations(ctx, tx, tenant, prefix.Position, prefix.Delta); err != nil {
+	if err = requireStateFormat(ctx, tx, tenant); err != nil {
 		return err
 	}
 	if err = j.compareState(ctx, tx, tenant, prefix.Position, prefix.Delta); err != nil {

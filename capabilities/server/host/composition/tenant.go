@@ -1,7 +1,6 @@
 package composition
 
 import (
-	"platformserver/apps/history"
 	platformserver "platformserver/host"
 	"platformserver/kernel/systemscope"
 	"platformserver/platform"
@@ -34,7 +33,7 @@ func BuiltinApps(id string, source *platform.SystemSource, seats ...platform.Sea
 	apps := []platform.App{
 		NewConsole(id, seats...),
 		enterprise.New(id, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id), ai.New(id), work.New(id), monitoring.New(id), automation.New(id), knowledge.New(id),
-		agentowner.New(id), files.New(id), history.New(id), build.New(id),
+		agentowner.New(id), files.New(id), build.New(id),
 	}
 	if id == systemscope.Tenant {
 		apps = append(apps, system.New(id, source))

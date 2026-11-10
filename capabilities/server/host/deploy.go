@@ -183,14 +183,6 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 				return fmt.Errorf("read SQL state position %s: %w", t.ID, err)
 			}
 		}
-		legacyState := false
-		if upgrade, ok := j.(persistence.RuntimeStateUpgrade); ok {
-			var err error
-			legacyState, err = upgrade.StateNeedsUpgrade(ctx, t.ID)
-			if err != nil {
-				return fmt.Errorf("read SQL state format %s: %w", t.ID, err)
-			}
-		}
 		auditPage, auditErr := t.store().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, Limit: 1})
 		if auditErr == nil && len(auditPage.Entries) == 0 {
 			if all, err := j.Entries(ctx, t.ID, 0); err == nil {
@@ -198,7 +190,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			}
 		}
 		var after int64
-		if d.SnapshotEvery > 0 && !legacyState {
+		if d.SnapshotEvery > 0 {
 			key, err := t.runtimeSnapshotKey(code)
 			if err != nil {
 				return fmt.Errorf("snapshot format %s: %w", t.ID, err)

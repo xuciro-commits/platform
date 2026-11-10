@@ -7,8 +7,6 @@ import (
 
 type StateDelta struct {
 	LegacyUnique bool
-	LegacyImages map[string]json.RawMessage
-	LegacyValues map[string]json.RawMessage
 	Unique       []StateUnique
 	Records      []StateRecord
 	Replacements []StateReplacement
@@ -110,8 +108,4 @@ type StateUnique struct {
 
 type UniqueState interface {
 	StateUnique(context.Context, string, string, string, string, int64) ([]string, error)
-}
-
-type RuntimeStateUpgrade interface {
-	StateNeedsUpgrade(context.Context, string) (bool, error)
 }

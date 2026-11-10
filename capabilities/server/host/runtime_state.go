@@ -24,24 +24,13 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 	if !ok {
 		return nil
 	}
-	if err := t.restoreLegacySeeds(ctx, store); err != nil {
-		return err
-	}
-	needsUpgrade := false
-	if upgrade, ok := j.(persistence.RuntimeStateUpgrade); ok {
-		var err error
-		needsUpgrade, err = upgrade.StateNeedsUpgrade(ctx, t.ID)
-		if err != nil {
-			return err
-		}
-	}
 	var view persistence.StateReadView
 	if recovery, ok := j.(persistence.RuntimeStateRecovery); ok {
 		position, active, err := recovery.StatePosition(ctx, t.ID)
 		if err != nil {
 			return err
 		}
-		if active && !needsUpgrade && prefix == nil && position == j.Position(t.ID) {
+		if active && prefix == nil && position == j.Position(t.ID) {
 			t.installRuntimeRecords(store, func() int64 { return j.Position(t.ID) })
 			t.installRuntimeHistory(store, func() int64 { return j.Position(t.ID) })
 			t.enableCurrentReadScopes()
@@ -70,21 +59,6 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 	d, err := t.runtimeStateDeltaLocked()
 	if err != nil {
 		return err
-	}
-	if needsUpgrade {
-		position := j.Position(t.ID)
-		if prefix != nil {
-			position = prefix.Position
-		}
-		images, values, readErr := LegacyStatePreimages(ctx, j, t.ID, position)
-		if readErr != nil {
-			return readErr
-		}
-		if prefix != nil {
-			prefix.Delta.LegacyImages, prefix.Delta.LegacyValues = images, values
-		} else {
-			d.LegacyImages, d.LegacyValues = images, values
-		}
 	}
 	if prefix != nil {
 		recovery, ok := j.(persistence.RuntimeStateRecovery)

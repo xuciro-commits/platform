@@ -11,10 +11,6 @@ export const registeredManifests = {
     "id": "build",
     "title": "Files"
   },
-  "core": {
-    "id": "core",
-    "title": "Legacy core records"
-  },
   "enterprise": {
     "id": "enterprise",
     "title": "Organisation"

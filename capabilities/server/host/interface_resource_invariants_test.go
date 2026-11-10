@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
-	"platformserver/apps/history"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -174,7 +177,7 @@ func TestInvariantC14InterfaceResourceLifecycle(t *testing.T) {
 }
 
 func TestInvariantC14ManifestInterfacesJoinRegistry(t *testing.T) {
-	live := newInvariantTenantWithApps(t, "invariant-c14-manifest", []platform.App{history.New("invariant-c14-manifest")})
+	live := newInvariantTenantWithApps(t, "invariant-c14-manifest", []platform.App{&manifestInterfaceApp{ledger: platform.NewLedger("invariant-c14-manifest", "fixture", platform.NewCatalog())}})
 	shape := map[string]any{
 		"name": "build.coded", "title": "Tenant coded", "description": "A tenant interface.",
 		"fields": []platform.InterfaceField{{Name: "code", Type: "text", Title: "Code"}},
@@ -186,13 +189,13 @@ func TestInvariantC14ManifestInterfacesJoinRegistry(t *testing.T) {
 	for _, interfaceShape := range registry {
 		count[interfaceShape.Name]++
 	}
-	if count["core.coded"] != 1 || count["build.coded"] != 1 {
+	if count["fixture.coded"] != 1 || count["build.coded"] != 1 {
 		t.Fatalf("manifest and tenant interfaces did not join one registry: %+v", count)
 	}
 	tenant := map[string]any{
 		"name": "coreimplementation", "title": "Core implementation",
 		"fields":     []build.Field{{Name: "code", Title: "Code", Type: "text"}, {Name: "name", Title: "Name", Type: "text"}},
-		"implements": []string{"core.coded"},
+		"implements": []string{"fixture.coded"},
 	}
 	live.accept(t, build.ObjectType+".create", build.ObjectType, "OBJ1", tenant)
 	live.accept(t, build.ObjectType+".publish", build.ObjectType, "OBJ1", map[string]any{})
@@ -214,4 +217,24 @@ func containsRef(values []platform.AssetRef, want platform.AssetRef) bool {
 		}
 	}
 	return false
+}
+
+type manifestInterfaceApp struct{ ledger *platform.Ledger }
+
+func (a *manifestInterfaceApp) Manifest() platform.Manifest {
+	return platform.Manifest{ID: "fixture", Title: "Fixture", Version: "1", Actions: a.ledger.Catalog, Interfaces: []platform.Interface{{Name: "fixture.coded", Title: "Coded", Description: "Anything found by a short unique code and a name.",
+		Fields: []platform.InterfaceField{{Name: "code", Type: "text", Title: "Code"}, {Name: "name", Type: "text", Title: "Name"}}}}}
+}
+func (a *manifestInterfaceApp) AcceptedLedger() *platform.Ledger { return a.ledger }
+func (a *manifestInterfaceApp) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	return &manifestInterfaceApp{ledger: ledger}, nil
+}
+func (a *manifestInterfaceApp) Declarations() []*pb.AuthorityDeclaration {
+	return a.ledger.Declarations()
+}
+func (a *manifestInterfaceApp) SnapshotFormat() string             { return "platform.ledger.v1" }
+func (a *manifestInterfaceApp) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
+func (a *manifestInterfaceApp) Restore(raw json.RawMessage) error  { return a.ledger.Restore(raw) }
+func (a *manifestInterfaceApp) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }

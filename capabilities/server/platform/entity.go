@@ -83,16 +83,6 @@ type Entity struct {
 	Withheld        string
 }
 
-type LegacySeed struct {
-	Type  string
-	ID    string
-	Value any
-}
-
-type LegacySeeder interface {
-	LegacySeeds() []LegacySeed
-}
-
 type DataSourceBinding struct {
 	Kind       string             `json:"kind"`
 	Source     string             `json:"source"`

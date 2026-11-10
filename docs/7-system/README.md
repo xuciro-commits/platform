@@ -149,7 +149,7 @@ POST /v1/submissions
 - 发布路径（7.5.1）：record 族（object、action-type）与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）的发布步骤仍手写在 `services/resources/authoring`；definition 族在 `build_kinds.go`；apps、function、integration、automation 已在各自服务，但经 Build 的“兼容公共类型”转接。
 - 包名与目录名不一致 16 处（7.7）：`services/actions`→business、`services/apps`→applications、`services/apps/system/build`→systembuild、`services/automate/runtime`→automation、`services/ai/runtime` 与 `ai/evaluation`→agents、`ai/retrieval` 与 `ai/sources`→knowledge、`ai/gateway`→aigateway、`ai/state`→aistate、`services/data/blobs`→resources、`data/transform`→integrations、`services/functions/runtime`→compute、`services/resources/authoring`→build、`resources/merge`→branches、`services/work/activity`→relations。
 - 内核用词（7.7）：代码以 App、Ledger、Entity、Authority 指代服务与接受语义；candidate 一词在 Go 中约 1200 处，多数指决定而非发布候选。
-- 纪元前路径（7.6、7.7）：仍在的解码与迁移：`apps/history` 的旧 `core.*` 记录形状与旧 core 种子恢复、`services/resources/authoring` 的 `build_transactions_legacy.go` 与 `data_compat.go`、`kernel/store/postgres_state_upgrade.go`（待核对）；领域层的见 [6-domain 现存差距](../6-domain/README.md#现存差距)。
+- 纪元前路径（7.6、7.7）：仍在的解码与迁移：`services/resources/authoring` 的 `build_transactions_legacy.go` 与 `data_compat.go`；领域层的见 [6-domain 现存差距](../6-domain/README.md#现存差距)。
 - 特殊租户（[1-enterprise §1.2](../1-enterprise.md)）：`system` 租户的源码与只读发布记录、`kernel/systemscope`、`services/apps/system` 与 `host/system_definitions.go` 仍在；`cmd/platform-updater` 也使用 `systemscope`，删除前须核对宿主升级是否依赖它。
 
 ## 相关
