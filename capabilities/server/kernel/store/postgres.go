@@ -30,7 +30,10 @@ type Entry struct {
 	Body      json.RawMessage `json:"body"`
 	At        time.Time       `json:"at"`
 	Versions  map[string]int  `json:"versions,omitempty"`
+	Epoch     int             `json:"epoch"`
 }
+
+const FormatEpoch = 1
 
 var appendHistogram, _ = otel.Meter("platformserver").Float64Histogram("platform.journal.append",
 	metric.WithUnit("ms"), metric.WithDescription("Time to append a journal entry"))
@@ -80,6 +83,7 @@ var schema = []string{
 		tenant text not null, seq bigint not null, code text not null, state bytea not null,
 		at timestamptz not null default now(), primary key (tenant, seq))`,
 	`alter table journal add column if not exists versions jsonb`,
+	`alter table journal add column if not exists epoch integer not null default 0`,
 	`create table if not exists embeddings (
 		tenant text not null, model text not null, hash text not null, vector bytea not null,
 		primary key (tenant, model, hash))`,
@@ -243,7 +247,7 @@ func initializeJournal(ctx context.Context, pool *pgxpool.Pool) error {
 }
 
 func (j *Postgres) Entries(ctx context.Context, tenant string, after int64) ([]Entry, error) {
-	rows, err := j.pool.Query(ctx, `select seq, app, kind, principal, body, at, versions from journal where tenant = $1 and seq > $2 order by seq`, tenant, after)
+	rows, err := j.pool.Query(ctx, `select seq, app, kind, principal, body, at, versions, epoch from journal where tenant = $1 and seq > $2 order by seq`, tenant, after)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +257,7 @@ func (j *Postgres) Entries(ctx context.Context, tenant string, after int64) ([]E
 	for rows.Next() {
 		var e Entry
 		var seq int64
-		if err := rows.Scan(&seq, &e.App, &e.Kind, &e.Principal, &e.Body, &e.At, &e.Versions); err != nil {
+		if err := rows.Scan(&seq, &e.App, &e.Kind, &e.Principal, &e.Body, &e.At, &e.Versions, &e.Epoch); err != nil {
 			return nil, fmt.Errorf("%w: tenant %s entry after %d: %v", ErrTenantJournal, tenant, last, err)
 		}
 		if seq != last+1 {
@@ -347,34 +351,6 @@ func (j *Postgres) Snapshot(ctx context.Context, tenant, code string) (int64, []
 	return seq, state, true, nil
 }
 
-func (j *Postgres) Append(ctx context.Context, tenant string, e Entry) error {
-	j.mu.Lock()
-	lock := j.locks[tenant]
-	if lock == nil {
-		lock = &sync.Mutex{}
-		j.locks[tenant] = lock
-	}
-	j.mu.Unlock()
-	lock.Lock()
-	defer lock.Unlock()
-	j.mu.Lock()
-	seq, read := j.next[tenant]
-	j.mu.Unlock()
-	if !read {
-		return fmt.Errorf("journal: append to %s before reading its entries", tenant)
-	}
-	started := time.Now()
-	defer func() { appendHistogram.Record(ctx, float64(time.Since(started).Microseconds())/1000) }()
-	if _, err := j.pool.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions); err != nil {
-		return err
-	}
-	j.mu.Lock()
-	j.next[tenant] = seq + 1
-	j.mu.Unlock()
-	return nil
-}
-
 func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) ([]byte, error) {
 	identity, err := j.identify(e.Body)
 	if err != nil || e.Kind != "accepted-result" || identity.Tenant != tenant || identity.App != e.App ||
@@ -463,8 +439,8 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	} else if !errors.Is(stateErr, pgx.ErrNoRows) {
 		return nil, stateErr
 	}
-	tag, err := tx.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions)
- values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing`, tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions)
+	tag, err := tx.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions, epoch)
+ values ($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict do nothing`, tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions, e.Epoch)
 	if err != nil {
 		return nil, err
 	}

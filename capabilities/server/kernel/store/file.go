@@ -223,13 +223,6 @@ func (j *File) Position(tenant string) int64 {
 	return j.next[tenant] - 1
 }
 
-func (j *File) Append(_ context.Context, tenant string, e Entry) error {
-	lock := j.lock(tenant)
-	lock.Lock()
-	defer lock.Unlock()
-	return j.appendLocked(tenant, e)
-}
-
 func (j *File) appendLocked(tenant string, e Entry) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()

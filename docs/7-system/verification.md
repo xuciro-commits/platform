@@ -89,4 +89,4 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 ## 现存差距
 
 - `make verify` 的内核不变量与 F1–F24 仍运行在内存宿主；SQL 模式覆盖创建、项目委派、viewer/discoverer 目录权限、日志、审计、运行索引和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。
-- 不变量与规范不符（7.10）：K1 仍断言旧 core 种子的恢复，尚无纪元断言；K8 的用例（`host/system_release_invariants_test.go`）仍断言 `system` 租户发布记录只读，尚无系统产品包的预装断言；资源入口验收仍检查 `work.view` 的 v0 状态。
+- 不变量与规范不符（7.10）：K1 仍断言旧 core 种子的恢复；K8 的用例（`host/system_release_invariants_test.go`）仍断言 `system` 租户发布记录只读，尚无系统产品包的预装断言；资源入口验收仍检查 `work.view` 的 v0 状态。

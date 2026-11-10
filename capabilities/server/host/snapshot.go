@@ -84,6 +84,7 @@ const tenantSQLSnapshotFormat = "platform.tenant.sql.v1"
 var snapshotBuild = sync.OnceValue(func() string { return CodeOf() })
 
 type snapshotCompatibility struct {
+	Epoch       int               `json:"epoch"`
 	Host        string            `json:"host"`
 	Owners      map[string]string `json:"owners"`
 	Composition string            `json:"composition"`
@@ -100,7 +101,7 @@ func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
 	if t.startupSnapshot != nil {
 		return *t.startupSnapshot, nil
 	}
-	compatibility := snapshotCompatibility{Host: tenantSnapshotFormat, Owners: map[string]string{}}
+	compatibility := snapshotCompatibility{Epoch: persistence.FormatEpoch, Host: tenantSnapshotFormat, Owners: map[string]string{}}
 	type compositionApp struct {
 		ID, Version string
 		Entities    []platform.EntityInfo

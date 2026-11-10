@@ -55,11 +55,6 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	if err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		if entry.Kind != "accepted-result" {
-			return fmt.Errorf("tenant %s: SQL checkpoint tail contains a legacy input", t.ID)
-		}
-	}
 	if err = t.recoverEntries(entries); err != nil {
 		return err
 	}

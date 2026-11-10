@@ -292,15 +292,6 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 				continue
 			}
 			prefix = &persistence.StateCheckpoint{Position: statePosition, Delta: delta}
-			acceptedOnly := true
-			for _, entry := range entries[split:] {
-				acceptedOnly = acceptedOnly && entry.Kind == "accepted-result"
-			}
-			if !acceptedOnly {
-				t.quarantine(fmt.Errorf("runtime state recovery suffix contains a legacy input"))
-				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
-				continue
-			}
 			if err := t.recoverEntries(entries[split:]); err != nil {
 				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 				continue

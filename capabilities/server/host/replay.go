@@ -18,11 +18,13 @@ func (t *Tenant) Replay(entries []Entry) error {
 		defer t.procs.Pin(nil)
 	}
 	for i, e := range entries {
+		if e.Epoch != persistence.FormatEpoch {
+			return fmt.Errorf("entry %d: journal is format epoch %d and this host reads epoch %d; rebuild the tenant", i+1, e.Epoch, persistence.FormatEpoch)
+		}
+	}
+	for i, e := range entries {
 		if t.procs != nil {
 			t.procs.Pin(e.Versions)
-		}
-		if e.Kind != "accepted-result" {
-			return fmt.Errorf("entry %d: legacy %s requires the versioned journal migration", i+1, e.Kind)
 		}
 		var m platform.Member
 		a := t.app(e.App)

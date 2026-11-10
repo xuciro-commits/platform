@@ -70,7 +70,6 @@ type Journals interface {
 	SaveSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error
 	RepairSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error
 	Snapshot(ctx context.Context, tenant, code string) (int64, []byte, bool, error)
-	Append(ctx context.Context, tenant string, e Entry) error
 	AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) ([]byte, error)
 	Close()
 }

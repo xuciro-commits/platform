@@ -354,6 +354,7 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 	if t.readError() != nil {
 		return nil, t.readError()
 	}
+	entry.Epoch = persistence.FormatEpoch
 	if t.AcceptResult != nil {
 		before := int64(0)
 		if t.runtimePosition != nil {

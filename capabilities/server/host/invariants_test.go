@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -43,6 +45,23 @@ func TestInvariantK1ReplayIsByteIdentical(t *testing.T) {
 		restored := live.restore(t, live.entries)
 		if differing := differingTypes(want, restored.recordImage(t)); len(differing) != 0 {
 			t.Fatalf("replay %d differs from the live record store in %v", replay, differing)
+		}
+	}
+	for i, e := range live.entries {
+		if e.Epoch != persistence.FormatEpoch {
+			t.Fatalf("entry %d records format epoch %d; want %d", i+1, e.Epoch, persistence.FormatEpoch)
+		}
+	}
+	empty := newInvariantTenantSetup(t, live.ID, nil).recordImage(t)
+	for _, epoch := range []int{0, persistence.FormatEpoch + 1} {
+		foreign := slices.Clone(live.entries)
+		foreign[len(foreign)-1].Epoch = epoch
+		refused := newInvariantTenantSetup(t, live.ID, nil)
+		if err := refused.Replay(foreign); err == nil || !strings.Contains(err.Error(), "rebuild the tenant") {
+			t.Fatalf("a journal with an entry of format epoch %d was loaded: %v", epoch, err)
+		}
+		if differing := differingTypes(empty, refused.recordImage(t)); len(differing) != 0 {
+			t.Fatalf("a refused format epoch %d journal applied entries to %v", epoch, differing)
 		}
 	}
 }
