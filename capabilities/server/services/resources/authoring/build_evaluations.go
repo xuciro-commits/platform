@@ -147,7 +147,7 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 const SchemaEvaluationSetPublish = TestPlanType + ".publish"
 
 func (b *Build) testPlanAsset(plan TestPlan, version int) (platform.ReleaseAsset, error) {
-	if len(plan.Evaluation) > 0 {
+	if plan.Variant == "evaluation-set" {
 		return b.evaluationSetAsset(plan, version)
 	}
 	descriptor := platform.TestPlanDescriptor{Name: plan.Name, Title: plan.Title, Roots: plan.Roots, At: plan.At, Organization: plan.Organization, Samples: plan.Samples, Steps: plan.Steps}
@@ -162,7 +162,7 @@ func (b *Build) testPlanAsset(plan TestPlan, version int) (platform.ReleaseAsset
 }
 
 func testPlanKind(plan TestPlan) platform.AssetKind {
-	if strings.EqualFold(plan.Variant, "evaluation-set") || plan.Variant == "" && len(plan.Evaluation) > 0 {
+	if plan.Variant == "evaluation-set" {
 		return platform.AssetEvaluation
 	}
 	return platform.AssetTestPlan
@@ -414,7 +414,7 @@ func (b *Build) testPlanDraft(asset platform.ReleaseAsset) (TestPlan, error) {
 		if err != nil {
 			return TestPlan{}, err
 		}
-		return TestPlan{Name: descriptor.Name, Title: descriptor.Title, Roots: descriptor.Roots, At: descriptor.At, Organization: descriptor.Organization, Samples: descriptor.Samples, Steps: descriptor.Steps}, nil
+		return TestPlan{Variant: "test-plan", Name: descriptor.Name, Title: descriptor.Title, Roots: descriptor.Roots, At: descriptor.At, Organization: descriptor.Organization, Samples: descriptor.Samples, Steps: descriptor.Steps}, nil
 	}
 	descriptor, err := platform.ReadEvaluationSet(asset.Body)
 	if err != nil {
@@ -439,7 +439,7 @@ func (b *Build) testPlanDraft(asset platform.ReleaseAsset) (TestPlan, error) {
 	if !ok || err != nil || version < 1 {
 		return TestPlan{}, fmt.Errorf("evaluation needs a supported function owner")
 	}
-	return TestPlan{Name: descriptor.Name, Title: descriptor.Title, Function: platform.Ref[Function](functionID), FunctionVersion: version, Model: descriptor.Model, At: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), Steps: []platform.TestStep{{Type: FunctionCallType, ID: "evaluation", Action: SchemaFunctionCall, Payload: "{}", Expect: "accepted"}}, Evaluation: []platform.EvaluationPolicy{descriptor.Policy}}, nil
+	return TestPlan{Variant: "evaluation-set", Name: descriptor.Name, Title: descriptor.Title, Function: platform.Ref[Function](functionID), FunctionVersion: version, Model: descriptor.Model, At: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), Steps: []platform.TestStep{{Type: FunctionCallType, ID: "evaluation", Action: SchemaFunctionCall, Payload: "{}", Expect: "accepted"}}, Evaluation: []platform.EvaluationPolicy{descriptor.Policy}}, nil
 }
 
 const (

@@ -1,6 +1,7 @@
 package host
 
 import (
+	dataowner "platformserver/services/data"
 	"slices"
 	"strings"
 	"testing"
@@ -33,11 +34,11 @@ func TestInvariantK1K4K5CompartmentClearancesAndDeclassification(t *testing.T) {
 	finance([]string{"builder"})
 	save(platform.SchemaMarkingSave, platform.MarkingType, "pii", map[string]any{"title": "Personal data", "members": []string{"reader", "builder", "partial"}, "declassifiers": []string{"builder"}})
 	save(platform.SchemaMarkingSave, platform.MarkingType, "confidential", map[string]any{"title": "Confidential", "members": []string{"reader", "builder", "partial"}, "declassifiers": []string{"builder"}})
-	live.accept(t, "build.dataset.create", build.DatasetType, "INPUT", map[string]any{"name": "classified", "title": "Classified", "marking": "confidential", "compartments": []string{"pii", "finance"}, "keep": 10})
-	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "A", "note": "protected"}}})
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "INPUT", map[string]any{"name": "classified", "title": "Classified", "marking": "confidential", "compartments": []string{"pii", "finance"}, "keep": 10})
+	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "A", "note": "protected"}}})
 	for _, id := range []string{"reader", "partial", "admin"} {
 		member, _ := live.Member(id)
-		page, refusal := live.Records(t.Context(), member, build.DatasetVersionType, platform.Query{}, invariantClock)
+		page, refusal := live.Records(t.Context(), member, dataowner.DatasetVersionType, platform.Query{}, invariantClock)
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
@@ -49,40 +50,40 @@ func TestInvariantK1K4K5CompartmentClearancesAndDeclassification(t *testing.T) {
 			t.Fatalf("%s sees %d classified versions, want %d", id, len(page.Records), want)
 		}
 	}
-	if _, refusal := live.Submit(live.member(t), live.submission("build.dataset.edit", build.DatasetType, "INPUT", map[string]any{"compartments": []string{}}), invariantClock); refusal == nil {
+	if _, refusal := live.Submit(live.member(t), live.submission("build.dataset.edit", dataowner.DatasetType, "INPUT", map[string]any{"compartments": []string{}}), invariantClock); refusal == nil {
 		t.Fatal("editing removed mandatory markings")
 	}
-	live.accept(t, "build.dataset.create", build.DatasetType, "OUTPUT", map[string]any{"name": "declassified", "title": "Declassified", "keep": 10})
-	live.accept(t, "build.pipeline.create", build.PipelineType, "PIPE", map[string]any{"name": "releasepublic", "title": "Release public data", "input": "INPUT", "outputDataset": "OUTPUT", "steps": []platform.TransformStep{{Kind: "declassify", Markings: []string{"confidential", "pii", "finance"}}}})
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "OUTPUT", map[string]any{"name": "declassified", "title": "Declassified", "keep": 10})
+	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PIPE", map[string]any{"name": "releasepublic", "title": "Release public data", "input": "INPUT", "outputDataset": "OUTPUT", "steps": []platform.TransformStep{{Kind: "declassify", Markings: []string{"confidential", "pii", "finance"}}}})
 	drafts := []build.JointDraftRef{{Kind: platform.AssetDataset, ID: "INPUT"}, {Kind: platform.AssetDataset, ID: "OUTPUT"}, {Kind: platform.AssetPipeline, ID: "PIPE"}}
 	preview, err := live.PreviewReleaseDrafts(admin, drafts, "", invariantClock)
 	if err != nil || !strings.Contains(preview.Diagnostic, "declassification") {
 		t.Fatalf("joint publication bypassed declassification permission: %+v %v", preview, err)
 	}
-	live.accept(t, "build.pipeline.publish", build.PipelineType, "PIPE", map[string]any{})
-	live.accept(t, "build.pipeline.run", build.PipelineType, "PIPE", map[string]any{})
+	live.accept(t, "build.pipeline.publish", dataowner.PipelineType, "PIPE", map[string]any{})
+	live.accept(t, "build.pipeline.run", dataowner.PipelineType, "PIPE", map[string]any{})
 	finance(nil)
 	live.RunPipelines(invariantClock.Add(time.Second))
-	output, _ := platform.Get[build.Dataset](live.automation(build.ID, false), "OUTPUT")
-	pipeline, _ := platform.Get[build.Pipeline](live.automation(build.ID, false), "PIPE")
+	output, _ := platform.Get[dataowner.Dataset](live.automation(build.ID, false), "OUTPUT")
+	pipeline, _ := platform.Get[dataowner.Pipeline](live.automation(build.ID, false), "PIPE")
 	if output.Version != 0 || pipeline.Last == nil || pipeline.Last.Error == "" {
 		t.Fatalf("unpermitted declassification wrote output: %+v %+v", output, pipeline.Last)
 	}
 	finance([]string{"builder"})
-	live.accept(t, "build.pipeline.run", build.PipelineType, "PIPE", map[string]any{})
+	live.accept(t, "build.pipeline.run", dataowner.PipelineType, "PIPE", map[string]any{})
 	live.RunPipelines(invariantClock.Add(2 * time.Second))
-	output, _ = platform.Get[build.Dataset](live.automation(build.ID, false), "OUTPUT")
-	pipeline, _ = platform.Get[build.Pipeline](live.automation(build.ID, false), "PIPE")
+	output, _ = platform.Get[dataowner.Dataset](live.automation(build.ID, false), "OUTPUT")
+	pipeline, _ = platform.Get[dataowner.Pipeline](live.automation(build.ID, false), "PIPE")
 	if output.Version != 1 || len(output.Compartments) != 0 || pipeline.Last.Error != "" || !slices.Contains(pipeline.Last.Declassified, "finance") {
 		t.Fatalf("authorized declassification: %+v %+v", output, pipeline.Last)
 	}
-	forged := live.submission(build.SchemaPipelineRan, build.PipelineType, "PIPE", map[string]any{"run": *pipeline.Last})
+	forged := live.submission(dataowner.SchemaPipelineRan, dataowner.PipelineType, "PIPE", map[string]any{"run": *pipeline.Last})
 	if _, refusal := live.Submit(live.member(t), forged, invariantClock); refusal == nil {
 		t.Fatal("a caller forged a pipeline execution result")
 	}
 	partial, _ := live.Member("partial")
-	visible, refusal := live.Records(t.Context(), partial, build.DatasetVersionType, platform.Query{}, invariantClock)
-	if refusal != nil || len(visible.Records) != 1 || visible.Records[0].(build.DatasetVersion).Dataset != "OUTPUT" {
+	visible, refusal := live.Records(t.Context(), partial, dataowner.DatasetVersionType, platform.Query{}, invariantClock)
+	if refusal != nil || len(visible.Records) != 1 || visible.Records[0].(dataowner.DatasetVersion).Dataset != "OUTPUT" {
 		t.Fatalf("declassified output not readable: %+v %v", visible, refusal)
 	}
 	for _, replay := range []int{1, 2} {

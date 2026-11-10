@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"crypto/hmac"
+	dataowner "platformserver/services/data"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -16,12 +17,12 @@ func (t *Tenant) listenerInput(ctx context.Context, m platform.Member, path, sec
 		if t.businessStopped() {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		rows, _, refusal := platform.Find[build.Listener](t.automation(build.ID, false), platform.Query{})
+		rows, _, refusal := platform.Find[dataowner.Listener](t.automation(build.ID, false), platform.Query{})
 		if refusal != nil {
 			return nil, refusal
 		}
 		owner := t.dataOwner()
-		var matches []build.Listener
+		var matches []dataowner.Listener
 		for _, live := range rows {
 			if !live.Enabled || live.State != "published" {
 				continue

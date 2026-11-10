@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	dataowner "platformserver/services/data"
 	"slices"
 	"strings"
 	"time"
@@ -29,14 +30,14 @@ func (h hostView) FreezeDispatch(c platform.Caller, subject, action string, spec
 	}
 	roots := []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: subject}, {App: build.ID, Kind: platform.AssetAction, Name: action}}
 	if spec.Readback.Source != "" {
-		source, found := platform.Get[build.Source](c, spec.Readback.Source)
+		source, found := platform.Get[dataowner.Source](c, spec.Readback.Source)
 		if !found {
 			return "", nil, fmt.Errorf("Dispatch status source is unavailable")
 		}
 		roots = append(roots, platform.AssetRef{App: build.ID, Kind: platform.AssetSource, Name: source.Name})
 	}
 	if spec.Readback.Observation != "" {
-		observation, found := platform.Get[build.Observation](c, spec.Readback.Observation)
+		observation, found := platform.Get[dataowner.Observation](c, spec.Readback.Observation)
 		if !found {
 			return "", nil, fmt.Errorf("Dispatch status observation is unavailable")
 		}
@@ -63,7 +64,7 @@ func (h hostView) QueueDispatch(c platform.Caller, r *pb.ChangeRecord, run platf
 		}
 		command, body, key = *run.CompensationCommand, run.CompensationRequest, run.Key+":compensate"
 	}
-	var request build.WritebackRequest
+	var request dataowner.WritebackRequest
 	if json.Unmarshal(body, &request) != nil || request.Dispatch != run.ID || request.Version != 1 || request.Connection != run.Target || request.SafeRetry != command.SafeRetry() || key == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch delivery has no original frozen request")
 	}
@@ -76,7 +77,7 @@ func (h hostView) QueueDispatch(c platform.Caller, r *pb.ChangeRecord, run platf
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
-	x := platform.Effect{ID: run.Intent, App: build.ID, Endpoint: build.WritebackEndpoint + request.Connection, Event: build.ID + "/dispatch", Key: fmt.Sprintf("%s:%d", run.ID, run.Attempt), Target: run.Subject, At: at, State: "pending", Due: at, Body: string(platform.Raw(request)), Applications: applications}
+	x := platform.Effect{ID: run.Intent, App: build.ID, Endpoint: dataowner.WritebackEndpoint + request.Connection, Event: build.ID + "/dispatch", Key: fmt.Sprintf("%s:%d", run.ID, run.Attempt), Target: run.Subject, At: at, State: "pending", Due: at, Body: string(platform.Raw(request)), Applications: applications}
 	if !slices.ContainsFunc(h.decision.intents, func(e platform.Effect) bool { return e.ID == x.ID }) {
 		h.decision.intents = append(h.decision.intents, x)
 	}
@@ -88,7 +89,7 @@ func (h hostView) ResolveDispatchDelivery(c platform.Caller, run platform.Dispat
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Dispatch resolution requires its original owner")
 	}
 	owned := func(x platform.Effect) bool {
-		var request build.WritebackRequest
+		var request dataowner.WritebackRequest
 		return x.App == build.ID && x.Event == build.ID+"/dispatch" && json.Unmarshal([]byte(x.Body), &request) == nil && request.Dispatch == run.ID
 	}
 	h.t.opsMu.Lock()
@@ -122,7 +123,7 @@ func (h hostView) CheckDispatchRead(run platform.DispatchRun, at time.Time) *ker
 	if read.Record != "" {
 		return nil
 	}
-	var connection build.Connection
+	var connection dataowner.Connection
 	if json.Unmarshal(run.Connection, &connection) != nil || connection.ID == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dispatch read connection is unavailable")
 	}
@@ -130,12 +131,12 @@ func (h hostView) CheckDispatchRead(run platform.DispatchRun, at time.Time) *ker
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Dispatch status requires an unclassified source projection")
 	}
 	if read.Source != "" {
-		var source build.Source
+		var source dataowner.Source
 		if json.Unmarshal(run.Source, &source) != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dispatch status source is unavailable")
 		}
 		publisher, found := h.t.sourcePublisher(source)
-		if !found || !publisher.Active() || !h.Readable(publisher, build.SourceType+"/"+read.Source, at) {
+		if !found || !publisher.Active() || !h.Readable(publisher, dataowner.SourceType+"/"+read.Source, at) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Dispatch status source access is unavailable")
 		}
 		return nil
@@ -167,8 +168,8 @@ func (h hostView) RetargetDispatch(c platform.Caller, run platform.DispatchRun, 
 	if _, refusal := c.ReadRecord(typ, id, at); refusal != nil {
 		return nil, nil, refusal
 	}
-	value, found := h.Record(build.ConnectionType + "/" + target)
-	connection, valid := value.(build.Connection)
+	value, found := h.Record(dataowner.ConnectionType + "/" + target)
+	connection, valid := value.(dataowner.Connection)
 	if !found || !valid || connection.State != "ready" || connection.Archived {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The selected dispatch connection is not ready")
 	}
@@ -176,7 +177,7 @@ func (h hostView) RetargetDispatch(c platform.Caller, run platform.DispatchRun, 
 	if err != nil || !slices.Contains([]string{"http", "odata"}, connection.Kind) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch requires a published HTTP connection")
 	}
-	var request build.WritebackRequest
+	var request dataowner.WritebackRequest
 	if json.Unmarshal(run.Request, &request) != nil || request.Dispatch != run.ID {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dispatch request is unavailable")
 	}
@@ -186,7 +187,7 @@ func (h hostView) RetargetDispatch(c platform.Caller, run platform.DispatchRun, 
 	}
 	request.Connection, request.URL, request.Secret, request.AllowPrivate = connection.ID, connection.Resolve(request.Path), connection.Secret, connection.AllowPrivate
 	readConnection := run.Connection
-	var original build.Connection
+	var original dataowner.Connection
 	if json.Unmarshal(run.Connection, &original) == nil && original.ID == run.Target {
 		readConnection = platform.Raw(connection)
 	}

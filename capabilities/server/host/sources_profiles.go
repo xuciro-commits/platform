@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/url"
 	"platformkernel/kernel"
+	dataowner "platformserver/services/data"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,7 +21,7 @@ import (
 
 const odataPages = 20
 
-func (t *Tenant) readOData(s build.Source, c build.Connection) ([]map[string]any, error) {
+func (t *Tenant) readOData(s dataowner.Source, c dataowner.Connection) ([]map[string]any, error) {
 	q := url.Values{}
 	q.Set("$format", "json")
 	filter := s.Filter
@@ -98,7 +99,7 @@ func odataLiteral(v string) string {
 	return "'" + strings.ReplaceAll(v, "'", "''") + "'"
 }
 
-func (t *Tenant) latestTableCursor(s build.Source, c build.Connection) (string, error) {
+func (t *Tenant) latestTableCursor(s dataowner.Source, c dataowner.Connection) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	conn, err := t.openPostgres(ctx, c)
@@ -130,7 +131,7 @@ func (t *Tenant) latestTableCursor(s build.Source, c build.Connection) (string, 
 	return s.Advance([]map[string]any{{s.Since: plain(values[0])}}), nil
 }
 
-func (t *Tenant) readTable(s build.Source, c build.Connection, columns ...string) ([]map[string]any, error) {
+func (t *Tenant) readTable(s dataowner.Source, c dataowner.Connection, columns ...string) ([]map[string]any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	conn, err := t.openPostgres(ctx, c)
@@ -184,7 +185,7 @@ func (t *Tenant) readTable(s build.Source, c build.Connection, columns ...string
 		}
 		if len(columns) > 0 {
 			projectedBytes += len(platform.Raw(row))
-			if projectedBytes > build.SourceBody {
+			if projectedBytes > dataowner.SourceBody {
 				return nil, fmt.Errorf("the projected table rows exceed the source byte budget")
 			}
 		}
@@ -226,7 +227,7 @@ func plain(v any) any {
 	return v
 }
 
-func (t *Tenant) openPostgres(ctx context.Context, c build.Connection) (*pgx.Conn, error) {
+func (t *Tenant) openPostgres(ctx context.Context, c dataowner.Connection) (*pgx.Conn, error) {
 	cfg, err := pgx.ParseConfig(c.Address)
 	if err != nil {
 		return nil, fmt.Errorf("the address is not a postgres URL")
@@ -251,12 +252,12 @@ func (t *Tenant) CheckConnections(now time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) {
 		return
 	}
-	conns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]build.Connection, *kernel.Error) {
-		rows, _, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["requested","=",true]]`), Sort: []string{"id"}, Limit: 50})
+	conns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Connection, *kernel.Error) {
+		rows, _, refusal := platform.Find[dataowner.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["requested","=",true]]`), Sort: []string{"id"}, Limit: 50})
 		return rows, refusal
 	})
 	for _, c := range conns {
-		check := build.ConnectionCheck{At: now}
+		check := dataowner.ConnectionCheck{At: now}
 		detail, err := t.checkConnection(c)
 		check.OK, check.Detail = err == nil, detail
 		if err != nil {
@@ -265,14 +266,14 @@ func (t *Tenant) CheckConnections(now time.Time) {
 		payload, _ := json.Marshal(map[string]any{"revision": c.Revision, "check": check})
 		caller := t.automation(build.ID, false)
 		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: fmt.Sprintf("checked:%s:%d:%s", c.ID, c.Revision, now.UTC().Format(time.RFC3339Nano)),
-			Target: &pb.EntityRef{Type: build.ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: build.SchemaConnectionChecked, Version: 1}, Payload: payload}
+			Target: &pb.EntityRef{Type: dataowner.ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: dataowner.SchemaConnectionChecked, Version: 1}, Payload: payload}
 		if _, err := t.submitBackground(caller.Member, sub, now); err != nil {
 			log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
 		}
 	}
 }
 
-func (t *Tenant) checkConnection(c build.Connection) (string, error) {
+func (t *Tenant) checkConnection(c dataowner.Connection) (string, error) {
 	if c.Secret != "" {
 		if value, ok := t.credentialValue(c.Secret, "connection/"+c.ID, c.Address); !ok || len(strings.TrimSpace(string(value))) == 0 {
 			return "", fmt.Errorf("the named connection secret is unavailable")

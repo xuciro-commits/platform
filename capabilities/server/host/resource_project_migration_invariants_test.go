@@ -8,7 +8,7 @@ import (
 	build "platformserver/services/resources/authoring"
 )
 
-func TestInvariantLegacyActionTypesFollowMigratedObjectProject(t *testing.T) {
+func TestInvariantUnplacedResourceFollowsItsOnlyApplication(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-resource-project-migration")
 	live.accept(t, "build.app.edit", build.AppType, invariantProject, map[string]any{
 		"name": "invariantproject", "title": "Invariant project",
@@ -23,15 +23,6 @@ func TestInvariantLegacyActionTypesFollowMigratedObjectProject(t *testing.T) {
 	if err := json.Unmarshal(raw, &baseline); err != nil {
 		t.Fatal(err)
 	}
-	for i, state := range baseline.Records[build.ObjectType] {
-		var object build.Object
-		if json.Unmarshal(state.Value, &object) != nil || object.ID != "OBJECT" {
-			continue
-		}
-		object.Actions = []build.Action{{Name: "approve", Title: "Approve", From: []string{"open"}}}
-		object.ActionTypes = nil
-		baseline.Records[build.ObjectType][i].Value = platform.Raw(object)
-	}
 	for i, state := range baseline.Records[build.ResourceType] {
 		var resource build.Resource
 		if json.Unmarshal(state.Value, &resource) != nil || resource.Type != build.ObjectType || resource.Draft != "OBJECT" {
@@ -40,7 +31,6 @@ func TestInvariantLegacyActionTypesFollowMigratedObjectProject(t *testing.T) {
 		resource.Project = build.WorkspaceProject
 		baseline.Records[build.ResourceType][i].Value = platform.Raw(resource)
 	}
-	baseline.Records[build.ActionTypeType] = nil
 	baseline.Checkpoint = nil
 	snapshot := platform.Raw(baseline)
 
@@ -52,20 +42,13 @@ func TestInvariantLegacyActionTypesFollowMigratedObjectProject(t *testing.T) {
 		t.Fatalf("initialize resources: %#v", err)
 	}
 	if project := restored.resourceProject(build.ObjectType, "OBJECT"); project != invariantProject {
-		t.Fatalf("legacy object project = %q; want %q", project, invariantProject)
+		t.Fatalf("object project = %q; want %q", project, invariantProject)
 	}
-	action, found := platform.Get[build.ActionType](restored.branchCaller(restored.member(t)), "build.alpha.approve")
-	if !found || action.Version != 1 {
-		t.Fatalf("legacy action type was not extracted: %+v found=%v", action, found)
-	}
-	if project := restored.resourceProject(build.ActionTypeType, action.ID); project != invariantProject {
-		t.Fatalf("extracted action type project = %q; want %q", project, invariantProject)
-	}
+	before := resourceRecord(t, restored, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"})
 	if err := restored.initializeResources(invariantClock); err != nil {
 		t.Fatalf("repeat initialize resources: %v", err)
 	}
-	again, _ := platform.Get[build.ActionType](restored.branchCaller(restored.member(t)), "build.alpha.approve")
-	if again.Version != action.Version || again.Record.Revision != action.Record.Revision {
-		t.Fatalf("resource migration is not idempotent: first=%+v second=%+v", action, again)
+	if after := resourceRecord(t, restored, before.Ref); after.Version != before.Version || after.Record.Revision != before.Record.Revision {
+		t.Fatalf("resource migration is not idempotent: first=%+v second=%+v", before, after)
 	}
 }

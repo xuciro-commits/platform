@@ -3,6 +3,7 @@ package host
 import (
 	"bytes"
 	"encoding/json"
+	dataowner "platformserver/services/data"
 	"reflect"
 	"slices"
 	"strings"
@@ -330,20 +331,20 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 	for _, dataset := range []struct{ id, name, marking string }{
 		{"OPEN", "open", "internal"}, {"GUARDED", "guarded", "confidential"},
 	} {
-		tn.accept(t, "build.dataset.create", build.DatasetType, dataset.id, map[string]any{"name": dataset.name, "title": dataset.name})
-		tn.accept(t, build.SchemaDatasetLoad, build.DatasetType, dataset.id, map[string]any{
+		tn.accept(t, "build.dataset.create", dataowner.DatasetType, dataset.id, map[string]any{"name": dataset.name, "title": dataset.name})
+		tn.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, dataset.id, map[string]any{
 			"rows": []map[string]any{{"note": dataset.name}}, "marking": dataset.marking,
 		})
 	}
-	openID, guardedID := build.VersionID("OPEN", 1), build.VersionID("GUARDED", 1)
+	openID, guardedID := dataowner.VersionID("OPEN", 1), dataowner.VersionID("GUARDED", 1)
 
 	t.Run("read refusal carries its reason", func(t *testing.T) {
 		want := "Authorization denied at verb: No role or policy grants this operation"
-		page, refusal := tn.Records(t.Context(), unprivileged, build.DatasetVersionType, platform.Query{}, invariantClock)
+		page, refusal := tn.Records(t.Context(), unprivileged, dataowner.DatasetVersionType, platform.Query{}, invariantClock)
 		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Message != want || len(page.Records) != 0 {
 			t.Fatalf("unauthorized collection read: page=%+v refusal=%+v; want POLICY_DENIED with %q", page, refusal, want)
 		}
-		view, refusal := tn.RecordOf(t.Context(), unprivileged, build.DatasetVersionType, openID, invariantClock)
+		view, refusal := tn.RecordOf(t.Context(), unprivileged, dataowner.DatasetVersionType, openID, invariantClock)
 		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Message != want || view.Record != nil {
 			t.Fatalf("unauthorized single read: view=%+v refusal=%+v; want POLICY_DENIED with %q", view, refusal, want)
 		}
@@ -354,13 +355,13 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 			member platform.Member
 			want   []string
 		}{{cleared, []string{guardedID, openID}}, {uncleared, []string{openID}}} {
-			page, refusal := tn.Records(t.Context(), check.member, build.DatasetVersionType, platform.Query{Sort: []string{"id"}}, invariantClock)
+			page, refusal := tn.Records(t.Context(), check.member, dataowner.DatasetVersionType, platform.Query{Sort: []string{"id"}}, invariantClock)
 			if refusal != nil {
 				t.Fatalf("%s collection read: %+v", check.member.ID, refusal)
 			}
 			var ids []string
 			for _, record := range page.Records {
-				version, ok := record.(build.DatasetVersion)
+				version, ok := record.(dataowner.DatasetVersion)
 				if !ok {
 					t.Fatalf("dataset version read returned %T", record)
 				}
@@ -377,13 +378,13 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 			member platform.Member
 			id     string
 		}{{cleared, guardedID}, {uncleared, openID}} {
-			view, refusal := tn.RecordOf(t.Context(), check.member, build.DatasetVersionType, check.id, invariantClock)
+			view, refusal := tn.RecordOf(t.Context(), check.member, dataowner.DatasetVersionType, check.id, invariantClock)
 			if refusal != nil || view.Record == nil {
 				t.Fatalf("%s cannot read visible version %s: view=%+v refusal=%+v", check.member.ID, check.id, view, refusal)
 			}
 		}
-		hidden, refusal := tn.RecordOf(t.Context(), uncleared, build.DatasetVersionType, guardedID, invariantClock)
-		missing, absent := tn.RecordOf(t.Context(), uncleared, build.DatasetVersionType, "MISSING@1", invariantClock)
+		hidden, refusal := tn.RecordOf(t.Context(), uncleared, dataowner.DatasetVersionType, guardedID, invariantClock)
+		missing, absent := tn.RecordOf(t.Context(), uncleared, dataowner.DatasetVersionType, "MISSING@1", invariantClock)
 		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND || hidden.Record != nil || !reflect.DeepEqual(refusal, absent) || !reflect.DeepEqual(hidden, missing) {
 			t.Fatalf("uncleared read differs from a missing version: hidden=%+v refusal=%+v missing=%+v refusal=%+v", hidden, refusal, missing, absent)
 		}
@@ -406,7 +407,7 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 				t.Fatalf("%s discovered wrong identity or permission: %+v", reader.ID, resource)
 			}
 		}
-		if _, refusal := tn.RecordOf(t.Context(), unprivileged, build.DatasetType, "GUARDED", invariantClock); refusal == nil {
+		if _, refusal := tn.RecordOf(t.Context(), unprivileged, dataowner.DatasetType, "GUARDED", invariantClock); refusal == nil {
 			t.Fatal("discovery granted access to a resource definition")
 		}
 	})
@@ -421,18 +422,18 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 		t.Fatal("the lineage inspector is not seated")
 	}
 	for _, dataset := range []struct{ id, name string }{{"INPUT", "input"}, {"OTHER", "other"}, {"OUTPUT", "output"}} {
-		live.accept(t, "build.dataset.create", build.DatasetType, dataset.id, map[string]any{"name": dataset.name, "title": dataset.name})
-		live.accept(t, build.SchemaDatasetLoad, build.DatasetType, dataset.id, map[string]any{
+		live.accept(t, "build.dataset.create", dataowner.DatasetType, dataset.id, map[string]any{"name": dataset.name, "title": dataset.name})
+		live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, dataset.id, map[string]any{
 			"rows": []map[string]any{{"id": "A1", "note": dataset.name}}, "marking": "internal",
 		})
 	}
-	live.accept(t, "build.connection.create", build.ConnectionType, "CONNECTION", map[string]any{
+	live.accept(t, "build.connection.create", dataowner.ConnectionType, "CONNECTION", map[string]any{
 		"name": "upstream", "title": "Upstream", "kind": "http", "address": "https://example.test", "marking": "confidential",
 	})
-	live.accept(t, "build.source.create", build.SourceType, "SOURCE", map[string]any{
+	live.accept(t, "build.source.create", dataowner.SourceType, "SOURCE", map[string]any{
 		"name": "feed", "title": "Feed", "connection": "CONNECTION", "dataset": "INPUT",
 	})
-	live.accept(t, "build.pipeline.create", build.PipelineType, "PIPELINE", map[string]any{
+	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PIPELINE", map[string]any{
 		"name": "combine", "title": "Combine", "input": "INPUT", "outputDataset": "OUTPUT",
 		"steps": []platform.TransformStep{{Kind: "join", Dataset: "OTHER", Column: "id", Match: "id"}},
 	})
@@ -442,7 +443,7 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 	for _, phase := range []struct{ other, downstream string }{{"internal", "confidential"}, {"restricted", "restricted"}} {
 		t.Run(phase.downstream, func(t *testing.T) {
 			if phase.other == "restricted" {
-				live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "OTHER", map[string]any{
+				live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "OTHER", map[string]any{
 					"rows": []map[string]any{{"id": "A1", "note": "higher clearance"}}, "marking": phase.other,
 				})
 			}
@@ -478,12 +479,12 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 				if got := index.datasets[id]; got != want {
 					t.Fatalf("dataset %s marking index: %q; want %q", id, got, want)
 				}
-				row := live.records.Type(build.DatasetVersionType).Rows().Get(build.VersionID(id, 1))
+				row := live.records.Type(dataowner.DatasetVersionType).Rows().Get(dataowner.VersionID(id, 1))
 				if row == nil {
 					t.Fatalf("dataset %s has no first version", id)
 				}
-				if got := index.row(build.DatasetVersionType, row); got != want {
-					t.Fatalf("dataset version %s marking: %q; want %q", build.VersionID(id, 1), got, want)
+				if got := index.row(dataowner.DatasetVersionType, row); got != want {
+					t.Fatalf("dataset version %s marking: %q; want %q", dataowner.VersionID(id, 1), got, want)
 				}
 			}
 		})

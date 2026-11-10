@@ -248,14 +248,13 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 	}
 	var draft struct {
 		platform.Record
-		Name       string            `json:"name"`
-		Title      string            `json:"title"`
-		State      string            `json:"state"`
-		Version    uint32            `json:"version"`
-		Published  string            `json:"published"`
-		Kind       string            `json:"kind"`
-		Variant    string            `json:"variant"`
-		Evaluation []json.RawMessage `json:"evaluation"`
+		Name      string `json:"name"`
+		Title     string `json:"title"`
+		State     string `json:"state"`
+		Version   uint32 `json:"version"`
+		Published string `json:"published"`
+		Kind      string `json:"kind"`
+		Variant   string `json:"variant"`
 	}
 	if json.Unmarshal(raw, &draft) != nil {
 		return
@@ -264,7 +263,7 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 	if err != nil {
 		return
 	}
-	if typ == TestPlanType && (draft.Variant == "evaluation-set" || draft.Variant == "" && len(draft.Evaluation) > 0) {
+	if typ == TestPlanType && draft.Variant == "evaluation-set" {
 		ref.Kind = platform.AssetEvaluation
 	}
 	rid := platform.ResourceID(c.Tenant, ref)
@@ -292,11 +291,7 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 	resource.Version++
 	resource.Variant = draft.Kind
 	if typ == TestPlanType {
-		if ref.Kind == platform.AssetEvaluation {
-			resource.Variant = "evaluation-set"
-		} else {
-			resource.Variant = "test-plan"
-		}
+		resource.Variant = draft.Variant
 	}
 	resource.State = "active"
 	if draft.Archived {

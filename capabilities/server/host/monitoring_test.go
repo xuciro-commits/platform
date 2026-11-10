@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	dataowner "platformserver/services/data"
 	"reflect"
 	"slices"
 	"strings"
@@ -111,7 +112,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	}, platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, build.ID: build.Builder, "probe": "runner", platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}}},
 		platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
 		platform.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
-		platform.Seat{Subjects: []string{"scoped"}, Member: platform.Member{ID: "scoped", Roles: map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}, Scopes: []string{build.SchemaSourcePulled}}},
+		platform.Seat{Subjects: []string{"scoped"}, Member: platform.Member{ID: "scoped", Roles: map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}, Scopes: []string{dataowner.SchemaSourcePulled}}},
 		platform.Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{}}})
 	var actions []platform.Action
 	for _, schema := range []string{"probe.start", "probe.step", "probe.undo"} {
@@ -138,28 +139,28 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJ1", map[string]any{})
 	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "protected input"})
-	live.accept(t, "build.dataset.create", build.DatasetType, "DS1", map[string]any{"name": "input", "title": "Input"})
-	live.accept(t, "build.dataset.create", build.DatasetType, "DS2", map[string]any{"name": "output", "title": "Output"})
-	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "DS1", map[string]any{"rows": []map[string]any{{"id": "A1", "note": "input"}}})
-	live.accept(t, "build.source.create", build.SourceType, "SRC1", map[string]any{"name": "feed", "title": "Feed", "url": "https://example.test/data", "dataset": "DS1", "every": "1m"})
-	live.accept(t, "build.source.publish", build.SourceType, "SRC1", map[string]any{})
-	sourceView, refusal := live.RecordOf(t.Context(), live.member(t), build.SourceType, "SRC1", now)
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "DS1", map[string]any{"name": "input", "title": "Input"})
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "DS2", map[string]any{"name": "output", "title": "Output"})
+	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "DS1", map[string]any{"rows": []map[string]any{{"id": "A1", "note": "input"}}})
+	live.accept(t, "build.source.create", dataowner.SourceType, "SRC1", map[string]any{"name": "feed", "title": "Feed", "url": "https://example.test/data", "dataset": "DS1", "every": "1m"})
+	live.accept(t, "build.source.publish", dataowner.SourceType, "SRC1", map[string]any{})
+	sourceView, refusal := live.RecordOf(t.Context(), live.member(t), dataowner.SourceType, "SRC1", now)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	source := sourceView.Record.(build.Source)
-	live.accept(t, build.SchemaSourcePulled, build.SourceType, "SRC1", map[string]any{"pull": build.SourcePull{At: invariantClock, DefinitionVersion: source.ExecutionVersion(), Error: "source failed"}})
-	live.accept(t, "build.pipeline.create", build.PipelineType, "PL1", map[string]any{"name": "transform", "title": "Transform", "input": "DS1", "outputDataset": "DS2", "steps": []platform.TransformStep{{Kind: "select", Columns: []string{"id"}}}})
-	live.accept(t, "build.pipeline.publish", build.PipelineType, "PL1", map[string]any{})
-	pipelineView, refusal := live.RecordOf(t.Context(), live.member(t), build.PipelineType, "PL1", now)
+	source := sourceView.Record.(dataowner.Source)
+	live.accept(t, dataowner.SchemaSourcePulled, dataowner.SourceType, "SRC1", map[string]any{"pull": dataowner.SourcePull{At: invariantClock, DefinitionVersion: source.ExecutionVersion(), Error: "source failed"}})
+	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PL1", map[string]any{"name": "transform", "title": "Transform", "input": "DS1", "outputDataset": "DS2", "steps": []platform.TransformStep{{Kind: "select", Columns: []string{"id"}}}})
+	live.accept(t, "build.pipeline.publish", dataowner.PipelineType, "PL1", map[string]any{})
+	pipelineView, refusal := live.RecordOf(t.Context(), live.member(t), dataowner.PipelineType, "PL1", now)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	pipeline := pipelineView.Record.(build.Pipeline)
-	if refusal := live.pipelineResult(live.member(t), pipeline, build.PipelineRun{At: invariantClock, DefinitionVersion: pipeline.ExecutionVersion(), Quarantined: 1}, "finished", nil, invariantClock); refusal != nil {
+	pipeline := pipelineView.Record.(dataowner.Pipeline)
+	if refusal := live.pipelineResult(live.member(t), pipeline, dataowner.PipelineRun{At: invariantClock, DefinitionVersion: pipeline.ExecutionVersion(), Quarantined: 1}, "finished", nil, invariantClock); refusal != nil {
 		t.Fatal(refusal)
 	}
-	live.accept(t, build.SchemaDatasetProjected, build.DatasetType, "DS1", map[string]any{"projection": build.DatasetProjection{Object: "build.alpha", Version: 1, At: invariantClock, Rows: 1, Refused: 1}})
+	live.accept(t, dataowner.SchemaDatasetProjected, dataowner.DatasetType, "DS1", map[string]any{"projection": dataowner.DatasetProjection{Object: "build.alpha", Version: 1, At: invariantClock, Rows: 1, Refused: 1}})
 	live.accept(t, "build.code.create", build.CodeType, "CODE1", map[string]any{"name": "algorithm", "title": "Algorithm", "language": "go", "source": "package main\nfunc main() {}", "input": platform.ValueSchema{Type: "string"}, "output": platform.ValueSchema{Type: "string"}, "roles": []string{build.Builder}, "limits": platform.OperationLimits{TimeoutMillis: 100, MemoryPages: 1, MaxInputBytes: 1024, MaxOutputBytes: 1024}})
 	live.accept(t, build.SchemaCodeCompile, build.CodeType, "CODE1", map[string]any{})
 	codeView, refusal := live.RecordOf(t.Context(), live.member(t), build.CodeType, "CODE1", now)
@@ -203,9 +204,9 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	live.opsMu.Lock()
 	live.outbound = append(live.outbound,
 		&effect{Effect: platform.Effect{ID: "ordinary-delivery", Endpoint: "webhook", Event: "probe/notice", Target: "build.alpha/A1", At: invariantClock, State: "failed", Body: "hidden payload", Error: "hidden failure"}},
-		&effect{Effect: platform.Effect{ID: "writeback-delivery", App: build.ID, Endpoint: build.WritebackEndpoint + "sample", Event: "writeback/sample", Target: "build.alpha/A1", At: invariantClock, Last: invariantClock, State: "rejected", Body: "hidden payload", Error: "hidden failure"}},
+		&effect{Effect: platform.Effect{ID: "writeback-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "sample", Event: "writeback/sample", Target: "build.alpha/A1", At: invariantClock, Last: invariantClock, State: "rejected", Body: "hidden payload", Error: "hidden failure"}},
 		&effect{Effect: platform.Effect{ID: "unknown-delivery", Endpoint: "webhook", Event: "probe/unknown", At: invariantClock, State: "unknown"}},
-		&effect{Effect: platform.Effect{ID: "dispatch-delivery", App: build.ID, Endpoint: build.WritebackEndpoint + "dispatch", Event: build.ID + "/dispatch", At: invariantClock, State: "failed"}})
+		&effect{Effect: platform.Effect{ID: "dispatch-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "dispatch", Event: build.ID + "/dispatch", At: invariantClock, State: "failed"}})
 	live.opsMu.Unlock()
 	host := NewHost(Tokens(map[string]string{"admin": "admin", "builder": "builder", "other": "other", "scoped": "scoped", "user": "user"}), live.Tenant)
 	host.Now = func() time.Time { return now }

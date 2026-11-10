@@ -234,7 +234,6 @@ func (t *Tenant) initializeResources(now time.Time) error {
 		return refusal
 	}
 	directory := map[string]build.Resource{}
-	legacyObjects := []string{}
 	t.records.Lock()
 	for _, recordType := range t.records.Types() {
 		info := recordType.Info()
@@ -242,18 +241,14 @@ func (t *Tenant) initializeResources(now time.Time) error {
 			continue
 		}
 		for id, row := range t.records.Type(info.Type).Rows().All() {
-			if info.Type == build.ObjectType && len(row.Value.Interface().(build.Object).Actions) > 0 {
-				legacyObjects = append(legacyObjects, id)
-			}
 			raw, _ := json.Marshal(row.Value.Interface())
 			var meta struct {
 				platform.Record
-				Name       string            `json:"name"`
-				Title      string            `json:"title"`
-				Published  string            `json:"published"`
-				Kind       string            `json:"kind"`
-				Variant    string            `json:"variant"`
-				Evaluation []json.RawMessage `json:"evaluation"`
+				Name      string `json:"name"`
+				Title     string `json:"title"`
+				Published string `json:"published"`
+				Kind      string `json:"kind"`
+				Variant   string `json:"variant"`
 			}
 			if err := json.Unmarshal(raw, &meta); err != nil {
 				t.records.Unlock()
@@ -264,7 +259,7 @@ func (t *Tenant) initializeResources(now time.Time) error {
 				t.records.Unlock()
 				return err
 			}
-			if info.Type == build.TestPlanType && (meta.Variant == "evaluation-set" || meta.Variant == "" && len(meta.Evaluation) > 0) {
+			if info.Type == build.TestPlanType && meta.Variant == "evaluation-set" {
 				ref.Kind = platform.AssetEvaluation
 			}
 			rid := platform.ResourceID(t.ID, ref)
@@ -278,11 +273,7 @@ func (t *Tenant) initializeResources(now time.Time) error {
 			}
 			variant := meta.Kind
 			if info.Type == build.TestPlanType {
-				if ref.Kind == platform.AssetEvaluation {
-					variant = "evaluation-set"
-				} else {
-					variant = "test-plan"
-				}
+				variant = meta.Variant
 			}
 			directory[rid] = build.Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: info.Type, Draft: id, Title: meta.Title, Variant: variant, Project: project, State: state, Version: meta.Revision}
 		}
@@ -322,12 +313,6 @@ func (t *Tenant) initializeResources(now time.Time) error {
 	}
 	if err := t.migrateLegacyResourceProjects(owner, now); err != nil {
 		return err
-	}
-	for _, id := range legacyObjects {
-		submission := &pb.Submission{TenantId: t.ID, Authority: build.ID, IdempotencyKey: "action-types-v1:" + id, Schema: &pb.SchemaRef{Name: build.SchemaExtractActions, Version: 1}, Target: &pb.EntityRef{Type: build.ObjectType, Id: id}, Payload: platform.Raw(map[string]any{})}
-		if refusal := t.submitAutomated(owner, t.automation(build.ID, false), submission, now); refusal != nil {
-			return refusal
-		}
 	}
 	return nil
 }

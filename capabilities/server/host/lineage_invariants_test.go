@@ -31,7 +31,7 @@ func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
 	project("p2", "Project two", []platform.ProjectMember{{Member: "builder", Role: platform.ProjectOwnerRole}})
 	connection := func(project, id string) {
 		t.Helper()
-		sub := live.submission("build.connection.create", build.ConnectionType, id, map[string]any{
+		sub := live.submission("build.connection.create", dataowner.ConnectionType, id, map[string]any{
 			"name": strings.ToLower(id), "title": id, "kind": "http", "address": "https://example.test", "marking": "restricted", "project": project,
 		})
 		if _, refusal := live.Submit(live.member(t), sub, invariantClock); refusal != nil {
@@ -65,8 +65,8 @@ func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJ", map[string]any{})
 	live.accept(t, "build.guarded.create", "build.guarded", "G1", map[string]any{"note": "secret"})
 	dataset := map[string]any{"name": "guarded", "title": "Guarded", "marking": "restricted", "project": "p1"}
-	live.accept(t, "build.dataset.create", build.DatasetType, "DS1", dataset)
-	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "DS1", map[string]any{"rows": []map[string]any{{"id": "A1", "note": "secret"}}, "marking": "restricted"})
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "DS1", dataset)
+	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "DS1", map[string]any{"rows": []map[string]any{{"id": "A1", "note": "secret"}}, "marking": "restricted"})
 	object["datasources"] = []platform.DataSourceBinding{{Kind: "dataset", Source: "DS1", Key: "id", Columns: []platform.DataSourceColumn{{Column: "note", Attribute: "note"}}}}
 	delete(object, "project")
 	edit := live.submission("build.object.edit", build.ObjectType, "OBJ", object)
@@ -114,27 +114,27 @@ func lineageNode(graph Lineage, id string) (LineageNode, bool) {
 
 func TestInvariantK12ExportUsesTheDatasetMarking(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k12-export")
-	live.accept(t, "build.dataset.create", build.DatasetType, "OPEN", map[string]any{"name": "open", "title": "Open", "marking": "internal"})
-	live.accept(t, "build.dataset.create", build.DatasetType, "CLOSED", map[string]any{"name": "closed", "title": "Closed", "marking": "restricted"})
-	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "OPEN", map[string]any{"rows": []map[string]any{{"id": "A1"}}, "marking": "internal"})
-	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "CLOSED", map[string]any{"rows": []map[string]any{{"id": "B1"}}, "marking": "restricted"})
-	row := live.records.Type(build.DatasetVersionType).Rows().Get(build.VersionID("OPEN", 1))
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "OPEN", map[string]any{"name": "open", "title": "Open", "marking": "internal"})
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "CLOSED", map[string]any{"name": "closed", "title": "Closed", "marking": "restricted"})
+	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "OPEN", map[string]any{"rows": []map[string]any{{"id": "A1"}}, "marking": "internal"})
+	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "CLOSED", map[string]any{"rows": []map[string]any{{"id": "B1"}}, "marking": "restricted"})
+	row := live.records.Type(dataowner.DatasetVersionType).Rows().Get(dataowner.VersionID("OPEN", 1))
 	if row == nil {
 		t.Fatal("open dataset version is missing")
 	}
 	index := live.markingsIn(live.records, false)
-	if got := index.highest(build.DatasetVersionType, row); got == "restricted" {
+	if got := index.highest(dataowner.DatasetVersionType, row); got == "restricted" {
 		t.Fatal("open dataset inherited another dataset's restriction")
 	}
 }
 
 func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k12-fields")
-	live.accept(t, "build.dataset.create", build.DatasetType, "INPUT", map[string]any{"name": "input", "title": "Input", "key": "id", "keep": 10})
-	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "A1", "note": "from input"}}})
-	live.accept(t, "build.dataset.create", build.DatasetType, "OUTPUT", map[string]any{"name": "output", "title": "Output", "key": "id", "keep": 10})
-	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "OUTPUT", map[string]any{"rows": []map[string]any{{"id": "A1", "title": "from pipeline"}}})
-	live.accept(t, "build.pipeline.create", build.PipelineType, "PIPE", map[string]any{
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "INPUT", map[string]any{"name": "input", "title": "Input", "key": "id", "keep": 10})
+	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "A1", "note": "from input"}}})
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "OUTPUT", map[string]any{"name": "output", "title": "Output", "key": "id", "keep": 10})
+	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "OUTPUT", map[string]any{"rows": []map[string]any{{"id": "A1", "title": "from pipeline"}}})
+	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PIPE", map[string]any{
 		"name": "rename", "title": "Rename", "input": "INPUT", "outputDataset": "OUTPUT",
 		"steps": []platform.TransformStep{{Kind: "rename", From: "note", To: "title"}},
 	})

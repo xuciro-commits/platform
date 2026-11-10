@@ -5,6 +5,7 @@ import records "platformserver/kernel/records"
 import (
 	"encoding/json"
 	"fmt"
+	dataowner "platformserver/services/data"
 	"slices"
 	"strconv"
 	"strings"
@@ -89,7 +90,7 @@ func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, st
 	if h.decision == nil || !c.Staging() || c.App != build.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects require their original private owner")
 	}
-	var request build.WritebackRequest
+	var request dataowner.WritebackRequest
 	if json.Unmarshal(raw, &request) != nil || request.Version != 1 || request.Connection == "" || request.Writeback == "" || request.Dispatch != "" || request.Confirmation != "" || target.Type == "" || target.ID == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction delivery has no frozen writeback request")
 	}
@@ -97,7 +98,7 @@ func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, st
 		return refusal
 	}
 	key := receipt.GetChangeId() + ":" + step
-	endpoint := build.WritebackEndpoint + request.Connection
+	endpoint := dataowner.WritebackEndpoint + request.Connection
 	x := platform.Effect{ID: fmt.Sprintf("%s:%s:transaction:%s:%s", c.Tenant, c.App, key, endpoint), App: c.App, Endpoint: endpoint, Event: c.App + "/transaction", Key: key, Target: target.Type + "/" + target.ID, At: at, Due: at, State: "pending", Body: string(raw)}
 	return h.queueTxnIntent(c, receipt, x)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
 	"testing"
 	"time"
@@ -12,18 +13,18 @@ import (
 func TestInvariantK1K2ScheduleMigrationHasOneTimer(t *testing.T) {
 	live := newInvariantTenant(t, "schedule-invariants")
 	for _, id := range []string{"INPUT", "OUTPUT"} {
-		live.accept(t, "build.dataset.create", build.DatasetType, id, map[string]any{"name": id, "title": id})
+		live.accept(t, "build.dataset.create", dataowner.DatasetType, id, map[string]any{"name": id, "title": id})
 	}
-	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "A"}}})
-	live.accept(t, "build.pipeline.create", build.PipelineType, "PIPE", map[string]any{"name": "scheduled", "title": "Scheduled", "input": "INPUT", "outputDataset": "OUTPUT"})
-	live.accept(t, "build.pipeline.publish", build.PipelineType, "PIPE", map[string]any{})
-	live.accept(t, "build.pipeline.run", build.PipelineType, "PIPE", map[string]any{})
-	legacy, _ := platform.Get[build.Pipeline](live.automation(build.ID, false), "PIPE")
+	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "A"}}})
+	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PIPE", map[string]any{"name": "scheduled", "title": "Scheduled", "input": "INPUT", "outputDataset": "OUTPUT"})
+	live.accept(t, "build.pipeline.publish", dataowner.PipelineType, "PIPE", map[string]any{})
+	live.accept(t, "build.pipeline.run", dataowner.PipelineType, "PIPE", map[string]any{})
+	legacy, _ := platform.Get[dataowner.Pipeline](live.automation(build.ID, false), "PIPE")
 	var asset platform.ReleaseAsset
 	if err := json.Unmarshal([]byte(legacy.Published), &asset); err != nil {
 		t.Fatal(err)
 	}
-	var definition build.PipelineDefinition
+	var definition dataowner.PipelineDefinition
 	if err := json.Unmarshal(asset.Body, &definition); err != nil {
 		t.Fatal(err)
 	}
@@ -47,11 +48,11 @@ func TestInvariantK1K2ScheduleMigrationHasOneTimer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, err := live.installationPredecessor(build.PipelineType + "/PIPE")
+	before, err := live.installationPredecessor(dataowner.PipelineType + "/PIPE")
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved := acceptedformat.Release{Version: 4, Kind: "release-result", Tenant: live.ID, App: build.ID, Member: "builder", Key: "legacy-schedule-fixture", At: invariantClock, CandidateID: candidate.ID, Bytes: candidate.Bytes, Active: true, Installations: []platform.ReleaseInstallation{{ReleasePublication: platform.ReleasePublication{Schema: build.PipelineType + ".publish", Image: platform.Raw(legacy)}, Ref: &asset.Ref, Record: build.PipelineType + "/PIPE", Before: before}}}
+	saved := acceptedformat.Release{Version: 4, Kind: "release-result", Tenant: live.ID, App: build.ID, Member: "builder", Key: "legacy-schedule-fixture", At: invariantClock, CandidateID: candidate.ID, Bytes: candidate.Bytes, Active: true, Installations: []platform.ReleaseInstallation{{ReleasePublication: platform.ReleasePublication{Schema: dataowner.PipelineType + ".publish", Image: platform.Raw(legacy)}, Ref: &asset.Ref, Record: dataowner.PipelineType + "/PIPE", Before: before}}}
 	saved.RequestHash, err = acceptedformat.ReleaseRequestHash(live.ID, "builder", saved.Key, candidate.ID, true)
 	if err != nil {
 		t.Fatal(err)
@@ -67,26 +68,26 @@ func TestInvariantK1K2ScheduleMigrationHasOneTimer(t *testing.T) {
 	if !ok || schedule.Runner != "builder" || schedule.LastRun == nil {
 		t.Fatalf("legacy schedule not accepted: %+v", schedule)
 	}
-	output, _ := platform.Get[build.Dataset](live.automation(build.ID, false), "OUTPUT")
+	output, _ := platform.Get[dataowner.Dataset](live.automation(build.ID, false), "OUTPUT")
 	if output.Version != 1 {
-		p, _ := platform.Get[build.Pipeline](live.automation(build.ID, false), "PIPE")
+		p, _ := platform.Get[dataowner.Pipeline](live.automation(build.ID, false), "PIPE")
 		t.Fatalf("first scheduled build wrote %d versions; last=%+v", output.Version, p.Last)
 	}
 	invariantPublishData(t, live, live.member(t), []build.JointDraftRef{{Kind: platform.AssetSchedule, ID: schedule.ID}}, "scheduled-resource-release")
 	live.accept(t, platform.ScheduleType+".edit", platform.ScheduleType, schedule.ID, map[string]any{"enabled": false})
 	live.RunPipelines(invariantClock.Add(2 * time.Minute))
-	output, _ = platform.Get[build.Dataset](live.automation(build.ID, false), "OUTPUT")
+	output, _ = platform.Get[dataowner.Dataset](live.automation(build.ID, false), "OUTPUT")
 	if output.Version != 1 {
 		t.Fatal("legacy Pipeline.Every still executed after its schedule was disabled")
 	}
 	live.accept(t, platform.ScheduleType+".edit", platform.ScheduleType, schedule.ID, map[string]any{"enabled": true})
 	live.RunPipelines(invariantClock.Add(3 * time.Minute))
-	output, _ = platform.Get[build.Dataset](live.automation(build.ID, false), "OUTPUT")
+	output, _ = platform.Get[dataowner.Dataset](live.automation(build.ID, false), "OUTPUT")
 	if output.Version != 2 {
 		t.Fatalf("enabled schedule versions=%d, want 2", output.Version)
 	}
 	live.RunPipelines(invariantClock.Add(3 * time.Minute))
-	output, _ = platform.Get[build.Dataset](live.automation(build.ID, false), "OUTPUT")
+	output, _ = platform.Get[dataowner.Dataset](live.automation(build.ID, false), "OUTPUT")
 	if output.Version != 2 {
 		t.Fatal("schedule repeated within one due period")
 	}

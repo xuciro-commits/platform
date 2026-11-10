@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	dataowner "platformserver/services/data"
 	"time"
 
 	"platformserver/platform"
@@ -12,7 +13,7 @@ func (t *Tenant) beginDispatchAttempt(x platform.Effect, at time.Time) bool {
 	if x.App != build.ID || x.Event != build.ID+"/dispatch" {
 		return true
 	}
-	var request build.WritebackRequest
+	var request dataowner.WritebackRequest
 	if json.Unmarshal([]byte(x.Body), &request) != nil || request.Dispatch == "" {
 		return false
 	}

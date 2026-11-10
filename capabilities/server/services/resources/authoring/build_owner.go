@@ -71,7 +71,6 @@ func New(tenant string) *Build {
 	b.apps = appsauthoring.NewOwner(appEnvironment{b})
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.apps.PageEntity())...)
 	actions = append(actions, platform.EntityActions(b.actionTypeEntity())...)
-	actions = append(actions, platform.Action{Schema: SchemaExtractActions, Target: ObjectType, Title: "Extract action types", Description: "Move current inline action drafts into independent retained resources.", Automation: true, Payload: []platform.Field{}})
 	actions = append(actions, platform.EntityActions(b.apps.ApplicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
 	actions = append(actions, b.automation.ProcessActions()...)
@@ -323,9 +322,6 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				}
 			}
 		}
-	}
-	if !c.Replaying && s.GetSchema().GetName() == SchemaExtractActions {
-		return b.submitOntologyWrite(c, s, now)
 	}
 	if s.GetTarget().GetType() == WorkingStateType {
 		return b.submitWorkingState(c, s, now)

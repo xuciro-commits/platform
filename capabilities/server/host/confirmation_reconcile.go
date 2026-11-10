@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformkernel/kernel"
+	dataowner "platformserver/services/data"
 
 	"slices"
 	"strings"
@@ -62,8 +63,8 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			type plan struct {
 				run        platform.ConfirmationRun
 				stamp      string
-				source     build.Source
-				connection build.Connection
+				source     dataowner.Source
+				connection dataowner.Connection
 				valid      bool
 			}
 			prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (plan, *kernel.Error) {
@@ -74,8 +75,8 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 					valid = (hostView{t: t}).CheckConfirmationRead(run, i, at) == nil
 				}
 				var stamp string
-				var source build.Source
-				var connection build.Connection
+				var source dataowner.Source
+				var connection dataowner.Connection
 				if valid {
 					party, policy := run.Parties[i], run.Definition.Parties[i].Reconcile
 					valid = policy != nil && (party.State == "pending" || party.State == "unknown")

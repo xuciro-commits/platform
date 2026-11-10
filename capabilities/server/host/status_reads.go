@@ -2,12 +2,11 @@ package host
 
 import (
 	"encoding/json"
+	dataowner "platformserver/services/data"
 	"sync"
 
 	"platformserver/platform"
 	"time"
-
-	"platformserver/services/resources/authoring"
 )
 
 const statusReadLimit = 64
@@ -70,13 +69,13 @@ func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, c
 	if !found {
 		return "", false
 	}
-	var connection build.Connection
+	var connection dataowner.Connection
 	_ = json.Unmarshal(connectionRaw, &connection)
 	var credential []byte
 	if connection.Secret != "" {
 		credential, _ = t.credentialValue(connection.Secret, "connection/"+connection.ID, connection.Address)
 	}
-	var source build.Source
+	var source dataowner.Source
 	_ = json.Unmarshal(sourceRaw, &source)
 	publisher, _ := t.sourcePublisher(source)
 	marking := platform.MarkingSet{}
@@ -93,7 +92,7 @@ func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, c
 	return stamp, err == nil
 }
 
-func (t *Tenant) sourcePublisher(source build.Source) (platform.Member, bool) {
+func (t *Tenant) sourcePublisher(source dataowner.Source) (platform.Member, bool) {
 	member, known := t.Member(source.Publisher)
 	if known && source.PublisherScopes != "" && json.Unmarshal([]byte(source.PublisherScopes), &member.Scopes) != nil {
 		return platform.Member{}, false

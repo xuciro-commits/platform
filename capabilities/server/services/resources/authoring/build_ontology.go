@@ -39,7 +39,6 @@ const (
 	ValueTypeType         = ontology.ValueTypeType
 	ObjectTypeGroupType   = ontology.ObjectTypeGroupType
 	SchemaPublish         = ontology.SchemaPublish
-	SchemaExtractActions  = ontology.SchemaExtractActions
 	SchemaActionType      = ontology.SchemaActionType
 	SchemaPropertyType    = ontology.SchemaPropertyType
 	SchemaValueType       = ontology.SchemaValueType

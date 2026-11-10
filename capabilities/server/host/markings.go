@@ -1,13 +1,13 @@
 package host
 
 import (
+	dataowner "platformserver/services/data"
 	"reflect"
 	"sync"
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/data/lineage"
-	"platformserver/services/resources/authoring"
 )
 
 type readMarkingCache struct {
@@ -102,27 +102,27 @@ func (t *Tenant) markingsIn(store *records.Store, held bool) markingIndex {
 }
 
 func (index markingIndex) row(typ string, row *records.Row) string {
-	if typ != build.DatasetVersionType {
+	if typ != dataowner.DatasetVersionType {
 		return index.types[typ]
 	}
-	if version, ok := rowAs[build.DatasetVersion](row); ok {
+	if version, ok := rowAs[dataowner.DatasetVersion](row); ok {
 		return index.datasets[version.Dataset]
 	}
 	return ""
 }
 
 func (index markingIndex) visible(m platform.Member, value reflect.Value) bool {
-	version, ok := valueAs[build.DatasetVersion](value)
+	version, ok := valueAs[dataowner.DatasetVersion](value)
 	return !ok || (platform.MarkingSet{Level: index.datasets[version.Dataset], Compartments: index.datasetCompartments[version.Dataset]}).Cleared(m)
 }
 
 func (index markingIndex) highest(typ string, row *records.Row) string {
-	if typ == build.DatasetVersionType && row != nil {
-		if version, ok := rowAs[build.DatasetVersion](row); ok {
+	if typ == dataowner.DatasetVersionType && row != nil {
+		if version, ok := rowAs[dataowner.DatasetVersion](row); ok {
 			return index.datasets[version.Dataset]
 		}
 	}
-	if typ != build.DatasetVersionType && typ != build.DatasetType {
+	if typ != dataowner.DatasetVersionType && typ != dataowner.DatasetType {
 		return index.types[typ]
 	}
 	highest := ""
@@ -133,8 +133,8 @@ func (index markingIndex) highest(typ string, row *records.Row) string {
 }
 
 func (index markingIndex) compartments(typ string, row *records.Row) []string {
-	if typ == build.DatasetVersionType {
-		if version, ok := rowAs[build.DatasetVersion](row); ok {
+	if typ == dataowner.DatasetVersionType {
+		if version, ok := rowAs[dataowner.DatasetVersion](row); ok {
 			return index.datasetCompartments[version.Dataset]
 		}
 	}

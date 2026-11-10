@@ -12,7 +12,6 @@ const (
 	BuilderRole           = "builder"
 	UserRole              = "user"
 	SchemaPublish         = ObjectType + ".publish"
-	SchemaExtractActions  = ObjectType + ".extract-actions"
 	SchemaActionType      = ActionTypeType + ".publish"
 	SchemaPropertyType    = PropertyTypeType + ".publish"
 	SchemaValueType       = ValueTypeType + ".publish"

@@ -7,6 +7,7 @@ import (
 	"hash/fnv"
 	"log"
 	"platformkernel/kernel"
+	dataowner "platformserver/services/data"
 	"slices"
 	"time"
 
@@ -42,8 +43,8 @@ func (t *Tenant) ProjectDatasets(now time.Time) {
 
 func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 	type preparation struct {
-		dataset  build.Dataset
-		previous build.DatasetProjection
+		dataset  dataowner.Dataset
+		previous dataowner.DatasetProjection
 		known    bool
 		data     []map[string]any
 		version  int
@@ -53,12 +54,12 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 	}
 	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (preparation, *kernel.Error) {
 		c := t.automation(build.ID, false)
-		ds, ok := platform.Get[build.Dataset](c, dataset)
+		ds, ok := platform.Get[dataowner.Dataset](c, dataset)
 		previous, known := ds.Projection(object)
 		if !ok || ds.Version == 0 || known && previous.Version == ds.Version && previous.Paused == "" && previous.MergeVersion == 1 {
 			return preparation{}, nil
 		}
-		data, version, err := build.DatasetRows(c, dataset, ds.Version)
+		data, version, err := dataowner.DatasetRows(c, dataset, ds.Version)
 		marking := ds.Marking
 		if fixed, refused := t.dataOwner().ExecutionDataset(ds); refused == nil {
 			marking = fixed.Marking
@@ -71,7 +72,7 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 		return
 	}
 	ds, previous, known, data, version, marking, member, err := prepared.dataset, prepared.previous, prepared.known, prepared.data, prepared.version, prepared.marking, prepared.member, prepared.err
-	result := build.DatasetProjection{Object: object, Version: ds.Version, At: now, Rows: len(data), MergeVersion: 1, Marking: marking, Compartments: slices.Clone(ds.Compartments)}
+	result := dataowner.DatasetProjection{Object: object, Version: ds.Version, At: now, Rows: len(data), MergeVersion: 1, Marking: marking, Compartments: slices.Clone(ds.Compartments)}
 	pause := func(reason string) {
 		result.Paused = reason
 		t.recordProjection(member, dataset, previous, known, result, now)
@@ -98,7 +99,7 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 		pause(refusal.Message)
 		return
 	}
-	problem := func(row build.SourceRow, message string) {
+	problem := func(row dataowner.SourceRow, message string) {
 		result.Refused++
 		if len(result.Problems) < 5 {
 			result.Problems = append(result.Problems, row.ID+": "+message)
@@ -145,7 +146,7 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 	t.recordProjection(member, dataset, previous, known, result, now)
 }
 
-func (t *Tenant) recordProjection(member platform.Member, dataset string, previous build.DatasetProjection, known bool, result build.DatasetProjection, now time.Time) {
+func (t *Tenant) recordProjection(member platform.Member, dataset string, previous dataowner.DatasetProjection, known bool, result dataowner.DatasetProjection, now time.Time) {
 	if known && previous.MergeVersion == result.MergeVersion && previous.Deleted == result.Deleted && slices.Equal(previous.Objects, result.Objects) && previous.Version == result.Version && previous.Paused == result.Paused && previous.Written == result.Written && previous.Refused == result.Refused && slices.Equal(previous.Problems, result.Problems) {
 		return
 	}
@@ -154,7 +155,7 @@ func (t *Tenant) recordProjection(member platform.Member, dataset string, previo
 	_, _ = digest.Write(payload)
 	key := fmt.Sprintf("projection:%s:%s@%d:%x", result.Object, dataset, result.Version, digest.Sum64())
 	if _, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key,
-		Target: &pb.EntityRef{Type: build.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: build.SchemaDatasetProjected, Version: 1}, Payload: payload}, now); err != nil {
+		Target: &pb.EntityRef{Type: dataowner.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: dataowner.SchemaDatasetProjected, Version: 1}, Payload: payload}, now); err != nil {
 		log.Printf("dataset projection result of %s not kept: %s", result.Object, err.Message)
 	}
 }

@@ -280,9 +280,7 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 	if previous.Published != "" && testPlanKind(previous) != testPlanKind(plan) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published test plan keeps its kind; create another plan")
 	}
-	variant := strings.ToLower(strings.TrimSpace(plan.Variant))
-	switch variant {
-	case "":
+	switch plan.Variant {
 	case "test-plan":
 		if len(plan.Evaluation) > 0 {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A business test plan cannot carry function evaluation thresholds")

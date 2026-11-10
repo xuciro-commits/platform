@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	dataowner "platformserver/services/data"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"strconv"
@@ -189,7 +190,7 @@ func (t *Tenant) scopedDispatchTargets(member platform.Member, id string, at tim
 	}
 	out := []DispatchTarget{}
 	for offset := 0; ; {
-		connections, total, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","ready"]]`), Sort: []string{"title", "id"}, Limit: 500, Offset: offset})
+		connections, total, refusal := platform.Find[dataowner.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","ready"]]`), Sort: []string{"title", "id"}, Limit: 500, Offset: offset})
 		if refusal != nil {
 			return nil, refusal
 		}

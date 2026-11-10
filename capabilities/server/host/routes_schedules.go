@@ -2,13 +2,13 @@ package host
 
 import (
 	"net/http"
+	dataowner "platformserver/services/data"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
 )
 
 type PipelineSchedule struct {
@@ -46,8 +46,8 @@ func (t *Tenant) pipelineSchedules(m platform.Member, now time.Time) ([]Pipeline
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		item := PipelineSchedule{Schedule: schedule, NextDue: schedule.NextDue()}
-		if view, refusal := t.recordOf(m, build.PipelineType, schedule.Pipeline, now); refusal == nil {
-			pipeline := view.Record.(build.Pipeline)
+		if view, refusal := t.recordOf(m, dataowner.PipelineType, schedule.Pipeline, now); refusal == nil {
+			pipeline := view.Record.(dataowner.Pipeline)
 			if pipeline.Last != nil {
 				at := pipeline.Last.At
 				item.LastBuild = &at

@@ -4,6 +4,7 @@ import automation "platformserver/services/automate/runtime"
 
 import (
 	"encoding/json"
+	dataowner "platformserver/services/data"
 
 	"platformserver/kernel/transport"
 
@@ -104,7 +105,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 		reflect.TypeFor[platform.PageCollectionInput](), reflect.TypeFor[platform.InputOptions](),
 		reflect.TypeFor[platform.ImageRegionsRequest](), reflect.TypeFor[build.Table](),
 		reflect.TypeFor[platform.Schedule](), reflect.TypeFor[platform.MediaSet](), reflect.TypeFor[platform.MediaSetVersion](), reflect.TypeFor[platform.Attachment](),
-		reflect.TypeFor[build.Source](), reflect.TypeFor[build.Connection](), reflect.TypeFor[build.Listener](),
+		reflect.TypeFor[dataowner.Source](), reflect.TypeFor[dataowner.Connection](), reflect.TypeFor[dataowner.Listener](),
 		reflect.TypeFor[platform.BusinessTxn](), reflect.TypeFor[platform.ConfirmationRun](),
 		reflect.TypeFor[platform.DispatchRun](), reflect.TypeFor[InterfaceRecordPage](),
 	}, reflect.TypeFor[SubmissionAnswer](), entities, actions)

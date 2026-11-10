@@ -556,15 +556,15 @@ func lineageNodeType(node string) (string, string) {
 	}
 	switch kind {
 	case "connection":
-		return build.ConnectionType, id
+		return dataowner.ConnectionType, id
 	case "source":
-		return build.SourceType, id
+		return dataowner.SourceType, id
 	case "dataset":
-		return build.DatasetType, id
+		return dataowner.DatasetType, id
 	case "pipeline":
-		return build.PipelineType, id
+		return dataowner.PipelineType, id
 	case "writeback":
-		return build.WritebackType, id
+		return dataowner.WritebackType, id
 	case "object":
 		return build.ObjectType, id
 	}

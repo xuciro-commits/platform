@@ -45,8 +45,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 		for _, record := range rows {
 			var meta struct {
 				platform.Record
-				Name, Title, Kind, Published string
-				Evaluation                   []json.RawMessage
+				Name, Title, Kind, Variant, Published string
 			}
 			if err := json.Unmarshal(platform.Raw(record), &meta); err != nil {
 				return nil, err
@@ -55,7 +54,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 				continue
 			}
 			ref, _ := draftAssetRef(entity.Type, meta.Name)
-			if entity.Type == TestPlanType && len(meta.Evaluation) > 0 {
+			if entity.Type == TestPlanType && meta.Variant == "evaluation-set" {
 				ref.Kind = platform.AssetEvaluation
 			}
 			if application != "" && !(entity.Type == AppType && meta.ID == application) && !held[ref] {

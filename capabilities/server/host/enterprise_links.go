@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"net/url"
+	dataowner "platformserver/services/data"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -23,38 +24,38 @@ func (t *Tenant) tenantLinkModel() (enterprisemodel.Model, *kernel.Error) {
 	return owner.Model(), nil
 }
 
-func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (build.Connection, *kernel.Error) {
+func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (dataowner.Connection, *kernel.Error) {
 	c = platform.RouteCaller(c, build.ID)
 	c.Automation = false
-	permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: build.ConnectionType, Record: id, Fields: []string{"kind", "address", "secret", "allowPrivate", "state", "published", "marking"}}, now)
+	permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: dataowner.ConnectionType, Record: id, Fields: []string{"kind", "address", "secret", "allowPrivate", "state", "published", "marking"}}, now)
 	if err := authorizationRefusal(permission); err != nil {
-		return build.Connection{}, err
+		return dataowner.Connection{}, err
 	}
 	if len(permission.Withheld) > 0 {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The connection settings are not readable")
+		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The connection settings are not readable")
 	}
-	raw, refusal := c.ReadRecord(build.ConnectionType, id, now)
+	raw, refusal := c.ReadRecord(dataowner.ConnectionType, id, now)
 	if refusal != nil {
-		return build.Connection{}, refusal
+		return dataowner.Connection{}, refusal
 	}
-	var connection build.Connection
+	var connection dataowner.Connection
 	if json.Unmarshal(raw, &connection) != nil {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The connection settings are not readable")
+		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The connection settings are not readable")
 	}
 	owner := t.dataOwner()
 	if owner == nil {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The connection owner is unavailable")
+		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The connection owner is unavailable")
 	}
 	fixed, err := owner.ExecutionConnection(connection)
 	if err != nil || fixed.Archived || fixed.State != "ready" || fixed.Kind != "http" {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs a ready HTTP connection")
+		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs a ready HTTP connection")
 	}
 	address, err := url.Parse(fixed.Address)
 	if err != nil || address.Host == "" || address.User != nil || address.RawQuery != "" || address.Fragment != "" || address.Scheme != "https" && !(address.Scheme == "http" && fixed.AllowPrivate) {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an HTTP service root")
+		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an HTTP service root")
 	}
 	if fixed.Secret == "" || t.authorization(fixed) == "" {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an available connection credential")
+		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an available connection credential")
 	}
 	return fixed, nil
 }

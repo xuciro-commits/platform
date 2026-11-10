@@ -5,7 +5,6 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"strings"
 	"time"
 )
 
@@ -149,48 +148,17 @@ type SavedView struct {
 	Owner  string `json:"owner" field:"readonly" source:"record"`
 }
 
-func workViewState(raw string) (map[string]json.RawMessage, int, error) {
-	raw = strings.TrimSpace(raw)
-	state := map[string]json.RawMessage{}
-	if raw == "" {
-		return state, 0, nil
-	}
-	if json.Unmarshal([]byte(raw), &state) != nil || state == nil {
-		return nil, 0, fmt.Errorf("saved view state must be a JSON object")
-	}
-	encoded, exists := state["version"]
-	if !exists {
-		return state, 0, nil
-	}
-	var version int
-	if json.Unmarshal(encoded, &version) != nil {
-		return nil, 0, fmt.Errorf("saved view state version must be an integer")
-	}
-	if version != 0 && version != WorkViewStateVersion {
-		return nil, 0, fmt.Errorf("saved view state version %d is not supported", version)
-	}
-	return state, version, nil
-}
-
 func CheckWorkViewState(raw string) error {
-	_, _, err := workViewState(raw)
-	return err
-}
-
-func UpgradeWorkViewState(raw string) (string, error) {
-	state, version, err := workViewState(raw)
-	if err != nil {
-		return "", err
+	var state struct {
+		Version int `json:"version"`
 	}
-	if version == WorkViewStateVersion {
-		return strings.TrimSpace(raw), nil
+	if json.Unmarshal([]byte(raw), &state) != nil {
+		return fmt.Errorf("saved view state must be a JSON object")
 	}
-	state["version"] = json.RawMessage("1")
-	encoded, err := json.Marshal(state)
-	if err != nil {
-		return "", err
+	if state.Version != WorkViewStateVersion {
+		return fmt.Errorf("saved view state version %d is not supported", state.Version)
 	}
-	return string(encoded), nil
+	return nil
 }
 
 type AcceptedEventPlan struct {

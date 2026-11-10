@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	dataowner "platformserver/services/data"
 
 	"platformserver/kernel/records"
 	"reflect"
@@ -14,7 +15,6 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/objects"
-	"platformserver/services/resources/authoring"
 	"platformserver/services/security"
 )
 
@@ -151,7 +151,7 @@ func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et 
 	if err != nil {
 		return func(reflect.Value) bool { return false }, nil
 	}
-	if et.Info().Type == build.DatasetVersionType {
+	if et.Info().Type == dataowner.DatasetVersionType {
 		index := t.markingsIn(store, true)
 		return func(value reflect.Value) bool { return index.visible(c.Member, value) && policy.Match(value) }, nil
 	}

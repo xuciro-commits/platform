@@ -80,81 +80,12 @@ func actionTypeImage(raw []byte) error {
 	return ontology.ValidateActionTypeImage(action, frozen)
 }
 
-func (b *Build) extractObjectActions(c platform.Caller, r *pb.ChangeRecord, object *Object, now time.Time) *kernel.Error {
-	all, err := readDefinitionInventory[ActionType](c)
-	if err != nil {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
-	}
-	refs := slices.Clone(object.ActionTypes)
-	seen := map[string]bool{}
-	for _, definition := range object.Actions {
-		name := TypeOf(object.Name) + "." + definition.Name
-		if seen[name] {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An object cannot repeat an action type")
-		}
-		seen[name] = true
-		ref := platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: name}
-		action := ActionType{Record: platform.Record{ID: name}, Name: name, Object: TypeOf(object.Name), State: "draft"}
-		index := slices.IndexFunc(all, func(item ActionType) bool { return item.Name == name })
-		if index >= 0 {
-			action = all[index]
-		}
-		action.Definition = definition
-		if refusal := b.actionTypeEntity().Validate(c, &action); refusal != nil {
-			return refusal
-		}
-		rid := platform.ResourceID(c.Tenant, ref)
-		resource, known := platform.Get[Resource](c, rid)
-		parent, found := platform.Get[Resource](c, platform.ResourceID(c.Tenant, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: action.Object}))
-		project := submissionProject(r.GetSubmission())
-		if found && parent.Project != "" {
-			project = parent.Project
-		}
-		if project == "" {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The action's object has no project")
-		}
-		if !known {
-			resource = Resource{Record: platform.Record{ID: rid}, Ref: ref, Project: project}
-			if found {
-				resource.Folder, resource.ManagedBy = parent.Folder, parent.ManagedBy
-			}
-		}
-		resource.Type, resource.Draft, resource.Title = ActionTypeType, action.ID, action.Title
-		resource.Version++
-		resource.State = "active"
-		if index < 0 || action.Version != all[index].Version {
-			c.Put(r, resource)
-			c.Put(r, action)
-		}
-		if !slices.ContainsFunc(refs, func(binding platform.AssetBinding) bool { return binding.Ref == ref }) {
-			refs = append(refs, platform.AssetBinding{Ref: ref})
-		}
-	}
-	object.Actions, object.ActionTypes = nil, refs
-	return nil
-}
-
 func (b *Build) writeObject(c platform.Caller, r *pb.ChangeRecord, verb, id string, payload json.RawMessage, now time.Time) *kernel.Error {
 	var input map[string]json.RawMessage
 	if json.Unmarshal(payload, &input) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object definition is one JSON object")
 	}
-	if _, supplied := input["actions"]; supplied && c.Replaying {
-		object, _ := platform.Get[Object](c, id)
-		if err := json.Unmarshal(payload, &object); err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		object.ID = id
-		if err := b.normalizeObjectRules(&object); err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		if refusal := b.extractObjectActions(c, r, &object, now); refusal != nil {
-			return refusal
-		}
-		input["actions"], input["actionTypes"] = platform.Raw(nil), platform.Raw(object.ActionTypes)
-		payload = platform.Raw(input)
-	}
-	if raw, supplied := input["actions"]; supplied && !c.Replaying {
+	if raw, supplied := input["actions"]; supplied {
 		current, found := platform.Get[Object](c, id)
 		var actions []Action
 		if json.Unmarshal(raw, &actions) != nil {
@@ -210,18 +141,6 @@ func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id 
 func (b *Build) submitOntologyWrite(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		return func(r *pb.ChangeRecord) {
-			if s.GetSchema().GetName() == SchemaExtractActions {
-				object, found := platform.Get[Object](c, s.GetTarget().GetId())
-				if !found || len(object.Actions) == 0 {
-					return
-				}
-				if refusal := b.extractObjectActions(c, r, &object, now); refusal != nil {
-					c.FailDecision(refusal)
-					return
-				}
-				c.Put(r, object)
-				return
-			}
 			verb := "edit"
 			if s.GetSchema().GetName() == s.GetTarget().GetType()+".create" {
 				verb = "create"

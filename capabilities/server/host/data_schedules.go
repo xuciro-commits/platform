@@ -7,11 +7,12 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
 	"time"
 )
 
-func (t *Tenant) runSchedules(pipelines []build.Pipeline, now time.Time) {
+func (t *Tenant) runSchedules(pipelines []dataowner.Pipeline, now time.Time) {
 	for _, pipeline := range pipelines {
 		if pipeline.Every == "" {
 			continue
@@ -30,7 +31,7 @@ func (t *Tenant) runSchedules(pipelines []build.Pipeline, now time.Time) {
 		})
 		if !exists {
 			project, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
-				return t.resourceProject(build.PipelineType, pipeline.ID), nil
+				return t.resourceProject(dataowner.PipelineType, pipeline.ID), nil
 			})
 			if project == "" {
 				log.Printf("schedule migration refused: pipeline %s has no project", pipeline.ID)
@@ -84,7 +85,7 @@ func (t *Tenant) runSchedules(pipelines []build.Pipeline, now time.Time) {
 		}
 		key := "schedule:" + schedule.ID + ":" + stamp
 		edits := []platform.CompositeEdit{
-			{Schema: build.PipelineType + ".run", Target: &pb.EntityRef{Type: build.PipelineType, Id: schedule.Pipeline}, Payload: platform.Raw(map[string]any{})},
+			{Schema: dataowner.PipelineType + ".run", Target: &pb.EntityRef{Type: dataowner.PipelineType, Id: schedule.Pipeline}, Payload: platform.Raw(map[string]any{})},
 			{Schema: platform.SchemaScheduleRan, Target: &pb.EntityRef{Type: platform.ScheduleType, Id: schedule.ID}, Payload: platform.Raw(map[string]any{"at": now})},
 		}
 		if _, err := t.Composite(member, key, edits, now); err != nil {

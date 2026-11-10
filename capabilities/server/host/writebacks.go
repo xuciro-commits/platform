@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	dataowner "platformserver/services/data"
 
 	"slices"
 	"strings"
@@ -38,10 +39,10 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	}
 	out := []IntegrationEffect{}
 	for _, effect := range t.Effects(now) {
-		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		confirmation := effect.Event == build.ID+"/confirmation" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		dispatch := effect.Event == build.ID+"/dispatch" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		transaction := effect.Event == build.ID+"/transaction" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, dataowner.WritebackEndpoint)
+		confirmation := effect.Event == build.ID+"/confirmation" && strings.HasPrefix(effect.Endpoint, dataowner.WritebackEndpoint)
+		dispatch := effect.Event == build.ID+"/dispatch" && strings.HasPrefix(effect.Endpoint, dataowner.WritebackEndpoint)
+		transaction := effect.Event == build.ID+"/transaction" && strings.HasPrefix(effect.Endpoint, dataowner.WritebackEndpoint)
 		if effect.App != build.ID || !writeback && !confirmation && !dispatch && !transaction {
 			continue
 		}
@@ -67,7 +68,7 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 		return nil, nil
 	}
 	c := t.automation(build.ID, false)
-	writebacks, _, refusal := platform.Find[build.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	writebacks, _, refusal := platform.Find[dataowner.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	if preparing && refusal != nil {
 		return nil, refusal
 	}
@@ -77,8 +78,8 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 		eventSchema, on := w.Schema(), w.On
 		if w.Published != "" {
 			var asset platform.ReleaseAsset
-			var definition build.WritebackDefinition
-			if build.ValueDecodeIntegration([]byte(w.Published), &asset) != nil || build.ValueDecodeIntegration(asset.Body, &definition) != nil {
+			var definition dataowner.WritebackDefinition
+			if dataowner.DecodeDescriptor([]byte(w.Published), &asset) != nil || dataowner.DecodeDescriptor(asset.Body, &definition) != nil {
 				if preparing {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The writeback publication is unavailable")
 				}
@@ -99,7 +100,7 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 		if w.On == "confirmation" || w.On == "dispatch" || w.On == "transaction" || w.Schema() != schema {
 			continue
 		}
-		conn, ok := platform.Get[build.Connection](c, w.Connection)
+		conn, ok := platform.Get[dataowner.Connection](c, w.Connection)
 		if !ok {
 			if preparing {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The writeback connection is not configured")
@@ -132,13 +133,13 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 		body, _ := json.Marshal(req)
 		at := e.Record.GetRecordedTime().AsTime()
 		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, build.ID, e.Record.GetChangeId(), w.ID),
-			Endpoint: build.WritebackEndpoint + conn.ID, Event: "writeback/" + w.Name, App: build.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at,
+			Endpoint: dataowner.WritebackEndpoint + conn.ID, Event: "writeback/" + w.Name, App: build.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at,
 			State: "pending", Due: at, Body: string(body)})
 	}
 	return planned, nil
 }
 
-func (t *Tenant) checkWritebackCredential(request build.WritebackRequest) *kernel.Error {
+func (t *Tenant) checkWritebackCredential(request dataowner.WritebackRequest) *kernel.Error {
 	if request.Secret != "" {
 		if value, ok := t.credentialValue(request.Secret, "connection/"+request.Connection, request.URL); !ok || strings.TrimSpace(string(value)) == "" {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The connection credential is not configured or permitted for this target")
@@ -150,7 +151,7 @@ func (t *Tenant) checkWritebackCredential(request build.WritebackRequest) *kerne
 func (t *Tenant) connectionEndpoints() []*Endpoint {
 	var out []*Endpoint
 	for _, x := range t.outbound {
-		if !strings.HasPrefix(x.Endpoint, build.WritebackEndpoint) || platform.EffectSettled(x.State) {
+		if !strings.HasPrefix(x.Endpoint, dataowner.WritebackEndpoint) || platform.EffectSettled(x.State) {
 			continue
 		}
 		if !slices.ContainsFunc(out, func(ep *Endpoint) bool { return ep.ID == x.Endpoint }) {
@@ -163,12 +164,12 @@ func (t *Tenant) connectionEndpoints() []*Endpoint {
 func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 	sum := sha256.Sum256([]byte(x.Body))
 	out = platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
-	var req build.WritebackRequest
+	var req dataowner.WritebackRequest
 	if json.Unmarshal([]byte(x.Body), &req) != nil {
 		out.Result, out.Detail = "rejected", "the request is unreadable"
 		return out
 	}
-	if err := build.CheckWritebackTransport(req.Transport, req.Method); err != nil {
+	if err := dataowner.CheckWritebackTransport(req.Transport, req.Method); err != nil {
 		out.Result, out.Detail = "rejected", err.Error()
 		return out
 	}

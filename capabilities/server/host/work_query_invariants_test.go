@@ -18,7 +18,6 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 	id := "invariant-work-view-state"
 	live := newInvariantTenantWithApps(t, id, []platform.App{workapp.New(id)})
 	member := live.member(t)
-	caller := platform.NewCaller(runtime{t: live.Tenant}, member, workapp.ID, false, false)
 	if _, ok := live.app(workapp.ID).(*workapp.Work); !ok {
 		t.Fatal("the work owner is not attached")
 	}
@@ -41,16 +40,6 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 		}
 		return value.([]workapp.SavedView), nil
 	}
-	version := func(state string) int {
-		t.Helper()
-		var envelope struct {
-			Version int `json:"version"`
-		}
-		if err := json.Unmarshal([]byte(state), &envelope); err != nil {
-			t.Fatalf("saved view state is not JSON: %v", err)
-		}
-		return envelope.Version
-	}
 	find := func(items []workapp.SavedView, viewID string) workapp.SavedView {
 		t.Helper()
 		for _, item := range items {
@@ -63,20 +52,9 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 	}
 
 	before := live.liveVersion("/v1/views")
-	if refusal := save("VIEW0", "Legacy exploration", `{"kind":"exploration","entity":"build.alpha","set":{"object":"build.alpha"}}`); refusal != nil {
-		t.Fatalf("version 0 state was refused: %s: %s", refusal.Code, refusal.Message)
+	if refusal := save("VIEW0", "Unversioned exploration", `{"kind":"exploration","entity":"build.alpha","set":{"object":"build.alpha"}}`); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+		t.Fatalf("unversioned save: refusal=%v; want INVALID_ARGUMENT", refusal)
 	}
-	if after := live.liveVersion("/v1/views"); after == before {
-		t.Fatal("a saved view did not invalidate its live read")
-	}
-	items, refusal := views()
-	if refusal != nil {
-		t.Fatalf("read the upgraded view: %s: %s", refusal.Code, refusal.Message)
-	}
-	if got := version(find(items, "VIEW0").State); got != platform.WorkViewStateVersion {
-		t.Fatalf("a new save stored state version %d; want %d", got, platform.WorkViewStateVersion)
-	}
-
 	if refusal := save("VIEW1", "Versioned list", `{"version":1,"kind":"list","search":"kept"}`); refusal != nil {
 		t.Fatalf("version 1 state was refused: %s: %s", refusal.Code, refusal.Message)
 	}
@@ -84,33 +62,15 @@ func TestInvariantWorkViewStateVersions(t *testing.T) {
 		t.Fatalf("unknown version save: refusal=%v; want INVALID_ARGUMENT", refusal)
 	}
 
-	legacy := workapp.SavedView{Record: platform.Record{ID: "HISTORY"}, Title: "History", Entity: "build.alpha", Owner: member.ID,
-		State: `{"kind":"list","search":"old"}`}
-	receipt := &pb.ChangeRecord{ChangeId: "historical-work-view", Submission: &pb.Submission{PrincipalId: member.ID, Schema: &pb.SchemaRef{Name: workapp.SchemaViewSave}}}
-	live.mu.Lock()
-	refusal = live.records.Put(caller, receipt, legacy)
-	live.mu.Unlock()
+	if after := live.liveVersion("/v1/views"); after == before {
+		t.Fatal("a saved view did not invalidate its live read")
+	}
+	items, refusal := views()
 	if refusal != nil {
-		t.Fatalf("seed a historical view: %s: %s", refusal.Code, refusal.Message)
+		t.Fatalf("read the saved view: %s: %s", refusal.Code, refusal.Message)
 	}
-	items, refusal = views()
-	if refusal != nil {
-		t.Fatalf("a historical version 0 view was not readable: %s: %s", refusal.Code, refusal.Message)
-	}
-	if got := find(items, "HISTORY").State; got != legacy.State {
-		t.Fatalf("a historical view was rewritten on read: %q", got)
-	}
-
-	unsupported := workapp.SavedView{Record: platform.Record{ID: "FUTURE"}, Title: "Future", Entity: "build.alpha", Owner: member.ID,
-		State: `{"version":2,"kind":"list"}`}
-	live.mu.Lock()
-	refusal = live.records.Put(caller, receipt, unsupported)
-	live.mu.Unlock()
-	if refusal != nil {
-		t.Fatalf("seed an unsupported view: %s: %s", refusal.Code, refusal.Message)
-	}
-	if _, refusal := views(); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
-		t.Fatalf("unknown stored version: refusal=%v; want INVALID_ARGUMENT", refusal)
+	if got := find(items, "VIEW1").State; got != `{"version":1,"kind":"list","search":"kept"}` {
+		t.Fatalf("the saved state was rewritten: %q", got)
 	}
 }
 

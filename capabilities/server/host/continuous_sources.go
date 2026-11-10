@@ -8,24 +8,25 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
 	"slices"
 	"strings"
 	"time"
 )
 
-func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *platform.StreamIntake, now time.Time) (build.Source, build.Connection, string, *kernel.Error) {
-	refuse := func(message string) (build.Source, build.Connection, string, *kernel.Error) {
-		return build.Source{}, build.Connection{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, message)
+func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *platform.StreamIntake, now time.Time) (dataowner.Source, dataowner.Connection, string, *kernel.Error) {
+	refuse := func(message string) (dataowner.Source, dataowner.Connection, string, *kernel.Error) {
+		return dataowner.Source{}, dataowner.Connection{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, message)
 	}
 	if intake == nil {
 		return refuse("The Flow has no controlled source intake")
 	}
-	view, err := t.recordOf(m, build.SourceType, intake.SourceRecord, now)
+	view, err := t.recordOf(m, dataowner.SourceType, intake.SourceRecord, now)
 	if err != nil {
 		return refuse("The Flow source is not readable")
 	}
-	source, ok := view.Record.(build.Source)
+	source, ok := view.Record.(dataowner.Source)
 	if ok {
 		var err error
 		source, err = t.dataOwner().ExecutionSource(source)
@@ -36,11 +37,11 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	if !ok || !source.Stream || source.State != "published" || source.Name != name || source.Since == "" || source.Profile != "table" {
 		return refuse("The Flow source must be a published incremental stream source")
 	}
-	view, err = t.recordOf(m, build.ConnectionType, source.Connection, now)
+	view, err = t.recordOf(m, dataowner.ConnectionType, source.Connection, now)
 	if err != nil {
 		return refuse("The Flow connection is not readable")
 	}
-	connection, ok := view.Record.(build.Connection)
+	connection, ok := view.Record.(dataowner.Connection)
 	if ok {
 		var err error
 		connection, err = t.dataOwner().ExecutionConnection(connection)
@@ -78,8 +79,8 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	var name, hash string
 	var intake *platform.StreamIntake
 	var budget int
-	var source build.Source
-	var connection build.Connection
+	var source dataowner.Source
+	var connection dataowner.Connection
 	var latestBootstrap bool
 	_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
 		f, instance, member, refusal := t.continuousSnapshotLocked(m, id, now)
@@ -130,7 +131,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 			}
 			return platform.FlowBatchOutcome{}, nil
 		}
-		batch := platform.FlowBatch{Bootstrap: true, Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Cursor, Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
+		batch := platform.FlowBatch{Bootstrap: true, Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Cursor, Sources: []string{dataowner.SourceType + "/" + source.ID, dataowner.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
 		if before.Batch != nil {
 			batch.Predecessor = before.Batch.Cursor
 		}
@@ -149,7 +150,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		}
 		position.Cursor = next
 	}
-	batch := platform.FlowBatch{Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Advance(rows), Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
+	batch := platform.FlowBatch{Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Advance(rows), Sources: []string{dataowner.SourceType + "/" + source.ID, dataowner.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
 	if before.Batch != nil {
 		batch.Predecessor = before.Batch.Cursor
 	}
@@ -194,7 +195,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	return t.ConsumeFlowBatch(current, id, batch, now)
 }
 
-func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowInstance, name string, intake *platform.StreamIntake, source build.Source, connection build.Connection, hash string, latestBootstrap bool, columns []string, now time.Time) ([]map[string]any, string, *kernel.Error) {
+func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowInstance, name string, intake *platform.StreamIntake, source dataowner.Source, connection dataowner.Connection, hash string, latestBootstrap bool, columns []string, now time.Time) ([]map[string]any, string, *kernel.Error) {
 	retry := intake.Retry
 	if err := retry.Check(); err != nil {
 		return nil, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -254,7 +255,7 @@ func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan platform.FlowBa
 	if refusal != nil {
 		return refusal
 	}
-	refs := []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}
+	refs := []string{dataowner.SourceType + "/" + source.ID, dataowner.ConnectionType + "/" + connection.ID}
 	if checkpoint.Record != source.ID || checkpoint.Config != hash || !slices.Equal(checkpoint.Sources, refs) || x.Batch != nil && x.Batch.Source != nil && (x.Batch.Source.Record != source.ID || x.Batch.Source.Config != hash) || intake.Offset == "latest" && (!checkpoint.Initialized || checkpoint.Offset != "latest") || checkpoint.Initialized && checkpoint.Offset != intake.Offset {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow source configuration or protected references changed")
 	}
@@ -348,7 +349,7 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 				}
 				if plan, err := f.PlanBatch(instance, t.automation(platform.FlowApp, false)); err == nil {
 					if _, intake, _ := plan.Intake(); intake != nil {
-						source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
+						source, exists := platform.Get[dataowner.Source](t.automation(build.ID, false), intake.SourceRecord)
 						if exists {
 							var err error
 							source, err = t.dataOwner().ExecutionSource(source)

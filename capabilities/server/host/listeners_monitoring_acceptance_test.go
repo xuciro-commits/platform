@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	dataowner "platformserver/services/data"
 	"slices"
 	"strings"
 	"testing"
@@ -81,8 +82,8 @@ func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
 	}
 	live := fresh()
 	live.Secrets = func(name string) ([]byte, bool) { return []byte("shared-value"), name == "listener-secret" }
-	live.accept(t, build.ListenerType+".create", build.ListenerType, "LISTENER", map[string]any{"name": "incoming", "title": "Incoming", "connector": "listenerprobe", "path": "incoming-token", "secret": "listener-secret"})
-	live.accept(t, build.ListenerType+".publish", build.ListenerType, "LISTENER", map[string]any{})
+	live.accept(t, dataowner.ListenerType+".create", dataowner.ListenerType, "LISTENER", map[string]any{"name": "incoming", "title": "Incoming", "connector": "listenerprobe", "path": "incoming-token", "secret": "listener-secret"})
+	live.accept(t, dataowner.ListenerType+".publish", dataowner.ListenerType, "LISTENER", map[string]any{})
 	host := NewHost(Tokens(map[string]string{"builder": "builder", "sender": "sender", "other": "other", "admin": "admin"}), live.Tenant)
 	host.Now = func() time.Time { return invariantClock }
 	handler := host.Handler()
@@ -166,14 +167,14 @@ func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	live.accept(t, build.ListenerType+".edit", build.ListenerType, "LISTENER", map[string]any{"title": "Revised inbound", "path": "incoming-next", "connector": "missing-input", "secret": "next-secret"})
+	live.accept(t, dataowner.ListenerType+".edit", dataowner.ListenerType, "LISTENER", map[string]any{"title": "Revised inbound", "path": "incoming-next", "connector": "missing-input", "secret": "next-secret"})
 	if response := request(http.MethodPost, "/v1/listeners/incoming-token", "sender", "shared-value", body); response.Code != http.StatusOK {
 		t.Fatalf("ordinary edit changed accepted listener: HTTP %d: %s", response.Code, response.Body)
 	}
 	if response := request(http.MethodPost, "/v1/listeners/incoming-next", "sender", "shared-value", body); response.Code == http.StatusOK {
 		t.Fatal("unpublished listener path became active")
 	}
-	live.accept(t, build.ListenerType+".edit", build.ListenerType, "LISTENER", map[string]any{"connector": "listenerprobe", "secret": "listener-secret"})
+	live.accept(t, dataowner.ListenerType+".edit", dataowner.ListenerType, "LISTENER", map[string]any{"connector": "listenerprobe", "secret": "listener-secret"})
 	drafts := []build.JointDraftRef{{Kind: platform.AssetListener, ID: "LISTENER"}}
 	preview, err := live.PreviewReleaseDrafts(live.member(t), drafts, "", invariantClock)
 	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
@@ -205,7 +206,7 @@ func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	live.accept(t, build.ListenerType+".pause", build.ListenerType, "LISTENER", map[string]any{})
+	live.accept(t, dataowner.ListenerType+".pause", dataowner.ListenerType, "LISTENER", map[string]any{})
 	if response := request(http.MethodPost, "/v1/listeners/incoming-next", "sender", "shared-value", body); response.Code == http.StatusOK {
 		t.Fatal("paused listener accepted a delivery")
 	}

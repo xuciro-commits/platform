@@ -449,7 +449,7 @@ test("F1 builder goes from an empty project to an application a business user ac
       expect(installedFunction.record.version).toBe(1);
       expect(JSON.parse(installedFunction.record.published)).toMatchObject({ name: functionName, version: 1, instructions: "Return the answer for the customer." });
       await submit("build.testplan", planID, "create", {
-        name: unique("evaluation"), title: "Order answer evaluation", function: functionID, functionVersion: 1, at: "2000-01-01T00:00:00Z",
+        variant: "evaluation-set", name: unique("evaluation"), title: "Order answer evaluation", function: functionID, functionVersion: 1, at: "2000-01-01T00:00:00Z",
         steps: [{ type: "build.function-call", id: "evaluation", action: "build.function-call.start", payload: "{}", expect: "accepted" }],
         evaluation: [{ minQuality: 1, maxCostUsd: 1, maxLatencyMillis: 1000, cases: [{ name: "case", input: { customer: "Acme" }, expected: { answer: "ok" } }] }],
       }, 0);

@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	dataowner "platformserver/services/data"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"strings"
@@ -44,14 +45,14 @@ func (h hostView) FreezeConfirmation(c platform.Caller, subject string, spec pla
 			if id == "" {
 				continue
 			}
-			w, ok := platform.Get[build.Writeback](c, id)
+			w, ok := platform.Get[dataowner.Writeback](c, id)
 			if !ok {
 				return "", nil, fmt.Errorf("Confirmation writeback is unavailable")
 			}
 			roots = append(roots, platform.AssetRef{App: build.ID, Kind: platform.AssetWriteback, Name: w.Name})
 		}
 		if p.Reconcile != nil {
-			s, ok := platform.Get[build.Source](c, p.Reconcile.Source)
+			s, ok := platform.Get[dataowner.Source](c, p.Reconcile.Source)
 			if !ok {
 				return "", nil, fmt.Errorf("Reconciliation source is unavailable")
 			}
@@ -122,7 +123,7 @@ func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run p
 		applicant.Request(receipt, platform.Request{Tag: p.Name + map[bool]string{true: ":compensate"}[compensate], Key: intent, Provider: p.Protocol.Provider, Protocol: declaration.Protocol, Action: action, Target: target, Payload: run.Input, Reply: platform.ConfirmationAnswerSchema})
 		return nil
 	}
-	var req build.WritebackRequest
+	var req dataowner.WritebackRequest
 	if json.Unmarshal(body, &req) != nil || req.Confirmation != run.ID || req.Party != p.Name || req.Version != 1 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Confirmation delivery has no frozen request")
 	}
@@ -137,7 +138,7 @@ func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run p
 	if compensate {
 		key += ":compensate"
 	}
-	x := platform.Effect{ID: intent, App: build.ID, Endpoint: build.WritebackEndpoint + req.Connection, Event: build.ID + "/confirmation", Key: key, Target: run.Subject, At: at, State: "pending", Due: at, Body: string(body), Applications: applications, Compensates: req.Compensates}
+	x := platform.Effect{ID: intent, App: build.ID, Endpoint: dataowner.WritebackEndpoint + req.Connection, Event: build.ID + "/confirmation", Key: key, Target: run.Subject, At: at, State: "pending", Due: at, Body: string(body), Applications: applications, Compensates: req.Compensates}
 	if !slices.ContainsFunc(h.decision.intents, func(e platform.Effect) bool { return e.ID == intent }) {
 		h.decision.intents = append(h.decision.intents, x)
 	}
@@ -205,7 +206,7 @@ func (h hostView) ResolveConfirmationDelivery(c platform.Caller, run platform.Co
 			if effect.ID != id || platform.EffectSettled(effect.State) {
 				continue
 			}
-			var request build.WritebackRequest
+			var request dataowner.WritebackRequest
 			if effect.App != build.ID || json.Unmarshal([]byte(effect.Body), &request) != nil || request.Confirmation != run.ID || request.Party != p.Name {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The confirmation does not own this delivery")
 			}
@@ -263,14 +264,14 @@ func (h hostView) CheckConfirmationRead(run platform.ConfirmationRun, index int,
 	if !known || !member.Active() || !h.Readable(member, run.Subject, at) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The confirmation applicant can no longer read the subject")
 	}
-	var source build.Source
-	var connection build.Connection
+	var source dataowner.Source
+	var connection dataowner.Connection
 	policy := run.Definition.Parties[index].Reconcile
 	if policy == nil || json.Unmarshal(run.Parties[index].Source, &source) != nil || json.Unmarshal(run.Parties[index].Connection, &connection) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original reconciliation descriptor is unavailable")
 	}
 	publisher, known := h.t.sourcePublisher(source)
-	if !known || !publisher.Active() || !h.Readable(publisher, build.SourceType+"/"+policy.Source, at) || (platform.MarkingSet{Level: connection.Marking, Compartments: connection.Compartments}).Guarded() || h.t.connectionMarkings(connection.ID).Guarded() {
+	if !known || !publisher.Active() || !h.Readable(publisher, dataowner.SourceType+"/"+policy.Source, at) || (platform.MarkingSet{Level: connection.Marking, Compartments: connection.Compartments}).Guarded() || h.t.connectionMarkings(connection.ID).Guarded() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Reconciliation source access is unavailable")
 	}
 	return nil

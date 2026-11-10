@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	dataowner "platformserver/services/data"
 	"slices"
 	"strings"
 	"time"
@@ -272,7 +273,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 		run.RetrySchemaVersion, run.RetryKind = action.SchemaVersion, kind
 	}
 	coverage := MonitoringCoverage{Source: "source", Basis: "latest", Limitation: "latest-only"}
-	sources, refusal := monitoringRecords[build.Source](t, m, build.SourceType, &coverage, now)
+	sources, refusal := monitoringRecords[dataowner.Source](t, m, dataowner.SourceType, &coverage, now)
 	if refusal != nil {
 		return out, refusal
 	}
@@ -280,7 +281,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 		if source.Last == nil && !source.Requested {
 			continue
 		}
-		run := MonitoringRun{Type: "sync", Source: "source", ID: "source:" + source.ID, Title: source.Title, ResourceRef: &platform.AssetRef{App: build.ID, Kind: platform.AssetSource, Name: source.Name}, RecordRef: build.SourceType + "/" + source.ID, Status: "unknown", OwnerStatus: source.State, When: source.Changed.At}
+		run := MonitoringRun{Type: "sync", Source: "source", ID: "source:" + source.ID, Title: source.Title, ResourceRef: &platform.AssetRef{App: build.ID, Kind: platform.AssetSource, Name: source.Name}, RecordRef: dataowner.SourceType + "/" + source.ID, Status: "unknown", OwnerStatus: source.State, When: source.Changed.At}
 		if source.Last != nil {
 			run.When, run.Status = source.Last.At, "ok"
 			if source.Last.Error != "" || source.Last.Failed > 0 {
@@ -291,7 +292,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 			run.Status = "pending"
 		}
 		if !source.Archived && source.State == "published" && !source.Stream {
-			retry(&run, build.SourceType+".pull", build.SourceType, source.ID, "rerun")
+			retry(&run, dataowner.SourceType+".pull", dataowner.SourceType, source.ID, "rerun")
 			fixed, fixedErr := t.dataOwner().ExecutionSource(source)
 			if fixedErr != nil {
 				coverage.Limitation = "definition-unavailable"
@@ -304,7 +305,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 	}
 	out.Coverage = append(out.Coverage, coverage)
 	coverage = MonitoringCoverage{Source: "pipeline", Basis: "latest", Limitation: "latest-only"}
-	pipelines, refusal := monitoringRecords[build.Pipeline](t, m, build.PipelineType, &coverage, now)
+	pipelines, refusal := monitoringRecords[dataowner.Pipeline](t, m, dataowner.PipelineType, &coverage, now)
 	if refusal != nil {
 		return out, refusal
 	}
@@ -312,7 +313,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 		if pipeline.Last == nil && !pipeline.Requested {
 			continue
 		}
-		run := MonitoringRun{Type: "build", Source: "pipeline", ID: "pipeline:" + pipeline.ID, Title: pipeline.Title, ResourceRef: &platform.AssetRef{App: build.ID, Kind: platform.AssetPipeline, Name: pipeline.Name}, RecordRef: build.PipelineType + "/" + pipeline.ID, When: pipeline.Changed.At, Status: "unknown", OwnerStatus: pipeline.State}
+		run := MonitoringRun{Type: "build", Source: "pipeline", ID: "pipeline:" + pipeline.ID, Title: pipeline.Title, ResourceRef: &platform.AssetRef{App: build.ID, Kind: platform.AssetPipeline, Name: pipeline.Name}, RecordRef: dataowner.PipelineType + "/" + pipeline.ID, When: pipeline.Changed.At, Status: "unknown", OwnerStatus: pipeline.State}
 		if pipeline.Last != nil {
 			run.When, run.Status = pipeline.Last.At, "ok"
 			if pipeline.Last.Error != "" || pipeline.Last.Failed > 0 {
@@ -325,7 +326,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 			run.Status = "pending"
 		}
 		if !pipeline.Archived && pipeline.State == "published" {
-			retry(&run, build.PipelineType+".run", build.PipelineType, pipeline.ID, "rerun")
+			retry(&run, dataowner.PipelineType+".run", dataowner.PipelineType, pipeline.ID, "rerun")
 		}
 		appendRun(run)
 	}
@@ -397,7 +398,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 	}
 	out.Coverage = append(out.Coverage, coverage)
 	coverage = MonitoringCoverage{Source: "projection", Basis: "latest", Limitation: "latest-only"}
-	datasets, refusal := monitoringRecords[build.Dataset](t, m, build.DatasetType, &coverage, now)
+	datasets, refusal := monitoringRecords[dataowner.Dataset](t, m, dataowner.DatasetType, &coverage, now)
 	if refusal != nil {
 		return out, refusal
 	}
@@ -407,7 +408,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 			if projection.Paused != "" || projection.Refused > 0 {
 				status = "failed"
 			}
-			appendRun(MonitoringRun{Type: "build", Source: "projection", ID: "projection:" + dataset.ID + ":" + projection.Object, Title: cmp.Or(dataset.Title, dataset.ID), ResourceRef: &platform.AssetRef{App: build.ID, Kind: platform.AssetDataset, Name: dataset.Name}, RecordRef: build.DatasetType + "/" + dataset.ID, When: projection.At, Status: status})
+			appendRun(MonitoringRun{Type: "build", Source: "projection", ID: "projection:" + dataset.ID + ":" + projection.Object, Title: cmp.Or(dataset.Title, dataset.ID), ResourceRef: &platform.AssetRef{App: build.ID, Kind: platform.AssetDataset, Name: dataset.Name}, RecordRef: dataowner.DatasetType + "/" + dataset.ID, When: projection.At, Status: status})
 		}
 	}
 	out.Coverage = append(out.Coverage, coverage)

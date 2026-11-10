@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	dataowner "platformserver/services/data"
 
 	"slices"
 	"strings"
@@ -128,8 +129,8 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 			}
 		}
 	case policy.Source != "":
-		var source build.Source
-		var connection build.Connection
+		var source dataowner.Source
+		var connection dataowner.Connection
 		if json.Unmarshal(run.Source, &source) != nil || json.Unmarshal(run.Connection, &connection) != nil {
 			problem = fmt.Errorf("The original dispatch status source is unavailable")
 		} else if connection.Secret != "" && len(t.authorization(connection)) == 0 {
@@ -139,7 +140,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 		}
 	case policy.Observation != "":
 		var definition platform.ObservationDefinition
-		var connection build.Connection
+		var connection dataowner.Connection
 		if json.Unmarshal(run.Observation, &definition) != nil || json.Unmarshal(run.Connection, &connection) != nil || run.Device == "" {
 			problem = fmt.Errorf("The original dispatch observation is unavailable")
 			break

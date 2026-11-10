@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	dataowner "platformserver/services/data"
 	"reflect"
 	"strings"
 	"testing"
@@ -16,7 +17,7 @@ import (
 
 func TestInvariantK1K2DatasetTransactionReplayAndIdempotency(t *testing.T) {
 	live := newInvariantTenant(t, "dataset-transaction-invariants")
-	live.accept(t, "build.dataset.create", build.DatasetType, "DS", map[string]any{"name": "transactions", "title": "Transactions", "key": "id", "keep": 10})
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "DS", map[string]any{"name": "transactions", "title": "Transactions", "key": "id", "keep": 10})
 	cases := []struct {
 		kind       string
 		rows, want []map[string]any
@@ -27,12 +28,12 @@ func TestInvariantK1K2DatasetTransactionReplayAndIdempotency(t *testing.T) {
 		{"delete", []map[string]any{{"id": "B"}}, []map[string]any{{"id": "A", "note": "retained", "count": float64(2)}, {"id": "C", "note": "inserted"}}},
 	}
 	for _, item := range cases {
-		submission := live.submission(build.SchemaDatasetLoad, build.DatasetType, "DS", map[string]any{"type": item.kind, "rows": item.rows})
+		submission := live.submission(dataowner.SchemaDatasetLoad, dataowner.DatasetType, "DS", map[string]any{"type": item.kind, "rows": item.rows})
 		accepted, refusal := live.Submit(live.member(t), submission, invariantClock)
 		if refusal != nil {
 			t.Fatalf("%s refused: %v", item.kind, refusal)
 		}
-		rows, _, err := build.DatasetRows(live.automation(build.ID, false), "DS", 0)
+		rows, _, err := dataowner.DatasetRows(live.automation(build.ID, false), "DS", 0)
 		if err != nil || !reflect.DeepEqual(rows, item.want) {
 			t.Fatalf("%s rows=%v, want=%v; err=%v", item.kind, rows, item.want, err)
 		}
@@ -46,7 +47,7 @@ func TestInvariantK1K2DatasetTransactionReplayAndIdempotency(t *testing.T) {
 			t.Fatalf("retry changed %v", differing)
 		}
 	}
-	first, _, err := build.DatasetRows(live.automation(build.ID, false), "DS", 1)
+	first, _, err := dataowner.DatasetRows(live.automation(build.ID, false), "DS", 1)
 	if err != nil || !reflect.DeepEqual(first, cases[0].want) {
 		t.Fatalf("historical rows changed: %v %v", first, err)
 	}
@@ -55,17 +56,17 @@ func TestInvariantK1K2DatasetTransactionReplayAndIdempotency(t *testing.T) {
 		map[string]any{"type": "update", "rows": []map[string]any{{"note": "no key"}}},
 		map[string]any{"type": "snapshot", "rows": []map[string]any{{"id": "A"}, {"id": "A"}}},
 	} {
-		if _, refusal := live.Submit(live.member(t), live.submission(build.SchemaDatasetLoad, build.DatasetType, "DS", payload), invariantClock); refusal == nil {
+		if _, refusal := live.Submit(live.member(t), live.submission(dataowner.SchemaDatasetLoad, dataowner.DatasetType, "DS", payload), invariantClock); refusal == nil {
 			t.Fatalf("invalid key transaction accepted: %v", payload)
 		}
 	}
-	live.accept(t, "build.dataset.create", build.DatasetType, "UNKEYED", map[string]any{"name": "unkeyed", "title": "Unkeyed"})
-	live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "UNKEYED", map[string]any{"rows": []map[string]any{{"id": "A"}, {"id": "A"}}})
-	if _, refusal := live.Submit(live.member(t), live.submission("build.dataset.edit", build.DatasetType, "UNKEYED", map[string]any{"key": "id"}), invariantClock); refusal == nil {
+	live.accept(t, "build.dataset.create", dataowner.DatasetType, "UNKEYED", map[string]any{"name": "unkeyed", "title": "Unkeyed"})
+	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "UNKEYED", map[string]any{"rows": []map[string]any{{"id": "A"}, {"id": "A"}}})
+	if _, refusal := live.Submit(live.member(t), live.submission("build.dataset.edit", dataowner.DatasetType, "UNKEYED", map[string]any{"key": "id"}), invariantClock); refusal == nil {
 		t.Fatal("a key was configured over duplicate existing values")
 	}
 	for _, kind := range []string{"update", "delete"} {
-		if _, refusal := live.Submit(live.member(t), live.submission(build.SchemaDatasetLoad, build.DatasetType, "UNKEYED", map[string]any{"type": kind, "rows": []map[string]any{{"id": "A"}}}), invariantClock); refusal == nil {
+		if _, refusal := live.Submit(live.member(t), live.submission(dataowner.SchemaDatasetLoad, dataowner.DatasetType, "UNKEYED", map[string]any{"type": kind, "rows": []map[string]any{{"id": "A"}}}), invariantClock); refusal == nil {
 			t.Fatalf("%s without configured key accepted", kind)
 		}
 	}
@@ -76,7 +77,7 @@ func TestInvariantK1K2DatasetTransactionReplayAndIdempotency(t *testing.T) {
 			t.Fatalf("replay %d differs in %v", replay, differing)
 		}
 	}
-	version, _ := platform.Get[build.DatasetVersion](live.automation(build.ID, false), build.VersionID("DS", 4))
+	version, _ := platform.Get[dataowner.DatasetVersion](live.automation(build.ID, false), dataowner.VersionID("DS", 4))
 	var retained []map[string]any
 	if json.Unmarshal(version.Data, &retained) != nil || !reflect.DeepEqual(retained, cases[3].want) {
 		t.Fatal("accepted final snapshot differs")
@@ -87,15 +88,15 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 	for _, mapping := range []string{"declared", "legacy"} {
 		t.Run(mapping, func(t *testing.T) {
 			live := newInvariantTenant(t, "source-snapshot-merge-"+mapping)
-			live.accept(t, "build.dataset.create", build.DatasetType, "INPUT", map[string]any{"name": "incoming", "title": "Incoming", "key": "id", "keep": 10})
+			live.accept(t, "build.dataset.create", dataowner.DatasetType, "INPUT", map[string]any{"name": "incoming", "title": "Incoming", "key": "id", "keep": 10})
 			sourceSpec := map[string]any{"name": "external", "title": "External", "url": "https://upstream.example.test/rows", "object": "build.merged"}
 			pipelineSpec := map[string]any{"name": "incomingpipe", "title": "Incoming pipeline", "input": "INPUT", "outputObject": "build.merged"}
 			if mapping == "legacy" {
-				sourceSpec["key"], sourceSpec["mapping"] = "id", []build.SourceField{{From: "note", To: "note"}}
+				sourceSpec["key"], sourceSpec["mapping"] = "id", []dataowner.SourceField{{From: "note", To: "note"}}
 				pipelineSpec["key"] = "id"
 			}
-			live.accept(t, "build.source.create", build.SourceType, "SOURCE", sourceSpec)
-			live.accept(t, "build.pipeline.create", build.PipelineType, "PIPE", pipelineSpec)
+			live.accept(t, "build.source.create", dataowner.SourceType, "SOURCE", sourceSpec)
+			live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PIPE", pipelineSpec)
 			object := invariantObject("merged", "Merged")
 			object["datasources"] = []platform.DataSourceBinding{
 				{Kind: "source", Source: "SOURCE", Key: "id", Columns: []platform.DataSourceColumn{{Column: "note", Attribute: "note"}}},
@@ -106,18 +107,18 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 			}
 			live.accept(t, "build.object.create", build.ObjectType, "OBJECT", object)
 			live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
-			live.accept(t, "build.source.publish", build.SourceType, "SOURCE", map[string]any{})
-			live.accept(t, "build.pipeline.publish", build.PipelineType, "PIPE", map[string]any{})
+			live.accept(t, "build.source.publish", dataowner.SourceType, "SOURCE", map[string]any{})
+			live.accept(t, "build.pipeline.publish", dataowner.PipelineType, "PIPE", map[string]any{})
 			live.accept(t, "build.merged.create", "build.merged", "D", map[string]any{"note": "created by action"})
 			rows := `[{"id":"A","note":"external A"},{"id":"B","note":"external B"},{"id":"C","note":"external C"},{"id":"D","note":"external D"}]`
 			live.Outbound = func(*http.Request, bool) (*http.Response, error) {
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(rows))}, nil
 			}
-			pull := func(at time.Time) build.Source {
+			pull := func(at time.Time) dataowner.Source {
 				t.Helper()
-				live.accept(t, "build.source.pull", build.SourceType, "SOURCE", map[string]any{})
+				live.accept(t, "build.source.pull", dataowner.SourceType, "SOURCE", map[string]any{})
 				live.PullSources(at)
-				source, _ := platform.Get[build.Source](live.automation(build.ID, false), "SOURCE")
+				source, _ := platform.Get[dataowner.Source](live.automation(build.ID, false), "SOURCE")
 				if source.Last == nil || source.Last.Error != "" || source.Last.Failed != 0 || source.Last.Execution.Pending {
 					t.Fatalf("source failed: %+v", source.Last)
 				}
@@ -139,10 +140,10 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 			}
 			pull(invariantClock)
 			live.accept(t, "build.merged.edit", "build.merged", "C", map[string]any{"note": "action edit"})
-			live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "B", "note": "pipeline B"}}})
-			live.accept(t, "build.pipeline.run", build.PipelineType, "PIPE", map[string]any{})
+			live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "B", "note": "pipeline B"}}})
+			live.accept(t, "build.pipeline.run", dataowner.PipelineType, "PIPE", map[string]any{})
 			live.RunPipelines(invariantClock.Add(time.Second))
-			firstPipeline, _ := platform.Get[build.Pipeline](live.automation(build.ID, false), "PIPE")
+			firstPipeline, _ := platform.Get[dataowner.Pipeline](live.automation(build.ID, false), "PIPE")
 			if firstPipeline.Last == nil || firstPipeline.Last.Error != "" || firstPipeline.Last.Failed != 0 || firstPipeline.Last.Written != 1 {
 				t.Fatalf("first pipeline run failed: %+v", firstPipeline.Last)
 			}
@@ -164,9 +165,9 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 			check("C", "action edit", true)
 			check("D", "created by action", false)
 			check("B", "pipeline B", false)
-			live.accept(t, build.SchemaDatasetLoad, build.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{}})
+			live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{}})
 			live.RunPipelines(invariantClock.Add(5 * time.Second))
-			pipeline, _ := platform.Get[build.Pipeline](live.automation(build.ID, false), "PIPE")
+			pipeline, _ := platform.Get[dataowner.Pipeline](live.automation(build.ID, false), "PIPE")
 			if pipeline.Last == nil || pipeline.Last.Error != "" || pipeline.Last.Failed != 0 || pipeline.Last.Deleted != 1 {
 				t.Fatalf("pipeline deletion failed: %+v", pipeline.Last)
 			}

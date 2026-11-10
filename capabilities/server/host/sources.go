@@ -141,14 +141,14 @@ func (t *Tenant) integrationPreparation(execution *dataowner.IntegrationExecutio
 	return plan, err
 }
 
-func (t *Tenant) sourceResult(member platform.Member, s build.Source, pull build.SourcePull, phase string, revision *uint32, now time.Time) *kernel.Error {
+func (t *Tenant) sourceResult(member platform.Member, s dataowner.Source, pull dataowner.SourcePull, phase string, revision *uint32, now time.Time) *kernel.Error {
 	payload := platform.Raw(map[string]any{"pull": pull})
 	key := "pulled:" + s.ID + ":" + now.UTC().Format(time.RFC3339Nano)
 	if pull.Execution != nil {
 		key = "source:" + pull.Execution.ID + ":" + phase
 	}
 	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, ExpectedRevision: revision,
-		Target: &pb.EntityRef{Type: build.SourceType, Id: s.ID}, Schema: &pb.SchemaRef{Name: build.SchemaSourcePulled, Version: 1}, Payload: payload}, now)
+		Target: &pb.EntityRef{Type: dataowner.SourceType, Id: s.ID}, Schema: &pb.SchemaRef{Name: dataowner.SchemaSourcePulled, Version: 1}, Payload: payload}, now)
 	if phase == "finished" {
 		status, detail := "ok", pull.Error
 		if pull.Error != "" || err != nil {
@@ -163,8 +163,8 @@ func (t *Tenant) sourceResult(member platform.Member, s build.Source, pull build
 	return err
 }
 
-func (t *Tenant) pullSource(s build.Source, now time.Time) {
-	pull := build.SourcePull{At: now, DefinitionVersion: s.ExecutionVersion()}
+func (t *Tenant) pullSource(s dataowner.Source, now time.Time) {
+	pull := dataowner.SourcePull{At: now, DefinitionVersion: s.ExecutionVersion()}
 	member, ok := t.Member(s.Puller)
 	if s.PullerScopes != "" && json.Unmarshal([]byte(s.PullerScopes), &member.Scopes) != nil {
 		log.Printf("source execution scopes are invalid")
@@ -195,7 +195,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
 		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: marking.Level, Compartments: marking.Compartments}
 		pull.Object, pull.Marking, pull.Compartments = plan.Object, plan.Marking, slices.Clone(plan.Compartments)
-		plan.Type, plan.ID = build.SourceType, s.ID
+		plan.Type, plan.ID = dataowner.SourceType, s.ID
 		if s.Stream {
 			plan.Transaction = "append"
 		}
@@ -260,7 +260,7 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		member = t.automation(build.ID, false).Member
 	}
 	if pull.Execution != nil {
-		if !t.integrationPending(build.SourceType, s.ID, pull.Execution) {
+		if !t.integrationPending(dataowner.SourceType, s.ID, pull.Execution) {
 			return
 		}
 		if !ok {
@@ -287,9 +287,9 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 	_ = t.sourceResult(member, s, pull, "finished", nil, now)
 }
 
-func (t *Tenant) declaredRows(object, kind, source string, input []map[string]any, now time.Time) ([]build.SourceRow, *platform.DataSourceBinding, error) {
+func (t *Tenant) declaredRows(object, kind, source string, input []map[string]any, now time.Time) ([]dataowner.SourceRow, *platform.DataSourceBinding, error) {
 	type answer struct {
-		rows    []build.SourceRow
+		rows    []dataowner.SourceRow
 		binding *platform.DataSourceBinding
 	}
 	value, err := readWithError(t, context.Background(), func(t *Tenant) (answer, error) {
@@ -299,7 +299,7 @@ func (t *Tenant) declaredRows(object, kind, source string, input []map[string]an
 	return value.rows, value.binding, err
 }
 
-func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[string]any, now time.Time) ([]build.SourceRow, *platform.DataSourceBinding, error) {
+func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[string]any, now time.Time) ([]dataowner.SourceRow, *platform.DataSourceBinding, error) {
 	t.records.Lock()
 	et := t.records.Type(object)
 	var binding *platform.DataSourceBinding
@@ -316,14 +316,14 @@ func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[strin
 	if binding == nil {
 		return nil, nil, nil
 	}
-	if len(input) > build.ValueSourceRows {
-		return nil, binding, fmt.Errorf("the answer holds %d rows; a pull takes at most %d", len(input), build.ValueSourceRows)
+	if len(input) > dataowner.ValueSourceRows {
+		return nil, binding, fmt.Errorf("the answer holds %d rows; a pull takes at most %d", len(input), dataowner.ValueSourceRows)
 	}
-	rows := make([]build.SourceRow, 0, len(input))
+	rows := make([]dataowner.SourceRow, 0, len(input))
 	for _, values := range input {
 		id := platform.IntegrationScalar(values[binding.Key])
 		at := now.UTC()
-		row := build.SourceRow{ID: id, Origin: id, At: &at}
+		row := dataowner.SourceRow{ID: id, Origin: id, At: &at}
 		if id != "" {
 			if resolved, failure := t.entityIDs.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
 				row.ID = resolved[0].ID
@@ -359,7 +359,7 @@ func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[strin
 	return rows, binding, nil
 }
 
-func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []build.SourceRow, now time.Time) (int, *kernel.Error) {
+func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []dataowner.SourceRow, now time.Time) (int, *kernel.Error) {
 	return recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) {
 		merged := 0
 		if resolver := t.resolver(member, object, producer, now); resolver != nil {
@@ -397,7 +397,7 @@ func (t *Tenant) integrationRefusedRead(authority, key string) bool {
 	return ok
 }
 
-func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, execution *build.IntegrationExecution, now time.Time, pull *build.SourcePull) bool {
+func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, execution *dataowner.IntegrationExecution, now time.Time, pull *dataowner.SourcePull) bool {
 	t.records.Lock()
 	et := t.records.Type(plan.Object)
 	t.records.Unlock()
@@ -431,7 +431,7 @@ func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, 
 	return true
 }
 
-func (t *Tenant) submitIntegrationRow(member platform.Member, app, object string, binding *platform.DataSourceBinding, row build.SourceRow, key string, now time.Time) *kernel.Error {
+func (t *Tenant) submitIntegrationRow(member platform.Member, app, object string, binding *platform.DataSourceBinding, row dataowner.SourceRow, key string, now time.Time) *kernel.Error {
 	sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: app, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: object, Id: row.ID}, Schema: &pb.SchemaRef{Name: object + row.Verb, Version: 1}, Payload: row.Payload}
 	if binding != nil {
@@ -446,7 +446,7 @@ func (t *Tenant) connectionMarkings(connection string) platform.MarkingSet {
 	if connection == "" {
 		return platform.MarkingSet{}
 	}
-	conn, _ := platform.Get[build.Connection](t.automation(build.ID, false), connection)
+	conn, _ := platform.Get[dataowner.Connection](t.automation(build.ID, false), connection)
 	fixed, err := t.dataOwner().ExecutionConnection(conn)
 	if err != nil {
 		return platform.MarkingSet{Level: "restricted"}
@@ -454,10 +454,10 @@ func (t *Tenant) connectionMarkings(connection string) platform.MarkingSet {
 	return platform.MarkingSet{Level: fixed.Marking, Compartments: fixed.Compartments}
 }
 
-func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
-	rules, _, _ := platform.Find[build.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
+func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *dataowner.Resolver {
+	rules, _, _ := platform.Find[dataowner.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
 	owner := t.dataOwner()
-	var fixed []build.Match
+	var fixed []dataowner.Match
 	for _, rule := range rules {
 		execution, err := owner.ExecutionMatching(rule)
 		if err != nil {
@@ -467,7 +467,7 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 		fixed = append(fixed, execution)
 	}
 	rules = fixed
-	i := slices.IndexFunc(rules, func(m build.Match) bool { return m.Object == object && m.State == "published" })
+	i := slices.IndexFunc(rules, func(m dataowner.Match) bool { return m.Object == object && m.State == "published" })
 	if i < 0 {
 		return nil
 	}
@@ -488,7 +488,7 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 			break
 		}
 	}
-	return build.NewResolver(rules[i], producer, records)
+	return dataowner.NewResolver(rules[i], producer, records)
 }
 
 func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer string, marking platform.MarkingSet, rows []map[string]any, key string, now time.Time, transaction string) *kernel.Error {
@@ -497,15 +497,15 @@ func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer string
 	}
 	payload, _ := json.Marshal(map[string]any{"type": transaction, "rows": rows, "producer": producer, "marking": marking.Level, "compartments": marking.Compartments})
 	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key,
-		Target: &pb.EntityRef{Type: build.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: build.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
+		Target: &pb.EntityRef{Type: dataowner.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: dataowner.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
 	return err
 }
 
-func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
-	var conn *build.Connection
+func (t *Tenant) readSource(s dataowner.Source) ([]map[string]any, error) {
+	var conn *dataowner.Connection
 	if s.Connection != "" {
-		c, failure := readWithError(t, context.Background(), func(t *Tenant) (build.Connection, error) {
-			current, ok := platform.Get[build.Connection](t.automation(build.ID, false), s.Connection)
+		c, failure := readWithError(t, context.Background(), func(t *Tenant) (dataowner.Connection, error) {
+			current, ok := platform.Get[dataowner.Connection](t.automation(build.ID, false), s.Connection)
 			if !ok {
 				return current, fmt.Errorf("the connection is not ready")
 			}
@@ -524,7 +524,7 @@ func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 	return t.readSourceWithConnection(s, conn)
 }
 
-func (t *Tenant) readSourceWithConnection(s build.Source, conn *build.Connection) ([]map[string]any, error) {
+func (t *Tenant) readSourceWithConnection(s dataowner.Source, conn *dataowner.Connection) ([]map[string]any, error) {
 	switch s.Profile {
 	case "odata":
 		return t.readOData(s, *conn)
@@ -550,7 +550,7 @@ func (t *Tenant) readSourceWithConnection(s build.Source, conn *build.Connection
 	return s.Decode(body)
 }
 
-func (t *Tenant) authorization(c build.Connection, target ...string) string {
+func (t *Tenant) authorization(c dataowner.Connection, target ...string) string {
 	address := c.Address
 	if len(target) > 0 {
 		address = target[0]
@@ -582,15 +582,15 @@ func (t *Tenant) fetchSource(url, header string, allowPrivate bool, accept strin
 		return nil, fmt.Errorf("the endpoint did not answer: %v", err)
 	}
 	defer resp.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, build.SourceBody+1))
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, dataowner.SourceBody+1))
 	if readErr != nil {
 		return nil, fmt.Errorf("the response body could not be read")
 	}
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("the endpoint answered %d", resp.StatusCode)
 	}
-	if len(body) > build.SourceBody {
-		return nil, fmt.Errorf("the answer exceeds %d bytes", build.SourceBody)
+	if len(body) > dataowner.SourceBody {
+		return nil, fmt.Errorf("the answer exceeds %d bytes", dataowner.SourceBody)
 	}
 	return body, nil
 }
