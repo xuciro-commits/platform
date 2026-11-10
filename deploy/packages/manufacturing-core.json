@@ -153,6 +153,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesleadtime",
           "title": "Supplier inquiries",
           "object": {
@@ -160,24 +161,159 @@
             "kind": "object",
             "name": "build.mesleadtime"
           },
-          "layout": "list-detail",
-          "listFields": [
-            "product",
-            "question",
-            "answer"
-          ],
-          "detailFields": [
-            "product",
-            "question",
-            "answer"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesleadtime.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesleadtime"
+              },
+              "model": {
+                "type": "build.mesleadtime",
+                "fields": [
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "question"
+                  },
+                  {
+                    "name": "answer"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "question"
+                },
+                {
+                  "name": "answer"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesleadtime"
+              },
+              "model": {
+                "type": "build.mesleadtime",
+                "fields": [
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "question"
+                  },
+                  {
+                    "name": "answer"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "question"
+                },
+                {
+                  "name": "answer"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesleadtime.create"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "layout": "list-detail",
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {

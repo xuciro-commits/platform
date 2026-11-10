@@ -537,6 +537,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpentry",
           "title": "Accounting documents",
           "object": {
@@ -544,40 +545,185 @@
             "kind": "object",
             "name": "build.erpentry"
           },
-          "listFields": [
-            "reference",
-            "date",
-            "currency",
-            "state"
-          ],
-          "detailFields": [
-            "reference",
-            "date",
-            "currency",
-            "state"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpentry.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpentry"
+              },
+              "model": {
+                "type": "build.erpentry",
+                "fields": [
+                  {
+                    "name": "reference"
+                  },
+                  {
+                    "name": "date"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "reference"
+                },
+                {
+                  "name": "date"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpentry.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpentry.post"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpentry.amend"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpentry"
+              },
+              "model": {
+                "type": "build.erpentry",
+                "fields": [
+                  {
+                    "name": "reference"
+                  },
+                  {
+                    "name": "date"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "reference"
+                },
+                {
+                  "name": "date"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpentry.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpentry.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpentry.post"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpentry.amend"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -589,6 +735,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpline",
           "title": "Accounting lines",
           "object": {
@@ -596,32 +743,187 @@
             "kind": "object",
             "name": "build.erpline"
           },
-          "listFields": [
-            "document",
-            "account",
-            "side",
-            "amount",
-            "memo"
-          ],
-          "detailFields": [
-            "document",
-            "account",
-            "side",
-            "amount",
-            "memo"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpline.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpline"
+              },
+              "model": {
+                "type": "build.erpline",
+                "fields": [
+                  {
+                    "name": "document"
+                  },
+                  {
+                    "name": "account"
+                  },
+                  {
+                    "name": "side"
+                  },
+                  {
+                    "name": "amount"
+                  },
+                  {
+                    "name": "memo"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "document"
+                },
+                {
+                  "name": "account"
+                },
+                {
+                  "name": "side"
+                },
+                {
+                  "name": "amount"
+                },
+                {
+                  "name": "memo"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpline.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpline"
+              },
+              "model": {
+                "type": "build.erpline",
+                "fields": [
+                  {
+                    "name": "document"
+                  },
+                  {
+                    "name": "account"
+                  },
+                  {
+                    "name": "side"
+                  },
+                  {
+                    "name": "amount"
+                  },
+                  {
+                    "name": "memo"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "document"
+                },
+                {
+                  "name": "account"
+                },
+                {
+                  "name": "side"
+                },
+                {
+                  "name": "amount"
+                },
+                {
+                  "name": "memo"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpline.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpline.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -709,6 +1011,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpaccounts",
           "title": "Chart of accounts",
           "object": {
@@ -716,20 +1019,175 @@
             "kind": "object",
             "name": "build.erpaccount"
           },
-          "listFields": [
-            "code",
-            "name",
-            "kind",
-            "posting",
-            "active"
+          "dataBindings": [
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpaccount"
+              },
+              "model": {
+                "type": "build.erpaccount",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "posting"
+                  },
+                  {
+                    "name": "active"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "posting"
+                },
+                {
+                  "name": "active"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpaccount"
+              },
+              "model": {
+                "type": "build.erpaccount",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "posting"
+                  },
+                  {
+                    "name": "active"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "posting"
+                },
+                {
+                  "name": "active"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
+            }
           ],
-          "detailFields": [
-            "code",
-            "name",
-            "kind",
-            "posting",
-            "active"
-          ]
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page"
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -741,6 +1199,7 @@
         "contractVersion": 1,
         "sourceVersion": "2",
         "body": {
+          "format": 4,
           "name": "erpjournals",
           "title": "Journal entries",
           "object": {
@@ -748,18 +1207,163 @@
             "kind": "object",
             "name": "build.erpentry"
           },
-          "listFields": [
-            "reference",
-            "date",
-            "currency",
-            "state"
+          "dataBindings": [
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpentry"
+              },
+              "model": {
+                "type": "build.erpentry",
+                "fields": [
+                  {
+                    "name": "reference"
+                  },
+                  {
+                    "name": "date"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "reference"
+                },
+                {
+                  "name": "date"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpentry"
+              },
+              "model": {
+                "type": "build.erpentry",
+                "fields": [
+                  {
+                    "name": "reference"
+                  },
+                  {
+                    "name": "date"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "reference"
+                },
+                {
+                  "name": "date"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
+            }
           ],
-          "detailFields": [
-            "reference",
-            "date",
-            "currency",
-            "state"
-          ]
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page"
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -6656,6 +7260,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpitem",
           "title": "Items",
           "object": {
@@ -6663,44 +7268,209 @@
             "kind": "object",
             "name": "build.erpitem"
           },
-          "listFields": [
-            "name",
-            "kind",
-            "unit",
-            "currency",
-            "cost",
-            "active"
-          ],
-          "detailFields": [
-            "name",
-            "kind",
-            "unit",
-            "currency",
-            "cost",
-            "active"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpitem.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpitem"
+              },
+              "model": {
+                "type": "build.erpitem",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "unit"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "cost"
+                  },
+                  {
+                    "name": "active"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "unit"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "cost"
+                },
+                {
+                  "name": "active"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpitem.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpitem.describe"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpitem.recost"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpitem"
+              },
+              "model": {
+                "type": "build.erpitem",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "unit"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "cost"
+                  },
+                  {
+                    "name": "active"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "unit"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "cost"
+                },
+                {
+                  "name": "active"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpitem.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpitem.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpitem.describe"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpitem.recost"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -6712,6 +7482,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpcomponent",
           "title": "Components",
           "object": {
@@ -6719,28 +7490,163 @@
             "kind": "object",
             "name": "build.erpcomponent"
           },
-          "listFields": [
-            "parent",
-            "material",
-            "quantity"
-          ],
-          "detailFields": [
-            "parent",
-            "material",
-            "quantity"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpcomponent.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpcomponent"
+              },
+              "model": {
+                "type": "build.erpcomponent",
+                "fields": [
+                  {
+                    "name": "parent"
+                  },
+                  {
+                    "name": "material"
+                  },
+                  {
+                    "name": "quantity"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "parent"
+                },
+                {
+                  "name": "material"
+                },
+                {
+                  "name": "quantity"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpcomponent.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpcomponent"
+              },
+              "model": {
+                "type": "build.erpcomponent",
+                "fields": [
+                  {
+                    "name": "parent"
+                  },
+                  {
+                    "name": "material"
+                  },
+                  {
+                    "name": "quantity"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "parent"
+                },
+                {
+                  "name": "material"
+                },
+                {
+                  "name": "quantity"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpcomponent.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpcomponent.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -6752,6 +7658,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erppartner",
           "title": "Business partners",
           "object": {
@@ -6759,28 +7666,163 @@
             "kind": "object",
             "name": "build.erppartner"
           },
-          "listFields": [
-            "name",
-            "kind",
-            "email"
-          ],
-          "detailFields": [
-            "name",
-            "kind",
-            "email"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppartner.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erppartner"
+              },
+              "model": {
+                "type": "build.erppartner",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "email"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "email"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppartner.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erppartner"
+              },
+              "model": {
+                "type": "build.erppartner",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "email"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "email"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppartner.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppartner.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -6792,6 +7834,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erppolicy",
           "title": "Purchasing policies",
           "object": {
@@ -6799,32 +7842,187 @@
             "kind": "object",
             "name": "build.erppolicy"
           },
-          "listFields": [
-            "name",
-            "limit",
-            "clearing",
-            "payables",
-            "variance"
-          ],
-          "detailFields": [
-            "name",
-            "limit",
-            "clearing",
-            "payables",
-            "variance"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppolicy.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erppolicy"
+              },
+              "model": {
+                "type": "build.erppolicy",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "limit"
+                  },
+                  {
+                    "name": "clearing"
+                  },
+                  {
+                    "name": "payables"
+                  },
+                  {
+                    "name": "variance"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "limit"
+                },
+                {
+                  "name": "clearing"
+                },
+                {
+                  "name": "payables"
+                },
+                {
+                  "name": "variance"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppolicy.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erppolicy"
+              },
+              "model": {
+                "type": "build.erppolicy",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "limit"
+                  },
+                  {
+                    "name": "clearing"
+                  },
+                  {
+                    "name": "payables"
+                  },
+                  {
+                    "name": "variance"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "limit"
+                },
+                {
+                  "name": "clearing"
+                },
+                {
+                  "name": "payables"
+                },
+                {
+                  "name": "variance"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppolicy.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppolicy.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -6836,6 +8034,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erppurchase",
           "title": "Purchase orders",
           "object": {
@@ -6843,59 +8042,224 @@
             "kind": "object",
             "name": "build.erppurchase"
           },
-          "listFields": [
-            "number",
-            "supplier",
-            "date",
-            "currency",
-            "state",
-            "invoice"
-          ],
-          "detailFields": [
-            "number",
-            "supplier",
-            "date",
-            "currency",
-            "state",
-            "invoice"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppurchase.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erppurchase"
+              },
+              "model": {
+                "type": "build.erppurchase",
+                "fields": [
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "supplier"
+                  },
+                  {
+                    "name": "date"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "invoice"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "supplier"
+                },
+                {
+                  "name": "date"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "invoice"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppurchase.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppurchase.order"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppurchase.request"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppurchase.receive"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppurchase.bill"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppurchase.cancel"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erppurchase"
+              },
+              "model": {
+                "type": "build.erppurchase",
+                "fields": [
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "supplier"
+                  },
+                  {
+                    "name": "date"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "invoice"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "supplier"
+                },
+                {
+                  "name": "date"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "invoice"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppurchase.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppurchase.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppurchase.order"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppurchase.request"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppurchase.receive"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppurchase.bill"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppurchase.cancel"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -6907,6 +8271,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erppurchaseline",
           "title": "Purchase lines",
           "object": {
@@ -6914,32 +8279,187 @@
             "kind": "object",
             "name": "build.erppurchaseline"
           },
-          "listFields": [
-            "purchase",
-            "number",
-            "product",
-            "quantity",
-            "price"
-          ],
-          "detailFields": [
-            "purchase",
-            "number",
-            "product",
-            "quantity",
-            "price"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppurchaseline.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erppurchaseline"
+              },
+              "model": {
+                "type": "build.erppurchaseline",
+                "fields": [
+                  {
+                    "name": "purchase"
+                  },
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "price"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "purchase"
+                },
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "price"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erppurchaseline.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erppurchaseline"
+              },
+              "model": {
+                "type": "build.erppurchaseline",
+                "fields": [
+                  {
+                    "name": "purchase"
+                  },
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "price"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "purchase"
+                },
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "price"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppurchaseline.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erppurchaseline.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -6951,6 +8471,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpreceipt",
           "title": "Stock receipts",
           "object": {
@@ -6958,28 +8479,163 @@
             "kind": "object",
             "name": "build.erpreceipt"
           },
-          "listFields": [
-            "purchase",
-            "date",
-            "state"
-          ],
-          "detailFields": [
-            "purchase",
-            "date",
-            "state"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpreceipt.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpreceipt"
+              },
+              "model": {
+                "type": "build.erpreceipt",
+                "fields": [
+                  {
+                    "name": "purchase"
+                  },
+                  {
+                    "name": "date"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "purchase"
+                },
+                {
+                  "name": "date"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpreceipt.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpreceipt"
+              },
+              "model": {
+                "type": "build.erpreceipt",
+                "fields": [
+                  {
+                    "name": "purchase"
+                  },
+                  {
+                    "name": "date"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "purchase"
+                },
+                {
+                  "name": "date"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpreceipt.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpreceipt.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -6991,6 +8647,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpstock",
           "title": "Inventory balances",
           "object": {
@@ -6998,30 +8655,175 @@
             "kind": "object",
             "name": "build.erpstock"
           },
-          "listFields": [
-            "product",
-            "bucket",
-            "unit",
-            "amount"
-          ],
-          "detailFields": [
-            "product",
-            "bucket",
-            "unit",
-            "amount"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpstock.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpstock"
+              },
+              "model": {
+                "type": "build.erpstock",
+                "fields": [
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "bucket"
+                  },
+                  {
+                    "name": "unit"
+                  },
+                  {
+                    "name": "amount"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "bucket"
+                },
+                {
+                  "name": "unit"
+                },
+                {
+                  "name": "amount"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpstock.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpstock"
+              },
+              "model": {
+                "type": "build.erpstock",
+                "fields": [
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "bucket"
+                  },
+                  {
+                    "name": "unit"
+                  },
+                  {
+                    "name": "amount"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "bucket"
+                },
+                {
+                  "name": "unit"
+                },
+                {
+                  "name": "amount"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpstock.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpstock.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -7033,6 +8835,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpmove",
           "title": "Inventory movements",
           "object": {
@@ -7040,36 +8843,211 @@
             "kind": "object",
             "name": "build.erpmove"
           },
-          "listFields": [
-            "receipt",
-            "line",
-            "product",
-            "quantity",
-            "unitcost",
-            "value",
-            "date"
-          ],
-          "detailFields": [
-            "receipt",
-            "line",
-            "product",
-            "quantity",
-            "unitcost",
-            "value",
-            "date"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpmove.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpmove"
+              },
+              "model": {
+                "type": "build.erpmove",
+                "fields": [
+                  {
+                    "name": "receipt"
+                  },
+                  {
+                    "name": "line"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "unitcost"
+                  },
+                  {
+                    "name": "value"
+                  },
+                  {
+                    "name": "date"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "receipt"
+                },
+                {
+                  "name": "line"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "unitcost"
+                },
+                {
+                  "name": "value"
+                },
+                {
+                  "name": "date"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpmove.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpmove"
+              },
+              "model": {
+                "type": "build.erpmove",
+                "fields": [
+                  {
+                    "name": "receipt"
+                  },
+                  {
+                    "name": "line"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "unitcost"
+                  },
+                  {
+                    "name": "value"
+                  },
+                  {
+                    "name": "date"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "receipt"
+                },
+                {
+                  "name": "line"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "unitcost"
+                },
+                {
+                  "name": "value"
+                },
+                {
+                  "name": "date"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpmove.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpmove.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -11656,6 +13634,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpproductionpolicy",
           "title": "Production accounting policy",
           "object": {
@@ -11663,30 +13642,175 @@
             "kind": "object",
             "name": "build.erpproductionpolicy"
           },
-          "listFields": [
-            "name",
-            "wip",
-            "scrap",
-            "variance"
-          ],
-          "detailFields": [
-            "name",
-            "wip",
-            "scrap",
-            "variance"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpproductionpolicy.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpproductionpolicy"
+              },
+              "model": {
+                "type": "build.erpproductionpolicy",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "wip"
+                  },
+                  {
+                    "name": "scrap"
+                  },
+                  {
+                    "name": "variance"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "wip"
+                },
+                {
+                  "name": "scrap"
+                },
+                {
+                  "name": "variance"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpproductionpolicy.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpproductionpolicy"
+              },
+              "model": {
+                "type": "build.erpproductionpolicy",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "wip"
+                  },
+                  {
+                    "name": "scrap"
+                  },
+                  {
+                    "name": "variance"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "wip"
+                },
+                {
+                  "name": "scrap"
+                },
+                {
+                  "name": "variance"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpproductionpolicy.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpproductionpolicy.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -11698,6 +13822,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "productionorder",
           "title": "Production order",
           "object": {
@@ -11705,56 +13830,281 @@
             "kind": "object",
             "name": "build.productionorder"
           },
-          "listFields": [
-            "number",
-            "product",
-            "policy",
-            "quantity",
-            "currency",
-            "unit"
-          ],
-          "detailFields": [
-            "number",
-            "product",
-            "policy",
-            "quantity",
-            "currency",
-            "unit",
-            "unitcost",
-            "account",
-            "wip",
-            "scrapaccount",
-            "variance",
-            "componentcount",
-            "yield",
-            "scrap",
-            "remaining",
-            "firstshop",
-            "currentbatch",
-            "state"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.productionorder.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.productionorder"
+              },
+              "model": {
+                "type": "build.productionorder",
+                "fields": [
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "policy"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "unit"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "policy"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "unit"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.productionorder.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.productionorder.start"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.productionorder.confirm"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.productionorder"
+              },
+              "model": {
+                "type": "build.productionorder",
+                "fields": [
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "policy"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "unit"
+                  },
+                  {
+                    "name": "unitcost"
+                  },
+                  {
+                    "name": "account"
+                  },
+                  {
+                    "name": "wip"
+                  },
+                  {
+                    "name": "scrapaccount"
+                  },
+                  {
+                    "name": "variance"
+                  },
+                  {
+                    "name": "componentcount"
+                  },
+                  {
+                    "name": "yield"
+                  },
+                  {
+                    "name": "scrap"
+                  },
+                  {
+                    "name": "remaining"
+                  },
+                  {
+                    "name": "firstshop"
+                  },
+                  {
+                    "name": "currentbatch"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "policy"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "unit"
+                },
+                {
+                  "name": "unitcost"
+                },
+                {
+                  "name": "account"
+                },
+                {
+                  "name": "wip"
+                },
+                {
+                  "name": "scrapaccount"
+                },
+                {
+                  "name": "variance"
+                },
+                {
+                  "name": "componentcount"
+                },
+                {
+                  "name": "yield"
+                },
+                {
+                  "name": "scrap"
+                },
+                {
+                  "name": "remaining"
+                },
+                {
+                  "name": "firstshop"
+                },
+                {
+                  "name": "currentbatch"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.productionorder.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.productionorder.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.productionorder.start"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.productionorder.confirm"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -11766,6 +14116,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpproductioncomponent",
           "title": "Frozen production component",
           "object": {
@@ -11773,36 +14124,211 @@
             "kind": "object",
             "name": "build.erpproductioncomponent"
           },
-          "listFields": [
-            "order",
-            "source",
-            "material",
-            "quantity",
-            "cost",
-            "unit"
-          ],
-          "detailFields": [
-            "order",
-            "source",
-            "material",
-            "quantity",
-            "cost",
-            "unit",
-            "currency",
-            "account"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpproductioncomponent.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpproductioncomponent"
+              },
+              "model": {
+                "type": "build.erpproductioncomponent",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "source"
+                  },
+                  {
+                    "name": "material"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "cost"
+                  },
+                  {
+                    "name": "unit"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "source"
+                },
+                {
+                  "name": "material"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "cost"
+                },
+                {
+                  "name": "unit"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpproductioncomponent.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpproductioncomponent"
+              },
+              "model": {
+                "type": "build.erpproductioncomponent",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "source"
+                  },
+                  {
+                    "name": "material"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "cost"
+                  },
+                  {
+                    "name": "unit"
+                  },
+                  {
+                    "name": "currency"
+                  },
+                  {
+                    "name": "account"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "source"
+                },
+                {
+                  "name": "material"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "cost"
+                },
+                {
+                  "name": "unit"
+                },
+                {
+                  "name": "currency"
+                },
+                {
+                  "name": "account"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpproductioncomponent.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpproductioncomponent.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -11814,6 +14340,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "productionbatch",
           "title": "Accepted production batch",
           "object": {
@@ -11821,36 +14348,211 @@
             "kind": "object",
             "name": "build.productionbatch"
           },
-          "listFields": [
-            "order",
-            "shoporder",
-            "batch",
-            "yield",
-            "scrap",
-            "final"
-          ],
-          "detailFields": [
-            "order",
-            "shoporder",
-            "batch",
-            "yield",
-            "scrap",
-            "final",
-            "status",
-            "receipt"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.productionbatch.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.productionbatch"
+              },
+              "model": {
+                "type": "build.productionbatch",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "shoporder"
+                  },
+                  {
+                    "name": "batch"
+                  },
+                  {
+                    "name": "yield"
+                  },
+                  {
+                    "name": "scrap"
+                  },
+                  {
+                    "name": "final"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "shoporder"
+                },
+                {
+                  "name": "batch"
+                },
+                {
+                  "name": "yield"
+                },
+                {
+                  "name": "scrap"
+                },
+                {
+                  "name": "final"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.productionbatch.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.productionbatch"
+              },
+              "model": {
+                "type": "build.productionbatch",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "shoporder"
+                  },
+                  {
+                    "name": "batch"
+                  },
+                  {
+                    "name": "yield"
+                  },
+                  {
+                    "name": "scrap"
+                  },
+                  {
+                    "name": "final"
+                  },
+                  {
+                    "name": "status"
+                  },
+                  {
+                    "name": "receipt"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "shoporder"
+                },
+                {
+                  "name": "batch"
+                },
+                {
+                  "name": "yield"
+                },
+                {
+                  "name": "scrap"
+                },
+                {
+                  "name": "final"
+                },
+                {
+                  "name": "status"
+                },
+                {
+                  "name": "receipt"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.productionbatch.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.productionbatch.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -11862,6 +14564,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "erpproductionposting",
           "title": "Production financial line",
           "object": {
@@ -11869,32 +14572,187 @@
             "kind": "object",
             "name": "build.erpproductionposting"
           },
-          "listFields": [
-            "order",
-            "batch",
-            "account",
-            "side",
-            "amount"
-          ],
-          "detailFields": [
-            "order",
-            "batch",
-            "account",
-            "side",
-            "amount"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpproductionposting.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpproductionposting"
+              },
+              "model": {
+                "type": "build.erpproductionposting",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "batch"
+                  },
+                  {
+                    "name": "account"
+                  },
+                  {
+                    "name": "side"
+                  },
+                  {
+                    "name": "amount"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "batch"
+                },
+                {
+                  "name": "account"
+                },
+                {
+                  "name": "side"
+                },
+                {
+                  "name": "amount"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.erpproductionposting.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.erpproductionposting"
+              },
+              "model": {
+                "type": "build.erpproductionposting",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "batch"
+                  },
+                  {
+                    "name": "account"
+                  },
+                  {
+                    "name": "side"
+                  },
+                  {
+                    "name": "amount"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "batch"
+                },
+                {
+                  "name": "account"
+                },
+                {
+                  "name": "side"
+                },
+                {
+                  "name": "amount"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpproductionposting.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.erpproductionposting.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {

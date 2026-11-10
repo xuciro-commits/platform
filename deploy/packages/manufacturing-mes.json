@@ -316,6 +316,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesupstreamorder",
           "title": "Upstream production plans",
           "object": {
@@ -323,31 +324,181 @@
             "kind": "object",
             "name": "build.mesupstreamorder"
           },
-          "listFields": [
-            "number",
-            "product",
-            "quantity",
-            "providerstate"
-          ],
-          "detailFields": [
-            "number",
-            "providerid",
-            "product",
-            "quantity",
-            "providerstate"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesupstreamorder.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesupstreamorder"
+              },
+              "model": {
+                "type": "build.mesupstreamorder",
+                "fields": [
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "providerstate"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "providerstate"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesupstreamorder.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesupstreamorder"
+              },
+              "model": {
+                "type": "build.mesupstreamorder",
+                "fields": [
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "providerid"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "providerstate"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "providerid"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "providerstate"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesupstreamorder.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesupstreamorder.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -951,6 +1102,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesproductionstart",
           "title": "Upstream start coordination",
           "object": {
@@ -958,41 +1110,191 @@
             "kind": "object",
             "name": "build.mesproductionstart"
           },
-          "listFields": [
-            "order",
-            "execution",
-            "upstream",
-            "state"
-          ],
-          "detailFields": [
-            "order",
-            "execution",
-            "upstream",
-            "shoporder",
-            "state"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionstart.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesproductionstart"
+              },
+              "model": {
+                "type": "build.mesproductionstart",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "execution"
+                  },
+                  {
+                    "name": "upstream"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "execution"
+                },
+                {
+                  "name": "upstream"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionstart.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionstart.send"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionstart.acknowledge"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesproductionstart"
+              },
+              "model": {
+                "type": "build.mesproductionstart",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "execution"
+                  },
+                  {
+                    "name": "upstream"
+                  },
+                  {
+                    "name": "shoporder"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "execution"
+                },
+                {
+                  "name": "upstream"
+                },
+                {
+                  "name": "shoporder"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionstart.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionstart.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionstart.send"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionstart.acknowledge"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -3654,6 +3956,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesproductionresult",
           "title": "Production result coordination",
           "object": {
@@ -3661,66 +3964,266 @@
             "kind": "object",
             "name": "build.mesproductionresult"
           },
-          "listFields": [
-            "order",
-            "execution",
-            "upstream",
-            "state"
-          ],
-          "detailFields": [
-            "order",
-            "execution",
-            "upstream",
-            "shoporder",
-            "batch",
-            "yield",
-            "scrap",
-            "final",
-            "attempt",
-            "previous",
-            "correction",
-            "replacement",
-            "coordination",
-            "previoussubject",
-            "state"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionresult.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesproductionresult"
+              },
+              "model": {
+                "type": "build.mesproductionresult",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "execution"
+                  },
+                  {
+                    "name": "upstream"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "execution"
+                },
+                {
+                  "name": "upstream"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionresult.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionresult.send"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionresult.acknowledge"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionresult.correct"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionresult.startcorrected"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesproductionresult.continuereport"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesproductionresult"
+              },
+              "model": {
+                "type": "build.mesproductionresult",
+                "fields": [
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "execution"
+                  },
+                  {
+                    "name": "upstream"
+                  },
+                  {
+                    "name": "shoporder"
+                  },
+                  {
+                    "name": "batch"
+                  },
+                  {
+                    "name": "yield"
+                  },
+                  {
+                    "name": "scrap"
+                  },
+                  {
+                    "name": "final"
+                  },
+                  {
+                    "name": "attempt"
+                  },
+                  {
+                    "name": "previous"
+                  },
+                  {
+                    "name": "correction"
+                  },
+                  {
+                    "name": "replacement"
+                  },
+                  {
+                    "name": "coordination"
+                  },
+                  {
+                    "name": "previoussubject"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "execution"
+                },
+                {
+                  "name": "upstream"
+                },
+                {
+                  "name": "shoporder"
+                },
+                {
+                  "name": "batch"
+                },
+                {
+                  "name": "yield"
+                },
+                {
+                  "name": "scrap"
+                },
+                {
+                  "name": "final"
+                },
+                {
+                  "name": "attempt"
+                },
+                {
+                  "name": "previous"
+                },
+                {
+                  "name": "correction"
+                },
+                {
+                  "name": "replacement"
+                },
+                {
+                  "name": "coordination"
+                },
+                {
+                  "name": "previoussubject"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionresult.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionresult.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionresult.send"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionresult.acknowledge"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionresult.correct"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionresult.startcorrected"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesproductionresult.continuereport"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10193,6 +10696,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesissue",
           "title": "Production exceptions",
           "object": {
@@ -10200,34 +10704,199 @@
             "kind": "object",
             "name": "build.mesissue"
           },
-          "listFields": [
-            "batch",
-            "serial",
-            "operation",
-            "code",
-            "reporter",
-            "at"
-          ],
-          "detailFields": [
-            "batch",
-            "serial",
-            "operation",
-            "code",
-            "reporter",
-            "at"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesissue.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesissue"
+              },
+              "model": {
+                "type": "build.mesissue",
+                "fields": [
+                  {
+                    "name": "batch"
+                  },
+                  {
+                    "name": "serial"
+                  },
+                  {
+                    "name": "operation"
+                  },
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "reporter"
+                  },
+                  {
+                    "name": "at"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "batch"
+                },
+                {
+                  "name": "serial"
+                },
+                {
+                  "name": "operation"
+                },
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "reporter"
+                },
+                {
+                  "name": "at"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesissue.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesissue"
+              },
+              "model": {
+                "type": "build.mesissue",
+                "fields": [
+                  {
+                    "name": "batch"
+                  },
+                  {
+                    "name": "serial"
+                  },
+                  {
+                    "name": "operation"
+                  },
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "reporter"
+                  },
+                  {
+                    "name": "at"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "batch"
+                },
+                {
+                  "name": "serial"
+                },
+                {
+                  "name": "operation"
+                },
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "reporter"
+                },
+                {
+                  "name": "at"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesissue.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesissue.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10239,6 +10908,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "messignature",
           "title": "Disposition signatures",
           "object": {
@@ -10246,36 +10916,211 @@
             "kind": "object",
             "name": "build.messignature"
           },
-          "listFields": [
-            "batch",
-            "issue",
-            "meaning",
-            "decision",
-            "target",
-            "actor",
-            "at"
-          ],
-          "detailFields": [
-            "batch",
-            "issue",
-            "meaning",
-            "decision",
-            "target",
-            "actor",
-            "at"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.messignature.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.messignature"
+              },
+              "model": {
+                "type": "build.messignature",
+                "fields": [
+                  {
+                    "name": "batch"
+                  },
+                  {
+                    "name": "issue"
+                  },
+                  {
+                    "name": "meaning"
+                  },
+                  {
+                    "name": "decision"
+                  },
+                  {
+                    "name": "target"
+                  },
+                  {
+                    "name": "actor"
+                  },
+                  {
+                    "name": "at"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "batch"
+                },
+                {
+                  "name": "issue"
+                },
+                {
+                  "name": "meaning"
+                },
+                {
+                  "name": "decision"
+                },
+                {
+                  "name": "target"
+                },
+                {
+                  "name": "actor"
+                },
+                {
+                  "name": "at"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.messignature.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.messignature"
+              },
+              "model": {
+                "type": "build.messignature",
+                "fields": [
+                  {
+                    "name": "batch"
+                  },
+                  {
+                    "name": "issue"
+                  },
+                  {
+                    "name": "meaning"
+                  },
+                  {
+                    "name": "decision"
+                  },
+                  {
+                    "name": "target"
+                  },
+                  {
+                    "name": "actor"
+                  },
+                  {
+                    "name": "at"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "batch"
+                },
+                {
+                  "name": "issue"
+                },
+                {
+                  "name": "meaning"
+                },
+                {
+                  "name": "decision"
+                },
+                {
+                  "name": "target"
+                },
+                {
+                  "name": "actor"
+                },
+                {
+                  "name": "at"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.messignature.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.messignature.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10287,6 +11132,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mescapability",
           "title": "Equipment capabilities",
           "object": {
@@ -10294,26 +11140,151 @@
             "kind": "object",
             "name": "build.mescapability"
           },
-          "listFields": [
-            "code",
-            "name"
-          ],
-          "detailFields": [
-            "code",
-            "name"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mescapability.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mescapability"
+              },
+              "model": {
+                "type": "build.mescapability",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mescapability.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mescapability"
+              },
+              "model": {
+                "type": "build.mescapability",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mescapability.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mescapability.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10325,6 +11296,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mescenter",
           "title": "Work centers",
           "object": {
@@ -10332,26 +11304,151 @@
             "kind": "object",
             "name": "build.mescenter"
           },
-          "listFields": [
-            "name",
-            "line"
-          ],
-          "detailFields": [
-            "name",
-            "line"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mescenter.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mescenter"
+              },
+              "model": {
+                "type": "build.mescenter",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "line"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "line"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mescenter.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mescenter"
+              },
+              "model": {
+                "type": "build.mescenter",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "line"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "line"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mescenter.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mescenter.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10363,6 +11460,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesresource",
           "title": "Resources",
           "object": {
@@ -10370,28 +11468,163 @@
             "kind": "object",
             "name": "build.mesresource"
           },
-          "listFields": [
-            "name",
-            "center",
-            "active"
-          ],
-          "detailFields": [
-            "name",
-            "center",
-            "active"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesresource.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesresource"
+              },
+              "model": {
+                "type": "build.mesresource",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "center"
+                  },
+                  {
+                    "name": "active"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "center"
+                },
+                {
+                  "name": "active"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesresource.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesresource"
+              },
+              "model": {
+                "type": "build.mesresource",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "center"
+                  },
+                  {
+                    "name": "active"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "center"
+                },
+                {
+                  "name": "active"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesresource.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesresource.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10403,6 +11636,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "messkill",
           "title": "Resource capabilities",
           "object": {
@@ -10410,26 +11644,151 @@
             "kind": "object",
             "name": "build.messkill"
           },
-          "listFields": [
-            "resource",
-            "capability"
-          ],
-          "detailFields": [
-            "resource",
-            "capability"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.messkill.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.messkill"
+              },
+              "model": {
+                "type": "build.messkill",
+                "fields": [
+                  {
+                    "name": "resource"
+                  },
+                  {
+                    "name": "capability"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "resource"
+                },
+                {
+                  "name": "capability"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.messkill.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.messkill"
+              },
+              "model": {
+                "type": "build.messkill",
+                "fields": [
+                  {
+                    "name": "resource"
+                  },
+                  {
+                    "name": "capability"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "resource"
+                },
+                {
+                  "name": "capability"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.messkill.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.messkill.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10441,6 +11800,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesrouting",
           "title": "Routing versions",
           "object": {
@@ -10448,41 +11808,216 @@
             "kind": "object",
             "name": "build.mesrouting"
           },
-          "listFields": [
-            "code",
-            "name",
-            "version",
-            "from",
-            "until",
-            "first",
-            "state"
-          ],
-          "detailFields": [
-            "code",
-            "name",
-            "version",
-            "from",
-            "until",
-            "first",
-            "state"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesrouting.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesrouting"
+              },
+              "model": {
+                "type": "build.mesrouting",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "version"
+                  },
+                  {
+                    "name": "from"
+                  },
+                  {
+                    "name": "until"
+                  },
+                  {
+                    "name": "first"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "version"
+                },
+                {
+                  "name": "from"
+                },
+                {
+                  "name": "until"
+                },
+                {
+                  "name": "first"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesrouting.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesrouting.release"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesrouting"
+              },
+              "model": {
+                "type": "build.mesrouting",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "version"
+                  },
+                  {
+                    "name": "from"
+                  },
+                  {
+                    "name": "until"
+                  },
+                  {
+                    "name": "first"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "version"
+                },
+                {
+                  "name": "from"
+                },
+                {
+                  "name": "until"
+                },
+                {
+                  "name": "first"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesrouting.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesrouting.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesrouting.release"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10494,6 +12029,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesoperation",
           "title": "Routing operations",
           "object": {
@@ -10501,34 +12037,199 @@
             "kind": "object",
             "name": "build.mesoperation"
           },
-          "listFields": [
-            "routing",
-            "number",
-            "name",
-            "center",
-            "next",
-            "instructions"
-          ],
-          "detailFields": [
-            "routing",
-            "number",
-            "name",
-            "center",
-            "next",
-            "instructions"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesoperation.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesoperation"
+              },
+              "model": {
+                "type": "build.mesoperation",
+                "fields": [
+                  {
+                    "name": "routing"
+                  },
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "center"
+                  },
+                  {
+                    "name": "next"
+                  },
+                  {
+                    "name": "instructions"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "routing"
+                },
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "center"
+                },
+                {
+                  "name": "next"
+                },
+                {
+                  "name": "instructions"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesoperation.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesoperation"
+              },
+              "model": {
+                "type": "build.mesoperation",
+                "fields": [
+                  {
+                    "name": "routing"
+                  },
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "center"
+                  },
+                  {
+                    "name": "next"
+                  },
+                  {
+                    "name": "instructions"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "routing"
+                },
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "center"
+                },
+                {
+                  "name": "next"
+                },
+                {
+                  "name": "instructions"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesoperation.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesoperation.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10540,6 +12241,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesrequirement",
           "title": "Operation requirements",
           "object": {
@@ -10547,26 +12249,151 @@
             "kind": "object",
             "name": "build.mesrequirement"
           },
-          "listFields": [
-            "operation",
-            "capability"
-          ],
-          "detailFields": [
-            "operation",
-            "capability"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesrequirement.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesrequirement"
+              },
+              "model": {
+                "type": "build.mesrequirement",
+                "fields": [
+                  {
+                    "name": "operation"
+                  },
+                  {
+                    "name": "capability"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "operation"
+                },
+                {
+                  "name": "capability"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesrequirement.edit"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesrequirement"
+              },
+              "model": {
+                "type": "build.mesrequirement",
+                "fields": [
+                  {
+                    "name": "operation"
+                  },
+                  {
+                    "name": "capability"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "operation"
+                },
+                {
+                  "name": "capability"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesrequirement.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesrequirement.edit"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -10578,6 +12405,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesorder",
           "title": "Shop orders",
           "object": {
@@ -10585,49 +12413,230 @@
             "kind": "object",
             "name": "build.mesorder"
           },
-          "actions": [
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesorder.create"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesorder.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesorder.release"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesorder.complete"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesorder.startupstream"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesorder.reportbatch"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesorder.adoptadvice"
-            }
-          ],
-          "layout": "composed",
-          "sections": [
+          "dataBindings": [
             {
               "id": "create",
-              "widget": "actions",
-              "configVersion": 1,
+              "owner": "create",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "selectionMode": "read",
+                "widget": "actions"
+              }
+            },
+            {
+              "id": "records",
+              "owner": "records",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesorder"
+              },
+              "model": {
+                "type": "build.mesorder",
+                "fields": [
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "routing"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "upstream"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "routing"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "upstream"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selection": "current",
+                "selectionMode": "write",
+                "widget": "table"
+              }
+            },
+            {
+              "id": "record",
+              "owner": "record",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesorder"
+              },
+              "model": {
+                "type": "build.mesorder",
+                "fields": [
+                  {
+                    "name": "number"
+                  },
+                  {
+                    "name": "product"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "routing"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "upstream"
+                  },
+                  {
+                    "name": "advice"
+                  },
+                  {
+                    "name": "advicecategory"
+                  },
+                  {
+                    "name": "advicereview"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "number"
+                },
+                {
+                  "name": "product"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "routing"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "upstream"
+                },
+                {
+                  "name": "advice"
+                },
+                {
+                  "name": "advicecategory"
+                },
+                {
+                  "name": "advicereview"
+                }
+              ],
+              "ports": {
+                "selection": "current",
+                "selectionMode": "read",
+                "widget": "record-view"
+              }
+            },
+            {
+              "id": "advice",
+              "owner": "advice",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesorder"
+              },
+              "model": {
+                "type": "build.mesorder"
+              },
+              "ports": {
+                "recordVariable": "currentRecord",
+                "widget": "ai-assistant"
+              },
+              "resources": [
+                {
+                  "id": "ai",
+                  "kind": "ai",
+                  "outputs": {
+                    "question": ""
+                  },
+                  "source": "analyst"
+                }
+              ]
+            }
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesorder.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesorder.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesorder.release"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesorder.complete"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesorder.startupstream"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesorder.reportbatch"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesorder.adoptadvice"
+                }
+              ]
+            },
+            {
+              "id": "create",
+              "owner": "create",
+              "binding": "create",
               "actions": [
                 {
                   "app": "build",
@@ -10638,36 +12647,13 @@
             },
             {
               "id": "records",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Shop orders",
-              "fields": [
-                "number",
-                "product",
-                "quantity",
-                "routing",
-                "state",
-                "upstream"
-              ],
-              "selection": "current"
+              "owner": "records",
+              "binding": "records"
             },
             {
               "id": "record",
-              "widget": "record-view",
-              "configVersion": 1,
-              "title": "Record and business actions",
-              "fields": [
-                "number",
-                "product",
-                "quantity",
-                "routing",
-                "state",
-                "upstream",
-                "advice",
-                "advicecategory",
-                "advicereview"
-              ],
-              "selection": "current",
+              "owner": "record",
+              "binding": "record",
               "actions": [
                 {
                   "app": "build",
@@ -10703,9 +12689,8 @@
             },
             {
               "id": "advice",
-              "widget": "ai-assistant",
-              "configVersion": 1,
-              "title": "Manufacturing review advice",
+              "owner": "advice",
+              "binding": "advice",
               "function": {
                 "ref": {
                   "app": "build",
@@ -10713,85 +12698,10 @@
                   "name": "mesreview"
                 },
                 "sourceVersion": "1.function-1"
-              },
-              "recordVariable": "currentRecord",
-              "ai": {
-                "kind": "analyst"
               }
             }
           ],
-          "selections": [
-            {
-              "name": "current",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.mesorder"
-              }
-            }
-          ],
-          "document": {
-            "formatVersion": 2,
-            "uiProfile": "platform.page.v2.111",
-            "root": "root",
-            "nodes": {
-              "root": {
-                "kind": "rows",
-                "children": [
-                  "create",
-                  "workspace"
-                ],
-                "gap": 12
-              },
-              "records": {
-                "kind": "widget",
-                "section": "records",
-                "size": {
-                  "weight": 3,
-                  "minWidth": 420,
-                  "maxHeight": 640,
-                  "scroll": "auto"
-                }
-              },
-              "record": {
-                "kind": "widget",
-                "section": "record",
-                "title": "Order details"
-              },
-              "advice": {
-                "kind": "widget",
-                "section": "advice",
-                "title": "Review advice panel"
-              },
-              "create": {
-                "kind": "widget",
-                "section": "create"
-              },
-              "workspace": {
-                "kind": "columns",
-                "title": "Order workspace",
-                "gap": 16,
-                "children": [
-                  "records",
-                  "orderpanel"
-                ]
-              },
-              "orderpanel": {
-                "kind": "tabs",
-                "title": "Order details",
-                "activeVariable": "orderTab",
-                "children": [
-                  "record",
-                  "advice"
-                ],
-                "size": {
-                  "weight": 2,
-                  "minWidth": 320,
-                  "maxHeight": 640,
-                  "scroll": "auto"
-                }
-              }
-            },
+          "inputSchema": {
             "variables": {
               "currentRecord": {
                 "scope": "page",
@@ -10808,6 +12718,212 @@
                 "mode": "state",
                 "initial": "record"
               }
+            },
+            "selections": [
+              {
+                "name": "current",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.mesorder"
+                }
+              }
+            ]
+          },
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "advice",
+                "parent": "orderpanel",
+                "kind": "page",
+                "binding": "advice",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "create",
+                "parent": "root",
+                "kind": "page",
+                "binding": "create",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "orderpanel",
+                "parent": "workspace",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "orderTab",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "record",
+                "parent": "orderpanel",
+                "kind": "page",
+                "binding": "record",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "records",
+                "parent": "workspace",
+                "kind": "page",
+                "binding": "records",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "workspace",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              }
+            ],
+            "owners": {
+              "advice": "advice",
+              "create": "create",
+              "record": "record",
+              "records": "records"
+            },
+            "root": "root"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": {
+                "formatVersion": 2,
+                "nodes": {
+                  "advice": {
+                    "kind": "widget",
+                    "section": "advice",
+                    "title": "Review advice panel"
+                  },
+                  "create": {
+                    "kind": "widget",
+                    "section": "create"
+                  },
+                  "orderpanel": {
+                    "children": [
+                      "record",
+                      "advice"
+                    ],
+                    "kind": "tabs",
+                    "size": {
+                      "maxHeight": 640,
+                      "minWidth": 320,
+                      "scroll": "auto",
+                      "weight": 2
+                    },
+                    "title": "Order details"
+                  },
+                  "record": {
+                    "kind": "widget",
+                    "section": "record",
+                    "title": "Order details"
+                  },
+                  "records": {
+                    "kind": "widget",
+                    "section": "records",
+                    "size": {
+                      "maxHeight": 640,
+                      "minWidth": 420,
+                      "scroll": "auto",
+                      "weight": 3
+                    }
+                  },
+                  "root": {
+                    "children": [
+                      "create",
+                      "workspace"
+                    ],
+                    "gap": 12,
+                    "kind": "rows"
+                  },
+                  "workspace": {
+                    "children": [
+                      "records",
+                      "orderpanel"
+                    ],
+                    "gap": 16,
+                    "kind": "columns",
+                    "title": "Order workspace"
+                  }
+                },
+                "root": "root",
+                "uiProfile": "platform.page.v2.111"
+              },
+              "sections": [
+                {
+                  "binding": "create",
+                  "configVersion": 1,
+                  "id": "create",
+                  "triggers": [
+                    "create"
+                  ]
+                },
+                {
+                  "binding": "records",
+                  "configVersion": 1,
+                  "id": "records",
+                  "title": "Shop orders",
+                  "triggers": [
+                    "records"
+                  ]
+                },
+                {
+                  "binding": "record",
+                  "configVersion": 1,
+                  "id": "record",
+                  "title": "Record and business actions",
+                  "triggers": [
+                    "record"
+                  ]
+                },
+                {
+                  "ai": {},
+                  "binding": "advice",
+                  "configVersion": 1,
+                  "id": "advice",
+                  "title": "Manufacturing review advice",
+                  "triggers": [
+                    "advice"
+                  ]
+                }
+              ]
             }
           }
         }
@@ -10821,6 +12937,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesbatch",
           "title": "Execution batches",
           "object": {
@@ -10828,79 +12945,344 @@
             "kind": "object",
             "name": "build.mesbatch"
           },
-          "listFields": [
-            "name",
-            "order",
-            "quantity",
-            "routing",
-            "routingversion",
-            "operation",
-            "resource",
-            "operator",
-            "state",
-            "good",
-            "scrap",
-            "issue",
-            "reviewer",
-            "approver",
-            "decision",
-            "target"
-          ],
-          "detailFields": [
-            "name",
-            "order",
-            "quantity",
-            "routing",
-            "routingversion",
-            "operation",
-            "resource",
-            "operator",
-            "state",
-            "good",
-            "scrap",
-            "issue",
-            "reviewer",
-            "approver",
-            "decision",
-            "target"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesbatch.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesbatch"
+              },
+              "model": {
+                "type": "build.mesbatch",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "routing"
+                  },
+                  {
+                    "name": "routingversion"
+                  },
+                  {
+                    "name": "operation"
+                  },
+                  {
+                    "name": "resource"
+                  },
+                  {
+                    "name": "operator"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "good"
+                  },
+                  {
+                    "name": "scrap"
+                  },
+                  {
+                    "name": "issue"
+                  },
+                  {
+                    "name": "reviewer"
+                  },
+                  {
+                    "name": "approver"
+                  },
+                  {
+                    "name": "decision"
+                  },
+                  {
+                    "name": "target"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "routing"
+                },
+                {
+                  "name": "routingversion"
+                },
+                {
+                  "name": "operation"
+                },
+                {
+                  "name": "resource"
+                },
+                {
+                  "name": "operator"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "good"
+                },
+                {
+                  "name": "scrap"
+                },
+                {
+                  "name": "issue"
+                },
+                {
+                  "name": "reviewer"
+                },
+                {
+                  "name": "approver"
+                },
+                {
+                  "name": "decision"
+                },
+                {
+                  "name": "target"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesbatch.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesbatch.start"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesbatch.complete"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesbatch.report"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesbatch.review"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesbatch.approve"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesbatch"
+              },
+              "model": {
+                "type": "build.mesbatch",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "order"
+                  },
+                  {
+                    "name": "quantity"
+                  },
+                  {
+                    "name": "routing"
+                  },
+                  {
+                    "name": "routingversion"
+                  },
+                  {
+                    "name": "operation"
+                  },
+                  {
+                    "name": "resource"
+                  },
+                  {
+                    "name": "operator"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "good"
+                  },
+                  {
+                    "name": "scrap"
+                  },
+                  {
+                    "name": "issue"
+                  },
+                  {
+                    "name": "reviewer"
+                  },
+                  {
+                    "name": "approver"
+                  },
+                  {
+                    "name": "decision"
+                  },
+                  {
+                    "name": "target"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "order"
+                },
+                {
+                  "name": "quantity"
+                },
+                {
+                  "name": "routing"
+                },
+                {
+                  "name": "routingversion"
+                },
+                {
+                  "name": "operation"
+                },
+                {
+                  "name": "resource"
+                },
+                {
+                  "name": "operator"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "good"
+                },
+                {
+                  "name": "scrap"
+                },
+                {
+                  "name": "issue"
+                },
+                {
+                  "name": "reviewer"
+                },
+                {
+                  "name": "approver"
+                },
+                {
+                  "name": "decision"
+                },
+                {
+                  "name": "target"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesbatch.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesbatch.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesbatch.start"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesbatch.complete"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesbatch.report"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesbatch.review"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesbatch.approve"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -12946,6 +15328,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesdevice",
           "title": "Equipment observations",
           "object": {
@@ -12953,37 +15336,192 @@
             "kind": "object",
             "name": "build.mesdevice"
           },
-          "listFields": [
-            "name",
-            "resource",
-            "device",
-            "unit"
-          ],
-          "detailFields": [
-            "name",
-            "resource",
-            "device",
-            "unit",
-            "notify",
-            "remindhours"
-          ],
-          "actions": [
+          "dataBindings": [
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesdevice.create"
+              "id": "list",
+              "owner": "binding:list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesdevice"
+              },
+              "model": {
+                "type": "build.mesdevice",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "resource"
+                  },
+                  {
+                    "name": "device"
+                  },
+                  {
+                    "name": "unit"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "resource"
+                },
+                {
+                  "name": "device"
+                },
+                {
+                  "name": "unit"
+                }
+              ],
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesdevice.edit"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesdevice.observe"
+              "id": "detail",
+              "owner": "binding:detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesdevice"
+              },
+              "model": {
+                "type": "build.mesdevice",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "resource"
+                  },
+                  {
+                    "name": "device"
+                  },
+                  {
+                    "name": "unit"
+                  },
+                  {
+                    "name": "notify"
+                  },
+                  {
+                    "name": "remindhours"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "resource"
+                },
+                {
+                  "name": "device"
+                },
+                {
+                  "name": "unit"
+                },
+                {
+                  "name": "notify"
+                },
+                {
+                  "name": "remindhours"
+                }
+              ],
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             }
-          ]
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesdevice.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesdevice.edit"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesdevice.observe"
+                }
+              ]
+            },
+            {
+              "id": "list",
+              "owner": "binding:list",
+              "binding": "list"
+            },
+            {
+              "id": "detail",
+              "owner": "binding:detail",
+              "binding": "detail"
+            }
+          ],
+          "inputSchema": {},
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "id": "binding:list",
+                "parent": "page",
+                "kind": "page",
+                "binding": "list"
+              },
+              {
+                "id": "binding:detail",
+                "parent": "page",
+                "kind": "page",
+                "binding": "detail"
+              }
+            ],
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": null,
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            }
+          }
         }
       },
       {
@@ -12995,6 +15533,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "mesdowntime",
           "title": "Downtime",
           "object": {
@@ -13002,51 +15541,316 @@
             "kind": "object",
             "name": "build.mesdowntime"
           },
-          "actions": [
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesdowntime.reason"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.mesdowntime.review"
-            }
-          ],
-          "layout": "composed",
-          "sections": [
+          "dataBindings": [
             {
               "id": "current",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Downtime events",
+              "owner": "current",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesdowntime"
+              },
+              "model": {
+                "type": "build.mesdowntime",
+                "fields": [
+                  {
+                    "name": "device"
+                  },
+                  {
+                    "name": "since"
+                  },
+                  {
+                    "name": "until"
+                  },
+                  {
+                    "name": "review"
+                  },
+                  {
+                    "name": "retired"
+                  },
+                  {
+                    "name": "reason"
+                  }
+                ]
+              },
               "fields": [
-                "device",
-                "since",
-                "until",
-                "review",
-                "retired",
-                "reason"
+                {
+                  "name": "device"
+                },
+                {
+                  "name": "since"
+                },
+                {
+                  "name": "until"
+                },
+                {
+                  "name": "review"
+                },
+                {
+                  "name": "retired"
+                },
+                {
+                  "name": "reason"
+                }
               ],
-              "selection": "current"
+              "ports": {
+                "parentable": "true",
+                "selection": "current",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
               "id": "detail",
-              "widget": "record-view",
-              "configVersion": 1,
-              "title": "Downtime detail",
+              "owner": "detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesdowntime"
+              },
+              "model": {
+                "type": "build.mesdowntime",
+                "fields": [
+                  {
+                    "name": "device"
+                  },
+                  {
+                    "name": "since"
+                  },
+                  {
+                    "name": "until"
+                  },
+                  {
+                    "name": "openstart"
+                  },
+                  {
+                    "name": "openend"
+                  },
+                  {
+                    "name": "review"
+                  },
+                  {
+                    "name": "retired"
+                  },
+                  {
+                    "name": "reason"
+                  }
+                ]
+              },
               "fields": [
-                "device",
-                "since",
-                "until",
-                "openstart",
-                "openend",
-                "review",
-                "retired",
-                "reason"
+                {
+                  "name": "device"
+                },
+                {
+                  "name": "since"
+                },
+                {
+                  "name": "until"
+                },
+                {
+                  "name": "openstart"
+                },
+                {
+                  "name": "openend"
+                },
+                {
+                  "name": "review"
+                },
+                {
+                  "name": "retired"
+                },
+                {
+                  "name": "reason"
+                }
               ],
-              "selection": "current",
+              "ports": {
+                "selection": "current",
+                "selectionMode": "read",
+                "widget": "record-view"
+              }
+            },
+            {
+              "id": "predecessors",
+              "owner": "predecessors",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesdowntime"
+              },
+              "model": {
+                "type": "build.mesdowntime",
+                "fields": [
+                  {
+                    "name": "device"
+                  },
+                  {
+                    "name": "since"
+                  },
+                  {
+                    "name": "until"
+                  },
+                  {
+                    "name": "reason"
+                  },
+                  {
+                    "name": "retired"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "device"
+                },
+                {
+                  "name": "since"
+                },
+                {
+                  "name": "until"
+                },
+                {
+                  "name": "reason"
+                },
+                {
+                  "name": "retired"
+                }
+              ],
+              "ports": {
+                "collectionVariable": "previousEvents",
+                "parentable": "true",
+                "selection": "previous",
+                "selectionMode": "write",
+                "widget": "table"
+              },
+              "limit": 50
+            },
+            {
+              "id": "previousdetail",
+              "owner": "previousdetail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesdowntime"
+              },
+              "model": {
+                "type": "build.mesdowntime",
+                "fields": [
+                  {
+                    "name": "since"
+                  },
+                  {
+                    "name": "until"
+                  },
+                  {
+                    "name": "reason"
+                  },
+                  {
+                    "name": "retired"
+                  },
+                  {
+                    "name": "review"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "since"
+                },
+                {
+                  "name": "until"
+                },
+                {
+                  "name": "reason"
+                },
+                {
+                  "name": "retired"
+                },
+                {
+                  "name": "review"
+                }
+              ],
+              "ports": {
+                "selection": "previous",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
+            },
+            {
+              "id": "provenance",
+              "owner": "provenance",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.mesdowntime"
+              },
+              "model": {
+                "type": "build.mesdowntime",
+                "fields": [
+                  {
+                    "name": "source"
+                  },
+                  {
+                    "name": "sourceversion"
+                  },
+                  {
+                    "name": "sourcerevision"
+                  },
+                  {
+                    "name": "processingversion"
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "name": "source"
+                },
+                {
+                  "name": "sourceversion"
+                },
+                {
+                  "name": "sourcerevision"
+                },
+                {
+                  "name": "processingversion"
+                }
+              ],
+              "ports": {
+                "selection": "current",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
+            }
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesdowntime.reason"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.mesdowntime.review"
+                }
+              ]
+            },
+            {
+              "id": "current",
+              "owner": "current",
+              "binding": "current"
+            },
+            {
+              "id": "detail",
+              "owner": "detail",
+              "binding": "detail",
               "actions": [
                 {
                   "app": "build",
@@ -13062,139 +15866,21 @@
             },
             {
               "id": "predecessors",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Predecessor events",
-              "fields": [
-                "device",
-                "since",
-                "until",
-                "reason",
-                "retired"
-              ],
-              "collectionVariable": "previousEvents",
-              "selection": "previous"
+              "owner": "predecessors",
+              "binding": "predecessors"
             },
             {
               "id": "previousdetail",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Original human decision",
-              "fields": [
-                "since",
-                "until",
-                "reason",
-                "retired",
-                "review"
-              ],
-              "selection": "previous"
+              "owner": "previousdetail",
+              "binding": "previousdetail"
             },
             {
               "id": "provenance",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Source and versions",
-              "fields": [
-                "source",
-                "sourceversion",
-                "sourcerevision",
-                "processingversion"
-              ],
-              "selection": "current"
+              "owner": "provenance",
+              "binding": "provenance"
             }
           ],
-          "selections": [
-            {
-              "name": "current",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.mesdowntime"
-              }
-            },
-            {
-              "name": "previous",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.mesdowntime"
-              }
-            }
-          ],
-          "document": {
-            "formatVersion": 2,
-            "uiProfile": "platform.page.v2.111",
-            "root": "root",
-            "nodes": {
-              "root": {
-                "kind": "rows",
-                "children": [
-                  "workspace"
-                ]
-              },
-              "current": {
-                "kind": "widget",
-                "section": "current",
-                "size": {
-                  "weight": 3,
-                  "minWidth": 420,
-                  "maxHeight": 640,
-                  "scroll": "auto"
-                }
-              },
-              "detail": {
-                "kind": "widget",
-                "section": "detail",
-                "title": "Current interval"
-              },
-              "predecessors": {
-                "kind": "widget",
-                "section": "predecessors"
-              },
-              "previousdetail": {
-                "kind": "widget",
-                "section": "previousdetail"
-              },
-              "workspace": {
-                "kind": "columns",
-                "title": "Downtime workspace",
-                "gap": 16,
-                "children": [
-                  "current",
-                  "eventpanel"
-                ]
-              },
-              "eventpanel": {
-                "kind": "tabs",
-                "title": "Downtime detail",
-                "activeVariable": "downtimeTab",
-                "children": [
-                  "detail",
-                  "history",
-                  "provenance"
-                ],
-                "size": {
-                  "weight": 2,
-                  "minWidth": 320,
-                  "maxHeight": 640,
-                  "scroll": "auto"
-                }
-              },
-              "history": {
-                "kind": "rows",
-                "title": "History",
-                "gap": 16,
-                "children": [
-                  "predecessors",
-                  "previousdetail"
-                ]
-              },
-              "provenance": {
-                "kind": "widget",
-                "title": "Source and versions",
-                "section": "provenance"
-              }
-            },
+          "inputSchema": {
             "variables": {
               "currentEvent": {
                 "scope": "page",
@@ -13205,24 +15891,25 @@
                   "section": "current"
                 }
               },
-              "previousEvents": {
-                "scope": "page",
-                "type": "object-set",
-                "mode": "resource",
-                "source": {
-                  "kind": "plan",
-                  "query": "predecessors"
-                }
-              },
               "downtimeTab": {
                 "scope": "page",
                 "type": "string",
                 "mode": "state",
                 "initial": "detail"
+              },
+              "previousEvents": {
+                "scope": "page",
+                "type": "object-set",
+                "mode": "resource",
+                "source": {
+                  "query": "predecessors",
+                  "kind": "plan"
+                }
               }
             },
             "queries": {
               "predecessors": {
+                "direction": "reverse",
                 "title": "Predecessor events",
                 "object": {
                   "app": "build",
@@ -13237,7 +15924,6 @@
                   },
                   "sourceVersion": "1.link-1"
                 },
-                "direction": "reverse",
                 "for": {
                   "variable": "currentEvent"
                 },
@@ -13246,6 +15932,265 @@
                 ],
                 "limit": 50
               }
+            },
+            "selections": [
+              {
+                "name": "current",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.mesdowntime"
+                }
+              },
+              {
+                "name": "previous",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.mesdowntime"
+                }
+              }
+            ]
+          },
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "current",
+                "parent": "workspace",
+                "kind": "page",
+                "binding": "current",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "detail",
+                "parent": "eventpanel",
+                "kind": "page",
+                "binding": "detail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "eventpanel",
+                "parent": "workspace",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "downtimeTab",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "history",
+                "parent": "eventpanel",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "predecessors",
+                "parent": "history",
+                "kind": "page",
+                "binding": "predecessors",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "previousdetail",
+                "parent": "history",
+                "kind": "page",
+                "binding": "previousdetail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "provenance",
+                "parent": "eventpanel",
+                "kind": "page",
+                "binding": "provenance",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "workspace",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              }
+            ],
+            "owners": {
+              "current": "current",
+              "detail": "detail",
+              "predecessors": "predecessors",
+              "previousdetail": "previousdetail",
+              "provenance": "provenance"
+            },
+            "root": "root"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": {
+                "formatVersion": 2,
+                "nodes": {
+                  "current": {
+                    "kind": "widget",
+                    "section": "current",
+                    "size": {
+                      "maxHeight": 640,
+                      "minWidth": 420,
+                      "scroll": "auto",
+                      "weight": 3
+                    }
+                  },
+                  "detail": {
+                    "kind": "widget",
+                    "section": "detail",
+                    "title": "Current interval"
+                  },
+                  "eventpanel": {
+                    "children": [
+                      "detail",
+                      "history",
+                      "provenance"
+                    ],
+                    "kind": "tabs",
+                    "size": {
+                      "maxHeight": 640,
+                      "minWidth": 320,
+                      "scroll": "auto",
+                      "weight": 2
+                    },
+                    "title": "Downtime detail"
+                  },
+                  "history": {
+                    "children": [
+                      "predecessors",
+                      "previousdetail"
+                    ],
+                    "gap": 16,
+                    "kind": "rows",
+                    "title": "History"
+                  },
+                  "predecessors": {
+                    "kind": "widget",
+                    "section": "predecessors"
+                  },
+                  "previousdetail": {
+                    "kind": "widget",
+                    "section": "previousdetail"
+                  },
+                  "provenance": {
+                    "kind": "widget",
+                    "section": "provenance",
+                    "title": "Source and versions"
+                  },
+                  "root": {
+                    "children": [
+                      "workspace"
+                    ],
+                    "kind": "rows"
+                  },
+                  "workspace": {
+                    "children": [
+                      "current",
+                      "eventpanel"
+                    ],
+                    "gap": 16,
+                    "kind": "columns",
+                    "title": "Downtime workspace"
+                  }
+                },
+                "root": "root",
+                "uiProfile": "platform.page.v2.111"
+              },
+              "sections": [
+                {
+                  "binding": "current",
+                  "configVersion": 1,
+                  "id": "current",
+                  "title": "Downtime events",
+                  "triggers": [
+                    "current"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "configVersion": 1,
+                  "id": "detail",
+                  "title": "Downtime detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                },
+                {
+                  "binding": "predecessors",
+                  "configVersion": 1,
+                  "id": "predecessors",
+                  "title": "Predecessor events",
+                  "triggers": [
+                    "predecessors"
+                  ]
+                },
+                {
+                  "binding": "previousdetail",
+                  "configVersion": 1,
+                  "id": "previousdetail",
+                  "title": "Original human decision",
+                  "triggers": [
+                    "previousdetail"
+                  ]
+                },
+                {
+                  "binding": "provenance",
+                  "configVersion": 1,
+                  "id": "provenance",
+                  "title": "Source and versions",
+                  "triggers": [
+                    "provenance"
+                  ]
+                }
+              ]
             }
           }
         }

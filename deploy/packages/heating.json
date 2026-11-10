@@ -3740,6 +3740,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "heatingoverview",
           "title": "Building overview",
           "description": "Choose a building to inspect its floors, zones and devices.",
@@ -3748,84 +3749,179 @@
             "kind": "object",
             "name": "build.building"
           },
-          "layout": "composed",
-          "listFields": [
-            "code",
-            "name",
-            "city",
-            "address"
-          ],
-          "detailFields": [],
-          "actions": [],
-          "sections": [
+          "dataBindings": [
             {
               "id": "overview-note",
-              "widget": "text",
-              "configVersion": 1,
-              "title": "Operating context",
-              "text": "Latest values are recorded business summaries; raw samples remain in the external observation store. Control loops stay in the device, gateway or PLC."
+              "owner": "overview-note",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "widget": "text"
+              }
             },
             {
               "id": "building-count",
-              "widget": "metric",
-              "configVersion": 1,
-              "title": "Buildings",
-              "measure": "count"
+              "owner": "building-count",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "measure": "count",
+                "parentable": "true",
+                "widget": "metric"
+              }
             },
             {
               "id": "managed-device-count",
-              "widget": "metric",
-              "configVersion": 1,
-              "title": "All managed devices",
+              "owner": "managed-device-count",
+              "kind": "records",
               "object": {
                 "app": "build",
                 "kind": "object",
                 "name": "build.device"
               },
-              "measure": "count"
+              "model": {
+                "type": "build.device"
+              },
+              "ports": {
+                "measure": "count",
+                "parentable": "true",
+                "widget": "metric"
+              }
             },
             {
               "id": "buildings-by-city",
-              "widget": "chart",
-              "configVersion": 1,
-              "title": "Buildings by city",
-              "group": "city",
-              "measure": "count",
-              "mark": "bar"
+              "owner": "buildings-by-city",
+              "kind": "records",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.building"
+              },
+              "model": {
+                "type": "build.building"
+              },
+              "fieldSlots": {
+                "group": [
+                  {
+                    "name": "city"
+                  }
+                ]
+              },
+              "ports": {
+                "measure": "count",
+                "parentable": "true",
+                "widget": "chart"
+              }
             },
             {
               "id": "building-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Buildings",
+              "owner": "building-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.building"
+              },
+              "model": {
+                "type": "build.building",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "city"
+                  },
+                  {
+                    "name": "address"
+                  }
+                ]
+              },
               "fields": [
-                "code",
-                "name",
-                "city",
-                "address"
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "city"
+                },
+                {
+                  "name": "address"
+                }
               ],
-              "showSearch": true
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
               "id": "building-detail",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Selected building",
-              "recordVariable": "building",
+              "owner": "building-detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.building"
+              },
+              "model": {
+                "type": "build.building",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "city"
+                  },
+                  {
+                    "name": "address"
+                  }
+                ]
+              },
               "fields": [
-                "code",
-                "name",
-                "city",
-                "address"
-              ]
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "city"
+                },
+                {
+                  "name": "address"
+                }
+              ],
+              "ports": {
+                "recordVariable": "building",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             },
             {
               "id": "floor-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Floors in the selected building",
-              "selection": "floor",
-              "showSearch": true,
+              "owner": "floor-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.floor"
+              },
               "model": {
                 "type": "build.floor",
                 "fields": [
@@ -3843,15 +3939,23 @@
                   "parentType": "build.building",
                   "field": "building"
                 }
+              },
+              "ports": {
+                "parentable": "true",
+                "selection": "floor",
+                "selectionMode": "write",
+                "widget": "table"
               }
             },
             {
               "id": "zone-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Zones on the selected floor",
-              "selection": "zone",
-              "showSearch": true,
+              "owner": "zone-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.zone"
+              },
               "model": {
                 "type": "build.zone",
                 "fields": [
@@ -3870,18 +3974,26 @@
                 ],
                 "relation": {
                   "parentType": "build.floor",
-                  "field": "floor",
-                  "parentSelection": "floor"
+                  "parentSelection": "floor",
+                  "field": "floor"
                 }
+              },
+              "ports": {
+                "parentable": "true",
+                "selection": "zone",
+                "selectionMode": "write",
+                "widget": "table"
               }
             },
             {
               "id": "building-device-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Devices in the selected building",
-              "selection": "overview-device",
-              "showSearch": true,
+              "owner": "building-device-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
               "model": {
                 "type": "build.device",
                 "fields": [
@@ -3911,93 +4023,68 @@
                   "parentType": "build.building",
                   "field": "building"
                 }
+              },
+              "ports": {
+                "parentable": "true",
+                "selection": "overview-device",
+                "selectionMode": "write",
+                "widget": "table"
               }
             }
           ],
-          "document": {
-            "formatVersion": 2,
-            "uiProfile": "platform.page.v2.111",
-            "root": "root",
-            "nodes": {
-              "root": {
-                "kind": "rows",
-                "children": [
-                  "overview-note",
-                  "row-2",
-                  "buildings-by-city",
-                  "building-list",
-                  "building-detail",
-                  "row-6",
-                  "building-device-list"
-                ]
-              },
-              "overview-note": {
-                "kind": "widget",
-                "section": "overview-note"
-              },
-              "row-2": {
-                "kind": "columns",
-                "children": [
-                  "building-count",
-                  "managed-device-count"
-                ]
-              },
-              "building-count": {
-                "kind": "widget",
-                "section": "building-count",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "managed-device-count": {
-                "kind": "widget",
-                "section": "managed-device-count",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "buildings-by-city": {
-                "kind": "widget",
-                "section": "buildings-by-city"
-              },
-              "building-list": {
-                "kind": "widget",
-                "section": "building-list"
-              },
-              "building-detail": {
-                "kind": "widget",
-                "section": "building-detail"
-              },
-              "row-6": {
-                "kind": "columns",
-                "children": [
-                  "floor-list",
-                  "zone-list"
-                ]
-              },
-              "floor-list": {
-                "kind": "widget",
-                "section": "floor-list",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "zone-list": {
-                "kind": "widget",
-                "section": "zone-list",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "building-device-list": {
-                "kind": "widget",
-                "section": "building-device-list"
-              }
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": []
             },
+            {
+              "id": "overview-note",
+              "owner": "overview-note",
+              "binding": "overview-note"
+            },
+            {
+              "id": "building-count",
+              "owner": "building-count",
+              "binding": "building-count"
+            },
+            {
+              "id": "managed-device-count",
+              "owner": "managed-device-count",
+              "binding": "managed-device-count"
+            },
+            {
+              "id": "buildings-by-city",
+              "owner": "buildings-by-city",
+              "binding": "buildings-by-city"
+            },
+            {
+              "id": "building-list",
+              "owner": "building-list",
+              "binding": "building-list"
+            },
+            {
+              "id": "building-detail",
+              "owner": "building-detail",
+              "binding": "building-detail"
+            },
+            {
+              "id": "floor-list",
+              "owner": "floor-list",
+              "binding": "floor-list"
+            },
+            {
+              "id": "zone-list",
+              "owner": "zone-list",
+              "binding": "zone-list"
+            },
+            {
+              "id": "building-device-list",
+              "owner": "building-device-list",
+              "binding": "building-device-list"
+            }
+          ],
+          "inputSchema": {
             "variables": {
               "building": {
                 "scope": "page",
@@ -4008,34 +4095,369 @@
                   "section": "building-list"
                 }
               }
-            }
+            },
+            "selections": [
+              {
+                "name": "floor",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.floor"
+                }
+              },
+              {
+                "name": "zone",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.zone"
+                }
+              },
+              {
+                "name": "overview-device",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.device"
+                }
+              }
+            ]
           },
-          "selections": [
-            {
-              "name": "floor",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.floor"
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "building-count",
+                "parent": "row-2",
+                "kind": "page",
+                "binding": "building-count",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "building-detail",
+                "parent": "root",
+                "kind": "page",
+                "binding": "building-detail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "building-device-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "building-device-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "building-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "building-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "buildings-by-city",
+                "parent": "root",
+                "kind": "page",
+                "binding": "buildings-by-city",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "floor-list",
+                "parent": "row-6",
+                "kind": "page",
+                "binding": "floor-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "managed-device-count",
+                "parent": "row-2",
+                "kind": "page",
+                "binding": "managed-device-count",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "overview-note",
+                "parent": "root",
+                "kind": "page",
+                "binding": "overview-note",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-2",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-6",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "zone-list",
+                "parent": "row-6",
+                "kind": "page",
+                "binding": "zone-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
               }
+            ],
+            "owners": {
+              "building-count": "building-count",
+              "building-detail": "building-detail",
+              "building-device-list": "building-device-list",
+              "building-list": "building-list",
+              "buildings-by-city": "buildings-by-city",
+              "floor-list": "floor-list",
+              "managed-device-count": "managed-device-count",
+              "overview-note": "overview-note",
+              "zone-list": "zone-list"
             },
-            {
-              "name": "zone",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.zone"
-              }
-            },
-            {
-              "name": "overview-device",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.device"
-              }
+            "root": "root"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": {
+                "formatVersion": 2,
+                "nodes": {
+                  "building-count": {
+                    "kind": "widget",
+                    "section": "building-count",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "building-detail": {
+                    "kind": "widget",
+                    "section": "building-detail"
+                  },
+                  "building-device-list": {
+                    "kind": "widget",
+                    "section": "building-device-list"
+                  },
+                  "building-list": {
+                    "kind": "widget",
+                    "section": "building-list"
+                  },
+                  "buildings-by-city": {
+                    "kind": "widget",
+                    "section": "buildings-by-city"
+                  },
+                  "floor-list": {
+                    "kind": "widget",
+                    "section": "floor-list",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "managed-device-count": {
+                    "kind": "widget",
+                    "section": "managed-device-count",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "overview-note": {
+                    "kind": "widget",
+                    "section": "overview-note"
+                  },
+                  "root": {
+                    "children": [
+                      "overview-note",
+                      "row-2",
+                      "buildings-by-city",
+                      "building-list",
+                      "building-detail",
+                      "row-6",
+                      "building-device-list"
+                    ],
+                    "kind": "rows"
+                  },
+                  "row-2": {
+                    "children": [
+                      "building-count",
+                      "managed-device-count"
+                    ],
+                    "kind": "columns"
+                  },
+                  "row-6": {
+                    "children": [
+                      "floor-list",
+                      "zone-list"
+                    ],
+                    "kind": "columns"
+                  },
+                  "zone-list": {
+                    "kind": "widget",
+                    "section": "zone-list",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  }
+                },
+                "root": "root",
+                "uiProfile": "platform.page.v2.111"
+              },
+              "sections": [
+                {
+                  "binding": "overview-note",
+                  "configVersion": 1,
+                  "id": "overview-note",
+                  "text": "Latest values are recorded business summaries; raw samples remain in the external observation store. Control loops stay in the device, gateway or PLC.",
+                  "title": "Operating context",
+                  "triggers": [
+                    "overview-note"
+                  ]
+                },
+                {
+                  "binding": "building-count",
+                  "configVersion": 1,
+                  "id": "building-count",
+                  "title": "Buildings",
+                  "triggers": [
+                    "building-count"
+                  ]
+                },
+                {
+                  "binding": "managed-device-count",
+                  "configVersion": 1,
+                  "id": "managed-device-count",
+                  "title": "All managed devices",
+                  "triggers": [
+                    "managed-device-count"
+                  ]
+                },
+                {
+                  "binding": "buildings-by-city",
+                  "configVersion": 1,
+                  "id": "buildings-by-city",
+                  "mark": "bar",
+                  "title": "Buildings by city",
+                  "triggers": [
+                    "buildings-by-city"
+                  ]
+                },
+                {
+                  "binding": "building-list",
+                  "configVersion": 1,
+                  "id": "building-list",
+                  "showSearch": true,
+                  "title": "Buildings",
+                  "triggers": [
+                    "building-list"
+                  ]
+                },
+                {
+                  "binding": "building-detail",
+                  "configVersion": 1,
+                  "id": "building-detail",
+                  "title": "Selected building",
+                  "triggers": [
+                    "building-detail"
+                  ]
+                },
+                {
+                  "binding": "floor-list",
+                  "configVersion": 1,
+                  "id": "floor-list",
+                  "showSearch": true,
+                  "title": "Floors in the selected building",
+                  "triggers": [
+                    "floor-list"
+                  ]
+                },
+                {
+                  "binding": "zone-list",
+                  "configVersion": 1,
+                  "id": "zone-list",
+                  "showSearch": true,
+                  "title": "Zones on the selected floor",
+                  "triggers": [
+                    "zone-list"
+                  ]
+                },
+                {
+                  "binding": "building-device-list",
+                  "configVersion": 1,
+                  "id": "building-device-list",
+                  "showSearch": true,
+                  "title": "Devices in the selected building",
+                  "triggers": [
+                    "building-device-list"
+                  ]
+                }
+              ]
             }
-          ]
+          }
         }
       },
       {
@@ -4047,6 +4469,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "heatingdevices",
           "title": "Device details",
           "description": "Inspect a device, its measurement points and its heating circuits.",
@@ -4055,160 +4478,309 @@
             "kind": "object",
             "name": "build.device"
           },
-          "layout": "composed",
-          "listFields": [
-            "code",
-            "name",
-            "building",
-            "kind",
-            "state",
-            "latesttemp",
-            "healthscore"
-          ],
-          "detailFields": [],
-          "actions": [
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.device.warn"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.device.markoffline"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.device.assesshealth"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.device.restore"
-            }
-          ],
-          "sections": [
+          "dataBindings": [
             {
               "id": "device-note",
-              "widget": "text",
-              "configVersion": 1,
-              "title": "Readings and commands",
-              "text": "Latest temperature and health score are recorded business summaries. Valve changes use declared Dispatch commands and status readback; a sent request does not prove completion."
+              "owner": "device-note",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "widget": "text"
+              }
             },
             {
               "id": "device-filter",
-              "widget": "filter",
-              "configVersion": 1,
-              "title": "Find devices",
+              "owner": "device-filter",
+              "kind": "records",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device",
+                "fields": [
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
               "fields": [
-                "building",
-                "kind",
-                "state"
-              ]
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "widget": "filter"
+              }
             },
             {
               "id": "device-count",
-              "widget": "metric",
-              "configVersion": 1,
-              "title": "Devices",
-              "measure": "count"
+              "owner": "device-count",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "measure": "count",
+                "parentable": "true",
+                "widget": "metric"
+              }
             },
             {
               "id": "health-average",
-              "widget": "metric",
-              "configVersion": 1,
-              "title": "Average health score",
-              "measure": "avg:healthscore"
+              "owner": "health-average",
+              "kind": "records",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device"
+              },
+              "fieldSlots": {
+                "measure": [
+                  {
+                    "name": "healthscore",
+                    "transform": "avg"
+                  }
+                ]
+              },
+              "ports": {
+                "measure": "avg:healthscore",
+                "parentable": "true",
+                "widget": "metric"
+              }
             },
             {
               "id": "device-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Devices",
+              "owner": "device-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "latesttemp"
+                  },
+                  {
+                    "name": "healthscore"
+                  },
+                  {
+                    "name": "checkedat"
+                  }
+                ]
+              },
               "fields": [
-                "code",
-                "name",
-                "building",
-                "kind",
-                "state",
-                "latesttemp",
-                "healthscore",
-                "checkedat"
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "latesttemp"
+                },
+                {
+                  "name": "healthscore"
+                },
+                {
+                  "name": "checkedat"
+                }
               ],
-              "showSearch": true
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
               "id": "device-status",
-              "widget": "status-tracker",
-              "configVersion": 1,
-              "title": "Device status",
-              "recordVariable": "device",
-              "statusTracker": {
-                "field": "state",
-                "stages": [
-                  "healthy",
-                  "warning",
-                  "offline"
+              "owner": "device-status",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device"
+              },
+              "fieldSlots": {
+                "statusTracker.field": [
+                  {
+                    "name": "state"
+                  }
                 ]
+              },
+              "ports": {
+                "recordVariable": "device",
+                "selectionMode": "read",
+                "widget": "status-tracker"
               }
             },
             {
               "id": "device-detail",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Selected device",
-              "recordVariable": "device",
+              "owner": "device-detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "zone"
+                  },
+                  {
+                    "name": "devicekey"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "latesttemp"
+                  },
+                  {
+                    "name": "healthscore"
+                  },
+                  {
+                    "name": "checkedat"
+                  },
+                  {
+                    "name": "warnlimit"
+                  },
+                  {
+                    "name": "healthmin"
+                  }
+                ]
+              },
               "fields": [
-                "code",
-                "name",
-                "building",
-                "zone",
-                "devicekey",
-                "kind",
-                "latesttemp",
-                "healthscore",
-                "checkedat",
-                "warnlimit",
-                "healthmin"
-              ]
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "zone"
+                },
+                {
+                  "name": "devicekey"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "latesttemp"
+                },
+                {
+                  "name": "healthscore"
+                },
+                {
+                  "name": "checkedat"
+                },
+                {
+                  "name": "warnlimit"
+                },
+                {
+                  "name": "healthmin"
+                }
+              ],
+              "ports": {
+                "recordVariable": "device",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             },
             {
               "id": "device-actions",
-              "widget": "actions",
-              "configVersion": 1,
-              "title": "Device actions",
-              "recordVariable": "device",
-              "actions": [
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "build.device.warn"
-                },
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "build.device.markoffline"
-                },
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "build.device.assesshealth"
-                },
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "build.device.restore"
-                }
-              ]
+              "owner": "device-actions",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device"
+              },
+              "ports": {
+                "recordVariable": "device",
+                "selectionMode": "read",
+                "widget": "actions"
+              }
             },
             {
               "id": "point-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Declared measurement points",
-              "selection": "point",
-              "showSearch": true,
+              "owner": "point-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.point"
+              },
               "model": {
                 "type": "build.point",
                 "fields": [
@@ -4232,15 +4804,23 @@
                   "parentType": "build.device",
                   "field": "device"
                 }
+              },
+              "ports": {
+                "parentable": "true",
+                "selection": "point",
+                "selectionMode": "write",
+                "widget": "table"
               }
             },
             {
               "id": "circuit-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Heating circuits for the selected device",
-              "selection": "circuit",
-              "showSearch": true,
+              "owner": "circuit-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.circuit"
+              },
               "model": {
                 "type": "build.circuit",
                 "fields": [
@@ -4267,41 +4847,211 @@
                   "parentType": "build.device",
                   "field": "device"
                 }
+              },
+              "ports": {
+                "parentable": "true",
+                "selection": "circuit",
+                "selectionMode": "write",
+                "widget": "table"
               }
             },
             {
               "id": "circuit-detail",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Selected heating circuit",
+              "owner": "circuit-detail",
+              "kind": "record",
               "object": {
                 "app": "build",
                 "kind": "object",
                 "name": "build.circuit"
               },
-              "recordVariable": "circuit",
+              "model": {
+                "type": "build.circuit",
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "zone"
+                  },
+                  {
+                    "name": "devicekey"
+                  },
+                  {
+                    "name": "requestedopening"
+                  },
+                  {
+                    "name": "actualopening"
+                  },
+                  {
+                    "name": "latesttemp"
+                  }
+                ]
+              },
               "fields": [
-                "code",
-                "name",
-                "building",
-                "zone",
-                "devicekey",
-                "requestedopening",
-                "actualopening",
-                "latesttemp"
-              ]
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "zone"
+                },
+                {
+                  "name": "devicekey"
+                },
+                {
+                  "name": "requestedopening"
+                },
+                {
+                  "name": "actualopening"
+                },
+                {
+                  "name": "latesttemp"
+                }
+              ],
+              "ports": {
+                "recordVariable": "circuit",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             },
             {
               "id": "circuit-actions",
-              "widget": "actions",
-              "configVersion": 1,
-              "title": "Circuit actions",
+              "owner": "circuit-actions",
+              "kind": "record",
               "object": {
                 "app": "build",
                 "kind": "object",
                 "name": "build.circuit"
               },
-              "recordVariable": "circuit",
+              "model": {
+                "type": "build.circuit"
+              },
+              "ports": {
+                "recordVariable": "circuit",
+                "selectionMode": "read",
+                "widget": "actions"
+              }
+            }
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.warn"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.markoffline"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.assesshealth"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.restore"
+                }
+              ]
+            },
+            {
+              "id": "device-note",
+              "owner": "device-note",
+              "binding": "device-note"
+            },
+            {
+              "id": "device-filter",
+              "owner": "device-filter",
+              "binding": "device-filter"
+            },
+            {
+              "id": "device-count",
+              "owner": "device-count",
+              "binding": "device-count"
+            },
+            {
+              "id": "health-average",
+              "owner": "health-average",
+              "binding": "health-average"
+            },
+            {
+              "id": "device-list",
+              "owner": "device-list",
+              "binding": "device-list"
+            },
+            {
+              "id": "device-status",
+              "owner": "device-status",
+              "binding": "device-status"
+            },
+            {
+              "id": "device-detail",
+              "owner": "device-detail",
+              "binding": "device-detail"
+            },
+            {
+              "id": "device-actions",
+              "owner": "device-actions",
+              "binding": "device-actions",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.warn"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.markoffline"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.assesshealth"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.restore"
+                }
+              ]
+            },
+            {
+              "id": "point-list",
+              "owner": "point-list",
+              "binding": "point-list"
+            },
+            {
+              "id": "circuit-list",
+              "owner": "circuit-list",
+              "binding": "circuit-list"
+            },
+            {
+              "id": "circuit-detail",
+              "owner": "circuit-detail",
+              "binding": "circuit-detail"
+            },
+            {
+              "id": "circuit-actions",
+              "owner": "circuit-actions",
+              "binding": "circuit-actions",
               "actions": [
                 {
                   "app": "build",
@@ -4316,129 +5066,8 @@
               ]
             }
           ],
-          "document": {
-            "formatVersion": 2,
-            "uiProfile": "platform.page.v2.111",
-            "root": "root",
-            "nodes": {
-              "root": {
-                "kind": "rows",
-                "children": [
-                  "device-note",
-                  "device-filter",
-                  "row-2",
-                  "device-list",
-                  "device-status",
-                  "row-5",
-                  "point-list",
-                  "circuit-list",
-                  "row-8"
-                ]
-              },
-              "device-note": {
-                "kind": "widget",
-                "section": "device-note"
-              },
-              "device-filter": {
-                "kind": "widget",
-                "section": "device-filter"
-              },
-              "row-2": {
-                "kind": "columns",
-                "children": [
-                  "device-count",
-                  "health-average"
-                ]
-              },
-              "device-count": {
-                "kind": "widget",
-                "section": "device-count",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "health-average": {
-                "kind": "widget",
-                "section": "health-average",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "device-list": {
-                "kind": "widget",
-                "section": "device-list"
-              },
-              "device-status": {
-                "kind": "widget",
-                "section": "device-status"
-              },
-              "row-5": {
-                "kind": "columns",
-                "children": [
-                  "device-detail",
-                  "device-actions"
-                ]
-              },
-              "device-detail": {
-                "kind": "widget",
-                "section": "device-detail",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "device-actions": {
-                "kind": "widget",
-                "section": "device-actions",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "point-list": {
-                "kind": "widget",
-                "section": "point-list"
-              },
-              "circuit-list": {
-                "kind": "widget",
-                "section": "circuit-list"
-              },
-              "row-8": {
-                "kind": "columns",
-                "children": [
-                  "circuit-detail",
-                  "circuit-actions"
-                ]
-              },
-              "circuit-detail": {
-                "kind": "widget",
-                "section": "circuit-detail",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "circuit-actions": {
-                "kind": "widget",
-                "section": "circuit-actions",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              }
-            },
+          "inputSchema": {
             "variables": {
-              "device": {
-                "scope": "page",
-                "type": "record",
-                "mode": "resource",
-                "source": {
-                  "kind": "record",
-                  "section": "device-list"
-                }
-              },
               "circuit": {
                 "scope": "page",
                 "type": "record",
@@ -4447,27 +5076,482 @@
                   "kind": "record",
                   "section": "circuit-list"
                 }
-              }
-            }
-          },
-          "selections": [
-            {
-              "name": "point",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.point"
+              },
+              "device": {
+                "scope": "page",
+                "type": "record",
+                "mode": "resource",
+                "source": {
+                  "kind": "record",
+                  "section": "device-list"
+                }
               }
             },
-            {
-              "name": "circuit",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.circuit"
+            "selections": [
+              {
+                "name": "point",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.point"
+                }
+              },
+              {
+                "name": "circuit",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.circuit"
+                }
               }
+            ]
+          },
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "circuit-actions",
+                "parent": "row-8",
+                "kind": "page",
+                "binding": "circuit-actions",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "circuit-detail",
+                "parent": "row-8",
+                "kind": "page",
+                "binding": "circuit-detail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "circuit-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "circuit-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "device-actions",
+                "parent": "row-5",
+                "kind": "page",
+                "binding": "device-actions",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "device-count",
+                "parent": "row-2",
+                "kind": "page",
+                "binding": "device-count",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "device-detail",
+                "parent": "row-5",
+                "kind": "page",
+                "binding": "device-detail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "device-filter",
+                "parent": "root",
+                "kind": "page",
+                "binding": "device-filter",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "device-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "device-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "device-note",
+                "parent": "root",
+                "kind": "page",
+                "binding": "device-note",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "device-status",
+                "parent": "root",
+                "kind": "page",
+                "binding": "device-status",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "health-average",
+                "parent": "row-2",
+                "kind": "page",
+                "binding": "health-average",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "point-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "point-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-2",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-5",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-8",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              }
+            ],
+            "owners": {
+              "circuit-actions": "circuit-actions",
+              "circuit-detail": "circuit-detail",
+              "circuit-list": "circuit-list",
+              "device-actions": "device-actions",
+              "device-count": "device-count",
+              "device-detail": "device-detail",
+              "device-filter": "device-filter",
+              "device-list": "device-list",
+              "device-note": "device-note",
+              "device-status": "device-status",
+              "health-average": "health-average",
+              "point-list": "point-list"
+            },
+            "root": "root"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": {
+                "formatVersion": 2,
+                "nodes": {
+                  "circuit-actions": {
+                    "kind": "widget",
+                    "section": "circuit-actions",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "circuit-detail": {
+                    "kind": "widget",
+                    "section": "circuit-detail",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "circuit-list": {
+                    "kind": "widget",
+                    "section": "circuit-list"
+                  },
+                  "device-actions": {
+                    "kind": "widget",
+                    "section": "device-actions",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "device-count": {
+                    "kind": "widget",
+                    "section": "device-count",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "device-detail": {
+                    "kind": "widget",
+                    "section": "device-detail",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "device-filter": {
+                    "kind": "widget",
+                    "section": "device-filter"
+                  },
+                  "device-list": {
+                    "kind": "widget",
+                    "section": "device-list"
+                  },
+                  "device-note": {
+                    "kind": "widget",
+                    "section": "device-note"
+                  },
+                  "device-status": {
+                    "kind": "widget",
+                    "section": "device-status"
+                  },
+                  "health-average": {
+                    "kind": "widget",
+                    "section": "health-average",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "point-list": {
+                    "kind": "widget",
+                    "section": "point-list"
+                  },
+                  "root": {
+                    "children": [
+                      "device-note",
+                      "device-filter",
+                      "row-2",
+                      "device-list",
+                      "device-status",
+                      "row-5",
+                      "point-list",
+                      "circuit-list",
+                      "row-8"
+                    ],
+                    "kind": "rows"
+                  },
+                  "row-2": {
+                    "children": [
+                      "device-count",
+                      "health-average"
+                    ],
+                    "kind": "columns"
+                  },
+                  "row-5": {
+                    "children": [
+                      "device-detail",
+                      "device-actions"
+                    ],
+                    "kind": "columns"
+                  },
+                  "row-8": {
+                    "children": [
+                      "circuit-detail",
+                      "circuit-actions"
+                    ],
+                    "kind": "columns"
+                  }
+                },
+                "root": "root",
+                "uiProfile": "platform.page.v2.111"
+              },
+              "sections": [
+                {
+                  "binding": "device-note",
+                  "configVersion": 1,
+                  "id": "device-note",
+                  "text": "Latest temperature and health score are recorded business summaries. Valve changes use declared Dispatch commands and status readback; a sent request does not prove completion.",
+                  "title": "Readings and commands",
+                  "triggers": [
+                    "device-note"
+                  ]
+                },
+                {
+                  "binding": "device-filter",
+                  "configVersion": 1,
+                  "id": "device-filter",
+                  "title": "Find devices",
+                  "triggers": [
+                    "device-filter"
+                  ]
+                },
+                {
+                  "binding": "device-count",
+                  "configVersion": 1,
+                  "id": "device-count",
+                  "title": "Devices",
+                  "triggers": [
+                    "device-count"
+                  ]
+                },
+                {
+                  "binding": "health-average",
+                  "configVersion": 1,
+                  "id": "health-average",
+                  "title": "Average health score",
+                  "triggers": [
+                    "health-average"
+                  ]
+                },
+                {
+                  "binding": "device-list",
+                  "configVersion": 1,
+                  "id": "device-list",
+                  "showSearch": true,
+                  "title": "Devices",
+                  "triggers": [
+                    "device-list"
+                  ]
+                },
+                {
+                  "binding": "device-status",
+                  "configVersion": 1,
+                  "id": "device-status",
+                  "statusTracker": {
+                    "stages": [
+                      "healthy",
+                      "warning",
+                      "offline"
+                    ]
+                  },
+                  "title": "Device status",
+                  "triggers": [
+                    "device-status"
+                  ]
+                },
+                {
+                  "binding": "device-detail",
+                  "configVersion": 1,
+                  "id": "device-detail",
+                  "title": "Selected device",
+                  "triggers": [
+                    "device-detail"
+                  ]
+                },
+                {
+                  "binding": "device-actions",
+                  "configVersion": 1,
+                  "id": "device-actions",
+                  "title": "Device actions",
+                  "triggers": [
+                    "device-actions"
+                  ]
+                },
+                {
+                  "binding": "point-list",
+                  "configVersion": 1,
+                  "id": "point-list",
+                  "showSearch": true,
+                  "title": "Declared measurement points",
+                  "triggers": [
+                    "point-list"
+                  ]
+                },
+                {
+                  "binding": "circuit-list",
+                  "configVersion": 1,
+                  "id": "circuit-list",
+                  "showSearch": true,
+                  "title": "Heating circuits for the selected device",
+                  "triggers": [
+                    "circuit-list"
+                  ]
+                },
+                {
+                  "binding": "circuit-detail",
+                  "configVersion": 1,
+                  "id": "circuit-detail",
+                  "title": "Selected heating circuit",
+                  "triggers": [
+                    "circuit-detail"
+                  ]
+                },
+                {
+                  "binding": "circuit-actions",
+                  "configVersion": 1,
+                  "id": "circuit-actions",
+                  "title": "Circuit actions",
+                  "triggers": [
+                    "circuit-actions"
+                  ]
+                }
+              ]
             }
-          ]
+          }
         }
       },
       {
@@ -4479,6 +5563,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "heatingalarms",
           "title": "Alarm handling",
           "description": "Review alarms, record decisions and handle the associated work.",
@@ -4487,145 +5572,308 @@
             "kind": "object",
             "name": "build.alarm"
           },
-          "layout": "composed",
-          "listFields": [
-            "summary",
-            "severity",
-            "state",
-            "building",
-            "device",
-            "openedat"
-          ],
-          "detailFields": [],
-          "actions": [
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.alarm.acknowledge"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.alarm.resolve"
-            }
-          ],
-          "sections": [
+          "dataBindings": [
             {
               "id": "alarm-note",
-              "widget": "text",
-              "configVersion": 1,
-              "title": "Alarm handling",
-              "text": "Select an alarm, acknowledge it and record the resolution through the original business actions. Linked work orders and tasks retain their own status and history."
+              "owner": "alarm-note",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "widget": "text"
+              }
             },
             {
               "id": "alarm-filter",
-              "widget": "filter",
-              "configVersion": 1,
-              "title": "Find alarms",
+              "owner": "alarm-filter",
+              "kind": "records",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.alarm"
+              },
+              "model": {
+                "type": "build.alarm",
+                "fields": [
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "severity"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
               "fields": [
-                "building",
-                "severity",
-                "state"
-              ]
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "severity"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "widget": "filter"
+              }
             },
             {
               "id": "alarm-count",
-              "widget": "metric",
-              "configVersion": 1,
-              "title": "Matching alarms",
-              "measure": "count"
+              "owner": "alarm-count",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "measure": "count",
+                "parentable": "true",
+                "widget": "metric"
+              }
             },
             {
               "id": "alarms-by-state",
-              "widget": "chart",
-              "configVersion": 1,
-              "title": "Alarms by status",
-              "group": "state",
-              "measure": "count",
-              "mark": "bar"
+              "owner": "alarms-by-state",
+              "kind": "records",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.alarm"
+              },
+              "model": {
+                "type": "build.alarm"
+              },
+              "fieldSlots": {
+                "group": [
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "ports": {
+                "measure": "count",
+                "parentable": "true",
+                "widget": "chart"
+              }
             },
             {
               "id": "alarm-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Alarm queue",
+              "owner": "alarm-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.alarm"
+              },
+              "model": {
+                "type": "build.alarm",
+                "fields": [
+                  {
+                    "name": "summary"
+                  },
+                  {
+                    "name": "severity"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "device"
+                  },
+                  {
+                    "name": "openedat"
+                  }
+                ]
+              },
               "fields": [
-                "summary",
-                "severity",
-                "state",
-                "building",
-                "device",
-                "openedat"
+                {
+                  "name": "summary"
+                },
+                {
+                  "name": "severity"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "device"
+                },
+                {
+                  "name": "openedat"
+                }
               ],
-              "showSearch": true
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
               "id": "alarm-status",
-              "widget": "status-tracker",
-              "configVersion": 1,
-              "title": "Alarm status",
-              "recordVariable": "alarm",
-              "statusTracker": {
-                "field": "state",
-                "stages": [
-                  "open",
-                  "acknowledged",
-                  "closed"
+              "owner": "alarm-status",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.alarm"
+              },
+              "model": {
+                "type": "build.alarm"
+              },
+              "fieldSlots": {
+                "statusTracker.field": [
+                  {
+                    "name": "state"
+                  }
                 ]
+              },
+              "ports": {
+                "recordVariable": "alarm",
+                "selectionMode": "read",
+                "widget": "status-tracker"
               }
             },
             {
               "id": "alarm-detail",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Selected alarm",
-              "recordVariable": "alarm",
+              "owner": "alarm-detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.alarm"
+              },
+              "model": {
+                "type": "build.alarm",
+                "fields": [
+                  {
+                    "name": "summary"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "device"
+                  },
+                  {
+                    "name": "severity"
+                  },
+                  {
+                    "name": "metric"
+                  },
+                  {
+                    "name": "observed"
+                  },
+                  {
+                    "name": "threshold"
+                  },
+                  {
+                    "name": "openedat"
+                  },
+                  {
+                    "name": "note"
+                  },
+                  {
+                    "name": "resolvedat"
+                  }
+                ]
+              },
               "fields": [
-                "summary",
-                "building",
-                "device",
-                "severity",
-                "metric",
-                "observed",
-                "threshold",
-                "openedat",
-                "note",
-                "resolvedat"
-              ]
+                {
+                  "name": "summary"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "device"
+                },
+                {
+                  "name": "severity"
+                },
+                {
+                  "name": "metric"
+                },
+                {
+                  "name": "observed"
+                },
+                {
+                  "name": "threshold"
+                },
+                {
+                  "name": "openedat"
+                },
+                {
+                  "name": "note"
+                },
+                {
+                  "name": "resolvedat"
+                }
+              ],
+              "ports": {
+                "recordVariable": "alarm",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             },
             {
               "id": "alarm-actions",
-              "widget": "actions",
-              "configVersion": 1,
-              "title": "Alarm actions",
-              "recordVariable": "alarm",
-              "actions": [
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "build.alarm.acknowledge"
-                },
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "build.alarm.resolve"
-                }
-              ]
+              "owner": "alarm-actions",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.alarm"
+              },
+              "model": {
+                "type": "build.alarm"
+              },
+              "ports": {
+                "recordVariable": "alarm",
+                "selectionMode": "read",
+                "widget": "actions"
+              }
             },
             {
               "id": "alarm-tasks",
-              "widget": "tasks",
-              "configVersion": 1,
-              "title": "Tasks for the selected alarm",
-              "recordVariable": "alarm"
+              "owner": "alarm-tasks",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.alarm"
+              },
+              "model": {
+                "type": "build.alarm"
+              },
+              "ports": {
+                "recordVariable": "alarm",
+                "selectionMode": "read",
+                "widget": "tasks"
+              }
             },
             {
               "id": "workorder-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Linked work orders",
-              "selection": "workorder",
-              "showSearch": true,
+              "owner": "workorder-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.workorder"
+              },
               "model": {
                 "type": "build.workorder",
                 "fields": [
@@ -4649,40 +5897,185 @@
                   "parentType": "build.alarm",
                   "field": "alarm"
                 }
+              },
+              "ports": {
+                "parentable": "true",
+                "selection": "workorder",
+                "selectionMode": "write",
+                "widget": "table"
               }
             },
             {
               "id": "workorder-detail",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Selected work order",
+              "owner": "workorder-detail",
+              "kind": "record",
               "object": {
                 "app": "build",
                 "kind": "object",
                 "name": "build.workorder"
               },
-              "recordVariable": "workorder",
+              "model": {
+                "type": "build.workorder",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "device"
+                  },
+                  {
+                    "name": "description"
+                  },
+                  {
+                    "name": "note"
+                  },
+                  {
+                    "name": "openedat"
+                  },
+                  {
+                    "name": "completedat"
+                  }
+                ]
+              },
               "fields": [
-                "name",
-                "building",
-                "device",
-                "description",
-                "note",
-                "openedat",
-                "completedat"
-              ]
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "device"
+                },
+                {
+                  "name": "description"
+                },
+                {
+                  "name": "note"
+                },
+                {
+                  "name": "openedat"
+                },
+                {
+                  "name": "completedat"
+                }
+              ],
+              "ports": {
+                "recordVariable": "workorder",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             },
             {
               "id": "workorder-actions",
-              "widget": "actions",
-              "configVersion": 1,
-              "title": "Work order actions",
+              "owner": "workorder-actions",
+              "kind": "record",
               "object": {
                 "app": "build",
                 "kind": "object",
                 "name": "build.workorder"
               },
-              "recordVariable": "workorder",
+              "model": {
+                "type": "build.workorder"
+              },
+              "ports": {
+                "recordVariable": "workorder",
+                "selectionMode": "read",
+                "widget": "actions"
+              }
+            }
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.alarm.acknowledge"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.alarm.resolve"
+                }
+              ]
+            },
+            {
+              "id": "alarm-note",
+              "owner": "alarm-note",
+              "binding": "alarm-note"
+            },
+            {
+              "id": "alarm-filter",
+              "owner": "alarm-filter",
+              "binding": "alarm-filter"
+            },
+            {
+              "id": "alarm-count",
+              "owner": "alarm-count",
+              "binding": "alarm-count"
+            },
+            {
+              "id": "alarms-by-state",
+              "owner": "alarms-by-state",
+              "binding": "alarms-by-state"
+            },
+            {
+              "id": "alarm-list",
+              "owner": "alarm-list",
+              "binding": "alarm-list"
+            },
+            {
+              "id": "alarm-status",
+              "owner": "alarm-status",
+              "binding": "alarm-status"
+            },
+            {
+              "id": "alarm-detail",
+              "owner": "alarm-detail",
+              "binding": "alarm-detail"
+            },
+            {
+              "id": "alarm-actions",
+              "owner": "alarm-actions",
+              "binding": "alarm-actions",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.alarm.acknowledge"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.alarm.resolve"
+                }
+              ]
+            },
+            {
+              "id": "alarm-tasks",
+              "owner": "alarm-tasks",
+              "binding": "alarm-tasks"
+            },
+            {
+              "id": "workorder-list",
+              "owner": "workorder-list",
+              "binding": "workorder-list"
+            },
+            {
+              "id": "workorder-detail",
+              "owner": "workorder-detail",
+              "binding": "workorder-detail"
+            },
+            {
+              "id": "workorder-actions",
+              "owner": "workorder-actions",
+              "binding": "workorder-actions",
               "actions": [
                 {
                   "app": "build",
@@ -4697,119 +6090,7 @@
               ]
             }
           ],
-          "document": {
-            "formatVersion": 2,
-            "uiProfile": "platform.page.v2.111",
-            "root": "root",
-            "nodes": {
-              "root": {
-                "kind": "rows",
-                "children": [
-                  "alarm-note",
-                  "alarm-filter",
-                  "row-2",
-                  "alarm-list",
-                  "alarm-status",
-                  "row-5",
-                  "alarm-tasks",
-                  "workorder-list",
-                  "row-8"
-                ]
-              },
-              "alarm-note": {
-                "kind": "widget",
-                "section": "alarm-note"
-              },
-              "alarm-filter": {
-                "kind": "widget",
-                "section": "alarm-filter"
-              },
-              "row-2": {
-                "kind": "columns",
-                "children": [
-                  "alarm-count",
-                  "alarms-by-state"
-                ]
-              },
-              "alarm-count": {
-                "kind": "widget",
-                "section": "alarm-count",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "alarms-by-state": {
-                "kind": "widget",
-                "section": "alarms-by-state",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "alarm-list": {
-                "kind": "widget",
-                "section": "alarm-list"
-              },
-              "alarm-status": {
-                "kind": "widget",
-                "section": "alarm-status"
-              },
-              "row-5": {
-                "kind": "columns",
-                "children": [
-                  "alarm-detail",
-                  "alarm-actions"
-                ]
-              },
-              "alarm-detail": {
-                "kind": "widget",
-                "section": "alarm-detail",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "alarm-actions": {
-                "kind": "widget",
-                "section": "alarm-actions",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "alarm-tasks": {
-                "kind": "widget",
-                "section": "alarm-tasks"
-              },
-              "workorder-list": {
-                "kind": "widget",
-                "section": "workorder-list"
-              },
-              "row-8": {
-                "kind": "columns",
-                "children": [
-                  "workorder-detail",
-                  "workorder-actions"
-                ]
-              },
-              "workorder-detail": {
-                "kind": "widget",
-                "section": "workorder-detail",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "workorder-actions": {
-                "kind": "widget",
-                "section": "workorder-actions",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              }
-            },
+          "inputSchema": {
             "variables": {
               "alarm": {
                 "scope": "page",
@@ -4829,18 +6110,464 @@
                   "section": "workorder-list"
                 }
               }
-            }
-          },
-          "selections": [
-            {
-              "name": "workorder",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.workorder"
+            },
+            "selections": [
+              {
+                "name": "workorder",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.workorder"
+                }
               }
+            ]
+          },
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "alarm-actions",
+                "parent": "row-5",
+                "kind": "page",
+                "binding": "alarm-actions",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "alarm-count",
+                "parent": "row-2",
+                "kind": "page",
+                "binding": "alarm-count",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "alarm-detail",
+                "parent": "row-5",
+                "kind": "page",
+                "binding": "alarm-detail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "alarm-filter",
+                "parent": "root",
+                "kind": "page",
+                "binding": "alarm-filter",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "alarm-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "alarm-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "alarm-note",
+                "parent": "root",
+                "kind": "page",
+                "binding": "alarm-note",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "alarm-status",
+                "parent": "root",
+                "kind": "page",
+                "binding": "alarm-status",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "alarm-tasks",
+                "parent": "root",
+                "kind": "page",
+                "binding": "alarm-tasks",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "alarms-by-state",
+                "parent": "row-2",
+                "kind": "page",
+                "binding": "alarms-by-state",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-2",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-5",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-8",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "workorder-actions",
+                "parent": "row-8",
+                "kind": "page",
+                "binding": "workorder-actions",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "workorder-detail",
+                "parent": "row-8",
+                "kind": "page",
+                "binding": "workorder-detail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "workorder-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "workorder-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              }
+            ],
+            "owners": {
+              "alarm-actions": "alarm-actions",
+              "alarm-count": "alarm-count",
+              "alarm-detail": "alarm-detail",
+              "alarm-filter": "alarm-filter",
+              "alarm-list": "alarm-list",
+              "alarm-note": "alarm-note",
+              "alarm-status": "alarm-status",
+              "alarm-tasks": "alarm-tasks",
+              "alarms-by-state": "alarms-by-state",
+              "workorder-actions": "workorder-actions",
+              "workorder-detail": "workorder-detail",
+              "workorder-list": "workorder-list"
+            },
+            "root": "root"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": {
+                "formatVersion": 2,
+                "nodes": {
+                  "alarm-actions": {
+                    "kind": "widget",
+                    "section": "alarm-actions",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "alarm-count": {
+                    "kind": "widget",
+                    "section": "alarm-count",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "alarm-detail": {
+                    "kind": "widget",
+                    "section": "alarm-detail",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "alarm-filter": {
+                    "kind": "widget",
+                    "section": "alarm-filter"
+                  },
+                  "alarm-list": {
+                    "kind": "widget",
+                    "section": "alarm-list"
+                  },
+                  "alarm-note": {
+                    "kind": "widget",
+                    "section": "alarm-note"
+                  },
+                  "alarm-status": {
+                    "kind": "widget",
+                    "section": "alarm-status"
+                  },
+                  "alarm-tasks": {
+                    "kind": "widget",
+                    "section": "alarm-tasks"
+                  },
+                  "alarms-by-state": {
+                    "kind": "widget",
+                    "section": "alarms-by-state",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "root": {
+                    "children": [
+                      "alarm-note",
+                      "alarm-filter",
+                      "row-2",
+                      "alarm-list",
+                      "alarm-status",
+                      "row-5",
+                      "alarm-tasks",
+                      "workorder-list",
+                      "row-8"
+                    ],
+                    "kind": "rows"
+                  },
+                  "row-2": {
+                    "children": [
+                      "alarm-count",
+                      "alarms-by-state"
+                    ],
+                    "kind": "columns"
+                  },
+                  "row-5": {
+                    "children": [
+                      "alarm-detail",
+                      "alarm-actions"
+                    ],
+                    "kind": "columns"
+                  },
+                  "row-8": {
+                    "children": [
+                      "workorder-detail",
+                      "workorder-actions"
+                    ],
+                    "kind": "columns"
+                  },
+                  "workorder-actions": {
+                    "kind": "widget",
+                    "section": "workorder-actions",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "workorder-detail": {
+                    "kind": "widget",
+                    "section": "workorder-detail",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "workorder-list": {
+                    "kind": "widget",
+                    "section": "workorder-list"
+                  }
+                },
+                "root": "root",
+                "uiProfile": "platform.page.v2.111"
+              },
+              "sections": [
+                {
+                  "binding": "alarm-note",
+                  "configVersion": 1,
+                  "id": "alarm-note",
+                  "text": "Select an alarm, acknowledge it and record the resolution through the original business actions. Linked work orders and tasks retain their own status and history.",
+                  "title": "Alarm handling",
+                  "triggers": [
+                    "alarm-note"
+                  ]
+                },
+                {
+                  "binding": "alarm-filter",
+                  "configVersion": 1,
+                  "id": "alarm-filter",
+                  "title": "Find alarms",
+                  "triggers": [
+                    "alarm-filter"
+                  ]
+                },
+                {
+                  "binding": "alarm-count",
+                  "configVersion": 1,
+                  "id": "alarm-count",
+                  "title": "Matching alarms",
+                  "triggers": [
+                    "alarm-count"
+                  ]
+                },
+                {
+                  "binding": "alarms-by-state",
+                  "configVersion": 1,
+                  "id": "alarms-by-state",
+                  "mark": "bar",
+                  "title": "Alarms by status",
+                  "triggers": [
+                    "alarms-by-state"
+                  ]
+                },
+                {
+                  "binding": "alarm-list",
+                  "configVersion": 1,
+                  "id": "alarm-list",
+                  "showSearch": true,
+                  "title": "Alarm queue",
+                  "triggers": [
+                    "alarm-list"
+                  ]
+                },
+                {
+                  "binding": "alarm-status",
+                  "configVersion": 1,
+                  "id": "alarm-status",
+                  "statusTracker": {
+                    "stages": [
+                      "open",
+                      "acknowledged",
+                      "closed"
+                    ]
+                  },
+                  "title": "Alarm status",
+                  "triggers": [
+                    "alarm-status"
+                  ]
+                },
+                {
+                  "binding": "alarm-detail",
+                  "configVersion": 1,
+                  "id": "alarm-detail",
+                  "title": "Selected alarm",
+                  "triggers": [
+                    "alarm-detail"
+                  ]
+                },
+                {
+                  "binding": "alarm-actions",
+                  "configVersion": 1,
+                  "id": "alarm-actions",
+                  "title": "Alarm actions",
+                  "triggers": [
+                    "alarm-actions"
+                  ]
+                },
+                {
+                  "binding": "alarm-tasks",
+                  "configVersion": 1,
+                  "id": "alarm-tasks",
+                  "title": "Tasks for the selected alarm",
+                  "triggers": [
+                    "alarm-tasks"
+                  ]
+                },
+                {
+                  "binding": "workorder-list",
+                  "configVersion": 1,
+                  "id": "workorder-list",
+                  "showSearch": true,
+                  "title": "Linked work orders",
+                  "triggers": [
+                    "workorder-list"
+                  ]
+                },
+                {
+                  "binding": "workorder-detail",
+                  "configVersion": 1,
+                  "id": "workorder-detail",
+                  "title": "Selected work order",
+                  "triggers": [
+                    "workorder-detail"
+                  ]
+                },
+                {
+                  "binding": "workorder-actions",
+                  "configVersion": 1,
+                  "id": "workorder-actions",
+                  "title": "Work order actions",
+                  "triggers": [
+                    "workorder-actions"
+                  ]
+                }
+              ]
             }
-          ]
+          }
         }
       },
       {
@@ -4852,6 +6579,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "heatingaccess",
           "title": "Access management",
           "description": "Review access points and time-limited physical access passes.",
@@ -4860,113 +6588,201 @@
             "kind": "object",
             "name": "build.accesspoint"
           },
-          "layout": "composed",
-          "listFields": [
-            "name",
-            "building",
-            "zone",
-            "state",
-            "lastcheckedat",
-            "lastresult"
-          ],
-          "detailFields": [],
-          "actions": [
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.accesspoint.checkpass"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.accesspoint.disable"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.accesspoint.enable"
-            }
-          ],
-          "sections": [
+          "dataBindings": [
             {
               "id": "access-note",
-              "widget": "text",
-              "configVersion": 1,
-              "title": "Physical access and platform access",
-              "text": "Passes authorize physical entry to a building or access point. They do not grant permission to read platform records. Check pass records a business decision; it does not claim that a physical door opened."
+              "owner": "access-note",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "widget": "text"
+              }
             },
             {
               "id": "access-filter",
-              "widget": "filter",
-              "configVersion": 1,
-              "title": "Find access points",
+              "owner": "access-filter",
+              "kind": "records",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.accesspoint"
+              },
+              "model": {
+                "type": "build.accesspoint",
+                "fields": [
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
               "fields": [
-                "building",
-                "state"
-              ]
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "widget": "filter"
+              }
             },
             {
               "id": "access-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Access points",
+              "owner": "access-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.accesspoint"
+              },
+              "model": {
+                "type": "build.accesspoint",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "zone"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "lastcheckedat"
+                  },
+                  {
+                    "name": "lastresult"
+                  }
+                ]
+              },
               "fields": [
-                "name",
-                "building",
-                "zone",
-                "state",
-                "lastcheckedat",
-                "lastresult"
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "zone"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "lastcheckedat"
+                },
+                {
+                  "name": "lastresult"
+                }
               ],
-              "showSearch": true
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
               "id": "access-detail",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Selected access point",
-              "recordVariable": "accesspoint",
+              "owner": "access-detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.accesspoint"
+              },
+              "model": {
+                "type": "build.accesspoint",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "zone"
+                  },
+                  {
+                    "name": "devicekey"
+                  },
+                  {
+                    "name": "lastpass"
+                  },
+                  {
+                    "name": "lastcheckedat"
+                  },
+                  {
+                    "name": "lastresult"
+                  }
+                ]
+              },
               "fields": [
-                "name",
-                "building",
-                "zone",
-                "devicekey",
-                "lastpass",
-                "lastcheckedat",
-                "lastresult"
-              ]
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "zone"
+                },
+                {
+                  "name": "devicekey"
+                },
+                {
+                  "name": "lastpass"
+                },
+                {
+                  "name": "lastcheckedat"
+                },
+                {
+                  "name": "lastresult"
+                }
+              ],
+              "ports": {
+                "recordVariable": "accesspoint",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             },
             {
               "id": "access-actions",
-              "widget": "actions",
-              "configVersion": 1,
-              "title": "Access point actions",
-              "recordVariable": "accesspoint",
-              "actions": [
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "build.accesspoint.checkpass"
-                },
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "build.accesspoint.disable"
-                },
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "build.accesspoint.enable"
-                }
-              ]
+              "owner": "access-actions",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.accesspoint"
+              },
+              "model": {
+                "type": "build.accesspoint"
+              },
+              "ports": {
+                "recordVariable": "accesspoint",
+                "selectionMode": "read",
+                "widget": "actions"
+              }
             },
             {
               "id": "pass-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Passes for the selected access point",
-              "selection": "accesspass",
-              "showSearch": true,
+              "owner": "pass-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.accesspass"
+              },
               "model": {
                 "type": "build.accesspass",
                 "fields": [
@@ -4990,41 +6806,181 @@
                   "parentType": "build.accesspoint",
                   "field": "accesspoint"
                 }
+              },
+              "ports": {
+                "parentable": "true",
+                "selection": "accesspass",
+                "selectionMode": "write",
+                "widget": "table"
               }
             },
             {
               "id": "pass-detail",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Selected access pass",
+              "owner": "pass-detail",
+              "kind": "record",
               "object": {
                 "app": "build",
                 "kind": "object",
                 "name": "build.accesspass"
               },
-              "recordVariable": "accesspass",
+              "model": {
+                "type": "build.accesspass",
+                "fields": [
+                  {
+                    "name": "holder"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "accesspoint"
+                  },
+                  {
+                    "name": "validfrom"
+                  },
+                  {
+                    "name": "validuntil"
+                  },
+                  {
+                    "name": "purpose"
+                  },
+                  {
+                    "name": "revokedat"
+                  },
+                  {
+                    "name": "revokereason"
+                  }
+                ]
+              },
               "fields": [
-                "holder",
-                "building",
-                "accesspoint",
-                "validfrom",
-                "validuntil",
-                "purpose",
-                "revokedat",
-                "revokereason"
-              ]
+                {
+                  "name": "holder"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "accesspoint"
+                },
+                {
+                  "name": "validfrom"
+                },
+                {
+                  "name": "validuntil"
+                },
+                {
+                  "name": "purpose"
+                },
+                {
+                  "name": "revokedat"
+                },
+                {
+                  "name": "revokereason"
+                }
+              ],
+              "ports": {
+                "recordVariable": "accesspass",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             },
             {
               "id": "pass-actions",
-              "widget": "actions",
-              "configVersion": 1,
-              "title": "Access pass actions",
+              "owner": "pass-actions",
+              "kind": "record",
               "object": {
                 "app": "build",
                 "kind": "object",
                 "name": "build.accesspass"
               },
-              "recordVariable": "accesspass",
+              "model": {
+                "type": "build.accesspass"
+              },
+              "ports": {
+                "recordVariable": "accesspass",
+                "selectionMode": "read",
+                "widget": "actions"
+              }
+            }
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.accesspoint.checkpass"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.accesspoint.disable"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.accesspoint.enable"
+                }
+              ]
+            },
+            {
+              "id": "access-note",
+              "owner": "access-note",
+              "binding": "access-note"
+            },
+            {
+              "id": "access-filter",
+              "owner": "access-filter",
+              "binding": "access-filter"
+            },
+            {
+              "id": "access-list",
+              "owner": "access-list",
+              "binding": "access-list"
+            },
+            {
+              "id": "access-detail",
+              "owner": "access-detail",
+              "binding": "access-detail"
+            },
+            {
+              "id": "access-actions",
+              "owner": "access-actions",
+              "binding": "access-actions",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.accesspoint.checkpass"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.accesspoint.disable"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.accesspoint.enable"
+                }
+              ]
+            },
+            {
+              "id": "pass-list",
+              "owner": "pass-list",
+              "binding": "pass-list"
+            },
+            {
+              "id": "pass-detail",
+              "owner": "pass-detail",
+              "binding": "pass-detail"
+            },
+            {
+              "id": "pass-actions",
+              "owner": "pass-actions",
+              "binding": "pass-actions",
               "actions": [
                 {
                   "app": "build",
@@ -5039,95 +6995,8 @@
               ]
             }
           ],
-          "document": {
-            "formatVersion": 2,
-            "uiProfile": "platform.page.v2.111",
-            "root": "root",
-            "nodes": {
-              "root": {
-                "kind": "rows",
-                "children": [
-                  "access-note",
-                  "access-filter",
-                  "access-list",
-                  "row-3",
-                  "pass-list",
-                  "row-5"
-                ]
-              },
-              "access-note": {
-                "kind": "widget",
-                "section": "access-note"
-              },
-              "access-filter": {
-                "kind": "widget",
-                "section": "access-filter"
-              },
-              "access-list": {
-                "kind": "widget",
-                "section": "access-list"
-              },
-              "row-3": {
-                "kind": "columns",
-                "children": [
-                  "access-detail",
-                  "access-actions"
-                ]
-              },
-              "access-detail": {
-                "kind": "widget",
-                "section": "access-detail",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "access-actions": {
-                "kind": "widget",
-                "section": "access-actions",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "pass-list": {
-                "kind": "widget",
-                "section": "pass-list"
-              },
-              "row-5": {
-                "kind": "columns",
-                "children": [
-                  "pass-detail",
-                  "pass-actions"
-                ]
-              },
-              "pass-detail": {
-                "kind": "widget",
-                "section": "pass-detail",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "pass-actions": {
-                "kind": "widget",
-                "section": "pass-actions",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              }
-            },
+          "inputSchema": {
             "variables": {
-              "accesspoint": {
-                "scope": "page",
-                "type": "record",
-                "mode": "resource",
-                "source": {
-                  "kind": "record",
-                  "section": "access-list"
-                }
-              },
               "accesspass": {
                 "scope": "page",
                 "type": "record",
@@ -5136,19 +7005,333 @@
                   "kind": "record",
                   "section": "pass-list"
                 }
+              },
+              "accesspoint": {
+                "scope": "page",
+                "type": "record",
+                "mode": "resource",
+                "source": {
+                  "kind": "record",
+                  "section": "access-list"
+                }
               }
-            }
+            },
+            "selections": [
+              {
+                "name": "accesspass",
+                "object": {
+                  "app": "build",
+                  "kind": "object",
+                  "name": "build.accesspass"
+                }
+              }
+            ]
           },
-          "selections": [
-            {
-              "name": "accesspass",
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "build.accesspass"
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "access-actions",
+                "parent": "row-3",
+                "kind": "page",
+                "binding": "access-actions",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "access-detail",
+                "parent": "row-3",
+                "kind": "page",
+                "binding": "access-detail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "access-filter",
+                "parent": "root",
+                "kind": "page",
+                "binding": "access-filter",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "access-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "access-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "access-note",
+                "parent": "root",
+                "kind": "page",
+                "binding": "access-note",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "pass-actions",
+                "parent": "row-5",
+                "kind": "page",
+                "binding": "pass-actions",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "pass-detail",
+                "parent": "row-5",
+                "kind": "page",
+                "binding": "pass-detail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "pass-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "pass-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-3",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-5",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
               }
+            ],
+            "owners": {
+              "access-actions": "access-actions",
+              "access-detail": "access-detail",
+              "access-filter": "access-filter",
+              "access-list": "access-list",
+              "access-note": "access-note",
+              "pass-actions": "pass-actions",
+              "pass-detail": "pass-detail",
+              "pass-list": "pass-list"
+            },
+            "root": "root"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": {
+                "formatVersion": 2,
+                "nodes": {
+                  "access-actions": {
+                    "kind": "widget",
+                    "section": "access-actions",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "access-detail": {
+                    "kind": "widget",
+                    "section": "access-detail",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "access-filter": {
+                    "kind": "widget",
+                    "section": "access-filter"
+                  },
+                  "access-list": {
+                    "kind": "widget",
+                    "section": "access-list"
+                  },
+                  "access-note": {
+                    "kind": "widget",
+                    "section": "access-note"
+                  },
+                  "pass-actions": {
+                    "kind": "widget",
+                    "section": "pass-actions",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "pass-detail": {
+                    "kind": "widget",
+                    "section": "pass-detail",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "pass-list": {
+                    "kind": "widget",
+                    "section": "pass-list"
+                  },
+                  "root": {
+                    "children": [
+                      "access-note",
+                      "access-filter",
+                      "access-list",
+                      "row-3",
+                      "pass-list",
+                      "row-5"
+                    ],
+                    "kind": "rows"
+                  },
+                  "row-3": {
+                    "children": [
+                      "access-detail",
+                      "access-actions"
+                    ],
+                    "kind": "columns"
+                  },
+                  "row-5": {
+                    "children": [
+                      "pass-detail",
+                      "pass-actions"
+                    ],
+                    "kind": "columns"
+                  }
+                },
+                "root": "root",
+                "uiProfile": "platform.page.v2.111"
+              },
+              "sections": [
+                {
+                  "binding": "access-note",
+                  "configVersion": 1,
+                  "id": "access-note",
+                  "text": "Passes authorize physical entry to a building or access point. They do not grant permission to read platform records. Check pass records a business decision; it does not claim that a physical door opened.",
+                  "title": "Physical access and platform access",
+                  "triggers": [
+                    "access-note"
+                  ]
+                },
+                {
+                  "binding": "access-filter",
+                  "configVersion": 1,
+                  "id": "access-filter",
+                  "title": "Find access points",
+                  "triggers": [
+                    "access-filter"
+                  ]
+                },
+                {
+                  "binding": "access-list",
+                  "configVersion": 1,
+                  "id": "access-list",
+                  "showSearch": true,
+                  "title": "Access points",
+                  "triggers": [
+                    "access-list"
+                  ]
+                },
+                {
+                  "binding": "access-detail",
+                  "configVersion": 1,
+                  "id": "access-detail",
+                  "title": "Selected access point",
+                  "triggers": [
+                    "access-detail"
+                  ]
+                },
+                {
+                  "binding": "access-actions",
+                  "configVersion": 1,
+                  "id": "access-actions",
+                  "title": "Access point actions",
+                  "triggers": [
+                    "access-actions"
+                  ]
+                },
+                {
+                  "binding": "pass-list",
+                  "configVersion": 1,
+                  "id": "pass-list",
+                  "showSearch": true,
+                  "title": "Passes for the selected access point",
+                  "triggers": [
+                    "pass-list"
+                  ]
+                },
+                {
+                  "binding": "pass-detail",
+                  "configVersion": 1,
+                  "id": "pass-detail",
+                  "title": "Selected access pass",
+                  "triggers": [
+                    "pass-detail"
+                  ]
+                },
+                {
+                  "binding": "pass-actions",
+                  "configVersion": 1,
+                  "id": "pass-actions",
+                  "title": "Access pass actions",
+                  "triggers": [
+                    "pass-actions"
+                  ]
+                }
+              ]
             }
-          ]
+          }
         }
       },
       {
@@ -5160,6 +7343,7 @@
         "contractVersion": 1,
         "sourceVersion": "1",
         "body": {
+          "format": 4,
           "name": "heatinghealth",
           "title": "Health dashboard",
           "description": "Compare recorded health assessments and inspect their timestamps.",
@@ -5168,112 +7352,353 @@
             "kind": "object",
             "name": "build.device"
           },
-          "layout": "composed",
-          "listFields": [
-            "name",
-            "building",
-            "state",
-            "healthscore",
-            "latesttemp",
-            "checkedat"
-          ],
-          "detailFields": [],
-          "actions": [
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.device.assesshealth"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.device.restore"
-            },
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "build.device.markoffline"
-            }
-          ],
-          "sections": [
+          "dataBindings": [
             {
               "id": "health-note",
-              "widget": "text",
-              "configVersion": 1,
-              "title": "Health evidence",
-              "text": "Health scores and status come from declared business rules and authorized assessments. Check the assessment time before acting; this dashboard does not infer equipment health from an unanswered request."
+              "owner": "health-note",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "widget": "text"
+              }
             },
             {
               "id": "health-filter",
-              "widget": "filter",
-              "configVersion": 1,
-              "title": "Find health records",
+              "owner": "health-filter",
+              "kind": "records",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device",
+                "fields": [
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
               "fields": [
-                "building",
-                "kind",
-                "state"
-              ]
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "state"
+                }
+              ],
+              "ports": {
+                "widget": "filter"
+              }
             },
             {
               "id": "health-device-count",
-              "widget": "metric",
-              "configVersion": 1,
-              "title": "Devices in this view",
-              "measure": "count"
+              "owner": "health-device-count",
+              "kind": "presentation",
+              "object": {
+                "app": "",
+                "kind": "",
+                "name": ""
+              },
+              "ports": {
+                "measure": "count",
+                "parentable": "true",
+                "widget": "metric"
+              }
             },
             {
               "id": "health-score-average",
-              "widget": "metric",
-              "configVersion": 1,
-              "title": "Average assessed health",
-              "measure": "avg:healthscore"
+              "owner": "health-score-average",
+              "kind": "records",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device"
+              },
+              "fieldSlots": {
+                "measure": [
+                  {
+                    "name": "healthscore",
+                    "transform": "avg"
+                  }
+                ]
+              },
+              "ports": {
+                "measure": "avg:healthscore",
+                "parentable": "true",
+                "widget": "metric"
+              }
             },
             {
               "id": "health-state-chart",
-              "widget": "chart",
-              "configVersion": 1,
-              "title": "Device status distribution",
-              "group": "state",
-              "measure": "count",
-              "mark": "bar"
+              "owner": "health-state-chart",
+              "kind": "records",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device"
+              },
+              "fieldSlots": {
+                "group": [
+                  {
+                    "name": "state"
+                  }
+                ]
+              },
+              "ports": {
+                "measure": "count",
+                "parentable": "true",
+                "widget": "chart"
+              }
             },
             {
               "id": "health-list",
-              "widget": "table",
-              "configVersion": 1,
-              "title": "Device health",
+              "owner": "health-list",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "healthscore"
+                  },
+                  {
+                    "name": "latesttemp"
+                  },
+                  {
+                    "name": "checkedat"
+                  }
+                ]
+              },
               "fields": [
-                "name",
-                "building",
-                "state",
-                "healthscore",
-                "latesttemp",
-                "checkedat"
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "healthscore"
+                },
+                {
+                  "name": "latesttemp"
+                },
+                {
+                  "name": "checkedat"
+                }
               ],
-              "showSearch": true
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
             },
             {
               "id": "health-detail",
-              "widget": "detail",
-              "configVersion": 1,
-              "title": "Selected health evidence",
-              "recordVariable": "device",
+              "owner": "health-detail",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device",
+                "fields": [
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "building"
+                  },
+                  {
+                    "name": "kind"
+                  },
+                  {
+                    "name": "state"
+                  },
+                  {
+                    "name": "healthscore"
+                  },
+                  {
+                    "name": "latesttemp"
+                  },
+                  {
+                    "name": "checkedat"
+                  }
+                ]
+              },
               "fields": [
-                "name",
-                "building",
-                "kind",
-                "state",
-                "healthscore",
-                "latesttemp",
-                "checkedat"
-              ]
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "building"
+                },
+                {
+                  "name": "kind"
+                },
+                {
+                  "name": "state"
+                },
+                {
+                  "name": "healthscore"
+                },
+                {
+                  "name": "latesttemp"
+                },
+                {
+                  "name": "checkedat"
+                }
+              ],
+              "ports": {
+                "recordVariable": "device",
+                "selectionMode": "read",
+                "widget": "detail"
+              }
             },
             {
               "id": "health-actions",
-              "widget": "actions",
-              "configVersion": 1,
-              "title": "Assessment actions",
-              "recordVariable": "device",
+              "owner": "health-actions",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device"
+              },
+              "ports": {
+                "recordVariable": "device",
+                "selectionMode": "read",
+                "widget": "actions"
+              }
+            },
+            {
+              "id": "health-advice",
+              "owner": "health-advice",
+              "kind": "record",
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "build.device"
+              },
+              "model": {
+                "type": "build.device"
+              },
+              "ports": {
+                "recordVariable": "device",
+                "widget": "ai-assistant"
+              },
+              "resources": [
+                {
+                  "id": "ai",
+                  "kind": "ai",
+                  "outputs": {
+                    "question": ""
+                  },
+                  "source": "analyst"
+                }
+              ]
+            }
+          ],
+          "actionTriggers": [
+            {
+              "id": "page",
+              "binding": "page",
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.assesshealth"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.restore"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "build.device.markoffline"
+                }
+              ]
+            },
+            {
+              "id": "health-note",
+              "owner": "health-note",
+              "binding": "health-note"
+            },
+            {
+              "id": "health-filter",
+              "owner": "health-filter",
+              "binding": "health-filter"
+            },
+            {
+              "id": "health-device-count",
+              "owner": "health-device-count",
+              "binding": "health-device-count"
+            },
+            {
+              "id": "health-score-average",
+              "owner": "health-score-average",
+              "binding": "health-score-average"
+            },
+            {
+              "id": "health-state-chart",
+              "owner": "health-state-chart",
+              "binding": "health-state-chart"
+            },
+            {
+              "id": "health-list",
+              "owner": "health-list",
+              "binding": "health-list"
+            },
+            {
+              "id": "health-detail",
+              "owner": "health-detail",
+              "binding": "health-detail"
+            },
+            {
+              "id": "health-actions",
+              "owner": "health-actions",
+              "binding": "health-actions",
               "actions": [
                 {
                   "app": "build",
@@ -5294,13 +7719,8 @@
             },
             {
               "id": "health-advice",
-              "widget": "ai-assistant",
-              "configVersion": 1,
-              "title": "Health advice",
-              "recordVariable": "device",
-              "ai": {
-                "kind": "analyst"
-              },
+              "owner": "health-advice",
+              "binding": "health-advice",
               "function": {
                 "ref": {
                   "app": "build",
@@ -5311,90 +7731,7 @@
               }
             }
           ],
-          "document": {
-            "formatVersion": 2,
-            "uiProfile": "platform.page.v2.111",
-            "root": "root",
-            "nodes": {
-              "root": {
-                "kind": "rows",
-                "children": [
-                  "health-note",
-                  "health-filter",
-                  "row-2",
-                  "health-state-chart",
-                  "health-list",
-                  "row-5",
-                  "health-advice"
-                ]
-              },
-              "health-note": {
-                "kind": "widget",
-                "section": "health-note"
-              },
-              "health-filter": {
-                "kind": "widget",
-                "section": "health-filter"
-              },
-              "row-2": {
-                "kind": "columns",
-                "children": [
-                  "health-device-count",
-                  "health-score-average"
-                ]
-              },
-              "health-device-count": {
-                "kind": "widget",
-                "section": "health-device-count",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "health-score-average": {
-                "kind": "widget",
-                "section": "health-score-average",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "health-state-chart": {
-                "kind": "widget",
-                "section": "health-state-chart"
-              },
-              "health-list": {
-                "kind": "widget",
-                "section": "health-list"
-              },
-              "row-5": {
-                "kind": "columns",
-                "children": [
-                  "health-detail",
-                  "health-actions"
-                ]
-              },
-              "health-detail": {
-                "kind": "widget",
-                "section": "health-detail",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "health-actions": {
-                "kind": "widget",
-                "section": "health-actions",
-                "size": {
-                  "weight": 1,
-                  "minWidth": 260
-                }
-              },
-              "health-advice": {
-                "kind": "widget",
-                "section": "health-advice"
-              }
-            },
+          "inputSchema": {
             "variables": {
               "device": {
                 "scope": "page",
@@ -5405,6 +7742,339 @@
                   "section": "health-list"
                 }
               }
+            }
+          },
+          "scopeVisibility": {
+            "scopes": [
+              {
+                "id": "health-actions",
+                "parent": "row-5",
+                "kind": "page",
+                "binding": "health-actions",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "health-advice",
+                "parent": "root",
+                "kind": "page",
+                "binding": "health-advice",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "health-detail",
+                "parent": "row-5",
+                "kind": "page",
+                "binding": "health-detail",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "health-device-count",
+                "parent": "row-2",
+                "kind": "page",
+                "binding": "health-device-count",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "health-filter",
+                "parent": "root",
+                "kind": "page",
+                "binding": "health-filter",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "health-list",
+                "parent": "root",
+                "kind": "page",
+                "binding": "health-list",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "health-note",
+                "parent": "root",
+                "kind": "page",
+                "binding": "health-note",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "health-score-average",
+                "parent": "row-2",
+                "kind": "page",
+                "binding": "health-score-average",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "health-state-chart",
+                "parent": "root",
+                "kind": "page",
+                "binding": "health-state-chart",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-2",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              },
+              {
+                "id": "row-5",
+                "parent": "root",
+                "kind": "page",
+                "bindings": {
+                  "activeVariable": "",
+                  "enabledWhen": "",
+                  "valueVariable": "",
+                  "visibleWhen": ""
+                }
+              }
+            ],
+            "owners": {
+              "health-actions": "health-actions",
+              "health-advice": "health-advice",
+              "health-detail": "health-detail",
+              "health-device-count": "health-device-count",
+              "health-filter": "health-filter",
+              "health-list": "health-list",
+              "health-note": "health-note",
+              "health-score-average": "health-score-average",
+              "health-state-chart": "health-state-chart"
+            },
+            "root": "root"
+          },
+          "widgetSpec": {
+            "format": "platform.page.web.v1",
+            "body": {
+              "document": {
+                "formatVersion": 2,
+                "nodes": {
+                  "health-actions": {
+                    "kind": "widget",
+                    "section": "health-actions",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "health-advice": {
+                    "kind": "widget",
+                    "section": "health-advice"
+                  },
+                  "health-detail": {
+                    "kind": "widget",
+                    "section": "health-detail",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "health-device-count": {
+                    "kind": "widget",
+                    "section": "health-device-count",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "health-filter": {
+                    "kind": "widget",
+                    "section": "health-filter"
+                  },
+                  "health-list": {
+                    "kind": "widget",
+                    "section": "health-list"
+                  },
+                  "health-note": {
+                    "kind": "widget",
+                    "section": "health-note"
+                  },
+                  "health-score-average": {
+                    "kind": "widget",
+                    "section": "health-score-average",
+                    "size": {
+                      "minWidth": 260,
+                      "weight": 1
+                    }
+                  },
+                  "health-state-chart": {
+                    "kind": "widget",
+                    "section": "health-state-chart"
+                  },
+                  "root": {
+                    "children": [
+                      "health-note",
+                      "health-filter",
+                      "row-2",
+                      "health-state-chart",
+                      "health-list",
+                      "row-5",
+                      "health-advice"
+                    ],
+                    "kind": "rows"
+                  },
+                  "row-2": {
+                    "children": [
+                      "health-device-count",
+                      "health-score-average"
+                    ],
+                    "kind": "columns"
+                  },
+                  "row-5": {
+                    "children": [
+                      "health-detail",
+                      "health-actions"
+                    ],
+                    "kind": "columns"
+                  }
+                },
+                "root": "root",
+                "uiProfile": "platform.page.v2.111"
+              },
+              "sections": [
+                {
+                  "binding": "health-note",
+                  "configVersion": 1,
+                  "id": "health-note",
+                  "text": "Health scores and status come from declared business rules and authorized assessments. Check the assessment time before acting; this dashboard does not infer equipment health from an unanswered request.",
+                  "title": "Health evidence",
+                  "triggers": [
+                    "health-note"
+                  ]
+                },
+                {
+                  "binding": "health-filter",
+                  "configVersion": 1,
+                  "id": "health-filter",
+                  "title": "Find health records",
+                  "triggers": [
+                    "health-filter"
+                  ]
+                },
+                {
+                  "binding": "health-device-count",
+                  "configVersion": 1,
+                  "id": "health-device-count",
+                  "title": "Devices in this view",
+                  "triggers": [
+                    "health-device-count"
+                  ]
+                },
+                {
+                  "binding": "health-score-average",
+                  "configVersion": 1,
+                  "id": "health-score-average",
+                  "title": "Average assessed health",
+                  "triggers": [
+                    "health-score-average"
+                  ]
+                },
+                {
+                  "binding": "health-state-chart",
+                  "configVersion": 1,
+                  "id": "health-state-chart",
+                  "mark": "bar",
+                  "title": "Device status distribution",
+                  "triggers": [
+                    "health-state-chart"
+                  ]
+                },
+                {
+                  "binding": "health-list",
+                  "configVersion": 1,
+                  "id": "health-list",
+                  "showSearch": true,
+                  "title": "Device health",
+                  "triggers": [
+                    "health-list"
+                  ]
+                },
+                {
+                  "binding": "health-detail",
+                  "configVersion": 1,
+                  "id": "health-detail",
+                  "title": "Selected health evidence",
+                  "triggers": [
+                    "health-detail"
+                  ]
+                },
+                {
+                  "binding": "health-actions",
+                  "configVersion": 1,
+                  "id": "health-actions",
+                  "title": "Assessment actions",
+                  "triggers": [
+                    "health-actions"
+                  ]
+                },
+                {
+                  "ai": {},
+                  "binding": "health-advice",
+                  "configVersion": 1,
+                  "id": "health-advice",
+                  "title": "Health advice",
+                  "triggers": [
+                    "health-advice"
+                  ]
+                }
+              ]
             }
           }
         }
