@@ -8,9 +8,10 @@
 
 | 任务涉及 | 先读 |
 |---|---|
-| 选当前批次、记录新差距 | [roadmap](docs/roadmap.md) |
+| 选当前批次、看里程碑、记录新差距 | [roadmap](docs/roadmap.md) |
+| 分派子代理、做架构诊断、判断该不该问负责人、调整检查或提高自治级别 | [method](docs/method.md) |
 | 命名、翻译 | [glossary](docs/glossary.md) |
-| 判断是否属于平台、终局、质量目标、外部依赖 | [1-enterprise](docs/1-enterprise.md) |
+| 意图与下注、承重决定、判断是否属于平台、质量目标、外部依赖 | [1-enterprise](docs/1-enterprise.md) |
 | 新能力或资源类型放哪个应用、平台还是产品包 | [2-product](docs/2-product.md) |
 | 导航、门户、资源分类、URL、Search、Files | [3-information](docs/3-information.md) |
 | 页面原型、保存模型、选择、窗口、快捷键 | [4-interaction](docs/4-interaction/README.md) |
@@ -26,11 +27,13 @@
 | 前端包、路由、数据获取、i18n | [7-system/web](docs/7-system/web.md) |
 | 检查、钩子、验收用例 | [7-system/verification](docs/7-system/verification.md) |
 
-前端改动另用技能 `platform-design`；一批完整交付用技能 `platform-batch`。
+前端改动另用技能 `platform-design`；一批完整交付用技能 `platform-batch`；架构诊断用技能 `platform-diagnose`。
 
 ## 硬规则
 
 - 先读实现与调用方，从根因解决；删除被替换的路径；不扩展无关功能。
+- 最小完整改动：能不写就不写，能复用就复用，删除优先于新增；不为只有一个实现的东西写接口，不留兼容分支（method R5）。
+- 校验只在信任边界；边界之内信任类型与不变量，不为不会出现的状态写分支，不吞错误换默认值（method R6）。
 - 新能力先在 2-product 找到唯一归属；找不到就先改规范。一项能力只有一个实现，一类资源只由一个工具应用编辑。
 - 代码改变了某份规范描述的行为，同一提交更新该规范（规则、规格或现存差距）。
 - 不写代码注释；编译指令、生成文件头、shebang 保留。
@@ -62,8 +65,9 @@
 
 ## 工作方式
 
+- 负责人掌舵，代理执行：负责人决定意图、承重决定与持久代价的取舍，并在浏览器走查观感；顺序、设计、实现、验证由代理决定（[method](docs/method.md)）。
+- 主会话诊断、定方案、审阅并提交；方案已定的施工写成工单派给实现代理（`.claude/agents/implementer.md`）。派不派是判断，不是流程。
 - 每批按技能 `platform-batch` 交付，结束时提交并推送 main。
-- 负责人决定方向与持久代价的取舍，并在浏览器走查观感；其余顺序由代理决定。
 - 钩子在 Go 编辑后格式化，并在 `git commit` 前检查构建、类型、空白与规范同步；被拦下时修正后重试，不绕过。
 - 项目知识只写进仓库；外部评审不入库（docs/README §6）。
 

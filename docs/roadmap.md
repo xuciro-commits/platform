@@ -8,15 +8,27 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 终局的三段与判断标准见 [1-enterprise §1.1](1-enterprise.md)。条目完成即删除；编号不复用。每批是一个独立可用的薄切片，跨层推进，不在一层深挖。
 
+## 里程碑
+
+从现在到终局（[1-enterprise §1.1](1-enterprise.md)）的四个里程碑，按顺序。这里只写成立的标准；条目只为当前里程碑排期，后面的里程碑到达时再拆。
+
+| 里程碑 | 终局阶段 | 成立的标准 |
+|---|---|---|
+| 收敛 | 平台成形 | “当前批次”第一至三段的完成标准全部成立 |
+| 自举 | 行业应用 | “当前批次”第四段完成：`deploy/packages/` 全部是 DevOps 导出的产品版本，系统产品包随宿主预装 |
+| 可交付 | 交付运营 | F 系列全部在 PostgreSQL 上通过；“安装 v1 → 客户扩展 → 升级 v2”演练不阻断；备份恢复演练只应用已接受映像；格式纪元冻结（C26） |
+| 首个客户 | 交付运营 | 一个客户租户安装一个行业应用，并在保留扩展的前提下升级一次 |
+
+代理的自治级别随里程碑提高，级别与前提见 [method 自治阶梯](method.md#自治阶梯)：收敛期间补齐 2 级的前提，自举完成时具备 4 级的前提。
+
 ## 当前批次
 
 本轮是结构收敛：内核回到 `kernel`、领域只留一套模型、平台开始自举。四段按顺序做，前一段的完成标准成立才进入下一段。收敛期间产品矩阵冻结（[2-product §2.2](2-product.md)）：不新增工具应用与资源类型，只修缺陷。每条完成时 `make check` 通过，K1、K2、K3、K13 的断言不改写（删除纪元前断言除外）。
 
-### 一、棘轮与格式纪元
+### 一、格式纪元
 
-目标规范：[7-system §7.6–7.7](7-system/README.md)、[7-system/verification §7.8](7-system/verification.md)、[6-domain R9](6-domain/README.md)、[1-enterprise §1.2](1-enterprise.md)。先锁住形状不再变坏，再删掉为不存在的历史保留的路径，让后面要搬的代码变少。
+目标规范：[7-system §7.6–7.7](7-system/README.md)、[7-system/verification §7.8](7-system/verification.md)、[6-domain R9](6-domain/README.md)、[1-enterprise §1.2](1-enterprise.md)。形状已由棘轮锁住（`scripts/shape-baseline.json`，每条完成时把基线调低）；本段删掉为不存在的历史保留的路径，让后面要搬的代码变少。
 
-- [ ] G1 形状棘轮：`scripts/check-boundaries.mjs` 增加行数、租户类型字段数、类型断言数、包名与目录名一致四项，基线写入 `scripts/shape-baseline.json`。完成标准：任一项变大时 `make check` 失败；`make check` 仍在 60 秒内。
 - [ ] E1 日志声明纪元 1：租户日志记录纪元，宿主拒绝装载纪元不符的日志；K1 增加纪元断言。开发与演示租户重建。
 - [ ] E2 页面只留格式 4：把产品包中的页面转为格式 4，删除 `format` 0/3 的读取与投影。完成标准：`deploy/packages/*.json` 不含旧格式页面；F 系列中打开产品包页面的用例通过。
 - [ ] E3 删除纪元前记录路径：`work.view` v0、对象草稿内嵌动作迁出、`build.testplan` 缺 `variant` 推断、旧告警迁移、Predicate v1、`apps/history` 与旧 core 种子恢复、`build_transactions_legacy.go`、`data_compat.go`、单体 `manufacturing.json`；逐项核对 `kernel/store/postgres_state_upgrade.go`。完成标准：6-domain 与 7-system 的“纪元前”差距条目删除。

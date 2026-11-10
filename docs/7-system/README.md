@@ -143,7 +143,7 @@ POST /v1/submissions
 - 内核位置（7.2）：提交序列在 `host` 而不在 `kernel`。`host` 是一个 4.5 万行的包；`host/host.go` 的 `Tenant` 有 112 个字段、约 820 个方法，同时持有车道、日志与全部服务状态；接受路径在 `host/acceptance_*.go` 12 个文件中；`kernel` 顶层只有约 850 行。
 - 三处内核（7.2）：`contract/go/kernel`（Receiver、ChangeLog、FactLog、Authorities）、`kernel` 与 `platform/ledger.go` 的规则引擎各持一部分接受语义；`contract/go/kernel` 在宿主中的实际使用面尚未逐项核对。
 - 提交入口（7.3）：`host/submit.go` 有 `submit → submitHeld → submitAccepted → submitAcceptedVersion → submitAcceptedWith` 五层，末层 11 个参数；幂等在 `committed.Answer`、`ledger.AcceptedFor`、`committed.Refusal` 上重复判定（后两者各约 20 处调用），身份与权威校验同 `Receiver.Receive` 重复；`t.quarantine(` 约 67 处，远多于两种不一致。
-- 服务注册（7.2、7.7）：`platform/app.go` 的 `Runtime` 接口有 30 余个方法并嵌入 8 个接口；另有 38 个 `*Runtime` 接口与 6 个可选 `*App` 接口，经约 390 处类型断言探测；约 200 个函数用可变参数表达可选项。
+- 服务注册（7.2、7.7）：`platform/app.go` 的 `Runtime` 接口有 30 余个方法并嵌入 8 个接口；另有 38 个 `*Runtime` 接口与 6 个可选 `*App` 接口，经约 330 处类型断言探测（形状棘轮的 `capabilityProbes`）；约 200 个函数用可变参数表达可选项。
 - `platform` 不是叶层 SDK（7.2）：约 2.4 万行，含动作规则引擎（`ledger.go`）、页面模型（`page_*`，约 5 千行）与实体—转换—业务事务模型（`entity.go`、`transaction.go`，见 [6-domain 现存差距](../6-domain/README.md#现存差距)）。
 - `services/resources/authoring`（包名 `build`，约 1.35 万行，被 104 个 `host` 文件导入）编辑所有资源类型；`services/actions` 只有约 1200 行，动作执行实际在 `platform` 与 `host`。
 - 发布路径（7.5.1）：record 族（object、action-type）与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）的发布步骤仍手写在 `services/resources/authoring`；definition 族在 `build_kinds.go`；apps、function、integration、automation 已在各自服务，但经 Build 的“兼容公共类型”转接。

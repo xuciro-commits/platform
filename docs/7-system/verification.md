@@ -24,7 +24,7 @@ read-when: 运行或新增检查、验收用例、钩子；判断一项改动需
 |---|---|
 | Go | `cd capabilities/server && go build ./... && go vet ./...`；`gofmt -l` 为空 |
 | Go 包边界 | `node scripts/check-boundaries.mjs`：`go list` 的实际导入与 [README §7.2](README.md#72-包结构) 依赖列一致；不符的导入只能是该文件“现存差距”中登记的条目，条目消除后必须删除 |
-| Go 形状 | 同一脚本的形状棘轮：`host` 与 `platform` 的非测试行数、租户类型的字段数、可选接口的类型断言数、包名与目录名不一致的包数，都不得超过 `scripts/shape-baseline.json` 的基线；基线只能调低，降到 [README §7.2](README.md#72-包结构) 的目标后改为固定上限 |
+| Go 形状 | 同一脚本的形状棘轮：`host` 与 `platform` 的非测试行数、租户类型的字段数、对具名类型的带 `ok` 类型断言数（能力探测；内置类型的断言不计）、包名与目录名不一致的包数，都不得超过 `scripts/shape-baseline.json` 的基线；数值低于基线时检查同样失败并要求调低基线（行数留 300 行余量），降到 [README §7.2](README.md#72-包结构) 的目标后改为固定上限 |
 | 宿主类型与页面契约 | `make contract` 前后 `api/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json` 逐字节一致 |
 | Web | 改动包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 文案 | `node scripts/check-i18n.mjs` 检查 `t("...")` 字面量与 `defineApp` 说明都在字典中；动态键取值齐全 |
@@ -89,5 +89,4 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 ## 现存差距
 
 - `make verify` 的内核不变量与 F1–F24 仍运行在内存宿主；SQL 模式覆盖创建、项目委派、viewer/discoverer 目录权限、日志、审计、运行索引和重启读取，尚未把全部 Playwright 用例跑在 PostgreSQL 上。
-- 形状棘轮（7.8）尚未实现：`scripts/check-boundaries.mjs` 只检查导入方向，看不到包的大小、类型的字段数与命名；`scripts/shape-baseline.json` 不存在。
 - 不变量与规范不符（7.10）：K1 仍断言旧 core 种子的恢复，尚无纪元断言；K8 的用例（`host/system_release_invariants_test.go`）仍断言 `system` 租户发布记录只读，尚无系统产品包的预装断言；资源入口验收仍检查 `work.view` 的 v0 状态。
