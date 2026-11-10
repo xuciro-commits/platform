@@ -333,45 +333,6 @@ export type AggregateWindowResult = {
   last?: AggregateWindowEdge;
 };
 
-export type Alert = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  migrated?: string;
-  migratedVersion?: number;
-  name: string;
-  title: string;
-  object: string;
-  field: string;
-  operator: "=" | "!=" | "<" | "<=" | ">" | ">=" | "empty" | "not empty";
-  value?: string;
-  message: string;
-  role?: string;
-  every?: boolean;
-  active: boolean;
-  state?: string;
-  version?: number;
-  definitionVersion?: number;
-  versions?: string[];
-  published?: string;
-};
-
-export type AlertRule = {
-  name: string;
-  title: string;
-  object: AssetRef;
-  field: string;
-  operator: string;
-  value?: string;
-  message: string;
-  role?: string;
-  every?: boolean;
-  active: boolean;
-};
-
 export type AppConcept = {
   id: string;
   title: string;
@@ -1648,7 +1609,6 @@ export type DecisionTrace = {
 
 export type Definition = {
   objectTypeGroup?: ObjectTypeGroup;
-  alert?: AlertRule;
   observation?: ObservationDefinition;
   sampleSet?: SampleSet;
   interface?: Interface;
@@ -3118,6 +3078,15 @@ export type ModelViewBinding = {
   expressions?: Record<string, Expr>;
 };
 
+export type MonitoringAlert = {
+  id: string;
+  title: string;
+  object?: string;
+  repeat: boolean;
+  message: string;
+  role: string;
+};
+
 export type MonitoringCoverage = {
   source: string;
   readable: boolean;
@@ -4249,7 +4218,6 @@ export type Process = {
   steps: ProcessStep[];
   lanes?: ProcessLane[];
   layout?: Record<string, NodePosition>;
-  legacyAlert?: string;
   pauseReason?: string;
   paused?: boolean;
   state: "draft" | "published";

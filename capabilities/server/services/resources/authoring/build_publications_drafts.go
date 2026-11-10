@@ -203,8 +203,6 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 			asset, compiled := b.jointDeclarations[ref]
 			if !compiled {
 				switch r := record.(type) {
-				case Alert:
-					asset, err = b.automation.AlertAsset(r, max(1, r.DefinitionVersion))
 				case SampleSetRecord:
 					asset, err = sampleSetAsset(r, max(1, r.DefinitionVersion))
 				case TestPlan:

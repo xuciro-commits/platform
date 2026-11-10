@@ -1,7 +1,6 @@
 package authoring
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -41,7 +40,6 @@ type Process struct {
 	Steps       []ProcessStep           `json:"steps" field:"aside"`
 	Lanes       []ProcessLane           `json:"lanes,omitempty" field:"aside" title:"Lanes"`
 	Layout      map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
-	LegacyAlert string                  `json:"legacyAlert,omitempty" field:"readonly"`
 	PauseReason string                  `json:"pauseReason,omitempty" field:"readonly"`
 	Paused      bool                    `json:"paused,omitempty" field:"readonly"`
 	State       string                  `json:"state" field:"readonly" choices:"draft,published"`
@@ -158,24 +156,4 @@ type FunctionOutcome struct {
 	Output  string
 	Reason  string
 	Sources []string
-}
-
-func (s *ProcessStep) UnmarshalJSON(raw []byte) error {
-	type current ProcessStep
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	var node struct {
-		current
-		Condition json.RawMessage `json:"condition,omitempty"`
-	}
-	if err := decoder.Decode(&node); err != nil {
-		return err
-	}
-	condition, err := platform.UpgradeCondition(node.Condition)
-	if err != nil {
-		return err
-	}
-	*s = ProcessStep(node.current)
-	s.Condition = condition
-	return nil
 }

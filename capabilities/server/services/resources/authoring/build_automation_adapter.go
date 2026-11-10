@@ -76,27 +76,4 @@ func (e automationEnvironment) CheckIntake(c platform.Caller, process automation
 	return e.b.data.CheckSource(c, source)
 }
 
-func (e automationEnvironment) PrepareAlertReferences(c platform.Caller, alert automationauthoring.Alert, process automationauthoring.Process) (func(*pb.ChangeRecord), error) {
-	applications, err := readDefinitionInventory[Application](c)
-	if err != nil {
-		return nil, err
-	}
-	oldRef := platform.AssetRef{App: ID, Kind: platform.AssetAlert, Name: alert.Name}
-	newRef := platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: TypeOf(process.Name)}
-	return func(receipt *pb.ChangeRecord) {
-		for _, app := range applications {
-			changed := false
-			for i, ref := range app.Resources {
-				if ref == oldRef {
-					app.Resources[i] = newRef
-					changed = true
-				}
-			}
-			if changed {
-				c.Put(receipt, app)
-			}
-		}
-	}, nil
-}
-
 var _ automationauthoring.Environment = automationEnvironment{}

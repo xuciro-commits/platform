@@ -170,7 +170,7 @@ export function findDefinition(definitions: Definition[], ref: AssetRef): Defini
 export function definitionPresentation(definition: Definition): { title: string; description?: string } {
   const body = definition.entity ?? definition.action ?? definition.page ?? definition.application ?? definition.query ?? definition.flow
     ?? definition.function ?? definition.operation ?? definition.agent ?? definition.propertyType ?? definition.valueType ?? definition.linkType ?? definition.interface
-    ?? definition.protocol ?? definition.observation ?? definition.alert ?? definition.evaluation ?? definition.testPlan ?? definition.sampleSet;
+    ?? definition.protocol ?? definition.observation ?? definition.evaluation ?? definition.testPlan ?? definition.sampleSet;
   return { title: body && "title" in body && typeof body.title === "string" && body.title ? body.title : definition.ref.name,
     description: body && "description" in body && typeof body.description === "string" ? body.description : undefined };
 }

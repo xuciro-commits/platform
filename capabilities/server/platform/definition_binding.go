@@ -1,7 +1,6 @@
 package platform
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	ruleexpr "platformserver/expr"
@@ -86,16 +85,6 @@ func (b Binding) Resolve(r *Run, subject json.RawMessage) (json.RawMessage, erro
 		raw = value
 	}
 	return slices.Clone(raw), nil
-}
-
-var conditionOps = map[string]string{"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=", "contains": "contains"}
-
-func ConditionRef(b Binding) string {
-	parts := []string{b.Source}
-	if b.Source == "step" {
-		parts = append(parts, b.Step)
-	}
-	return strings.Join(append(parts, b.Path...), ".")
 }
 
 func ConditionBinding(ref string) (Binding, error) {
@@ -210,99 +199,4 @@ func TestCondition(e Expr, r *Run, subject json.RawMessage, engines ...RuleEngin
 		return false, fmt.Errorf("%s", issue.Message)
 	}
 	return err == nil && string(answer.Value.Data) == "true", err
-}
-
-type conditionV1 struct {
-	Op    string        `json:"op"`
-	Left  *Binding      `json:"left,omitempty"`
-	Right *Binding      `json:"right,omitempty"`
-	Terms []conditionV1 `json:"terms,omitempty"`
-}
-
-func (p conditionV1) operand(b *Binding) (Expr, error) {
-	if err := b.Check(); err != nil {
-		return Expr{}, err
-	}
-	if b.Source == "literal" {
-		return Expr{Kind: "json", Lit: &ruleexpr.Literal{Value: b.Value}}, nil
-	}
-	if slices.ContainsFunc(b.Path, func(part string) bool { return strings.Contains(part, ".") }) {
-		return Expr{}, fmt.Errorf("condition path %s cannot name a field containing a dot", strings.Join(b.Path, "/"))
-	}
-	return ruleexpr.RefOf("json", ConditionRef(*b)), nil
-}
-
-func (p conditionV1) expr(depth int) (Expr, error) {
-	if depth > 16 {
-		return Expr{}, fmt.Errorf("condition nesting exceeds its bound")
-	}
-	switch p.Op {
-	case "all", "any", "not":
-		if p.Left != nil || p.Right != nil || len(p.Terms) == 0 || len(p.Terms) > 32 || p.Op == "not" && len(p.Terms) != 1 {
-			return Expr{}, fmt.Errorf("logical condition needs bounded terms")
-		}
-		args := make([]Expr, len(p.Terms))
-		for i, term := range p.Terms {
-			arg, err := term.expr(depth + 1)
-			if err != nil {
-				return Expr{}, err
-			}
-			args[i] = arg
-		}
-		if len(args) == 1 && p.Op != "not" {
-			return args[0], nil
-		}
-		return Expr{Op: map[string]string{"all": "and", "any": "or", "not": "not"}[p.Op], Kind: "boolean", Args: args}, nil
-	}
-	op, ok := conditionOps[p.Op]
-	if p.Op == "exists" {
-		op, ok = "is-not-null", true
-	}
-	if !ok {
-		return Expr{}, fmt.Errorf("unknown condition operator %s", p.Op)
-	}
-	if p.Left == nil || len(p.Terms) > 0 || (p.Op == "exists") != (p.Right == nil) {
-		return Expr{}, fmt.Errorf("condition needs matching operands")
-	}
-	args := []*Binding{p.Left}
-	if p.Right != nil {
-		args = append(args, p.Right)
-	}
-	e := Expr{Op: op, Kind: "boolean"}
-	for _, b := range args {
-		arg, err := p.operand(b)
-		if err != nil {
-			return Expr{}, err
-		}
-		e.Args = append(e.Args, arg)
-	}
-	return e, nil
-}
-
-func UpgradeCondition(raw json.RawMessage) (*Expr, error) {
-	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return nil, nil
-	}
-	var keys map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &keys); err != nil {
-		return nil, err
-	}
-	if keys["left"] == nil && keys["right"] == nil && keys["terms"] == nil {
-		var e Expr
-		if err := json.Unmarshal(raw, &e); err != nil {
-			return nil, err
-		}
-		return &e, nil
-	}
-	var legacy conditionV1
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&legacy); err != nil {
-		return nil, err
-	}
-	e, err := legacy.expr(0)
-	if err != nil {
-		return nil, err
-	}
-	return &e, nil
 }

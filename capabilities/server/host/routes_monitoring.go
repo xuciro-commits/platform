@@ -1,6 +1,7 @@
 package host
 
 import (
+	"encoding/json"
 	"net/http"
 	"slices"
 	"strconv"
@@ -220,15 +221,26 @@ func (h *Host) routesMonitoring(rt *routes) {
 		t.audit.Remember(platform.AuditEntry{At: now, Member: m.ID, App: controlowner.PlatformApp, Action: "platform.metrics.read", Target: observationFilterSummary(query)})
 		WriteJSON(w, http.StatusOK, summary)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/alerts", Summary: "Active Automate alert rules visible to the caller", Answer: []build.Alert{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		now := h.Now()
+	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/alerts", Summary: "Active automations with a notification effect visible to the caller", Answer: []MonitoringAlert{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		coverage := MonitoringCoverage{Source: "alerts", Basis: "current"}
-		alerts, refusal := monitoringRecords[build.Alert](t, m, build.AlertType, &coverage, now)
+		processes, refusal := monitoringRecords[build.Process](t, m, build.ProcessType, &coverage, h.Now())
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
 		}
-		out := slices.DeleteFunc(alerts, func(alert build.Alert) bool { return !alert.Active || alert.Archived })
+		out := []MonitoringAlert{}
+		for _, process := range processes {
+			var installed build.Process
+			if process.Archived || process.Paused || json.Unmarshal([]byte(process.Published), &installed) != nil || installed.Kind != "automation" {
+				continue
+			}
+			for _, step := range installed.Steps {
+				if step.Notify != nil {
+					out = append(out, MonitoringAlert{ID: process.ID, Title: installed.Title, Object: installed.Object, Repeat: installed.Repeat, Message: step.Notify.Body, Role: step.Notify.Role})
+					break
+				}
+			}
+		}
 		WriteJSON(w, http.StatusOK, out)
 	})
 }

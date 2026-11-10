@@ -5956,17 +5956,22 @@
                 "name": "held",
                 "kind": "branch",
                 "condition": {
-                  "op": "eq",
-                  "left": {
-                    "source": "subject",
-                    "path": [
-                      "state"
-                    ]
-                  },
-                  "right": {
-                    "source": "literal",
-                    "value": "held"
-                  }
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "ref": "subject.state"
+                    },
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "lit": {
+                        "value": "held"
+                      }
+                    }
+                  ]
                 },
                 "cases": {
                   "true": "release",
@@ -7219,18 +7224,22 @@
                 "name": "complete",
                 "kind": "branch",
                 "condition": {
-                  "op": "lte",
-                  "left": {
-                    "source": "step",
-                    "step": "bookings",
-                    "path": [
-                      "total"
-                    ]
-                  },
-                  "right": {
-                    "source": "literal",
-                    "value": 200
-                  }
+                  "op": "<=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "ref": "step.bookings.total"
+                    },
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "lit": {
+                        "value": 200
+                      }
+                    }
+                  ]
                 },
                 "cases": {
                   "true": "each",
@@ -7256,37 +7265,40 @@
                 "name": "window",
                 "kind": "branch",
                 "condition": {
-                  "op": "all",
-                  "terms": [
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
                     {
-                      "op": "gte",
-                      "left": {
-                        "source": "input",
-                        "path": [
-                          "period"
-                        ]
-                      },
-                      "right": {
-                        "source": "item",
-                        "path": [
-                          "arrivalnoticeat"
-                        ]
-                      }
+                      "op": ">=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "input.period"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "item.arrivalnoticeat"
+                        }
+                      ]
                     },
                     {
-                      "op": "lt",
-                      "left": {
-                        "source": "input",
-                        "path": [
-                          "period"
-                        ]
-                      },
-                      "right": {
-                        "source": "item",
-                        "path": [
-                          "begins"
-                        ]
-                      }
+                      "op": "<",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "input.period"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "item.begins"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -14079,49 +14091,62 @@
                 "name": "closing",
                 "kind": "branch",
                 "condition": {
-                  "op": "any",
-                  "terms": [
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "compensating"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "compensating"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "releasing"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "releasing"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "needsreview"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "needsreview"
+                          }
+                        }
+                      ]
                     }
                   ]
                 },
@@ -14239,49 +14264,62 @@
                 "name": "closing",
                 "kind": "branch",
                 "condition": {
-                  "op": "any",
-                  "terms": [
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "compensating"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "compensating"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "releasing"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "releasing"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "needsreview"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "needsreview"
+                          }
+                        }
+                      ]
                     }
                   ]
                 },
@@ -14399,49 +14437,62 @@
                 "name": "closing",
                 "kind": "branch",
                 "condition": {
-                  "op": "any",
-                  "terms": [
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "compensating"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "compensating"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "releasing"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "releasing"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "needsreview"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "needsreview"
+                          }
+                        }
+                      ]
                     }
                   ]
                 },
@@ -14559,49 +14610,62 @@
                 "name": "closing",
                 "kind": "branch",
                 "condition": {
-                  "op": "any",
-                  "terms": [
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "compensating"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "compensating"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "releasing"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "releasing"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "needsreview"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "needsreview"
+                          }
+                        }
+                      ]
                     }
                   ]
                 },
@@ -14719,49 +14783,62 @@
                 "name": "closing",
                 "kind": "branch",
                 "condition": {
-                  "op": "any",
-                  "terms": [
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "compensating"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "compensating"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "releasing"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "releasing"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "needsreview"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "needsreview"
+                          }
+                        }
+                      ]
                     }
                   ]
                 },
@@ -14879,49 +14956,62 @@
                 "name": "closing",
                 "kind": "branch",
                 "condition": {
-                  "op": "any",
-                  "terms": [
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "compensating"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "compensating"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "releasing"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "releasing"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "needsreview"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "needsreview"
+                          }
+                        }
+                      ]
                     }
                   ]
                 },
@@ -15039,49 +15129,62 @@
                 "name": "closing",
                 "kind": "branch",
                 "condition": {
-                  "op": "any",
-                  "terms": [
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "compensating"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "compensating"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "releasing"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "releasing"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "needsreview"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "needsreview"
+                          }
+                        }
+                      ]
                     }
                   ]
                 },
@@ -15199,49 +15302,62 @@
                 "name": "closing",
                 "kind": "branch",
                 "condition": {
-                  "op": "any",
-                  "terms": [
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "compensating"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "compensating"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "releasing"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "releasing"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "op": "eq",
-                      "left": {
-                        "source": "subject",
-                        "path": [
-                          "plan",
-                          "state"
-                        ]
-                      },
-                      "right": {
-                        "source": "literal",
-                        "value": "needsreview"
-                      }
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.plan.state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "needsreview"
+                          }
+                        }
+                      ]
                     }
                   ]
                 },

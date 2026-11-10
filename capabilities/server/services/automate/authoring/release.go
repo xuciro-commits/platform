@@ -11,97 +11,8 @@ import (
 	"platformserver/platform"
 )
 
-func (o *Owner) AlertAssets() ([]platform.ReleaseAsset, error) {
-	rows, err := o.alertInventory()
-	if err != nil {
-		return nil, err
-	}
-	var assets []platform.ReleaseAsset
-	for _, a := range rows {
-		if a.Archived {
-			continue
-		}
-		if err := o.freezeLegacyAlert(&a); err != nil {
-			return nil, err
-		}
-		if a.Published == "" {
-			continue
-		}
-		_, asset, err := o.alertImage(platform.Raw(a))
-		if err != nil {
-			return nil, err
-		}
-		assets = append(assets, asset)
-	}
-	return assets, nil
-}
-
-func (o *Owner) AlertPinned(ref platform.AssetRef, version string) (platform.ReleaseAsset, error) {
-	rows, err := o.alertInventory()
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	for _, record := range rows {
-		if err := o.freezeLegacyAlert(&record); err != nil {
-			return platform.ReleaseAsset{}, err
-		}
-		for _, raw := range append(slices.Clone(record.Versions), record.Published) {
-			var asset platform.ReleaseAsset
-			if json.Unmarshal([]byte(raw), &asset) == nil && asset.Ref == ref && asset.SourceVersion == version {
-				_, _, err := o.alertFromAsset(asset)
-				return asset, err
-			}
-		}
-	}
-	return platform.ReleaseAsset{}, fmt.Errorf("alert %s@%s is not retained", ref, version)
-}
-
-func (o *Owner) AlertDraftAssets(before []platform.ReleaseAsset, id string) (after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	a, ok := platform.Get[Alert](o.env.Host().Automation(platform.Caller{}, o.env.AppID()), id)
-	if !ok || a.Archived {
-		return nil, prior, next, false, fmt.Errorf("alert draft %s was not found", id)
-	}
-	if err = o.freezeLegacyAlert(&a); err != nil {
-		return
-	}
-	if a.Published != "" {
-		_, asset, problem := o.alertImage(platform.Raw(a))
-		if problem != nil {
-			err = problem
-			return
-		}
-		prior, hadPrior = asset.Ref, true
-	}
-	if err = o.checkAlert(o.env.Host().Automation(platform.Caller{}, o.env.AppID()), a); err != nil {
-		return
-	}
-	next = platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetAlert, Name: a.Name}
-	asset, problem := o.alertReleaseAsset(a, a.Version+1)
-	if problem != nil {
-		err = problem
-		return
-	}
-	after = slices.DeleteFunc(slices.Clone(before), func(candidate platform.ReleaseAsset) bool {
-		return candidate.Ref == next || hadPrior && candidate.Ref == prior
-	})
-	after = append(after, asset)
-	return
-}
-
-func (o *Owner) AlertAsset(alert Alert, version int) (platform.ReleaseAsset, error) {
-	return o.alertReleaseAsset(alert, version)
-}
-
 func (o *Owner) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
-	processes, err := o.PrepareProcessPublications(assets)
-	if err != nil {
-		return nil, err
-	}
-	alerts, err := o.prepareAlertPublications(assets)
-	if err != nil {
-		return nil, err
-	}
-	return append(processes, alerts...), nil
+	return o.PrepareProcessPublications(assets)
 }
 
 func (o *Owner) PrepareProcessPublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
@@ -127,9 +38,8 @@ func (o *Owner) PrepareProcessPublications(assets []platform.ReleaseAsset) ([]pl
 		if prior, ok := readPublished[Process](records[i].Published); ok {
 			priorAsset, err := o.processReleaseAsset(prior, asset.SourceVersion)
 			if err == nil {
-				a, _ := upgradedProcessBody(priorAsset.Body)
-				z, _ := upgradedProcessBody(asset.Body)
-				if reflect.DeepEqual(a, z) {
+				var a, z any
+				if json.Unmarshal(priorAsset.Body, &a) == nil && json.Unmarshal(asset.Body, &z) == nil && reflect.DeepEqual(a, z) {
 					continue
 				}
 			}
@@ -149,49 +59,6 @@ func (o *Owner) PrepareProcessPublications(assets []platform.ReleaseAsset) ([]pl
 		out = append(out, platform.ReleasePublication{Schema: SchemaProcess, Image: raw})
 	}
 	return out, nil
-}
-
-func (o *Owner) prepareAlertPublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
-	rows, err := o.alertInventory()
-	if err != nil {
-		return nil, err
-	}
-	var out []platform.ReleasePublication
-	for _, asset := range assets {
-		if asset.Ref.App != o.env.AppID() || asset.Ref.Kind != platform.AssetAlert {
-			continue
-		}
-		frozen, version, err := o.alertFromAsset(asset)
-		if err != nil {
-			return nil, err
-		}
-		i := slices.IndexFunc(rows, func(a Alert) bool { return !a.Archived && a.Name == frozen.Name })
-		if i < 0 {
-			return nil, fmt.Errorf("alert %s has no target draft", asset.Ref)
-		}
-		record := rows[i]
-		if err := o.freezeLegacyAlert(&record); err != nil {
-			return nil, err
-		}
-		if version <= record.Version {
-			retained, err := o.AlertPinned(asset.Ref, asset.SourceVersion)
-			if err != nil || !sameRuleAsset(retained, asset) {
-				return nil, fmt.Errorf("retained alert bytes differ")
-			}
-		} else if record.Version != 0 && version != record.Version+1 {
-			return nil, fmt.Errorf("alert needs its next version or retained bytes")
-		}
-		if err := o.retainAlertAsset(&record, asset); err != nil {
-			return nil, err
-		}
-		out = append(out, platform.ReleasePublication{Schema: SchemaAlertPublish, Image: platform.Raw(record)})
-	}
-	return out, nil
-}
-
-func (o *Owner) alertInventory() ([]Alert, error) {
-	c := o.env.Host().Automation(platform.Caller{}, o.env.AppID())
-	return readInventory[Alert](c, "alert")
 }
 
 func (o *Owner) ProcessAssets(processes []Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
@@ -264,9 +131,8 @@ func (o *Owner) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
 	if err != nil {
 		return p, err
 	}
-	got, err := upgradedProcessBody(asset.Body)
-	var want any
-	if err != nil || json.Unmarshal(expected.Body, &want) != nil || expected.Ref != asset.Ref || !reflect.DeepEqual(got, want) {
+	var got, want any
+	if json.Unmarshal(asset.Body, &got) != nil || json.Unmarshal(expected.Body, &want) != nil || expected.Ref != asset.Ref || !reflect.DeepEqual(got, want) {
 		return p, fmt.Errorf("process %s definition and compiled bindings differ", asset.Ref)
 	}
 	p.ID, p.Version, p.State = asset.Ref.Name, 1, "published"
@@ -376,44 +242,6 @@ func (o *Owner) processReleaseAsset(saved Process, sourceVersion string) (platfo
 	return platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }
 
-func upgradedProcessBody(raw json.RawMessage) (any, error) {
-	var body any
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, err
-	}
-	var walk func(any) error
-	walk = func(value any) error {
-		switch node := value.(type) {
-		case map[string]any:
-			for key, child := range node {
-				if condition, ok := child.(map[string]any); ok && key == "condition" && (condition["left"] != nil || condition["terms"] != nil) {
-					legacy, _ := json.Marshal(condition)
-					upgraded, err := platform.UpgradeCondition(legacy)
-					if err != nil {
-						return err
-					}
-					current, _ := json.Marshal(upgraded)
-					var decoded any
-					_ = json.Unmarshal(current, &decoded)
-					node[key] = decoded
-					continue
-				}
-				if err := walk(child); err != nil {
-					return err
-				}
-			}
-		case []any:
-			for _, child := range node {
-				if err := walk(child); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}
-	return body, walk(body)
-}
-
 func (o *Owner) Draft(asset platform.ReleaseAsset) (string, any, bool, error) {
 	switch asset.Ref.Kind {
 	case platform.AssetFlow:
@@ -422,23 +250,8 @@ func (o *Owner) Draft(asset platform.ReleaseAsset) (string, any, bool, error) {
 			return "", nil, true, err
 		}
 		return ProcessType, p, true, nil
-	case platform.AssetAlert:
-		alert, _, err := o.alertFromAsset(asset)
-		alert.State = "draft"
-		return AlertType, alert, true, err
 	}
 	return "", nil, false, nil
-}
-
-func (o *Owner) Definition(asset platform.ReleaseAsset) (*platform.AlertRule, bool, error) {
-	if asset.Ref.Kind != platform.AssetAlert {
-		return nil, false, nil
-	}
-	var alert platform.AlertRule
-	if json.Unmarshal(asset.Body, &alert) != nil || alert.Check() != nil {
-		return nil, true, fmt.Errorf("invalid accepted alert rule")
-	}
-	return &alert, true, nil
 }
 
 func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
@@ -455,19 +268,6 @@ func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platfo
 			Ref:    platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetFlow, Name: o.QualifiedName(record.Name)},
 			Schema: schema, Record: ProcessType + "/" + record.ID, Image: slices.Clone(image),
 		}, nil
-	case SchemaAlertPublish:
-		_, asset, err := o.alertImage(image)
-		if err != nil {
-			return platform.AssetInstallation{}, err
-		}
-		var record struct {
-			platform.Record
-			Name string `json:"name"`
-		}
-		if json.Unmarshal(image, &record) != nil || record.ID == "" {
-			return platform.AssetInstallation{}, fmt.Errorf("invalid release publication row")
-		}
-		return platform.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: AlertType + "/" + record.ID, Image: slices.Clone(image)}, nil
 	}
 	return platform.AssetInstallation{}, fmt.Errorf("not an automation installation schema")
 }
@@ -485,7 +285,7 @@ func (o *Owner) ValidateInstallation(plan platform.AssetInstallation) error {
 
 func (o *Owner) ValidateImage(schema string, image []byte) error {
 	switch schema {
-	case SchemaProcess, schemaAlertMigrate:
+	case SchemaProcess:
 		p, err := ReadProcessImage(image)
 		if err != nil {
 			return err
@@ -494,23 +294,13 @@ func (o *Owner) ValidateImage(schema string, image []byte) error {
 			return fmt.Errorf("tenant has no flow runtime")
 		}
 		return o.validate(p)
-	case SchemaAlertPublish:
-		_, asset, err := o.alertImage(image)
-		if err != nil {
-			return err
-		}
-		alert, _, err := o.alertFromAsset(asset)
-		if err != nil {
-			return err
-		}
-		return o.checkAlert(o.env.Host().Automation(platform.Caller{}, o.env.AppID()), alert)
 	}
 	return fmt.Errorf("not an automation publication schema")
 }
 
 func (o *Owner) ApplyImage(schema string, image []byte) error {
 	switch schema {
-	case SchemaProcess, schemaAlertMigrate:
+	case SchemaProcess:
 		p, err := ReadProcessImage(image)
 		if err != nil {
 			return err
@@ -519,13 +309,10 @@ func (o *Owner) ApplyImage(schema string, image []byte) error {
 			return fmt.Errorf("tenant has no flow runtime")
 		}
 		return o.Install(platform.Caller{Replaying: true}, p)
-	case SchemaAlertPublish:
-		_, _, err := o.alertImage(image)
-		return err
 	}
 	return fmt.Errorf("not an automation publication schema")
 }
 
 func (o *Owner) HandlesPublication(schema string) bool {
-	return schema == SchemaProcess || schema == SchemaAlertPublish || schema == schemaAlertMigrate || schema == schemaAlertDraftMigrate
+	return schema == SchemaProcess
 }

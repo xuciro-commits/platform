@@ -16,19 +16,13 @@ import (
 )
 
 func (*Build) DefinitionMetadataKind(kind platform.AssetKind) bool {
-	return dataowner.IsIntegration(kind) || slices.Contains([]platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetAlert}, kind)
+	return dataowner.IsIntegration(kind) || slices.Contains([]platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet}, kind)
 }
 
 func (b *Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Definition, error) {
 	definition := platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides)}
 	var err error
 	switch asset.Ref.Kind {
-	case platform.AssetAlert:
-		alert, handled, err := b.automation.Definition(asset)
-		if !handled || err != nil {
-			return definition, err
-		}
-		definition.Alert = alert
 	case platform.AssetObservation:
 		var observation platform.ObservationDefinition
 		if err = json.Unmarshal(asset.Body, &observation); err == nil {

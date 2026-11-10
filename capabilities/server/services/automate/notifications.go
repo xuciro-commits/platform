@@ -22,13 +22,10 @@ func (n NotificationEffect) Check() error {
 	return nil
 }
 
-func Notify(c platform.Caller, run *platform.Run, step string, n NotificationEffect, object, display, legacy string, subject json.RawMessage, now time.Time) json.RawMessage {
+func Notify(c platform.Caller, run *platform.Run, step string, n NotificationEffect, object, display string, subject json.RawMessage, now time.Time) json.RawMessage {
 	ref := ""
 	title := n.Title
 	key := "automation:" + run.ID + ":" + step
-	if legacy != "" && !strings.HasPrefix(run.Key, "manual:") {
-		key = "alert:" + legacy + ":" + run.Key
-	}
 	if object != "" {
 		var record map[string]any
 		_ = json.Unmarshal(subject, &record)

@@ -300,9 +300,6 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	if ref.Kind == platform.AssetSampleSet {
 		return b.sampleSetPinned(ref, version)
 	}
-	if ref.Kind == platform.AssetAlert {
-		return b.automation.AlertPinned(ref, version)
-	}
 	if k := definitionKindOf(ref.Kind); k != nil {
 		return k.resolve(b, ref.Name, version)
 	}

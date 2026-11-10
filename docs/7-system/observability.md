@@ -140,7 +140,7 @@ Health
 
 Errors 是 Logs 的错误指纹分组，不增加第九个入口。Audit 留在 Control Panel，按 Business、Security、Personal reads 分组，不复制到 Monitoring。
 
-入口：Monitoring → Logs 查看运营日志；Monitoring → Traces/Metrics/Alerts 查看请求路径、固定汇总和已启用的 Automate 告警规则；Control Panel → Settings and audit → Audit trail 查看不可变审计；Monitoring → Health 查看采集覆盖和就绪条件。Logs 与 Audit 页面互相提供直接跳转。
+入口：Monitoring → Logs 查看运营日志；Monitoring → Traces/Metrics/Alerts 查看请求路径、固定汇总和已启用的带通知效果的自动化；Control Panel → Settings and audit → Audit trail 查看不可变审计；Monitoring → Health 查看采集覆盖和就绪条件。Logs 与 Audit 页面互相提供直接跳转。
 
 Logs 页面：
 

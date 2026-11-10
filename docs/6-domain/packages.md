@@ -85,9 +85,9 @@ read-when: 改动产品包、Marketplace 安装、升级、卸载、重装、产
 | `blueprint.setup` 创建的初始化数据 | 作为租户数据保留 | 不自动重跑 | 按数据治理策略处理 |
 | 包制品、`Retained`、安装记录 | 保留 | 可复用 | purge 单独删除 |
 
-## 6.26 ERP/MES 拆包
+## 6.26 ERP/MES 包边界与所有权转移
 
-`manufacturing.core`、`manufacturing.erp` 和 `manufacturing.mes` 分别安装到受管项目；不保留拆分前的单体 `application.manufacturing` 包。拆分边界是所有权：
+`manufacturing.core`、`manufacturing.erp` 和 `manufacturing.mes` 分别安装到受管项目。包边界是所有权：
 
 | 包 | 责任 |
 |---|---|
@@ -107,7 +107,7 @@ read-when: 改动产品包、Marketplace 安装、升级、卸载、重装、产
 - ERP 包通过 `productionorderupstream` 和 `productionbatchupstream` 命名查询向 MES 提供生产订单与生产批次；MES 不轮询 ERP 内部记录地址。
 - 只有 ERP 内部需要强同步；MES 与 ERP 之间不得把库存或会计拆成独立异步步骤，也不能用新的幂等键重试已接收批次。
 
-Marketplace 的精确产品版本提供“Transfer existing resources…”：审阅原拥有者和资源修订号，创建目标受管项目，再经 `build.resource.rehome` 转移。重试只列尚未归位的资源；保留 RID、类型名、业务应用身份、记录、媒体和历史。项目容器自身保持项目 ID，带文件夹的资源先移出文件夹，陈旧资源修订被拒绝。先迁移并安装 core，再分别迁移并安装 ERP、MES，最后退役旧包；旧包仅归档尚归它所有的资源。业务应用可以跨项目归位，项目容器不能移动。所有 blueprint asset 仍属于 `build`，拆包只改变所有权与依赖，不产生第二套事务权威。
+Marketplace 的精确产品版本提供“Transfer existing resources…”：审阅原拥有者和资源修订号，创建目标受管项目，再经 `build.resource.rehome` 转移。重试只列尚未归位的资源；保留 RID、类型名、业务应用身份、记录、媒体和历史。项目容器自身保持项目 ID，带文件夹的资源先移出文件夹，陈旧资源修订被拒绝。所有权转移与原拥有者无关：未受管资源或任一产品的资源都可转给蓝图含同一资源引用的产品。被依赖的产品先转移并安装，原产品最后退役；它仅归档尚归它所有的资源。业务应用可以跨项目归位，项目容器不能移动。所有 blueprint asset 仍属于 `build`，转移只改变所有权与依赖，不产生第二套事务权威。
 
 ## 6.27 现存差距
 

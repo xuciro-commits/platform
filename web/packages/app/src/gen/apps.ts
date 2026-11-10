@@ -148,10 +148,6 @@ export const registeredApplications = {
       {
         "type": "build.process/automation",
         "view": "automation"
-      },
-      {
-        "type": "build.alertrule",
-        "view": "alert"
       }
     ]
   },

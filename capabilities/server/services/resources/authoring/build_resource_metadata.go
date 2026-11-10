@@ -53,12 +53,6 @@ func unreleased(kind, view, label, plural string, order int) resourcePresentatio
 	return presentation
 }
 
-func hidden(kind, view, label, plural string, order int) resourcePresentation {
-	presentation := presented(kind, view, label, plural, order)
-	presentation.listed, presentation.release = false, false
-	return presentation
-}
-
 func releaseOnly(kind, view, label, plural string, order int) resourcePresentation {
 	presentation := presented(kind, view, label, plural, order)
 	presentation.listed = false
@@ -144,10 +138,6 @@ var resourceDescriptors = []resourceDescriptor{
 	{
 		app: ID, typ: SampleSetType, kind: platform.AssetSampleSet, family: versionedResources, released: true, defaultDraft: true,
 		presentations: []resourcePresentation{presented("sample-set", "sample-set", "Sample set", "Sample sets", 2)},
-	},
-	{
-		app: ID, typ: automationauthoring.AlertType, kind: platform.AssetAlert, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
-		presentations: []resourcePresentation{hidden("alert", "alert", "Alert rule", "Alert rules", 31)},
 	},
 	{
 		app: ID, typ: dataowner.ConnectionType, kind: platform.AssetConnection, family: integrationResources, released: true, defaultDraft: true,

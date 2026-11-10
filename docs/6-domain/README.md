@@ -13,7 +13,7 @@ read-when: 新增或改变资源类型、对象模型、动作、函数、自动
 - 本文：领域地图、资源内核、本体、对象、数据、动作、函数、自动化、工作项、组织、规则语言。
 - [security.md](security.md)：权限三层、角色、标记、对象策略。
 - [change.md](change.md)：工作状态、分支、提案、产品、版本、安装、升级。
-- [packages.md](packages.md)：产品包生命周期、卸载与重装、数据保留、ERP/MES 拆包边界。
+- [packages.md](packages.md)：产品包生命周期、卸载与重装、数据保留、ERP/MES 包边界与所有权转移。
 - [lineage.md](lineage.md)：血缘推导、Preview 与 Guard 两条基线、影响分析、列级血缘、读取合同。
 
 ## 6.1 规则
@@ -165,5 +165,5 @@ read-when: 新增或改变资源类型、对象模型、动作、函数、自动
 
 - 授权上下文的来源装配仍在宿主，尚未收进 `services/security` 的窄端口；重放继续显式使用 `NativeRules`。
 - 两套模型（R8，`capabilities/server/platform`）：`entity.go` 的 `Entity` / `Transition`、`ledger.go` 的 `Ledger` 与规则引擎、`transaction.go` 的 `BusinessTxn` / `TxnPost` / `TxnJournal` 是与资源—对象—动作并行的模型；动作执行经它们完成，会计形状的类型位于平台（违反 2-product R4）。
-- 纪元前形状（R9）仍被读取或迁移：`work.view` 的 v0 状态（6.5）；对象草稿内嵌动作的迁出（6.7）；`build.testplan` 缺 `variant` 的推断（6.8）；旧告警迁移与 Predicate v1 的读取转换（6.9，`services/automate/authoring`）；单体 `application.manufacturing` 包（`deploy/packages/manufacturing.json`）。
+- 纪元前形状（R9）仍被读取或迁移：`work.view` 的 v0 状态（6.5）；对象草稿内嵌动作的迁出（6.7）；`build.testplan` 缺 `variant` 的推断（6.8）。
 - 内置对象类型（6.10）：工作项、审批与通知由 `services/work` 的 Go 代码定义，不是系统产品包中的本体资源（2-product R8）。

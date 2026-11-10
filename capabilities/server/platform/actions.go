@@ -265,7 +265,7 @@ func StaticControlAction(action Action) bool {
 	}
 	switch action.Target {
 	case "agent.run", "agent.switch", "agent.evaluation", "agent.memory", "work.task", "platform.work", "platform.effect", "platform.operation", "platform.job",
-		"build.object", "build.page", "build.app", "build.flow", "build.agent", "build.function", "build.code", "build.query", "build.process", "build.connection", "build.pipeline", "build.dataset", "build.datasetversion", MediaSetType, MediaSetVersionType, ScheduleType, "build.evaluation", "build.release", "build.packagesource", "build.alertrule":
+		"build.object", "build.page", "build.app", "build.flow", "build.agent", "build.function", "build.code", "build.query", "build.process", "build.connection", "build.pipeline", "build.dataset", "build.datasetversion", MediaSetType, MediaSetVersionType, ScheduleType, "build.evaluation", "build.release", "build.packagesource":
 		return true
 	}
 	return false

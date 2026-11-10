@@ -601,26 +601,6 @@ export const resourceContract = {
       "acceptedPublication": true,
       "qualifiedName": false,
       "released": true
-    },
-    {
-      "app": "build",
-      "kind": "alert",
-      "type": "build.alertrule",
-      "assetKind": "alert",
-      "ref": "alert",
-      "view": "alert",
-      "route": "default",
-      "label": "Alert rule",
-      "plural": "Alert rules",
-      "order": 31,
-      "listed": false,
-      "release": false,
-      "releaseKind": "alert",
-      "publication": "build.alertrule.publish",
-      "directInstall": true,
-      "acceptedPublication": true,
-      "qualifiedName": false,
-      "released": true
     }
   ]
 } as const;

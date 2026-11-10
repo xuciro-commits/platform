@@ -103,7 +103,6 @@ const logicViews: View[] = [
 ];
 const automateViews: View[] = [
   view("automation", () => t("Automations"), p => p.id ? <AutomationEditor key={p.id} id={p.id} /> : <Automations />),
-  view("alert", () => t("Automations"), p => p.id ? <AutomationEditor key={p.id} id={`alert-${p.id}`} /> : <Automations />),
   view("runs", () => t("Runs"), p => <WorkflowRuns name={p.name ?? ""} initialRun={p.run ?? p.id} onStepSelect={() => {}} />),
 ];
 const workshopViews: View[] = [

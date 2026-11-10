@@ -34,7 +34,7 @@ import { InstalledApplicationHome } from "./InstalledApplicationHome";
 import { ExtensionSettings } from "./ExtensionSettings";
 import { useApplicationLifecycle } from "./application-lifecycle";
 
-const editorCreatedKinds = new Set(["table", "alert", "function", "agent", "evaluation-set", "sample-set", "test-plan", "interface", "connection", "source", "dataset", "pipeline", "writeback", "matching"]);
+const editorCreatedKinds = new Set(["table", "function", "agent", "evaluation-set", "sample-set", "test-plan", "interface", "connection", "source", "dataset", "pipeline", "writeback", "matching"]);
 
 function NewResourceMenu({ application, onCreated, children, disabled, area }: { application: string; area?: string; onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
   const { catalog , holds} = useHost();

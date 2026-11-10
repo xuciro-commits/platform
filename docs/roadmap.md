@@ -29,7 +29,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范：[7-system §7.6–7.7](7-system/README.md)、[7-system/verification §7.8](7-system/verification.md)、[6-domain R9](6-domain/README.md)、[1-enterprise §1.2](1-enterprise.md)。形状已由棘轮锁住（`scripts/shape-baseline.json`，每条完成时把基线调低）；本段删掉为不存在的历史保留的路径，让后面要搬的代码变少。
 
-- [ ] E3 删除纪元前记录路径：`work.view` v0、对象草稿内嵌动作迁出、`build.testplan` 缺 `variant` 推断、旧告警迁移、Predicate v1、`build_transactions_legacy.go`、`data_compat.go`、单体 `manufacturing.json`。完成标准：6-domain 与 7-system 的“纪元前”差距条目删除。
+- [ ] E3 删除纪元前记录路径：`work.view` v0、对象草稿内嵌动作迁出、`build.testplan` 缺 `variant` 推断、`build_transactions_legacy.go`、`data_compat.go`。完成标准：6-domain 与 7-system 的“纪元前”差距条目删除。
 - [ ] E4 取消特殊租户：删除 `system` 租户的源码与发布记录、`kernel/systemscope`、`services/apps/system`、界面的“平台自身”与只读 Releases 视图；先核对 `cmd/platform-updater` 对 `systemscope` 的依赖并把宿主升级留在 Host Console。完成标准：7-system 现存差距中两处 `kernel/systemscope` 依赖消除。
 
 ### 二、内核回到 kernel
@@ -72,4 +72,3 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 代码中与规范冲突、尚未排期的小项；顺手修掉即删除。
 
 - “隔离”一词指三件事：租户数据隔离、租户因不一致转为只读、函数的隔离计算；规范与界面文案尚未分开命名。
-- [5-experience](5-experience.md) 与 [6-domain/packages §6.26](6-domain/packages.md) 的“存量拆包”路径仍以单体制造包为起点；E3 删除该包后改写为通用的所有权转移。

@@ -88,17 +88,22 @@
                 "name": "configured",
                 "kind": "branch",
                 "condition": {
-                  "op": "eq",
-                  "left": {
-                    "source": "subject",
-                    "path": [
-                      "upstreamstart"
-                    ]
-                  },
-                  "right": {
-                    "source": "literal",
-                    "value": true
-                  }
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "ref": "subject.upstreamstart"
+                    },
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "lit": {
+                        "value": true
+                      }
+                    }
+                  ]
                 },
                 "cases": {
                   "true": "start",

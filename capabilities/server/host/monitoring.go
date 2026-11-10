@@ -40,6 +40,15 @@ type MonitoringRetryTarget struct {
 	ID   string `json:"id"`
 }
 
+type MonitoringAlert struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Object  string `json:"object,omitempty"`
+	Repeat  bool   `json:"repeat"`
+	Message string `json:"message"`
+	Role    string `json:"role"`
+}
+
 type MonitoringCoverage struct {
 	Source     string `json:"source"`
 	Readable   bool   `json:"readable"`

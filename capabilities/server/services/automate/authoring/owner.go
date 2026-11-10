@@ -25,7 +25,6 @@ type Environment interface {
 	Query(string, int) (platform.NamedQuery, int, bool)
 	ValidateQuery(platform.NamedQuery) error
 	CheckIntake(platform.Caller, Process) *kernel.Error
-	PrepareAlertReferences(platform.Caller, Alert, Process) (func(*pb.ChangeRecord), error)
 	FunctionCallAction() string
 	FunctionResult(platform.Caller, string) (FunctionOutcome, bool)
 	JointMode() bool
@@ -75,15 +74,8 @@ func (o *Owner) ProcessActions() []platform.Action {
 	return platform.EntityActions(o.ProcessEntity())
 }
 
-func (o *Owner) MigrationActions() []platform.Action {
-	return []platform.Action{
-		{Schema: schemaAlertDraftMigrate, Target: ProcessType, Title: "Migrate alert draft", Description: "Retain an unpublished alert as an editable automation draft.", Automation: true, Payload: []platform.Field{{Name: "alert", Type: "string", Required: true}}},
-		{Schema: schemaAlertMigrate, Target: ProcessType, Title: "Migrate alert to automation", Description: "Retain an existing alert as a normal automation with a notification effect.", Automation: true, Payload: []platform.Field{{Name: "alert", Type: "string", Required: true}}},
-	}
-}
-
 func (o *Owner) Entities() []platform.Entity {
-	return []platform.Entity{o.ProcessEntity(), o.AlertEntity()}
+	return []platform.Entity{o.ProcessEntity()}
 }
 
 func (o *Owner) QualifiedName(name string) string {
@@ -294,7 +286,7 @@ func (o *Owner) Flow(p Process) platform.Flow {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
 			}
 			info, _ := o.env.Entity(p.Object)
-			return automateowner.Notify(o.env.Host().Caller(c, member, o.env.AppID()), r, step, n, p.Object, info.Display, p.LegacyAlert, subject, r.Now), nil
+			return automateowner.Notify(o.env.Host().Caller(c, member, o.env.AppID()), r, step, n, p.Object, info.Display, subject, r.Now), nil
 		},
 		Paused: func(c platform.Caller) bool {
 			current, ok := platform.Get[Process](o.env.Host().Automation(c, o.env.AppID()), p.ID)

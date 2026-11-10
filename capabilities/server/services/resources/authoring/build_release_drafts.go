@@ -333,14 +333,6 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 		}
 		return b.CodeDraftAssets(id)
 	}
-	if kind == platform.AssetAlert {
-		before, err = b.ReleaseAssets()
-		if err != nil {
-			return
-		}
-		after, prior, next, hadPrior, err = b.automation.AlertDraftAssets(before, id)
-		return
-	}
 	if kind == platform.AssetFunction {
 		return b.functions.DraftAssets(id)
 	}

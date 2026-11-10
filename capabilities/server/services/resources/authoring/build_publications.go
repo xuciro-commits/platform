@@ -9,7 +9,7 @@ import (
 )
 
 func (b *Build) AcceptedPublicationSchemas() []string {
-	return append(acceptedPublicationSchemas(), b.automation.AcceptedPublicationSchemas()...)
+	return acceptedPublicationSchemas()
 }
 
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, error) {

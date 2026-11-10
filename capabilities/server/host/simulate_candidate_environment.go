@@ -146,14 +146,6 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		if asset.Ref.Kind == platform.AssetObject && slices.ContainsFunc(b.Manifest().Entities, func(e platform.Entity) bool { return e.Type == asset.Ref.Name }) {
 			continue
 		}
-		if asset.Ref.Kind == platform.AssetAlert {
-			alert, _, err := b.AcceptedAlert(asset)
-			if err != nil {
-				return nil, err
-			}
-			definitions[build.AlertType] = append(definitions[build.AlertType], records.StoredState{Value: platform.Raw(alert)})
-			continue
-		}
 		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetValueType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetObjectTypeGroup || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || b.DefinitionMetadataKind(asset.Ref.Kind) {
 			continue
 		}

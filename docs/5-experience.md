@@ -143,7 +143,7 @@ read-when: 设计或改变一条用户任务路径、写界面文案与翻译、
 1. Marketplace → Catalog → 产品详情 → “Install” → 目标项目、角色映射、标记映射 → 安装审阅 → 确认。
 2. 有新版本时 Updates → 升级/降级审阅（列出受影响的客户扩展）→ 确认。
 3. Installed → “Mark for uninstall” → “Retire” → 审阅退役影响 → 确认；Retired 页签用同一精确版本重装。
-4. 存量拆包：逐个目标产品“Transfer existing resources…” → 审阅 → “Transfer ownership” → 普通安装；共享产品先完成，旧产品最后退役。资源身份与业务记录保持不变。
+4. 所有权转移：目标产品“Transfer existing resources…” → 审阅 → “Transfer ownership” → 普通安装；被依赖的产品先完成，原产品最后退役。资源身份与业务记录保持不变。
 
 成功标准：安装前看到将创建的全部资源与所需权限；升级不使客户扩展失效，或在审阅中提前指出；退役保留业务记录、扩展、历史与媒体，重装恢复本包定义且不复制数据。
 

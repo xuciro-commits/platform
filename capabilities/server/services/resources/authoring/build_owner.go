@@ -95,14 +95,13 @@ func New(tenant string) *Build {
 	actions = append(actions, dispatchActions()...)
 	actions = append(actions, platform.EntityActions(b.tableEntity())...)
 	actions = append(actions, platform.EntityActions(b.agentEntity())...)
-	actions = append(actions, b.automation.MigrationActions()...)
 	actions = append(actions, platform.EntityActions(b.sampleSetEntity())...)
 	actions = append(actions, codeActions()...)
 	actions = append(actions, platform.EntityActions(b.productEntity())...)
 	actions = append(actions, productVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionCallType, EvaluationType, CodeType, TableType, AgentType, automationauthoring.AlertType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionCallType, EvaluationType, CodeType, TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), classes...)
 	return b
@@ -132,7 +131,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), b.agentEntity(), b.automation.AlertEntity(), b.codeEntity(), b.tableEntity(), b.sampleSetEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), b.agentEntity(), b.codeEntity(), b.tableEntity(), b.sampleSetEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -562,7 +561,6 @@ type ConstructionSandbox interface {
 	platform.AssetDefinitionReader
 	Reinstall() error
 	BeginAssetBootstrap([]platform.ReleaseAsset) (func(), error)
-	AcceptedAlert(platform.ReleaseAsset) (automationauthoring.Alert, int, error)
 	ProcessFromAsset(platform.ReleaseAsset) (automationauthoring.Process, error)
 	InstallDefinitionAsset(platform.ReleaseAsset) error
 	InstallFunctionAsset(platform.ReleaseAsset) error

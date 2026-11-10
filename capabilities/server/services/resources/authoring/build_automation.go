@@ -14,10 +14,6 @@ func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (automationauthori
 	return b.automation.ProcessFromAsset(asset)
 }
 
-func (b *Build) AcceptedAlert(asset platform.ReleaseAsset) (automationauthoring.Alert, int, error) {
-	return b.automation.AcceptedAlert(asset)
-}
-
 func (b *Build) FlowReleaseAsset(name string, version int) (platform.ReleaseAsset, error) {
 	return b.automation.FlowReleaseAsset(name, version)
 }

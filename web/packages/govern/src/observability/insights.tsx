@@ -112,17 +112,17 @@ export function MonitoringTracesView() {
 }
 
 export function MonitoringAlertsView() {
-  const query = useReadQuery<Api.Alert[]>("/v1/monitoring/alerts", 5000);
+  const query = useReadQuery<Api.MonitoringAlert[]>("/v1/monitoring/alerts", 5000);
   const { open } = useWorkspace();
   return <>
-    <PageHeader title={t("Alerts")} help={t("Active alert rules are authored in Automate. Monitoring shows what is armed and links to the rule; evaluation, work and notifications stay with Automate.")} />
+    <PageHeader title={t("Alerts")} help={t("Alerts are automations with a notification effect, authored in Automate. Monitoring shows what is armed and links to the automation; evaluation, work and notifications stay with Automate.")} />
     <ReadResult query={query}>{(alerts) => alerts.length === 0
-      ? <EmptyState title={t("No active alerts")} hint={t("Create an alert rule in Automate, then return here to see it armed.")}
-        action={<Button size="sm" onClick={() => open({ view: "alert" })}>{t("Open Automate alerts")}</Button>} />
+      ? <EmptyState title={t("No active alerts")} hint={t("Create an automation with a notification effect in Automate, then return here to see it armed.")}
+        action={<Button size="sm" onClick={() => open({ view: "automation" })}>{t("Open Automate")}</Button>} />
       : <div className="grid gap-2">{alerts.map((alert) => <Card key={alert.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
-        <Button variant="link" className="h-auto min-w-0 p-0 text-left font-medium" onClick={() => open({ view: "alert", params: { id: alert.id } })}>{alert.title}</Button>
-        <Tag label={`${alert.object}.${alert.field} ${alert.operator} ${alert.value ?? ""}`} tone="info" />
-        <Tag label={alert.every ? t("Every match") : t("Once per record")} />
+        <Button variant="link" className="h-auto min-w-0 p-0 text-left font-medium" onClick={() => open({ view: "automation", params: { id: alert.id } })}>{alert.title}</Button>
+        {alert.object && <Tag label={alert.object} tone="info" />}
+        <Tag label={alert.repeat ? t("Every match") : t("Once per record")} />
         <span className="text-xs text-muted">{alert.message}</span>
       </Card>)}</div>}</ReadResult>
   </>;

@@ -24,7 +24,7 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	if descriptor.kind == platform.AssetSampleSet {
 		return sampleSetInstallation(image)
 	}
-	if descriptor.typ == automationauthoring.ProcessType || descriptor.typ == automationauthoring.AlertType {
+	if descriptor.typ == automationauthoring.ProcessType {
 		return b.automation.DecodeInstallation(schema, image)
 	}
 	if b.apps.HandlesPublication(schema) {
@@ -188,12 +188,6 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 			}
 		}
 		return "", nil, fmt.Errorf("compute %s needs its original compiled target owner; a module descriptor does not carry source or compilation evidence", asset.Ref)
-	case platform.AssetAlert:
-		typ, record, handled, err := b.automation.Draft(asset)
-		if !handled {
-			return "", nil, fmt.Errorf("alert asset has no automation owner")
-		}
-		return typ, record, err
 	}
 	return "", nil, nil
 }
