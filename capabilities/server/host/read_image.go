@@ -18,7 +18,7 @@ import (
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/data/lineage"
-	computeowner "platformserver/services/functions/runtime"
+	"platformserver/services/functions/runtime"
 )
 
 type tenantReadImage struct {
@@ -238,7 +238,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	t.opsMu.Lock()
 	view.rotation = t.rotation
 	t.opsMu.Unlock()
-	view.staged = computeowner.NewChannel(t.ID, view.files)
+	view.staged = compute.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())
 	view.claims = t.claims.Fork(t.ID)
 	view.DefinitionEpoch.Store(t.DefinitionEpoch.Load())

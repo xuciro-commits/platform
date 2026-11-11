@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	dataowner "platformserver/services/data"
+	"platformserver/services/functions/runtime"
 	"slices"
 	"strings"
 	"time"
@@ -340,7 +341,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 			}
 			continue
 		}
-		var binding operationBinding
+		var binding compute.OperationBinding
 		if json.Unmarshal([]byte(effect.Body), &binding) != nil {
 			coverage.Limitation = "input-unavailable"
 			continue

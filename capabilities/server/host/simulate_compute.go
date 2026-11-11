@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 
 	"time"
@@ -23,7 +24,7 @@ func pendingComputeEffects(t *Tenant) []platform.Effect {
 func settleComputeFixture(t *Tenant, actor platform.Member, fixture platform.ComputeFixture, now time.Time) (bool, error) {
 	var matched []platform.Effect
 	for _, effect := range pendingComputeEffects(t) {
-		var binding operationBinding
+		var binding compute.OperationBinding
 		if json.Unmarshal([]byte(effect.Body), &binding) == nil && binding.Definition.Name == fixture.Name && (fixture.App == "" || fixture.App == effect.App) {
 			matched = append(matched, effect)
 		}
@@ -34,7 +35,7 @@ func settleComputeFixture(t *Tenant, actor platform.Member, fixture platform.Com
 	if len(matched) != 1 {
 		return false, fmt.Errorf("one fixture needs exactly one matching pending compute call")
 	}
-	var binding operationBinding
+	var binding compute.OperationBinding
 	json.Unmarshal([]byte(matched[0].Body), &binding)
 	outcome := platform.Outcome{Effect: matched[0].ID, Result: "rejected", Detail: fixture.Error}
 	if fixture.ExpectState == "completed" {

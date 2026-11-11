@@ -11,6 +11,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	"platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"strings"
@@ -423,7 +424,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		return nil
 	}
 	if x.Endpoint == acceptedformat.OperationEndpoint {
-		draft.operationAnswers = map[string]platform.OperationResult{x.ID: operationResultOf(x)}
+		draft.operationAnswers = map[string]platform.OperationResult{x.ID: compute.ResultOf(x)}
 		processesOwner := t.procs
 		if app, ok := t.procs.(platform.App); ok {
 			processesOwner = draft.stateApp(app).(platform.Processes)

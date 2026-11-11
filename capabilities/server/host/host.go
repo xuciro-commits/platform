@@ -12,7 +12,7 @@ import (
 	knowledgeindex "platformserver/services/ai/retrieval"
 	"platformserver/services/data/blobs"
 	"platformserver/services/data/transform"
-	computeowner "platformserver/services/functions/runtime"
+	"platformserver/services/functions/runtime"
 
 	runtimekernel "platformserver/kernel"
 	"platformserver/services/devops/releases"
@@ -61,7 +61,7 @@ type Tenant struct {
 	ownerSet
 	releases      releases.Store
 	console       controlowner.HostState
-	staged        computeowner.Channel
+	staged        compute.Channel
 	definitions   []platform.Definition
 	flowArtifacts flowArtifactGC
 	audit         runtimekernel.AuditLog
@@ -83,7 +83,7 @@ type Tenant struct {
 	endpoints     []*actions.Endpoint
 	outbound      actions.Outbox
 	tenantPorts
-	cancels  computeowner.Cancels
+	cancels  compute.Cancels
 	memFiles resources.MemoryFiles
 	uploads  resources.Uploads
 
@@ -117,7 +117,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		t.agentEvaluator = services.NewAgentEvaluator()
 	}
 	t.Projection.SetRules(services.Rules)
-	t.staged = computeowner.NewChannel(id, t.files)
+	t.staged = compute.NewChannel(id, t.files)
 	t.i18n = transport.NewTranslator(func() []platform.App { return t.apps },
 		func(a platform.App) platform.Manifest { return transport.ManifestOf(a, t.definitionsFingerprint()) },
 		t.words.Clone, PlatformLanguages)

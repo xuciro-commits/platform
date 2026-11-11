@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/services/functions/runtime"
 	"strings"
 
 	"platformserver/platform"
@@ -14,7 +15,7 @@ func (t *Tenant) pageOperation(binding *platform.AssetBinding) (platform.Operati
 	}
 	app := t.App(binding.Ref.App)
 	if app != nil && binding.SourceVersion == app.Manifest().Version {
-		if op, version, exists := operationDefinition(app, binding.Ref.Name, 0); exists && version == 0 && op.Binding.Kind == "native" {
+		if op, version, exists := compute.OperationDefinition(app, binding.Ref.Name, 0); exists && version == 0 && op.Binding.Kind == "native" {
 			return op, 0, nil
 		}
 	}

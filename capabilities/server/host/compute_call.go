@@ -9,6 +9,7 @@ import (
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"time"
@@ -34,11 +35,11 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 		var version int
 		var declared bool
 		if app != nil {
-			op, version, declared = operationDefinition(app, q.Name, q.Version)
+			op, version, declared = compute.OperationDefinition(app, q.Name, q.Version)
 		}
 		callID := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, q.App, q.Key, acceptedformat.OperationEndpoint)
 		if x, ok := t.outbound.Get(callID); ok {
-			var previous operationBinding
+			var previous compute.OperationBinding
 			if json.Unmarshal([]byte(x.Body), &previous) == nil && previous.SealedInput != nil {
 				op, version, declared = previous.Definition, previous.Call.Version, true
 			}
@@ -124,7 +125,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 		}
 	}
 	if x, ok := t.outbound.Get(id); ok {
-		var binding operationBinding
+		var binding compute.OperationBinding
 		if json.Unmarshal([]byte(x.Body), &binding) == nil {
 			if prepared != nil {
 				retained = binding.SealedInput != nil && binding.SealedInput.Ticket == prepared.ref.Ticket

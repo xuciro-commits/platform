@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/services/functions/runtime"
 
 	"slices"
 	"strings"
@@ -27,7 +28,7 @@ func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, 
 	if platform.EffectSettled(x.State) {
 		return nil
 	}
-	var b operationBinding
+	var b compute.OperationBinding
 	_ = json.Unmarshal([]byte(x.Body), &b)
 	if c.Automation {
 		target := r.GetSubmission().GetTarget()
@@ -129,5 +130,5 @@ func (h hostView) Operation(app, name string, version int) (platform.Operation, 
 	if owner == nil {
 		return platform.Operation{}, 0, false
 	}
-	return operationDefinition(owner, name, version)
+	return compute.OperationDefinition(owner, name, version)
 }

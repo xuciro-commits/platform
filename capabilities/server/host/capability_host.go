@@ -6,6 +6,7 @@ import (
 	"platformserver/platform"
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/functions/authoring"
+	"platformserver/services/functions/runtime"
 	"slices"
 	"strconv"
 )
@@ -81,7 +82,7 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 			}
 		}
 	case platform.AssetCompute:
-		operation, ordinal, ok := operationDefinition(app, ref.Name, version)
+		operation, ordinal, ok := compute.OperationDefinition(app, ref.Name, version)
 		caller := platform.NewCaller(runtime{t: t}, m, ref.App, false, false)
 		if !ok || ordinal != version || !t.authorizeCapability(caller, ref.App, operation.Name, operation.Roles, true, authorizationDetails{}).Allow {
 			return platform.CapabilityDescriptor{}, false

@@ -4,7 +4,7 @@ import trialowner "platformserver/services/devops/trials"
 
 import transport "platformserver/kernel/transport"
 
-import computeowner "platformserver/services/functions/runtime"
+import "platformserver/services/functions/runtime"
 
 import releaseowner "platformserver/services/devops/releases"
 
@@ -117,7 +117,7 @@ func (h *Host) routesBuild(rt *routes) {
 		if !readCapabilityBody(w, r, &q) {
 			return
 		}
-		source, err := computeowner.GenerateComputeSDK(q.Input, q.Output, q.ABI)
+		source, err := compute.GenerateComputeSDK(q.Input, q.Output, q.ABI)
 		if err != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error()))
 			return

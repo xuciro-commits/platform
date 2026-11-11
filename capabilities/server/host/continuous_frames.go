@@ -13,6 +13,7 @@ import (
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/services/functions/runtime"
 	"slices"
 	"time"
 )
@@ -485,7 +486,7 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 		if !ok || current.Tenant != t.ID || owner == nil {
 			return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared window Compute owner or member is unavailable")
 		}
-		op, version, ok := operationDefinition(owner, request.Name, request.Version)
+		op, version, ok := compute.OperationDefinition(owner, request.Name, request.Version)
 		if !ok || op.Check() != nil {
 			return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The prepared window Compute operation is not retained")
 		}

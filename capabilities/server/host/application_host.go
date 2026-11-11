@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -281,7 +282,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 			}
 			out := []appowner.Computation{}
 			for _, effect := range effects {
-				var binding operationBinding
+				var binding compute.OperationBinding
 				if json.Unmarshal([]byte(effect.Body), &binding) != nil || binding.Build != nil {
 					continue
 				}
