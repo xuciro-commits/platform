@@ -188,6 +188,7 @@ func (h flowExecution) Submit(c platform.Caller, s *pb.Submission, at time.Time)
 	return platform.Decide(c, owner, s, at)
 }
 
+func (r *flowExecutionRuntime) StagedDecision() platform.StagedDecision { return r }
 func (r *flowExecutionRuntime) DecisionCatalog(ledger *platform.Ledger) *platform.Catalog {
 	for _, owner := range r.view.apps {
 		if owner.AcceptedLedger() == ledger {

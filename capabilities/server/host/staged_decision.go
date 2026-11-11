@@ -95,9 +95,10 @@ func (d *stagedDecision) InputRefused(err *kernel.Error, issues []platform.Field
 	d.inputIssues[err] = issues
 }
 
-func (d *stagedDecision) StagedDecision() platform.StagedDecision { return d }
-func (d *stagedDecision) ReadScoped() bool                        { return true }
-func (d *stagedDecision) Probing() bool                           { return d.probing }
+func (d *stagedDecision) StagedDecision() platform.StagedDecision            { return d }
+func (d *stagedDecision) ReadScoped() bool                                   { return true }
+func (d *stagedDecision) DecisionCatalog(*platform.Ledger) *platform.Catalog { return nil }
+func (d *stagedDecision) Probing() bool                                      { return d.probing }
 
 func (d *stagedDecision) FailDecision(err *kernel.Error) {
 	if d.failure == nil {

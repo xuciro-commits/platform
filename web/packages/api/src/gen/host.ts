@@ -657,14 +657,10 @@ export type ApprovalRequest = {
   submission: string;
   level: number;
   levels: ApprovalStep[];
-  state: "pending" | "approved" | "rejected" | "refused" | "withdrawn" | "redirected";
+  state: "pending" | "approved" | "rejected" | "refused" | "withdrawn";
   outcome?: string;
   rejectedBy?: string;
   release?: string;
-  redirectAction?: string;
-  redirectRelease?: string;
-  redirectTo?: string;
-  redirectedBy?: string;
 };
 
 export type ApprovalStep = {

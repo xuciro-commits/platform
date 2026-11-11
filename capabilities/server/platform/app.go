@@ -140,6 +140,7 @@ func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 type StagedDecision interface {
 	HoldChanges(*Ledger) (release func(), refusal *kernel.Error)
 	DraftChanges(*Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog
+	DecisionCatalog(*Ledger) *Catalog
 	FailDecision(*kernel.Error)
 	RecordAuthorization(Caller, AuthzRequest, AuthzDecision)
 	BusinessRefused(*kernel.Error, BusinessRefusalFact)
@@ -174,10 +175,6 @@ func (c Caller) probing() bool {
 }
 
 func (c Caller) ReadScoped() bool { return c.rt != nil && c.rt.ReadScoped() }
-
-type DecisionDeclarationRuntime interface {
-	DecisionCatalog(*Ledger) *Catalog
-}
 
 func (c Caller) FailDecision(err *kernel.Error) {
 	if err == nil {

@@ -228,8 +228,8 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 }
 
 func (l *Ledger) catalogFor(c Caller) *Catalog {
-	if bound, ok := c.rt.(DecisionDeclarationRuntime); ok {
-		if selected := bound.DecisionCatalog(l); selected != nil {
+	if draft := c.StagedDecision(); draft != nil {
+		if selected := draft.DecisionCatalog(l); selected != nil {
 			return selected
 		}
 	}

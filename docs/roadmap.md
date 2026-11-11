@@ -34,7 +34,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范：[7-system §7.2–7.3](7-system/README.md)、[concurrency](7-system/concurrency.md)。完成标准（整段）：`host` 不超过 1.5 万行且没有 `acceptance_*.go`；`kernel` 不导入任何服务；K1、K2、K3、K13（含 `-race`）不改断言通过。
 
-- [ ] N3 一个拥有者接口：决定、应用、分叉、读取四个方法；分叉已是 `platform.App.Fork(ledger)`（读取映像传入分叉账本，暂存决定与安装传入原账本），快照、恢复与快照格式已是 `platform.App` 的方法；`AcceptedStateApp`（4 个拥有者的状态映像，应用与恢复语义不同，如 Console 应用时结束停用成员的会话）与 `AcceptedInputApp`（只有 AI）是少数拥有者的真实能力，不给其余拥有者写空实现，改为注册时按类型登记；两种运行时都实现的扩展已并入 `platform.Runtime`，只由暂存决定实现的能力已是 `platform.StagedDecision` 句柄；拥有者角色（身份、目录、链接、模型、任务、流程、智能体、术语、观察者、监听）已由 `host/owner_roles.go` 按启用的拥有者一次登记；余下 `DecisionDeclarationRuntime`（只有保留发布执行覆盖）与约 247 处探测（多为服务与宿主之间的可选接口）继续按注册时类型收敛；`AcceptedStateApp`、`AcceptedInputApp` 与资产生命周期拥有者的登记要等读取映像与暂存视图不再逐个替换 `apps` 才能持有实例。内核只有一个实现，`KernelFactory` 与其七个接口已删除，Ledger 直接持有 `contract/go/kernel` 的具体类型。服务不再自建 Ledger：`platform/ledger.go` 的接受语义与 `contract/go/kernel` 的实现并入 `kernel`，`Error` 等值类型进 `platform`，`contract/go` 只留协议生成代码。各服务经此接口持有自己的状态：`host.Tenant` 余下的 65 个字段（副作用队列 `outbound` 与 `endpoints` 及与工作板、配额共用的 `opsMu`，各服务的拥有者绑定与运行状态）随各服务实现该接口移出；之后读取映像不再复制整个 `Tenant`，随之进 `kernel.Sequence`。
+- [ ] N3 一个拥有者接口：决定、应用、分叉、读取四个方法；分叉已是 `platform.App.Fork(ledger)`（读取映像传入分叉账本，暂存决定与安装传入原账本），快照、恢复与快照格式已是 `platform.App` 的方法；`AcceptedStateApp`（4 个拥有者的状态映像，应用与恢复语义不同，如 Console 应用时结束停用成员的会话）与 `AcceptedInputApp`（只有 AI）是少数拥有者的真实能力，不给其余拥有者写空实现，改为注册时按类型登记；两种运行时都实现的扩展已并入 `platform.Runtime`，只由暂存决定实现的能力已是 `platform.StagedDecision` 句柄；拥有者角色（身份、目录、链接、模型、任务、流程、智能体、术语、观察者、监听）已由 `host/owner_roles.go` 按启用的拥有者一次登记；保留发布执行的决定目录已是暂存决定句柄的方法；余下约 245 处探测（多为服务与宿主之间的可选接口）继续按注册时类型收敛；`AcceptedStateApp`、`AcceptedInputApp` 与资产生命周期拥有者的登记要等读取映像与暂存视图不再逐个替换 `apps` 才能持有实例。内核只有一个实现，`KernelFactory` 与其七个接口已删除，Ledger 直接持有 `contract/go/kernel` 的具体类型。服务不再自建 Ledger：`platform/ledger.go` 的接受语义与 `contract/go/kernel` 的实现并入 `kernel`，`Error` 等值类型进 `platform`，`contract/go` 只留协议生成代码。各服务经此接口持有自己的状态：`host.Tenant` 余下的 65 个字段（副作用队列 `outbound` 与 `endpoints` 及与工作板、配额共用的 `opsMu`，各服务的拥有者绑定与运行状态）随各服务实现该接口移出；之后读取映像不再复制整个 `Tenant`，随之进 `kernel.Sequence`。
 - [ ] N4 一个提交入口：`submit` 五层合为一个函数加选项结构；幂等只留映像预检与车道内提交两处；`quarantine` 只留应用不一致与位置不一致两处，其余改为拒绝或运行失败。
 - [ ] N5 接受路径迁入 `kernel`：`host/acceptance_*.go` 中属于接受语义的部分进 `kernel`，属于某类资源的部分进它的服务；`host` 只剩 HTTP、身份、租户装配与后台调度。
 
@@ -67,5 +67,4 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 代码中与规范冲突、尚未排期的小项；顺手修掉即删除。
 
-- 审批退役与重定向是死路径（6-domain）：`platform.Caller.CheckApprovalRetirement` 没有运行时实现，`work.approval.retire` 总被拒绝，因此只由它产生的 `redirected` 审批、`services/work/redirect.go` 的重定向作业与 `ApprovalRequest` 的重定向字段从不生效（实现随旧租户迁移机制一并删除）。删除 `services/work/retirement.go`、`redirect.go`、`ApprovalRetirementOwner`、`ApprovalRetirementRuntime` 与相关字段、状态和文案。
 - “隔离”一词指三件事：租户数据隔离、租户因不一致转为只读、函数的隔离计算；规范与界面文案尚未分开命名。

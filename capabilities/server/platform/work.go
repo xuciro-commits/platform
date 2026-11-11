@@ -66,43 +66,20 @@ type ApprovalOwner interface {
 	RequestApproval(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
 }
 
-type ApprovalRetirementOwner interface {
-	App
-	RetireApproval(Caller, string, string, time.Time) *kernel.Error
-}
-
-type ApprovalRetirementRuntime interface {
-	CheckApprovalRetirement(Caller, string, string) (ApprovalRetirement, *kernel.Error)
-}
-
-type ApprovalRetirement struct{ Actor, Redirect, Release string }
-
-func (c Caller) CheckApprovalRetirement(migration, approval string) (ApprovalRetirement, *kernel.Error) {
-	runtime, ok := c.rt.(ApprovalRetirementRuntime)
-	if !ok || !c.Staging() || c.Replaying {
-		return ApprovalRetirement{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Approval retirement requires a private migration")
-	}
-	return runtime.CheckApprovalRetirement(c, migration, approval)
-}
-
 type ApprovalRequest struct {
 	Record
-	Action          string         `json:"action" field:"readonly,search" source:"record"`
-	Title           string         `json:"title" field:"readonly,search" source:"record"`
-	App             string         `json:"app" field:"readonly" source:"record"`
-	Target          string         `json:"target" field:"readonly,search" source:"record"`
-	Requester       string         `json:"requester" field:"readonly" source:"record"`
-	Submission      string         `json:"submission" field:"readonly" type:"longtext"`
-	Level           int            `json:"level" field:"readonly"`
-	Levels          []ApprovalStep `json:"levels" field:"readonly"`
-	State           string         `json:"state" field:"readonly" choices:"pending,approved,rejected,refused,withdrawn,redirected"`
-	Outcome         string         `json:"outcome,omitempty" field:"readonly" source:"user-input"`
-	RejectedBy      string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by" source:"record"`
-	Release         string         `json:"release,omitempty" field:"readonly" source:"record"`
-	RedirectAction  string         `json:"redirectAction,omitempty" field:"readonly" source:"record" title:"Redirect action"`
-	RedirectRelease string         `json:"redirectRelease,omitempty" field:"readonly" source:"record" title:"Redirect release"`
-	RedirectTo      string         `json:"redirectTo,omitempty" field:"readonly" source:"record" title:"Redirect to"`
-	RedirectedBy    string         `json:"redirectedBy,omitempty" field:"readonly" source:"record" title:"Redirected by"`
+	Action     string         `json:"action" field:"readonly,search" source:"record"`
+	Title      string         `json:"title" field:"readonly,search" source:"record"`
+	App        string         `json:"app" field:"readonly" source:"record"`
+	Target     string         `json:"target" field:"readonly,search" source:"record"`
+	Requester  string         `json:"requester" field:"readonly" source:"record"`
+	Submission string         `json:"submission" field:"readonly" type:"longtext"`
+	Level      int            `json:"level" field:"readonly"`
+	Levels     []ApprovalStep `json:"levels" field:"readonly"`
+	State      string         `json:"state" field:"readonly" choices:"pending,approved,rejected,refused,withdrawn"`
+	Outcome    string         `json:"outcome,omitempty" field:"readonly" source:"user-input"`
+	RejectedBy string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by" source:"record"`
+	Release    string         `json:"release,omitempty" field:"readonly" source:"record"`
 }
 
 type ApprovalStep struct {

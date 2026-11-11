@@ -84,8 +84,6 @@ func (w *Work) RequestApproval(c platform.Caller, held *pb.Submission, now time.
 func New(tenant string) *Work {
 	w := &Work{}
 	var actions []platform.Action
-	actions = append(actions, retirementAction())
-	actions = append(actions, redirectAction())
 	actions = append(actions, refusalEscalationAction())
 	actions = append(actions, taskActions()...)
 	for _, e := range w.entities() {
@@ -126,7 +124,7 @@ func (w *Work) entities() []platform.Entity {
 			Lifecycle: &platform.Lifecycle{Field: "state", Initial: "pending",
 				States: []platform.State{{Name: "pending", Title: "Pending", Tone: "warning"}, {Name: "approved", Title: "Approved", Tone: "success"},
 					{Name: "rejected", Title: "Rejected", Tone: "danger"}, {Name: "refused", Title: "Refused when run", Tone: "danger"},
-					{Name: "withdrawn", Title: "Withdrawn", Tone: "neutral"}, {Name: "redirected", Title: "Redirected", Tone: "info"}},
+					{Name: "withdrawn", Title: "Withdrawn", Tone: "neutral"}},
 				Transitions: []platform.Transition{
 					{Name: "approve", Title: "Approve", From: []string{"pending"}, To: []string{"pending", "approved", "refused"}, Roles: everyone, Capability: "approvals",
 						Description: "Approve at the level you are an approver of; the last approval runs the held action with the rules of that moment.",
@@ -176,7 +174,7 @@ func (w *Work) Restore(raw json.RawMessage) error { return w.ledger.Restore(raw)
 func (w *Work) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
 		Reads: []string{"inbox", "requests", "views"}, Everyone: []string{"inbox", "requests", "views"},
-		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}, {Name: "redirects", Title: "Start redirected approvals after release activation", Every: time.Second}, {Name: "refusals", Title: "Escalate repeated business refusals", Every: time.Second}}}
+		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}, {Name: "refusals", Title: "Escalate repeated business refusals", Every: time.Second}}}
 }
 
 func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Declarations() }
@@ -195,10 +193,6 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 			return w.createTask(c, s, now)
 		case schemaRefusalEscalation:
 			return w.escalateRefusal(c, s, now)
-		case schemaRetireApproval:
-			return w.retireApproval(c, s, now)
-		case schemaRedirectApproval:
-			return w.redirectApproval(c, s, now)
 		case SchemaDelegate, SchemaUndelegate:
 			return w.delegate(c, s)
 		case SchemaViewSave, SchemaViewRemove:
@@ -530,9 +524,6 @@ func (w *Work) Read(c platform.Caller, name string) (any, *kernel.Error) {
 }
 
 func (w *Work) Run(c platform.Caller, name string, now time.Time) *kernel.Error {
-	if name == "redirects" {
-		return w.runRedirects(c, now)
-	}
 	if name == "refusals" {
 		return w.runRefusalEscalations(c, now)
 	}

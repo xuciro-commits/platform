@@ -311,10 +311,7 @@ func (t *Tenant) initializeResources(now time.Time) error {
 			return refusal
 		}
 	}
-	if err := t.migrateLegacyResourceProjects(owner, now); err != nil {
-		return err
-	}
-	return nil
+	return t.migrateLegacyResourceProjects(owner, now)
 }
 
 type legacyResourceProject struct {

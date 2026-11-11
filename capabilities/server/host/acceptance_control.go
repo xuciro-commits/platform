@@ -80,10 +80,7 @@ func decodeControl(raw []byte, v any) error {
 	if len(raw) == 0 || len(raw) > platform.AcceptedResultMaxBytes {
 		return fmt.Errorf("control image is empty or too large")
 	}
-	if err := platform.DecodeJSON(raw, v, "control image"); err != nil {
-		return err
-	}
-	return nil
+	return platform.DecodeJSON(raw, v, "control image")
 }
 
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
