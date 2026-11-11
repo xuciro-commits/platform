@@ -105,7 +105,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			if (platform.MarkingSet{Level: connection.Marking, Compartments: connection.Compartments}).Guarded() {
 				problem = fmt.Errorf("Reconciliation requires an unclassified source projection")
 			} else {
-				rows, problem = t.sourceReader().Read(source, &connection)
+				rows, problem = t.dataClient().Read(source, &connection)
 			}
 			_, subject, _ := strings.Cut(run.Subject, "/")
 			if policy.KeyInput != "" {

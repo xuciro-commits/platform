@@ -24,7 +24,7 @@ func (t *Tenant) CheckConnections(now time.Time) {
 	})
 	for _, c := range conns {
 		check := dataowner.ConnectionCheck{At: now}
-		detail, err := t.sourceReader().Check(c)
+		detail, err := t.dataClient().Check(c)
 		check.OK, check.Detail = err == nil, detail
 		if err != nil {
 			check.Error = err.Error()

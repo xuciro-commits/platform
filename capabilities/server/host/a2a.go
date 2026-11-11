@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"platformserver/services/actions"
 	"slices"
 	"strings"
 	"time"
@@ -281,7 +282,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect, authorizationHeader bool) platform.Outcome {
+func (t *Tenant) sendA2A(ep actions.Endpoint, x platform.Effect, authorizationHeader bool) platform.Outcome {
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
 	var body struct {
@@ -318,10 +319,7 @@ func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect, authorizationHeader boo
 		}
 		req.Header.Set("Authorization", strings.TrimSpace(value))
 	}
-	send := t.Outbound
-	if send == nil {
-		send = guarded
-	}
+	send := t.sender()
 	resp, err := send(req, ep.AllowPrivate)
 	if err != nil {
 		out.Result, out.Detail = "retry", "no answer (resent as the same message): "+err.Error()

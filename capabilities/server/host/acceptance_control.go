@@ -208,7 +208,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 	case "endpoints":
 		t.opsMu.Lock()
 		defer t.opsMu.Unlock()
-		var endpoints []*Endpoint
+		var endpoints []*actions.Endpoint
 		if err := decodeControl(raw, &endpoints); err != nil {
 			return err
 		}

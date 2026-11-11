@@ -220,7 +220,7 @@ func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *kernel.Error {
 func (t *Tenant) modelProvider(pv platform.AIProvider, dispatch ...func()) providers.Client {
 	send := t.AIClient
 	if send == nil {
-		dialer := guardedDialer(pv.Kind == "local")
+		dialer := actions.GuardedDialer(pv.Kind == "local")
 		client := &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 		send = client.Do
 	}

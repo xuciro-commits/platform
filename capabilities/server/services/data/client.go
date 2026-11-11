@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,12 +25,14 @@ type Credentials interface {
 	CredentialHeader(name, consumer, address string) ([]byte, bool)
 }
 
-type SourceReader struct {
+type Client struct {
 	Credentials Credentials
 	Send        func(req *http.Request, allowPrivate bool) (*http.Response, error)
+	A2A         func(id, url, secret string, allowPrivate bool, x platform.Effect) platform.Outcome
+	Private     error
 }
 
-func (r SourceReader) Read(s Source, conn *Connection) ([]map[string]any, error) {
+func (r Client) Read(s Source, conn *Connection) ([]map[string]any, error) {
 	switch s.Profile {
 	case "odata":
 		return r.readOData(s, *conn)
@@ -54,7 +58,7 @@ func (r SourceReader) Read(s Source, conn *Connection) ([]map[string]any, error)
 	return s.Decode(body)
 }
 
-func (r SourceReader) Authorization(c Connection, target ...string) string {
+func (r Client) Authorization(c Connection, target ...string) string {
 	address := c.Address
 	if len(target) > 0 {
 		address = target[0]
@@ -68,7 +72,7 @@ func (r SourceReader) Authorization(c Connection, target ...string) string {
 	return ""
 }
 
-func (r SourceReader) Fetch(url, header string, allowPrivate bool, accept string) ([]byte, error) {
+func (r Client) Fetch(url, header string, allowPrivate bool, accept string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("the URL is not valid")
@@ -95,7 +99,7 @@ func (r SourceReader) Fetch(url, header string, allowPrivate bool, accept string
 	return body, nil
 }
 
-func (r SourceReader) readOData(s Source, c Connection) ([]map[string]any, error) {
+func (r Client) readOData(s Source, c Connection) ([]map[string]any, error) {
 	q := url.Values{}
 	q.Set("$format", "json")
 	filter := s.Filter
@@ -173,7 +177,7 @@ func odataLiteral(v string) string {
 	return "'" + strings.ReplaceAll(v, "'", "''") + "'"
 }
 
-func (r SourceReader) LatestTableCursor(s Source, c Connection) (string, error) {
+func (r Client) LatestTableCursor(s Source, c Connection) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	conn, err := r.openPostgres(ctx, c)
@@ -205,7 +209,7 @@ func (r SourceReader) LatestTableCursor(s Source, c Connection) (string, error) 
 	return s.Advance([]map[string]any{{s.Since: plain(values[0])}}), nil
 }
 
-func (r SourceReader) ReadTable(s Source, c Connection, columns ...string) ([]map[string]any, error) {
+func (r Client) ReadTable(s Source, c Connection, columns ...string) ([]map[string]any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	conn, err := r.openPostgres(ctx, c)
@@ -301,7 +305,7 @@ func plain(v any) any {
 	return v
 }
 
-func (r SourceReader) openPostgres(ctx context.Context, c Connection) (*pgx.Conn, error) {
+func (r Client) openPostgres(ctx context.Context, c Connection) (*pgx.Conn, error) {
 	cfg, err := pgx.ParseConfig(c.Address)
 	if err != nil {
 		return nil, fmt.Errorf("the address is not a postgres URL")
@@ -322,7 +326,7 @@ func (r SourceReader) openPostgres(ctx context.Context, c Connection) (*pgx.Conn
 	return conn, nil
 }
 
-func (r SourceReader) Check(c Connection) (string, error) {
+func (r Client) Check(c Connection) (string, error) {
 	if c.Secret != "" {
 		if value, ok := r.Credentials.CredentialValue(c.Secret, "connection/"+c.ID, c.Address); !ok || len(strings.TrimSpace(string(value))) == 0 {
 			return "", fmt.Errorf("the named connection secret is unavailable")
@@ -364,4 +368,92 @@ func (r SourceReader) Check(c Connection) (string, error) {
 		}
 		return "answered", nil
 	}
+}
+
+func (c Client) Writeback(x platform.Effect) (out platform.Outcome) {
+	sum := sha256.Sum256([]byte(x.Body))
+	out = platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
+	var req WritebackRequest
+	if json.Unmarshal([]byte(x.Body), &req) != nil {
+		out.Result, out.Detail = "rejected", "the request is unreadable"
+		return out
+	}
+	if err := CheckWritebackTransport(req.Transport, req.Method); err != nil {
+		out.Result, out.Detail = "rejected", err.Error()
+		return out
+	}
+	defer func() {
+		if req.Dispatch != "" && !req.SafeRetry && out.Result == "retry" {
+			out.Result, out.Detail = "unknown", "This command cannot be resent automatically: "+out.Detail
+		}
+	}()
+	u, err := url.Parse(req.URL)
+	if err != nil || u.Scheme != "https" && !(u.Scheme == "http" && req.AllowPrivate) {
+		out.Result, out.Detail = "rejected", "only https addresses (http when private addresses are allowed)"
+		return out
+	}
+	if req.Transport == "a2a" {
+		message := x
+		message.Body = string(platform.Raw(map[string]any{"data": req.Body}))
+		answer := c.A2A("connection/"+req.Connection, req.URL, req.Secret, req.AllowPrivate, message)
+		answer.Digest = out.Digest
+		return answer
+	}
+	var requestBody any = req.Body
+	body, _ := json.Marshal(requestBody)
+	r, err := http.NewRequest(req.Method, req.URL, strings.NewReader(string(body)))
+	if err != nil {
+		out.Result, out.Detail = "rejected", "the request method or address is invalid"
+		return out
+	}
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Accept", "application/json")
+	r.Header.Set("Idempotency-Key", x.ID)
+	if req.Dispatch != "" {
+		r.Header.Set("Idempotency-Key", req.DispatchKey)
+	}
+	if req.Secret != "" {
+		v, ok := c.Credentials.CredentialHeader(req.Secret, "connection/"+req.Connection, req.URL)
+		if !ok {
+			out.Result, out.Detail = "retry", "secret "+req.Secret+" missing"
+			return out
+		}
+		r.Header.Set("Authorization", strings.TrimSpace(string(v)))
+	}
+	resp, err := c.Send(r, req.AllowPrivate)
+	switch {
+	case err != nil && strings.Contains(err.Error(), c.Private.Error()):
+		out.Result, out.Detail = "rejected", c.Private.Error()
+	case err != nil:
+		out.Result, out.Detail = "unknown", "No delivery answer; reconcile or record a human decision: "+err.Error()
+	default:
+		answer, readErr := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
+		resp.Body.Close()
+		if readErr != nil || len(answer) > 64<<10 {
+			out.Result, out.Detail = "unknown", "The delivery answer is incomplete or exceeds its retained evidence budget"
+			return out
+		}
+		if len(answer) > 0 && !json.Valid(answer) {
+			answer = platform.Raw(clipDetail(answer))
+		}
+		out.Answer = answer
+		code := resp.StatusCode
+		switch {
+		case code >= 200 && code < 300:
+			out.Result = "delivered"
+		case code >= 400 && code < 500 && code != 408 && code != 429:
+			out.Result, out.Detail = "rejected", resp.Status+": "+clipDetail(answer)
+		default:
+			out.Result, out.Detail = "retry", resp.Status
+		}
+	}
+	return out
+}
+
+func clipDetail(raw []byte) string {
+	s := strings.TrimSpace(string(raw))
+	if len(s) > 200 {
+		s = s[:200] + "…"
+	}
+	return s
 }

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"platformserver/services/actions"
 
 	"slices"
 	"strings"
@@ -520,13 +522,23 @@ func (t *Tenant) readSource(s dataowner.Source) ([]map[string]any, error) {
 			}
 		}
 	}
-	return t.sourceReader().Read(s, conn)
+	return t.dataClient().Read(s, conn)
 }
 
-func (t *Tenant) sourceReader() dataowner.SourceReader {
-	send := t.Outbound
-	if send == nil {
-		send = guarded
+func (t *Tenant) sender() func(*http.Request, bool) (*http.Response, error) {
+	if t.Outbound == nil {
+		return guarded
 	}
-	return dataowner.SourceReader{Credentials: t, Send: send}
+	return t.Outbound
+}
+
+func (t *Tenant) transport() actions.Transport {
+	return actions.Transport{Credentials: t, Send: t.sender()}
+}
+
+func (t *Tenant) dataClient() dataowner.Client {
+	return dataowner.Client{Credentials: t, Send: t.sender(), Private: actions.ErrPrivate,
+		A2A: func(id, url, secret string, allowPrivate bool, x platform.Effect) platform.Outcome {
+			return t.sendA2A(actions.Endpoint{ID: id, URL: url, Secret: secret, AllowPrivate: allowPrivate}, x, true)
+		}}
 }

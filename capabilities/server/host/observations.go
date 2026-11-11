@@ -301,10 +301,7 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 	if plan.header != "" {
 		request.Header.Set("Authorization", plan.header)
 	}
-	send := t.Outbound
-	if send == nil {
-		send = guarded
-	}
+	send := t.sender()
 	response, err := send(request, plan.connection.AllowPrivate)
 	if err != nil {
 		return result, fmt.Errorf("observation storage did not answer")

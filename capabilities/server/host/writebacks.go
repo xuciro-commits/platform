@@ -1,13 +1,9 @@
 package host
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
+	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
 
 	"slices"
@@ -148,107 +144,15 @@ func (t *Tenant) checkWritebackCredential(request dataowner.WritebackRequest) *k
 	return nil
 }
 
-func (t *Tenant) connectionEndpoints() []*Endpoint {
-	var out []*Endpoint
+func (t *Tenant) connectionEndpoints() []*actions.Endpoint {
+	var out []*actions.Endpoint
 	for _, x := range t.outbound.Select(nil) {
 		if !strings.HasPrefix(x.Endpoint, dataowner.WritebackEndpoint) || platform.EffectSettled(x.State) {
 			continue
 		}
-		if !slices.ContainsFunc(out, func(ep *Endpoint) bool { return ep.ID == x.Endpoint }) {
-			out = append(out, &Endpoint{ID: x.Endpoint, Kind: "connection"})
+		if !slices.ContainsFunc(out, func(ep *actions.Endpoint) bool { return ep.ID == x.Endpoint }) {
+			out = append(out, &actions.Endpoint{ID: x.Endpoint, Kind: "connection"})
 		}
 	}
 	return out
-}
-
-func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
-	sum := sha256.Sum256([]byte(x.Body))
-	out = platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
-	var req dataowner.WritebackRequest
-	if json.Unmarshal([]byte(x.Body), &req) != nil {
-		out.Result, out.Detail = "rejected", "the request is unreadable"
-		return out
-	}
-	if err := dataowner.CheckWritebackTransport(req.Transport, req.Method); err != nil {
-		out.Result, out.Detail = "rejected", err.Error()
-		return out
-	}
-	defer func() {
-		if req.Dispatch != "" && !req.SafeRetry && out.Result == "retry" {
-			out.Result, out.Detail = "unknown", "This command cannot be resent automatically: "+out.Detail
-		}
-	}()
-	u, err := url.Parse(req.URL)
-	if err != nil || u.Scheme != "https" && !(u.Scheme == "http" && req.AllowPrivate) {
-		out.Result, out.Detail = "rejected", "only https addresses (http when private addresses are allowed)"
-		return out
-	}
-	if req.Transport == "a2a" {
-		message := x
-		message.Body = string(platform.Raw(map[string]any{"data": req.Body}))
-		answer := t.sendA2A(Endpoint{ID: "connection/" + req.Connection, URL: req.URL, Secret: req.Secret, AllowPrivate: req.AllowPrivate}, message, true)
-		answer.Digest = out.Digest
-		return answer
-	}
-	var requestBody any = req.Body
-	body, _ := json.Marshal(requestBody)
-	r, err := http.NewRequest(req.Method, req.URL, strings.NewReader(string(body)))
-	if err != nil {
-		out.Result, out.Detail = "rejected", "the request method or address is invalid"
-		return out
-	}
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Accept", "application/json")
-	r.Header.Set("Idempotency-Key", x.ID)
-	if req.Dispatch != "" {
-		r.Header.Set("Idempotency-Key", req.DispatchKey)
-	}
-	if req.Secret != "" {
-		v, ok := t.CredentialHeader(req.Secret, "connection/"+req.Connection, req.URL)
-		if !ok {
-			out.Result, out.Detail = "retry", "secret "+req.Secret+" missing"
-			return out
-		}
-		r.Header.Set("Authorization", strings.TrimSpace(string(v)))
-	}
-	send := t.Outbound
-	if send == nil {
-		send = guarded
-	}
-	resp, err := send(r, req.AllowPrivate)
-	switch {
-	case err != nil && strings.Contains(err.Error(), errPrivate.Error()):
-		out.Result, out.Detail = "rejected", errPrivate.Error()
-	case err != nil:
-		out.Result, out.Detail = "unknown", "No delivery answer; reconcile or record a human decision: "+err.Error()
-	default:
-		answer, readErr := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
-		resp.Body.Close()
-		if readErr != nil || len(answer) > 64<<10 {
-			out.Result, out.Detail = "unknown", "The delivery answer is incomplete or exceeds its retained evidence budget"
-			return out
-		}
-		if len(answer) > 0 && !json.Valid(answer) {
-			answer = platform.Raw(clipDetail(answer))
-		}
-		out.Answer = answer
-		code := resp.StatusCode
-		switch {
-		case code >= 200 && code < 300:
-			out.Result = "delivered"
-		case code >= 400 && code < 500 && code != 408 && code != 429:
-			out.Result, out.Detail = "rejected", resp.Status+": "+clipDetail(answer)
-		default:
-			out.Result, out.Detail = "retry", resp.Status
-		}
-	}
-	return out
-}
-
-func clipDetail(raw []byte) string {
-	s := strings.TrimSpace(string(raw))
-	if len(s) > 200 {
-		s = s[:200] + "…"
-	}
-	return s
 }

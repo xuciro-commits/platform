@@ -132,10 +132,7 @@ func (h *Host) routesPackageSources(rt *routes) {
 }
 
 func (t *Tenant) inspectPackage(ctx context.Context, request platform.PackageInspectRequest) (platform.PackagePreview, error) {
-	send := t.Outbound
-	if send == nil {
-		send = guarded
-	}
+	send := t.sender()
 	return packages.Inspect(ctx, t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (platform.Precheck, error) {
 		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (platform.Precheck, *kernel.Error) {
 			owner, ok := t.app(controlowner.PlatformApp).(interface {

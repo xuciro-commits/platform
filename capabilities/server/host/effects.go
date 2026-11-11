@@ -3,16 +3,10 @@ package host
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,29 +20,11 @@ import (
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 	"slices"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
-type Endpoint struct {
-	ID            string   `json:"id"`
-	Kind          string   `json:"kind"`
-	URL           string   `json:"url"`
-	Secret        string   `json:"secret,omitempty"`
-	Events        []string `json:"events,omitempty"`
-	Effects       []string `json:"effects,omitempty"`
-	From          string   `json:"from,omitempty"`
-	Notifications []string `json:"notifications,omitempty"`
-	AllowPrivate  bool     `json:"allowPrivate,omitempty"`
-	Irreversible  bool     `json:"irreversible,omitempty"`
-}
-
-const (
-	bodyKept      = 30 * 24 * time.Hour
-	effectTimeout = 10 * time.Second
-)
+const bodyKept = 30 * 24 * time.Hour
 
 func (t *Tenant) emit(e platform.Event, names []string) {
 	planned, _ := t.eventEffects(e, names, false)
@@ -166,7 +142,7 @@ func (t *Tenant) Effects(now time.Time) []platform.Effect {
 }
 
 type EndpointView struct {
-	Endpoint
+	actions.Endpoint
 	Pending  int    `json:"pending"`
 	Failing  int    `json:"failing"`
 	Health   string `json:"health"`
@@ -221,12 +197,12 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	}
 	type job struct {
 		effect   platform.Effect
-		endpoint Endpoint
+		endpoint actions.Endpoint
 		span     trace.SpanContext
 	}
 	var jobs []job
 	t.opsMu.Lock()
-	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), &Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
+	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), &actions.Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
 		if ep.Kind != acceptedformat.ModelEndpoint && !t.breakers.Allow("endpoint:"+ep.ID, now, true) {
 			continue
 		}
@@ -261,96 +237,28 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	return append(sends, t.operationDispatches(now)...)
 }
 
-func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
+func (t *Tenant) sendWithUsage(ep actions.Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
 	if ep.Kind == acceptedformat.ModelEndpoint {
 		return t.sendModel(x, now)
 	}
 	return t.send(ep, x, now), nil
 }
 
-func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
+func (t *Tenant) send(ep actions.Endpoint, x platform.Effect, now time.Time) platform.Outcome {
 	if ep.Kind == acceptedformat.ModelEndpoint {
 		out, _ := t.sendModel(x, now)
 		return out
 	}
 	if ep.Kind == "email" {
-		return t.sendMail(ep, x, now)
+		return t.transport().Mail(ep, x, now)
 	}
 	if ep.Kind == "a2a" {
 		return t.sendA2A(ep, x, false)
 	}
 	if ep.Kind == "connection" {
-		return t.sendWriteback(x)
+		return t.dataClient().Writeback(x)
 	}
-	sum := sha256.Sum256([]byte(x.Body))
-	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
-	secret, ok := t.CredentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL)
-	if !ok {
-		out.Result, out.Detail = "retry", "secret "+ep.Secret+" missing"
-		return out
-	}
-	u, err := url.Parse(ep.URL)
-	if err != nil || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
-		out.Result, out.Detail = "rejected", "only https endpoints (http when private addresses are allowed)"
-		return out
-	}
-	stamp := strconv.FormatInt(now.Unix(), 10)
-	mac := hmac.New(sha256.New, secret)
-	mac.Write([]byte(x.ID + "." + stamp + "." + x.Body))
-	req, _ := http.NewRequest(http.MethodPost, ep.URL, strings.NewReader(x.Body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("webhook-id", x.ID)
-	req.Header.Set("webhook-timestamp", stamp)
-	req.Header.Set("webhook-signature", "v1,"+base64.StdEncoding.EncodeToString(mac.Sum(nil)))
-	req.Header.Set("Idempotency-Key", x.ID)
-	send := t.Outbound
-	if send == nil {
-		send = guarded
-	}
-	resp, err := send(req, ep.AllowPrivate)
-	switch {
-	case err != nil && strings.Contains(err.Error(), errPrivate.Error()):
-		out.Result, out.Detail = "rejected", errPrivate.Error()
-	case err != nil:
-		out.Result, out.Detail = "unknown", "No delivery answer; reconcile or record a human decision: "+err.Error()
-	default:
-		answer, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-		resp.Body.Close()
-		if x.App != "" && json.Valid(answer) {
-			out.Answer = answer
-		}
-		code := resp.StatusCode
-		switch {
-		case code >= 200 && code < 300:
-			out.Result = "delivered"
-		case code >= 400 && code < 500 && code != 408 && code != 429:
-			out.Result, out.Detail = "rejected", resp.Status
-		default:
-			out.Result, out.Detail = "retry", resp.Status
-		}
-	}
-	return out
-}
-
-var errPrivate = fmt.Errorf("private address refused")
-
-func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
-	dialer := guardedDialer(allowPrivate)
-	client := &http.Client{Timeout: effectTimeout, Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(req)
-	return controlowner.RedactCredentialFailure(response, req), err
-}
-
-func guardedDialer(allowPrivate bool) *net.Dialer {
-	return &net.Dialer{Timeout: effectTimeout, Control: func(_, address string, _ syscall.RawConn) error {
-		host, _, _ := net.SplitHostPort(address)
-		ip := net.ParseIP(host)
-		if !allowPrivate && (ip == nil || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {
-			return errPrivate
-		}
-		return nil
-	}}
+	return t.transport().Webhook(ep, x, now)
 }
 
 func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
@@ -402,7 +310,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 	id := s.GetTarget().GetId()
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	t.opsMu.Lock()
-	known := slices.IndexFunc(t.endpoints, func(e *Endpoint) bool { return e.ID == id }) >= 0
+	known := slices.IndexFunc(t.endpoints, func(e *actions.Endpoint) bool { return e.ID == id }) >= 0
 	t.opsMu.Unlock()
 	if s.GetSchema().GetName() == controlowner.SchemaEndpointRemove {
 		if !known {
@@ -414,7 +322,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 		}
 		return func(*pb.ChangeRecord) {
 			t.opsMu.Lock()
-			t.endpoints = slices.DeleteFunc(t.endpoints, func(e *Endpoint) bool { return e.ID == id })
+			t.endpoints = slices.DeleteFunc(t.endpoints, func(e *actions.Endpoint) bool { return e.ID == id })
 			t.opsMu.Unlock()
 			var dropped []platform.Effect
 			t.outbound.UpdateAll(func(x *actions.Queued) {
@@ -428,7 +336,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 			}
 		}, nil
 	}
-	var ep Endpoint
+	var ep actions.Endpoint
 	if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" {
 		return nil, invalid
 	}
@@ -545,4 +453,12 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			q.CallbackError = ""
 		})
 	}, nil
+}
+
+func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
+	dialer := actions.GuardedDialer(allowPrivate)
+	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	response, err := client.Do(req)
+	return controlowner.RedactCredentialFailure(response, req), err
 }

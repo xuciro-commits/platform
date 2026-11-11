@@ -230,14 +230,14 @@ func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowIns
 			return nil, "", refusal
 		}
 		if !initialized {
-			cursor, readErr = t.sourceReader().LatestTableCursor(source, connection)
+			cursor, readErr = t.dataClient().LatestTableCursor(source, connection)
 			if readErr != nil {
 				continue
 			}
 			initialized = true
 		}
 		source.Cursor = cursor
-		rows, err := t.sourceReader().ReadTable(source, connection, columns...)
+		rows, err := t.dataClient().ReadTable(source, connection, columns...)
 		if err == nil {
 			if refusal := checkOriginal(); refusal != nil {
 				return nil, "", refusal

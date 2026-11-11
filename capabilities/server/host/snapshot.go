@@ -63,7 +63,7 @@ type tenantState struct {
 	NoticeSeq           int                                     `json:"noticeSeq"`
 	Settings            map[string]string                       `json:"settings"`
 	Words               map[string]map[string]string            `json:"words,omitempty"`
-	Endpoints           []*Endpoint                             `json:"endpoints"`
+	Endpoints           []*actions.Endpoint                     `json:"endpoints"`
 	Outbound            []acceptedformat.EffectState            `json:"outbound"`
 	HostRequests        map[string]platform.HostControlReceipt  `json:"hostRequests,omitempty"`
 	HostLifecycle       string                                  `json:"hostLifecycle,omitempty"`

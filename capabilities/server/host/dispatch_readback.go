@@ -133,10 +133,10 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 		var connection dataowner.Connection
 		if json.Unmarshal(run.Source, &source) != nil || json.Unmarshal(run.Connection, &connection) != nil {
 			problem = fmt.Errorf("The original dispatch status source is unavailable")
-		} else if connection.Secret != "" && len(t.sourceReader().Authorization(connection)) == 0 {
+		} else if connection.Secret != "" && len(t.dataClient().Authorization(connection)) == 0 {
 			problem = fmt.Errorf("The dispatch status credential is unavailable in this environment")
 		} else {
-			rows, problem = t.sourceReader().Read(source, &connection)
+			rows, problem = t.dataClient().Read(source, &connection)
 		}
 	case policy.Observation != "":
 		var definition platform.ObservationDefinition

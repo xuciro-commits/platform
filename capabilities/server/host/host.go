@@ -80,7 +80,7 @@ type Tenant struct {
 	settings      controlowner.Settings
 	words         controlowner.Words
 	sequences     runtimekernel.Sequences
-	endpoints     []*Endpoint
+	endpoints     []*actions.Endpoint
 	outbound      actions.Outbox
 	tenantPorts
 	cancels  computeowner.Cancels
