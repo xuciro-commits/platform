@@ -111,11 +111,10 @@ func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
 	composition := make([]compositionApp, 0, len(t.apps))
 	for _, app := range t.apps {
 		manifest := app.Manifest()
-		format, declared := app.(platform.SnapshotFormatOwner)
-		if !declared || strings.TrimSpace(format.SnapshotFormat()) == "" {
+		if format := strings.TrimSpace(app.SnapshotFormat()); format == "" {
 			compatibility.Host = ""
 		} else {
-			compatibility.Owners[manifest.ID] = format.SnapshotFormat()
+			compatibility.Owners[manifest.ID] = format
 		}
 		item := compositionApp{ID: manifest.ID, Version: manifest.Version, Provides: manifest.Provides, Consumes: manifest.Consumes}
 		own := map[reflect.Type]string{}
@@ -346,11 +345,7 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	}
 	s := tenantState{Apps: map[string]json.RawMessage{}, Records: map[string][]records.StoredState{}, Bindings: map[string]string{}, Queues: map[string][]string{}}
 	for _, a := range t.apps {
-		sn, ok := a.(platform.Snapshotter)
-		if !ok {
-			return tenantState{}, nil, 0, fmt.Errorf("tenant %s: app %s cannot be snapshotted", t.ID, a.Manifest().ID)
-		}
-		raw, err := sn.Snapshot()
+		raw, err := a.Snapshot()
 		if err != nil {
 			return tenantState{}, nil, 0, fmt.Errorf("tenant %s: app %s: %v", t.ID, a.Manifest().ID, err)
 		}
@@ -500,12 +495,11 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		return fmt.Errorf("tenant %s: the snapshot has %d apps, the tenant %d", t.ID, len(s.Apps), len(t.apps))
 	}
 	for _, a := range t.apps {
-		sn, ok := a.(platform.Snapshotter)
 		raw, saved := s.Apps[a.Manifest().ID]
-		if !ok || !saved {
+		if !saved {
 			return fmt.Errorf("tenant %s: app %s has no snapshot", t.ID, a.Manifest().ID)
 		}
-		if err := sn.Restore(raw); err != nil {
+		if err := a.Restore(raw); err != nil {
 			return fmt.Errorf("tenant %s: app %s: %v", t.ID, a.Manifest().ID, err)
 		}
 	}

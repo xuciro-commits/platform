@@ -34,7 +34,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范：[7-system §7.2–7.3](7-system/README.md)、[concurrency](7-system/concurrency.md)。完成标准（整段）：`host` 不超过 1.5 万行且没有 `acceptance_*.go`；`kernel` 不导入任何服务；K1、K2、K3、K13（含 `-race`）不改断言通过。
 
-- [ ] N3 一个拥有者接口：决定、应用、分叉、读取四个方法；分叉已是 `platform.App.Fork(ledger)`（读取映像传入分叉账本，暂存决定与安装传入原账本）；替换余下 2 个可选 `*App` 接口（`AcceptedStateApp`、`AcceptedInputApp`）与 38 个 `*Runtime` 接口，删除调用点的类型断言探测。服务不再自建 Ledger：`platform/ledger.go` 的接受语义与 `contract/go/kernel` 的实现并入 `kernel`，`Error` 等值类型进 `platform`，`contract/go` 只留协议生成代码。各服务经此接口持有自己的状态：`host.Tenant` 余下的 74 个字段（副作用队列 `outbound` 与 `endpoints` 及与工作板、配额共用的 `opsMu`，各服务的拥有者绑定与运行状态）随各服务实现该接口移出；之后读取映像不再复制整个 `Tenant`，随之进 `kernel.Sequence`。
+- [ ] N3 一个拥有者接口：决定、应用、分叉、读取四个方法；分叉已是 `platform.App.Fork(ledger)`（读取映像传入分叉账本，暂存决定与安装传入原账本），快照、恢复与快照格式已是 `platform.App` 的方法；`AcceptedStateApp`（4 个拥有者的状态映像，应用与恢复语义不同，如 Console 应用时结束停用成员的会话）与 `AcceptedInputApp`（只有 AI）是少数拥有者的真实能力，不给其余拥有者写空实现，改为注册时按类型登记；替换 38 个 `*Runtime` 接口，删除调用点的类型断言探测。服务不再自建 Ledger：`platform/ledger.go` 的接受语义与 `contract/go/kernel` 的实现并入 `kernel`，`Error` 等值类型进 `platform`，`contract/go` 只留协议生成代码。各服务经此接口持有自己的状态：`host.Tenant` 余下的 74 个字段（副作用队列 `outbound` 与 `endpoints` 及与工作板、配额共用的 `opsMu`，各服务的拥有者绑定与运行状态）随各服务实现该接口移出；之后读取映像不再复制整个 `Tenant`，随之进 `kernel.Sequence`。
 - [ ] N4 一个提交入口：`submit` 五层合为一个函数加选项结构；幂等只留映像预检与车道内提交两处；`quarantine` 只留应用不一致与位置不一致两处，其余改为拒绝或运行失败。
 - [ ] N5 接受路径迁入 `kernel`：`host/acceptance_*.go` 中属于接受语义的部分进 `kernel`，属于某类资源的部分进它的服务；`host` 只剩 HTTP、身份、租户装配与后台调度。
 

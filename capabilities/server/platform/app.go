@@ -387,6 +387,9 @@ type App interface {
 	Declarations() []*pb.AuthorityDeclaration
 	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
 	Fork(ledger *Ledger) (App, error)
+	Snapshot() (json.RawMessage, error)
+	Restore(json.RawMessage) error
+	SnapshotFormat() string
 }
 
 type Reader interface {

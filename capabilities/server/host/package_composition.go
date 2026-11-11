@@ -15,9 +15,7 @@ func (t *Tenant) baseModules() []platform.CapabilityModule {
 	for _, app := range t.apps {
 		m := app.Manifest()
 		module := platform.CapabilityModule{ID: "platform.owner." + m.ID, Title: m.Title, Version: m.Version, Scope: "tenant", Replacement: "restart", Provides: []platform.CapabilityContract{{ID: "platform.owner." + m.ID, Version: "1", Semantics: "1"}}}
-		if owner, ok := app.(platform.SnapshotFormatOwner); ok {
-			module.StateFormat = owner.SnapshotFormat()
-		}
+		module.StateFormat = app.SnapshotFormat()
 		for _, provider := range modules[:4] {
 			module.Requires = append(module.Requires, provider.Provides...)
 		}

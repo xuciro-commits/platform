@@ -136,6 +136,7 @@ func (a *sampleOwner) Manifest() platform.Manifest              { return a.manif
 func (a *sampleOwner) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 func (a *sampleOwner) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *sampleOwner) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
+func (a *sampleOwner) SnapshotFormat() string                   { return "platform.ledger.v1" }
 func (a *sampleOwner) Fork(ledger *platform.Ledger) (platform.App, error) {
 	return &sampleOwner{manifest: a.manifest, ledger: ledger}, nil
 }

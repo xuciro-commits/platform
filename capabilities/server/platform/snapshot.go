@@ -19,15 +19,6 @@ type SimulationOrganizationFactory interface {
 	NewSimulationOrganization(tenant string, seed OrgSeed) App
 }
 
-type Snapshotter interface {
-	Snapshot() (json.RawMessage, error)
-	Restore(json.RawMessage) error
-}
-
-type SnapshotFormatOwner interface {
-	SnapshotFormat() string
-}
-
 func (l *Ledger) Snapshot() (json.RawMessage, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
