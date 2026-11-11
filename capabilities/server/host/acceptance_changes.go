@@ -19,7 +19,7 @@ func (d *stagedDecision) savedChangePlan() (acceptedformat.ChangePlan, error) {
 		Sequences:     maps.Clone(d.allocated),
 		SequenceBases: maps.Clone(d.sequenceBases), Unique: d.savedUniqueChanges()}
 	var err error
-	plan.States, err = d.savedStates()
+	plan.States, err = runtimekernel.SavedStates(d.states, d.stateBases)
 	if err == nil {
 		plan.Control, err = d.savedControl()
 	}
@@ -42,7 +42,7 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 	if err := t.validateAcceptedIntents(plan.Intents); err != nil {
 		return nil, err
 	}
-	if err := t.validateAcceptedStates(plan.States); err != nil {
+	if err := runtimekernel.CheckStates(t.states, plan.States); err != nil {
 		return nil, err
 	}
 	if err := t.sequences.Check(plan.SequenceBases, plan.Sequences); err != nil {
@@ -59,19 +59,8 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 		if owner == nil {
 			return nil, fmt.Errorf("accepted result needs missing child authority")
 		}
-		direct := make(map[string]bool, len(plan.Rows))
-		for _, row := range plan.Rows {
-			direct[row.Type+"/"+row.ID] = true
-		}
-		for _, row := range batch.Rows {
-			if direct[row.Type+"/"+row.ID] {
-				return nil, fmt.Errorf("accepted result writes the same direct and child record")
-			}
-		}
-		for _, row := range batch.DirectRows {
-			if direct[row.Row.Type+"/"+row.Row.ID] {
-				return nil, fmt.Errorf("accepted result writes the same direct and child record")
-			}
+		if err := runtimekernel.CheckDirectAndChild(plan.Rows, batch); err != nil {
+			return nil, err
 		}
 		prepared.child, err = t.prepareAcceptedBatch(owner.AcceptedLedger(), plan.Changes)
 		if err != nil || prepared.child == nil {
@@ -123,7 +112,7 @@ func (p *preparedAcceptedChanges) apply(t *Tenant) error {
 	if err := t.applyAcceptedControl(p.plan.Control); err != nil {
 		return err
 	}
-	if err := t.applyAcceptedStates(p.plan.States); err != nil {
+	if err := runtimekernel.ApplyStates(t.states, p.plan.States); err != nil {
 		return err
 	}
 	t.applyAcceptedNotices(p.plan.Notices)
@@ -224,64 +213,6 @@ func (d *stagedDecision) attachPrivateHosts() {
 func (d *stagedDecision) flowVersions() map[string]int {
 	if private, ok := d.privateApps[platform.FlowApp].(platform.Processes); ok {
 		return private.Versions()
-	}
-	return nil
-}
-
-func (d *stagedDecision) savedStates() ([]acceptedformat.State, error) {
-	var out []acceptedformat.State
-	for _, id := range slices.Sorted(maps.Keys(d.states)) {
-		owner := d.states[id]
-		image, err := owner.AcceptedState()
-		if err != nil {
-			return nil, err
-		}
-		if err := owner.ValidateAcceptedState(image); err != nil {
-			return nil, err
-		}
-		before, err := platform.CanonicalDigest(d.stateBases[id])
-		if err != nil {
-			return nil, err
-		}
-		after, err := platform.CanonicalDigest(image)
-		if err != nil {
-			return nil, err
-		}
-		if before != after {
-			out = append(out, acceptedformat.State{App: id, Before: before, Image: image})
-		}
-	}
-	return out, nil
-}
-
-func (t *Tenant) validateAcceptedStates(states []acceptedformat.State) error {
-	seen := map[string]bool{}
-	for _, state := range states {
-		owner := t.states[state.App]
-		if owner == nil || seen[state.App] || state.Before == "" || len(state.Image) == 0 {
-			return fmt.Errorf("accepted result has a duplicate or unknown state owner %s", state.App)
-		}
-		seen[state.App] = true
-		if err := owner.ValidateAcceptedState(state.Image); err != nil {
-			return err
-		}
-		prior, err := owner.AcceptedState()
-		if err != nil {
-			return err
-		}
-		hash, err := platform.CanonicalDigest(prior)
-		if err != nil || hash != state.Before {
-			return fmt.Errorf("accepted state predecessor differs for %s", state.App)
-		}
-	}
-	return nil
-}
-
-func (t *Tenant) applyAcceptedStates(states []acceptedformat.State) error {
-	for _, state := range states {
-		if err := t.states[state.App].ApplyAcceptedState(state.Image); err != nil {
-			return err
-		}
 	}
 	return nil
 }

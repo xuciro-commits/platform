@@ -78,7 +78,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if err != nil {
 		return nil, fmt.Errorf("batch operations: %w", err)
 	}
-	result.States, err = d.savedStates()
+	result.States, err = runtimekernel.SavedStates(d.states, d.stateBases)
 	if err != nil {
 		return nil, fmt.Errorf("batch states: %w", err)
 	}
@@ -296,7 +296,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err := t.validateAcceptedObservations(result.Observations); err != nil {
 		return nil, err
 	}
-	if err := t.validateAcceptedStates(result.States); err != nil {
+	if err := runtimekernel.CheckStates(t.states, result.States); err != nil {
 		return nil, err
 	}
 	if err := t.validateOperationCancellations(result.Operations); err != nil {
@@ -421,7 +421,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	if err := t.applyAcceptedControl(result.Control); err != nil {
 		return false, err
 	}
-	if err := t.applyAcceptedStates(result.States); err != nil {
+	if err := runtimekernel.ApplyStates(t.states, result.States); err != nil {
 		return false, err
 	}
 	if err := t.applyOperationCancellations(result.Operations); err != nil {
