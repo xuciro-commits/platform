@@ -263,7 +263,7 @@ func dependencyDirections(descriptors []platform.Dependencies, focus platform.As
 
 func (t *Tenant) DependencyView(m platform.Member, focus platform.AssetRef, app string) (DependencyView, *kernel.Error) {
 	view := DependencyView{Descriptors: []platform.Dependencies{}, Requires: []platform.AssetRef{}, UsedBy: []platform.AssetRef{}}
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return view, err
 	}
 	definitions, err := t.definitionsFor(m)
@@ -296,7 +296,7 @@ func (t *Tenant) DependencyView(m platform.Member, focus platform.AssetRef, app 
 }
 
 func (t *Tenant) ProvidedCapabilities(m platform.Member, kind, side string) ([]ProvidedCapability, *kernel.Error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	if kind != "" && !slices.Contains([]string{"action", "query", "function", "operation", "protocol", "interface"}, kind) ||

@@ -61,7 +61,7 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 		}
 		data, version, err := dataowner.DatasetRows(c, dataset, ds.Version)
 		marking := ds.Marking
-		if fixed, refused := t.dataOwner().ExecutionDataset(ds); refused == nil {
+		if fixed, refused := t.DataOwner().ExecutionDataset(ds); refused == nil {
 			marking = fixed.Marking
 		}
 		member := c.Member

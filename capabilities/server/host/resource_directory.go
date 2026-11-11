@@ -86,12 +86,8 @@ func findResource(store *records.Store, filters []persistence.StateFilter, match
 	return build.Resource{}, false
 }
 
-func projectDelegated(m platform.Member) bool {
-	return slices.ContainsFunc(m.Grants, func(g platform.Grant) bool { return g.App == build.ID && strings.HasPrefix(g.By, "project:") }) && !holdsIndependentBuildRole(m, build.Builder)
-}
-
-func (t *Tenant) resourceRole(m platform.Member, project string) string {
-	if m.Holds("platform", "admin") || holdsIndependentBuildRole(m, build.Builder) {
+func (t *Tenant) ResourceRole(m platform.Member, project string) string {
+	if m.Holds("platform", "admin") || build.HoldsIndependentRole(m, build.Builder) {
 		return platform.ProjectOwnerRole
 	}
 	if access, ok := t.app("platform").(platform.ProjectAccess); ok {
@@ -100,8 +96,8 @@ func (t *Tenant) resourceRole(m platform.Member, project string) string {
 	return ""
 }
 
-func (t *Tenant) resourcePermission(store *records.Store, m platform.Member, typ, id, kind string, held bool) (bool, bool) {
-	if !projectDelegated(m) {
+func (t *Tenant) ResourcePermission(store *records.Store, m platform.Member, typ, id, kind string, held bool) (bool, bool) {
+	if !build.ProjectDelegated(m) {
 		return true, false
 	}
 	if id == "" {
@@ -121,7 +117,7 @@ func (t *Tenant) resourcePermission(store *records.Store, m platform.Member, typ
 				return branch.Created.By == m.ID, false
 			}
 			for _, change := range branch.Changes {
-				if allowed, _ := t.resourcePermission(store, m, change.Type, change.ID, kind, true); !allowed {
+				if allowed, _ := t.ResourcePermission(store, m, change.Type, change.ID, kind, true); !allowed {
 					return false, false
 				}
 			}
@@ -167,7 +163,7 @@ func (t *Tenant) resourcePermission(store *records.Store, m platform.Member, typ
 	if project == "" {
 		return definition, false
 	}
-	role := t.resourceRole(m, project)
+	role := t.ResourceRole(m, project)
 	allowed := role != "" && role != platform.ProjectDiscovererRole
 	if typ == build.ResourceType || typ == build.FolderType {
 		allowed = role != ""
@@ -185,7 +181,7 @@ func (t *Tenant) resourceDirectory(m platform.Member) ResourceDirectory {
 	if resources := t.Projection.Type(build.ResourceType); resources != nil {
 		for _, row := range resources.Rows().All() {
 			resource := row.Value.Interface().(build.Resource)
-			role := t.resourceRole(m, resource.Project)
+			role := t.ResourceRole(m, resource.Project)
 			if role == "" {
 				continue
 			}
@@ -195,7 +191,7 @@ func (t *Tenant) resourceDirectory(m platform.Member) ResourceDirectory {
 	if folders := t.Projection.Type(build.FolderType); folders != nil {
 		for _, row := range folders.Rows().All() {
 			folder := row.Value.Interface().(build.Folder)
-			if !folder.Archived && t.resourceRole(m, folder.Project) != "" {
+			if !folder.Archived && t.ResourceRole(m, folder.Project) != "" {
 				out.Folders = append(out.Folders, folder)
 			}
 		}
@@ -411,7 +407,7 @@ func (h *Host) routesResources(rt *routes) {
 		for _, row := range t.Projection.Type(build.ResourceType).Rows().All() {
 			resource := row.Value.Interface().(build.Resource)
 			if marked[resource.Ref] && !resource.Archived {
-				role := t.resourceRole(m, resource.Project)
+				role := t.ResourceRole(m, resource.Project)
 				resources = append(resources, ResourceEntry{Resource: resource, Path: []string{}, CanOpen: role != "" && role != platform.ProjectDiscovererRole, CanEdit: false})
 			}
 		}
@@ -421,7 +417,7 @@ func (h *Host) routesResources(rt *routes) {
 	})
 
 	rt.recordRead(transport.Route{Pattern: "GET /v1/branches/{id}/reviewers", Summary: "Eligible non-author editors and the project approval requirement", Answer: BranchReviewers{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		branch, refusal := t.readBranchLocked(m, r.PathValue("id"), h.Now())
+		branch, refusal := t.ReadBranch(m, r.PathValue("id"), h.Now())
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
@@ -439,7 +435,7 @@ func (h *Host) routesResources(rt *routes) {
 			}
 			eligible := true
 			for _, project := range projects {
-				role := t.resourceRole(member, project)
+				role := t.ResourceRole(member, project)
 				if role != platform.ProjectOwnerRole && role != platform.ProjectEditorRole {
 					eligible = false
 					break

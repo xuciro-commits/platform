@@ -30,10 +30,10 @@ func (t *Tenant) entityView(m platform.Member) []platform.EntityInfo {
 	defer t.Projection.Unlock()
 	out := []platform.EntityInfo{}
 	for _, et := range t.Projection.Types() {
-		if projectDelegated(m) && et.Info().App == build.ID && !build.BranchDraftType(et.Info().Type) && et.Info().Type != build.ResourceType && et.Info().Type != build.FolderType && et.Info().Type != build.WorkingStateType && et.Info().Type != build.BranchType {
+		if build.ProjectDelegated(m) && et.Info().App == build.ID && !build.BranchDraftType(et.Info().Type) && et.Info().Type != build.ResourceType && et.Info().Type != build.FolderType && et.Info().Type != build.WorkingStateType && et.Info().Type != build.BranchType {
 			if resources := t.Projection.Type(build.ResourceType); resources != nil {
 				if row := resources.Rows().Get(platform.ResourceID(t.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: et.Info().Type})); row != nil {
-					if role := t.resourceRole(m, row.Value.Interface().(build.Resource).Project); role == "" || role == platform.ProjectDiscovererRole {
+					if role := t.ResourceRole(m, row.Value.Interface().(build.Resource).Project); role == "" || role == platform.ProjectDiscovererRole {
 						continue
 					}
 				}

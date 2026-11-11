@@ -16,7 +16,7 @@ func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]platform.Capabili
 }
 
 func (t *Tenant) scopedDraftActionCapabilities(m platform.Member) ([]platform.CapabilityDescriptor, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)

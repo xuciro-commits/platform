@@ -39,7 +39,7 @@ func (t *Tenant) pipelineSchedules(m platform.Member, now time.Time) ([]Pipeline
 		return nil, refusal
 	}
 	out := []PipelineSchedule{}
-	owner := t.dataOwner()
+	owner := t.DataOwner()
 	for _, row := range page.Records {
 		schedule, err := owner.ExecutionSchedule(row.(platform.Schedule))
 		if err != nil {

@@ -51,7 +51,7 @@ func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.T
 }
 
 func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts submitOptions) (*pb.ChangeRecord, *kernel.Error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	if t.quarantined() {

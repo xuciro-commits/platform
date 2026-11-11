@@ -168,7 +168,7 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Model read exceeds its bounded window")
 	}
 	member = t.authorizationMember(member)
-	if err := t.admits(member); err != nil {
+	if err := t.Admits(member); err != nil {
 		return result, err
 	}
 	var page platform.Page

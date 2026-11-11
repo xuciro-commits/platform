@@ -44,7 +44,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 
 func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *kernel.Error) {
 	out := platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return out, err
 	}
 	if typ == "" || id == "" {

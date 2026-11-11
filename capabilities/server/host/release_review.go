@@ -48,7 +48,7 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 }
 
 func (t *Tenant) scopedSavedReleases(m platform.Member, offset, limit int, application ...string) (releaseowner.ReleasePage, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return releaseowner.ReleasePage{}, err
 	}
 	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
@@ -67,7 +67,7 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (releaseowner.
 }
 
 func (t *Tenant) scopedReviewSavedRelease(m platform.Member, id string) (releaseowner.SavedReleaseReview, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return releaseowner.SavedReleaseReview{}, err
 	}
 	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)

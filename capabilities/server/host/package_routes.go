@@ -46,7 +46,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 		fail := func(err error) (packages.PackagePreparation, *kernel.Error) {
 			return packages.PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 		}
-		if !holdsIndependentBuildRole(m, build.Builder) {
+		if !build.HoldsIndependentRole(m, build.Builder) {
 			return packages.PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Builder role required")
 		}
 		_, refusal := t.read(m, "packages")

@@ -106,7 +106,7 @@ func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time
 	}
 	current, ok := t.Member(m.ID)
 	current.Scopes = slices.Clone(m.Scopes)
-	if !ok || t.admits(current) != nil {
+	if !ok || t.Admits(current) != nil {
 		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
 	}
 	f, ok := t.procs.(platform.ContinuousFlowOwner)

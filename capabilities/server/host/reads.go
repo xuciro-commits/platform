@@ -89,7 +89,7 @@ func (t *Tenant) readFromApp(m platform.Member, app, name string, inputs ...json
 
 func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	m = t.authorizationMember(m)
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	if a == nil {

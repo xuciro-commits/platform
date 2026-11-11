@@ -35,7 +35,7 @@ func (t *Tenant) RunPipelines(now time.Time) {
 		pipelines, _, _ := platform.Find[dataowner.Pipeline](c, query)
 		versions := map[string]int{}
 		changed := map[string]bool{}
-		owner := t.dataOwner()
+		owner := t.DataOwner()
 		var fixed []dataowner.Pipeline
 		for _, p := range pipelines {
 			p, err := owner.ExecutionPipeline(p)
@@ -148,7 +148,7 @@ func (t *Tenant) runPipeline(p dataowner.Pipeline, now time.Time) {
 				}
 				inputs[id], data[id] = version, rows
 				if ds, ok := platform.Get[dataowner.Dataset](c, id); ok {
-					fixed, err := t.dataOwner().ExecutionDataset(ds)
+					fixed, err := t.DataOwner().ExecutionDataset(ds)
 					if err != nil {
 						inputErr = err
 						break

@@ -35,7 +35,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		if !t.ownerActive(registered.Ref.App) {
 			continue
 		}
-		if projectDelegated(m) {
+		if build.ProjectDelegated(m) {
 			project := ""
 			t.Projection.Lock()
 			if resources := t.Projection.Type(build.ResourceType); resources != nil {
@@ -44,7 +44,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				}
 			}
 			t.Projection.Unlock()
-			if role := t.resourceRole(m, project); role == "" || role == platform.ProjectDiscovererRole {
+			if role := t.ResourceRole(m, project); role == "" || role == platform.ProjectDiscovererRole {
 				continue
 			}
 		}
@@ -63,7 +63,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 			def.Action = &action
 		case platform.AssetObjectTypeGroup:
-			if def.ObjectTypeGroup == nil || !m.Active() || t.admits(m) != nil {
+			if def.ObjectTypeGroup == nil || !m.Active() || t.Admits(m) != nil {
 				continue
 			}
 		case platform.AssetPropertyType:
@@ -266,7 +266,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		default:
 			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
 			info, ok := entities[typ]
-			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {
+			if !ok || def.OwnerRecord == "" || !m.Active() || t.Admits(m) != nil {
 				continue
 			}
 			if _, visibleName := info.Field("name"); !visibleName || !t.readable(m, def.OwnerRecord, time.Now()) {

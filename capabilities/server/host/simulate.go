@@ -21,7 +21,7 @@ func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submi
 }
 
 func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb.Submission, now time.Time) (trialowner.Simulation, *kernel.Error) {
-	if err := t.admits(member); err != nil {
+	if err := t.Admits(member); err != nil {
 		return trialowner.Simulation{}, err
 	}
 	member = t.authorizationMember(member)

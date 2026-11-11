@@ -55,7 +55,7 @@ type Tenant struct {
 	views        transport.ViewCache
 	readViews    *transport.ViewCache
 	streamMu     sync.Mutex
-	lineageCache lineage.Cache[*branchWorld]
+	lineageCache lineage.Cache[lineage.Host]
 	markings     lineage.MarkingCache[*records.Store]
 	ownerSet
 	releases      releases.Store

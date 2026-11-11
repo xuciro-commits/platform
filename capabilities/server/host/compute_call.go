@@ -101,7 +101,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	} else {
 		keep, refusal := decideOnImage(t, context.Background(), "operation:call", func(t *Tenant) (bool, *kernel.Error) {
 			latest, ok := t.Member(current.ID)
-			if !ok || t.quarantined() || t.admits(latest) != nil {
+			if !ok || t.quarantined() || t.Admits(latest) != nil {
 				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The operation member is unavailable")
 			}
 			owner := t.app(controlowner.PlatformApp)

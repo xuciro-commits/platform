@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func (t *Tenant) admits(m platform.Member) *kernel.Error {
+func (t *Tenant) Admits(m platform.Member) *kernel.Error {
 	if m.Tenant != t.ID {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}

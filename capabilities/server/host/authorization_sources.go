@@ -59,7 +59,7 @@ func (s authorizationSources) DerivationSources(store *records.Store, m platform
 	return s.t.objectOwner(store).NarrowerIn(store, m, at, held)
 }
 func (s authorizationSources) ProjectAccess(store *records.Store, m platform.Member, typ, id, kind string, held bool) (bool, bool) {
-	return s.t.resourcePermission(store, m, typ, id, kind, held)
+	return s.t.ResourcePermission(store, m, typ, id, kind, held)
 }
 func (s authorizationSources) Markings(store *records.Store, held bool) security.RecordMarkings {
 	return securityMarkings{s.t.markingsIn(store, held)}

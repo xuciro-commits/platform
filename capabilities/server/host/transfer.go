@@ -22,7 +22,7 @@ import (
 
 func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]platform.ImportRow, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	t.Projection.Lock()
@@ -177,7 +177,7 @@ func sign(x float64) float64 {
 
 func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
 	m = t.authorizationMember(m)
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	t.Projection.Lock()

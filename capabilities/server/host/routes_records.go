@@ -211,7 +211,7 @@ func (h *Host) routesRecords(rt *routes) {
 		WriteJSON(w, http.StatusOK, groups)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-query", Summary: "Elements of the enterprise model by stereotype, kind, words and day: the typed read", Answer: platform.EnterpriseQueryResult{}, Query: []transport.Param{{Name: "stereotype", Description: "UAF stereotypes, comma-separated; empty: all"}, {Name: "kind", Description: "Exact kind within the stereotype, e.g. line, workshop"}, {Name: "q", Description: "Words to find in id, name, short name or kind"}, {Name: "alive", Description: "\"all\" takes closed and future elements too; a YYYY-MM-DD day reads that day; empty: today"}, {Name: "limit", Description: "Elements to return (default 200, at most 1000)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if err := t.admits(m); err != nil {
+		if err := t.Admits(m); err != nil {
 			Reply(w, nil, err)
 			return
 		}
@@ -238,7 +238,7 @@ func (h *Host) routesRecords(rt *routes) {
 		WriteJSON(w, http.StatusOK, out)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-resolve", Summary: "Named elements by id: stored references read back, closed elements included and marked", Answer: platform.EnterpriseQueryResult{}, Query: []transport.Param{{Name: "ids", Description: "Element ids, comma-separated (at most 100)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if err := t.admits(m); err != nil {
+		if err := t.Admits(m); err != nil {
 			Reply(w, nil, err)
 			return
 		}

@@ -34,7 +34,7 @@ func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, off
 	if element == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A reference read names the element")
 	}
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	if offset < 0 {

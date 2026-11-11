@@ -51,7 +51,7 @@ func (t *Tenant) runSchedules(pipelines []dataowner.Pipeline, now time.Time) {
 		if err != nil {
 			return nil, err
 		}
-		owner := t.dataOwner()
+		owner := t.DataOwner()
 		out := make([]platform.Schedule, 0, len(rows))
 		for _, row := range rows {
 			fixed, err := owner.ExecutionSchedule(row)

@@ -9,7 +9,7 @@ import (
 )
 
 func (t *Tenant) PageContentDefinition(m platform.Member, ref platform.AssetRef, version string) (platform.Definition, *kernel.Error) {
-	if refusal := t.admits(m); refusal != nil {
+	if refusal := t.Admits(m); refusal != nil {
 		return platform.Definition{}, refusal
 	}
 	if ref.Check() != nil || ref.Kind != platform.AssetPage || platform.CheckPageContentVersion(version) != nil {

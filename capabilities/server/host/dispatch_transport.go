@@ -172,7 +172,7 @@ func (h hostView) RetargetDispatch(c platform.Caller, run platform.DispatchRun, 
 	if !found || !valid || connection.State != "ready" || connection.Archived {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The selected dispatch connection is not ready")
 	}
-	connection, err := h.t.dataOwner().ExecutionConnection(connection)
+	connection, err := h.t.DataOwner().ExecutionConnection(connection)
 	if err != nil || !slices.Contains([]string{"http", "odata"}, connection.Kind) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch requires a published HTTP connection")
 	}

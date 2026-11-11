@@ -32,7 +32,7 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []platform.Compo
 }
 
 func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platform.CompositeEdit, now time.Time) (platform.CompositeAnswer, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return platform.CompositeAnswer{}, err
 	}
 	if key == "" || len(key) > 200 || len(edits) == 0 || len(edits) > 64 || now.IsZero() {

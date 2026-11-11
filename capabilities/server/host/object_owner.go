@@ -11,7 +11,7 @@ func (t *Tenant) objectOwner(store *records.Store) *objects.Owner {
 		Store:                  store,
 		BaseStore:              t.Projection,
 		TenantID:               t.ID,
-		Admit:                  t.admits,
+		Admit:                  t.Admits,
 		AuthorizationMember:    t.authorizationMember,
 		Caller:                 t.objectCaller,
 		Authorize:              t.authorizeFrom,

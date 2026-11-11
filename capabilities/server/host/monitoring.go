@@ -210,7 +210,7 @@ func monitoringRecords[T any](t *Tenant, m platform.Member, typ string, coverage
 func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRunFilter, now time.Time) (MonitoringRunPage, *kernel.Error) {
 	out := MonitoringRunPage{Runs: []MonitoringRun{}, Offset: filter.Offset, Limit: filter.Limit, Coverage: []MonitoringCoverage{}}
 	m = t.authorizationMember(m)
-	if refusal := t.admits(m); refusal != nil {
+	if refusal := t.Admits(m); refusal != nil {
 		return out, refusal
 	}
 	definitions, err := t.definitionsFor(m)
@@ -288,7 +288,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 		}
 		if !source.Archived && source.State == "published" && !source.Stream {
 			retry(&run, dataowner.SourceType+".pull", dataowner.SourceType, source.ID, "rerun")
-			fixed, fixedErr := t.dataOwner().ExecutionSource(source)
+			fixed, fixedErr := t.DataOwner().ExecutionSource(source)
 			if fixedErr != nil {
 				coverage.Limitation = "definition-unavailable"
 			} else if every, parseErr := time.ParseDuration(fixed.Every); parseErr == nil && every > 0 && source.Last != nil && now.After(source.Last.At.Add(every)) {

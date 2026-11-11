@@ -39,7 +39,7 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 
 func (t *Tenant) simulateStagedCandidateRead(builder platform.Member, request trialowner.CandidateSimulationRequest, staged *stagedCandidate) (trialowner.CandidateSimulation, *kernel.Error) {
 	var empty trialowner.CandidateSimulation
-	if err := t.admits(builder); err != nil {
+	if err := t.Admits(builder); err != nil {
 		return empty, err
 	}
 	caller := platform.NewCaller(runtime{t: t}, builder, build.ID, false, false)

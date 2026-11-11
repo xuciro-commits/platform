@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"platformserver/services/data/lineage"
 	"slices"
 	"strconv"
 
@@ -104,7 +105,7 @@ func (h *Host) routesIntegration(rt *routes) {
 			{Name: "edgeLimit", Description: "response edge cap, at most 5000"},
 			{Name: "fields", Description: "off or on: include field nodes and edges"},
 			{Name: "field", Description: "a field node ID to trace upstream and downstream"},
-		}, Answer: Lineage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		}, Answer: lineage.Lineage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		depth, err := lineageInt(r, "depth", 0)
 		if err != nil {
 			Reply(w, nil, err)
@@ -124,7 +125,7 @@ func (h *Host) routesIntegration(rt *routes) {
 		if focus == "" {
 			focus = r.URL.Query().Get("node")
 		}
-		out, refusal := t.lineageLocked(m, LineageRequest{
+		out, refusal := lineage.NewReader(t).Read(m, lineage.LineageRequest{
 			Mode: r.URL.Query().Get("mode"), Project: r.URL.Query().Get("project"),
 			Focus: focus, Ref: r.URL.Query().Get("ref"), Direction: r.URL.Query().Get("direction"),
 			Depth: depth, NodeLimit: nodeLimit, EdgeLimit: edgeLimit, Branch: r.URL.Query().Get("branch"),

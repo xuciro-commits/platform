@@ -11,7 +11,7 @@ import (
 )
 
 func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor {
-	if t.admits(m) != nil {
+	if t.Admits(m) != nil {
 		return []platform.CapabilityDescriptor{}
 	}
 	m = t.authorizationMember(m)
@@ -43,7 +43,7 @@ func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor
 }
 
 func (t *Tenant) describeCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, *kernel.Error) {
-	if refusal := t.admits(m); refusal != nil {
+	if refusal := t.Admits(m); refusal != nil {
 		return platform.CapabilityDescriptor{}, refusal
 	}
 	if version > 0 {

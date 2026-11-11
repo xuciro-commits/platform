@@ -20,7 +20,7 @@ func (t *Tenant) ReadCapabilityAI(ctx context.Context, m platform.Member, id str
 
 func (t *Tenant) readCapabilityAI(m platform.Member, id string, now time.Time) (platform.OperationResult, *kernel.Error) {
 	answer := platform.OperationResult{ID: id}
-	if refusal := t.admits(m); refusal != nil {
+	if refusal := t.Admits(m); refusal != nil {
 		return answer, refusal
 	}
 	m = t.authorizationMember(m)

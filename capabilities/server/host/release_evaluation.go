@@ -45,10 +45,10 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 }
 
 func (t *Tenant) prepareEvaluateRelease(m platform.Member, request ReleaseEvaluationRequest, now time.Time) (string, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return "", err
 	}
-	if !holdsIndependentBuildRole(m, build.Builder) || request.CandidateID == "" || (request.PlanID == "") == (request.Agent == "") ||
+	if !build.HoldsIndependentRole(m, build.Builder) || request.CandidateID == "" || (request.PlanID == "") == (request.Agent == "") ||
 		request.Key == "" || len(request.Key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("a builder, saved candidate, test plan or agent, and idempotency key are required")
 	}

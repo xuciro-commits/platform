@@ -246,7 +246,7 @@ type branchWorld struct {
 
 func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) (branchWorld, *kernel.Error) {
 	var world branchWorld
-	branch, refusal := t.readBranchLocked(m, id, now)
+	branch, refusal := t.ReadBranch(m, id, now)
 	if refusal != nil {
 		return world, refusal
 	}
@@ -518,7 +518,7 @@ func (t *Tenant) ProposeBranch(m platform.Member, id string, request BranchPropo
 
 func (t *Tenant) MergeBranch(m platform.Member, id string, request BranchMergeRequest, now time.Time) (BranchMergeResult, *kernel.Error) {
 	var result BranchMergeResult
-	if refusal := t.admits(m); refusal != nil {
+	if refusal := t.Admits(m); refusal != nil {
 		return result, refusal
 	}
 	candidate, applied, refusal := t.applyBranch(m, id, request, now)
@@ -566,7 +566,7 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request Branch
 	if refusal := t.recordReadRefusal(); refusal != nil {
 		return none, nil, refusal
 	}
-	branch, refusal := t.readBranchLocked(m, id, now)
+	branch, refusal := t.ReadBranch(m, id, now)
 	if refusal != nil {
 		return none, nil, refusal
 	}

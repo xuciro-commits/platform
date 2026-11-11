@@ -267,7 +267,7 @@ func (t *Tenant) scopedApplicationRecordDiagnostic(m platform.Member, ref platfo
 	return out, nil
 }
 func (t *Tenant) applicationContext() appowner.Context {
-	return appowner.Context{Tenant: t.ID, Admit: t.admits, Definitions: t.Definitions, Entity: t.entity, App: t.app,
+	return appowner.Context{Tenant: t.ID, Admit: t.Admits, Definitions: t.Definitions, Entity: t.entity, App: t.app,
 		Assets: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) }, Candidate: t.releases.Candidate,
 		Candidates: func() map[string]json.RawMessage { return t.releases.Candidates() }, CloseCandidate: t.candidateWithBindings,
 		Rows: func(m platform.Member, typ string, q platform.Query, at time.Time) ([]any, *kernel.Error) {

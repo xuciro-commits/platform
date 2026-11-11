@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	dataowner "platformserver/services/data"
+	"platformserver/services/data/lineage"
 	"reflect"
 	"slices"
 	"strings"
@@ -307,11 +308,11 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 					"rows": []map[string]any{{"id": "A1", "note": "higher clearance"}}, "marking": phase.other,
 				})
 			}
-			graph, refusal := live.lineage(t.Context(), inspector, LineageRequest{Mode: "overview"})
+			graph, refusal := live.lineage(t.Context(), inspector, lineage.LineageRequest{Mode: "overview"})
 			if refusal != nil {
 				t.Fatalf("read lineage: %+v", refusal)
 			}
-			nodes := map[string]LineageNode{}
+			nodes := map[string]lineage.LineageNode{}
 			for _, node := range graph.Nodes {
 				nodes[node.ID] = node
 			}

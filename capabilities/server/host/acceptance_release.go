@@ -126,10 +126,10 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 }
 
 func (t *Tenant) prepareSaveReleaseCandidates(m platform.Member, drafts []build.JointDraftRef, candidateID, key string, now time.Time) (string, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return "", err
 	}
-	if !holdsIndependentBuildRole(m, build.Builder, build.Publisher) {
+	if !build.HoldsIndependentRole(m, build.Builder, build.Publisher) {
 		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
@@ -178,10 +178,10 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 }
 
 func (t *Tenant) prepareActivateReleaseWithUpgrade(m platform.Member, candidateID, key, upgradeID string, now time.Time) (string, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return "", err
 	}
-	if !holdsIndependentBuildRole(m, build.Builder, build.Publisher) {
+	if !build.HoldsIndependentRole(m, build.Builder, build.Publisher) {
 		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {

@@ -39,7 +39,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 
 func (t *Tenant) scopedPreviewPipeline(member platform.Member, request PipelinePreviewRequest, at time.Time) (PipelinePreview, *kernel.Error) {
 	out := PipelinePreview{Rows: []map[string]any{}, Quarantine: []platform.QuarantinedRow{}}
-	if problem := t.admits(member); problem != nil {
+	if problem := t.Admits(member); problem != nil {
 		return out, problem
 	}
 	if t.quarantined() || t.app(build.ID) == nil {
@@ -94,7 +94,7 @@ func (t *Tenant) scopedPreviewPipeline(member platform.Member, request PipelineP
 		}
 		inputs[id] = rows
 	}
-	problem := t.dataOwner().CheckPipeline(caller, p)
+	problem := t.DataOwner().CheckPipeline(caller, p)
 	if problem != nil {
 		return out, problem
 	}

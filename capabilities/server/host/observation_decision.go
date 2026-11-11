@@ -113,7 +113,7 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 	initial, refusal := recordRead(t, ctx, func(t *Tenant) (prepared, *kernel.Error) {
 		var answer ObservationEvaluation
 		m = t.authorizationMember(m)
-		if refusal := t.admits(m); refusal != nil {
+		if refusal := t.Admits(m); refusal != nil {
 			return prepared{answer: answer}, refusal
 		}
 		if !m.Active() || m.Tenant != t.ID {

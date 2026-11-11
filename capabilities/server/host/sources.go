@@ -31,7 +31,7 @@ func (t *Tenant) PullSources(now time.Time) {
 		if err != nil {
 			return nil, err
 		}
-		owner := t.dataOwner()
+		owner := t.DataOwner()
 		var fixed []dataowner.Source
 		for _, source := range found {
 			source, err := owner.ExecutionSource(source)
@@ -447,7 +447,7 @@ func (t *Tenant) connectionMarkings(connection string) platform.MarkingSet {
 		return platform.MarkingSet{}
 	}
 	conn, _ := platform.Get[dataowner.Connection](t.automation(build.ID, false), connection)
-	fixed, err := t.dataOwner().ExecutionConnection(conn)
+	fixed, err := t.DataOwner().ExecutionConnection(conn)
 	if err != nil {
 		return platform.MarkingSet{Level: "restricted"}
 	}
@@ -456,7 +456,7 @@ func (t *Tenant) connectionMarkings(connection string) platform.MarkingSet {
 
 func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *dataowner.Resolver {
 	rules, _, _ := platform.Find[dataowner.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
-	owner := t.dataOwner()
+	owner := t.DataOwner()
 	var fixed []dataowner.Match
 	for _, rule := range rules {
 		execution, err := owner.ExecutionMatching(rule)
@@ -509,7 +509,7 @@ func (t *Tenant) readSource(s dataowner.Source) ([]map[string]any, error) {
 			if !ok {
 				return current, fmt.Errorf("the connection is not ready")
 			}
-			return t.dataOwner().ExecutionConnection(current)
+			return t.DataOwner().ExecutionConnection(current)
 		})
 		if failure != nil || c.State != "ready" {
 			return nil, fmt.Errorf("the connection is not ready")

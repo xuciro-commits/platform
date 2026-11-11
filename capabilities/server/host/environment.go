@@ -110,7 +110,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if from == nil || to == nil || from.ID == to.ID {
 		return PromotionResult{}, fmt.Errorf("promotion needs two different environments")
 	}
-	if !holdsIndependentBuildRole(member, build.Builder, build.Publisher) {
+	if !build.HoldsIndependentRole(member, build.Builder, build.Publisher) {
 		return PromotionResult{}, fmt.Errorf("promotion needs the builder or publisher role in %s", to.ID)
 	}
 	raw, artifact, err := from.sealedOrSeal(candidateID, now)

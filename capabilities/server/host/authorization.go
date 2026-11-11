@@ -132,20 +132,6 @@ func delegatedAsset(s *pb.Submission) (platform.ProjectAsset, bool) {
 	return platform.ProjectAsset{App: payload.App, Kind: strings.TrimPrefix(typ, build.ID+"."), Name: id}, true
 }
 
-func holdsIndependentBuildRole(m platform.Member, roles ...string) bool {
-	held := false
-	for _, g := range m.Grants {
-		if g.App != build.ID {
-			continue
-		}
-		held = true
-		if !strings.HasPrefix(g.By, "project:") && slices.Contains(roles, g.Role) {
-			return true
-		}
-	}
-	return !held && slices.Contains(roles, m.Roles[build.ID])
-}
-
 func (t *Tenant) member(id string) (platform.Member, bool) {
 	if t.identity == nil {
 		return platform.Member{}, false

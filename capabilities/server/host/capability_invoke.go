@@ -15,7 +15,7 @@ import (
 
 func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q platform.CapabilityInvocation, now time.Time) (platform.CapabilityResult, *kernel.Error) {
 	answer := platform.CapabilityResult{Ref: q.Ref}
-	if refusal := t.admits(m); refusal != nil {
+	if refusal := t.Admits(m); refusal != nil {
 		return answer, refusal
 	}
 	bad := func(message string) (platform.CapabilityResult, *kernel.Error) {

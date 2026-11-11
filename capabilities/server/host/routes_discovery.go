@@ -180,7 +180,7 @@ func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time
 }
 
 func (t *Tenant) scopedDispatchTargets(member platform.Member, id string, at time.Time) ([]DispatchTarget, *kernel.Error) {
-	if refusal := t.admits(member); refusal != nil {
+	if refusal := t.Admits(member); refusal != nil {
 		return nil, refusal
 	}
 	caller := platform.NewCaller(runtime{t: t}, member, build.ID, false, false)

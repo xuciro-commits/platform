@@ -206,10 +206,10 @@ func (t *Tenant) branchCaller(m platform.Member) platform.Caller {
 }
 
 func (t *Tenant) readBranch(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (build.Branch, *kernel.Error) { return t.readBranchLocked(m, id, now) })
+	return recordRead(t, context.Background(), func(t *Tenant) (build.Branch, *kernel.Error) { return t.ReadBranch(m, id, now) })
 }
 
-func (t *Tenant) readBranchLocked(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {
+func (t *Tenant) ReadBranch(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {
 	var branch build.Branch
 	raw, refusal := t.readRecordFrom(t.Projection, t.branchCaller(m), build.BranchType, id, now)
 	if refusal != nil {
@@ -263,7 +263,7 @@ func (t *Tenant) canEditProjectResource(m platform.Member, project string) bool 
 	if !exists {
 		return false
 	}
-	role := t.resourceRole(m, project)
+	role := t.ResourceRole(m, project)
 	return role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole
 }
 
@@ -574,7 +574,7 @@ func (t *Tenant) prepareBranchSave(m platform.Member, id, typ, draft string, req
 		return branchSavePreparation{}, branchRefuse("A resource keeps the project recorded by its first branch change")
 	}
 	if op == "create" && typ == build.AppType {
-		if !m.Holds("platform", "admin") && !holdsIndependentBuildRole(m, build.Builder) {
+		if !m.Holds("platform", "admin") && !build.HoldsIndependentRole(m, build.Builder) {
 			return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Creating a project needs an independent builder")
 		}
 	} else if !t.canEditProjectResource(m, project) {

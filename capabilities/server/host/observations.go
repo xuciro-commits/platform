@@ -66,7 +66,7 @@ func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Err
 }
 
 func (t *Tenant) scopedObservations(m platform.Member) ([]ObservationInfo, *kernel.Error) {
-	if refusal := t.admits(m); refusal != nil {
+	if refusal := t.Admits(m); refusal != nil {
 		return nil, refusal
 	}
 	definitions, err := t.observationDefinitions(m)
@@ -98,7 +98,7 @@ func (t *Tenant) observationDefinitions(m platform.Member) ([]platform.Definitio
 func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, record string, at time.Time, evaluate bool) (observationReadPlan, *kernel.Error) {
 	var plan observationReadPlan
 	m = t.authorizationMember(m)
-	if refusal := t.admits(m); refusal != nil {
+	if refusal := t.Admits(m); refusal != nil {
 		return plan, refusal
 	}
 	if ref.Kind != platform.AssetObservation || ref.Check() != nil || record == "" || len(record) > 200 || strings.ContainsAny(record, "/\x00\r\n") {
@@ -176,7 +176,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if plan.connection.ID == "" || plan.connection.State != "ready" {
 		return plan, observationUnavailable(fmt.Errorf("observation connection is not ready"))
 	}
-	owner := t.dataOwner()
+	owner := t.DataOwner()
 	if owner == nil {
 		return plan, observationUnavailable(fmt.Errorf("observation connection has no original owner"))
 	}

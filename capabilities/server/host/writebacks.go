@@ -31,7 +31,7 @@ type IntegrationEffect struct {
 }
 
 func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]IntegrationEffect, *kernel.Error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
@@ -73,7 +73,7 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 		return nil, refusal
 	}
 	var planned []platform.Effect
-	owner := t.dataOwner()
+	owner := t.DataOwner()
 	for _, w := range writebacks {
 		eventSchema, on := w.Schema(), w.On
 		if w.Published != "" {

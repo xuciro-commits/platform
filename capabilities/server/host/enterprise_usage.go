@@ -135,7 +135,7 @@ func (t *Tenant) checkEnterpriseUsage(c platform.Caller, store *records.Store, i
 }
 
 func (t *Tenant) enterpriseUsageRead(m platform.Member, id, until string, now time.Time) (EnterpriseUsage, *kernel.Error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return EnterpriseUsage{}, err
 	}
 	if until == "" {

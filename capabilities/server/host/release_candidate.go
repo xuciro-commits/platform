@@ -42,7 +42,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 }
 
 func (t *Tenant) scopedReferencedDrafts(m platform.Member, kind platform.AssetKind, id, branch string, now time.Time) (releaseowner.ReleaseDraftClosure, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return releaseowner.ReleaseDraftClosure{}, err
 	}
 	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
@@ -72,7 +72,7 @@ func (t *Tenant) scopedReferencedDrafts(m platform.Member, kind platform.AssetKi
 }
 
 func (t *Tenant) builderDrafts(m platform.Member, permission string) (build.ConstructionDrafts, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
@@ -175,7 +175,7 @@ func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingSt
 }
 
 func (t *Tenant) scopedWorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingState, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return releaseowner.ReleaseWorkingState{}, err
 	}
 	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
@@ -204,7 +204,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 }
 
 func (t *Tenant) scopedPreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef, branch string, now time.Time) (releaseowner.ReleasePreview, error) {
-	if err := t.admits(m); err != nil {
+	if err := t.Admits(m); err != nil {
 		return releaseowner.ReleasePreview{}, err
 	}
 	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)

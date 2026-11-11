@@ -18,7 +18,7 @@ func (t *Tenant) listenerInput(ctx context.Context, m platform.Member, path, sec
 		if refusal != nil {
 			return "", refusal
 		}
-		owner := t.dataOwner()
+		owner := t.DataOwner()
 		var matches []dataowner.Listener
 		for _, live := range rows {
 			if !live.Enabled || live.State != "published" {

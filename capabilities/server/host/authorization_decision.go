@@ -157,7 +157,7 @@ func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et 
 	}
 	return func(value reflect.Value) bool {
 		id := records.Header(value).ID
-		allowed, projectRead := t.resourcePermission(store, c.Member, et.Info().Type, id, "read", true)
+		allowed, projectRead := t.ResourcePermission(store, c.Member, et.Info().Type, id, "read", true)
 		return allowed && (projectRead || policy.Match(value))
 	}, nil
 }

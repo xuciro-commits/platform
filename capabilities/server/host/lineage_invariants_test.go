@@ -44,7 +44,7 @@ func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
 	if !ok {
 		t.Fatal("delegated member is not seated")
 	}
-	graph, refusal := live.lineage(t.Context(), delegatedMember, LineageRequest{Mode: "overview"})
+	graph, refusal := live.lineage(t.Context(), delegatedMember, lineage.LineageRequest{Mode: "overview"})
 	if refusal != nil {
 		t.Fatalf("delegated lineage: %+v", refusal)
 	}
@@ -54,7 +54,7 @@ func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
 	if graph.Total.Nodes == 0 || graph.Returned.Nodes == 0 {
 		t.Fatalf("delegated overview has no resource: %+v", graph)
 	}
-	if _, refusal := live.lineage(t.Context(), delegatedMember, LineageRequest{Mode: "focus", Focus: "connection:C2"}); refusal == nil {
+	if _, refusal := live.lineage(t.Context(), delegatedMember, lineage.LineageRequest{Mode: "focus", Focus: "connection:C2"}); refusal == nil {
 		t.Fatal("delegated builder focused another project's resource")
 	}
 
@@ -84,7 +84,7 @@ func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
 	if _, refusal := live.RecordOf(t.Context(), uncleared.Member, "build.guarded", "G1", invariantClock); refusal == nil {
 		t.Fatal("unactivated object definition lowered the accepted guard")
 	}
-	preview, refusal := live.lineage(t.Context(), live.member(t), LineageRequest{Mode: "overview"})
+	preview, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "overview"})
 	if refusal != nil {
 		t.Fatalf("preview lineage: %+v", refusal)
 	}
@@ -94,7 +94,7 @@ func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
 	}
 }
 
-func hasNode(graph Lineage, id string) bool {
+func hasNode(graph lineage.Lineage, id string) bool {
 	for _, node := range graph.Nodes {
 		if node.ID == id {
 			return true
@@ -103,13 +103,13 @@ func hasNode(graph Lineage, id string) bool {
 	return false
 }
 
-func lineageNode(graph Lineage, id string) (LineageNode, bool) {
+func lineageNode(graph lineage.Lineage, id string) (lineage.LineageNode, bool) {
 	for _, node := range graph.Nodes {
 		if node.ID == id {
 			return node, true
 		}
 	}
-	return LineageNode{}, false
+	return lineage.LineageNode{}, false
 }
 
 func TestInvariantK12ExportUsesTheDatasetMarking(t *testing.T) {
@@ -144,21 +144,21 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 	object["datasources"] = []platform.DataSourceBinding{binding, binding}
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", object)
 
-	shallow, refusal := live.lineage(t.Context(), live.member(t), LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 1, Fields: true})
+	shallow, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 1, Fields: true})
 	if refusal != nil {
 		t.Fatalf("shallow lineage: %+v", refusal)
 	}
 	if shallow.Impact == nil || shallow.Impact.Upstream < 3 {
 		t.Fatalf("impact was not computed on the full visible graph: %+v", shallow.Impact)
 	}
-	deep, refusal := live.lineage(t.Context(), live.member(t), LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, Fields: true})
+	deep, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, Fields: true})
 	if refusal != nil {
 		t.Fatalf("deep lineage: %+v", refusal)
 	}
 	if deep.Impact == nil || deep.Impact.Upstream != shallow.Impact.Upstream || deep.Impact.Downstream != shallow.Impact.Downstream {
 		t.Fatalf("depth changed impact counts: shallow %+v deep %+v", shallow.Impact, deep.Impact)
 	}
-	fields := map[string]LineageFieldNode{}
+	fields := map[string]lineage.LineageFieldNode{}
 	for _, field := range deep.FieldNodes {
 		fields[field.ID] = field
 	}
@@ -189,7 +189,7 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 		t.Fatalf("same-pair binding edges were merged: %+v", bindings)
 	}
 
-	limited, refusal := live.lineage(t.Context(), live.member(t), LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, NodeLimit: 1, Fields: true})
+	limited, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, NodeLimit: 1, Fields: true})
 	if refusal != nil {
 		t.Fatalf("limited lineage: %+v", refusal)
 	}
@@ -202,7 +202,7 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 	if limited.Impact == nil || limited.Impact.Upstream != shallow.Impact.Upstream {
 		t.Fatalf("truncation changed impact counts: %+v", limited.Impact)
 	}
-	edgeLimited, refusal := live.lineage(t.Context(), live.member(t), LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, EdgeLimit: 1})
+	edgeLimited, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, EdgeLimit: 1})
 	if refusal != nil {
 		t.Fatalf("edge-limited lineage: %+v", refusal)
 	}
@@ -250,7 +250,7 @@ func TestInvariantK12LineageGuardNeverFallsBelowWriteEvidence(t *testing.T) {
 
 func TestInvariantK12LineageGuardFailsClosedWhenAcceptedDefinitionIsUnreadable(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k12-unreadable")
-	guard := live.lineageGuard(lineage.Input{
+	guard := lineage.NewReader(live.Tenant).Guard(lineage.Input{
 		Objects: []build.Object{{Name: "alpha", Title: "Alpha", Published: "{"}},
 	})
 	graph := lineage.Build(guard, lineage.Guard)
@@ -280,11 +280,11 @@ func TestInvariantK12LineageBranchReadsStagedDefinitionsWithoutChangingMain(t *t
 	if _, refusal = live.SaveBranchResource(live.member(t), branch.ID, build.ObjectType, "OBJ", BranchSaveRequest{Spec: platform.Raw(changed)}, invariantClock); refusal != nil {
 		t.Fatalf("save branch object: %+v", refusal)
 	}
-	main, refusal := live.lineage(t.Context(), live.member(t), LineageRequest{Mode: "focus", Focus: "object:build.alpha"})
+	main, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha"})
 	if refusal != nil {
 		t.Fatalf("main lineage: %+v", refusal)
 	}
-	branched, refusal := live.lineage(t.Context(), live.member(t), LineageRequest{Mode: "focus", Branch: branch.ID, Focus: "object:build.alpha"})
+	branched, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Branch: branch.ID, Focus: "object:build.alpha"})
 	if refusal != nil {
 		t.Fatalf("branch lineage: %+v", refusal)
 	}
