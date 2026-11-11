@@ -66,8 +66,9 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 	for _, app := range t.apps {
 		var original *pb.Submission
 		var receipt *pb.ChangeRecord
-		if raw := t.Committed.Answer(app.Manifest().ID + "/" + key); len(raw) > 0 {
-			result, saved, err := acceptedformat.DecodeBatch(raw)
+		prior := t.priorOf(app, key)
+		if len(prior.Answer) > 0 {
+			result, saved, err := acceptedformat.DecodeBatch(prior.Answer)
 			if err != nil {
 				return nil, observationUnavailable(err), true
 			}
@@ -76,8 +77,8 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 			if err != nil {
 				return nil, observationUnavailable(err), true
 			}
-		} else if saved := app.AcceptedLedger().AcceptedFor(t.ID, key); saved != nil {
-			receipt, original = saved, saved.GetSubmission()
+		} else if prior.Record != nil {
+			receipt, original = prior.Record, prior.Record.GetSubmission()
 		}
 		if original != nil {
 			if original.GetPrincipalId() != m.ID || original.GetCorrelationId() != identity {
@@ -85,7 +86,7 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 			}
 			return receipt, nil, true
 		}
-		if saved, found := t.Committed.Refusal(app.Manifest().ID + "/" + key); found {
+		if saved := prior.Refusal; saved != nil {
 			var original pb.Submission
 			if len(saved.Submission) == 0 || protojson.Unmarshal(saved.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetCorrelationId() != identity {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true

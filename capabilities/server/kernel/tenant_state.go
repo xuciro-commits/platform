@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -254,6 +255,28 @@ func (c *Committed) Composite(key string) (string, bool) {
 func (c *Committed) SchemaVersion(key string) (platform.SchemaVersion, bool) {
 	return storedValue(c, "schema-version", key, c.schemaVersions)
 }
+
+type Prior struct {
+	Answer  json.RawMessage
+	Record  *pb.ChangeRecord
+	Refusal *acceptedformat.Refusal
+}
+
+func (p Prior) Known() bool { return len(p.Answer) > 0 || p.Record != nil || p.Refusal != nil }
+
+func (c *Committed) Prior(app string, ledger *platform.Ledger, tenant, key string) Prior {
+	if answer := c.Answer(app + "/" + key); len(answer) > 0 {
+		return Prior{Answer: answer}
+	}
+	if record := ledger.AcceptedFor(tenant, key); record != nil {
+		return Prior{Record: record}
+	}
+	if refusal, ok := c.Refusal(app + "/" + key); ok {
+		return Prior{Refusal: &refusal}
+	}
+	return Prior{}
+}
+
 func (c *Committed) DecisionDefinition(key string) *platform.DecisionDefinition {
 	v, _ := storedValue(c, "decision-definition", key, c.decisionDefinitions)
 	return v

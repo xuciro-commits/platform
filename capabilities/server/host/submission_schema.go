@@ -23,19 +23,18 @@ func (t *Tenant) currentSubmissionSchema(app platform.App, sub *pb.Submission) *
 		return sub
 	}
 	family := uint32(1)
-	key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
-	if raw := t.Committed.Answer(key); len(raw) > 0 {
-		result, receipt, err := acceptedformat.DecodeBatch(raw)
+	if prior := t.priorOf(app, sub.GetIdempotencyKey()); len(prior.Answer) > 0 {
+		result, receipt, err := acceptedformat.DecodeBatch(prior.Answer)
 		if err == nil {
 			saved, err := acceptedformat.BatchSubmission(result, receipt)
 			if err == nil {
 				family = saved.GetSchema().GetVersion()
 			}
 		}
-	} else if prior := app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()); prior != nil {
-		family = prior.GetSubmission().GetSchema().GetVersion()
-	} else if prior, exists := t.Committed.Refusal(key); exists {
-		_, saved, err := acceptedformat.DecodeRefusal(platform.Raw(prior))
+	} else if prior.Record != nil {
+		family = prior.Record.GetSubmission().GetSchema().GetVersion()
+	} else if prior.Refusal != nil {
+		_, saved, err := acceptedformat.DecodeRefusal(platform.Raw(*prior.Refusal))
 		if err == nil {
 			family = saved.GetSchema().GetVersion()
 		}

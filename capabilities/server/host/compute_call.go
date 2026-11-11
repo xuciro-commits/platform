@@ -109,12 +109,11 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			if !ok || t.quarantined() || t.admits(latest) != nil {
 				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The operation member is unavailable")
 			}
-			owner, ok := t.app(controlowner.PlatformApp).(platform.App)
-			if !ok {
+			owner := t.app(controlowner.PlatformApp)
+			if owner == nil {
 				return false, unknown()
 			}
-			_, refusedBefore := t.Committed.Refusal(controlowner.PlatformApp + "/" + q.Key)
-			known := refusedBefore || len(t.Committed.Answer(controlowner.PlatformApp+"/"+q.Key)) > 0 || owner.AcceptedLedger().AcceptedFor(t.ID, q.Key) != nil
+			known := t.priorOf(owner, q.Key).Known()
 			_, refusal := t.accept(owner, latest, s, now, acceptOptions{inputs: []*preparedOperationInput{prepared}})
 			return !known, refusal
 		}, func(t *Tenant, candidate preparedAccepted, keep bool, refusal *kernel.Error) (bool, *kernel.Error) {

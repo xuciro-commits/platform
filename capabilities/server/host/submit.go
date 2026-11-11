@@ -10,11 +10,16 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 	"time"
 )
+
+func (t *Tenant) priorOf(a platform.App, key string) runtimekernel.Prior {
+	return t.Committed.Prior(a.Manifest().ID, a.AcceptedLedger(), t.ID, key)
+}
 
 func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA} }
 
@@ -75,25 +80,20 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 			if a == nil {
 				return out, unknown()
 			}
-			key := a.Manifest().ID + "/" + s.GetIdempotencyKey()
-			_, refused := t.Committed.Refusal(key)
-			if !refused && len(t.Committed.Answer(key)) == 0 && a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()) == nil {
+			if !t.priorOf(a, s.GetIdempotencyKey()).Known() {
 				return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 			}
 		}
 		source := opts.source
-		if source != nil {
-			if prior := a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()); prior != nil {
-				previous := prior.GetSubmission()
-				if previous.GetPrincipalId() != m.ID || !proto.Equal(previous.GetTarget(), s.GetTarget()) || !proto.Equal(previous.GetSchema(), s.GetSchema()) && !source.deleted {
-					return out, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
-				}
-				return answer{record: prior}, nil
+		if prior := t.priorOf(a, s.GetIdempotencyKey()); source != nil && prior.Record != nil {
+			previous := prior.Record.GetSubmission()
+			if previous.GetPrincipalId() != m.ID || !proto.Equal(previous.GetTarget(), s.GetTarget()) || !proto.Equal(previous.GetSchema(), s.GetSchema()) && !source.deleted {
+				return out, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 			}
-			if prior, ok := t.Committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
-				saved := prior.Error
-				return out, &saved
-			}
+			return answer{record: prior.Record}, nil
+		} else if source != nil && prior.Refusal != nil {
+			saved := prior.Refusal.Error
+			return out, &saved
 		}
 		if err = t.delegatedBound(m, s); err != nil {
 			return out, err
@@ -112,14 +112,6 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 			if err != nil {
 				return out, err
 			}
-		}
-		if prior, ok := t.Committed.Refusal(s.GetAuthority() + "/" + s.GetIdempotencyKey()); ok {
-			hash, _ := acceptedformat.SubmissionHash(s, decision.binding)
-			if hash != prior.RequestHash || s.GetPrincipalId() != m.ID {
-				return out, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
-			}
-			saved := prior.Error
-			return answer{issues: t.readableFieldIssues(m, prior.Issues, now)}, &saved
 		}
 		end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 			attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
@@ -163,35 +155,35 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	if s.GetIdempotencyKey() == "" || s.GetTarget() == nil || s.GetSchema() == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")
 	}
-	ledger := a.AcceptedLedger()
-	if saved := t.Committed.Answer(a.Manifest().ID + "/" + s.GetIdempotencyKey()); len(saved) > 0 {
-		result, receipt, err := acceptedformat.DecodeBatch(saved)
+	prior := t.priorOf(a, s.GetIdempotencyKey())
+	if len(prior.Answer) > 0 {
+		result, receipt, err := acceptedformat.DecodeBatch(prior.Answer)
 		hash, hashErr := acceptedformat.SubmissionHash(s, binding)
 		if err != nil || hashErr != nil || result.RequestHash != hash {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
 		return receipt, nil
 	}
-	if prior := ledger.AcceptedFor(t.ID, s.GetIdempotencyKey()); prior != nil {
-		if !proto.Equal(prior.GetSubmission(), s) {
+	if prior.Record != nil {
+		if !proto.Equal(prior.Record.GetSubmission(), s) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
 		saved, bound := t.Committed.SchemaVersion(a.Manifest().ID + "/" + s.GetIdempotencyKey())
 		if bound != (binding != nil) || binding != nil && saved != *binding {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
-		return prior, nil
+		return prior.Record, nil
 	}
 	hash, err := acceptedformat.SubmissionHash(s, binding)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission cannot be encoded")
 	}
-	if prior, ok := t.Committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
-		if prior.RequestHash != hash {
+	if prior.Refusal != nil {
+		if prior.Refusal.RequestHash != hash {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
-		answer := prior.Error
-		return nil, &answer
+		saved := prior.Refusal.Error
+		return nil, &saved
 	}
 	if s.GetSchema().GetName() == controlowner.SchemaCredentialSave {
 		if _, failure := controlowner.DecodeCredentialWrite(t.ID, s.GetPayload()); failure != nil {

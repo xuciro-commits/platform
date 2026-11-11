@@ -166,6 +166,6 @@ func (t *Tenant) integrationAnswered(app, key string) bool {
 }
 
 func (t *Tenant) integrationAnsweredRead(app, key string) bool {
-	_, refused := t.Committed.Refusal(app + "/" + key)
-	return refused || len(t.Committed.Answer(app+"/"+key)) > 0
+	owner := t.app(app)
+	return owner != nil && t.priorOf(owner, key).Known()
 }

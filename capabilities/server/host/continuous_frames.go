@@ -264,8 +264,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			} else {
 				value.sub = t.currentSubmissionSchema(owner, sub)
 			}
-			_, refused := t.Committed.Refusal(owner.Manifest().ID + "/" + sub.GetIdempotencyKey())
-			if refusal != nil || refused || owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+			if prior := t.priorOf(owner, sub.GetIdempotencyKey()); refusal != nil || prior.Refusal != nil || prior.Record != nil {
 				value.handled = true
 				value.record, refusal = t.accept(owner, m, value.sub, now, acceptOptions{binding: value.binding, schemaRefusal: refusal})
 				return value, refusal
