@@ -5295,7 +5295,6 @@ export type TenantHealth = {
   apps: number;
   queues: QueueHealth[];
   failed: number;
-  deferred: string[];
   breakers: Breaker[];
   openBreakers: number;
   connectorsFailing: number;

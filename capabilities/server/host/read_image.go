@@ -231,16 +231,15 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.sequences.Restore(t.sequences.Clone())
 	notices, sequence := t.notices.State()
 	view.notices.Restore(notices, sequence)
-	view.Files, view.Secrets = t.files(), t.Secrets
-	view.Outbound, view.AIClient = t.Outbound, t.AIClient
-	view.ComputeWorker, view.Compiler = t.ComputeWorker, t.Compiler
-	view.Quota, view.index = t.Quota, t.index
+	view.tenantPorts = t.tenantPorts
+	view.Files = t.files()
+	view.index = t.index
 	if t.services.NewAgentEvaluator != nil {
 		view.agentEvaluator = t.services.NewAgentEvaluator()
 	}
 	view.breakers = t.breakers.Fork()
 	t.opsMu.Lock()
-	view.quota = t.quota.Fork()
+	view.rotation = t.rotation
 	t.opsMu.Unlock()
 	view.staged = computeowner.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())

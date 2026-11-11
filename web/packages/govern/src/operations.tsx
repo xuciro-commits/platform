@@ -27,7 +27,6 @@ export function SystemHealth() {
         <PropertyList columns={3} items={[
           [t("Waiting work"), health.queues.reduce((n, q) => n + q.depth, 0)],
           [t("Failed work"), health.failed],
-          [t("Applications over quota"), health.deferred.length],
           [t("Open breakers"), `${health.openBreakers} / ${health.breakers.length}`],
           [t("Failing connectors"), health.connectorsFailing],
           [t("Failing endpoints"), health.endpointsFailing],
@@ -60,9 +59,8 @@ export function SystemHealth() {
           {t("This tenant is quarantined. Inputs and work are stopped. Repair its journal or restore a valid backup, then retry recovery.")}
           {health.recoveryError && <code className="block break-all">{health.recoveryError}</code>}
         </div>}
-        {(health.queues.length > 0 || health.deferred.length > 0 || health.breakers.length > 0) && <div className="flex flex-wrap items-center gap-2">
+        {(health.queues.length > 0 || health.breakers.length > 0) && <div className="flex flex-wrap items-center gap-2">
           {health.queues.map((q) => <Tag key={q.app} label={t("{app}: {n} waiting, oldest {s} s", { app: q.app, n: q.depth, s: Math.round(q.oldestSeconds) })} tone="info" />)}
-          {health.deferred.map((a) => <Tag key={a} label={t("{app} past its quota", { app: a })} tone="warning" />)}
           {health.breakers.map((b) => <Tag key={b.destination} label={t("{destination}: breaker {state} after {n} failures", { destination: b.destination, state: t(b.state), n: b.failures })}
             tone={b.state === "closed" ? "neutral" : "danger"} />)}
         </div>}

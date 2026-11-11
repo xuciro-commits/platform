@@ -18,7 +18,6 @@ type TenantHealth struct {
 	Apps          int                `json:"apps"`
 	Queues        []QueueHealth      `json:"queues"`
 	Failed        int                `json:"failed"`
-	Deferred      []string           `json:"deferred"`
 	Breakers      []platform.Breaker `json:"breakers"`
 	OpenBreakers  int                `json:"openBreakers"`
 	Connectors    int                `json:"connectorsFailing"`
@@ -99,14 +98,11 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 	}
 	if fault := operational.Fault.Load(); fault != nil {
 		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: Started,
-			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []platform.Breaker{},
+			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Breakers: []platform.Breaker{},
 			Observations: ObservationHealth{Dropped: t.observations.Dropped()},
 			Readiness:    []HealthCondition{{Name: "journal", Ready: false, Detail: fault.Reason}, {Name: "observations", Ready: false, Detail: "tenant is quarantined"}, {Name: "work-loop", Ready: false, Detail: "tenant is quarantined"}}}
 	}
-	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.workLoop().Deferred(now), Breakers: t.Breakers(now)}
-	if h.Deferred == nil {
-		h.Deferred = []string{}
-	}
+	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Breakers: t.Breakers(now)}
 	h.Queues, h.Failed = t.queueHealth(now)
 	for _, b := range h.Breakers {
 		if b.State != "closed" {
@@ -123,7 +119,7 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 			h.Endpoints++
 		}
 	}
-	if h.Failed > 0 || h.OpenBreakers > 0 || h.Connectors > 0 || h.Endpoints > 0 || len(h.Deferred) > 0 {
+	if h.Failed > 0 || h.OpenBreakers > 0 || h.Connectors > 0 || h.Endpoints > 0 {
 		h.Status = "degraded"
 	}
 	if t.console.Suspended() {

@@ -3,6 +3,7 @@ package host
 import (
 	"errors"
 	"fmt"
+	"net/http"
 
 	"platformserver/platform"
 )
@@ -40,6 +41,13 @@ func ownerRolesOf(apps []platform.App, active func(string) bool) (ownerRoles, er
 		}
 	}
 	return r, nil
+}
+
+type tenantPorts struct {
+	Secrets  func(name string) ([]byte, bool)
+	Outbound func(req *http.Request, allowPrivate bool) (*http.Response, error)
+	AIClient func(req *http.Request) (*http.Response, error)
+	Files    platform.FileStore
 }
 
 type ownerSet struct {

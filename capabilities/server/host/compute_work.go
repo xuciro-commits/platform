@@ -89,7 +89,7 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 			t.opsMu.Lock()
 			busy := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id && x.sending })
 			t.opsMu.Unlock()
-			if busy || t.overQuota(value.effect.App, now) {
+			if busy {
 				return claim{}, nil
 			}
 			value.claimed = t.finishOperationClaim(candidate)
@@ -111,9 +111,6 @@ func (t *Tenant) prepareOperationClaim(id string, now time.Time) (platform.Effec
 	}
 	before := t.outbound[i].Effect
 	t.opsMu.Unlock()
-	if t.overQuota(before.App, now) {
-		return platform.Effect{}, false
-	}
 	works := t.forkWorkState()
 	var prior json.RawMessage
 	if work, err := works.Get(id); err == nil {
@@ -150,13 +147,11 @@ func (t *Tenant) finishOperationClaim(candidate preparedAccepted) bool {
 	if err != nil {
 		return false
 	}
-	claim, err := t.applyOperationClaim(saved)
-	if err != nil {
+	if _, err := t.applyOperationClaim(saved); err != nil {
 		t.quarantine(err)
 		return false
 	}
 	t.acceptedResultApplied()
-	t.spend(claim.Before.App, candidate.entry.At)
 	return true
 }
 func (t *Tenant) operationCurrent(id string, generation uint32) bool {

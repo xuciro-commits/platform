@@ -72,7 +72,7 @@ func (d *Deployment) restoreRuntimeSelections(ctx context.Context, journal Journ
 			old.quarantine(fmt.Errorf("replacement has incompatible owner or kernel restore formats"))
 			continue
 		}
-		fresh.Files, fresh.Secrets, fresh.Outbound, fresh.AIClient = old.Files, old.Secrets, old.Outbound, old.AIClient
+		fresh.tenantPorts = old.tenantPorts
 		entries, err := journal.Entries(ctx, old.ID, 0)
 		if err != nil {
 			return err

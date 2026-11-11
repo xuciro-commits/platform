@@ -52,7 +52,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	if err != nil || !reflect.DeepEqual(before, after) || old.services.KernelModule.StateFormat != fresh.services.KernelModule.StateFormat {
 		return fmt.Errorf("tenant %s recovery factory has different app composition or restore formats: %v", id, err)
 	}
-	fresh.Files, fresh.Secrets, fresh.Outbound, fresh.AIClient = old.Files, old.Secrets, old.Outbound, old.AIClient
+	fresh.tenantPorts = old.tenantPorts
 	fresh.Store = journal
 	entries, err := journal.Entries(ctx, id, 0)
 	if err != nil {

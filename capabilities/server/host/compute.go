@@ -368,11 +368,7 @@ func (t *Tenant) readArtifact(ctx context.Context, digest string) ([]byte, error
 }
 
 func (t *Tenant) buildCode(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error) {
-	compiler := t.Compiler
-	if compiler == nil {
-		compiler = computeowner.EnvironmentCompiler()
-	}
-	result, module, err := compiler.Compile(ctx, q)
+	result, module, err := computeowner.EnvironmentCompiler().Compile(ctx, q)
 	if err == nil {
 		err = computeowner.ValidateWasm(ctx, module, q.ABI)
 		if err == nil {
@@ -514,10 +510,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			var module []byte
 			module, err = t.readArtifact(ctx, op.Binding.Module)
 			if err == nil {
-				worker := t.ComputeWorker
-				if worker == nil {
-					worker = computeowner.EnvironmentWasmWorker()
-				}
+				worker := computeowner.EnvironmentWasmWorker()
 				var result platform.WasmResponse
 				request := platform.WasmRequest{ABI: op.Binding.ABI, Module: module, Digest: op.Binding.Module, Input: inputs, Limits: op.Limits}
 				if op.Limits.DataInputBytes > 0 {

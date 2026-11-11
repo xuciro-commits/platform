@@ -6,7 +6,6 @@ import automation "platformserver/services/automate/runtime"
 
 import (
 	"fmt"
-	"net/http"
 	"platformkernel/kernel"
 	"platformserver/kernel/transport"
 	knowledgeindex "platformserver/services/ai/retrieval"
@@ -72,8 +71,7 @@ type Tenant struct {
 	works         *kernel.Works
 	opsMu         sync.Mutex
 	work          automation.WorkBoard
-	Quota         int
-	quota         automation.Quota
+	rotation      automation.Rotation
 	breakers      integrations.Breakers
 	connectors    connectorRoster
 	notices       runtimekernel.NoticeBoard
@@ -82,15 +80,10 @@ type Tenant struct {
 	sequences     runtimekernel.Sequences
 	endpoints     []*Endpoint
 	outbound      []*effect
-	Secrets       func(name string) ([]byte, bool)
-	Outbound      func(req *http.Request, allowPrivate bool) (*http.Response, error)
-	AIClient      func(req *http.Request) (*http.Response, error)
-	Files         platform.FileStore
-	ComputeWorker platform.WasmWorker
-	Compiler      platform.CodeCompiler
-	cancels       computeowner.Cancels
-	memFiles      resources.MemoryFiles
-	uploads       resources.Uploads
+	tenantPorts
+	cancels  computeowner.Cancels
+	memFiles resources.MemoryFiles
+	uploads  resources.Uploads
 
 	includeArchivedDefinitions bool
 }

@@ -18,9 +18,8 @@ type WorkState struct {
 }
 type WorkLoop struct {
 	Board        *WorkBoard
-	Quota        *Quota
+	Rotation     *Rotation
 	Apps         []platform.App
-	Limit        int
 	Active       func(string) bool
 	Lock, Unlock func()
 	Attempt, Run func(*Task, time.Time, bool) string
@@ -55,45 +54,9 @@ func StateOfTask(task *Task) (platform.ScheduledTaskState, error) {
 	return s, nil
 }
 
-type Quota struct {
-	used map[string]usedMinute
-	turn int
-}
+type Rotation struct{ turn int }
 
-func (q *Quota) Fork() Quota {
-	fork := Quota{used: make(map[string]usedMinute, len(q.used)), turn: q.turn}
-	for key, value := range q.used {
-		fork.used[key] = value
-	}
-	return fork
-}
-
-type usedMinute struct {
-	minute time.Time
-	n      int
-}
-
-func (q *Quota) Over(app string, limit int, now time.Time) bool {
-	if limit <= 0 {
-		return false
-	}
-	u := q.used[app]
-	return u.minute.Equal(now.Truncate(time.Minute)) && u.n >= limit
-}
-
-func (q *Quota) Spend(app string, now time.Time) {
-	if q.used == nil {
-		q.used = map[string]usedMinute{}
-	}
-	u, minute := q.used[app], now.Truncate(time.Minute)
-	if !u.minute.Equal(minute) {
-		u = usedMinute{minute: minute}
-	}
-	u.n++
-	q.used[app] = u
-}
-
-func (q *Quota) Next(n int) { q.turn = (q.turn + 1) % max(n, 1) }
+func (r *Rotation) Next(n int) { r.turn = (r.turn + 1) % max(n, 1) }
 
 type WorkBoard struct {
 	Queues map[string][]*Task
@@ -282,11 +245,8 @@ func (s WorkLoop) Round(now time.Time, budget int) (bool, int) {
 			if took >= budget {
 				break
 			}
-			a := s.Apps[(s.Quota.turn+i)%n].Manifest().ID
+			a := s.Apps[(s.Rotation.turn+i)%n].Manifest().ID
 			if !s.Active(a) {
-				continue
-			}
-			if s.Quota.Over(a, s.Limit, now) {
 				continue
 			}
 			s.Lock()
@@ -296,19 +256,17 @@ func (s WorkLoop) Round(now time.Time, budget int) (bool, int) {
 				continue
 			}
 			s.Attempt(next, now, false)
-			s.Quota.Spend(a, now)
 			took, progressed = took+1, true
 		}
 	}
 	for _, j := range s.Board.Jobs {
-		if s.Active(j.App) && j.DueAt(now) && took < budget && !s.Quota.Over(j.App, s.Limit, now) {
+		if s.Active(j.App) && j.DueAt(now) && took < budget {
 			s.Run(j, now, false)
-			s.Quota.Spend(j.App, now)
 			took++
 		}
 	}
 	if took > 0 {
-		s.Quota.Next(n)
+		s.Rotation.Next(n)
 	}
 	return s.Pending(now), took
 }
@@ -317,27 +275,11 @@ func (s WorkLoop) Pending(now time.Time) bool {
 	s.Lock()
 	defer s.Unlock()
 	for app, q := range s.Board.Queues {
-		if s.Active(app) && Ready(q, now) != nil && !s.Quota.Over(app, s.Limit, now) {
+		if s.Active(app) && Ready(q, now) != nil {
 			return true
 		}
 	}
-	return slices.ContainsFunc(s.Board.Jobs, func(j *Task) bool { return s.Active(j.App) && j.DueAt(now) && !s.Quota.Over(j.App, s.Limit, now) })
-}
-
-func (s WorkLoop) Deferred(now time.Time) []string {
-	s.Lock()
-	defer s.Unlock()
-	var out []string
-	for _, a := range s.Apps {
-		id := a.Manifest().ID
-		if !s.Active(id) {
-			continue
-		}
-		if s.Quota.Over(id, s.Limit, now) && (Ready(s.Board.Queued(id), now) != nil || slices.ContainsFunc(s.Board.Jobs, func(j *Task) bool { return j.App == id && j.DueAt(now) })) {
-			out = append(out, id)
-		}
-	}
-	return out
+	return slices.ContainsFunc(s.Board.Jobs, func(j *Task) bool { return s.Active(j.App) && j.DueAt(now) })
 }
 
 func (task *Task) RestoreOutcome(saved Task) {

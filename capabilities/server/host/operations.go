@@ -160,7 +160,7 @@ func (t *Tenant) step(now time.Time) (more bool) {
 			}
 		}
 		t.opsMu.Lock()
-		t.quota = value.scope.quota.Fork()
+		t.rotation = value.scope.rotation
 		for _, job := range value.scope.work.Jobs {
 			if current := t.work.Job(job.ID); current != nil {
 				current.NextRun = job.NextRun
@@ -172,15 +172,6 @@ func (t *Tenant) step(now time.Time) (more bool) {
 		return value, refusal
 	})
 	return refusal == nil && result.more
-}
-
-func (t *Tenant) overQuota(app string, now time.Time) bool { return t.quota.Over(app, t.Quota, now) }
-
-func (t *Tenant) spend(app string, now time.Time) { t.quota.Spend(app, now) }
-
-func (t *Tenant) Deferred(now time.Time) []string {
-	out, _ := recordRead(t, context.Background(), func(t *Tenant) ([]string, *kernel.Error) { return t.workLoop().Deferred(now), nil })
-	return out
 }
 
 func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) string {
@@ -624,5 +615,5 @@ func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.
 }
 
 func (t *Tenant) workLoop() automation.WorkLoop {
-	return automation.WorkLoop{Board: &t.work, Quota: &t.quota, Apps: t.apps, Limit: t.Quota, Active: t.ownerActive, Lock: t.opsMu.Lock, Unlock: t.opsMu.Unlock, Attempt: t.attempt, Run: t.run}
+	return automation.WorkLoop{Board: &t.work, Rotation: &t.rotation, Apps: t.apps, Active: t.ownerActive, Lock: t.opsMu.Lock, Unlock: t.opsMu.Unlock, Attempt: t.attempt, Run: t.run}
 }
