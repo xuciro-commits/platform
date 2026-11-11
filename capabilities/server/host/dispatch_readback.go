@@ -145,10 +145,10 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 			problem = fmt.Errorf("The original dispatch observation is unavailable")
 			break
 		}
-		plan := observationReadPlan{info: ObservationInfo{Ref: platform.AssetRef{App: definition.Object.App, Kind: platform.AssetObservation, Name: definition.Name}, Definition: definition}, connection: connection, device: run.Device}
+		plan := dataowner.ObservationPlan{Info: dataowner.ObservationInfo{Ref: platform.AssetRef{App: definition.Object.App, Kind: platform.AssetObservation, Name: definition.Name}, Definition: definition}, Connection: connection, Device: run.Device}
 		for _, asset := range run.Assets {
-			if asset.Ref == plan.info.Ref {
-				plan.info.Version = asset.SourceVersion
+			if asset.Ref == plan.Info.Ref {
+				plan.Info.Version = asset.SourceVersion
 				break
 			}
 		}
@@ -158,7 +158,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 				problem = fmt.Errorf("The dispatch observation credential is unavailable in this environment")
 				break
 			}
-			plan.header = strings.TrimSpace(string(credential))
+			plan.Header = strings.TrimSpace(string(credential))
 		}
 		_, subject, _ := strings.Cut(run.Subject, "/")
 		started := run.StartedAt
@@ -175,7 +175,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 			problem = fmt.Errorf("No observation status exists after this command started")
 			break
 		}
-		result, err := t.fetchObservation(context.Background(), plan, ObservationRead{Record: subject, Since: since, Until: at, Mode: "summary"}, at)
+		result, err := t.observationSources().Fetch(context.Background(), plan, dataowner.ObservationRead{Record: subject, Since: since, Until: at, Mode: "summary"}, at)
 		if err != nil {
 			problem = err
 		} else if result.Window.Count == 0 {

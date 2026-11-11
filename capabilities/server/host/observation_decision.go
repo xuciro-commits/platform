@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	dataowner "platformserver/services/data"
 
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *platfor
 	}
 	fields := []string{definition.DeviceField}
 	if definition.Decision != nil {
-		fields = append(fields, observationDecisionFields(*definition.Decision)...)
+		fields = append(fields, dataowner.ObservationDecisionFields(*definition.Decision)...)
 	}
 	permission := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: typ, Record: id, Fields: fields}, now, false)
 	if !permission.Allow || len(permission.Withheld) > 0 {
@@ -54,7 +55,7 @@ func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *platfor
 	return &copy
 }
 
-func observationRequestIdentity(ref platform.AssetRef, q ObservationEvaluate) (string, string, error) {
+func observationRequestIdentity(ref platform.AssetRef, q dataowner.ObservationEvaluate) (string, string, error) {
 	if q.Key == "" || len(q.Key) > 160 || strings.ContainsAny(q.Key, "/\x00\r\n") || q.Until.IsZero() {
 		return "", "", fmt.Errorf("choose a stable observation decision key and window end")
 	}
@@ -70,12 +71,12 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 		if len(prior.Answer) > 0 {
 			result, saved, err := acceptedformat.DecodeBatch(prior.Answer)
 			if err != nil {
-				return nil, observationUnavailable(err), true
+				return nil, dataowner.ObservationUnavailable(err), true
 			}
 			receipt = saved
 			original, err = acceptedformat.BatchSubmission(result, saved)
 			if err != nil {
-				return nil, observationUnavailable(err), true
+				return nil, dataowner.ObservationUnavailable(err), true
 			}
 		} else if prior.Record != nil {
 			receipt, original = prior.Record, prior.Record.GetSubmission()
@@ -98,7 +99,7 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 	return nil, nil, false
 }
 
-func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref platform.AssetRef, q ObservationEvaluate, now time.Time) (ObservationEvaluation, *kernel.Error) {
+func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref platform.AssetRef, q dataowner.ObservationEvaluate, now time.Time) (ObservationEvaluation, *kernel.Error) {
 	var answer ObservationEvaluation
 	key, identity, err := observationRequestIdentity(ref, q)
 	if err != nil {
@@ -107,8 +108,8 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 	type prepared struct {
 		answer ObservationEvaluation
 		member platform.Member
-		plan   observationReadPlan
-		read   ObservationRead
+		plan   dataowner.ObservationPlan
+		read   dataowner.ObservationRead
 	}
 	initial, refusal := recordRead(t, ctx, func(t *Tenant) (prepared, *kernel.Error) {
 		var answer ObservationEvaluation
@@ -126,29 +127,29 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 			}
 			return prepared{answer: answer}, refusal
 		}
-		plan, refusal := t.prepareObservation(m, ref, q.Record, now, true)
+		plan, refusal := t.observationSources().Prepare(m, ref, q.Record, now, true)
 		if refusal != nil {
 			return prepared{answer: answer}, refusal
 		}
-		read := ObservationRead{Record: q.Record, Since: q.Until.Add(-time.Duration(plan.info.Definition.WindowSeconds) * time.Second), Until: q.Until, Mode: "summary"}
-		if plan.info.Definition.Decision.Mode == "intervals" {
+		read := dataowner.ObservationRead{Record: q.Record, Since: q.Until.Add(-time.Duration(plan.Info.Definition.WindowSeconds) * time.Second), Until: q.Until, Mode: "summary"}
+		if plan.Info.Definition.Decision.Mode == "intervals" {
 			read.Mode = "intervals"
 			read.Limit = platform.ObservationMaxPoints
 		}
-		if err := checkObservationRead(&read, now); err != nil {
+		if err := dataowner.CheckObservationRead(&read, now); err != nil {
 			return prepared{answer: answer}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		decision := plan.info.Definition.Decision
+		decision := plan.Info.Definition.Decision
 		owner := t.App(decision.Action.App)
 		if owner == nil {
 			return prepared{answer: answer}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Observation decision action is unavailable")
 		}
 		action, declared := owner.Manifest().Actions.Action(decision.Action.Name)
-		if err := platform.CheckObservationAction(plan.info.Definition, action); err != nil {
-			return prepared{answer: answer}, observationUnavailable(err)
+		if err := platform.CheckObservationAction(plan.Info.Definition, action); err != nil {
+			return prepared{answer: answer}, dataowner.ObservationUnavailable(err)
 		}
 		caller := platform.NewCaller(runtime{t: t, scoped: true}, m, decision.Action.App, false, false)
-		if refusal := authorizationRefusal(t.authorizeCapability(caller, decision.Action.App, action.Schema, action.Roles, declared && action.Target == plan.entity.Type, authorizationDetails{At: now, Sources: plan.sources})); refusal != nil {
+		if refusal := authorizationRefusal(t.authorizeCapability(caller, decision.Action.App, action.Schema, action.Roles, declared && action.Target == plan.Entity.Type, authorizationDetails{At: now, Sources: plan.Sources})); refusal != nil {
 			return prepared{answer: answer}, refusal
 		}
 		return prepared{member: m, plan: plan, read: read}, nil
@@ -157,29 +158,29 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 		return initial.answer, refusal
 	}
 	m, plan, read := initial.member, initial.plan, initial.read
-	decision := plan.info.Definition.Decision
-	result, err := t.fetchObservation(ctx, plan, read, now)
+	decision := plan.Info.Definition.Decision
+	result, err := t.observationSources().Fetch(ctx, plan, read, now)
 	if err != nil {
-		return answer, observationUnavailable(err)
+		return answer, dataowner.ObservationUnavailable(err)
 	}
 	var matched bool
 	var inputs map[string]json.RawMessage
 	if result.Intervals != nil {
-		matched, inputs, err = platform.EvaluateObservationIntervals(plan.info.Definition, plan.entity, plan.record, *result.Intervals, now, t.services.Rules)
+		matched, inputs, err = platform.EvaluateObservationIntervals(plan.Info.Definition, plan.Entity, plan.Record, *result.Intervals, now, t.services.Rules)
 	} else {
-		matched, inputs, err = platform.EvaluateObservation(plan.info.Definition, plan.entity, plan.record, result.Window, now, t.services.Rules)
+		matched, inputs, err = platform.EvaluateObservation(plan.Info.Definition, plan.Entity, plan.Record, result.Window, now, t.services.Rules)
 	}
 	if err != nil {
-		return answer, observationUnavailable(err)
+		return answer, dataowner.ObservationUnavailable(err)
 	}
 	return decideOnImage(t, ctx, "observation:answer", func(t *Tenant) (ObservationEvaluation, *kernel.Error) {
 		m = t.authorizationMember(m)
 		var answer ObservationEvaluation
-		current, refusal := t.prepareObservation(m, ref, q.Record, now, true)
+		current, refusal := t.observationSources().Prepare(m, ref, q.Record, now, true)
 		if refusal != nil {
 			return answer, refusal
 		}
-		if current.stamp != plan.stamp {
+		if current.Stamp != plan.Stamp {
 			return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Observation source or permissions changed while reading")
 		}
 		if receipt, refusal, found := t.observationPrior(m, key, identity); found {
@@ -200,11 +201,11 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 		var source struct {
 			Revision uint32 `json:"revision"`
 		}
-		if json.Unmarshal(plan.record, &source) != nil {
-			return answer, observationUnavailable(fmt.Errorf("observation record revision is unavailable"))
+		if json.Unmarshal(plan.Record, &source) != nil {
+			return answer, dataowner.ObservationUnavailable(fmt.Errorf("observation record revision is unavailable"))
 		}
 		submission := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: decision.Action.App, IdempotencyKey: key, CorrelationId: identity,
-			Target: &pb.EntityRef{Type: plan.entity.Type, Id: q.Record}, Schema: &pb.SchemaRef{Name: decision.Action.Name, Version: 1}, ExpectedRevision: &source.Revision, Payload: payload}
+			Target: &pb.EntityRef{Type: plan.Entity.Type, Id: q.Record}, Schema: &pb.SchemaRef{Name: decision.Action.Name, Version: 1}, ExpectedRevision: &source.Revision, Payload: payload}
 		if refusal := t.delegatedBound(m, submission); refusal != nil {
 			return answer, refusal
 		}
@@ -213,7 +214,7 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 			return answer, unknown()
 		}
 		submission = t.currentSubmissionSchema(owner, submission)
-		evidence := &platform.ObservationDecisionEvidence{Key: key, Definition: platform.AssetBinding{Ref: ref, SourceVersion: plan.info.Version}, Record: plan.entity.Type + "/" + q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Window: result.Window, Intervals: result.Intervals}
+		evidence := &platform.ObservationDecisionEvidence{Key: key, Definition: platform.AssetBinding{Ref: ref, SourceVersion: plan.Info.Version}, Record: plan.Entity.Type + "/" + q.Record, Device: plan.Device, Signal: plan.Info.Definition.Signal, Window: result.Window, Intervals: result.Intervals}
 		receipt, refusal := t.accept(owner, m, submission, now, acceptOptions{observation: evidence})
 		if receipt != nil {
 			answer.Receipt = &SubmissionAnswer{Record: receipt}

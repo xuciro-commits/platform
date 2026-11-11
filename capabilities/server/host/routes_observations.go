@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	dataowner "platformserver/services/data"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 )
 
 func (h *Host) routesObservations(rt *routes) {
-	rt.handle(transport.Route{Pattern: "GET /v1/observations", Summary: "Declared external observation sources available through original member and model permissions", Answer: []ObservationInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "GET /v1/observations", Summary: "Declared external observation sources available through original member and model permissions", Answer: []dataowner.ObservationInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, refusal := t.Observations(m)
 		if refusal != nil {
 			Reply(w, nil, refusal)
@@ -21,8 +22,8 @@ func (h *Host) routesObservations(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
-	rt.handle(transport.Route{Pattern: "POST /v1/observations/{app}/{name}/read", Summary: "Read a current protocol point or bounded external window without storing points in tenant state", Body: ObservationRead{}, Answer: platform.ObservationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request ObservationRead
+	rt.handle(transport.Route{Pattern: "POST /v1/observations/{app}/{name}/read", Summary: "Read a current protocol point or bounded external window without storing points in tenant state", Body: dataowner.ObservationRead{}, Answer: platform.ObservationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request dataowner.ObservationRead
 		if !readObservationRequest(w, r, &request) {
 			return
 		}
@@ -33,8 +34,8 @@ func (h *Host) routesObservations(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.handle(transport.Route{Pattern: "POST /v1/observations/{app}/{name}/evaluate", Summary: "Evaluate one external summary with the shared rule language and submit only compact results through the original business action", Body: ObservationEvaluate{}, Answer: ObservationEvaluation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request ObservationEvaluate
+	rt.handle(transport.Route{Pattern: "POST /v1/observations/{app}/{name}/evaluate", Summary: "Evaluate one external summary with the shared rule language and submit only compact results through the original business action", Body: dataowner.ObservationEvaluate{}, Answer: ObservationEvaluation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request dataowner.ObservationEvaluate
 		if !readObservationRequest(w, r, &request) {
 			return
 		}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"platformkernel/kernel"
+	dataowner "platformserver/services/data"
 	controlowner "platformserver/services/security/control"
 
 	"strings"
@@ -93,7 +94,7 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 				if !started {
 					continue
 				}
-				_, problem := t.EvaluateObservation(context.Background(), member, source.ref, ObservationEvaluate{Record: row.ID, Until: until, Key: "scheduled-" + identity}, at)
+				_, problem := t.EvaluateObservation(context.Background(), member, source.ref, dataowner.ObservationEvaluate{Record: row.ID, Until: until, Key: "scheduled-" + identity}, at)
 				if problem == nil {
 					t.schedules.Windows.End(slot, identity)
 				} else {

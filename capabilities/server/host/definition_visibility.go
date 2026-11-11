@@ -5,6 +5,7 @@ import records "platformserver/kernel/records"
 import (
 	"maps"
 	pageowner "platformserver/services/apps/pages"
+	dataowner "platformserver/services/data"
 	"platformserver/services/functions/authoring"
 	"slices"
 	"strconv"
@@ -219,7 +220,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			visible := *declaration
 			if visible.Decision != nil {
 				readable := true
-				for _, name := range observationDecisionFields(*visible.Decision) {
+				for _, name := range dataowner.ObservationDecisionFields(*visible.Decision) {
 					if _, found := info.Field(name); !found {
 						readable = false
 					}
