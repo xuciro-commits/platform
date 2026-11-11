@@ -2,8 +2,6 @@ package host
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"slices"
 	"strconv"
@@ -19,182 +17,40 @@ import (
 	"platformserver/services/resources/merge"
 )
 
-type BranchResourceStatus struct {
-	Type    string    `json:"type"`
-	ID      string    `json:"id"`
-	RID     string    `json:"rid,omitempty"`
-	Op      string    `json:"op" enum:"create,update,delete"`
-	Changes int       `json:"changes"`
-	LastSeq int       `json:"lastSeq"`
-	LastAt  time.Time `json:"lastAt"`
-	LastBy  string    `json:"lastBy"`
-	Drifted bool      `json:"drifted,omitempty"`
-}
-
-type BranchDetail struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Title       string                 `json:"title"`
-	Description string                 `json:"description,omitempty"`
-	State       string                 `json:"state" enum:"open,proposed,merged,closed"`
-	Revision    uint32                 `json:"revision"`
-	Created     platform.Stamp         `json:"created"`
-	Changed     platform.Stamp         `json:"changed"`
-	Changes     int                    `json:"changes"`
-	Resources   []BranchResourceStatus `json:"resources"`
-	Proposal    *build.BranchProposal  `json:"proposal,omitempty"`
-	Check       *BranchCheck           `json:"check,omitempty"`
-	CheckStale  bool                   `json:"checkStale,omitempty"`
-	Merge       *build.BranchMerge     `json:"merge,omitempty"`
-}
-
-type BranchChangeEntry struct {
-	Seq     int             `json:"seq"`
-	At      time.Time       `json:"at"`
-	By      string          `json:"by"`
-	Type    string          `json:"type"`
-	ID      string          `json:"id"`
-	Project string          `json:"project,omitempty"`
-	RID     string          `json:"rid,omitempty"`
-	Op      string          `json:"op" enum:"create,update,delete"`
-	Rebased bool            `json:"rebased,omitempty"`
-	Base    json.RawMessage `json:"base,omitempty"`
-	Spec    json.RawMessage `json:"spec,omitempty"`
-}
-
-type BranchResourceView struct {
-	Type    string          `json:"type"`
-	ID      string          `json:"id"`
-	Project string          `json:"project,omitempty"`
-	RID     string          `json:"rid,omitempty"`
-	Op      string          `json:"op,omitempty" enum:"create,update,delete"`
-	Base    json.RawMessage `json:"base,omitempty"`
-	Main    json.RawMessage `json:"main,omitempty"`
-	Branch  json.RawMessage `json:"branch,omitempty"`
-}
-
-type BranchResourceDiff struct {
-	Type      string                  `json:"type"`
-	ID        string                  `json:"id"`
-	RID       string                  `json:"rid,omitempty"`
-	Op        string                  `json:"op" enum:"create,update,delete"`
-	Branch    []branches.PathChange   `json:"branch"`
-	Main      []branches.PathChange   `json:"main"`
-	Conflicts []branches.PathConflict `json:"conflicts"`
-	Merged    json.RawMessage         `json:"merged,omitempty"`
-}
-
-type BranchDiff struct {
-	Resources []BranchResourceDiff `json:"resources"`
-	Conflicts int                  `json:"conflicts"`
-}
-
-type BranchResourceCheck struct {
-	Type     string                `json:"type"`
-	ID       string                `json:"id"`
-	RID      string                `json:"rid,omitempty"`
-	Action   string                `json:"action" enum:"create,edit,archive,none"`
-	Artifact string                `json:"artifact,omitempty"`
-	Accepted bool                  `json:"accepted"`
-	Message  string                `json:"message,omitempty"`
-	Code     string                `json:"code,omitempty"`
-	Issues   []platform.FieldIssue `json:"issues,omitempty"`
-}
-
-type BranchGraphCheck struct {
-	Passed    bool                `json:"passed"`
-	Messages  []string            `json:"messages"`
-	Candidate string              `json:"candidate,omitempty"`
-	Added     []platform.AssetRef `json:"added,omitempty"`
-	Removed   []platform.AssetRef `json:"removed,omitempty"`
-	Changed   []platform.AssetRef `json:"changed,omitempty"`
-}
-
-type BranchSimulationCheck struct {
-	CandidateID string   `json:"candidateId,omitempty"`
-	Passed      *bool    `json:"passed,omitempty"`
-	Steps       int      `json:"steps"`
-	Messages    []string `json:"messages"`
-}
-
-type BranchCheck struct {
-	At         time.Time              `json:"at"`
-	By         string                 `json:"by"`
-	Base       string                 `json:"base"`
-	Content    string                 `json:"content"`
-	Passed     bool                   `json:"passed"`
-	Conflicts  int                    `json:"conflicts"`
-	Resources  []BranchResourceCheck  `json:"resources"`
-	Graph      BranchGraphCheck       `json:"graph"`
-	Simulation *BranchSimulationCheck `json:"simulation,omitempty"`
-}
-
 type BranchChecks struct {
 	At         time.Time                       `json:"at"`
-	Conflicts  []BranchResourceDiff            `json:"conflicts"`
-	Resources  []BranchResourceCheck           `json:"resources"`
+	Conflicts  []branches.BranchResourceDiff   `json:"conflicts"`
+	Resources  []branches.BranchResourceCheck  `json:"resources"`
 	Approved   bool                            `json:"approved"`
 	Approval   string                          `json:"approval,omitempty"`
 	Ready      bool                            `json:"ready"`
-	Check      BranchCheck                     `json:"check"`
+	Check      branches.BranchCheck            `json:"check"`
 	Simulation *trialowner.CandidateSimulation `json:"simulation,omitempty"`
 }
 
 type BranchMergeResult struct {
-	Branch         BranchDetail                    `json:"branch"`
+	Branch         branches.BranchDetail           `json:"branch"`
 	Candidate      string                          `json:"candidate,omitempty"`
 	CandidateError string                          `json:"candidateError,omitempty"`
-	Applied        []BranchResourceCheck           `json:"applied"`
+	Applied        []branches.BranchResourceCheck  `json:"applied"`
 	Simulated      *trialowner.CandidateSimulation `json:"simulation,omitempty"`
 }
 
-type BranchCreateRequest struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-}
-
-type BranchSaveRequest struct {
-	Op      string          `json:"op,omitempty" enum:"create,update,delete"`
-	Project string          `json:"project,omitempty"`
-	Spec    json.RawMessage `json:"spec,omitempty"`
-}
-
-type BranchResolveRequest struct {
-	Resolutions []BranchResolution `json:"resolutions,omitempty"`
-}
-
-type BranchResolution struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
-	Path string `json:"path"`
-	Take string `json:"take" enum:"branch,main"`
-}
-
 type BranchCheckRequest struct {
-	Resolutions []BranchResolution                     `json:"resolutions,omitempty"`
+	Resolutions []branches.BranchResolution            `json:"resolutions,omitempty"`
 	Simulation  *trialowner.CandidateSimulationRequest `json:"simulation,omitempty"`
 }
 
 type BranchProposeRequest struct {
 	Reviewers   []string                               `json:"reviewers,omitempty"`
 	Note        string                                 `json:"note,omitempty"`
-	Resolutions []BranchResolution                     `json:"resolutions,omitempty"`
+	Resolutions []branches.BranchResolution            `json:"resolutions,omitempty"`
 	Simulation  *trialowner.CandidateSimulationRequest `json:"simulation,omitempty"`
-}
-
-type BranchReviewRequest struct {
-	Decision string `json:"decision" enum:"approve,changes"`
-	Note     string `json:"note,omitempty"`
 }
 
 type BranchMergeRequest struct {
-	Resolutions []BranchResolution                     `json:"resolutions,omitempty"`
+	Resolutions []branches.BranchResolution            `json:"resolutions,omitempty"`
 	Simulation  *trialowner.CandidateSimulationRequest `json:"simulation,omitempty"`
-}
-
-type BranchConflictError struct {
-	Conflicts []BranchResourceDiff `json:"conflicts"`
 }
 
 func branchRefuse(message string, args ...any) *kernel.Error {
@@ -222,15 +78,6 @@ func (t *Tenant) ReadBranch(m platform.Member, id string, now time.Time) (build.
 		branch.Changes = []build.BranchChange{}
 	}
 	return branch, nil
-}
-
-type mainDraft struct {
-	Spec      json.RawMessage
-	Revision  uint32
-	Exists    bool
-	RID       string
-	Module    string
-	BuildHash string
 }
 
 func (t *Tenant) resourceProject(typ, draft string) string {
@@ -283,8 +130,8 @@ func (t *Tenant) draftFields(typ string) (map[string]bool, *kernel.Error) {
 	return fields, nil
 }
 
-func (t *Tenant) mainDraft(m platform.Member, typ, id string, now time.Time) (mainDraft, *kernel.Error) {
-	var out mainDraft
+func (t *Tenant) mainDraftOf(m platform.Member, typ, id string, now time.Time) (branches.MainDraft, *kernel.Error) {
+	var out branches.MainDraft
 	if !build.BranchDraftType(typ) {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{type} is not a resource draft type", typ)
 	}
@@ -338,13 +185,13 @@ func (t *Tenant) branchRID(typ, id string, spec map[string]json.RawMessage) stri
 	return platform.ResourceID(t.ID, ref)
 }
 
-func (t *Tenant) branchDetail(m platform.Member, branch build.Branch, now time.Time) (BranchDetail, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (BranchDetail, *kernel.Error) { return t.branchDetailRead(m, branch, now) })
+func (t *Tenant) branchDetail(m platform.Member, branch build.Branch, now time.Time) (branches.BranchDetail, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (branches.BranchDetail, *kernel.Error) { return t.branchDetailRead(m, branch, now) })
 }
 
-func (t *Tenant) branchDetailRead(m platform.Member, branch build.Branch, now time.Time) (BranchDetail, *kernel.Error) {
-	detail := BranchDetail{ID: branch.ID, Name: branch.Name, Title: branch.Title, Description: branch.Description, State: branch.State, Revision: branch.Revision,
-		Created: branch.Created, Changed: branch.Changed, Changes: len(branch.Changes), Resources: []BranchResourceStatus{}, Proposal: branch.Proposal, Check: decodeBranchCheck(branch), Merge: branch.Merge}
+func (t *Tenant) branchDetailRead(m platform.Member, branch build.Branch, now time.Time) (branches.BranchDetail, *kernel.Error) {
+	detail := branches.BranchDetail{ID: branch.ID, Name: branch.Name, Title: branch.Title, Description: branch.Description, State: branch.State, Revision: branch.Revision,
+		Created: branch.Created, Changed: branch.Changed, Changes: len(branch.Changes), Resources: []branches.BranchResourceStatus{}, Proposal: branch.Proposal, Check: branches.DecodeCheck(branch), Merge: branch.Merge}
 	if detail.Check != nil && (branch.State == build.BranchOpen || branch.State == build.BranchProposed) {
 		detail.CheckStale = detail.Check.Base != t.branchBaseLocked()
 	}
@@ -357,9 +204,9 @@ func (t *Tenant) branchDetailRead(m platform.Member, branch build.Branch, now ti
 				count++
 			}
 		}
-		status := BranchResourceStatus{Type: typ, ID: id, Op: latest.Op, Changes: count, LastSeq: latest.Seq, LastAt: latest.At, LastBy: latest.By}
+		status := branches.BranchResourceStatus{Type: typ, ID: id, Op: latest.Op, Changes: count, LastSeq: latest.Seq, LastAt: latest.At, LastBy: latest.By}
 		if branch.State == build.BranchOpen || branch.State == build.BranchProposed {
-			current, refusal := t.mainDraft(m, typ, id, now)
+			current, refusal := t.mainDraftOf(m, typ, id, now)
 			if refusal != nil {
 				return detail, refusal
 			}
@@ -375,11 +222,11 @@ func (t *Tenant) branchDetailRead(m platform.Member, branch build.Branch, now ti
 	return detail, nil
 }
 
-func (t *Tenant) ListBranches(m platform.Member, now time.Time) ([]BranchDetail, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) ([]BranchDetail, *kernel.Error) { return t.scopedListBranches(m, now) })
+func (t *Tenant) ListBranches(m platform.Member, now time.Time) ([]branches.BranchDetail, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) ([]branches.BranchDetail, *kernel.Error) { return t.scopedListBranches(m, now) })
 }
 
-func (t *Tenant) scopedListBranches(m platform.Member, now time.Time) ([]BranchDetail, *kernel.Error) {
+func (t *Tenant) scopedListBranches(m platform.Member, now time.Time) ([]branches.BranchDetail, *kernel.Error) {
 	page, refusal := t.recordsFrom(t.Projection, m, build.BranchType, platform.Query{Limit: 500, Sort: []string{"id"}}, now)
 	var ids []string
 	if refusal == nil {
@@ -396,75 +243,67 @@ func (t *Tenant) scopedListBranches(m platform.Member, now time.Time) ([]BranchD
 	if refusal != nil {
 		return nil, refusal
 	}
-	out := []BranchDetail{}
+	out := []branches.BranchDetail{}
 	for _, id := range ids {
 		branch, refusal := t.readBranch(m, id, now)
 		if refusal != nil {
 			return nil, refusal
 		}
-		detail := BranchDetail{ID: branch.ID, Name: branch.Name, Title: branch.Title, Description: branch.Description, State: branch.State, Revision: branch.Revision,
-			Created: branch.Created, Changed: branch.Changed, Changes: len(branch.Changes), Resources: []BranchResourceStatus{}, Proposal: branch.Proposal, Check: decodeBranchCheck(branch), Merge: branch.Merge}
+		detail := branches.BranchDetail{ID: branch.ID, Name: branch.Name, Title: branch.Title, Description: branch.Description, State: branch.State, Revision: branch.Revision,
+			Created: branch.Created, Changed: branch.Changed, Changes: len(branch.Changes), Resources: []branches.BranchResourceStatus{}, Proposal: branch.Proposal, Check: branches.DecodeCheck(branch), Merge: branch.Merge}
 		for _, key := range branch.Resources() {
 			typ, rid, _ := strings.Cut(key, "/")
 			latest, _ := branch.Latest(typ, rid)
-			detail.Resources = append(detail.Resources, BranchResourceStatus{Type: typ, ID: rid, Op: latest.Op, LastSeq: latest.Seq, LastAt: latest.At, LastBy: latest.By})
+			detail.Resources = append(detail.Resources, branches.BranchResourceStatus{Type: typ, ID: rid, Op: latest.Op, LastSeq: latest.Seq, LastAt: latest.At, LastBy: latest.By})
 		}
 		out = append(out, detail)
 	}
 	return out, nil
 }
 
-func branchKey(prefix, member, schema string, payload []byte, revision *uint32) string {
-	sum := sha256.New()
-	sum.Write([]byte(member + "\x00" + schema + "\x00"))
-	sum.Write(payload)
-	if revision != nil {
-		sum.Write([]byte("\x00" + strconv.FormatUint(uint64(*revision), 10)))
-	}
-	return prefix + ":" + hex.EncodeToString(sum.Sum(nil))[:24]
-}
-
 func (t *Tenant) submitBranch(m platform.Member, key, schema, id string, payload any, now time.Time) *kernel.Error {
 	raw := platform.Raw(payload)
-	_, refusal := t.Submit(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: branchKey(key, m.ID, schema, raw, nil),
+	_, refusal := t.Submit(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: branches.Key(key, m.ID, schema, raw, nil),
 		Target: &pb.EntityRef{Type: build.BranchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now)
 	return refusal
 }
 
-func (t *Tenant) CreateBranch(m platform.Member, request BranchCreateRequest, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) CreateBranch(m platform.Member, request branches.BranchCreateRequest, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	if !ontology.Named(request.Name) {
-		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch name is lower-case letters and digits")
+		return branches.BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch name is lower-case letters and digits")
 	}
 	if refusal := t.submitBranch(m, "branch:"+request.Name+":create", build.BranchType+".create", request.Name, map[string]any{"name": request.Name, "title": request.Title, "description": request.Description}, now); refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	return t.BranchDetail(m, request.Name, now)
 }
 
-func (t *Tenant) BranchDetail(m platform.Member, id string, now time.Time) (BranchDetail, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (BranchDetail, *kernel.Error) { return t.branchDetailByIDRead(m, id, now) })
+func (t *Tenant) BranchDetail(m platform.Member, id string, now time.Time) (branches.BranchDetail, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (branches.BranchDetail, *kernel.Error) { return t.branchDetailByIDRead(m, id, now) })
 }
 
-func (t *Tenant) branchDetailByIDRead(m platform.Member, id string, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) branchDetailByIDRead(m platform.Member, id string, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	return t.branchDetail(m, branch, now)
 }
 
-func (t *Tenant) BranchChanges(m platform.Member, id string, specs bool, now time.Time) ([]BranchChangeEntry, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) ([]BranchChangeEntry, *kernel.Error) { return t.scopedBranchChanges(m, id, specs, now) })
+func (t *Tenant) BranchChanges(m platform.Member, id string, specs bool, now time.Time) ([]branches.BranchChangeEntry, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) ([]branches.BranchChangeEntry, *kernel.Error) {
+		return t.scopedBranchChanges(m, id, specs, now)
+	})
 }
 
-func (t *Tenant) scopedBranchChanges(m platform.Member, id string, specs bool, now time.Time) ([]BranchChangeEntry, *kernel.Error) {
+func (t *Tenant) scopedBranchChanges(m platform.Member, id string, specs bool, now time.Time) ([]branches.BranchChangeEntry, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
 		return nil, refusal
 	}
-	out := make([]BranchChangeEntry, 0, len(branch.Changes))
+	out := make([]branches.BranchChangeEntry, 0, len(branch.Changes))
 	for _, change := range branch.Changes {
-		entry := BranchChangeEntry{Seq: change.Seq, At: change.At, By: change.By, Type: change.Type, ID: change.ID, Project: change.Project, Op: change.Op, Rebased: change.Rebased, RID: t.branchRID(change.Type, change.ID, nil)}
+		entry := branches.BranchChangeEntry{Seq: change.Seq, At: change.At, By: change.By, Type: change.Type, ID: change.ID, Project: change.Project, Op: change.Op, Rebased: change.Rebased, RID: t.branchRID(change.Type, change.ID, nil)}
 		if specs {
 			entry.Base, entry.Spec = change.Base, change.Spec
 		}
@@ -475,22 +314,22 @@ func (t *Tenant) scopedBranchChanges(m platform.Member, id string, specs bool, n
 
 type branchSavePreparation struct {
 	branch      build.Branch
-	current     mainDraft
+	current     branches.MainDraft
 	op, project string
 	spec        json.RawMessage
 }
 
-func (t *Tenant) SaveBranchResource(m platform.Member, id, typ, draft string, request BranchSaveRequest, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) SaveBranchResource(m platform.Member, id, typ, draft string, request branches.BranchSaveRequest, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	plan, refusal := recordRead(t, context.Background(), func(t *Tenant) (branchSavePreparation, *kernel.Error) {
 		return t.prepareBranchSave(m, id, typ, draft, request, now)
 	})
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	return t.appendBranchSave(m, plan.branch, plan.current, typ, draft, plan.op, plan.project, plan.spec, now)
 }
 
-func (t *Tenant) prepareBranchSave(m platform.Member, id, typ, draft string, request BranchSaveRequest, now time.Time) (branchSavePreparation, *kernel.Error) {
+func (t *Tenant) prepareBranchSave(m platform.Member, id, typ, draft string, request branches.BranchSaveRequest, now time.Time) (branchSavePreparation, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
 		return branchSavePreparation{}, refusal
@@ -498,7 +337,7 @@ func (t *Tenant) prepareBranchSave(m platform.Member, id, typ, draft string, req
 	if branch.State != build.BranchOpen {
 		return branchSavePreparation{}, branchRefuse("The branch is {state}; only an open branch takes saves", branch.State)
 	}
-	current, refusal := t.mainDraft(m, typ, draft, now)
+	current, refusal := t.mainDraftOf(m, typ, draft, now)
 	if refusal != nil {
 		return branchSavePreparation{}, refusal
 	}
@@ -537,14 +376,14 @@ func (t *Tenant) prepareBranchSave(m platform.Member, id, typ, draft string, req
 			return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A saved spec is one JSON object")
 		}
 		for name := range spec {
-			if !fields[name] && !(typ == build.CodeType && name == codeBuildKey) {
+			if !fields[name] && !(typ == build.CodeType && name == branches.CodeBuildKey) {
 				return branchSavePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is not an authored field of {type}", name, typ)
 			}
 		}
 		if typ == build.CodeType {
-			delete(spec, codeBuildKey)
-			if kept := keptCodeBuild(previous, touched, spec); kept != nil {
-				spec[codeBuildKey] = kept
+			delete(spec, branches.CodeBuildKey)
+			if kept := branches.KeptCodeBuild(previous, touched, spec); kept != nil {
+				spec[branches.CodeBuildKey] = kept
 			}
 			request.Spec, _ = json.Marshal(spec)
 		}
@@ -583,27 +422,9 @@ func (t *Tenant) prepareBranchSave(m platform.Member, id, typ, draft string, req
 	return branchSavePreparation{branch: branch, current: current, op: op, project: project, spec: request.Spec}, nil
 }
 
-const codeBuildKey = "build"
-
-func keptCodeBuild(previous build.BranchChange, touched bool, spec map[string]json.RawMessage) json.RawMessage {
-	if !touched || previous.Op == "delete" {
-		return nil
-	}
-	var earlier map[string]json.RawMessage
-	if json.Unmarshal(previous.Spec, &earlier) != nil || earlier[codeBuildKey] == nil {
-		return nil
-	}
-	var artifact build.CodeArtifact
-	authored, _ := json.Marshal(spec)
-	if json.Unmarshal(earlier[codeBuildKey], &artifact) != nil || !artifact.Matches(authored) {
-		return nil
-	}
-	return earlier[codeBuildKey]
-}
-
-func (t *Tenant) appendBranchSave(m platform.Member, branch build.Branch, current mainDraft, typ, draft, op, project string, spec json.RawMessage, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) appendBranchSave(m platform.Member, branch build.Branch, current branches.MainDraft, typ, draft, op, project string, spec json.RawMessage, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	previous, touched := branch.Latest(typ, draft)
-	if touched && previous.Op == op && !previous.Rebased && sameJSON(previous.Spec, spec) {
+	if touched && previous.Op == op && !previous.Rebased && branches.SameJSON(previous.Spec, spec) {
 		return t.branchDetail(m, branch, now)
 	}
 	payload := map[string]any{"type": typ, "id": draft, "op": op, "project": project}
@@ -618,87 +439,57 @@ func (t *Tenant) appendBranchSave(m platform.Member, branch build.Branch, curren
 		}
 	}
 	if refusal := t.submitBranch(m, "branch:"+branch.ID+":save:"+strconv.Itoa(len(branch.Changes)+1), build.BranchType+".save", branch.ID, payload, now); refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	return t.BranchDetail(m, branch.ID, now)
 }
 
-func effectiveSpec(branch build.Branch, typ, id string) (spec json.RawMessage, deleted bool) {
-	latest, ok := branch.Latest(typ, id)
-	if !ok || latest.Op == "delete" {
-		return nil, ok
-	}
-	return latest.Spec, false
-}
-
-func (t *Tenant) BranchResource(m platform.Member, id, typ, draft string, now time.Time) (BranchResourceView, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (BranchResourceView, *kernel.Error) {
+func (t *Tenant) BranchResource(m platform.Member, id, typ, draft string, now time.Time) (branches.BranchResourceView, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (branches.BranchResourceView, *kernel.Error) {
 		return t.scopedBranchResource(m, id, typ, draft, now)
 	})
 }
 
-func (t *Tenant) scopedBranchResource(m platform.Member, id, typ, draft string, now time.Time) (BranchResourceView, *kernel.Error) {
+func (t *Tenant) scopedBranchResource(m platform.Member, id, typ, draft string, now time.Time) (branches.BranchResourceView, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchResourceView{}, refusal
+		return branches.BranchResourceView{}, refusal
 	}
 	latest, touched := branch.Latest(typ, draft)
-	current, refusal := t.mainDraft(m, typ, draft, now)
+	current, refusal := t.mainDraftOf(m, typ, draft, now)
 	if refusal != nil {
-		return BranchResourceView{}, refusal
+		return branches.BranchResourceView{}, refusal
 	}
 	if !touched {
-		return BranchResourceView{Type: typ, ID: draft, Project: t.resourceProject(typ, draft), RID: current.RID, Main: current.Spec, Branch: current.Spec}, nil
+		return branches.BranchResourceView{Type: typ, ID: draft, Project: t.resourceProject(typ, draft), RID: current.RID, Main: current.Spec, Branch: current.Spec}, nil
 	}
 	base, _ := branch.Base(typ, draft)
-	spec, _ := effectiveSpec(branch, typ, draft)
+	spec, _ := branches.EffectiveSpec(branch, typ, draft)
 	project := latest.Project
 	if project == "" {
 		project = t.resourceProject(typ, draft)
 	}
-	return BranchResourceView{Type: typ, ID: draft, Project: project, RID: current.RID, Op: latest.Op, Base: base, Main: current.Spec, Branch: spec}, nil
+	return branches.BranchResourceView{Type: typ, ID: draft, Project: project, RID: current.RID, Op: latest.Op, Base: base, Main: current.Spec, Branch: spec}, nil
 }
 
-type resourcePlan struct {
-	Type, ID string
-	RID      string
-	Project  string
-	Op       string
-	Base     json.RawMessage
-	Main     mainDraft
-	Branch   json.RawMessage
-	Merged   json.RawMessage
-	Diff     BranchResourceDiff
-}
-
-func resolutionsFor(requested []BranchResolution, typ, id string) []branches.Resolution {
-	var out []branches.Resolution
-	for _, r := range requested {
-		if r.Type == typ && r.ID == id {
-			out = append(out, branches.Resolution{Path: r.Path, Take: r.Take})
-		}
-	}
-	return out
-}
-
-func (t *Tenant) planBranch(m platform.Member, branch build.Branch, resolutions []BranchResolution, now time.Time) ([]resourcePlan, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) ([]resourcePlan, *kernel.Error) {
+func (t *Tenant) planBranch(m platform.Member, branch build.Branch, resolutions []branches.BranchResolution, now time.Time) ([]branches.ResourcePlan, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) ([]branches.ResourcePlan, *kernel.Error) {
 		return t.planBranchLocked(m, branch, resolutions, now)
 	})
 }
 
-func (t *Tenant) planBranchLocked(m platform.Member, branch build.Branch, resolutions []BranchResolution, now time.Time) ([]resourcePlan, *kernel.Error) {
-	var plans []resourcePlan
+func (t *Tenant) planBranchLocked(m platform.Member, branch build.Branch, resolutions []branches.BranchResolution, now time.Time) ([]branches.ResourcePlan, *kernel.Error) {
+	var plans []branches.ResourcePlan
 	for _, key := range branch.Resources() {
 		typ, id, _ := strings.Cut(key, "/")
 		latest, _ := branch.Latest(typ, id)
-		current, refusal := t.mainDraft(m, typ, id, now)
+		current, refusal := t.mainDraftOf(m, typ, id, now)
 		if refusal != nil {
 			return nil, refusal
 		}
 		base, _ := branch.Base(typ, id)
-		spec, _ := effectiveSpec(branch, typ, id)
-		merged, conflicts, err := branches.Merge(base, current.Spec, spec, resolutionsFor(resolutions, typ, id))
+		spec, _ := branches.EffectiveSpec(branch, typ, id)
+		merged, conflicts, err := branches.Merge(base, current.Spec, spec, branches.ResolutionsFor(resolutions, typ, id))
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The branch specs are unreadable: {error}", err.Error())
 		}
@@ -717,26 +508,26 @@ func (t *Tenant) planBranchLocked(m platform.Member, branch build.Branch, resolu
 		if project == "" {
 			project = t.resourceProject(typ, id)
 		}
-		plans = append(plans, resourcePlan{Type: typ, ID: id, RID: current.RID, Project: project, Op: latest.Op, Base: base, Main: current, Branch: spec, Merged: merged,
-			Diff: BranchResourceDiff{Type: typ, ID: id, RID: current.RID, Op: latest.Op, Branch: branchChanges, Main: mainChanges, Conflicts: conflicts, Merged: merged}})
+		plans = append(plans, branches.ResourcePlan{Type: typ, ID: id, RID: current.RID, Project: project, Op: latest.Op, Base: base, Main: current, Branch: spec, Merged: merged,
+			Diff: branches.BranchResourceDiff{Type: typ, ID: id, RID: current.RID, Op: latest.Op, Branch: branchChanges, Main: mainChanges, Conflicts: conflicts, Merged: merged}})
 	}
 	return plans, nil
 }
 
-func (t *Tenant) BranchDiff(m platform.Member, id string, now time.Time) (BranchDiff, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (BranchDiff, *kernel.Error) { return t.scopedBranchDiff(m, id, now) })
+func (t *Tenant) BranchDiff(m platform.Member, id string, now time.Time) (branches.BranchDiff, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (branches.BranchDiff, *kernel.Error) { return t.scopedBranchDiff(m, id, now) })
 }
 
-func (t *Tenant) scopedBranchDiff(m platform.Member, id string, now time.Time) (BranchDiff, *kernel.Error) {
+func (t *Tenant) scopedBranchDiff(m platform.Member, id string, now time.Time) (branches.BranchDiff, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchDiff{}, refusal
+		return branches.BranchDiff{}, refusal
 	}
 	plans, refusal := t.planBranch(m, branch, nil, now)
 	if refusal != nil {
-		return BranchDiff{}, refusal
+		return branches.BranchDiff{}, refusal
 	}
-	out := BranchDiff{Resources: []BranchResourceDiff{}}
+	out := branches.BranchDiff{Resources: []branches.BranchResourceDiff{}}
 	for _, plan := range plans {
 		out.Resources = append(out.Resources, plan.Diff)
 		out.Conflicts += len(plan.Diff.Conflicts)
@@ -744,37 +535,13 @@ func (t *Tenant) scopedBranchDiff(m platform.Member, id string, now time.Time) (
 	return out, nil
 }
 
-func conflictsOf(plans []resourcePlan) []BranchResourceDiff {
-	out := []BranchResourceDiff{}
-	for _, plan := range plans {
-		if len(plan.Diff.Conflicts) > 0 {
-			out = append(out, plan.Diff)
-		}
-	}
-	return out
-}
-
-type branchAction struct {
-	plan     resourcePlan
-	action   string
-	schema   string
-	payload  map[string]json.RawMessage
-	artifact json.RawMessage
-}
-
-func (a branchAction) module() string {
-	var artifact build.CodeArtifact
-	_ = json.Unmarshal(a.artifact, &artifact)
-	return artifact.Module
-}
-
-func (t *Tenant) splitCodeBuild(plan resourcePlan) (json.RawMessage, json.RawMessage) {
+func (t *Tenant) splitCodeBuild(plan branches.ResourcePlan) (json.RawMessage, json.RawMessage) {
 	var spec map[string]json.RawMessage
-	if json.Unmarshal(plan.Merged, &spec) != nil || spec[codeBuildKey] == nil {
+	if json.Unmarshal(plan.Merged, &spec) != nil || spec[branches.CodeBuildKey] == nil {
 		return plan.Merged, nil
 	}
-	raw := spec[codeBuildKey]
-	delete(spec, codeBuildKey)
+	raw := spec[branches.CodeBuildKey]
+	delete(spec, branches.CodeBuildKey)
 	authored, _ := json.Marshal(spec)
 	var artifact build.CodeArtifact
 	if json.Unmarshal(raw, &artifact) != nil || !artifact.Matches(authored) || !t.artifactStored(context.Background(), artifact.Module) || artifact.Module == plan.Main.Module && artifact.BuildHash == plan.Main.BuildHash {
@@ -783,27 +550,27 @@ func (t *Tenant) splitCodeBuild(plan resourcePlan) (json.RawMessage, json.RawMes
 	return authored, raw
 }
 
-func (t *Tenant) branchActions(plans []resourcePlan) ([]branchAction, *kernel.Error) {
-	var actions []branchAction
+func (t *Tenant) branchActions(plans []branches.ResourcePlan) ([]branches.Action, *kernel.Error) {
+	var actions []branches.Action
 	for _, plan := range plans {
-		item := branchAction{plan: plan, action: "none"}
+		item := branches.Action{Plan: plan, Action: "none"}
 		merged := plan.Merged
 		if plan.Type == build.CodeType && merged != nil {
-			merged, item.artifact = t.splitCodeBuild(plan)
+			merged, item.Artifact = t.splitCodeBuild(plan)
 		}
 		switch {
 		case merged == nil && plan.Main.Exists:
-			item.action, item.schema = "archive", plan.Type+".archive"
-			item.payload = map[string]json.RawMessage{}
+			item.Action, item.Schema = "archive", plan.Type+".archive"
+			item.Payload = map[string]json.RawMessage{}
 		case merged != nil && !plan.Main.Exists:
 			if plan.Project == "" {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The branch has no project for {resource}", plan.Type+"/"+plan.ID)
 			}
-			item.action, item.schema = "create", plan.Type+".create"
-			if json.Unmarshal(merged, &item.payload) != nil {
+			item.Action, item.Schema = "create", plan.Type+".create"
+			if json.Unmarshal(merged, &item.Payload) != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The merged spec is unreadable")
 			}
-			item.payload["project"] = platform.Raw(plan.Project)
+			item.Payload["project"] = platform.Raw(plan.Project)
 		case merged != nil:
 			var current map[string]json.RawMessage
 			var mergedFields map[string]json.RawMessage
@@ -822,24 +589,24 @@ func (t *Tenant) branchActions(plans []resourcePlan) ([]branchAction, *kernel.Er
 				}
 			}
 			if len(changed) > 0 {
-				item.action, item.schema, item.payload = "edit", plan.Type+".edit", changed
-			} else if item.artifact != nil {
-				item.action = "edit"
+				item.Action, item.Schema, item.Payload = "edit", plan.Type+".edit", changed
+			} else if item.Artifact != nil {
+				item.Action = "edit"
 			}
 		}
-		if item.action == "archive" {
-			item.artifact = nil
+		if item.Action == "archive" {
+			item.Artifact = nil
 		}
 		actions = append(actions, item)
 	}
-	slices.SortStableFunc(actions, func(a, b branchAction) int {
-		order := func(x branchAction) int {
+	slices.SortStableFunc(actions, func(a, b branches.Action) int {
+		order := func(x branches.Action) int {
 			switch {
-			case x.action == "archive":
+			case x.Action == "archive":
 				return 3
-			case x.plan.Type == build.AppType:
+			case x.Plan.Type == build.AppType:
 				return 2
-			case x.action == "edit":
+			case x.Action == "edit":
 				return 1
 			}
 			return 0
@@ -849,61 +616,39 @@ func (t *Tenant) branchActions(plans []resourcePlan) ([]branchAction, *kernel.Er
 	return actions, nil
 }
 
-func (a branchAction) submission(tenant string, m platform.Member, key string) *pb.Submission {
-	payload, _ := json.Marshal(a.payload)
-	s := &pb.Submission{TenantId: tenant, PrincipalId: m.ID, Authority: build.ID,
-		Target: &pb.EntityRef{Type: a.plan.Type, Id: a.plan.ID}, Schema: &pb.SchemaRef{Name: a.schema, Version: 1}, Payload: payload}
-	if a.action != "create" && a.plan.Main.Revision > 0 {
-		revision := a.plan.Main.Revision
-		s.ExpectedRevision = &revision
-	}
-	s.IdempotencyKey = branchKey(key, m.ID, a.schema, payload, s.ExpectedRevision)
-	return s
-}
-
-func (t *Tenant) ReviewBranch(m platform.Member, id string, request BranchReviewRequest, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) ReviewBranch(m platform.Member, id string, request branches.BranchReviewRequest, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	reviews := 0
 	if branch.Proposal != nil {
 		reviews = len(branch.Proposal.Reviews)
 	}
 	if refusal := t.submitBranch(m, "branch:"+id+":review:"+strconv.Itoa(len(branch.Changes))+":"+strconv.Itoa(reviews+1), build.BranchType+".review", id, map[string]any{"decision": request.Decision, "note": request.Note}, now); refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	return t.BranchDetail(m, id, now)
 }
 
-func (t *Tenant) WithdrawBranch(m platform.Member, id string, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) WithdrawBranch(m platform.Member, id string, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	if refusal := t.submitBranch(m, "branch:"+id+":withdraw:"+strconv.Itoa(int(branch.Record.Revision)), build.BranchType+".withdraw", id, map[string]any{}, now); refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	return t.BranchDetail(m, id, now)
 }
 
-func (t *Tenant) CloseBranch(m platform.Member, id string, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) CloseBranch(m platform.Member, id string, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	if refusal := t.submitBranch(m, "branch:"+id+":close:"+strconv.Itoa(int(branch.Record.Revision)), build.BranchType+".close", id, map[string]any{}, now); refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	return t.BranchDetail(m, id, now)
-}
-
-func sameJSON(a, b json.RawMessage) bool {
-	var x, y any
-	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
-		return false
-	}
-	left, _ := json.Marshal(x)
-	right, _ := json.Marshal(y)
-	return string(left) == string(right)
 }

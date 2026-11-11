@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
+	"platformserver/services/resources/merge"
 	"reflect"
 	"slices"
 	"strings"
@@ -363,18 +364,18 @@ func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
 	if len(mainBefore) == 0 {
 		t.Fatal("main has no object drafts")
 	}
-	branch, refusal := live.CreateBranch(member, BranchCreateRequest{Name: "k6", Title: "K6 branch"}, invariantClock)
+	branch, refusal := live.CreateBranch(member, branches.BranchCreateRequest{Name: "k6", Title: "K6 branch"}, invariantClock)
 	if refusal != nil {
 		t.Fatalf("create branch: %v", refusal)
 	}
 	for _, object := range objects {
-		saved, refusal := live.SaveBranchResource(member, branch.ID, build.ObjectType, object.id, BranchSaveRequest{
+		saved, refusal := live.SaveBranchResource(member, branch.ID, build.ObjectType, object.id, branches.BranchSaveRequest{
 			Spec: platform.Raw(invariantObject(object.name, object.title+", branched")),
 		}, invariantClock)
 		if refusal != nil {
 			t.Fatalf("save %s into branch: %v", object.id, refusal)
 		}
-		if !slices.ContainsFunc(saved.Resources, func(resource BranchResourceStatus) bool {
+		if !slices.ContainsFunc(saved.Resources, func(resource branches.BranchResourceStatus) bool {
 			return resource.Type == build.ObjectType && resource.ID == object.id && resource.Op == "update"
 		}) {
 			t.Fatalf("branch save omitted %s: %+v", object.id, saved.Resources)
@@ -390,7 +391,7 @@ func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
 		t.Fatal("proposing the branch changed main's object drafts before merge")
 	}
 	reviewer, _ := live.Member("reviewer")
-	if _, refusal := live.ReviewBranch(reviewer, branch.ID, BranchReviewRequest{Decision: "approve"}, invariantClock); refusal != nil {
+	if _, refusal := live.ReviewBranch(reviewer, branch.ID, branches.BranchReviewRequest{Decision: "approve"}, invariantClock); refusal != nil {
 		t.Fatalf("review branch: %v", refusal)
 	}
 	sealedBefore := len(live.entries)
@@ -468,18 +469,18 @@ func TestInvariantBranchSaveRejectsSpoofedProject(t *testing.T) {
 	member := live.member(t)
 	live.accept(t, "build.app.create", build.AppType, "other-project", map[string]any{"name": "otherproject", "title": "Other project"})
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ", invariantObject("alpha", "Alpha"))
-	branch, refusal := live.CreateBranch(member, BranchCreateRequest{Name: "projectguard", Title: "Project guard"}, invariantClock)
+	branch, refusal := live.CreateBranch(member, branches.BranchCreateRequest{Name: "projectguard", Title: "Project guard"}, invariantClock)
 	if refusal != nil {
 		t.Fatalf("create branch: %v", refusal)
 	}
-	_, refusal = live.SaveBranchResource(member, branch.ID, build.ObjectType, "OBJ", BranchSaveRequest{
+	_, refusal = live.SaveBranchResource(member, branch.ID, build.ObjectType, "OBJ", branches.BranchSaveRequest{
 		Project: "other-project",
 		Spec:    platform.Raw(invariantObject("alpha", "Alpha changed")),
 	}, invariantClock)
 	if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 		t.Fatalf("spoofed branch project was not refused: %v", refusal)
 	}
-	_, refusal = live.SaveBranchResource(member, branch.ID, build.ObjectType, "OBJ", BranchSaveRequest{
+	_, refusal = live.SaveBranchResource(member, branch.ID, build.ObjectType, "OBJ", branches.BranchSaveRequest{
 		Spec: platform.Raw(invariantObject("alpha", "Alpha changed")),
 	}, invariantClock)
 	if refusal != nil || live.resourceProject(build.ObjectType, "OBJ") != invariantProject {

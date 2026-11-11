@@ -4,13 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"platformserver/services/actions"
+	"platformserver/services/resources/merge"
 	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -21,41 +20,6 @@ import (
 	trialowner "platformserver/services/devops/trials"
 	"platformserver/services/resources/authoring"
 )
-
-func decodeBranchCheck(branch build.Branch) *BranchCheck {
-	if len(branch.Check) == 0 {
-		return nil
-	}
-	var check BranchCheck
-	if json.Unmarshal(branch.Check, &check) != nil {
-		return nil
-	}
-	if check.Resources == nil {
-		check.Resources = []BranchResourceCheck{}
-	}
-	if check.Graph.Messages == nil {
-		check.Graph.Messages = []string{}
-	}
-	return &check
-}
-
-func (c BranchCheck) Failure() string {
-	for _, resource := range c.Resources {
-		if !resource.Accepted {
-			return resource.Type + "/" + resource.ID + ": " + resource.Message
-		}
-	}
-	if len(c.Graph.Messages) > 0 && !c.Graph.Passed {
-		return c.Graph.Messages[0]
-	}
-	if c.Simulation != nil && len(c.Simulation.Messages) > 0 && (c.Simulation.Passed == nil || !*c.Simulation.Passed) {
-		return c.Simulation.Messages[0]
-	}
-	if c.Conflicts > 0 {
-		return strconv.Itoa(c.Conflicts) + " resources conflict with main"
-	}
-	return ""
-}
 
 func (t *Tenant) branchBaseLocked() string {
 	sum := sha256.New()
@@ -85,25 +49,13 @@ func (t *Tenant) branchBaseLocked() string {
 	return hex.EncodeToString(sum.Sum(nil))
 }
 
-func branchContent(plans []resourcePlan) string {
-	ordered := slices.Clone(plans)
-	slices.SortFunc(ordered, func(a, b resourcePlan) int { return strings.Compare(a.Type+"/"+a.ID, b.Type+"/"+b.ID) })
-	sum := sha256.New()
-	for _, plan := range ordered {
-		sum.Write([]byte(plan.Type + "\x00" + plan.ID + "\x00" + plan.Op + "\x00" + plan.Project + "\x00"))
-		sum.Write(plan.Merged)
-		sum.Write([]byte("\x00"))
-	}
-	return hex.EncodeToString(sum.Sum(nil))
-}
-
 type branchChild struct {
 	receipt *pb.ChangeRecord
 	issues  []platform.FieldIssue
 	refusal *kernel.Error
 }
 
-func (t *Tenant) decideBranchChild(draft *stagedDecision, m platform.Member, item branchAction, key string, now time.Time) (out branchChild) {
+func (t *Tenant) decideBranchChild(draft *stagedDecision, m platform.Member, item branches.Action, key string, now time.Time) (out branchChild) {
 	defer func() {
 		if p := recover(); p != nil {
 			if _, ok := p.(stagedEffectPanic); !ok {
@@ -112,16 +64,16 @@ func (t *Tenant) decideBranchChild(draft *stagedDecision, m platform.Member, ite
 			out = branchChild{refusal: platform.RefuseOutsideAcceptedBoundary()}
 		}
 	}()
-	if item.schema != "" {
-		out = t.decideBranchStep(draft, m, item.schema, item.submission(t.ID, m, key), false, now)
+	if item.Schema != "" {
+		out = t.decideBranchStep(draft, m, item.Schema, item.Submission(t.ID, m, key), false, now)
 		if out.refusal != nil {
 			return out
 		}
 	}
-	if item.artifact != nil {
-		attach := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, Target: &pb.EntityRef{Type: item.plan.Type, Id: item.plan.ID},
-			Schema: &pb.SchemaRef{Name: build.SchemaCodeAttach, Version: 1}, Payload: item.artifact}
-		attach.IdempotencyKey = branchKey(key+":build", m.ID, build.SchemaCodeAttach, item.artifact, nil)
+	if item.Artifact != nil {
+		attach := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, Target: &pb.EntityRef{Type: item.Plan.Type, Id: item.Plan.ID},
+			Schema: &pb.SchemaRef{Name: build.SchemaCodeAttach, Version: 1}, Payload: item.Artifact}
+		attach.IdempotencyKey = branches.Key(key+":build", m.ID, build.SchemaCodeAttach, item.Artifact, nil)
 		out = t.decideBranchStep(draft, m, build.SchemaCodeAttach, attach, true, now)
 	}
 	return out
@@ -146,24 +98,24 @@ func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, sche
 
 type branchStage struct {
 	draft     *stagedDecision
-	resources []BranchResourceCheck
+	resources []branches.BranchResourceCheck
 	receipt   *pb.ChangeRecord
 }
 
 func (s branchStage) accepted() bool {
-	return !slices.ContainsFunc(s.resources, func(c BranchResourceCheck) bool { return !c.Accepted })
+	return !slices.ContainsFunc(s.resources, func(c branches.BranchResourceCheck) bool { return !c.Accepted })
 }
 
-func (t *Tenant) stageBranchLocked(m platform.Member, branchID string, actions []branchAction, now time.Time) branchStage {
-	stage := branchStage{resources: make([]BranchResourceCheck, 0, len(actions)), draft: t.newStagedDecision()}
-	key := func(item branchAction) string {
-		return "branch-check:" + branchID + ":" + item.plan.Type + "/" + item.plan.ID
+func (t *Tenant) stageBranchLocked(m platform.Member, branchID string, actions []branches.Action, now time.Time) branchStage {
+	stage := branchStage{resources: make([]branches.BranchResourceCheck, 0, len(actions)), draft: t.newStagedDecision()}
+	key := func(item branches.Action) string {
+		return "branch-check:" + branchID + ":" + item.Plan.Type + "/" + item.Plan.ID
 	}
 	var applied []int
 	for i, item := range actions {
-		check := BranchResourceCheck{Type: item.plan.Type, ID: item.plan.ID, RID: item.plan.RID, Action: item.action, Artifact: item.module(), Accepted: true}
+		check := branches.BranchResourceCheck{Type: item.Plan.Type, ID: item.Plan.ID, RID: item.Plan.RID, Action: item.Action, Artifact: item.Module(), Accepted: true}
 		stage.resources = append(stage.resources, check)
-		if item.action == "none" {
+		if item.Action == "none" {
 			continue
 		}
 		child := t.decideBranchChild(stage.draft, m, item, key(item), now)
@@ -189,29 +141,6 @@ func (t *Tenant) stageBranchLocked(m platform.Member, branchID string, actions [
 		applied = kept
 	}
 	return stage
-}
-
-func branchDraftSet(owner build.ConstructionDrafts, actions []branchAction) []build.JointDraftRef {
-	var drafts []build.JointDraftRef
-	for _, item := range actions {
-		if item.action == "none" || item.action == "archive" {
-			continue
-		}
-		ref, err := build.BranchResource(item.plan.Type, item.plan.ID)
-		if err != nil {
-			continue
-		}
-		selected := []build.JointDraftRef{{Kind: ref.Kind, ID: item.plan.ID}}
-		if closure, err := owner.ReferencedDrafts(ref.Kind, item.plan.ID, ""); err == nil {
-			selected = append(selected, closure...)
-		}
-		for _, draft := range selected {
-			if !slices.Contains(drafts, draft) {
-				drafts = append(drafts, draft)
-			}
-		}
-	}
-	return drafts
 }
 
 func (t *Tenant) stageViewLocked(stage branchStage, now time.Time) (*Tenant, error) {
@@ -240,7 +169,7 @@ func (t *Tenant) stageViewLocked(stage branchStage, now time.Time) (*Tenant, err
 
 type branchWorld struct {
 	stage   branchStage
-	actions []branchAction
+	actions []branches.Action
 	view    *Tenant
 	branch  build.Branch
 }
@@ -258,7 +187,7 @@ func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) 
 	if refusal != nil {
 		return world, refusal
 	}
-	if conflicts := conflictsOf(plans); len(conflicts) > 0 {
+	if conflicts := branches.ConflictsOf(plans); len(conflicts) > 0 {
 		return world, branchRefuse("The branch conflicts with main in {count} resources; rebase it first", len(conflicts))
 	}
 	actions, refusal := t.branchActions(plans)
@@ -266,7 +195,7 @@ func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) 
 		return world, refusal
 	}
 	stage := t.stageBranchLocked(m, branch.ID, actions, now)
-	if i := slices.IndexFunc(stage.resources, func(c BranchResourceCheck) bool { return !c.Accepted }); i >= 0 {
+	if i := slices.IndexFunc(stage.resources, func(c branches.BranchResourceCheck) bool { return !c.Accepted }); i >= 0 {
 		return world, branchRefuse("{resource} would be refused in the merged world: {message}", stage.resources[i].Type+"/"+stage.resources[i].ID, stage.resources[i].Message)
 	}
 	view, err := t.stageViewLocked(stage, now)
@@ -276,9 +205,9 @@ func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) 
 	return branchWorld{stage: stage, actions: actions, view: view, branch: branch}, nil
 }
 
-func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions []branchAction, now time.Time) (BranchGraphCheck, *stagedCandidate) {
-	graph := BranchGraphCheck{Messages: []string{}}
-	fail := func(format string, args ...any) (BranchGraphCheck, *stagedCandidate) {
+func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions []branches.Action, now time.Time) (branches.BranchGraphCheck, *stagedCandidate) {
+	graph := branches.BranchGraphCheck{Messages: []string{}}
+	fail := func(format string, args ...any) (branches.BranchGraphCheck, *stagedCandidate) {
 		graph.Messages = append(graph.Messages, fmt.Sprintf(format, args...))
 		return graph, nil
 	}
@@ -290,7 +219,7 @@ func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions 
 	if !ok {
 		return fail("The staged definition graph has no builder")
 	}
-	drafts := branchDraftSet(owner, actions)
+	drafts := branches.DraftSet(owner, actions)
 	if len(drafts) == 0 {
 		graph.Passed = true
 		return graph, nil
@@ -308,13 +237,13 @@ func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions 
 }
 
 type branchEvaluation struct {
-	check      BranchCheck
-	conflicts  []BranchResourceDiff
+	check      branches.BranchCheck
+	conflicts  []branches.BranchResourceDiff
 	simulation *trialowner.CandidateSimulation
 }
 
-func simulationSummary(out trialowner.CandidateSimulation) *BranchSimulationCheck {
-	summary := &BranchSimulationCheck{CandidateID: out.CandidateID, Passed: out.Passed, Steps: len(out.Steps), Messages: []string{}}
+func simulationSummary(out trialowner.CandidateSimulation) *branches.BranchSimulationCheck {
+	summary := &branches.BranchSimulationCheck{CandidateID: out.CandidateID, Passed: out.Passed, Steps: len(out.Steps), Messages: []string{}}
 	for i, step := range out.Steps {
 		unmatched := step.Matched != nil && !*step.Matched || step.ComputeMatched != nil && !*step.ComputeMatched || step.FunctionMatched != nil && !*step.FunctionMatched
 		if !unmatched {
@@ -332,30 +261,26 @@ func simulationSummary(out trialowner.CandidateSimulation) *BranchSimulationChec
 	return summary
 }
 
-func (s *BranchSimulationCheck) ok() bool {
-	return s == nil || len(s.Messages) == 0 && (s.Passed == nil || *s.Passed)
-}
-
-func failedSimulation(message string) *BranchSimulationCheck {
+func failedSimulation(message string) *branches.BranchSimulationCheck {
 	failed := false
-	return &BranchSimulationCheck{Passed: &failed, Messages: []string{message}}
+	return &branches.BranchSimulationCheck{Passed: &failed, Messages: []string{message}}
 }
 
-func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resolutions []BranchResolution, sim *trialowner.CandidateSimulationRequest, now time.Time) (branchEvaluation, *kernel.Error) {
+func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resolutions []branches.BranchResolution, sim *trialowner.CandidateSimulationRequest, now time.Time) (branchEvaluation, *kernel.Error) {
 	return recordRead(t, context.Background(), func(t *Tenant) (branchEvaluation, *kernel.Error) {
 		return t.evaluateBranchRead(m, branch, resolutions, sim, now)
 	})
 }
 
-func (t *Tenant) evaluateBranchRead(m platform.Member, branch build.Branch, resolutions []BranchResolution, sim *trialowner.CandidateSimulationRequest, now time.Time) (branchEvaluation, *kernel.Error) {
+func (t *Tenant) evaluateBranchRead(m platform.Member, branch build.Branch, resolutions []branches.BranchResolution, sim *trialowner.CandidateSimulationRequest, now time.Time) (branchEvaluation, *kernel.Error) {
 	var out branchEvaluation
 	plans, refusal := t.planBranchLocked(m, branch, resolutions, now)
 	if refusal != nil {
 		return out, refusal
 	}
-	out.conflicts = conflictsOf(plans)
-	check := BranchCheck{At: now.UTC(), By: m.ID, Base: t.branchBaseLocked(), Content: branchContent(plans), Conflicts: len(out.conflicts),
-		Resources: []BranchResourceCheck{}, Graph: BranchGraphCheck{Messages: []string{}}}
+	out.conflicts = branches.ConflictsOf(plans)
+	check := branches.BranchCheck{At: now.UTC(), By: m.ID, Base: t.branchBaseLocked(), Content: branches.Content(plans), Conflicts: len(out.conflicts),
+		Resources: []branches.BranchResourceCheck{}, Graph: branches.BranchGraphCheck{Messages: []string{}}}
 	var staged *stagedCandidate
 	if len(out.conflicts) > 0 {
 		check.Graph.Messages = append(check.Graph.Messages, fmt.Sprintf("Not evaluated: the branch conflicts with main in %d resources; rebase it first", len(out.conflicts)))
@@ -386,13 +311,13 @@ func (t *Tenant) evaluateBranchRead(m platform.Member, branch build.Branch, reso
 			}
 		}
 	}
-	check.Passed = len(out.conflicts) == 0 && len(check.Resources) > 0 && !slices.ContainsFunc(check.Resources, func(c BranchResourceCheck) bool { return !c.Accepted }) &&
-		check.Graph.Passed && check.Simulation.ok()
+	check.Passed = len(out.conflicts) == 0 && len(check.Resources) > 0 && !slices.ContainsFunc(check.Resources, func(c branches.BranchResourceCheck) bool { return !c.Accepted }) &&
+		check.Graph.Passed && check.Simulation.OK()
 	out.check = check
 	return out, nil
 }
 
-func (t *Tenant) recordBranchCheck(m platform.Member, branch build.Branch, check BranchCheck, now time.Time) *kernel.Error {
+func (t *Tenant) recordBranchCheck(m platform.Member, branch build.Branch, check branches.BranchCheck, now time.Time) *kernel.Error {
 	schema := build.BranchType + ".check"
 	if branch.State == build.BranchProposed {
 		schema = build.BranchType + ".recheck"
@@ -418,38 +343,38 @@ func (t *Tenant) BranchChecks(m platform.Member, id string, request BranchCheckR
 	return checks, nil
 }
 
-func (t *Tenant) RecheckBranch(m platform.Member, id string, request BranchCheckRequest, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) RecheckBranch(m platform.Member, id string, request BranchCheckRequest, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	if branch.State != build.BranchOpen && branch.State != build.BranchProposed || len(branch.Changes) == 0 {
-		return BranchDetail{}, branchRefuse("Only an open or proposed branch with changes can be re-checked")
+		return branches.BranchDetail{}, branchRefuse("Only an open or proposed branch with changes can be re-checked")
 	}
 	evaluation, refusal := t.evaluateBranch(m, branch, request.Resolutions, request.Simulation, now)
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	if refusal := t.recordBranchCheck(m, branch, evaluation.check, now); refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	return t.BranchDetail(m, id, now)
 }
 
-func (t *Tenant) RebaseBranch(m platform.Member, id string, request BranchResolveRequest, now time.Time) (BranchDetail, []BranchResourceDiff, *kernel.Error) {
+func (t *Tenant) RebaseBranch(m platform.Member, id string, request branches.BranchResolveRequest, now time.Time) (branches.BranchDetail, []branches.BranchResourceDiff, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchDetail{}, nil, refusal
+		return branches.BranchDetail{}, nil, refusal
 	}
 	if branch.State != build.BranchOpen {
-		return BranchDetail{}, nil, branchRefuse("The branch is {state}; only an open branch rebases", branch.State)
+		return branches.BranchDetail{}, nil, branchRefuse("The branch is {state}; only an open branch rebases", branch.State)
 	}
 	plans, refusal := t.planBranch(m, branch, request.Resolutions, now)
 	if refusal != nil {
-		return BranchDetail{}, nil, refusal
+		return branches.BranchDetail{}, nil, refusal
 	}
-	if conflicts := conflictsOf(plans); len(conflicts) > 0 {
-		return BranchDetail{}, conflicts, nil
+	if conflicts := branches.ConflictsOf(plans); len(conflicts) > 0 {
+		return branches.BranchDetail{}, conflicts, nil
 	}
 	seq := len(branch.Changes)
 	for _, plan := range plans {
@@ -471,7 +396,7 @@ func (t *Tenant) RebaseBranch(m platform.Member, id string, request BranchResolv
 			payload["op"], payload["spec"] = "update", plan.Merged
 		}
 		if refusal := t.submitBranch(m, "branch:"+id+":save:"+strconv.Itoa(seq), build.BranchType+".save", id, payload, now); refusal != nil {
-			return BranchDetail{}, nil, refusal
+			return branches.BranchDetail{}, nil, refusal
 		}
 	}
 	if rebased, refusal := t.readBranch(m, id, now); refusal == nil && len(rebased.Changes) > 0 {
@@ -483,36 +408,36 @@ func (t *Tenant) RebaseBranch(m platform.Member, id string, request BranchResolv
 	return detail, nil, refusal
 }
 
-func (t *Tenant) ProposeBranch(m platform.Member, id string, request BranchProposeRequest, now time.Time) (BranchDetail, *kernel.Error) {
+func (t *Tenant) ProposeBranch(m platform.Member, id string, request BranchProposeRequest, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	branch, refusal := t.readBranch(m, id, now)
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	if branch.State != build.BranchOpen || len(branch.Changes) == 0 {
-		return BranchDetail{}, branchRefuse("Only an open branch with changes can be proposed")
+		return branches.BranchDetail{}, branchRefuse("Only an open branch with changes can be proposed")
 	}
 	for _, reviewer := range request.Reviewers {
 		member, ok := t.Member(reviewer)
 		if !ok || !member.Holds(build.ID, build.Builder) {
-			return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Reviewer {member} must be a builder", reviewer)
+			return branches.BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Reviewer {member} must be a builder", reviewer)
 		}
 	}
 	evaluation, refusal := t.evaluateBranch(m, branch, request.Resolutions, request.Simulation, now)
 	if refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	if len(evaluation.conflicts) > 0 {
-		return BranchDetail{}, branchRefuse("The branch conflicts with main in {count} resources; rebase it first", len(evaluation.conflicts))
+		return branches.BranchDetail{}, branchRefuse("The branch conflicts with main in {count} resources; rebase it first", len(evaluation.conflicts))
 	}
 	if !evaluation.check.Passed {
-		return BranchDetail{}, branchRefuse("The staged check of the merged definition graph failed: {message}", evaluation.check.Failure())
+		return branches.BranchDetail{}, branchRefuse("The staged check of the merged definition graph failed: {message}", evaluation.check.Failure())
 	}
 	reviewers := request.Reviewers
 	if reviewers == nil {
 		reviewers = []string{}
 	}
 	if refusal := t.submitBranch(m, "branch:"+id+":propose:"+strconv.Itoa(len(branch.Changes)), build.BranchType+".propose", id, map[string]any{"reviewers": reviewers, "note": request.Note, "checks": evaluation.check}, now); refusal != nil {
-		return BranchDetail{}, refusal
+		return branches.BranchDetail{}, refusal
 	}
 	return t.BranchDetail(m, id, now)
 }
@@ -541,13 +466,13 @@ func (t *Tenant) MergeBranch(m platform.Member, id string, request BranchMergeRe
 
 type mergedCandidate struct {
 	id      string
-	actions []branchAction
+	actions []branches.Action
 }
 
-func (t *Tenant) applyBranch(m platform.Member, id string, request BranchMergeRequest, now time.Time) (mergedCandidate, []BranchResourceCheck, *kernel.Error) {
+func (t *Tenant) applyBranch(m platform.Member, id string, request BranchMergeRequest, now time.Time) (mergedCandidate, []branches.BranchResourceCheck, *kernel.Error) {
 	type prepared struct {
 		merged mergedCandidate
-		checks []BranchResourceCheck
+		checks []branches.BranchResourceCheck
 	}
 	value, refusal := decideOnImage(t, context.Background(), "branch:merge", func(t *Tenant) (prepared, *kernel.Error) {
 		merged, checks, refusal := t.prepareBranchMerge(m, id, request, now)
@@ -559,7 +484,7 @@ func (t *Tenant) applyBranch(m platform.Member, id string, request BranchMergeRe
 	return value.merged, value.checks, refusal
 }
 
-func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request BranchMergeRequest, now time.Time) (mergedCandidate, []BranchResourceCheck, *kernel.Error) {
+func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request BranchMergeRequest, now time.Time) (mergedCandidate, []branches.BranchResourceCheck, *kernel.Error) {
 	var none mergedCandidate
 	if t.quarantined() {
 		return none, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -581,10 +506,10 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request Branch
 	if refusal != nil {
 		return none, nil, refusal
 	}
-	if conflicts := conflictsOf(plans); len(conflicts) > 0 {
+	if conflicts := branches.ConflictsOf(plans); len(conflicts) > 0 {
 		return none, nil, branchRefuse("The branch conflicts with main in {count} resources; rebase it first", len(conflicts))
 	}
-	check := decodeBranchCheck(branch)
+	check := branches.DecodeCheck(branch)
 	if check == nil {
 		return none, nil, branchRefuse("The proposal has no staged check; re-check the branch before merging")
 	}
@@ -594,7 +519,7 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request Branch
 	if check.Base != t.branchBaseLocked() {
 		return none, nil, branchRefuse("Main changed since the proposal was last checked; rebase or re-check the branch before merging")
 	}
-	if check.Content != branchContent(plans) {
+	if check.Content != branches.Content(plans) {
 		return none, nil, branchRefuse("The merged content differs from the checked content; re-check the branch before merging")
 	}
 	if request.Simulation != nil && check.Simulation == nil {
@@ -604,15 +529,15 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request Branch
 	if refusal != nil {
 		return none, nil, refusal
 	}
-	applied := make([]BranchResourceCheck, 0, len(actions))
+	applied := make([]branches.BranchResourceCheck, 0, len(actions))
 	for _, item := range actions {
-		applied = append(applied, BranchResourceCheck{Type: item.plan.Type, ID: item.plan.ID, RID: item.plan.RID, Action: item.action, Artifact: item.module(), Accepted: true})
+		applied = append(applied, branches.BranchResourceCheck{Type: item.Plan.Type, ID: item.Plan.ID, RID: item.Plan.RID, Action: item.Action, Artifact: item.Module(), Accepted: true})
 	}
 	revision := branch.Record.Revision
 	payload := platform.Raw(map[string]any{"candidate": check.Graph.Candidate, "applied": applied, "base": check.Base})
 	s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, ExpectedRevision: &revision,
 		Target: &pb.EntityRef{Type: build.BranchType, Id: id}, Schema: &pb.SchemaRef{Name: build.BranchType + ".merge", Version: 1}, Payload: payload}
-	s.IdempotencyKey = branchKey("branch:"+id+":merge", m.ID, s.Schema.Name, payload, &revision)
+	s.IdempotencyKey = branches.Key("branch:"+id+":merge", m.ID, s.Schema.Name, payload, &revision)
 	owner := t.owner["action:"+s.Schema.Name]
 	if owner == nil {
 		return none, nil, unknown()
@@ -623,12 +548,12 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request Branch
 	}
 	before := func(draft *stagedDecision) *kernel.Error {
 		for _, item := range actions {
-			if item.action == "none" {
+			if item.Action == "none" {
 				continue
 			}
-			child := t.decideBranchChild(draft, m, item, "branch:"+id+":merge:"+item.plan.Type+"/"+item.plan.ID, now)
+			child := t.decideBranchChild(draft, m, item, "branch:"+id+":merge:"+item.Plan.Type+"/"+item.Plan.ID, now)
 			if child.refusal != nil {
-				return platform.Refuse(child.refusal.Code, "{resource} could not be applied: {message}", item.plan.Type+"/"+item.plan.ID, child.refusal.Message)
+				return platform.Refuse(child.refusal.Code, "{resource} could not be applied: {message}", item.Plan.Type+"/"+item.Plan.ID, child.refusal.Message)
 			}
 		}
 		return nil
@@ -650,7 +575,7 @@ func (t *Tenant) saveBranchCandidate(m platform.Member, branchID string, merged 
 		if !ok {
 			return preparation{}, fmt.Errorf("the tenant has no builder")
 		}
-		drafts := branchDraftSet(owner, merged.actions)
+		drafts := branches.DraftSet(owner, merged.actions)
 		preview, candidate, err := t.previewReleaseLocked(drafts, m)
 		return preparation{drafts: drafts, preview: preview, candidate: candidate}, err
 	})
