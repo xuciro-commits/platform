@@ -81,37 +81,11 @@ func (t *Tenant) deactivateOwners(disabled []string) error {
 			delete(t.owner, name)
 		}
 	}
-	t.listeners = slices.DeleteFunc(t.listeners, func(id string) bool { return !t.ownerActive(id) })
-	t.observers = slices.DeleteFunc(t.observers, func(observer platform.Observer) bool {
-		app, ok := observer.(platform.App)
-		return ok && !t.ownerActive(app.Manifest().ID)
-	})
-	for _, app := range t.apps {
-		if t.ownerActive(app.Manifest().ID) {
-			continue
-		}
-		if _, ok := app.(platform.Linker); ok {
-			t.linker = nil
-		}
-		if _, ok := app.(platform.Directory); ok {
-			t.directory = nil
-		}
-		if _, ok := app.(platform.IdentityDirectory); ok {
-			t.identity = nil
-		}
-		if _, ok := app.(models); ok {
-			t.ai = nil
-		}
-		if _, ok := app.(platform.Tasks); ok {
-			t.tasks = nil
-		}
-		if _, ok := app.(platform.AgentRuntime); ok {
-			t.agents = nil
-		}
-		if _, ok := app.(platform.Glossary); ok {
-			t.knowledge = nil
-		}
+	roles, err := ownerRolesOf(t.apps, t.ownerActive)
+	if err != nil {
+		return err
 	}
+	t.ownerRoles = roles
 	return nil
 }
 

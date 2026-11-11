@@ -46,62 +46,53 @@ type Tenant struct {
 	observations      runtimekernel.ObservationBuffer
 	runIndex          runtimekernel.RunIndexCache[[]MonitoringCoverage]
 	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
-	identity          platform.IdentityDirectory
-	claims            dataowner.SourceClaims
-	Record            func(Entry)
-	AcceptResult      func(Entry, string, string) ([]byte, error)
-	knowledge         platform.Glossary
-	index             *knowledgeindex.Index
-	i18n              transport.Translator
-	views             transport.ViewCache
-	readViews         *transport.ViewCache
-	streamMu          sync.Mutex
-	lineageCache      lineage.Cache[*branchWorld]
-	markings          lineage.MarkingCache[*records.Store]
-	apps              []platform.App
-	appIndex          map[string]int
-	releases          releases.Store
-	console           controlowner.HostState
-	staged            computeowner.Channel
-	definitions       []platform.Definition
-	owner             map[string]platform.App
-	flowArtifacts     flowArtifactGC
-	audit             runtimekernel.AuditLog
-	events            []automation.QueuedEvent
-	bindings          map[string]binding
-	observers         []platform.Observer
-	change            changes
-	linker            platform.Linker
-	directory         platform.Directory
-	hops              int
-	acted             int
-	works             platform.Works
-	opsMu             sync.Mutex
-	work              automation.WorkBoard
-	Quota             int
-	quota             automation.Quota
-	breakers          integrations.Breakers
-	connectors        connectorRoster
-	notices           runtimekernel.NoticeBoard
-	settings          controlowner.Settings
-	words             controlowner.Words
-	sequences         runtimekernel.Sequences
-	endpoints         []*Endpoint
-	outbound          []*effect
-	Secrets           func(name string) ([]byte, bool)
-	Outbound          func(req *http.Request, allowPrivate bool) (*http.Response, error)
-	AIClient          func(req *http.Request) (*http.Response, error)
-	ai                models
-	tasks             platform.Tasks
-	procs             platform.Processes
-	listeners         []string
-	agents            platform.AgentRuntime
-	Files             platform.FileStore
-	ComputeWorker     platform.WasmWorker
-	Compiler          platform.CodeCompiler
-	cancels           computeowner.Cancels
-	memFiles          resources.MemoryFiles
-	uploads           resources.Uploads
+	ownerRoles
+	claims        dataowner.SourceClaims
+	Record        func(Entry)
+	AcceptResult  func(Entry, string, string) ([]byte, error)
+	index         *knowledgeindex.Index
+	i18n          transport.Translator
+	views         transport.ViewCache
+	readViews     *transport.ViewCache
+	streamMu      sync.Mutex
+	lineageCache  lineage.Cache[*branchWorld]
+	markings      lineage.MarkingCache[*records.Store]
+	apps          []platform.App
+	appIndex      map[string]int
+	releases      releases.Store
+	console       controlowner.HostState
+	staged        computeowner.Channel
+	definitions   []platform.Definition
+	owner         map[string]platform.App
+	flowArtifacts flowArtifactGC
+	audit         runtimekernel.AuditLog
+	events        []automation.QueuedEvent
+	bindings      map[string]binding
+	change        changes
+	hops          int
+	acted         int
+	works         platform.Works
+	opsMu         sync.Mutex
+	work          automation.WorkBoard
+	Quota         int
+	quota         automation.Quota
+	breakers      integrations.Breakers
+	connectors    connectorRoster
+	notices       runtimekernel.NoticeBoard
+	settings      controlowner.Settings
+	words         controlowner.Words
+	sequences     runtimekernel.Sequences
+	endpoints     []*Endpoint
+	outbound      []*effect
+	Secrets       func(name string) ([]byte, bool)
+	Outbound      func(req *http.Request, allowPrivate bool) (*http.Response, error)
+	AIClient      func(req *http.Request) (*http.Response, error)
+	Files         platform.FileStore
+	ComputeWorker platform.WasmWorker
+	Compiler      platform.CodeCompiler
+	cancels       computeowner.Cancels
+	memFiles      resources.MemoryFiles
+	uploads       resources.Uploads
 
 	includeArchivedDefinitions bool
 }
@@ -163,60 +154,6 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			return nil, err
 		}
 		(hostView{t: t, app: a}).bindOwner(a)
-		if x, ok := a.(platform.Observer); ok {
-			t.observers = append(t.observers, x)
-		}
-		if x, ok := a.(platform.Linker); ok {
-			if t.linker != nil {
-				return nil, fmt.Errorf("tenant %s has two link owners", id)
-			}
-			t.linker = x
-		}
-		if x, ok := a.(platform.Directory); ok {
-			if t.directory != nil {
-				return nil, fmt.Errorf("tenant %s has two directory owners", id)
-			}
-			t.directory = x
-		}
-		if identity, ok := a.(platform.IdentityDirectory); ok {
-			if t.identity != nil {
-				return nil, fmt.Errorf("tenant %s has two identity owners", id)
-			}
-			t.identity = identity
-		}
-		if x, ok := a.(models); ok {
-			if t.ai != nil {
-				return nil, fmt.Errorf("tenant %s has two model owners", id)
-			}
-			t.ai = x
-		}
-		if x, ok := a.(platform.Tasks); ok {
-			if t.tasks != nil {
-				return nil, fmt.Errorf("tenant %s has two task owners", id)
-			}
-			t.tasks = x
-		}
-		if x, ok := a.(platform.Processes); ok {
-			if t.procs != nil {
-				return nil, fmt.Errorf("tenant %s has two process owners", id)
-			}
-			t.procs = x
-		}
-		if _, ok := a.(platform.Listener); ok {
-			t.listeners = append(t.listeners, m.ID)
-		}
-		if x, ok := a.(platform.AgentRuntime); ok {
-			if t.agents != nil {
-				return nil, fmt.Errorf("tenant %s has two agent owners", id)
-			}
-			t.agents = x
-		}
-		if x, ok := a.(platform.Glossary); ok {
-			if t.knowledge != nil {
-				return nil, fmt.Errorf("tenant %s has two glossary owners", id)
-			}
-			t.knowledge = x
-		}
 		_, subscriber := a.(platform.Subscriber)
 		if err := build.CheckSubscriptions(m, subscriber); err != nil {
 			return nil, fmt.Errorf("tenant %s: %w", id, err)
@@ -247,6 +184,11 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			}
 		}
 	}
+	roles, err := ownerRolesOf(apps, func(string) bool { return true })
+	if err != nil {
+		return nil, fmt.Errorf("tenant %s has %w", id, err)
+	}
+	t.ownerRoles = roles
 	for _, a := range apps {
 		if len(a.Manifest().Agents) == 0 {
 			continue

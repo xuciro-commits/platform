@@ -93,7 +93,7 @@ check-web:
 	cd web && $(PNPM) typecheck && $(PNPM) build
 
 test:
-	node scripts/check-invariants.mjs $(RUN)
+	node scripts/check-invariants.mjs '$(RUN)'
 
 e2e:
 	cd web/e2e && $(PNPM) exec playwright test $(SPEC)

@@ -202,7 +202,6 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.Projection = t.Projection.ForkRecords()
 	view.Projection.Current().Detach()
 	view.definitions = slices.Clone(t.definitions)
-	view.listeners = slices.Clone(t.listeners)
 	view.disabledOwners = maps.Clone(t.disabledOwners)
 	view.apps = make([]platform.App, len(t.apps))
 	view.owner = make(map[string]platform.App, len(t.owner))
@@ -216,34 +215,12 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 			return nil, err
 		}
 		view.apps[i] = fork
-		if observer, ok := fork.(platform.Observer); ok {
-			view.observers = append(view.observers, observer)
-		}
-		if identity, ok := fork.(platform.IdentityDirectory); ok {
-			view.identity = identity
-		}
-		if directory, ok := fork.(platform.Directory); ok {
-			view.directory = directory
-		}
-		if linker, ok := fork.(platform.Linker); ok {
-			view.linker = linker
-		}
-		if tasks, ok := fork.(platform.Tasks); ok {
-			view.tasks = tasks
-		}
-		if processes, ok := fork.(platform.Processes); ok {
-			view.procs = processes
-		}
-		if agents, ok := fork.(platform.AgentRuntime); ok {
-			view.agents = agents
-		}
-		if model, ok := fork.(models); ok {
-			view.ai = model
-		}
-		if knowledge, ok := fork.(platform.Glossary); ok {
-			view.knowledge = knowledge
-		}
 	}
+	roles, err := ownerRolesOf(view.apps, view.ownerActive)
+	if err != nil {
+		return nil, err
+	}
+	view.ownerRoles = roles
 	for key, owner := range t.owner {
 		view.owner[key] = view.app(owner.Manifest().ID)
 	}
