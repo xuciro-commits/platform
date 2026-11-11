@@ -179,57 +179,22 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	if err := t.checkApplicationExtension(platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, a); err != nil {
 		return err
 	}
-	if a.Name == "" || a.Title == "" {
-		return fmt.Errorf("application %q: it needs a name and a title", a.Name)
-	}
-	if len(a.Pages) == 0 && len(a.Resources) == 0 {
-		return fmt.Errorf("application %s: it needs pages or declared resources", a.Name)
-	}
-	if a.Icon != "" && !platform.IconName(a.Icon) {
-		return fmt.Errorf("application %s: %q is not an icon name", a.Name, a.Icon)
-	}
-	for _, page := range a.Pages {
-		ref := platform.AssetRef{App: id, Kind: platform.AssetPage, Name: page}
-		pageDefinition := slices.IndexFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref && d.Page != nil })
-		if pageDefinition >= 0 {
-			if err := a.CheckPageVariables(*t.definitions[pageDefinition].Page); err != nil {
-				return err
-			}
-		}
-		if pageDefinition < 0 {
-			return fmt.Errorf("application %s: no page %s", a.Name, page)
-		}
-	}
-	if err := a.CheckVariables(); err != nil {
-		return err
-	}
-	if err := t.checkPageQueries(a.QueryPage()); err != nil {
-		return err
-	}
-	if err := a.CheckResources(); err != nil {
-		return fmt.Errorf("application %s: %w", a.Name, err)
-	}
-	for _, ref := range a.Resources {
+	err := t.pageBindings().CheckApplication(id, a, func(ref platform.AssetRef) (bool, error) {
 		known := slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
 		if !known && (ref.Kind == platform.AssetAgent || t.ownedMetadataKind(ref)) {
 			registered, err := t.ownedAssetDefinitions(t.definitions)
 			if err != nil {
-				return err
+				return false, err
 			}
 			known = slices.ContainsFunc(registered, func(d platform.Definition) bool { return d.Ref == ref })
 		}
 		if ref.Kind == platform.AssetFlow {
 			known = t.procs != nil && strings.HasPrefix(ref.Name, ref.App+".") && t.procs.HasPublishedFlow(ref.Name)
 		}
-		if !known {
-			return fmt.Errorf("application %s: no published resource %s", a.Name, ref)
-		}
-	}
-	if err := a.CheckHeader(); err != nil {
+		return known, nil
+	})
+	if err != nil {
 		return err
-	}
-	if err := a.CheckGroups(); err != nil {
-		return fmt.Errorf("application %s: %v", a.Name, err)
 	}
 	return t.storeApplication(app, a)
 }
