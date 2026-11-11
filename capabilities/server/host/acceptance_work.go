@@ -359,7 +359,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if err := prepared.apply(t); err != nil {
+	if err := t.applyAcceptedChanges(prepared); err != nil {
 		return false, err
 	}
 	t.installAcceptedWork(finished)
@@ -377,7 +377,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 		t.delivered(platform.Delivery{At: result.At, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s),
 			Subscriber: task.App, Outcome: result.Outcome, Attempt: task.Attempts})
 	}
-	prepared.publish(t)
+	t.publishAcceptedChanges(prepared)
 	return true, nil
 }
 

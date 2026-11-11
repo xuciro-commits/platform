@@ -242,10 +242,10 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, err
 	if err != nil {
 		return result, false, err
 	}
-	if err := prepared.apply(t); err != nil {
+	if err := t.applyAcceptedChanges(prepared); err != nil {
 		return result, false, err
 	}
-	prepared.publish(t)
+	t.publishAcceptedChanges(prepared)
 	if result.Refusal != nil {
 		t.refused(result.Member, result.Name, result.Refusal, result.At)
 	}

@@ -26,104 +26,48 @@ func (d *stagedDecision) savedChangePlan() (acceptedformat.ChangePlan, error) {
 	return plan, err
 }
 
-type preparedAcceptedChanges struct {
-	plan    acceptedformat.ChangePlan
-	records *records.Store
-	child   *runtimekernel.PreparedBatch
+func (t *Tenant) changeApply() runtimekernel.ChangeApply {
+	return runtimekernel.ChangeApply{Batch: t.batchApply(),
+		Check: func(plan acceptedformat.ChangePlan) error {
+			if err := t.validateAcceptedControl(plan.Control); err != nil {
+				return err
+			}
+			if err := t.notices.Check(plan.Notices); err != nil {
+				return err
+			}
+			if err := t.validateAcceptedIntents(plan.Intents); err != nil {
+				return err
+			}
+			if err := runtimekernel.CheckStates(t.states, plan.States); err != nil {
+				return err
+			}
+			return t.sequences.Check(plan.SequenceBases, plan.Sequences)
+		},
+		Apply: func(plan acceptedformat.ChangePlan) error {
+			if err := t.applyAcceptedControl(plan.Control); err != nil {
+				return err
+			}
+			if err := runtimekernel.ApplyStates(t.states, plan.States); err != nil {
+				return err
+			}
+			t.applyAcceptedNotices(plan.Notices)
+			t.installAcceptedIntents(plan.Intents)
+			t.sequences.Set(plan.Sequences)
+			return nil
+		}}
 }
 
-func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*preparedAcceptedChanges, error) {
-	if err := t.validateAcceptedControl(plan.Control); err != nil {
-		return nil, err
-	}
-	if err := t.notices.Check(plan.Notices); err != nil {
-		return nil, err
-	}
-	if err := t.validateAcceptedIntents(plan.Intents); err != nil {
-		return nil, err
-	}
-	if err := runtimekernel.CheckStates(t.states, plan.States); err != nil {
-		return nil, err
-	}
-	if err := t.sequences.Check(plan.SequenceBases, plan.Sequences); err != nil {
-		return nil, err
-	}
-	prepared := &preparedAcceptedChanges{plan: plan}
-	var err error
-	if len(plan.Changes) > 0 {
-		batch, _, err := acceptedformat.DecodeBatch(plan.Changes)
-		if err != nil || batch.Tenant != t.ID || !batch.At.Equal(plan.At) {
-			return nil, fmt.Errorf("accepted result has an invalid child decision: %v", err)
-		}
-		owner := t.App(batch.App)
-		if owner == nil {
-			return nil, fmt.Errorf("accepted result needs missing child authority")
-		}
-		if err := runtimekernel.CheckDirectAndChild(plan.Rows, batch); err != nil {
-			return nil, err
-		}
-		prepared.child, err = t.prepareAcceptedBatch(owner.AcceptedLedger(), plan.Changes)
-		if err != nil || prepared.child == nil {
-			return nil, fmt.Errorf("accepted child result: %v (already applied=%t)", err, prepared.child == nil)
-		}
-	}
-	if len(plan.Rows) > 0 {
-		base := t.Projection
-		if prepared.child != nil {
-			base = prepared.child.Records
-		}
-		prepared.records, err = runtimekernel.ApplyDirectRows(base, plan.Rows, plan.Member, plan.At, checkRunApplicationBindings)
-		if err != nil {
-			return nil, err
-		}
-		if prepared.child != nil {
-			prepared.records.ExtendDecision(base)
-			prepared.child.Records = prepared.records
-			prepared.records = nil
-		}
-	}
-	if plan.CheckUnique {
-		records := prepared.records
-		if prepared.child != nil {
-			records = prepared.child.Records
-		}
-		if records == nil {
-			records = t.Projection.ForkRecords()
-		}
-		if err := runtimekernel.ValidateUniqueReplacements(records, plan.Unique); err != nil {
-			return nil, err
-		}
-	}
-	return prepared, nil
+func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*runtimekernel.PreparedChanges, error) {
+	return t.PrepareChanges(plan, t.changeApply())
 }
 
-func (p *preparedAcceptedChanges) apply(t *Tenant) error {
-	if p.child != nil {
-		if applied, err := t.promoteAcceptedBatch(p.child); err != nil || !applied {
-			return fmt.Errorf("accepted child application: %v (applied=%t)", err, applied)
-		}
-
-	}
-	if p.records != nil {
-		if err := t.Projection.PromoteRecords(p.records); err != nil {
-			return err
-		}
-	}
-	if err := t.applyAcceptedControl(p.plan.Control); err != nil {
-		return err
-	}
-	if err := runtimekernel.ApplyStates(t.states, p.plan.States); err != nil {
-		return err
-	}
-	t.applyAcceptedNotices(p.plan.Notices)
-	t.installAcceptedIntents(p.plan.Intents)
-	t.sequences.Set(p.plan.Sequences)
-	return nil
+func (t *Tenant) applyAcceptedChanges(p *runtimekernel.PreparedChanges) error {
+	return t.PromoteChanges(p, t.changeApply())
 }
 
-func (p *preparedAcceptedChanges) publish(t *Tenant) {
-	if p.child != nil {
-		t.publishAcceptedBatch(p.child.Result)
+func (t *Tenant) publishAcceptedChanges(p *runtimekernel.PreparedChanges) {
+	if p.Child != nil {
+		t.publishAcceptedBatch(p.Child.Result)
 	}
 }
 

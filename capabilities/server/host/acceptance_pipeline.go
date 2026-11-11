@@ -174,7 +174,7 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, e
 	if err != nil {
 		return result, false, err
 	}
-	if err := prepared.apply(t); err != nil {
+	if err := t.applyAcceptedChanges(prepared); err != nil {
 		return result, false, err
 	}
 	t.outbound.Update(result.Before.ID, func(x *actions.Queued) {
@@ -187,7 +187,7 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, e
 	if result.Usage != nil {
 		t.ai.Meter(*result.Usage)
 	}
-	prepared.publish(t)
+	t.publishAcceptedChanges(prepared)
 	return result, true, nil
 }
 
