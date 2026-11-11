@@ -9,7 +9,6 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
-	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 	"slices"
@@ -76,20 +75,8 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 		} else if err := t.Projection.PromoteRecords(draft.Projection); err != nil {
 			return saved, err
 		}
-		t.setDefinitions(draft.definitions)
-		t.owner = t.rehome(draft.owner)
-		registry, err := t.assetRegistryLocked()
-		if err != nil {
+		if err := t.installReleaseDefinitions(draft, saved.Installations); err != nil {
 			return saved, err
-		}
-		for _, installation := range saved.Installations {
-			plan, err := releaseowner.InstallationPlan(registry, installation)
-			if err != nil {
-				return saved, err
-			}
-			if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{}); err != nil {
-				return saved, err
-			}
 		}
 		if bootstrap != nil {
 			t.publishAcceptedBatch(bootstrap.Result)

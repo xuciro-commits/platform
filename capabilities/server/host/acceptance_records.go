@@ -222,7 +222,7 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 					return nil, nil, err
 				}
 				draft = installation.Projection
-				install = func() error { return t.installBatchDefinitions(installation, result.Definitions) }
+				install = func() error { return t.installReleaseDefinitions(installation, result.Definitions) }
 			}
 			for _, decision := range result.Decisions {
 				if p := decision.Publication; p != nil {
@@ -267,7 +267,7 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 		}}
 }
 
-func (t *Tenant) installBatchDefinitions(installed *Tenant, definitions []platform.ReleaseInstallation) error {
+func (t *Tenant) installReleaseDefinitions(installed *Tenant, definitions []platform.ReleaseInstallation) error {
 	t.setDefinitions(installed.definitions)
 	t.owner = t.rehome(installed.owner)
 	registry, err := t.assetRegistryLocked()

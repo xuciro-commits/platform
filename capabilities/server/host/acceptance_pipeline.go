@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -130,65 +131,24 @@ func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedformat.RuntimeAgent, er
 }
 
 func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, error) {
-	result, err := acceptedformat.DecodeEffect(raw)
-	if err != nil {
-		return result, false, err
+	h := runtimekernel.EffectApply{Changes: t.changeApply(), Finish: t.prepareOperationFinish, Published: t.publishAcceptedChanges,
+		Current: func(id string) (acceptedformat.EffectState, bool) {
+			current, found := t.outbound.Get(id)
+			if !found {
+				return acceptedformat.EffectState{}, false
+			}
+			return acceptedformat.EffectState{Effect: current.Effect, Since: current.Since}, true
+		},
+		Settle: func(id string, after acceptedformat.EffectState, finished *pb.Work) {
+			t.outbound.Update(id, func(x *actions.Queued) { x.Effect, x.Since, x.Sending = after.Effect, after.Since, false })
+			if finished != nil {
+				t.installAcceptedWork(finished)
+			}
+		}}
+	if t.ai != nil {
+		h.Usage, h.Meter = t.ai.Snapshot, t.ai.Meter
 	}
-	if result.Tenant != t.ID {
-		return result, false, fmt.Errorf("effect result belongs to another tenant")
-	}
-	current, found := t.outbound.Get(result.Before.ID)
-	var before acceptedformat.EffectState
-	if found {
-		before = acceptedformat.EffectState{Effect: current.Effect, Since: current.Since}
-	}
-	beforeHash, err := platform.CanonicalDigest(before)
-	savedHash, savedErr := platform.CanonicalDigest(result.Before)
-	if !found || err != nil || savedErr != nil || beforeHash != savedHash {
-		return result, false, fmt.Errorf("effect result predecessor differs")
-	}
-	works, priorWork, savedWork, err := t.prepareOperationFinish(result.Before.Effect, result.Outcome)
-	if err != nil {
-		return result, false, err
-	}
-	if works != nil {
-		priorHash, _ := platform.CanonicalDigest(priorWork)
-		expectedPrior, _ := platform.CanonicalDigest(result.WorkBefore)
-		workHash, _ := platform.CanonicalDigest(savedWork)
-		expectedWork, _ := platform.CanonicalDigest(result.Work)
-		if priorHash != expectedPrior || workHash != expectedWork {
-			return result, false, fmt.Errorf("operation result ownership differs")
-		}
-	}
-	if result.Usage != nil {
-		if t.ai == nil {
-			return result, false, fmt.Errorf("effect result needs the AI meter")
-		}
-		state, err := t.ai.Snapshot()
-		currentHash, hashErr := platform.CanonicalDigest(state)
-		if err != nil || hashErr != nil || currentHash != result.UsageBefore {
-			return result, false, fmt.Errorf("effect result model usage predecessor differs")
-		}
-	}
-	prepared, err := t.prepareAcceptedChanges(result.ChangePlan())
-	if err != nil {
-		return result, false, err
-	}
-	if err := t.applyAcceptedChanges(prepared); err != nil {
-		return result, false, err
-	}
-	t.outbound.Update(result.Before.ID, func(x *actions.Queued) {
-		x.Effect, x.Since, x.Sending = result.After.Effect, result.After.Since, false
-	})
-	if works != nil {
-		finished, _ := works.Get(result.Before.ID)
-		t.installAcceptedWork(finished)
-	}
-	if result.Usage != nil {
-		t.ai.Meter(*result.Usage)
-	}
-	t.publishAcceptedChanges(prepared)
-	return result, true, nil
+	return t.ApplyEffectResult(raw, h)
 }
 
 func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform.AIUsage, at time.Time) {
