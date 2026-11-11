@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/kernel/records"
-	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/security"
 
 	"reflect"
@@ -18,7 +17,7 @@ import (
 )
 
 func RecordSetBinding(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
-	return pageowner.QuerySourceDefinition(definitions, binding)
+	return QuerySourceDefinition(definitions, binding)
 }
 
 func (t *Owner) ValidateRecordSet(info platform.EntityInfo, set platform.RecordSet) error {
@@ -326,4 +325,15 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 
 func (t *Owner) CheckRecordSetDeclarations(info platform.EntityInfo, engines ...platform.RuleEngine) error {
 	return t.checkRecordSetDeclarations(info, engines...)
+}
+
+func QuerySourceDefinition(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
+	if binding != nil {
+		for i := range definitions {
+			if definitions[i].Ref == binding.Ref {
+				return definitions[i].QuerySourceVersion(binding.SourceVersion)
+			}
+		}
+	}
+	return nil
 }

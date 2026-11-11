@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	pageowner "platformserver/services/apps/pages"
 	"strconv"
 	"strings"
 
@@ -29,8 +30,8 @@ import (
 const releaseCommandBytes = build.JointDraftLimit * 512
 
 type ActionCheckRequest struct {
-	Target PageModelRecord `json:"target"`
-	Inputs json.RawMessage `json:"inputs,omitempty"`
+	Target pageowner.PageModelRecord `json:"target"`
+	Inputs json.RawMessage           `json:"inputs,omitempty"`
 }
 
 type ActionConditionCheck struct {

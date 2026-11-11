@@ -3,22 +3,12 @@ package pages
 import (
 	"fmt"
 	"platformserver/platform"
+	"platformserver/services/objects"
 	"slices"
 )
 
-func QuerySourceDefinition(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
-	if binding != nil {
-		for i := range definitions {
-			if definitions[i].Ref == binding.Ref {
-				return definitions[i].QuerySourceVersion(binding.SourceVersion)
-			}
-		}
-	}
-	return nil
-}
-
 func VisibleInterfaceQuery(p platform.Page, q platform.PageQuery, entities map[string]platform.EntityInfo, definitions []platform.Definition) *platform.Definition {
-	named := QuerySourceDefinition(definitions, q.Query)
+	named := objects.QuerySourceDefinition(definitions, q.Query)
 	if named == nil || named.Query == nil {
 		return nil
 	}
@@ -87,7 +77,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 		}
 	}
 	for id, q := range p.InputSchema.Queries {
-		named := QuerySourceDefinition(b.Definitions, q.Query)
+		named := objects.QuerySourceDefinition(b.Definitions, q.Query)
 		if q.Interface != "" {
 			if err := p.CheckInterfaceQuery(q, named); err != nil {
 				return fmt.Errorf("page query %s: %w", id, err)
@@ -154,7 +144,7 @@ func CheckModelQueries(page platform.Page, definitions []platform.Definition, en
 				if set == nil || set.Query == nil {
 					continue
 				}
-				named := QuerySourceDefinition(definitions, set.Query)
+				named := objects.QuerySourceDefinition(definitions, set.Query)
 				if named == nil || named.Query == nil || named.Query.Object != m.Type {
 					return fmt.Errorf("section %s: retained model query type or version is unavailable", section.ID)
 				}

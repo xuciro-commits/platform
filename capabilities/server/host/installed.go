@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	releaseowner "platformserver/services/devops/releases"
+	"platformserver/services/objects"
 
 	pageowner "platformserver/services/apps/pages"
 	"reflect"
@@ -230,7 +231,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			return fmt.Errorf("page %s binding %s: %w", p.Name, binding.ID, err)
 		}
 		if binding.Query != nil {
-			query := pageowner.QuerySourceDefinition(t.definitions, binding.Query)
+			query := objects.QuerySourceDefinition(t.definitions, binding.Query)
 			if query == nil || query.Query == nil || query.Query.Object != binding.Object.Name {
 				return fmt.Errorf("page binding query owner or version is unavailable")
 			}

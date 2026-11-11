@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"platformserver/kernel/records"
+	pageowner "platformserver/services/apps/pages"
 	"reflect"
 	"strconv"
 	"strings"
@@ -26,39 +27,39 @@ func enterpriseApp(t *Tenant) platform.EnterpriseQueries {
 }
 
 func (h *Host) routesRecords(rt *routes) {
-	rt.recordRead(transport.Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: PageModelRead{}, Answer: PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request *PageModelRead
+	rt.recordRead(transport.Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: pageowner.PageModelRead{}, Answer: pageowner.PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request *pageowner.PageModelRead
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&request) != nil || request == nil || decoder.Decode(new(any)) != io.EOF {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A model read needs one bounded request"))
 			return
 		}
-		value, err := t.readPageModel(m, *request, h.Now())
+		value, err := t.pageModels().Read(m, *request, h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return
 		}
 		owner, _, _ := strings.Cut(value.Object, ".")
 		WriteJSON(w, http.StatusOK, struct {
-			PageModelResult
+			pageowner.PageModelResult
 			Fields any `json:"fields"`
 		}{value, t.i18n.TranslateInApp(value.Fields, owner, t.Language(m, r))})
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/page-model/rules", Summary: "List original action criteria available to the builder model inspector", Answer: []PageModelRule{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/page-model/rules", Summary: "List original action criteria available to the builder model inspector", Answer: []pageowner.PageModelRule{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 
 		c := platform.NewCaller(runtime{t: t}, m, "build", false, false)
 		if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/page-model/rules", "read", []string{"builder"}, true)); err != nil {
 			Reply(w, nil, err)
 			return
 		}
-		values := []PageModelRule{}
+		values := []pageowner.PageModelRule{}
 		for _, entry := range t.definitions {
 			if entry.Action == nil {
 				continue
 			}
 			if criteria, ok := t.modelCriteria(entry.Ref); ok {
-				values = append(values, PageModelRule{Action: entry.Ref, Title: entry.Action.Title, Criteria: *criteria})
+				values = append(values, pageowner.PageModelRule{Action: entry.Ref, Title: entry.Action.Title, Criteria: *criteria})
 			}
 		}
 		WriteJSON(w, http.StatusOK, values)

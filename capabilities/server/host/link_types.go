@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	pageowner "platformserver/services/apps/pages"
 	releaseowner "platformserver/services/devops/releases"
+	"platformserver/services/objects"
 	"slices"
 	"strconv"
 )
@@ -83,7 +83,7 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 }
 
 func (t *Tenant) visibleLink(m platform.Member, binding platform.AssetBinding) *platform.LinkType {
-	if selected := pageowner.QuerySourceDefinition(t.Definitions(m), &binding); selected != nil {
+	if selected := objects.QuerySourceDefinition(t.Definitions(m), &binding); selected != nil {
 		return selected.LinkType
 	}
 	return nil
