@@ -139,10 +139,8 @@ func (s *Sequence) PrepareBatch(l *platform.Ledger, raw []byte, h BatchApply) (*
 	if err := draft.ValidateChangedLinkConstraints(); err != nil {
 		return nil, err
 	}
-	if result.Version >= 8 {
-		if err := ValidateUniqueReplacements(draft, result.Unique); err != nil {
-			return nil, err
-		}
+	if err := ValidateUniqueReplacements(draft, result.Unique); err != nil {
+		return nil, err
 	}
 	if err := h.Sequences(result); err != nil {
 		return nil, err

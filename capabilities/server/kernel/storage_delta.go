@@ -26,7 +26,7 @@ func StorageDelta(raw []byte, applyUsage UsageApplier) (persistence.StateDelta, 
 	for _, key := range b.changeOrder {
 		changes = append(changes, b.changes[key])
 	}
-	return persistence.StateDelta{Records: slices.Collect(maps.Values(b.records)), Replacements: b.replacements, Changes: changes, Values: slices.Collect(maps.Values(b.values)), ValueUpdates: b.valueUpdates, Unique: slices.Collect(maps.Values(b.unique)), LegacyUnique: b.legacyUnique}, nil
+	return persistence.StateDelta{Records: slices.Collect(maps.Values(b.records)), Replacements: b.replacements, Changes: changes, Values: slices.Collect(maps.Values(b.values)), ValueUpdates: b.valueUpdates, Unique: slices.Collect(maps.Values(b.unique))}, nil
 }
 
 type storageDeltaBuilder struct {
@@ -38,7 +38,6 @@ type storageDeltaBuilder struct {
 	values       map[string]persistence.StateValue
 	valueUpdates []persistence.StateValueUpdate
 	unique       map[string]persistence.StateUnique
-	legacyUnique bool
 }
 
 func (b *storageDeltaBuilder) value(owner, key string, image any) {
@@ -148,7 +147,6 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		b.legacyUnique = b.legacyUnique || result.Version < 2
 		b.value("input", result.App+"/"+result.Key, raw)
 		return b.plan(result.ChangePlan())
 	case "effect-result":
@@ -156,7 +154,6 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		b.legacyUnique = b.legacyUnique || result.Version < 4
 		if err := b.plan(result.ChangePlan()); err != nil {
 			return err
 		}
@@ -173,7 +170,6 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		b.legacyUnique = b.legacyUnique || result.Version < 3
 		if err := b.plan(result.ChangePlan()); err != nil {
 			return err
 		}
@@ -185,7 +181,6 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		b.legacyUnique = b.legacyUnique || result.Version < 8
 		sub, err := acceptedformat.BatchSubmission(result, receipt)
 		if err != nil {
 			return err
@@ -293,7 +288,6 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		b.legacyUnique = b.legacyUnique || result.Version < 5
 		if err := b.record(result.Row, -1); err != nil {
 			return err
 		}

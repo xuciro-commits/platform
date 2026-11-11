@@ -160,7 +160,6 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 		return err
 	}
 	next := saved + 1
-	legacyKeys := false
 	for _, result := range suffix {
 		if result.position != next || result.kind != "accepted-result" {
 			return fmt.Errorf("tenant %s recovery requires a contiguous accepted-result at %d", tenant, next)
@@ -173,7 +172,6 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 		if err != nil {
 			return fmt.Errorf("tenant %s retained state delta at %d: %w", tenant, next, err)
 		}
-		legacyKeys = legacyKeys || delta.LegacyUnique
 		if err = j.writeState(ctx, tx, tenant, next, delta); err != nil {
 			return err
 		}
@@ -185,7 +183,7 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 	if next != position+1 {
 		return fmt.Errorf("tenant %s recovery suffix is incomplete", tenant)
 	}
-	if err = j.compareStateImage(ctx, tx, tenant, position, full, legacyKeys); err != nil {
+	if err = j.compareState(ctx, tx, tenant, position, full); err != nil {
 		return fmt.Errorf("SQL recovered state: %w", err)
 	}
 	if err = tx.QueryRow(ctx, `select coalesce(max(seq),0) from journal where tenant=$1`, tenant).Scan(&latest); err != nil {
@@ -201,10 +199,6 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 }
 
 func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, position int64, d StateDelta) error {
-	return j.compareStateImage(ctx, tx, tenant, position, d, false)
-}
-
-func (j *Postgres) compareStateImage(ctx context.Context, tx pgx.Tx, tenant string, position int64, d StateDelta, rebuildUnique bool) error {
 	var count int
 	if err := tx.QueryRow(ctx, `select count(*) from runtime_records where tenant=$1`, tenant).Scan(&count); err != nil {
 		return err
@@ -280,11 +274,6 @@ func (j *Postgres) compareStateImage(ctx context.Context, tx pgx.Tx, tenant stri
 		}
 		if !equal {
 			return fmt.Errorf("tenant %s owner state differs: %s/%s", tenant, v.Owner, v.Key)
-		}
-	}
-	if rebuildUnique {
-		if _, err := tx.Exec(ctx, `delete from runtime_unique_formats where tenant=$1`, tenant); err != nil {
-			return err
 		}
 	}
 	return j.compareUnique(ctx, tx, tenant, position, d.Unique)

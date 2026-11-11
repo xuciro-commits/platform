@@ -75,24 +75,16 @@ func DecodeEffect(raw []byte) (Effect, error) {
 		return result, err
 	}
 
-	if result.Version < 5 && (result.Outcome.PublicMessage != "" || result.Before.PublicMessage != "" || result.After.PublicMessage != "") {
-		return result, fmt.Errorf("legacy effect result carries public delivery text")
-	}
-	if result.Version >= 5 && result.Outcome.Detail != "" && result.Outcome.PublicMessage == "" {
+	if result.Outcome.Detail != "" && result.Outcome.PublicMessage == "" {
 		return result, fmt.Errorf("effect result omits its public delivery text")
-	}
-	if result.Version < 4 && len(result.Unique) > 0 {
-		return result, fmt.Errorf("legacy effect result carries derived unique keys")
 	}
 	digest, err := DigestEffect(result)
 	hash, hashErr := EffectResultHash(result.Before, result.Outcome, result.At)
 	expected := result.Before
 	MarkEffect(&expected.Effect, expected.Since, result.Outcome, result.At)
-	if result.Version >= 3 {
-		expected.CallbackError = result.CallbackError
-	}
+	expected.CallbackError = result.CallbackError
 	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash ||
-		(result.Version != 1 && result.Version != 2 && result.Version != 3 && result.Version != 4 && result.Version != 5) || result.Version == 1 && result.Control != nil || result.Kind != "effect-result" || result.Tenant == "" ||
+		result.Version != 5 || result.Kind != "effect-result" || result.Tenant == "" ||
 		result.App != "platform" || result.At.IsZero() || result.Before.ID == "" ||
 		!slices.Contains([]string{"delivered", "rejected", "retry", "unknown"}, result.Outcome.Result) ||
 		len(result.Outcome.Answer) > 64<<10 ||
@@ -108,12 +100,8 @@ func DecodeEffect(raw []byte) (Effect, error) {
 		return result, fmt.Errorf("effect result omits the direct record writer")
 	}
 	for _, row := range result.Rows {
-		if result.Version >= 4 {
-			if err := records.ValidateHistoryRef(row.Image); err != nil {
-				return result, err
-			}
-		} else if row.HistoryRef != nil || row.Predecessor != "" || row.Format != "" {
-			return result, fmt.Errorf("legacy effect result carries new record metadata")
+		if err := records.ValidateHistoryRef(row.Image); err != nil {
+			return result, err
 		}
 		if row.App != result.Before.App || result.Member != "app:"+row.App ||
 			row.Type == "" || row.ID == "" || len(row.History) == 0 || len(row.Value) == 0 {

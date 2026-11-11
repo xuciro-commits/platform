@@ -37,52 +37,19 @@ func ApplyBatchRows(draft *records.Store, result acceptedformat.Batch, tenant st
 			return fmt.Errorf("record extraction origin changed")
 		}
 		before := ""
-		baseHistory, revision := 0, uint32(0)
-		if result.Version >= 8 {
-			if err := records.CheckHistoryPredecessor(image.Image, prior); err != nil {
-				return err
-			}
-			var err error
-			before, err = records.Predecessor(image.Type, image.ID, prior)
-			if err != nil {
-				return err
-			}
-			if before != image.Before {
-				return fmt.Errorf("record batch image predecessor differs")
-			}
-			if prior != nil {
-				revision = records.Header(prior.Value).Revision
-			}
-		} else {
-			if prior != nil {
-				row, err := records.FullImage(image.Type, image.ID, prior)
-				if err != nil {
-					return err
-				}
-				before, err = platform.CanonicalDigest(row)
-				if err != nil {
-					return err
-				}
-				baseHistory, revision = len(prior.RecordHistory()), records.Header(prior.Value).Revision
-			}
-			if result.Version >= 2 {
-				if image.HistoryBase != baseHistory {
-					return fmt.Errorf("record batch history predecessor differs for %s/%s", image.Type, image.ID)
-				}
-				if prior != nil {
-					image.History = append(records.CopyHistory(prior.RecordHistory()), image.History...)
-				}
-			}
-			prefixEqual := true
-			if result.Version == 1 && prior != nil && baseHistory > 0 && len(image.History) >= baseHistory {
-				oldDigest, oldErr := platform.CanonicalDigest(prior.RecordHistory())
-				savedDigest, savedErr := platform.CanonicalDigest(image.History[:baseHistory])
-				prefixEqual = oldErr == nil && savedErr == nil && oldDigest == savedDigest
-			}
-			if before != image.Before || len(image.History) <= baseHistory || !prefixEqual {
-				return fmt.Errorf("record batch predecessor differs for %s/%s (value=%t history=%d/%d prefix=%t)",
-					image.Type, image.ID, before == image.Before, baseHistory, len(image.History), prefixEqual)
-			}
+		revision := uint32(0)
+		if err := records.CheckHistoryPredecessor(image.Image, prior); err != nil {
+			return err
+		}
+		before, err := records.Predecessor(image.Type, image.ID, prior)
+		if err != nil {
+			return err
+		}
+		if before != image.Before {
+			return fmt.Errorf("record batch image predecessor differs")
+		}
+		if prior != nil {
+			revision = records.Header(prior.Value).Revision
 		}
 		value := reflect.New(et.Info().Go).Elem()
 		decode, err := records.DecodeFormattedImage(et.Info(), image.Value, image.Projection, draft.Current().Release(), image.Format)
@@ -102,10 +69,10 @@ func ApplyBatchRows(draft *records.Store, result acceptedformat.Batch, tenant st
 		}
 		rec := records.Header(value)
 		var last *pb.ChangeRecord
-		if len(image.Authorities) > 0 && len(image.Authorities) != len(image.History)-baseHistory {
+		if len(image.Authorities) > 0 && len(image.Authorities) != len(image.History) {
 			return fmt.Errorf("record batch history authorities differ")
 		}
-		for index, change := range image.History[baseHistory:] {
+		for index, change := range image.History {
 			app := image.App
 			if len(image.Authorities) > 0 {
 				app = image.Authorities[index]
@@ -130,15 +97,13 @@ func ApplyBatchRows(draft *records.Store, result acceptedformat.Batch, tenant st
 			return fmt.Errorf("record batch image differs from its decisions")
 		}
 		recovered := &records.Row{Value: value, Format: image.Format, History: records.CopyHistory(image.History), Projection: records.CloneProjection(image.Projection), Extraction: image.Extraction}
-		if result.Version >= 8 {
-			if err := records.AppendRowHistory(recovered, prior, image.History); err != nil {
-				return err
-			}
+		if err := records.AppendRowHistory(recovered, prior, image.History); err != nil {
+			return err
 		}
 		recovered.RetainOriginal(image.Value)
 		et.SetRow(rec.ID, recovered)
 		draft.TrackWrite(image.Type + "/" + rec.ID)
-		for _, change := range image.History[baseHistory:] {
+		for _, change := range image.History {
 			draft.RememberChange(image.App+"/"+change.Change, image.Type+"/"+rec.ID)
 		}
 		if et.Knowledge() {

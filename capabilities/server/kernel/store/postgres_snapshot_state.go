@@ -306,9 +306,6 @@ func (j *Postgres) VerifyStateSnapshot(ctx context.Context, tenant string, snaps
 		}
 	}
 	for _, delta := range deltas {
-		if delta.LegacyUnique {
-			return fmt.Errorf("SQL checkpoint tail has no saved unique-key changes")
-		}
 		for _, r := range delta.Records {
 			if err = verifyTailRecord(ctx, tx, tenant, r); err != nil {
 				return err

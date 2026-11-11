@@ -59,15 +59,12 @@ func DecodeInput(raw []byte) (Input, error) {
 		return result, err
 	}
 
-	if result.Version == 1 && len(result.Unique) > 0 {
-		return result, fmt.Errorf("legacy connector result carries derived unique keys")
-	}
 	digest, err := DigestInput(result)
 	if err != nil || digest != result.Digest {
 		return result, fmt.Errorf("connector result digest differs")
 	}
 	hash, err := InputHash(result.Tenant, result.App, result.Name, result.Member, result.Body)
-	if err != nil || (result.Version != 1 && result.Version != 2) || result.Kind != "input-result" ||
+	if err != nil || result.Version != 2 || result.Kind != "input-result" ||
 		result.Tenant == "" || result.App == "" || result.Name == "" || result.Member == "" ||
 		result.At.IsZero() || result.RequestHash != hash || result.Key != "input:"+hash ||
 		result.Refusal != nil && (result.Refusal.Code == pb.ErrorCode_ERROR_CODE_UNSPECIFIED ||
@@ -88,12 +85,8 @@ func DecodeInput(raw []byte) (Input, error) {
 	}
 	seen := map[string]bool{}
 	for _, row := range result.Rows {
-		if result.Version >= 2 {
-			if err := records.ValidateHistoryRef(row.Image); err != nil {
-				return result, err
-			}
-		} else if row.HistoryRef != nil || row.Predecessor != "" || row.Format != "" {
-			return result, fmt.Errorf("legacy connector result carries new record metadata")
+		if err := records.ValidateHistoryRef(row.Image); err != nil {
+			return result, err
 		}
 		ref := row.Type + "/" + row.ID
 		if row.Type == "" || row.ID == "" || row.App != result.App || seen[ref] ||

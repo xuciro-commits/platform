@@ -6,7 +6,6 @@ import (
 )
 
 type StateDelta struct {
-	LegacyUnique bool
 	Unique       []StateUnique
 	Records      []StateRecord
 	Replacements []StateReplacement

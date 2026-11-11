@@ -10,7 +10,6 @@ import (
 	"platformserver/platform"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -47,30 +46,16 @@ func DecodeAcceptedRecord(et *records.Type, draft *records.Store, result accepte
 
 func InstallAcceptedRecord(draft *records.Store, et *records.Type, result acceptedformat.Record, receipt *pb.ChangeRecord, value reflect.Value, prior *records.Row) error {
 	rec := records.Header(value)
-	if result.Version >= 5 {
-		if err := records.CheckHistoryPredecessor(result.Row, prior); err != nil {
-			return err
-		}
-		before, err := records.Predecessor(result.Row.Type, result.Row.ID, prior)
-		if err != nil || before != result.Row.Predecessor || prior != nil && !reflect.DeepEqual(records.Header(prior.Value).Created, rec.Created) || prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) {
-			return fmt.Errorf("accepted record predecessor differs: %v", err)
-		}
-	} else {
-		verb, _ := strings.CutPrefix(receipt.GetSubmission().GetSchema().GetName(), result.Row.Type+".")
-		before := len(result.Row.History) - 1
-		if verb == "create" && prior != nil || verb != "create" && prior == nil ||
-			prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) ||
-			prior == nil && before != 0 || prior != nil && (len(prior.RecordHistory()) != before ||
-			before > 0 && !reflect.DeepEqual(prior.RecordHistory(), result.Row.History[:before]) ||
-			!reflect.DeepEqual(records.Header(prior.Value).Created, rec.Created)) {
-			return fmt.Errorf("accepted record is missing its predecessor")
-		}
+	if err := records.CheckHistoryPredecessor(result.Row, prior); err != nil {
+		return err
+	}
+	before, err := records.Predecessor(result.Row.Type, result.Row.ID, prior)
+	if err != nil || before != result.Row.Predecessor || prior != nil && !reflect.DeepEqual(records.Header(prior.Value).Created, rec.Created) || prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) {
+		return fmt.Errorf("accepted record predecessor differs: %v", err)
 	}
 	recovered := &records.Row{Value: value, Format: result.Row.Format, History: records.CopyHistory(result.Row.History)}
-	if result.Version >= 5 {
-		if err := records.AppendRowHistory(recovered, prior, result.Row.History); err != nil {
-			return err
-		}
+	if err := records.AppendRowHistory(recovered, prior, result.Row.History); err != nil {
+		return err
 	}
 	recovered.RetainOriginal(result.Row.Value)
 	et.SetRow(rec.ID, recovered)

@@ -32,18 +32,18 @@ type ChangePlan struct {
 
 func (r Input) ChangePlan() ChangePlan {
 	return ChangePlan{Rows: r.Rows, Member: r.Member, At: r.At, Changes: r.Changes,
-		States: r.States, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 2 && len(r.Changes) == 0}
+		States: r.States, Notices: r.Notices, Unique: r.Unique, CheckUnique: len(r.Changes) == 0}
 }
 
 func (r Effect) ChangePlan() ChangePlan {
 	return ChangePlan{Rows: r.Rows, Member: r.Member, At: r.At, Changes: r.Changes,
-		States: r.States, Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 4}
+		States: r.States, Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: true}
 }
 
 func (r Batch) ChangePlan() ChangePlan {
 	return ChangePlan{At: r.At, States: r.States, Control: r.Control, Intents: r.Intents,
 		Notices: r.Notices, Sequences: r.Sequences,
-		SequenceBases: r.SequenceBases, Unique: r.Unique, CheckUnique: r.Version >= 8}
+		SequenceBases: r.SequenceBases, Unique: r.Unique, CheckUnique: true}
 }
 
 type State struct {

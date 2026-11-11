@@ -166,15 +166,12 @@ func DecodeWork(raw []byte) (Work, error) {
 		return result, err
 	}
 
-	if result.Version < 3 && len(result.Unique) > 0 {
-		return result, fmt.Errorf("legacy work result carries derived unique keys")
-	}
 	digest, err := DigestWork(result)
 	hash, hashErr := WorkInputHash(result.Input, result.PriorWork)
 	finished := new(pb.Work)
 	workErr := protojson.Unmarshal(result.Work, finished)
 	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash || workErr != nil ||
-		(result.Version != 1 && result.Version != 2 && result.Version != 3) || result.Version == 1 && (result.Control != nil || len(result.States) > 0) || result.Kind != "work-result" || result.Tenant == "" || result.App == "" || result.At.IsZero() ||
+		result.Version != 3 || result.Kind != "work-result" || result.Tenant == "" || result.App == "" || result.At.IsZero() ||
 		result.Input.ID == "" || result.Input.App != result.App || result.Input.Kind != "delivery" && result.Input.Kind != "job" ||
 		result.After.ID != result.Input.ID || result.After.App != result.App || result.After.Kind != result.Input.Kind ||
 		result.After.Title != result.Input.Title || result.After.Attempts != result.Input.Attempts+1 ||
@@ -264,7 +261,7 @@ func DecodeOperationClaim(raw []byte) (OperationClaim, error) {
 
 func (r Work) ChangePlan() ChangePlan {
 	return ChangePlan{At: r.At, Changes: r.Changes, States: r.States,
-		Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 3}
+		Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: true}
 }
 
 type Composite struct {
@@ -350,7 +347,7 @@ func DecodeComposite(raw []byte) (Composite, error) {
 	if (len(saved.Changes) == 0) == (saved.Refusal == "") {
 		return saved, fmt.Errorf("composite result has incompatible changes or refusal")
 	}
-	if saved.Version >= 2 && saved.Refusal == "" {
+	if saved.Refusal == "" {
 		batch, receipt, err := DecodeBatch(saved.Changes)
 		if err != nil || batch.Tenant != saved.Tenant || batch.App != saved.App || !batch.At.Equal(saved.At) || receipt.GetSubmission().GetPrincipalId() != saved.Member {
 			return saved, fmt.Errorf("composite result changes differ: %v", err)

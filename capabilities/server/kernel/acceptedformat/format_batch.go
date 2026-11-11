@@ -78,7 +78,7 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if result.Version < 1 || result.Version > 11 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
+	if result.Version < 8 || result.Version > 11 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
 		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
@@ -88,12 +88,6 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	}
 	if err := ValidateSourceClaims(result.Claims, result.Origin, result.Version == 11, result.Version < 11); err != nil {
 		return result, nil, err
-	}
-	if result.Version < 8 && (result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || result.Version < 6 && (result.Version == 5) != (len(result.Iterations) > 0) || result.Version < 7 && (result.Version == 6) != (len(result.Definitions) > 0) || result.Version < 8 && (result.Version == 7) != (len(result.Business) > 0)) {
-		return result, nil, fmt.Errorf("record batch control format differs")
-	}
-	if result.Version < 8 && len(result.Unique) > 0 {
-		return result, nil, fmt.Errorf("legacy batch has unique-key metadata")
 	}
 	if len(result.Business) > 64 {
 		return result, nil, fmt.Errorf("business result exceeds its evidence bound")
@@ -210,19 +204,15 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	seen := map[string]bool{}
 	for _, row := range result.Rows {
 		ref := row.Type + "/" + row.ID
-		if result.Version >= 8 {
-			if row.HistoryRef == nil || row.HistoryBase != row.HistoryRef.Base {
-				return result, nil, fmt.Errorf("record batch has no versioned history")
-			}
-			if err := records.ValidateHistoryRef(row.Image); err != nil {
-				return result, nil, err
-			}
-		} else if row.HistoryRef != nil || row.Format != "" || row.Predecessor != "" {
-			return result, nil, fmt.Errorf("legacy record batch carries new metadata")
+		if row.HistoryRef == nil || row.HistoryBase != row.HistoryRef.Base {
+			return result, nil, fmt.Errorf("record batch has no versioned history")
+		}
+		if err := records.ValidateHistoryRef(row.Image); err != nil {
+			return result, nil, err
 		}
 
 		if row.Type == "" || row.ID == "" || row.App == "" || len(row.Value) == 0 ||
-			len(row.History) == 0 || row.HistoryBase < 0 || result.Version == 1 && row.HistoryBase != 0 || seen[ref] || !written[ref] {
+			len(row.History) == 0 || row.HistoryBase < 0 || seen[ref] || !written[ref] {
 			return result, nil, fmt.Errorf("record batch omits or duplicates a row")
 		}
 		seen[ref] = true
@@ -239,12 +229,8 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	}
 	for _, direct := range result.DirectRows {
 		row := direct.Row
-		if result.Version >= 8 {
-			if err := records.ValidateHistoryRef(row.Image); err != nil {
-				return result, nil, err
-			}
-		} else if row.HistoryRef != nil || row.Format != "" {
-			return result, nil, fmt.Errorf("legacy callback row carries new metadata")
+		if err := records.ValidateHistoryRef(row.Image); err != nil {
+			return result, nil, err
 		}
 		ref := row.Type + "/" + row.ID
 		if seen[ref] || written[ref] || row.Type == "" || row.ID == "" || row.App == "" || direct.Source.ID == "" || direct.Source.App != row.App || len(row.History) == 0 || len(row.Value) == 0 {

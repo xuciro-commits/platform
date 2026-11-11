@@ -47,7 +47,7 @@ func (s *Sequence) ApplyRecordResult(l *platform.Ledger, raw []byte, h RecordApp
 		return false, err
 	}
 	var publisher platform.AcceptedPublisher
-	if result.Version == 3 || result.Version == 5 && result.Kind == "publication" {
+	if result.Kind == "publication" {
 		schema := receipt.GetSubmission().GetSchema().GetName()
 		var ok bool
 		publisher, ok = h.App(result.App).(platform.AcceptedPublisher)
@@ -77,10 +77,8 @@ func (s *Sequence) ApplyRecordResult(l *platform.Ledger, raw []byte, h RecordApp
 		return false, err
 	}
 	draft.Unlock()
-	if result.Version >= 5 {
-		if err := ValidateUniqueReplacements(draft, result.Unique); err != nil {
-			return false, err
-		}
+	if err := ValidateUniqueReplacements(draft, result.Unique); err != nil {
+		return false, err
 	}
 	changed, err := l.ApplyAcceptedChange(receipt)
 	if err != nil {
