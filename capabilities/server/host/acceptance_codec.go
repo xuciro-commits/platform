@@ -8,11 +8,9 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
-	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
-	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -78,94 +76,19 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 }
 
 func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {
-	result, receipt, err := acceptedformat.DecodeRecord(raw)
-	if err != nil {
-		return false, err
-	}
-	if result.Tenant != t.ID || l == nil || !slices.ContainsFunc(l.Declarations(), func(d *pb.AuthorityDeclaration) bool {
-		return d.GetTenantId() == result.Tenant && d.GetAuthorityId() == result.App && d.GetDataClass() == result.Row.Type
-	}) {
-		return false, fmt.Errorf("accepted result belongs to another tenant or authority")
-	}
-	s := t.Projection
-	draft := s.ForkRecords()
-	draft.Lock()
-	et := draft.Type(result.Row.Type)
-	if et == nil || et.Info().App != result.App {
-		draft.Unlock()
-		return false, fmt.Errorf("accepted result needs installed entity %s", result.Row.Type)
-	}
-	value, decoded, err := runtimekernel.DecodeAcceptedRecord(et, draft, result, receipt, checkRunApplicationBindings)
-	if err != nil {
-		draft.Unlock()
-		return false, err
-	}
-	rec := records.Header(value)
-	var source *preparedSourceClaim
-	if len(result.Claims) > 0 {
-		source = &preparedSourceClaim{origin: result.Origin, claims: result.Claims}
-		if _, err := t.sourceFacts(result.Row.Type, result.Row.ID, receipt.GetChangeId(), source); err != nil {
-			draft.Unlock()
-			return false, err
-		}
-	}
-	var publisher platform.AcceptedPublisher
-	if result.Version == 3 || result.Version == 5 && result.Kind == "publication" {
-		schema := receipt.GetSubmission().GetSchema().GetName()
-		var ok bool
-		publisher, ok = t.App(result.App).(platform.AcceptedPublisher)
-		if !ok || !slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
-			draft.Unlock()
-			return false, fmt.Errorf("accepted publication has no installer")
-		}
-		if err := publisher.ValidateAcceptedPublication(schema, decoded); err != nil {
-			draft.Unlock()
-			return false, fmt.Errorf("accepted publication is invalid: %w", err)
-		}
-	}
-	prior := et.Rows().Get(rec.ID)
-	if prior != nil && reflect.DeepEqual(prior.Value.Interface(), value.Interface()) &&
-		records.ImageAlreadyApplied(prior, result.Row) {
-		draft.Unlock()
-		changed, err := l.ApplyAcceptedChange(receipt)
-		if err == nil {
-			t.Committed.SaveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
-			t.Committed.SaveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
-			err = t.applySourceClaims(result.Row.Type, result.Row.ID, receipt.GetChangeId(), result.At, source)
-		}
-		return changed, err
-	}
-	if err := runtimekernel.InstallAcceptedRecord(draft, et, result, receipt, value, prior); err != nil {
-		draft.Unlock()
-		return false, err
-	}
-	draft.Unlock()
-	if result.Version >= 5 {
-		if err := runtimekernel.ValidateUniqueReplacements(draft, result.Unique); err != nil {
-			return false, err
-		}
-	}
-	changed, err := l.ApplyAcceptedChange(receipt)
-	if err != nil {
-		return false, err
-	}
-	if err := s.PromoteRecords(draft); err != nil {
-		return false, err
-	}
-	if err := t.applySourceClaims(result.Row.Type, result.Row.ID, receipt.GetChangeId(), result.At, source); err != nil {
-		return false, err
-	}
-	if result.Row.Type == build.AppType {
-		t.DefinitionEpoch.Add(1)
-	}
-	t.Committed.SaveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
-	t.Committed.SaveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
-	if changed && publisher != nil {
-		if err := publisher.ApplyAcceptedPublication(receipt.GetSubmission().GetSchema().GetName(), decoded); err != nil {
-			return false, err
-		}
-	}
-	return changed, nil
+	return t.ApplyRecordResult(l, raw, runtimekernel.RecordApply{App: t.App, CheckBindings: checkRunApplicationBindings, DefinitionType: build.AppType,
+		Claims: func(result acceptedformat.Record, receipt *pb.ChangeRecord) (func() error, error) {
+			var source *preparedSourceClaim
+			if len(result.Claims) > 0 {
+				source = &preparedSourceClaim{origin: result.Origin, claims: result.Claims}
+				if _, err := t.sourceFacts(result.Row.Type, result.Row.ID, receipt.GetChangeId(), source); err != nil {
+					return nil, err
+				}
+			}
+			return func() error {
+				return t.applySourceClaims(result.Row.Type, result.Row.ID, receipt.GetChangeId(), result.At, source)
+			}, nil
+		}})
 }
 
 func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
