@@ -31,7 +31,7 @@ func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platf
 
 func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
 	console, _ := d.tenant.App(controlowner.PlatformApp).(platform.IdentityProfile)
-	if private, ok := d.states[controlowner.PlatformApp].(platform.IdentityProfile); ok {
+	if private, ok := d.States[controlowner.PlatformApp].(platform.IdentityProfile); ok {
 		console = private
 	}
 	var out []string
@@ -41,7 +41,7 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 			reach = console.Reach(member)
 		}
 		n.Member, n.App, n.At = member, c.App, now
-		x, added := d.notices.Add(n, console != nil && !reach.InApp)
+		x, added := d.Notices.Add(n, console != nil && !reach.InApp)
 		if !added {
 			continue
 		}
@@ -49,14 +49,14 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 		if console != nil {
 			router := d.routingTenant()
 			router.opsMu.Lock()
-			d.notices.Mail(router.planMailNotice(x, reach)...)
+			d.Notices.Mail(router.planMailNotice(x, reach)...)
 			router.opsMu.Unlock()
 		}
 	}
 	return out
 }
 
-func (d *stagedDecision) Seen(c platform.Caller, keys ...string) { d.notices.Seen(c.App, keys) }
+func (d *stagedDecision) Seen(c platform.Caller, keys ...string) { d.Notices.Seen(c.App, keys) }
 
 func (t *Tenant) applyAcceptedNotices(n *acceptedformat.Notices) {
 	if n == nil {

@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	dataowner "platformserver/services/data"
 
@@ -17,23 +16,6 @@ import (
 	"platformserver/services/security"
 )
 
-func (d *stagedDecision) savedAuthorizations() ([]acceptedformat.AuthorizationEvidence, error) {
-	var saved []acceptedformat.AuthorizationEvidence
-	seen := map[string]bool{}
-	for _, item := range d.authorizations {
-		raw, err := json.Marshal(item)
-		if err != nil {
-			return nil, err
-		}
-		key := string(raw)
-		if !seen[key] {
-			seen[key] = true
-			saved = append(saved, item)
-		}
-	}
-	return saved, nil
-}
-
 func (r runtime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) platform.AuthzDecision {
 	if at.IsZero() {
 		at = Now()
@@ -44,22 +26,22 @@ func (r runtime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.T
 func (d *stagedDecision) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) platform.AuthzDecision {
 	c.Member = d.tenant.authorizationMember(c.Member)
 	if at.IsZero() {
-		at = d.at
+		at = d.At
 	}
-	decision := d.tenant.authorizeFrom(d.records, c, q, at, false)
+	decision := d.tenant.authorizeFrom(d.Records, c, q, at, false)
 	app := c.App
 	if owner := d.tenant.owner["action:"+q.Action]; owner != nil {
 		app = owner.Manifest().ID
-	} else if et := d.records.Type(q.Type); et != nil {
+	} else if et := d.Records.Type(q.Type); et != nil {
 		app = et.Info().App
 	}
-	d.authorizations = append(d.authorizations, acceptedformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesIn(app))})
+	d.Authorizations = append(d.Authorizations, acceptedformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesIn(app))})
 	return decision
 }
 
 func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.AuthzRequest, decision platform.AuthzDecision) {
 	c.Member = d.tenant.authorizationMember(c.Member)
-	d.authorizations = append(d.authorizations, acceptedformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesHere())})
+	d.Authorizations = append(d.Authorizations, acceptedformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesHere())})
 	if d.TraceEnabled() {
 		d.RecordDecisionTrace(platform.DecisionTrace{Kind: "authorization", Request: &q, Authorization: &decision})
 	}
@@ -90,7 +72,7 @@ func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string
 
 func (d *stagedDecision) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool) *kernel.Error {
 	decision := d.tenant.authorizeNative(c, permission, kind, allowed, declared)
-	d.authorizations = append(d.authorizations, acceptedformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: kind, Action: permission}, Decision: decision, Roles: slices.Clone(c.RolesHere())})
+	d.Authorizations = append(d.Authorizations, acceptedformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: kind, Action: permission}, Decision: decision, Roles: slices.Clone(c.RolesHere())})
 	return authorizationRefusal(decision)
 }
 

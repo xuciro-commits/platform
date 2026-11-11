@@ -17,7 +17,7 @@ import (
 )
 
 func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
-	if err := d.checkFinalConstraints(); err != nil {
+	if err := d.CheckFinalConstraints(); err != nil {
 		return nil, err
 	}
 	owner := d.tenant.App(app)
@@ -28,7 +28,7 @@ func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt 
 	if !declared || action.Target != request.GetTarget().GetType() {
 		return nil, fmt.Errorf("submission target differs from its declared action")
 	}
-	if len(d.businessFacts) == 0 && !strings.HasPrefix(request.GetCorrelationId(), "correction:") && proto.Equal(request, receipt.GetSubmission()) {
+	if len(d.BusinessFacts) == 0 && !strings.HasPrefix(request.GetCorrelationId(), "correction:") && proto.Equal(request, receipt.GetSubmission()) {
 		if raw, err := d.result(app, receipt, at); err == nil {
 			return raw, nil
 		}
@@ -37,13 +37,13 @@ func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt 
 }
 
 func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedAt time.Time) ([]byte, error) {
-	if d.control != nil || d.Failure != nil || len(d.allocated) > 0 || d.notices.Changed() ||
-		len(d.intents) > 0 || len(d.observations) > 0 || len(d.states) > 0 ||
-		len(d.operationCancels) > 0 ||
-		d.observed && len(d.tenant.observers) > 0 {
+	if d.control != nil || d.Failure != nil || len(d.Allocated) > 0 || d.Notices.Changed() ||
+		len(d.Intents) > 0 || len(d.Observations) > 0 || len(d.States) > 0 ||
+		len(d.OperationCancels) > 0 ||
+		d.Observed && len(d.tenant.observers) > 0 {
 		return nil, fmt.Errorf("decision needs a result carrying all state and intents")
 	}
-	if receipt == nil || len(d.events) != 1 || d.records.WriteCount() != 1 || len(d.Logs) != 1 {
+	if receipt == nil || len(d.Events) != 1 || d.Records.WriteCount() != 1 || len(d.Logs) != 1 {
 		return nil, fmt.Errorf("one accepted record and event are required")
 	}
 	accepted := false
@@ -55,8 +55,8 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	}
 	typ, id := receipt.GetSubmission().GetTarget().GetType(), receipt.GetSubmission().GetTarget().GetId()
 	ref := typ + "/" + id
-	if !d.records.Written(ref) || d.events[0].App != app || !proto.Equal(d.events[0].Record, receipt) ||
-		len(d.events[0].Changed) != 1 || d.events[0].Changed[0] != ref {
+	if !d.Records.Written(ref) || d.Events[0].App != app || !proto.Equal(d.Events[0].Record, receipt) ||
+		len(d.Events[0].Changed) != 1 || d.Events[0].Changed[0] != ref {
 		return nil, fmt.Errorf("decision has other record or event effects")
 	}
 	kind := "record"
@@ -66,13 +66,13 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	} else if build.CallbackFreeTransition(d.tenant.App(app).Manifest(), receipt.GetSubmission().GetSchema().GetName()) {
 		kind = "pure-transition"
 	}
-	plan, refusal := d.tenant.planAcceptedEvent(d.events[0])
+	plan, refusal := d.tenant.planAcceptedEvent(d.Events[0])
 	if refusal != nil {
 		return nil, refusal
 	}
-	return runtimekernel.EncodeAcceptedRecord(runtimekernel.RecordResult{Store: d.records, App: app, Kind: kind, Receipt: receipt, At: submittedAt,
-		SchemaVersion: d.schemaVersion, Definition: d.definitions[app+"/"+receipt.GetChangeId()], Event: plan,
-		Authorizations: d.authorizations, Unique: d.savedUniqueChanges()})
+	return runtimekernel.EncodeAcceptedRecord(runtimekernel.RecordResult{Store: d.Records, App: app, Kind: kind, Receipt: receipt, At: submittedAt,
+		SchemaVersion: d.SchemaVersion, Definition: d.Definitions[app+"/"+receipt.GetChangeId()], Event: plan,
+		Authorizations: d.Authorizations, Unique: d.SavedUniqueChanges()})
 }
 
 func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {

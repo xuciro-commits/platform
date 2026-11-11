@@ -24,10 +24,10 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 		}
 	}()
 	r, err = decide()
-	if err == nil && r != nil && len(d.events) > len(saved.events) && slices.ContainsFunc(d.events[len(saved.events):], func(event platform.Event) bool {
+	if err == nil && r != nil && len(d.Events) > len(saved.Events) && slices.ContainsFunc(d.Events[len(saved.Events):], func(event platform.Event) bool {
 		return event.App == r.GetSubmission().GetAuthority() && event.Record.GetChangeId() == r.GetChangeId()
 	}) {
-		err = d.checkFinalConstraints()
+		err = d.CheckFinalConstraints()
 	}
 	if err != nil {
 		*d = saved
@@ -39,36 +39,36 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 func (d *stagedDecision) privateFork() *stagedDecision {
 	fork := *d
 	fork.definitionPlans = nil
-	fork.businessFacts = slices.Clone(d.businessFacts)
-	for i := range fork.businessFacts {
-		fork.businessFacts[i] = acceptedformat.CloneBusinessFact(fork.businessFacts[i])
+	fork.BusinessFacts = slices.Clone(d.BusinessFacts)
+	for i := range fork.BusinessFacts {
+		fork.BusinessFacts[i] = acceptedformat.CloneBusinessFact(fork.BusinessFacts[i])
 	}
 	fork.BusinessRefusals = maps.Clone(d.BusinessRefusals)
 	for key, fact := range fork.BusinessRefusals {
 		fork.BusinessRefusals[key] = acceptedformat.CloneBusinessFact(fact)
 	}
 	fork.callbackWrites = maps.Clone(d.callbackWrites)
-	if d.callbackOrigin != nil {
-		origin := *d.callbackOrigin
+	if d.CallbackOrigin != nil {
+		origin := *d.CallbackOrigin
 		origin.Output = slices.Clone(origin.Output)
-		fork.callbackOrigin = &origin
+		fork.CallbackOrigin = &origin
 	}
-	fork.operationCancels = maps.Clone(d.operationCancels)
-	fork.operationAnswers = maps.Clone(d.operationAnswers)
-	for id, answer := range fork.operationAnswers {
+	fork.OperationCancels = maps.Clone(d.OperationCancels)
+	fork.OperationAnswers = maps.Clone(d.OperationAnswers)
+	for id, answer := range fork.OperationAnswers {
 		answer.Output = slices.Clone(answer.Output)
 		if answer.Ref != nil {
 			ref := *answer.Ref
 			answer.Ref = &ref
 		}
-		fork.operationAnswers[id] = answer
+		fork.OperationAnswers[id] = answer
 	}
 	fork.operationInputs = maps.Clone(d.operationInputs)
 	for hash, pending := range fork.operationInputs {
 		fork.operationInputs[hash] = slices.Clone(pending)
 	}
 	fork.InputIssues = maps.Clone(d.InputIssues)
-	fork.constraintWrites = maps.Clone(d.constraintWrites)
+	fork.ConstraintWrites = maps.Clone(d.ConstraintWrites)
 	for refusal, issues := range fork.InputIssues {
 		issues = slices.Clone(issues)
 		for i := range issues {
@@ -85,12 +85,12 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		}
 		fork.InputIssues[refusal] = issues
 	}
-	fork.records = d.records.ForkRecords()
-	fork.records.InheritDecision(d.records)
+	fork.Records = d.Records.ForkRecords()
+	fork.Records.InheritDecision(d.Records)
 	fork.Logs = map[*platform.Ledger]*kernel.ChangeLog{}
 	for ledger, log := range d.Logs {
 		suspended := d.Receiving[ledger]
-		for id := range d.active {
+		for id := range d.Active {
 			owner := d.tenant.App(id)
 			if owner != nil && owner.AcceptedLedger() == ledger {
 				suspended = true
@@ -103,27 +103,27 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 			fork.Logs[ledger] = log.Fork()
 		}
 	}
-	fork.events, fork.notices = slices.Clone(d.events), d.notices.Clone()
-	fork.definitions = maps.Clone(d.definitions)
-	fork.sequences, fork.allocated, fork.sequenceBases = maps.Clone(d.sequences), maps.Clone(d.allocated), maps.Clone(d.sequenceBases)
-	fork.writers, fork.changed = cloneLists(d.writers), cloneLists(d.changed)
-	fork.publications = maps.Clone(d.publications)
-	fork.intents = slices.Clone(d.intents)
-	fork.iterations = slices.Clone(d.iterations)
-	fork.authorizations = slices.Clone(d.authorizations)
-	fork.observations = slices.Clone(d.observations)
-	fork.active = maps.Clone(d.active)
+	fork.Events, fork.Notices = slices.Clone(d.Events), d.Notices.Clone()
+	fork.Definitions = maps.Clone(d.Definitions)
+	fork.Sequences, fork.Allocated, fork.SequenceBases = maps.Clone(d.Sequences), maps.Clone(d.Allocated), maps.Clone(d.SequenceBases)
+	fork.Writers, fork.Changed = cloneLists(d.Writers), cloneLists(d.Changed)
+	fork.Publications = maps.Clone(d.Publications)
+	fork.Intents = slices.Clone(d.Intents)
+	fork.Iterations = slices.Clone(d.Iterations)
+	fork.Authorizations = slices.Clone(d.Authorizations)
+	fork.Observations = slices.Clone(d.Observations)
+	fork.Active = maps.Clone(d.Active)
 	fork.Receiving = maps.Clone(d.Receiving)
-	fork.requests, fork.requestCounts = slices.Clone(d.requests), maps.Clone(d.requestCounts)
-	fork.connectors = runtimekernel.CloneConnectors(d.connectors)
-	fork.privateApps = map[string]platform.App{}
-	fork.states, fork.stateBases = map[string]platform.AcceptedStateApp{}, map[string]json.RawMessage{}
-	for id, base := range d.stateBases {
-		fork.stateBases[id] = slices.Clone(base)
+	fork.requests, fork.RequestCounts = slices.Clone(d.requests), maps.Clone(d.RequestCounts)
+	fork.Connectors = runtimekernel.CloneConnectors(d.Connectors)
+	fork.PrivateApps = map[string]platform.App{}
+	fork.States, fork.StateBases = map[string]platform.AcceptedStateApp{}, map[string]json.RawMessage{}
+	for id, base := range d.StateBases {
+		fork.StateBases[id] = slices.Clone(base)
 	}
-	for id, owner := range d.states {
-		if d.active[id] || d.Receiving[owner.AcceptedLedger()] {
-			fork.states[id], fork.privateApps[id] = owner, owner
+	for id, owner := range d.States {
+		if d.Active[id] || d.Receiving[owner.AcceptedLedger()] {
+			fork.States[id], fork.PrivateApps[id] = owner, owner
 			continue
 		}
 		app, err := owner.Fork(owner.AcceptedLedger())
@@ -131,24 +131,24 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		if err != nil || !ok {
 			unsupportedStagedEffect()
 		}
-		fork.states[id], fork.privateApps[id] = copy, app
+		fork.States[id], fork.PrivateApps[id] = copy, app
 	}
-	for id, app := range d.privateApps {
-		if d.active[id] || d.Receiving[app.AcceptedLedger()] {
-			fork.privateApps[id] = app
+	for id, app := range d.PrivateApps {
+		if d.Active[id] || d.Receiving[app.AcceptedLedger()] {
+			fork.PrivateApps[id] = app
 			continue
 		}
-		if fork.privateApps[id] != nil {
+		if fork.PrivateApps[id] != nil {
 			continue
 		}
 		copy, err := app.Fork(app.AcceptedLedger())
 		if err != nil || copy == nil || copy.Manifest().ID != id || copy.AcceptedLedger() != app.AcceptedLedger() {
 			unsupportedStagedEffect()
 		}
-		fork.privateApps[id] = copy
+		fork.PrivateApps[id] = copy
 	}
-	for id, app := range fork.privateApps {
-		if d.active[id] || d.Receiving[app.AcceptedLedger()] {
+	for id, app := range fork.PrivateApps {
+		if d.Active[id] || d.Receiving[app.AcceptedLedger()] {
 			continue
 		}
 		(hostView{t: d.tenant, app: app, decision: &fork}).bindOwner(app)
@@ -185,7 +185,7 @@ func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller
 		err = d.Failure
 	}
 	if err == nil {
-		err = d.checkFinalConstraints()
+		err = d.CheckFinalConstraints()
 	}
 	return err
 }
@@ -199,11 +199,11 @@ func cloneLists(src map[string][]string) map[string][]string {
 }
 
 func (d *stagedDecision) stageObservers() *kernel.Error {
-	if d.observed {
+	if d.Observed {
 		return d.Failure
 	}
-	count := len(d.events)
-	for _, e := range slices.Clone(d.events) {
+	count := len(d.Events)
+	for _, e := range slices.Clone(d.Events) {
 		for _, app := range d.tenant.LiveApps() {
 			_, observer := app.(platform.Observer)
 			if !observer {
@@ -219,13 +219,13 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 			if err != nil || owner.ValidateObserved(raw) != nil {
 				return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
-			d.observations = append(d.observations, acceptedformat.Observation{App: id, Body: raw})
+			d.Observations = append(d.Observations, acceptedformat.Observation{App: id, Body: raw})
 		}
 	}
-	if len(d.events) != count {
+	if len(d.Events) != count {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	d.observed = true
+	d.Observed = true
 	return d.Failure
 }
 

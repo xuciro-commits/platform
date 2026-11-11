@@ -7,7 +7,6 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
-	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -15,11 +14,11 @@ import (
 )
 
 func (d *stagedDecision) savedChangePlan() (acceptedformat.ChangePlan, error) {
-	plan := acceptedformat.ChangePlan{Notices: d.notices.Saved(), Intents: slices.Clone(d.intents),
-		Sequences:     maps.Clone(d.allocated),
-		SequenceBases: maps.Clone(d.sequenceBases), Unique: d.savedUniqueChanges()}
+	plan := acceptedformat.ChangePlan{Notices: d.Notices.Saved(), Intents: slices.Clone(d.Intents),
+		Sequences:     maps.Clone(d.Allocated),
+		SequenceBases: maps.Clone(d.SequenceBases), Unique: d.SavedUniqueChanges()}
 	var err error
-	plan.States, err = runtimekernel.SavedStates(d.states, d.stateBases)
+	plan.States, err = runtimekernel.SavedStates(d.States, d.StateBases)
 	if err == nil {
 		plan.Control, err = d.savedControl()
 	}
@@ -72,12 +71,12 @@ func (t *Tenant) publishAcceptedChanges(p *runtimekernel.PreparedChanges) {
 }
 
 func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude map[string]bool, source string) ([]acceptedformat.InputRow, error) {
-	d.records.Lock()
-	defer d.records.Unlock()
-	d.records.Parent().Lock()
-	defer d.records.Parent().Unlock()
+	d.Records.Lock()
+	defer d.Records.Unlock()
+	d.Records.Parent().Lock()
+	defer d.Records.Parent().Unlock()
 	if refs == nil {
-		refs = slices.Sorted(d.records.Writes())
+		refs = slices.Sorted(d.Records.Writes())
 	}
 	var rows []acceptedformat.InputRow
 	for _, ref := range refs {
@@ -85,12 +84,12 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 			continue
 		}
 		typ, id, ok := strings.Cut(ref, "/")
-		et := d.records.Type(typ)
+		et := d.Records.Type(typ)
 		if !ok || et == nil || et.Info().App != owner || et.Rows().Get(id) == nil {
 			return nil, fmt.Errorf("%s writes a foreign or undeclared record", source)
 		}
 		var prior *records.Row
-		if old := d.records.Parent().Type(typ); old != nil {
+		if old := d.Records.Parent().Type(typ); old != nil {
 			prior = old.Rows().Get(id)
 		}
 		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
@@ -113,7 +112,7 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, membe
 
 func (d *stagedDecision) stateApp(app platform.App) platform.App {
 	id := app.Manifest().ID
-	if existing := d.privateApps[id]; existing != nil {
+	if existing := d.PrivateApps[id]; existing != nil {
 		return existing
 	}
 	var fork platform.App
@@ -129,40 +128,27 @@ func (d *stagedDecision) stateApp(app platform.App) platform.App {
 	if err != nil || fork == nil || fork.Manifest().ID != id || fork.AcceptedLedger() != app.AcceptedLedger() {
 		unsupportedStagedEffect()
 	}
-	if d.privateApps == nil {
-		d.privateApps = map[string]platform.App{}
+	if d.PrivateApps == nil {
+		d.PrivateApps = map[string]platform.App{}
 	}
-	d.privateApps[id] = fork
+	d.PrivateApps[id] = fork
 	(hostView{t: d.tenant, app: fork, decision: d}).bindOwner(fork)
 	if ownsState {
 		copy, ok := fork.(platform.AcceptedStateApp)
 		if !ok {
 			unsupportedStagedEffect()
 		}
-		if d.states == nil {
-			d.states = map[string]platform.AcceptedStateApp{}
-			d.stateBases = map[string]json.RawMessage{}
+		if d.States == nil {
+			d.States = map[string]platform.AcceptedStateApp{}
+			d.StateBases = map[string]json.RawMessage{}
 		}
-		d.states[id], d.stateBases[id] = copy, slices.Clone(before)
+		d.States[id], d.StateBases[id] = copy, slices.Clone(before)
 	}
 	return fork
 }
 
 func (d *stagedDecision) attachPrivateHosts() {
-	for _, app := range d.privateApps {
+	for _, app := range d.PrivateApps {
 		(hostView{t: d.tenant, app: app, decision: d}).bindOwner(app)
 	}
-}
-
-func (d *stagedDecision) flowVersions() map[string]int {
-	if private, ok := d.privateApps[platform.FlowApp].(platform.Processes); ok {
-		return private.Versions()
-	}
-	return nil
-}
-
-func (d *stagedDecision) savedUniqueChanges() []persistence.StateUnique {
-	d.records.Lock()
-	defer d.records.Unlock()
-	return runtimekernel.UniqueReplacements(d.records.UniqueChanges())
 }

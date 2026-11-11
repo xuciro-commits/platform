@@ -27,7 +27,7 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err 
 		}
 	}()
 	draft := t.newStagedDecision()
-	draft.at = at
+	draft.At = at
 	agent := draft.stateApp(t.agents).(platform.AgentRuntime)
 	run, _ := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), b.Run)
 	if b.Evaluation != nil {
@@ -54,10 +54,10 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err 
 	if refusal == nil {
 		refusal = draft.stageObservers()
 	}
-	if refusal != nil || len(draft.events) == 0 {
+	if refusal != nil || len(draft.Events) == 0 {
 		return fmt.Errorf("agent answer has no complete decision: %v", refusal)
 	}
-	last := draft.events[len(draft.events)-1]
+	last := draft.Events[len(draft.Events)-1]
 	if r.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at); err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err 
 		return err
 	}
 	principal, _ := json.Marshal(member)
-	candidate := preparedAccepted{entry: Entry{App: platform.AgentApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, key: r.Key, hash: r.RequestHash, uploads: draft.tenant.preparedUploads()}
+	candidate := preparedAccepted{entry: Entry{App: platform.AgentApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.FlowVersions()}, key: r.Key, hash: r.RequestHash, uploads: draft.tenant.preparedUploads()}
 	if t.preparedResult != nil {
 		*t.preparedResult = candidate
 		return nil
@@ -209,7 +209,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		result.Rows, result.Member, result.Changes, result.Unique = nil, "", nil, nil
 		result.Notices, result.Intents, result.States, result.Control = nil, nil, nil, nil
 		draft = t.newStagedDecision()
-		draft.at = at
+		draft.At = at
 	}
 	result.Digest, err = acceptedformat.DigestEffect(result)
 	var raw []byte
@@ -224,7 +224,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		return
 	}
 	principal, _ := json.Marshal(t.automation(controlowner.PlatformApp, false).Member)
-	candidate := preparedAccepted{entry: Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, key: result.Key, hash: result.RequestHash, uploads: draft.tenant.preparedUploads()}
+	candidate := preparedAccepted{entry: Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.FlowVersions()}, key: result.Key, hash: result.RequestHash, uploads: draft.tenant.preparedUploads()}
 	if t.preparedResult != nil {
 		*t.preparedResult = candidate
 		return
@@ -234,7 +234,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 
 func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before acceptedformat.EffectState, after platform.Effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (*stagedDecision, error) {
 	draft := t.newStagedDecision()
-	draft.at = at
+	draft.At = at
 	if after.State == "failed" && t.App(controlowner.PlatformApp) != nil {
 		admin := platform.NewCaller(draft, platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, controlowner.PlatformApp, false, true)
 		admin.Notify(platform.Notification{Title: "Effect to " + after.Endpoint + " failed: " + after.Event,
@@ -247,9 +247,9 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 				return draft, err
 			}
 			result.CallbackError = err.Error()
-			result.Authorizations = slices.Clone(draft.authorizations)
+			result.Authorizations = slices.Clone(draft.Authorizations)
 			draft = t.newStagedDecision()
-			draft.at = at
+			draft.At = at
 		}
 	}
 	if before.Endpoint == acceptedformat.ModelEndpoint && (after.State == "rejected" || after.State == "failed" || after.State == "unknown") {
@@ -275,18 +275,18 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 			}
 		}
 	}
-	result.Authorizations = append(result.Authorizations, draft.authorizations...)
+	result.Authorizations = append(result.Authorizations, draft.Authorizations...)
 	result.After.CallbackError = result.CallbackError
 	if draft.Failure != nil {
 		return draft, draft.Failure
 	}
 	var err error
-	if len(draft.events) == 0 && (len(draft.observations) > 0 || len(draft.allocated) > 0 ||
+	if len(draft.Events) == 0 && (len(draft.Observations) > 0 || len(draft.Allocated) > 0 ||
 		len(draft.Logs) > 0 || len(draft.requests) > 0) {
 		err = fmt.Errorf("effect answer has unrepresented changes")
 	} else {
 		eventRows := map[string]bool{}
-		for _, event := range draft.events {
+		for _, event := range draft.Events {
 			for _, ref := range event.Changed {
 				eventRows[ref] = true
 			}
@@ -295,12 +295,12 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 		if len(result.Rows) > 0 {
 			result.Member = "app:" + before.App
 		}
-		if err == nil && len(draft.events) > 0 {
-			writes := draft.records.WriteSnapshot()
-			draft.records.UseWrites(eventRows)
-			last := draft.events[len(draft.events)-1]
+		if err == nil && len(draft.Events) > 0 {
+			writes := draft.Records.WriteSnapshot()
+			draft.Records.UseWrites(eventRows)
+			last := draft.Events[len(draft.Events)-1]
 			result.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
-			draft.records.UseWrites(writes)
+			draft.Records.UseWrites(writes)
 		} else if err == nil {
 			var plan acceptedformat.ChangePlan
 			plan, err = draft.savedChangePlan()
@@ -311,7 +311,7 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 	if err != nil {
 		return draft, err
 	}
-	result.Unique = draft.savedUniqueChanges()
+	result.Unique = draft.SavedUniqueChanges()
 	_, err = t.prepareAcceptedChanges(result.ChangePlan())
 	return draft, err
 }
@@ -368,7 +368,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		return nil
 	}
 	if x.Endpoint == acceptedformat.OperationEndpoint {
-		draft.operationAnswers = map[string]platform.OperationResult{x.ID: compute.ResultOf(x)}
+		draft.OperationAnswers = map[string]platform.OperationResult{x.ID: compute.ResultOf(x)}
 		processesOwner := t.procs
 		if app, ok := t.procs.(platform.App); ok {
 			processesOwner = draft.stateApp(app).(platform.Processes)
@@ -386,10 +386,10 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		if source.ID == "" || source.App != x.App {
 			return fmt.Errorf("effect callback has no accepted source")
 		}
-		previous := draft.callbackOrigin
+		previous := draft.CallbackOrigin
 		refusal := func() *kernel.Error {
-			draft.callbackOrigin = &source.Effect
-			defer func() { draft.callbackOrigin = previous }()
+			draft.CallbackOrigin = &source.Effect
+			defer func() { draft.CallbackOrigin = previous }()
 			return app.Answer(c, x, out, at)
 		}()
 		if refusal != nil {

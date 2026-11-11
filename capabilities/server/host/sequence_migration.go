@@ -14,10 +14,10 @@ import (
 
 var migratedSequenceNumber = regexp.MustCompile(`\{n(?::[1-9])?\}`)
 
-func (d *stagedDecision) sequenceWaterline(app string, sequence platform.Sequence, year int) (int, *kernel.Error) {
-	d.records.Lock()
-	defer d.records.Unlock()
-	owner := d.records.Type(sequence.SeedRecord)
+func (d *stagedDecision) SequenceWaterline(app string, sequence platform.Sequence, year int) (int, *kernel.Error) {
+	d.Records.Lock()
+	defer d.Records.Unlock()
+	owner := d.Records.Type(sequence.SeedRecord)
 	if owner == nil || owner.Info().App != app {
 		return 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A migrated number range requires its original record owner")
 	}

@@ -79,8 +79,8 @@ func (h hostView) QueueDispatch(c platform.Caller, r *pb.ChangeRecord, run platf
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
 	x := platform.Effect{ID: run.Intent, App: build.ID, Endpoint: dataowner.WritebackEndpoint + request.Connection, Event: build.ID + "/dispatch", Key: fmt.Sprintf("%s:%d", run.ID, run.Attempt), Target: run.Subject, At: at, State: "pending", Due: at, Body: string(platform.Raw(request)), Applications: applications}
-	if !slices.ContainsFunc(h.decision.intents, func(e platform.Effect) bool { return e.ID == x.ID }) {
-		h.decision.intents = append(h.decision.intents, x)
+	if !slices.ContainsFunc(h.decision.Intents, func(e platform.Effect) bool { return e.ID == x.ID }) {
+		h.decision.Intents = append(h.decision.Intents, x)
 	}
 	return nil
 }
@@ -94,7 +94,7 @@ func (h hostView) ResolveDispatchDelivery(c platform.Caller, run platform.Dispat
 		return x.App == build.ID && x.Event == build.ID+"/dispatch" && json.Unmarshal([]byte(x.Body), &request) == nil && request.Dispatch == run.ID
 	}
 	inFlight := h.t.outbound.Any(func(x actions.Queued) bool {
-		answering := h.decision.callbackOrigin != nil && h.decision.callbackOrigin.ID == x.ID
+		answering := h.decision.CallbackOrigin != nil && h.decision.CallbackOrigin.ID == x.ID
 		return owned(x.Effect) && x.Sending && !answering
 	})
 	if inFlight {

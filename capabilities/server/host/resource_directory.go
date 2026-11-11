@@ -515,7 +515,7 @@ func (h *Host) routesResources(rt *routes) {
 func (h hostView) ManagedDefinition(ref platform.AssetRef) bool {
 	store := h.t.Projection
 	if h.decision != nil {
-		store = h.decision.records
+		store = h.decision.Records
 	}
 	directory := store.Type(build.ResourceType)
 	if directory == nil {

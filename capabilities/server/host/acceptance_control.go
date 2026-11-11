@@ -190,8 +190,8 @@ func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tena
 	if err != nil {
 		unsupportedStagedEffect()
 	}
-	view.Projection = d.records
-	view.connectors.Use(d.connectors)
+	view.Projection = d.Records
+	view.connectors.Use(d.Connectors)
 	view.controlAnswer = func(x platform.Effect, out platform.Outcome, at time.Time) *kernel.Error {
 		if err := d.tenant.stageEffectAnswer(d, x, out, nil, at); err != nil {
 			if refusal, ok := err.(*kernel.Error); ok {
@@ -216,7 +216,7 @@ func (d *stagedDecision) savedControl() (*acceptedformat.Control, error) {
 	if err != nil {
 		return nil, err
 	}
-	return runtimekernel.ControlDiff(d.control.base, current, d.operationCancels)
+	return runtimekernel.ControlDiff(d.control.base, current, d.OperationCancels)
 }
 
 func (t *Tenant) validateAcceptedControl(saved *acceptedformat.Control) error {
@@ -296,14 +296,14 @@ func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at
 	}
 	if s.GetTarget().GetType() == controlowner.NotificationType {
 		id := s.GetTarget().GetId()
-		owner, found := d.notices.Owner(id)
+		owner, found := d.Notices.Owner(id)
 		if !found {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "")
 		}
 		if owner != c.ID {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "")
 		}
-		return func(*pb.ChangeRecord) { d.notices.MarkRead(id) }, nil
+		return func(*pb.ChangeRecord) { d.Notices.MarkRead(id) }, nil
 	}
 	if s.GetTarget().GetType() == controlowner.EffectType && s.GetSchema().GetName() == controlowner.SchemaEffectDiscard {
 		queued, _ := d.tenant.outbound.Get(s.GetTarget().GetId())
@@ -313,10 +313,10 @@ func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "")
 			}
 			return func(*pb.ChangeRecord) {
-				if d.operationCancels == nil {
-					d.operationCancels = map[string]bool{}
+				if d.OperationCancels == nil {
+					d.OperationCancels = map[string]bool{}
 				}
-				d.operationCancels[current.ID] = true
+				d.OperationCancels[current.ID] = true
 				after := current
 				after.State, after.Error, after.Output = "discarded", "Cancelled", nil
 				if err := d.tenant.stageEffectAnswer(d, after, platform.Outcome{Effect: current.ID, Result: "discarded", Detail: "Cancelled"}, nil, at); err != nil {

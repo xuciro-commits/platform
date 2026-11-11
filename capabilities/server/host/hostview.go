@@ -31,7 +31,7 @@ func (h hostView) ProtocolContract(id string) (platform.Protocol, bool) {
 func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *kernel.Error) {
 	store := h.t.Projection
 	if h.decision != nil {
-		store = h.decision.records
+		store = h.decision.Records
 	}
 	page, refusal := h.t.recordsFrom(store, c.Member, typ, platform.Query{Limit: 200}, time.Now())
 	if refusal != nil {
@@ -409,7 +409,7 @@ func (h hostView) Stored(tenant, hash string) bool {
 
 func (h hostView) Record(ref string) (any, bool) {
 	if h.decision != nil {
-		return (&Tenant{Projection: h.decision.records}).held(ref)
+		return (&Tenant{Projection: h.decision.Records}).held(ref)
 	}
 	return h.t.held(ref)
 }
@@ -475,7 +475,7 @@ func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ow
 func (h hostView) BuildProcessConsumptions() []platform.Consumption {
 	processes := h.t.procs
 	if h.decision != nil {
-		if app := h.decision.privateApps[platform.FlowApp]; app != nil {
+		if app := h.decision.PrivateApps[platform.FlowApp]; app != nil {
 			processes = app.(platform.Processes)
 		}
 	}

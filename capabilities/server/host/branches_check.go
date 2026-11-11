@@ -155,7 +155,7 @@ func (t *Tenant) stageViewLocked(stage branchStage, now time.Time) (*Tenant, err
 			return nil, fmt.Errorf("The merged resources do not form one valid accepted result: %s", err)
 		}
 	}
-	view, err := t.assetInstallationView(draft.records)
+	view, err := t.assetInstallationView(draft.Records)
 	if err != nil {
 		return nil, fmt.Errorf("The staged definition graph could not be assembled: %s", err)
 	}

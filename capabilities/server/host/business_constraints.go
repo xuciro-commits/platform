@@ -79,8 +79,8 @@ func (t *Tenant) localizedFieldIssues(member platform.Member, issues []platform.
 	return issues
 }
 
-func (d *stagedDecision) constraints() runtimekernel.ConstraintCheck {
-	k := runtimekernel.ConstraintCheck{Records: d.records, At: d.at, Writes: d.constraintWrites, Definitions: d.tenant.definitions,
+func (d *stagedDecision) ConstraintCheck() runtimekernel.ConstraintCheck {
+	k := runtimekernel.ConstraintCheck{Records: d.Records, At: d.At, Writes: d.ConstraintWrites, Definitions: d.tenant.definitions,
 		RuleQuery: hostView{t: d.tenant}.RuleQuery, Binding: d.tenant.recordSetBinding}
 	if d.TraceEnabled() {
 		k.Trace = d.RecordDecisionTrace
@@ -88,9 +88,9 @@ func (d *stagedDecision) constraints() runtimekernel.ConstraintCheck {
 	return k
 }
 
-func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
+func (d *stagedDecision) CheckFinalConstraints() *kernel.Error {
 	if d.Failure == nil {
-		d.Failure = d.constraints().Final()
+		d.Failure = d.ConstraintCheck().Final()
 	}
 	return d.Failure
 }

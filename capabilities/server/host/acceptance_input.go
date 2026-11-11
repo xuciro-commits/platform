@@ -22,7 +22,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if err != nil {
 		return nil, err
 	}
-	result.Notices, result.Authorizations = d.notices.Saved(), slices.Clone(d.authorizations)
+	result.Notices, result.Authorizations = d.Notices.Saved(), slices.Clone(d.Authorizations)
 	if message, ok := answer.(proto.Message); ok {
 		result.Answer, err = protojson.Marshal(message)
 	} else {
@@ -31,7 +31,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if err != nil {
 		return nil, err
 	}
-	if len(d.events) > 0 {
+	if len(d.Events) > 0 {
 		receipt, ok := answer.(*pb.ChangeRecord)
 		if !ok || receipt.GetSubmission().GetAuthority() != app {
 			return nil, fmt.Errorf("connector input has decisions without a matching answer")
@@ -43,7 +43,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 		result.Notices = nil
 		return runtimekernel.SealInput(result)
 	}
-	if d.control != nil || len(d.intents) > 0 || len(d.observations) > 0 || len(d.allocated) > 0 || len(d.operationCancels) > 0 {
+	if d.control != nil || len(d.Intents) > 0 || len(d.Observations) > 0 || len(d.Allocated) > 0 || len(d.OperationCancels) > 0 {
 		return nil, fmt.Errorf("connector input contains effects without a decision")
 	}
 	for ledger, staged := range d.Logs {
@@ -86,7 +86,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 	}
 	draft := t.newStagedDecision()
 	entry := t.authorizeEntry(m, a.Manifest().ID, "input:"+name, "action", now)
-	draft.authorizations = append(draft.authorizations, acceptedformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: "input:" + name}, Decision: entry, Roles: slices.Clone(m.RolesIn(a.Manifest().ID))})
+	draft.Authorizations = append(draft.Authorizations, acceptedformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: "input:" + name}, Decision: entry, Roles: slices.Clone(m.RolesIn(a.Manifest().ID))})
 	answer, refusal, unsupported := decideAcceptedInput(a, draft, m, name, body, now)
 	if unsupported {
 		return nil, refusal
@@ -111,7 +111,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 	principal, _ := json.Marshal(m)
 	var versions map[string]int
 	if t.procs != nil {
-		versions = draft.flowVersions()
+		versions = draft.FlowVersions()
 	}
 	entryResult := Entry{App: a.Manifest().ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: versions}
 	if t.preparedResult != nil {

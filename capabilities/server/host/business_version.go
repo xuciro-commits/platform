@@ -19,23 +19,11 @@ func businessQuery(info platform.EntityInfo, q platform.Query, member platform.M
 	return objects.BusinessQuery(info, q, member, at)
 }
 
-func (d *stagedDecision) PrepareBusinessVersions(c platform.Caller, record any, at time.Time) *kernel.Error {
-	value := reflect.ValueOf(record)
-	if value.Kind() != reflect.Pointer || value.IsNil() {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Business version preparation requires a record")
-	}
-	prepared, err := d.prepareBusinessRecord(c, value.Elem().Interface(), at)
-	if err == nil {
-		value.Elem().Set(reflect.ValueOf(prepared))
-	}
-	return err
-}
-
-func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at time.Time) (any, *kernel.Error) {
-	d.records.Lock()
-	et := d.records.Of(c, reflect.TypeOf(entity))
+func (d *stagedDecision) PrepareBusinessRecord(c platform.Caller, entity any, at time.Time) (any, *kernel.Error) {
+	d.Records.Lock()
+	et := d.Records.Of(c, reflect.TypeOf(entity))
 	if et == nil {
-		d.records.Unlock()
+		d.Records.Unlock()
 		return entity, nil
 	}
 	info := et.Info()
@@ -47,7 +35,7 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 	} else {
 		record.VersionPins = nil
 	}
-	d.records.Unlock()
+	d.Records.Unlock()
 	if before == nil && len(info.VersionPins) > 0 && info.Lifecycle != nil && records.BusinessField(info, value, info.Lifecycle.Field) == "" {
 		field, _ := info.Field(info.Lifecycle.Field)
 		value.FieldByIndex(field.Index).SetString(info.Lifecycle.Initial)
@@ -79,9 +67,9 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		var source *records.Type
 		var selected *records.Row
 		func() {
-			d.records.Lock()
-			defer d.records.Unlock()
-			source = d.records.Type(field.Ref)
+			d.Records.Lock()
+			defer d.Records.Unlock()
+			source = d.Records.Type(field.Ref)
 			if source != nil {
 				selected = source.Rows().Get(id)
 			}
@@ -145,4 +133,16 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		}
 	}
 	return value.Interface(), nil
+}
+
+func (d *stagedDecision) PrepareBusinessVersions(c platform.Caller, record any, at time.Time) *kernel.Error {
+	value := reflect.ValueOf(record)
+	if value.Kind() != reflect.Pointer || value.IsNil() {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Business version preparation requires a record")
+	}
+	prepared, err := d.PrepareBusinessRecord(c, value.Elem().Interface(), at)
+	if err == nil {
+		value.Elem().Set(reflect.ValueOf(prepared))
+	}
+	return err
 }

@@ -200,8 +200,8 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	}
 	draft := t.newStagedDecision()
 	draft.sourceProjection = opts.source
-	draft.observationInput = opts.observation
-	draft.schemaVersion = binding
+	draft.ObservationInput = opts.observation
+	draft.SchemaVersion = binding
 	if len(opts.inputs) > 0 {
 		draft.operationInputs = make(map[string][]*preparedOperationInput, len(opts.inputs))
 		for _, prepared := range opts.inputs {
@@ -382,7 +382,7 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 		refusal = draft.stageObservers()
 	}
 	if refusal == nil {
-		refusal = draft.checkFinalConstraints()
+		refusal = draft.CheckFinalConstraints()
 	}
 	return record, refusal
 }

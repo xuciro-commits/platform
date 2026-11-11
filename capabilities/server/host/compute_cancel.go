@@ -38,10 +38,10 @@ func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, 
 	} else if c.ID != b.Member {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation belongs to another member")
 	}
-	if d.operationCancels == nil {
-		d.operationCancels = map[string]bool{}
+	if d.OperationCancels == nil {
+		d.OperationCancels = map[string]bool{}
 	}
-	d.operationCancels[id] = true
+	d.OperationCancels[id] = true
 	return nil
 }
 func (t *Tenant) operationCancellation(id string) (acceptedformat.OperationCancellation, error) {
@@ -69,7 +69,7 @@ func (t *Tenant) operationCancellation(id string) (acceptedformat.OperationCance
 }
 func (d *stagedDecision) savedOperationCancellations() ([]acceptedformat.OperationCancellation, error) {
 	ids := []string{}
-	for id := range d.operationCancels {
+	for id := range d.OperationCancels {
 		ids = append(ids, id)
 	}
 	slices.Sort(ids)

@@ -104,19 +104,19 @@ func (r runtime) ReadQuery(c platform.Caller, app, name string, inputs json.RawM
 	return r.t.readQueryFrom(r.t.Projection, c, app, name, inputs, now)
 }
 func (d *stagedDecision) ReadQuery(c platform.Caller, app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
-	return d.tenant.readQueryFrom(d.records, c, app, name, inputs, now)
+	return d.tenant.readQueryFrom(d.Records, c, app, name, inputs, now)
 }
 func (r runtime) ReadQueryVersion(c platform.Caller, app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
 	return r.t.readQueryVersionFrom(r.t.Projection, c, app, name, version, inputs, now)
 }
 func (d *stagedDecision) ReadQueryVersion(c platform.Caller, app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
-	return d.tenant.readQueryVersionFrom(d.records, c, app, name, version, inputs, now)
+	return d.tenant.readQueryVersionFrom(d.Records, c, app, name, version, inputs, now)
 }
 func (r runtime) ReadRecord(c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
 	return r.t.readRecordFrom(r.t.Projection, c, typ, id, now)
 }
 func (d *stagedDecision) ReadRecord(c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
-	return d.tenant.readRecordFrom(d.records, c, typ, id, now)
+	return d.tenant.readRecordFrom(d.Records, c, typ, id, now)
 }
 
 func (t *Tenant) readRecordPathFrom(store *records.Store, c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
@@ -129,7 +129,7 @@ func (r runtime) ReadRecordPath(c platform.Caller, typ, id string, path []string
 	return r.t.readRecordPathFrom(r.t.Projection, c, typ, id, path, now)
 }
 func (d *stagedDecision) ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
-	return d.tenant.readRecordPathFrom(d.records, c, typ, id, path, now)
+	return d.tenant.readRecordPathFrom(d.Records, c, typ, id, path, now)
 }
 
 func (t *Tenant) readRuleQueryFrom(store *records.Store, c platform.Caller, set platform.RuleCollection, input json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
@@ -150,5 +150,5 @@ func (r runtime) ReadRuleQuery(c platform.Caller, set platform.RuleCollection, i
 	return r.t.readRuleQueryFrom(r.t.Projection, c, set, input, now)
 }
 func (d *stagedDecision) ReadRuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
-	return d.tenant.readRuleQueryFrom(d.records, c, set, input, now)
+	return d.tenant.readRuleQueryFrom(d.Records, c, set, input, now)
 }

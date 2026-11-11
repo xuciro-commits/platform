@@ -47,7 +47,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 	if len(existing) > 0 {
 		decision = existing[0]
 	}
-	view, err := t.assetInstallationView(decision.records, includeArchived)
+	view, err := t.assetInstallationView(decision.Records, includeArchived)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -64,8 +64,8 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 			}
 		}
 	}
-	decision.tenant, decision.records = view, view.Projection
-	decision.records.Current().SelectRelease(candidate.ID)
+	decision.tenant, decision.Records = view, view.Projection
+	decision.Records.Current().SelectRelease(candidate.ID)
 	apps := slices.Clone(view.apps)
 	for i, app := range apps {
 		if view.assets[app.Manifest().ID] == nil {
@@ -114,9 +114,9 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 						return refusal
 					}
 				}
-				for i, event := range decision.events {
+				for i, event := range decision.Events {
 					if event.Record == receipt {
-						decision.events[i].Changed = slices.Clone(decision.changed[event.App+"/"+receipt.GetChangeId()])
+						decision.Events[i].Changed = slices.Clone(decision.Changed[event.App+"/"+receipt.GetChangeId()])
 					}
 				}
 			}
@@ -149,7 +149,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 		}
 	}
 	for ordinal, draft := range drafts {
-		et := decision.records.Type(draft.Type)
+		et := decision.Records.Type(draft.Type)
 		if et == nil {
 			return nil, nil, fmt.Errorf("%s does not host %s", t.ID, draft.Type)
 		}
@@ -314,7 +314,7 @@ func (r releaseInstallationRuntime) Bootstrap(candidate platform.ReleaseCandidat
 	if err != nil {
 		return nil, nil, err
 	}
-	view, err := r.t.assetInstallationView(decision.records)
+	view, err := r.t.assetInstallationView(decision.Records)
 	if err != nil {
 		return nil, nil, err
 	}

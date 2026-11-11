@@ -140,8 +140,8 @@ func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run p
 		key += ":compensate"
 	}
 	x := platform.Effect{ID: intent, App: build.ID, Endpoint: dataowner.WritebackEndpoint + req.Connection, Event: build.ID + "/confirmation", Key: key, Target: run.Subject, At: at, State: "pending", Due: at, Body: string(body), Applications: applications, Compensates: req.Compensates}
-	if !slices.ContainsFunc(h.decision.intents, func(e platform.Effect) bool { return e.ID == intent }) {
-		h.decision.intents = append(h.decision.intents, x)
+	if !slices.ContainsFunc(h.decision.Intents, func(e platform.Effect) bool { return e.ID == intent }) {
+		h.decision.Intents = append(h.decision.Intents, x)
 	}
 	return nil
 }
@@ -193,7 +193,7 @@ func (h hostView) ResolveConfirmationDelivery(c platform.Caller, run platform.Co
 	}
 	p := run.Parties[index]
 	inFlight := h.t.outbound.Any(func(e actions.Queued) bool {
-		answering := h.decision.callbackOrigin != nil && h.decision.callbackOrigin.ID == e.ID
+		answering := h.decision.CallbackOrigin != nil && h.decision.CallbackOrigin.ID == e.ID
 		return (e.ID == p.Intent || e.ID == p.Compensation) && e.Sending && !answering
 	})
 	if inFlight {

@@ -22,7 +22,7 @@ func (d *stagedDecision) CaptureTxnIteration(c platform.Caller, receipt *pb.Chan
 		return fail("Iteration capture is outside its private authority")
 	}
 	iteration.Decision = c.App + "/" + receipt.GetChangeId()
-	all := append(slices.Clone(d.iterations), iteration)
+	all := append(slices.Clone(d.Iterations), iteration)
 	if err := acceptedformat.ValidateTxnIterations("", all); err != nil {
 		return fail(err.Error())
 	}
@@ -32,6 +32,6 @@ func (d *stagedDecision) CaptureTxnIteration(c platform.Caller, receipt *pb.Chan
 		}
 	}
 	iteration.IDs = slices.Clone(iteration.IDs)
-	d.iterations = append(d.iterations, iteration)
+	d.Iterations = append(d.Iterations, iteration)
 	return nil
 }

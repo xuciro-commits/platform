@@ -283,26 +283,26 @@ func (r *flowExecutionRuntime) recoverRetainedRead(refusal **kernel.Error) {
 }
 
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
-	r.records.Lock()
-	valid := r.readSource == r.records && r.readStore != nil && r.readSQLView == r.records.Current().View()
-	for typ, et := range r.records.Types() {
+	r.Records.Lock()
+	valid := r.readSource == r.Records && r.readStore != nil && r.readSQLView == r.Records.Current().View()
+	for typ, et := range r.Records.Types() {
 		origin, exists := r.readOrigins[typ]
 		if !exists || origin.typ != et || origin.rows != et.Rows() {
 			valid = false
 			break
 		}
 	}
-	valid = valid && len(r.readOrigins) == r.records.TypeCount()
+	valid = valid && len(r.readOrigins) == r.Records.TypeCount()
 	store := r.readStore
 	var origins map[string]retainedReadOrigin
 	if !valid {
-		store = r.records.ForkRecordsLocked()
+		store = r.Records.ForkRecordsLocked()
 		origins = map[string]retainedReadOrigin{}
-		for typ, et := range r.records.Types() {
+		for typ, et := range r.Records.Types() {
 			origins[typ] = retainedReadOrigin{typ: et, rows: et.Rows()}
 		}
 	}
-	r.records.Unlock()
+	r.Records.Unlock()
 	if !valid {
 		for typ, info := range r.shapes {
 			current := store.Type(typ)
@@ -312,7 +312,7 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 			source := &retainedRows{runtime: r, current: current.Info(), info: info, rows: origins[typ].rows}
 			store.ReplaceReadType(info, records.SourceRows(source), true)
 		}
-		r.readSource, r.readStore, r.readOrigins, r.readSQLView = r.records, store, origins, store.Current().View()
+		r.readSource, r.readStore, r.readOrigins, r.readSQLView = r.Records, store, origins, store.Current().View()
 	}
 	return (hostView{t: r.view}).installationView(store), nil
 }
@@ -325,9 +325,9 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 		var value *records.Row
 		var stored platform.EntityInfo
 		func() {
-			r.records.Lock()
-			defer r.records.Unlock()
-			current := r.records.Type(name)
+			r.Records.Lock()
+			defer r.Records.Unlock()
+			current := r.Records.Type(name)
 			if current != nil {
 				value, stored = current.Rows().Get(id), current.Info()
 			}
@@ -342,7 +342,7 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 		}
 		return decoded.Value.Interface(), true
 	}
-	return r.records.Get(c, typ, id)
+	return r.Records.Get(c, typ, id)
 }
 func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) (refusal *kernel.Error) {
 	defer r.recoverRetainedRead(&refusal)
@@ -350,7 +350,7 @@ func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) (refusal *ke
 	if err != nil {
 		return err
 	}
-	return view.Projection.Check(c, entity, r.at)
+	return view.Projection.Check(c, entity, r.At)
 }
 func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platform.Query) (out []any, total int, refusal *kernel.Error) {
 	defer r.recoverRetainedRead(&refusal)
@@ -359,7 +359,7 @@ func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platf
 		return nil, 0, err
 	}
 	d := *r.stagedDecision
-	d.records = view.Projection
+	d.Records = view.Projection
 	return d.Find(c, typ, q)
 }
 func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
@@ -377,7 +377,7 @@ func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at 
 	}
 	var fields map[string]json.RawMessage
 	_ = json.Unmarshal(raw, &fields)
-	if current := r.records.Type(typ); current != nil {
+	if current := r.Records.Type(typ); current != nil {
 		for name := range fields {
 			field, declared := current.Info().Field(name)
 			if declared && field.AliasOf != "" {
@@ -469,7 +469,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if _, retained := r.shapes[old.Info().Type]; !retained {
 		return r.stagedDecision.Put(c, receipt, entity)
 	}
-	current := r.records.Type(old.Info().Type)
+	current := r.Records.Type(old.Info().Type)
 	id := records.Header(records.Copy(old.Info().Go, entity)).ID
 	var input, before, result map[string]json.RawMessage
 	if json.Unmarshal(jsonOf(entity), &input) != nil {
@@ -509,7 +509,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if current.Rows().Get(id) == nil {
 		question.Kind = "create"
 	}
-	grant := r.tenant.authorizeFrom(r.records, c, question, r.at, false)
+	grant := r.tenant.authorizeFrom(r.Records, c, question, r.At, false)
 	r.RecordAuthorization(c, question, grant)
 	if refusal := authorizationRefusal(grant); refusal != nil {
 		return refusal
@@ -541,7 +541,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 func (r *flowExecutionRuntime) mapRetainedWrite(typ string, before, after map[string]json.RawMessage) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
 	before, after = maps.Clone(before), maps.Clone(after)
 	declared := r.shapes
-	current := r.records.Type(typ)
+	current := r.Records.Type(typ)
 	for _, target := range current.Info().Fields {
 		if string(before[target.Name]) == string(after[target.Name]) {
 			continue

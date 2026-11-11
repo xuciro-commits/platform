@@ -45,21 +45,21 @@ func (d *stagedDecision) requestApproval(a platform.App, m platform.Member, s *p
 }
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
-	if err := d.checkFinalConstraints(); err != nil {
+	if err := d.CheckFinalConstraints(); err != nil {
 		return nil, fmt.Errorf("batch constraints: %w", err)
 	}
-	if receipt == nil || len(d.events) == 0 || d.Failure != nil {
+	if receipt == nil || len(d.Events) == 0 || d.Failure != nil {
 		return nil, fmt.Errorf("batch needs accepted decisions and all written records")
 	}
-	if err := d.records.ValidateChangedLinkConstraints(); err != nil {
+	if err := d.Records.ValidateChangedLinkConstraints(); err != nil {
 		return nil, fmt.Errorf("batch links: %w", err)
 	}
 	result := acceptedformat.Batch{Version: 8, Kind: "record-batch", Tenant: d.tenant.ID,
-		Definitions: slices.Clone(d.installations),
-		App:         app, At: at.UTC(), Sequences: maps.Clone(d.allocated), SequenceBases: maps.Clone(d.sequenceBases),
-		Notices: d.notices.Saved(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations)}
+		Definitions: slices.Clone(d.Installations),
+		App:         app, At: at.UTC(), Sequences: maps.Clone(d.Allocated), SequenceBases: maps.Clone(d.SequenceBases),
+		Notices: d.Notices.Saved(), Intents: slices.Clone(d.Intents), Observations: slices.Clone(d.Observations)}
 	var err error
-	result.Authorizations, err = d.savedAuthorizations()
+	result.Authorizations, err = d.SavedAuthorizations()
 	if err != nil {
 		return nil, fmt.Errorf("batch authorizations: %w", err)
 	}
@@ -71,7 +71,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if err != nil {
 		return nil, fmt.Errorf("batch operations: %w", err)
 	}
-	result.States, err = runtimekernel.SavedStates(d.states, d.stateBases)
+	result.States, err = runtimekernel.SavedStates(d.States, d.StateBases)
 	if err != nil {
 		return nil, fmt.Errorf("batch states: %w", err)
 	}
@@ -85,13 +85,13 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 			return nil, fmt.Errorf("batch submission: %w", err)
 		}
 	}
-	result.SchemaVersion = d.schemaVersion
+	result.SchemaVersion = d.SchemaVersion
 	result.RequestHash, err = acceptedformat.SubmissionHash(request, result.SchemaVersion)
 	if err != nil {
 		return nil, fmt.Errorf("batch request hash: %w", err)
 	}
 	seen := map[string]bool{}
-	for _, event := range d.events {
+	for _, event := range d.Events {
 		owner, ok := d.tenant.App(event.App).(platform.App)
 		if !ok || d.Logs[owner.AcceptedLedger()] == nil {
 			return nil, fmt.Errorf("batch decision has no staged ledger for %s", event.App)
@@ -114,50 +114,50 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		if refusal != nil {
 			return nil, fmt.Errorf("batch event plan %s: %w", event.App, refusal)
 		}
-		plan.Observed = d.observed
-		plan.Hops = d.hops
+		plan.Observed = d.Observed
+		plan.Hops = d.Hops
 		if plan.Hops > acceptedformat.MaxHops {
 			plan.Stopped, plan.Subscribers = plan.Subscribers, nil
 		}
-		result.Decisions = append(result.Decisions, acceptedformat.Decision{Receipt: raw, Event: plan, Definition: d.definitions[event.App+"/"+event.Record.GetChangeId()],
-			Publication: d.publications[event.App+"/"+event.Record.GetChangeId()]})
+		result.Decisions = append(result.Decisions, acceptedformat.Decision{Receipt: raw, Event: plan, Definition: d.Definitions[event.App+"/"+event.Record.GetChangeId()],
+			Publication: d.Publications[event.App+"/"+event.Record.GetChangeId()]})
 		if publication := result.Decisions[len(result.Decisions)-1].Publication; publication != nil {
 			copied := *publication
-			if et := d.records.Type(event.Record.GetSubmission().GetTarget().GetType()); et != nil {
+			if et := d.Records.Type(event.Record.GetSubmission().GetTarget().GetType()); et != nil {
 				copied.Format = et.Info().RecordFormat
 			}
 			result.Decisions[len(result.Decisions)-1].Publication = &copied
 		}
 		for _, ref := range event.Changed {
-			if !d.records.Written(ref) {
+			if !d.Records.Written(ref) {
 				return nil, fmt.Errorf("batch event names an unwritten record")
 			}
 			seen[ref] = true
 		}
 	}
-	if len(seen) != d.records.WriteCount() {
+	if len(seen) != d.Records.WriteCount() {
 		result.DirectRows, err = d.savedCallbackRows(seen)
 		if err != nil {
 			return nil, fmt.Errorf("batch direct rows: %w", err)
 		}
-		if len(seen)+len(result.DirectRows) != d.records.WriteCount() {
+		if len(seen)+len(result.DirectRows) != d.Records.WriteCount() {
 			return nil, fmt.Errorf("batch event omits a written record")
 		}
 	}
-	if len(d.iterations) > 0 {
-		result.Iterations = slices.Clone(d.iterations)
+	if len(d.Iterations) > 0 {
+		result.Iterations = slices.Clone(d.Iterations)
 	}
-	if len(d.businessFacts) > 0 {
-		result.Business = slices.Clone(d.businessFacts)
+	if len(d.BusinessFacts) > 0 {
+		result.Business = slices.Clone(d.BusinessFacts)
 	}
 	if len(result.Iterations) > 0 {
 		result.Version = 9
 	}
-	if d.observationInput != nil && d.observationInput.Intervals != nil {
+	if d.ObservationInput != nil && d.ObservationInput.Intervals != nil {
 		result.Version = 10
 	}
-	result.Unique = d.savedUniqueChanges()
-	return runtimekernel.SealBatch(d.records, result, seen, d.writers)
+	result.Unique = d.SavedUniqueChanges()
+	return runtimekernel.SealBatch(d.Records, result, seen, d.Writers)
 }
 
 func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error) {
@@ -294,7 +294,7 @@ type callbackWrite struct {
 
 func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]acceptedformat.CallbackRow, error) {
 	var rows []acceptedformat.CallbackRow
-	for _, ref := range slices.Sorted(d.records.Writes()) {
+	for _, ref := range slices.Sorted(d.Records.Writes()) {
 		if published[ref] {
 			continue
 		}
@@ -313,7 +313,7 @@ func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]accepte
 		if historyCount != callback.History {
 			return nil, fmt.Errorf("callback row has a write outside its source callback")
 		}
-		if _, err := d.tenant.prepareAcceptedDirectRows(direct, "app:"+callback.Source.App, d.at); err != nil {
+		if _, err := d.tenant.prepareAcceptedDirectRows(direct, "app:"+callback.Source.App, d.At); err != nil {
 			return nil, err
 		}
 		rows = append(rows, acceptedformat.CallbackRow{Row: direct[0], Source: callback.Source})

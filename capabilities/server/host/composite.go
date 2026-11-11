@@ -109,7 +109,7 @@ func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platfor
 		return platform.CompositeAnswer{}, err
 	}
 	principal, _ := json.Marshal(m)
-	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()}
+	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.FlowVersions()}
 	if t.preparedResult != nil {
 		*t.preparedResult = preparedAccepted{entry: entry, key: saved.Key, hash: saved.RequestHash, uploads: t.preparedResult.uploads}
 		return compositeAnswer(saved)

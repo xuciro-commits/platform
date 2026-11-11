@@ -75,7 +75,7 @@ func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb
 			s.ExpectedRevision = nil
 		}
 	}
-	draft.simulation = true
+	draft.Simulation = true
 	_, refusal := decideAcceptedAs(a, draft, m, s, now, false)
 	out := trialowner.Simulation{Changes: []trialowner.SimulatedChange{}}
 	if refusal != nil {
@@ -86,9 +86,9 @@ func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb
 		return out, nil
 	}
 	out.Accepted = true
-	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, ownerSet: t.ownerSet, Projection: draft.records, directory: t.directory}
+	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, ownerSet: t.ownerSet, Projection: draft.Records, directory: t.directory}
 	for _, ref := range slices.Sorted(func(yield func(string) bool) {
-		for k := range draft.records.Writes() {
+		for k := range draft.Records.Writes() {
 			if !yield(k) {
 				return
 			}
@@ -120,7 +120,7 @@ func (d *stagedDecision) RecordDecisionTrace(event platform.DecisionTrace) {
 }
 
 func (r runtime) Simulating() bool         { return r.t.simulation }
-func (d *stagedDecision) Simulating() bool { return d.simulation || d.tenant.simulation }
+func (d *stagedDecision) Simulating() bool { return d.Simulation || d.tenant.simulation }
 
 type simulationEnvironment struct {
 	trialowner.Environment

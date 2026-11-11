@@ -131,17 +131,17 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	draft := t.newStagedDecision()
-	draft.at = now
+	draft.At = now
 	if task.Event != nil {
-		draft.hops = task.Event.Hops + 1
+		draft.Hops = task.Event.Hops + 1
 	}
 	c := platform.NewCaller(draft, platform.Member{ID: "app:" + task.App, Tenant: t.ID}, task.App, false, true)
 	refusal = decideWork(t, draft, c, task, now)
-	result.Authorizations = slices.Clone(draft.authorizations)
+	result.Authorizations = slices.Clone(draft.Authorizations)
 	if refusal != nil {
 		result.Outcome = refusal.Error()
 		draft = t.newStagedDecision()
-		draft.at = now
+		draft.At = now
 	}
 	if err := works.Finish(task.ID, generation, result.Outcome != "ok"); err != nil {
 		return err.Error()
@@ -173,14 +173,14 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 			Body: result.Outcome + ". Retry it in Settings → Automation once the cause is fixed.", Key: "failed:" + task.ID},
 			now, platform.Recipient{AppRole: controlowner.Admin})
 	}
-	if len(draft.events) > 0 {
-		last := draft.events[len(draft.events)-1]
+	if len(draft.Events) > 0 {
+		last := draft.Events[len(draft.Events)-1]
 		result.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, now)
 		if err != nil {
 			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 		}
-	} else if draft.records.WriteCount() > 0 || draft.Failure != nil ||
-		len(draft.observations) > 0 || len(draft.allocated) > 0 || len(draft.Logs) > 0 || len(draft.operationCancels) > 0 || len(draft.requests) > 0 {
+	} else if draft.Records.WriteCount() > 0 || draft.Failure != nil ||
+		len(draft.Observations) > 0 || len(draft.Allocated) > 0 || len(draft.Logs) > 0 || len(draft.OperationCancels) > 0 || len(draft.requests) > 0 {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	} else {
 		var plan acceptedformat.ChangePlan
@@ -191,7 +191,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 		}
 	}
-	result.Unique = draft.savedUniqueChanges()
+	result.Unique = draft.SavedUniqueChanges()
 	if task.Kind == "job" && result.Outcome == "ok" && len(result.Changes) == 0 &&
 		result.Notices == nil && len(result.Intents) == 0 && len(result.States) == 0 && result.Control == nil && len(result.Unique) == 0 {
 		return result.Outcome
@@ -218,7 +218,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	principal, _ := json.Marshal(c.Member)
-	entry := Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()}
+	entry := Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.FlowVersions()}
 	if t.preparedResult != nil {
 		*t.preparedResult = preparedAccepted{entry: entry, key: result.Key, hash: result.RequestHash, uploads: t.preparedResult.uploads}
 		return result.Outcome

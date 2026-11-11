@@ -50,7 +50,7 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 			d.operationInputs[hash] = pending[1:]
 		}
 	}
-	call, intent, err := d.tenant.planOperation(c, r, q, d.records, d.intents, input)
+	call, intent, err := d.tenant.planOperation(c, r, q, d.Records, d.Intents, input)
 	if err != nil {
 		if d.Failure == nil {
 			d.Failure = err
@@ -58,7 +58,7 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 		return platform.OperationCall{}, err
 	}
 	if !d.ProbeOnly {
-		d.intents = append(d.intents, intent)
+		d.Intents = append(d.Intents, intent)
 	}
 	return call, nil
 }
@@ -217,7 +217,7 @@ func (r runtime) OperationResult(c platform.Caller, id string) (platform.Operati
 	return r.t.operationResult(c, id)
 }
 func (d *stagedDecision) OperationResult(c platform.Caller, id string) (platform.OperationResult, *kernel.Error) {
-	if x, ok := d.operationAnswers[id]; ok {
+	if x, ok := d.OperationAnswers[id]; ok {
 		return x, nil
 	}
 	return d.tenant.operationResult(c, id)
@@ -256,7 +256,7 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 		return refuse("Compilation needs a bounded Go/TinyGo code asset")
 	}
 	queued := d.tenant.queuedOperations()
-	for _, x := range d.intents {
+	for _, x := range d.Intents {
 		if x.Endpoint == acceptedformat.OperationEndpoint {
 			queued++
 		}
@@ -270,7 +270,7 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 	body, _ := json.Marshal(compute.OperationBinding{Build: &q, Call: call, Member: c.ID})
 	at := r.GetRecordedTime().AsTime()
 	if !d.ProbeOnly {
-		d.intents = append(d.intents, platform.Effect{ID: id, Endpoint: acceptedformat.OperationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)})
+		d.Intents = append(d.Intents, platform.Effect{ID: id, Endpoint: acceptedformat.OperationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)})
 	}
 	return call, nil
 }

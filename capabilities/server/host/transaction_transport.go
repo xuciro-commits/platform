@@ -26,10 +26,10 @@ func (h hostView) TakeTxnStep() *kernel.Error {
 	if h.decision != nil && h.decision.Failure != nil {
 		return h.decision.Failure
 	}
-	if h.decision == nil || h.decision.transactionSteps >= platform.TxnMaxExecutionSteps {
+	if h.decision == nil || h.decision.TransactionSteps >= platform.TxnMaxExecutionSteps {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction execution exceeds its step budget")
 	}
-	h.decision.transactionSteps++
+	h.decision.TransactionSteps++
 	return nil
 }
 
@@ -43,7 +43,7 @@ func (h hostView) BeginTxnCalls(c platform.Caller, at time.Time) (platform.TxnCa
 	if h.decision == nil || !c.Staging() || c.App != build.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction calls require their original private owner")
 	}
-	return &txnCalls{decision: h.decision, caller: c, snapshot: h.decision.records.ForkRecords()}, nil
+	return &txnCalls{decision: h.decision, caller: c, snapshot: h.decision.Records.ForkRecords()}, nil
 }
 
 func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *pb.Submission, now time.Time) *kernel.Error {
@@ -81,7 +81,7 @@ func (q *txnCalls) Call(call platform.TxnCall, inputs json.RawMessage, at time.T
 	}
 	store := q.snapshot
 	if call.View == "current" {
-		store = q.decision.records
+		store = q.decision.Records
 	}
 	return q.decision.tenant.readQueryVersionFrom(store, q.caller, call.Ref.App, call.Ref.Name, call.Version, inputs, at)
 }
@@ -110,13 +110,13 @@ func (h hostView) queueTxnIntent(c platform.Caller, receipt *pb.ChangeRecord, ef
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
 	effect.Applications = applications
-	if slices.ContainsFunc(h.decision.intents, func(existing platform.Effect) bool { return existing.ID == effect.ID }) {
+	if slices.ContainsFunc(h.decision.Intents, func(existing platform.Effect) bool { return existing.ID == effect.ID }) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A transaction step declared the same outbound intent twice")
 	}
 	if !strings.HasPrefix(effect.Target, c.App+".") {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects cannot target another authority")
 	}
-	h.decision.intents = append(h.decision.intents, effect)
+	h.decision.Intents = append(h.decision.Intents, effect)
 	return nil
 }
 

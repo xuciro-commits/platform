@@ -29,11 +29,11 @@ func (r runtime) ReadRecordSet(c platform.Caller, object, id, name string, at ti
 }
 
 func (d *stagedDecision) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
-	return d.tenant.readRecordSetFrom(d.records, c, object, id, name, at)
+	return d.tenant.readRecordSetFrom(d.Records, c, object, id, name, at)
 }
 
 func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, name string, raw json.RawMessage, at time.Time) (platform.RecordSetResult, *kernel.Error) {
-	store := d.records.ForkRecords()
+	store := d.Records.ForkRecords()
 	et := store.Type(object)
 	if !c.Staging() || et == nil || et.Info().App != c.App || id == "" {
 		return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection candidate is outside its owner")

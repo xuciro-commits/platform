@@ -3,7 +3,7 @@ package host
 import "platformserver/platform"
 
 func (d *stagedDecision) ObservationContext(c platform.Caller) *platform.ObservationContext {
-	evidence := d.observationInput
+	evidence := d.ObservationInput
 	if evidence == nil || c.App != evidence.Definition.Ref.App || c.Tenant != d.tenant.ID {
 		return nil
 	}

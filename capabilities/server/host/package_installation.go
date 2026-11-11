@@ -27,7 +27,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 	projectName := fmt.Sprintf("pkg%x", projectHash[:12])
 	caller := platform.NewCaller(d, c.Member, build.ID, true, false)
 	resources := []build.Resource{}
-	if directory := d.records.Type(build.ResourceType); directory != nil {
+	if directory := d.Records.Type(build.ResourceType); directory != nil {
 		for _, row := range directory.Rows().All() {
 			resources = append(resources, row.Value.Interface().(build.Resource))
 		}
@@ -35,7 +35,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 	archiveResource := func(r *pb.ChangeRecord, resource build.Resource) {
 		resource.State, resource.Archived = "archived", true
 		caller.Put(r, resource)
-		et := d.records.Type(resource.Type)
+		et := d.Records.Type(resource.Type)
 		value := records.Copy(et.Info().Go, et.Rows().Get(resource.Draft).Value.Interface())
 		value.FieldByName("Archived").SetBool(true)
 		caller.Put(r, value.Interface())
@@ -43,7 +43,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 	restoreResource := func(r *pb.ChangeRecord, resource build.Resource) {
 		resource.State, resource.Archived = "active", false
 		caller.Put(r, resource)
-		et := d.records.Type(resource.Type)
+		et := d.Records.Type(resource.Type)
 		value := records.Copy(et.Info().Go, et.Rows().Get(resource.Draft).Value.Interface())
 		value.FieldByName("Archived").SetBool(false)
 		caller.Put(r, value.Interface())
@@ -96,7 +96,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 	if len(impact.References) > 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before switching the product version", impact.References[0].Resource.String(), impact.References[0].Consumer.String())
 	}
-	context := platform.AssetReleaseContext{Member: c.Member, At: d.at, ManagedBy: descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: upgrade}
+	context := platform.AssetReleaseContext{Member: c.Member, At: d.At, ManagedBy: descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: upgrade}
 	_, _, err = h.t.bootstrapOwnerDraftsLockedWithArchived(candidate, context, false, nil, true, d)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())
@@ -138,17 +138,17 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		caller.Put(r, build.Resource{Record: platform.Record{ID: platform.ResourceID(c.Tenant, projectRef)}, Ref: projectRef, Type: build.AppType, Draft: projectID, Project: projectID, Title: descriptor.Title, State: "active", Version: 1, ManagedBy: descriptor.ID})
 		for _, plan := range plans {
 			typ, id, _ := strings.Cut(plan.Record, "/")
-			et := d.records.Type(typ)
+			et := d.Records.Type(typ)
 			value := reflect.New(et.Info().Go)
 			if err := json.Unmarshal(plan.Image, value.Interface()); err != nil {
 				d.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error()))
 				return
 			}
 			caller.Put(r, value.Elem().Interface())
-			row := d.records.Type(typ).Rows().Get(id)
+			row := d.Records.Type(typ).Rows().Get(id)
 			image, _ := json.Marshal(row.Value.Interface())
 			ref := plan.Ref
-			d.installations = append(d.installations, platform.ReleaseInstallation{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: image}, Ref: &ref, Record: plan.Record})
+			d.Installations = append(d.Installations, platform.ReleaseInstallation{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: image}, Ref: &ref, Record: plan.Record})
 			var title struct{ Title string }
 			_ = json.Unmarshal(image, &title)
 			if title.Title == "" {

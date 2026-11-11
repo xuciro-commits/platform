@@ -102,7 +102,7 @@ func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.Ch
 	if !c.Staging() || c.Replaying || receipt.GetChangeId() == "" || receipt.GetSubmission().GetAuthority() != c.App || receipt.GetSubmission().GetPrincipalId() != c.ID || receipt.GetSubmission().GetTenantId() != d.tenant.ID {
 		return fail(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration is outside its private authority"))
 	}
-	plan, err := d.tenant.relationMigrationPlan(d.records, c, binding, at)
+	plan, err := d.tenant.relationMigrationPlan(d.Records, c, binding, at)
 	if err != nil {
 		return fail(err)
 	}
@@ -125,7 +125,7 @@ func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.Ch
 		childType, childID, _ := strings.Cut(child, "/")
 		request := platform.TxnLink{Binding: binding, Parent: platform.TxnRef{Type: parentType, ID: parentID}, Child: platform.TxnRef{Type: childType, ID: childID}}
 		id := records.RelationID(binding.Ref.String(), parent, child)
-		prior := d.records.Type(entity.Type).Rows().Get(id)
+		prior := d.Records.Type(entity.Type).Rows().Get(id)
 		if prior != nil && !records.Header(prior.Value).Archived {
 			return fail(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration overlaps an existing owned relationship"))
 		}
@@ -216,17 +216,17 @@ func (r runtime) OwnedRelations(c platform.Caller, entity string) []platform.Rel
 	return r.t.ownedRelations(r.t.Projection, c, entity, time.Now())
 }
 func (d *stagedDecision) OwnedRelations(c platform.Caller, entity string) []platform.RelationLink {
-	return d.tenant.ownedRelations(d.records, c, entity, d.at)
+	return d.tenant.ownedRelations(d.Records, c, entity, d.At)
 }
 func (r runtime) LegacyRelationActive(c platform.Caller, link platform.RelationLink) bool {
 	return r.t.legacyRelationActive(r.t.Projection, link)
 }
 func (d *stagedDecision) LegacyRelationActive(c platform.Caller, link platform.RelationLink) bool {
-	return d.tenant.legacyRelationActive(d.records, link)
+	return d.tenant.legacyRelationActive(d.Records, link)
 }
 func (r runtime) LegacyRelationWritable(c platform.Caller, from, to string) bool {
 	return r.t.legacyRelationWritable(r.t.Projection, from, to)
 }
 func (d *stagedDecision) LegacyRelationWritable(c platform.Caller, from, to string) bool {
-	return d.tenant.legacyRelationWritable(d.records, from, to)
+	return d.tenant.legacyRelationWritable(d.Records, from, to)
 }

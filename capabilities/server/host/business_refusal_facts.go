@@ -12,21 +12,21 @@ import (
 )
 
 func (d *stagedDecision) CaptureBusinessRefusal(c platform.Caller, receipt *pb.ChangeRecord, fact platform.BusinessRefusalFact) *kernel.Error {
-	if !c.Staging() || c.Replaying || receipt.GetSubmission().GetAuthority() != c.App || receipt.GetSubmission().GetPrincipalId() != c.ID || fact.Member != c.ID || !fact.At.Equal(d.at) || fact.Subject != target(receipt.GetSubmission()) || fact.Action != receipt.GetSubmission().GetSchema().GetName() || fact.Level == "block" {
+	if !c.Staging() || c.Replaying || receipt.GetSubmission().GetAuthority() != c.App || receipt.GetSubmission().GetPrincipalId() != c.ID || fact.Member != c.ID || !fact.At.Equal(d.At) || fact.Subject != target(receipt.GetSubmission()) || fact.Action != receipt.GetSubmission().GetSchema().GetName() || fact.Level == "block" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal evidence must belong to its original decision")
 	}
 	if err := acceptedformat.ValidateBusinessFact(c.App, fact); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	if len(d.businessFacts) >= 64 {
+	if len(d.BusinessFacts) >= 64 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal evidence exceeds its declared bounds")
 	}
-	d.businessFacts = append(d.businessFacts, acceptedformat.CloneBusinessFact(fact))
+	d.BusinessFacts = append(d.BusinessFacts, acceptedformat.CloneBusinessFact(fact))
 	return nil
 }
 
 func (d *stagedDecision) RefuseBusinessCondition(c platform.Caller, code, message string, original any, inputs map[string]any, at time.Time) *kernel.Error {
-	sub := d.currentSubmission
+	sub := d.CurrentSubmission
 	if sub == nil || sub.GetAuthority() != c.App || sub.GetPrincipalId() != c.ID {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{message}", message)
 	}
