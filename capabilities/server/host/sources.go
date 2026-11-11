@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 
 	"slices"
 	"strings"
@@ -516,81 +515,18 @@ func (t *Tenant) readSource(s dataowner.Source) ([]map[string]any, error) {
 		}
 		conn = &c
 		if c.Secret != "" {
-			if value, ok := t.credentialHeader(c.Secret, "connection/"+c.ID, c.Address); !ok || len(strings.TrimSpace(string(value))) == 0 {
+			if value, ok := t.CredentialHeader(c.Secret, "connection/"+c.ID, c.Address); !ok || len(strings.TrimSpace(string(value))) == 0 {
 				return nil, fmt.Errorf("the named connection secret is unavailable")
 			}
 		}
 	}
-	return t.readSourceWithConnection(s, conn)
+	return t.sourceReader().Read(s, conn)
 }
 
-func (t *Tenant) readSourceWithConnection(s dataowner.Source, conn *dataowner.Connection) ([]map[string]any, error) {
-	switch s.Profile {
-	case "odata":
-		return t.readOData(s, *conn)
-	case "table":
-		return t.readTable(s, *conn)
-	}
-	url, header, private := s.URL, s.Header, s.AllowPrivate
-	if conn != nil {
-		url, private = conn.Resolve(s.URL), conn.AllowPrivate
-		header = t.authorization(*conn, url)
-		if conn.Secret != "" && header == "" {
-			return nil, fmt.Errorf("The connection credential is not authorized for this target")
-		}
-	}
-	accept := "application/json"
-	if s.Profile == "csv" {
-		accept = "text/csv, text/plain"
-	}
-	body, err := t.fetchSource(url, header, private, accept)
-	if err != nil {
-		return nil, err
-	}
-	return s.Decode(body)
-}
-
-func (t *Tenant) authorization(c dataowner.Connection, target ...string) string {
-	address := c.Address
-	if len(target) > 0 {
-		address = target[0]
-	}
-	if c.Secret == "" {
-		return ""
-	}
-	if v, ok := t.credentialHeader(c.Secret, "connection/"+c.ID, address); ok && len(strings.TrimSpace(string(v))) > 0 {
-		return "Authorization: " + strings.TrimSpace(string(v))
-	}
-	return ""
-}
-
-func (t *Tenant) fetchSource(url, header string, allowPrivate bool, accept string) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("the URL is not valid")
-	}
-	req.Header.Set("Accept", accept)
-	if name, value, ok := strings.Cut(header, ":"); ok && strings.TrimSpace(name) != "" {
-		req.Header.Set(strings.TrimSpace(name), strings.TrimSpace(value))
-	}
+func (t *Tenant) sourceReader() dataowner.SourceReader {
 	send := t.Outbound
 	if send == nil {
 		send = guarded
 	}
-	resp, err := send(req, allowPrivate)
-	if err != nil {
-		return nil, fmt.Errorf("the endpoint did not answer: %v", err)
-	}
-	defer resp.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, dataowner.SourceBody+1))
-	if readErr != nil {
-		return nil, fmt.Errorf("the response body could not be read")
-	}
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("the endpoint answered %d", resp.StatusCode)
-	}
-	if len(body) > dataowner.SourceBody {
-		return nil, fmt.Errorf("the answer exceeds %d bytes", dataowner.SourceBody)
-	}
-	return body, nil
+	return dataowner.SourceReader{Credentials: t, Send: send}
 }

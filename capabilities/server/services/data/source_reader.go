@@ -1,0 +1,367 @@
+package data
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"platformserver/platform"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	pgx "github.com/jackc/pgx/v5"
+)
+
+const odataPages = 20
+
+type Credentials interface {
+	CredentialValue(name, consumer, address string) ([]byte, bool)
+	CredentialHeader(name, consumer, address string) ([]byte, bool)
+}
+
+type SourceReader struct {
+	Credentials Credentials
+	Send        func(req *http.Request, allowPrivate bool) (*http.Response, error)
+}
+
+func (r SourceReader) Read(s Source, conn *Connection) ([]map[string]any, error) {
+	switch s.Profile {
+	case "odata":
+		return r.readOData(s, *conn)
+	case "table":
+		return r.ReadTable(s, *conn)
+	}
+	url, header, private := s.URL, s.Header, s.AllowPrivate
+	if conn != nil {
+		url, private = conn.Resolve(s.URL), conn.AllowPrivate
+		header = r.Authorization(*conn, url)
+		if conn.Secret != "" && header == "" {
+			return nil, fmt.Errorf("The connection credential is not authorized for this target")
+		}
+	}
+	accept := "application/json"
+	if s.Profile == "csv" {
+		accept = "text/csv, text/plain"
+	}
+	body, err := r.Fetch(url, header, private, accept)
+	if err != nil {
+		return nil, err
+	}
+	return s.Decode(body)
+}
+
+func (r SourceReader) Authorization(c Connection, target ...string) string {
+	address := c.Address
+	if len(target) > 0 {
+		address = target[0]
+	}
+	if c.Secret == "" {
+		return ""
+	}
+	if v, ok := r.Credentials.CredentialHeader(c.Secret, "connection/"+c.ID, address); ok && len(strings.TrimSpace(string(v))) > 0 {
+		return "Authorization: " + strings.TrimSpace(string(v))
+	}
+	return ""
+}
+
+func (r SourceReader) Fetch(url, header string, allowPrivate bool, accept string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("the URL is not valid")
+	}
+	req.Header.Set("Accept", accept)
+	if name, value, ok := strings.Cut(header, ":"); ok && strings.TrimSpace(name) != "" {
+		req.Header.Set(strings.TrimSpace(name), strings.TrimSpace(value))
+	}
+	resp, err := r.Send(req, allowPrivate)
+	if err != nil {
+		return nil, fmt.Errorf("the endpoint did not answer: %v", err)
+	}
+	defer resp.Body.Close()
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, SourceBody+1))
+	if readErr != nil {
+		return nil, fmt.Errorf("the response body could not be read")
+	}
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("the endpoint answered %d", resp.StatusCode)
+	}
+	if len(body) > SourceBody {
+		return nil, fmt.Errorf("the answer exceeds %d bytes", SourceBody)
+	}
+	return body, nil
+}
+
+func (r SourceReader) readOData(s Source, c Connection) ([]map[string]any, error) {
+	q := url.Values{}
+	q.Set("$format", "json")
+	filter := s.Filter
+	if s.Since != "" {
+		if s.Cursor != "" {
+			clause := fmt.Sprintf("%s gt %s", s.Since, odataLiteral(s.Cursor))
+			if filter != "" {
+				filter = "(" + filter + ") and " + clause
+			} else {
+				filter = clause
+			}
+		}
+		q.Set("$orderby", s.Since)
+	}
+	if filter != "" {
+		q.Set("$filter", filter)
+	}
+	next := c.Resolve(s.Entity) + "?" + q.Encode()
+	var rows []map[string]any
+	for page := 0; next != "" && page < odataPages && len(rows) <= 5000; page++ {
+		body, err := r.Fetch(next, r.Authorization(c, next), c.AllowPrivate, "application/json")
+		if err != nil {
+			return nil, err
+		}
+		var answer struct {
+			Value    []map[string]any `json:"value"`
+			NextLink string           `json:"@odata.nextLink"`
+			D        json.RawMessage  `json:"d"`
+		}
+		if err := json.Unmarshal(body, &answer); err != nil {
+			return nil, fmt.Errorf("the service did not answer JSON")
+		}
+		if len(answer.D) > 0 {
+			var d struct {
+				Results []map[string]any `json:"results"`
+				Next    string           `json:"__next"`
+			}
+			if json.Unmarshal(answer.D, &d) == nil && d.Results != nil {
+				answer.Value, answer.NextLink = d.Results, d.Next
+			} else {
+				var list []map[string]any
+				if json.Unmarshal(answer.D, &list) == nil {
+					answer.Value = list
+				}
+			}
+		}
+		rows = append(rows, answer.Value...)
+		next = answer.NextLink
+		if next != "" {
+			current, _ := url.Parse(c.Resolve(s.Entity))
+			ref, err := url.Parse(next)
+			if err != nil {
+				return nil, fmt.Errorf("the service returned an invalid next link")
+			}
+			resolved := current.ResolveReference(ref)
+			if resolved.Scheme != current.Scheme || resolved.Host != current.Host {
+				return nil, fmt.Errorf("the service next link leaves the connection's origin")
+			}
+			next = resolved.String()
+		}
+	}
+	if next != "" || len(rows) > 5000 {
+		return nil, fmt.Errorf("the OData result exceeds 20 pages or 5000 rows; narrow the filter")
+	}
+	return rows, nil
+}
+
+func odataLiteral(v string) string {
+	if _, err := time.Parse(time.RFC3339, v); err == nil {
+		return v
+	}
+	if strings.Trim(v, "0123456789.-") == "" {
+		return v
+	}
+	return "'" + strings.ReplaceAll(v, "'", "''") + "'"
+}
+
+func (r SourceReader) LatestTableCursor(s Source, c Connection) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	conn, err := r.openPostgres(ctx, c)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close(ctx)
+	column := pgx.Identifier{s.Since}.Sanitize()
+	query := "select " + column + " from " + pgx.Identifier(strings.Split(s.Entity, ".")).Sanitize()
+	if s.Filter != "" {
+		query += " where " + s.Filter
+	}
+	query += " order by " + column + " desc limit 1"
+	rows, err := conn.Query(ctx, query)
+	if err != nil {
+		return "", fmt.Errorf("the latest source cursor could not be read: %v", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return "", fmt.Errorf("the latest source cursor could not be read: %v", err)
+		}
+		return "", nil
+	}
+	values, err := rows.Values()
+	if err != nil || len(values) != 1 {
+		return "", fmt.Errorf("the latest source cursor could not be decoded")
+	}
+	return s.Advance([]map[string]any{{s.Since: plain(values[0])}}), nil
+}
+
+func (r SourceReader) ReadTable(s Source, c Connection, columns ...string) ([]map[string]any, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	conn, err := r.openPostgres(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(ctx)
+	var where []string
+	var args []any
+	if s.Filter != "" {
+		where = append(where, "("+s.Filter+")")
+	}
+	selection := "*"
+	if len(columns) > 0 {
+		columns = slices.Clone(columns)
+		slices.Sort(columns)
+		columns = slices.Compact(columns)
+		for i, column := range columns {
+			columns[i] = pgx.Identifier{column}.Sanitize()
+		}
+		selection = strings.Join(columns, ",")
+	}
+	query := "select " + selection + " from " + pgx.Identifier(strings.Split(s.Entity, ".")).Sanitize()
+	if s.Since != "" && s.Cursor != "" {
+		where = append(where, fmt.Sprintf("%s > $1", pgx.Identifier{s.Since}.Sanitize()))
+		args = append(args, s.Cursor)
+	}
+	if len(where) > 0 {
+		query += " where " + strings.Join(where, " and ")
+	}
+	if s.Since != "" {
+		query += " order by " + pgx.Identifier{s.Since}.Sanitize()
+	}
+	query += " limit 5001"
+	rows, err := conn.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("the query failed: %v", err)
+	}
+	defer rows.Close()
+	fields := rows.FieldDescriptions()
+	var out []map[string]any
+	projectedBytes := 0
+	for rows.Next() {
+		values, err := rows.Values()
+		if err != nil {
+			return nil, fmt.Errorf("a row could not be read: %v", err)
+		}
+		row := map[string]any{}
+		for i, f := range fields {
+			row[f.Name] = plain(values[i])
+		}
+		if len(columns) > 0 {
+			projectedBytes += len(platform.Raw(row))
+			if projectedBytes > SourceBody {
+				return nil, fmt.Errorf("the projected table rows exceed the source byte budget")
+			}
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) > 5000 {
+		if s.Since == "" || fmt.Sprint(out[4999][s.Since]) == fmt.Sprint(out[5000][s.Since]) {
+			return nil, fmt.Errorf("the table result exceeds 5000 rows at one cursor; narrow the filter")
+		}
+		out = out[:5000]
+	}
+	return out, nil
+}
+
+func plain(v any) any {
+	switch x := v.(type) {
+	case time.Time:
+		return x.UTC().Format(time.RFC3339Nano)
+	case int64:
+		return json.Number(strconv.FormatInt(x, 10))
+	case int32:
+		return float64(x)
+	case int16:
+		return float64(x)
+	case float32:
+		return float64(x)
+	case []byte:
+		return string(x)
+	}
+	if raw, err := json.Marshal(v); err == nil {
+		var back any
+		if json.Unmarshal(raw, &back) == nil {
+			return back
+		}
+	}
+	return v
+}
+
+func (r SourceReader) openPostgres(ctx context.Context, c Connection) (*pgx.Conn, error) {
+	cfg, err := pgx.ParseConfig(c.Address)
+	if err != nil {
+		return nil, fmt.Errorf("the address is not a postgres URL")
+	}
+	if c.Secret != "" {
+		if v, ok := r.Credentials.CredentialValue(c.Secret, "connection/"+c.ID, c.Address); ok {
+			cfg.Password = strings.TrimSpace(string(v))
+		} else {
+			return nil, fmt.Errorf("The database credential is unavailable or not authorized for this target")
+		}
+	}
+	cfg.RuntimeParams["default_transaction_read_only"] = "on"
+	cfg.RuntimeParams["application_name"] = "platform-source"
+	conn, err := pgx.ConnectConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("the database did not answer: %v", err)
+	}
+	return conn, nil
+}
+
+func (r SourceReader) Check(c Connection) (string, error) {
+	if c.Secret != "" {
+		if value, ok := r.Credentials.CredentialValue(c.Secret, "connection/"+c.ID, c.Address); !ok || len(strings.TrimSpace(string(value))) == 0 {
+			return "", fmt.Errorf("the named connection secret is unavailable")
+		}
+	}
+	switch c.Kind {
+	case "postgres":
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		conn, err := r.openPostgres(ctx, c)
+		if err != nil {
+			return "", err
+		}
+		defer conn.Close(ctx)
+		var version string
+		if err := conn.QueryRow(ctx, "select version()").Scan(&version); err != nil {
+			return "", fmt.Errorf("the database did not answer: %v", err)
+		}
+		return version, nil
+	case "odata":
+		body, err := r.Fetch(c.Resolve("")+"?$format=json", r.Authorization(c), c.AllowPrivate, "application/json")
+		if err != nil {
+			return "", err
+		}
+		var doc struct {
+			Context string `json:"@odata.context"`
+			D       any    `json:"d"`
+		}
+		if json.Unmarshal(body, &doc) != nil {
+			return "", fmt.Errorf("the service root did not answer JSON")
+		}
+		if doc.Context != "" {
+			return "OData v4", nil
+		}
+		return "OData v2", nil
+	default:
+		if _, err := r.Fetch(c.Resolve(""), r.Authorization(c), c.AllowPrivate, "*/*"); err != nil {
+			return "", err
+		}
+		return "answered", nil
+	}
+}

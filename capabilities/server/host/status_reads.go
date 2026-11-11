@@ -16,7 +16,7 @@ func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, c
 	_ = json.Unmarshal(connectionRaw, &connection)
 	var credential []byte
 	if connection.Secret != "" {
-		credential, _ = t.credentialValue(connection.Secret, "connection/"+connection.ID, connection.Address)
+		credential, _ = t.CredentialValue(connection.Secret, "connection/"+connection.ID, connection.Address)
 	}
 	var source dataowner.Source
 	_ = json.Unmarshal(sourceRaw, &source)

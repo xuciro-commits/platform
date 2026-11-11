@@ -141,7 +141,7 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 
 func (t *Tenant) checkWritebackCredential(request dataowner.WritebackRequest) *kernel.Error {
 	if request.Secret != "" {
-		if value, ok := t.credentialValue(request.Secret, "connection/"+request.Connection, request.URL); !ok || strings.TrimSpace(string(value)) == "" {
+		if value, ok := t.CredentialValue(request.Secret, "connection/"+request.Connection, request.URL); !ok || strings.TrimSpace(string(value)) == "" {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The connection credential is not configured or permitted for this target")
 		}
 	}
@@ -204,7 +204,7 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 		r.Header.Set("Idempotency-Key", req.DispatchKey)
 	}
 	if req.Secret != "" {
-		v, ok := t.credentialHeader(req.Secret, "connection/"+req.Connection, req.URL)
+		v, ok := t.CredentialHeader(req.Secret, "connection/"+req.Connection, req.URL)
 		if !ok {
 			out.Result, out.Detail = "retry", "secret "+req.Secret+" missing"
 			return out

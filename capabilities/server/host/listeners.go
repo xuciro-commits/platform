@@ -36,7 +36,7 @@ func (t *Tenant) listenerInput(ctx context.Context, m platform.Member, path, sec
 			return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		listener := matches[0]
-		value, ok := t.credentialValue(listener.Secret, "listener/"+listener.ID, origin)
+		value, ok := t.CredentialValue(listener.Secret, "listener/"+listener.ID, origin)
 		if !ok || len(value) == 0 || secret == "" || !hmac.Equal(value, []byte(secret)) {
 			return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}

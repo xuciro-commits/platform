@@ -14,11 +14,11 @@ func (t *Tenant) resolveCredential(name, consumer, address string) ([]byte, stri
 	owner, _ := t.app(controlowner.PlatformApp).(platform.Credentials)
 	return controlowner.ResolveCredential(t.ID, owner, t.secret, name, consumer, address)
 }
-func (t *Tenant) credentialValue(name, consumer, address string) ([]byte, bool) {
+func (t *Tenant) CredentialValue(name, consumer, address string) ([]byte, bool) {
 	value, _, err := t.resolveCredential(name, consumer, address)
 	return value, err == nil
 }
-func (t *Tenant) credentialHeader(name, consumer, address string) ([]byte, bool) {
+func (t *Tenant) CredentialHeader(name, consumer, address string) ([]byte, bool) {
 	value, kind, err := t.resolveCredential(name, consumer, address)
 	if err == nil && kind == "bearer" {
 		value = []byte("Bearer " + string(value))

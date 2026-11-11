@@ -54,7 +54,7 @@ func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (
 	if err != nil || address.Host == "" || address.User != nil || address.RawQuery != "" || address.Fragment != "" || address.Scheme != "https" && !(address.Scheme == "http" && fixed.AllowPrivate) {
 		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an HTTP service root")
 	}
-	if fixed.Secret == "" || t.authorization(fixed) == "" {
+	if fixed.Secret == "" || t.sourceReader().Authorization(fixed) == "" {
 		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an available connection credential")
 	}
 	return fixed, nil

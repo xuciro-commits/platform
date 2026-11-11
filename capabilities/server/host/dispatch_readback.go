@@ -133,10 +133,10 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 		var connection dataowner.Connection
 		if json.Unmarshal(run.Source, &source) != nil || json.Unmarshal(run.Connection, &connection) != nil {
 			problem = fmt.Errorf("The original dispatch status source is unavailable")
-		} else if connection.Secret != "" && len(t.authorization(connection)) == 0 {
+		} else if connection.Secret != "" && len(t.sourceReader().Authorization(connection)) == 0 {
 			problem = fmt.Errorf("The dispatch status credential is unavailable in this environment")
 		} else {
-			rows, problem = t.readSourceWithConnection(source, &connection)
+			rows, problem = t.sourceReader().Read(source, &connection)
 		}
 	case policy.Observation != "":
 		var definition platform.ObservationDefinition
@@ -153,7 +153,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 			}
 		}
 		if connection.Secret != "" {
-			credential, found := t.credentialHeader(connection.Secret, "connection/"+connection.ID, connection.Address)
+			credential, found := t.CredentialHeader(connection.Secret, "connection/"+connection.ID, connection.Address)
 			if !found || strings.TrimSpace(string(credential)) == "" {
 				problem = fmt.Errorf("The dispatch observation credential is unavailable in this environment")
 				break
