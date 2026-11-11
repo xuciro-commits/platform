@@ -37,7 +37,7 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 	slices.Sort(keys)
 	for _, key := range keys {
 		binding := c.Models[key]
-		info, _ := t.entity(binding.Model.Type)
+		info, _ := t.Entity(binding.Model.Type)
 		model := binding.Model
 		model.Fields = slices.Clone(model.Fields)
 		roles := make([]string, 0, len(binding.Roles))
@@ -84,7 +84,7 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 			}
 			denied := false
 			for role, expr := range binding.Expressions {
-				answer, refusal := platform.EvaluateRule(expr, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, t.entity)
+				answer, refusal := platform.EvaluateRule(expr, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, t.Entity)
 				if refusal != nil {
 					if refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 						return result, refusal
@@ -122,11 +122,11 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 		if len(rows.Records)*len(columns.Records) > cellLimit {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Matrix exceeds 1600 cells; bind narrower declared collections")
 		}
-		info, _ := t.entity(rows.Object)
+		info, _ := t.Entity(rows.Object)
 		caller := platform.NewCaller(runtime{t: t, scoped: true}, member, info.App, false, false)
 		for _, row := range rows.Records {
 			for _, column := range columns.Records {
-				answer, err := platform.EvaluateRule(*c.Value, platform.MatrixRuleReads(c), caller, nil, map[string]any{"row": row["id"], "column": column["id"]}, at, t.entity)
+				answer, err := platform.EvaluateRule(*c.Value, platform.MatrixRuleReads(c), caller, nil, map[string]any{"row": row["id"], "column": column["id"]}, at, t.Entity)
 				if err != nil {
 					if err.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 						return result, err

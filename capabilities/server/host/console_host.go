@@ -17,7 +17,7 @@ func (h hostView) App(id string) platform.App {
 	if !h.t.ownerActive(id) {
 		return nil
 	}
-	return h.t.app(id)
+	return h.t.App(id)
 }
 func (h hostView) BaseModules() []platform.CapabilityModule { return h.t.baseModules() }
 func (h hostView) AppIDs() []string                         { return h.t.AppIDs() }

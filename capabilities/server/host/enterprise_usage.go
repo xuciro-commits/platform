@@ -107,7 +107,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *records.Store
 			add(EnterpriseUsageItem{Kind: "record", Title: title, Ref: "record:" + et.Info().Type + "/" + records.Header(r.Value).ID, Field: field, Current: current}, visible)
 		}
 	}
-	if directory, ok := t.app(controlowner.PlatformApp).(platform.IdentityDirectory); ok {
+	if directory, ok := t.App(controlowner.PlatformApp).(platform.IdentityDirectory); ok {
 		visible := details && c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Type: controlowner.MemberType, Action: controlowner.SchemaGrant}, now).Allow
 		for _, usage := range directory.UnitGrantUsage(id, until) {
 			ref := "member:" + usage.Member

@@ -35,7 +35,7 @@ func (h hostView) InstallPropertyType(c platform.Caller, p platform.PropertyType
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetPropertyType, Name: p.Name}
 	d := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".property-" + strconv.Itoa(version), ContractVersion: 1, PropertyType: &p, PropertyVersions: map[string]platform.PropertyType{}}
-	d, err := h.t.describeDefinition(d)
+	d, err := h.t.describer().DescribeDefinition(d)
 	if err != nil {
 		return err
 	}

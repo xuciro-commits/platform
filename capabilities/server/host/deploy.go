@@ -280,7 +280,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 			continue
 		}
-		if console, ok := t.app(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
+		if console, ok := t.App(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
 			console.CloseTokenSecretWindows()
 		}
 		fresh[t.ID] = after == 0 && len(entries) == 0
@@ -675,7 +675,7 @@ func (d *Deployment) preparePackageIndex(tenants []*Tenant) error {
 }
 
 func (d *Deployment) bindPackageIndex(tenant *Tenant) {
-	if console, ok := tenant.app(controlowner.PlatformApp).(packages.Catalog); ok && d.packageIndex != nil {
+	if console, ok := tenant.App(controlowner.PlatformApp).(packages.Catalog); ok && d.packageIndex != nil {
 		console.BindPackageIndex(d.packageIndex)
 	}
 }

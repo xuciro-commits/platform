@@ -28,7 +28,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 			t.procs.Pin(e.Versions)
 		}
 		var m platform.Member
-		a := t.app(e.App)
+		a := t.App(e.App)
 		if a == nil || json.Unmarshal(e.Principal, &m) != nil {
 			return fmt.Errorf("entry %d: app %q not enabled or member unreadable", i+1, e.App)
 		}

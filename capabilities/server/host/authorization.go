@@ -35,7 +35,7 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 	if !viaProject || slices.Contains(independent, build.Builder) || owner.Manifest().Actions.PermitsAny(independent, s.GetSchema().GetName()) {
 		return nil
 	}
-	d, _ := t.app(controlowner.PlatformApp).(platform.ProjectAccess)
+	d, _ := t.App(controlowner.PlatformApp).(platform.ProjectAccess)
 	if build.IsResourceCreate(s) {
 		var payload struct {
 			Project string `json:"project"`

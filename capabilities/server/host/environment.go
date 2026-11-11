@@ -124,7 +124,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	result := PromotionResult{From: from.ID, To: to.ID, Candidate: candidate.ID, Digest: artifact.Digest, Active: activate, Key: key, Assets: len(candidate.Assets)}
 	return decideWithError(to, "release:promote", func(to *Tenant) (PromotionResult, error) {
 		for _, asset := range candidate.Assets {
-			if to.app(asset.Ref.App) == nil {
+			if to.App(asset.Ref.App) == nil {
 				return result, fmt.Errorf("%s does not host %s, which %s belongs to", to.ID, asset.Ref.App, asset.Ref.Name)
 			}
 		}

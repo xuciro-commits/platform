@@ -53,7 +53,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 		if refusal != nil {
 			return packages.PackagePreparation{}, refusal
 		}
-		source, ok := t.app(controlowner.PlatformApp).(packagePreparationSource)
+		source, ok := t.App(controlowner.PlatformApp).(packagePreparationSource)
 		if !ok {
 			return fail(fmt.Errorf("package owner is unavailable"))
 		}
@@ -61,7 +61,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 		if err != nil {
 			return fail(err)
 		}
-		owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+		owner, ok := t.App(build.ID).(build.ConstructionDrafts)
 		if !ok {
 			return fail(fmt.Errorf("Build is unavailable"))
 		}
@@ -135,7 +135,7 @@ func (t *Tenant) inspectPackage(ctx context.Context, request platform.PackageIns
 	send := t.sender()
 	return packages.Inspect(ctx, t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (platform.Precheck, error) {
 		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (platform.Precheck, *kernel.Error) {
-			owner, ok := t.app(controlowner.PlatformApp).(interface {
+			owner, ok := t.App(controlowner.PlatformApp).(interface {
 				Precheck(platform.PackageDescriptor) platform.Precheck
 			})
 			if !ok {

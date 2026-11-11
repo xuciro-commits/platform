@@ -19,7 +19,7 @@ import (
 )
 
 func (d *stagedDecision) TxnTransport() platform.TxnTransport {
-	return hostView{t: d.tenant, app: d.tenant.app(build.ID), decision: d}
+	return hostView{t: d.tenant, app: d.tenant.App(build.ID), decision: d}
 }
 
 func (h hostView) TakeTxnStep() *kernel.Error {
@@ -56,7 +56,7 @@ func (h hostView) CheckTxnCall(call platform.TxnCall) error {
 	if call.Ref.Check() != nil || call.Ref.Kind != platform.AssetQuery || call.Version < 0 || !slices.Contains([]string{"", "snapshot", "current"}, call.View) {
 		return fmt.Errorf("Transaction calls need a synchronous pure query with snapshot or current reads")
 	}
-	owner := h.t.app(call.Ref.App)
+	owner := h.t.App(call.Ref.App)
 	if owner == nil {
 		return fmt.Errorf("Transaction query owner is unavailable")
 	}

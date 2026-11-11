@@ -80,7 +80,7 @@ func (t *Tenant) ReadFrom(ctx context.Context, m platform.Member, app, name stri
 	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *kernel.Error) { return t.readFromApp(m, app, name, inputs...) })
 }
 func (t *Tenant) readFromApp(m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
-	a := t.app(app)
+	a := t.App(app)
 	if a == nil || !slices.Contains(a.Manifest().Reads, name) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}

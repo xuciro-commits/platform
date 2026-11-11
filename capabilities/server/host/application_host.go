@@ -133,7 +133,7 @@ func (t *Tenant) applicationRunsFromIndex(m platform.Member, ref platform.AssetR
 		return strings.Compare(a.Kind+"/"+a.ID, b.Kind+"/"+b.ID)
 	})
 	out := platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}, Total: len(runs)}
-	if definitions, err := t.definitionsFor(m); err == nil {
+	if definitions, err := t.DefinitionsFor(m); err == nil {
 		for _, definition := range definitions {
 			if definition.Ref == ref && definition.Application != nil {
 				out.Title = definition.Application.Title
@@ -217,7 +217,7 @@ func (t *Tenant) scopedApplicationRecordDiagnostic(m platform.Member, ref platfo
 		return out, refusal
 	}
 	owner := t.Projection.Type(typ).Info().App
-	ledger := t.app(owner).AcceptedLedger()
+	ledger := t.App(owner).AcceptedLedger()
 	receipts := ledger.RecordsFor(t.ID)
 	visible := map[platform.AssetRef]bool{}
 	for _, definition := range t.Definitions(m) {
@@ -267,7 +267,7 @@ func (t *Tenant) scopedApplicationRecordDiagnostic(m platform.Member, ref platfo
 	return out, nil
 }
 func (t *Tenant) applicationContext() appowner.Context {
-	return appowner.Context{Tenant: t.ID, Admit: t.Admits, Definitions: t.Definitions, Entity: t.entity, App: t.app,
+	return appowner.Context{Tenant: t.ID, Admit: t.Admits, Definitions: t.Definitions, Entity: t.Entity, App: t.App,
 		Assets: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) }, Candidate: t.releases.Candidate,
 		Candidates: func() map[string]json.RawMessage { return t.releases.Candidates() }, CloseCandidate: t.candidateWithBindings,
 		Rows: func(m platform.Member, typ string, q platform.Query, at time.Time) ([]any, *kernel.Error) {

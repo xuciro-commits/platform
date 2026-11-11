@@ -29,7 +29,7 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	if lang, asked := t.asked(r); asked {
 		return lang
 	}
-	if d, ok := t.app(controlowner.PlatformApp).(platform.IdentityProfile); ok {
+	if d, ok := t.App(controlowner.PlatformApp).(platform.IdentityProfile); ok {
 		return d.Language("")
 	}
 	return ""
@@ -81,7 +81,7 @@ func canonical(tag string) string {
 func (t *Tenant) Texts(app string) []string {
 	var m platform.Manifest
 	var parts []any
-	if a := t.app(app); a != nil {
+	if a := t.App(app); a != nil {
 		m = a.Manifest()
 		parts = append(parts, map[string]any{"title": m.Title}, m.Actions.All(), m.Pages, m.Settings, m.Emits)
 	}

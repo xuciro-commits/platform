@@ -214,7 +214,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 }
 
 func (t *Tenant) fileSources() []knowledgeindex.Source {
-	if t.app(platform.FileApp) == nil {
+	if t.App(platform.FileApp) == nil {
 		return nil
 	}
 	attached, _, _ := platform.Find[platform.File](t.automation(platform.FileApp, false), platform.Query{Limit: 100000})
@@ -228,7 +228,7 @@ func (t *Tenant) fileSources() []knowledgeindex.Source {
 }
 
 func (t *Tenant) fileSource(f platform.File) (knowledgeindex.Source, bool) {
-	if t.app(platform.FileApp) == nil || f.Archived || !strings.HasPrefix(f.ContentType, "text/") || f.Size > 1<<20 {
+	if t.App(platform.FileApp) == nil || f.Archived || !strings.HasPrefix(f.ContentType, "text/") || f.Size > 1<<20 {
 		return knowledgeindex.Source{}, false
 	}
 	{

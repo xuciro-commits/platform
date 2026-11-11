@@ -20,7 +20,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 	if err != nil {
 		return saved, err
 	}
-	if saved.Tenant != t.ID || t.app(build.ID) == nil {
+	if saved.Tenant != t.ID || t.App(build.ID) == nil {
 		return saved, fmt.Errorf("release result belongs to another tenant or unavailable builder")
 	}
 	if prior := t.releases.Raw(saved.CandidateID); prior != nil && !bytes.Equal(prior, saved.Bytes) {
@@ -36,7 +36,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 		records := t.Projection
 		var bootstrap *preparedAcceptedBatch
 		if len(saved.Bootstrap) > 0 {
-			bootstrap, err = t.prepareAcceptedBatch(t.app(saved.App).AcceptedLedger(), saved.Bootstrap)
+			bootstrap, err = t.prepareAcceptedBatch(t.App(saved.App).AcceptedLedger(), saved.Bootstrap)
 			if err != nil || bootstrap == nil {
 				return saved, fmt.Errorf("release bootstrap cannot prepare: %v", err)
 			}
@@ -294,7 +294,7 @@ func (t *Tenant) acceptedInstallationReleaseLocked(saved platform.ReleaseCandida
 }
 
 func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
-	if t.app(platform.WorkApp) == nil {
+	if t.App(platform.WorkApp) == nil {
 		return nil
 	}
 	candidate, err := platform.ReadCandidate(candidateID, raw)

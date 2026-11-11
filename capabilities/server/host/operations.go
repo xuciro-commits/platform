@@ -28,7 +28,7 @@ const (
 var deliveryRetry = platform.Retry{Initial: 2 * time.Second, Max: time.Minute, Attempts: 5}
 
 func (t *Tenant) retryOf(app string) platform.Retry {
-	if a := t.app(app); a != nil && a.Manifest().Retry != nil {
+	if a := t.App(app); a != nil && a.Manifest().Retry != nil {
 		return *a.Manifest().Retry
 	}
 	return deliveryRetry
@@ -55,7 +55,7 @@ func (t *Tenant) enqueue(now time.Time) {
 		if e.Plan != nil {
 			t.outbound.Add(t.current(), e.Plan.Effects...)
 			for _, id := range e.Plan.Subscribers {
-				if t.app(id) == nil {
+				if t.App(id) == nil {
 					panic(fmt.Errorf("accepted result requires missing subscriber %s", id))
 				}
 				t.deliver(id, e, now)
@@ -76,7 +76,7 @@ func (t *Tenant) enqueue(now time.Time) {
 			t.deliver(id, e, now)
 		}
 		for _, id := range t.listeners {
-			if id != e.App && t.app(id).(platform.Listener).Interested(names, e.Event) {
+			if id != e.App && t.App(id).(platform.Listener).Interested(names, e.Event) {
 				t.deliver(id, e, now)
 			}
 		}
@@ -184,14 +184,14 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 		defer func() { end(outcome); counted(t, "delivery", task.App, outcome) }()
 	}
 	var err *kernel.Error
-	if x, ok := t.app(task.App).(platform.Listener); ok {
+	if x, ok := t.App(task.App).(platform.Listener); ok {
 		names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(task.Event.Event)...)
 		if task.Event.Plan != nil {
 			names = task.Event.Plan.Names
 		}
 		err = x.Listen(t.automation(task.App, replaying), task.Event.Event, names, now)
 	} else {
-		err = t.app(task.App).(platform.Subscriber).Handle(t.automation(task.App, replaying), task.Event.Event)
+		err = t.App(task.App).(platform.Subscriber).Handle(t.automation(task.App, replaying), task.Event.Event)
 	}
 	if err != nil {
 		outcome = err.Error()
@@ -241,7 +241,7 @@ func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) strin
 	}
 	generation, _, _ := t.works.Start(task.ID, "host")
 	outcome := "ok"
-	if err := t.app(task.App).(platform.Runner).Run(t.automation(task.App, replaying), task.Job.Name, now); err != nil {
+	if err := t.App(task.App).(platform.Runner).Run(t.automation(task.App, replaying), task.Job.Name, now); err != nil {
 		outcome = err.Error()
 	}
 	t.works.Finish(task.ID, generation, outcome != "ok")
@@ -259,7 +259,7 @@ func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) strin
 }
 
 func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool) {
-	if t.app(controlowner.PlatformApp) == nil {
+	if t.App(controlowner.PlatformApp) == nil {
 		return
 	}
 	t.automation(controlowner.PlatformApp, replaying).Notify(platform.Notification{Title: title, Body: why + ". Retry it in Settings → Automation once the cause is fixed.",
@@ -338,7 +338,7 @@ func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
 	members := t.recipients(c, now, to)
 	delivery := map[string]platform.Reach{}
-	if d, ok := t.app(controlowner.PlatformApp).(platform.IdentityProfile); ok {
+	if d, ok := t.App(controlowner.PlatformApp).(platform.IdentityProfile); ok {
 		for _, m := range members {
 			delivery[m] = d.Reach(m)
 		}
@@ -353,7 +353,7 @@ func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Reci
 			members = append(members, r.Member)
 		}
 		if r.AppRole != "" {
-			if d, ok := t.app(controlowner.PlatformApp).(platform.IdentityDirectory); ok {
+			if d, ok := t.App(controlowner.PlatformApp).(platform.IdentityDirectory); ok {
 				for _, m := range d.Holding(c.App, r.AppRole) {
 					if !slices.Contains(members, m) {
 						members = append(members, m)
@@ -399,7 +399,7 @@ func (t *Tenant) setting(c platform.Caller, name string) string {
 	if tenantWide, ok := strings.CutPrefix(name, controlowner.PlatformApp+"/"); ok {
 		app, name = controlowner.PlatformApp, tenantWide
 	}
-	a := t.app(app)
+	a := t.App(app)
 	if a == nil {
 		return ""
 	}
@@ -462,13 +462,13 @@ func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Tim
 	var p struct{ Value string }
 	json.Unmarshal(s.GetPayload(), &p)
 	app, name, _ := strings.Cut(id, "/")
-	a := t.app(app)
+	a := t.App(app)
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if app == controlowner.PlatformApp && strings.HasPrefix(name, "logPolicy/") {
 		targetApp := strings.TrimPrefix(name, "logPolicy/")
-		if t.app(targetApp) == nil {
+		if t.App(targetApp) == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		if !c.Replaying {

@@ -166,6 +166,6 @@ func (t *Tenant) integrationAnswered(app, key string) bool {
 }
 
 func (t *Tenant) integrationAnsweredRead(app, key string) bool {
-	owner := t.app(app)
+	owner := t.App(app)
 	return owner != nil && t.priorOf(owner, key).Known()
 }

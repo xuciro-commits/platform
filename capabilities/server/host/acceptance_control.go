@@ -151,14 +151,14 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		state := tenantState{Queues: w.Queues, Failed: w.Failed, Tasks: w.Tasks, Jobs: w.Jobs}
 		known := map[string]bool{}
 		for _, task := range w.Tasks {
-			if task.ID == "" || known[task.ID] || t.app(task.App) == nil {
+			if task.ID == "" || known[task.ID] || t.App(task.App) == nil {
 				return fmt.Errorf("control work identity differs")
 			}
 			known[task.ID] = true
 		}
 		indexed := map[string]bool{}
 		for app, queue := range w.Queues {
-			if t.app(app) == nil {
+			if t.App(app) == nil {
 				return fmt.Errorf("control queue owner missing")
 			}
 			for _, id := range queue {

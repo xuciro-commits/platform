@@ -18,7 +18,7 @@ import (
 )
 
 func (d *stagedDecision) ConfirmationTransport() platform.ConfirmationTransport {
-	return hostView{t: d.tenant, app: d.tenant.app(build.ID), decision: d}
+	return hostView{t: d.tenant, app: d.tenant.App(build.ID), decision: d}
 }
 
 func (h hostView) FreezeConfirmation(c platform.Caller, subject string, spec platform.Confirmation, at time.Time) (string, []platform.ReleaseAsset, error) {
@@ -92,7 +92,7 @@ func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run p
 		if p.Protocol == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The confirmation has no original protocol mapping")
 		}
-		provider := h.t.app(p.Protocol.Provider)
+		provider := h.t.App(p.Protocol.Provider)
 		if provider == nil || provider.Manifest().Version != p.Protocol.Version {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original confirmation provider version is unavailable")
 		}

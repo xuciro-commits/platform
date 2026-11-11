@@ -178,7 +178,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 			result.After.Due = now.Add(retry.After(int(generation) - task.Since))
 		}
 	}
-	if result.After.State == "failed" && t.app(controlowner.PlatformApp) != nil {
+	if result.After.State == "failed" && t.App(controlowner.PlatformApp) != nil {
 		admin := platform.NewCaller(draft, platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, controlowner.PlatformApp, false, true)
 		admin.Notify(platform.Notification{Title: "Delivery to " + task.App + " failed: " + task.Title,
 			Body: result.Outcome + ". Retry it in Settings → Automation once the cause is fixed.", Key: "failed:" + task.ID},
@@ -271,7 +271,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 			}
 		}
 	}()
-	owner := t.app(task.App)
+	owner := t.App(task.App)
 	if owner == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", "verb", "The operation is unavailable in its owner declaration")
 	}
@@ -286,17 +286,17 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 		return refusal
 	}
 	if task.Kind == "job" {
-		refusal = d.stateApp(t.app(task.App)).(platform.Runner).Run(c, task.Job.Name, now)
+		refusal = d.stateApp(t.App(task.App)).(platform.Runner).Run(c, task.Job.Name, now)
 	} else {
 		t.hops = task.Event.Hops + 1
-		if listener, ok := d.stateApp(t.app(task.App)).(platform.Listener); ok {
+		if listener, ok := d.stateApp(t.App(task.App)).(platform.Listener); ok {
 			names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(task.Event.Event)...)
 			if task.Event.Plan != nil {
 				names = task.Event.Plan.Names
 			}
 			refusal = listener.Listen(c, task.Event.Event, names, now)
 		} else {
-			refusal = d.stateApp(t.app(task.App)).(platform.Subscriber).Handle(c, task.Event.Event)
+			refusal = d.stateApp(t.App(task.App)).(platform.Subscriber).Handle(c, task.Event.Event)
 		}
 	}
 	if refusal == nil {
@@ -313,7 +313,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 
 func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	result, err := acceptedformat.DecodeWork(raw)
-	if err != nil || result.Tenant != t.ID || t.app(result.App) == nil {
+	if err != nil || result.Tenant != t.ID || t.App(result.App) == nil {
 		return false, fmt.Errorf("work result cannot be applied: %v", err)
 	}
 	finished := new(pb.Work)

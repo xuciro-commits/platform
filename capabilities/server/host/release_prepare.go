@@ -184,7 +184,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 		if request != nil && (matches > 0 || et.Rows().Get(draft.Name) != nil) {
 			return nil, nil, fmt.Errorf("asset %s already has a draft; open that draft instead", draft.Ref)
 		}
-		app := view.app(et.Info().App)
+		app := view.App(et.Info().App)
 		if matches == 0 {
 			raw, err := releaseowner.AssetDraftPayload(et.Info(), draft.Image)
 			if err != nil {

@@ -251,7 +251,7 @@ func (d *stagedDecision) Check(c platform.Caller, entity any) *kernel.Error {
 }
 
 func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
-	if tracker, ok := d.tenant.app(c.App).(interface {
+	if tracker, ok := d.tenant.App(c.App).(interface {
 		TrackResource(platform.Caller, *pb.ChangeRecord, time.Time)
 	}); ok {
 		tracker.TrackResource(c, record, d.at)
@@ -259,7 +259,7 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 	changed := slices.Clone(d.changed[c.App+"/"+record.GetChangeId()])
 	d.events = append(d.events, platform.Event{App: c.App, Record: record, Changed: changed})
 	schema := record.GetSubmission().GetSchema().GetName()
-	if publisher, ok := d.tenant.app(c.App).(platform.AcceptedPublisher); ok &&
+	if publisher, ok := d.tenant.App(c.App).(platform.AcceptedPublisher); ok &&
 		slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
 		ref := record.GetSubmission().GetTarget()
 		var raw []byte
@@ -432,7 +432,7 @@ func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name stri
 		rec.GetSubmission().GetTenantId() != d.tenant.ID {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	app := d.tenant.app(c.App)
+	app := d.tenant.App(c.App)
 	if app == nil {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}

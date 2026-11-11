@@ -22,7 +22,7 @@ func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
 		if kind == "model" && x.Endpoint == acceptedformat.ModelEndpoint {
 			id = fmt.Sprintf("%s:%s:model:%s", t.ID, x.App, x.Key)
 		}
-		if !ok || kind == "" || x.App == "" || t.app(x.App) == nil || x.Key == "" || x.Endpoint == "" ||
+		if !ok || kind == "" || x.App == "" || t.App(x.App) == nil || x.Key == "" || x.Endpoint == "" ||
 			x.ID != id ||
 			ids[x.ID] || x.State != "pending" && x.State != "held" || x.At.IsZero() || !x.Due.Equal(x.At) ||
 			x.Attempts != 0 || !x.Last.IsZero() || x.Error != "" || x.Digest != "" ||
@@ -48,7 +48,7 @@ func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platf
 }
 
 func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
-	console, _ := d.tenant.app(controlowner.PlatformApp).(platform.IdentityProfile)
+	console, _ := d.tenant.App(controlowner.PlatformApp).(platform.IdentityProfile)
 	if private, ok := d.states[controlowner.PlatformApp].(platform.IdentityProfile); ok {
 		console = private
 	}

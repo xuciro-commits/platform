@@ -38,7 +38,7 @@ func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platfor
 	if key == "" || len(key) > 200 || len(edits) == 0 || len(edits) > 64 || now.IsZero() {
 		return platform.CompositeAnswer{}, fmt.Errorf("a composite needs an idempotency key and one to 64 edits")
 	}
-	if t.app(build.ID) == nil {
+	if t.App(build.ID) == nil {
 		return platform.CompositeAnswer{}, fmt.Errorf("this tenant runs no builder")
 	}
 	if t.quarantined() {
@@ -60,7 +60,7 @@ func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platfor
 	}
 	if digest, exists := t.Committed.Composite(saved.Key); exists {
 		for i, edit := range edits {
-			r := t.app(build.ID).AcceptedLedger().AcceptedFor(t.ID, key+"#"+strconv.Itoa(i))
+			r := t.App(build.ID).AcceptedLedger().AcceptedFor(t.ID, key+"#"+strconv.Itoa(i))
 			x := r.GetSubmission()
 			if x.GetPrincipalId() != m.ID || x.GetSchema().GetName() != edit.Schema || !proto.Equal(x.GetTarget(), edit.Target) || !acceptedformat.SameCompositePayload(x.GetPayload(), edit.Payload) {
 				return platform.CompositeAnswer{}, fmt.Errorf("historical composite key belongs to another request")
@@ -151,7 +151,7 @@ func compositeAnswer(saved acceptedformat.Composite) (platform.CompositeAnswer, 
 }
 
 func (t *Tenant) stageCompositeLocked(m platform.Member, edits []platform.CompositeEdit, key string, now time.Time) (*Tenant, error) {
-	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+	owner, ok := t.App(build.ID).(build.ConstructionDrafts)
 	if !ok {
 		return nil, fmt.Errorf("this tenant runs no builder")
 	}
@@ -191,7 +191,7 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, e
 	if saved.Version >= 2 {
 		if saved.Refusal == "" {
 			batch, _, _ := acceptedformat.DecodeBatch(saved.Changes)
-			if _, err := t.applyAcceptedBatch(t.app(build.ID).AcceptedLedger(), saved.Changes); err != nil {
+			if _, err := t.applyAcceptedBatch(t.App(build.ID).AcceptedLedger(), saved.Changes); err != nil {
 				return saved, err
 			}
 			t.publishAcceptedBatch(batch)

@@ -27,7 +27,7 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 		return nil, nil, &platform.AIError{Status: 400, Detail: err.Error()}
 	}
 	version := 0
-	if owner, ok := t.app(controlowner.PlatformApp).(platform.Credentials); ok {
+	if owner, ok := t.App(controlowner.PlatformApp).(platform.Credentials); ok {
 		if credential, ok := owner.Credential(pv.Secret); ok {
 			version = credential.Version
 		}

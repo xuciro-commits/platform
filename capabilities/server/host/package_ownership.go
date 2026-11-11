@@ -43,7 +43,7 @@ func (t *Tenant) packageOwnership(descriptor platform.PackageDescriptor) (Packag
 	if descriptor.Blueprint == nil {
 		return plan, nil
 	}
-	assets, err := t.app(build.ID).(build.ConstructionDrafts).CompleteBlueprintAssets(descriptor.Blueprint.Assets)
+	assets, err := t.App(build.ID).(build.ConstructionDrafts).CompleteBlueprintAssets(descriptor.Blueprint.Assets)
 	if err != nil {
 		return plan, err
 	}
@@ -68,12 +68,12 @@ func (t *Tenant) packageOwnership(descriptor platform.PackageDescriptor) (Packag
 
 func (h *Host) routesPackageOwnership(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/packages/{id}/ownership", Summary: "Review an explicit resource ownership transfer before installing a split product", Answer: PackageOwnership{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		c := t.caller(m, t.app("platform"), false)
+		c := t.caller(m, t.App("platform"), false)
 		if refusal := authorizationRefusal(t.authorizeNative(c, "GET /v1/packages/{id}/ownership", "read", []string{"admin"}, true)); refusal != nil {
 			Reply(w, nil, refusal)
 			return
 		}
-		catalog := t.app("platform").(interface{ PackageViews() []platform.PackageView })
+		catalog := t.App("platform").(interface{ PackageViews() []platform.PackageView })
 		for _, view := range catalog.PackageViews() {
 			if view.Descriptor.ID != r.PathValue("id") || view.Descriptor.Version != r.URL.Query().Get("version") {
 				continue

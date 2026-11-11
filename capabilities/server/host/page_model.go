@@ -180,7 +180,7 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 		if err := json.Unmarshal(platform.Raw(request.Draft), &page); err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid page model")
 		}
-		if err := page.NormalizeModelBindings(t.entity); err != nil {
+		if err := page.NormalizeModelBindings(t.Entity); err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 		projected, err := page.Safety()
@@ -217,12 +217,12 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 	}
 	page = projectedPage
 	for _, binding := range page.DataBindings {
-		if err := page.CheckDataBinding(binding, t.entity, t.modelCriteria, t.services.Rules); err != nil {
+		if err := page.CheckDataBinding(binding, t.Entity, t.modelCriteria, t.services.Rules); err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 	}
 
-	if err := pageowner.CheckModelQueries(page, t.definitions, t.entity); err != nil {
+	if err := pageowner.CheckModelQueries(page, t.definitions, t.Entity); err != nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	index := slices.IndexFunc(page.DataBindings, func(section platform.PageDataBinding) bool { return section.ID == request.Section })
@@ -240,7 +240,7 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 	result := PageModelResult{Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}}
 	model := section.Model
 	result.Model, result.Object = model, model.Type
-	info, known := t.entity(model.Type)
+	info, known := t.Entity(model.Type)
 	if !known {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Model object is unavailable")
 	}
@@ -384,7 +384,7 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 			}
 		}
 		if model.Label != nil {
-			value, refusal := platform.EvaluateRule(*model.Label, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, t.entity)
+			value, refusal := platform.EvaluateRule(*model.Label, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, t.Entity)
 			if refusal != nil {
 				if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 					result.Partial = true
@@ -456,7 +456,7 @@ func (t *Tenant) pageModelRows(c platform.Caller, page platform.Page, section pl
 			ids = append(ids, identity.ID)
 		}
 		set = platform.ObjectSet{Object: model.Type, IDs: ids}
-		if root, ok := t.entity(page.RecordResourceObject(collection.RecordVariable).Name); ok {
+		if root, ok := t.Entity(page.RecordResourceObject(collection.RecordVariable).Name); ok {
 			for _, declared := range root.Sets {
 				if declared.Name != collection.Name {
 					continue

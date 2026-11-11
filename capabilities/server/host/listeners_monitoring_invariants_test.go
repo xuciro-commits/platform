@@ -147,13 +147,13 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 	if len(live.entries) != before+1 {
 		t.Fatalf("duplicate delivery produced %d accepted results", len(live.entries)-before)
 	}
-	owner := live.app(build.ID).(*build.Build)
+	owner := live.App(build.ID).(*build.Build)
 	if !slices.Contains(owner.AssetKinds(), platform.AssetListener) {
 		t.Fatal("listener has no asset lifecycle owner")
 	}
 	var original platform.ReleaseAsset
 	_, refusal := coordinatedRecordRead(live.Tenant, context.Background(), func(view *Tenant) (any, *kernel.Error) {
-		assets, err := view.app(build.ID).(*build.Build).ReleaseAssets()
+		assets, err := view.App(build.ID).(*build.Build).ReleaseAssets()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -200,7 +200,7 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 		t.Fatal("old published path remained active after release installation")
 	}
 	_, refusal = coordinatedRecordRead(live.Tenant, context.Background(), func(view *Tenant) (any, *kernel.Error) {
-		retained, err := view.app(build.ID).(*build.Build).ResolvePinned(original.Ref, original.SourceVersion)
+		retained, err := view.App(build.ID).(*build.Build).ResolvePinned(original.Ref, original.SourceVersion)
 		if err != nil || !bytes.Equal(retained.Body, original.Body) {
 			t.Fatalf("original listener version not retained: %v", err)
 		}

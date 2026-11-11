@@ -261,5 +261,5 @@ func (t *Tenant) finishPreparedInput(m platform.Member, name string, candidate p
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	return t.finishCommittedInput(t.app(candidate.entry.App).(platform.AcceptedInputApp), m, name, candidate.key, candidate.hash, committed)
+	return t.finishCommittedInput(t.App(candidate.entry.App).(platform.AcceptedInputApp), m, name, candidate.key, candidate.hash, committed)
 }

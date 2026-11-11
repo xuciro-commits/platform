@@ -51,7 +51,7 @@ func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.En
 		return q, err
 	}
 	for _, typ := range q.Implementations {
-		info, ok := t.entity(typ)
+		info, ok := t.Entity(typ)
 		if next, exists := overlay[typ]; exists {
 			info, ok = next, true
 		}

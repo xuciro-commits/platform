@@ -55,7 +55,7 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 }
 
 func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.Effect, *kernel.Error) {
-	if t.app(build.ID) == nil {
+	if t.App(build.ID) == nil {
 		return nil, nil
 	}
 	s := e.Record.GetSubmission()

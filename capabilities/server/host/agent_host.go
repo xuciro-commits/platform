@@ -175,7 +175,7 @@ func (h hostView) AgentGlossary(app string) string            { return h.t.gloss
 func (h hostView) AgentLanguage(language string) string       { return agents.LanguageName(language) }
 func (h hostView) AgentSuspended(member string) bool          { return h.t.suspended(member) }
 func (h hostView) ExternalAgentMembers() []platform.Member {
-	owner, ok := h.t.app(controlowner.PlatformApp).(platform.IdentityDirectory)
+	owner, ok := h.t.App(controlowner.PlatformApp).(platform.IdentityDirectory)
 	if !ok {
 		return nil
 	}
@@ -342,7 +342,7 @@ func (h hostView) AgentEvaluationApp(candidate, agent string) (platform.App, str
 	if i < 0 {
 		return nil, "", fmt.Errorf("the saved candidate does not contain this agent")
 	}
-	compiler, ok := h.t.app(owner).(platform.ReleaseExecutionOwner)
+	compiler, ok := h.t.App(owner).(platform.ReleaseExecutionOwner)
 	if !ok {
 		return nil, "", fmt.Errorf("the agent's original execution owner is unavailable")
 	}

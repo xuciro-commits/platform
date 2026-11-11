@@ -23,7 +23,7 @@ func (t *Tenant) scopedDraftActionCapabilities(m platform.Member) ([]platform.Ca
 	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/build/drafts/actions", "read", []string{build.Builder}, true)); err != nil {
 		return nil, err
 	}
-	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+	owner, ok := t.App(build.ID).(build.ConstructionDrafts)
 	if !ok {
 		return nil, fmt.Errorf("tenant has no builder")
 	}

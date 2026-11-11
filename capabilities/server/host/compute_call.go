@@ -29,7 +29,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	}
 	initial, refusal := recordRead(t, context.Background(), func(t *Tenant) (setup, *kernel.Error) {
 		current, seated := t.Member(member.ID)
-		app := t.app(q.App)
+		app := t.App(q.App)
 		var op platform.Operation
 		var version int
 		var declared bool
@@ -104,7 +104,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			if !ok || t.quarantined() || t.Admits(latest) != nil {
 				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The operation member is unavailable")
 			}
-			owner := t.app(controlowner.PlatformApp)
+			owner := t.App(controlowner.PlatformApp)
 			if owner == nil {
 				return false, unknown()
 			}

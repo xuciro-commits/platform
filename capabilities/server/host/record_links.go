@@ -13,7 +13,7 @@ func (t *Tenant) installPublicationLinkConstraint(store *records.Store, schema s
 	if schema != build.SchemaLinkType {
 		return nil
 	}
-	owner, ok := t.app(build.ID).(platform.LinkPublicationReader)
+	owner, ok := t.App(build.ID).(platform.LinkPublicationReader)
 	if !ok {
 		return fmt.Errorf("link publication owner is unavailable")
 	}

@@ -42,10 +42,10 @@ func (t *Tenant) scopedPreviewPipeline(member platform.Member, request PipelineP
 	if problem := t.Admits(member); problem != nil {
 		return out, problem
 	}
-	if t.quarantined() || t.app(build.ID) == nil {
+	if t.quarantined() || t.App(build.ID) == nil {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Pipeline trial is unavailable")
 	}
-	caller := t.caller(member, t.app(build.ID), false)
+	caller := t.caller(member, t.App(build.ID), false)
 	if problem := authorizationRefusal(t.authorizeCapability(caller, build.ID, "build.pipeline.preview", []string{build.Builder, build.Integrator}, true, authorizationDetails{At: at})); problem != nil {
 		return out, problem
 	}

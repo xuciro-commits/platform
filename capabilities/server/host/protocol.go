@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	releaseowner "platformserver/services/devops/releases"
 	"slices"
 	"strings"
 	"time"
@@ -97,7 +98,7 @@ func (t *Tenant) provider(used string) (platform.App, string, bool) {
 }
 
 func (t *Tenant) consumes(c platform.Caller, protocol string) bool {
-	self := t.app(c.App)
+	self := t.App(c.App)
 	return self != nil && slices.ContainsFunc(self.Manifest().Consumes, func(x platform.Consumption) bool { return x.Protocol == protocol })
 }
 
@@ -124,7 +125,7 @@ func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload 
 		declared, _ := b.provider.Manifest().Actions.Action(schema)
 		target := &pb.EntityRef{Type: declared.Target, Id: id}
 		called := platform.RouteCaller(c, b.provider.Manifest().ID)
-		sub := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(declared.Target),
+		sub := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.AuthorityOf(declared.Target),
 			Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}
 		var record *pb.ChangeRecord
 		var err *kernel.Error
@@ -244,7 +245,7 @@ func (t *Tenant) invokeDiagnosed(m platform.Member, protocol, action, id string,
 	}
 	declared, _ := provider.Manifest().Actions.Action(schema)
 	target := &pb.EntityRef{Type: declared.Target, Id: id}
-	record, err, issues := t.submitDiagnosed(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: t.authorityOf(declared.Target),
+	record, err, issues := t.submitDiagnosed(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: t.AuthorityOf(declared.Target),
 		Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, Payload: payload}, now)
 	return target, record, err, issues
 }
@@ -261,7 +262,7 @@ func (t *Tenant) Query(m platform.Member, protocol, read string) (any, *kernel.E
 	return t.read(m, name)
 }
 
-func (t *Tenant) authorityOf(dataClass string) string {
+func (t *Tenant) AuthorityOf(dataClass string) string {
 	for _, d := range t.Declarations() {
 		if d.GetDataClass() == dataClass {
 			return d.GetAuthorityId()
@@ -272,7 +273,7 @@ func (t *Tenant) authorityOf(dataClass string) string {
 
 func (t *Tenant) protocolEvents(e platform.Event) []string {
 	var out []string
-	if a := t.app(e.App); a != nil {
+	if a := t.App(e.App); a != nil {
 		for _, pv := range a.Manifest().Provides {
 			for event, schema := range pv.Events {
 				if schema == e.Record.GetSubmission().GetSchema().GetName() {
@@ -358,3 +359,13 @@ func (t *Tenant) boundProvider(c platform.Caller, protocol string) (string, *ker
 	}
 	return "", nil
 }
+
+func (t *Tenant) ProtocolProvider(protocol string) (string, bool) {
+	b, ok := t.resolve(protocol)
+	if !ok {
+		return "", false
+	}
+	return b.provider.Manifest().ID, true
+}
+
+func (t *Tenant) describer() releaseowner.Describer { return releaseowner.NewDescriber(t) }

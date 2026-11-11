@@ -24,7 +24,7 @@ func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, 
 	if sourceVersion != "" {
 		available[i].SourceVersion = sourceVersion
 	}
-	available[i], err = t.describeOwnedAsset(available[i])
+	available[i], err = t.describer().DescribeOwnedAsset(available[i])
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
@@ -92,7 +92,7 @@ func (t *Tenant) operationClosure(app string, op platform.Operation, version int
 	}
 	sourceVersion := ""
 	if version > 0 {
-		sourceVersion = t.app(app).Manifest().Version + ".compute-" + strconv.Itoa(version)
+		sourceVersion = t.App(app).Manifest().Version + ".compute-" + strconv.Itoa(version)
 	}
 	return t.capabilityClosure(platform.AssetRef{App: app, Kind: platform.AssetCompute, Name: op.Name}, body, sourceVersion, retained)
 }

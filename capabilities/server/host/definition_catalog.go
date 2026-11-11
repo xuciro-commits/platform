@@ -12,7 +12,7 @@ import (
 )
 
 func (t *Tenant) ownedMetadataKind(ref platform.AssetRef) bool {
-	owner, ok := t.app(ref.App).(platform.AssetDefinitionReader)
+	owner, ok := t.App(ref.App).(platform.AssetDefinitionReader)
 	return ok && owner.DefinitionMetadataKind(ref.Kind)
 }
 
@@ -30,7 +30,7 @@ func (t *Tenant) ownedAssetDefinition(plan platform.AssetInstallation) (platform
 	if err := json.Unmarshal([]byte(record.Published), &asset); err != nil || asset.Ref != plan.Ref || asset.SourceVersion == "" || asset.ContractVersion < 1 {
 		return platform.Definition{}, false, fmt.Errorf("asset %s has an invalid accepted definition", plan.Ref)
 	}
-	owner := t.app(plan.Ref.App).(platform.AssetDefinitionReader)
+	owner := t.App(plan.Ref.App).(platform.AssetDefinitionReader)
 	definition, err := owner.DefinitionDescriptor(asset)
 	if err != nil {
 		return definition, false, err

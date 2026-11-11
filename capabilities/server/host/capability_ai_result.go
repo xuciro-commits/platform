@@ -35,7 +35,7 @@ func (t *Tenant) readCapabilityAI(m platform.Member, id string, now time.Time) (
 	contract := run.Contract
 	if len(contract.Roles) == 0 {
 		var exists bool
-		contract, _, exists = agentowner.FunctionDefinition(t.app(owner), run.Function, run.Version)
+		contract, _, exists = agentowner.FunctionDefinition(t.App(owner), run.Function, run.Version)
 		if !exists {
 			return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Retained function definition is unavailable")
 		}

@@ -31,7 +31,7 @@ func (t *Tenant) ModelToolReads(m platform.Member) []string {
 	return out
 }
 func (t *Tenant) ProposeModelTool(m platform.Member, proposal platform.ModelToolProposal, at time.Time) *kernel.Error {
-	owner, refusal := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) { return t.authorityOf(proposal.Action.Target), nil })
+	owner, refusal := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) { return t.AuthorityOf(proposal.Action.Target), nil })
 	if refusal != nil {
 		return refusal
 	}

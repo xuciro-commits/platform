@@ -223,7 +223,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	}
 	view.ownerRoles = roles
 	for protocol, binding := range view.bindings {
-		binding.provider = view.app(binding.provider.Manifest().ID)
+		binding.provider = view.App(binding.provider.Manifest().ID)
 		view.bindings[protocol] = binding
 	}
 	view.Committed = t.Committed.Fork()

@@ -153,7 +153,7 @@ func (t *Tenant) platformSetting(name string) string {
 	if value, ok := t.settings.Get(controlowner.PlatformApp + "/" + name); ok {
 		return value
 	}
-	app := t.app(controlowner.PlatformApp)
+	app := t.App(controlowner.PlatformApp)
 	if app == nil {
 		return ""
 	}

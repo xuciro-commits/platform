@@ -210,7 +210,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		if err := t.checkRecordSetDeclarations(et.Info()); err != nil {
 			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.Info().Type, err)
 		}
-		if err := platform.CheckConstraints(et.Info(), t.entity, true); err != nil {
+		if err := platform.CheckConstraints(et.Info(), t.Entity, true); err != nil {
 			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.Info().Type, err)
 		}
 	}

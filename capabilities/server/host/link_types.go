@@ -11,11 +11,11 @@ import (
 )
 
 func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
-	parent, ok := h.t.entity(l.Parent.Name)
+	parent, ok := h.t.Entity(l.Parent.Name)
 	if !ok {
 		return fmt.Errorf("link parent is unavailable")
 	}
-	child, ok := h.t.entity(l.Child.Name)
+	child, ok := h.t.Entity(l.Child.Name)
 	if !ok || child.App != h.app.Manifest().ID {
 		return fmt.Errorf("link type needs its child owner's object")
 	}
@@ -58,7 +58,7 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetLinkType, Name: l.Name}
 	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".link-" + strconv.Itoa(version), ContractVersion: l.Contract(), LinkType: &l, LinkVersions: map[string]platform.LinkType{}}
-	def, err := h.t.describeDefinition(def)
+	def, err := h.t.describer().DescribeDefinition(def)
 	if err != nil {
 		return err
 	}

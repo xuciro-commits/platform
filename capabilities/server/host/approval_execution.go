@@ -109,7 +109,7 @@ func (r *flowExecutionRuntime) ProbeDecision(c platform.Caller, decide func(plat
 }
 
 func (r *flowExecutionRuntime) RequestApproval(c platform.Caller, app string, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	owner := r.view.app(app)
+	owner := r.view.App(app)
 	if owner == nil || c.Automation || c.Tenant != r.tenant.ID || s.GetAuthority() != app || s.GetPrincipalId() != c.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
 	}
@@ -122,7 +122,7 @@ func (r *flowExecutionRuntime) RequestApproval(c platform.Caller, app string, s 
 	}); refusal != nil {
 		return nil, refusal
 	}
-	work, ok := r.stateApp(r.tenant.app(platform.WorkApp)).(platform.ApprovalOwner)
+	work, ok := r.stateApp(r.tenant.App(platform.WorkApp)).(platform.ApprovalOwner)
 	if !ok {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The approval owner is unavailable")
 	}

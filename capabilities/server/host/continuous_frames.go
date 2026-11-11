@@ -408,7 +408,7 @@ func (t *Tenant) retireContinuousArtifacts(plan platform.FlowArtifactCleanupPrep
 		if !plan.Matches(latest) {
 			return nil, nil
 		}
-		return t.accept(plan.Decision(t.app(platform.FlowApp)), member, plan.Submission(t.ID), now, acceptOptions{automation: true})
+		return t.accept(plan.Decision(t.App(platform.FlowApp)), member, plan.Submission(t.ID), now, acceptOptions{automation: true})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		return t.finishPreparedSubmission(member, candidate, record, refusal)
 	})
@@ -481,7 +481,7 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 	}
 	bound, refusal := recordRead(t, context.Background(), func(t *Tenant) (binding, *kernel.Error) {
 		current, ok := t.Member(member.ID)
-		owner := t.app(request.App)
+		owner := t.App(request.App)
 		if !ok || current.Tenant != t.ID || owner == nil {
 			return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared window Compute owner or member is unavailable")
 		}

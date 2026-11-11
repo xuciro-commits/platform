@@ -53,12 +53,12 @@ func (t *Tenant) packageRemovalImpacts(removed, replaced map[platform.AssetRef]b
 
 func (h *Host) routesPackageReview(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/packages/{id}/review", Summary: "Review the exact product's resource differences and customer extensions", Answer: PackageReview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		c := t.caller(m, t.app("platform"), false)
+		c := t.caller(m, t.App("platform"), false)
 		if refusal := authorizationRefusal(t.authorizeNative(c, "GET /v1/packages/{id}/review", "read", []string{"admin"}, true)); refusal != nil {
 			Reply(w, nil, refusal)
 			return
 		}
-		catalog := t.app("platform").(interface {
+		catalog := t.App("platform").(interface {
 			PackageViews() []platform.PackageView
 			LifecycleImpact(platform.Caller, string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
 		})
@@ -77,7 +77,7 @@ func (h *Host) routesPackageReview(rt *routes) {
 		answer := PackageReview{ID: chosen.Descriptor.ID, Version: chosen.Descriptor.Version, Changes: []platform.PackageResourceChange{}, Extensions: []releaseowner.ReleaseExtensionReview{}}
 		uninstall := r.URL.Query().Get("mode") == "uninstall"
 		before, after := map[platform.AssetRef]platform.ReleaseAsset{}, map[platform.AssetRef]platform.ReleaseAsset{}
-		owner := t.app(build.ID).(build.ConstructionDrafts)
+		owner := t.App(build.ID).(build.ConstructionDrafts)
 		if held := chosen.Installed; held != nil && held.State != "retired" {
 			for _, view := range views {
 				if view.Descriptor.ID == held.ID && view.Descriptor.Version == held.Version && view.Descriptor.Blueprint != nil {

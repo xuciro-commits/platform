@@ -7,7 +7,7 @@ import (
 )
 
 func (h hostView) ValidateCodeAsset(asset platform.ReleaseAsset) error {
-	owner := h.t.app(asset.Ref.App)
+	owner := h.t.App(asset.Ref.App)
 	if owner == nil {
 		return fmt.Errorf("code asset %s has no original owner", asset.Ref)
 	}

@@ -27,7 +27,7 @@ type Upload struct {
 
 func (t *Tenant) Upload(m platform.Member, name, contentType string, body io.Reader, now time.Time) (Upload, int, error) {
 	limit, refusal := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) {
-		if t.app(platform.FileApp) == nil {
+		if t.App(platform.FileApp) == nil {
 			return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return platform.MaxFileSize(t.automation(platform.FileApp, false)), nil
@@ -70,12 +70,12 @@ func (t *Tenant) SweepUploads(now time.Time) {
 	}
 	pending, refusal := decideOnImage(t, context.Background(), "uploads:reserve", func(t *Tenant) (map[string]bool, *kernel.Error) {
 		retained := map[string]bool{}
-		if t.app(platform.FileApp) != nil {
+		if t.App(platform.FileApp) != nil {
 			if !retainUploadHashes[platform.File](t.automation(platform.FileApp, false), func(file platform.File) { retained[file.Hash] = true }) {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 		}
-		if t.app("build") != nil {
+		if t.App("build") != nil {
 			keep := func(items []platform.MediaItem) {
 				for _, item := range items {
 					retained[item.Hash] = true

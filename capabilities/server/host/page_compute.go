@@ -12,7 +12,7 @@ func (t *Tenant) pageOperation(binding *platform.AssetBinding) (platform.Operati
 	if binding == nil || binding.Ref.Kind != platform.AssetCompute || binding.SourceVersion == "" {
 		return platform.Operation{}, 0, fmt.Errorf("choose an exact published code function")
 	}
-	app := t.app(binding.Ref.App)
+	app := t.App(binding.Ref.App)
 	if app != nil && binding.SourceVersion == app.Manifest().Version {
 		if op, version, exists := operationDefinition(app, binding.Ref.Name, 0); exists && version == 0 && op.Binding.Kind == "native" {
 			return op, 0, nil

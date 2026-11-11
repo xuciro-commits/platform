@@ -76,7 +76,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 		}
 		a := t.owner["action:"+s.GetSchema().GetName()]
 		if a == nil {
-			a = t.app(s.GetAuthority())
+			a = t.App(s.GetAuthority())
 			if a == nil {
 				return out, unknown()
 			}
@@ -331,7 +331,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	for _, subscriber := range saved.Event.Subscribers {
-		if t.app(subscriber) == nil {
+		if t.App(subscriber) == nil {
 			t.quarantine(fmt.Errorf("committed result requires missing subscriber %s", subscriber))
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
@@ -428,12 +428,12 @@ func (t *Tenant) finishPreparedSubmission(m platform.Member, candidate preparedA
 		}
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
 	}
-	return t.finishCommittedResult(t.app(candidate.entry.App), m, candidate.hash, committed)
+	return t.finishCommittedResult(t.App(candidate.entry.App), m, candidate.hash, committed)
 }
 
 func (t *Tenant) submitBackground(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return decideOnImage(t, context.Background(), "submit:background", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
-		app := t.app(s.GetAuthority())
+		app := t.App(s.GetAuthority())
 		if app == nil {
 			return nil, unknown()
 		}

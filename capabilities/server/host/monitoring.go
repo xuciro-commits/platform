@@ -213,7 +213,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 	if refusal := t.Admits(m); refusal != nil {
 		return out, refusal
 	}
-	definitions, err := t.definitionsFor(m)
+	definitions, err := t.DefinitionsFor(m)
 	if err != nil {
 		return out, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}

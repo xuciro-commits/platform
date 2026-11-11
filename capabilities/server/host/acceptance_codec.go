@@ -26,7 +26,7 @@ func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt 
 	if err := d.checkFinalConstraints(); err != nil {
 		return nil, err
 	}
-	owner := d.tenant.app(app)
+	owner := d.tenant.App(app)
 	if owner == nil || request.GetAuthority() != app {
 		return nil, fmt.Errorf("decision has no matching submission owner")
 	}
@@ -98,10 +98,10 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	}
 	version := acceptedformat.RecordVersion
 	kind := "record"
-	if publisher, ok := d.tenant.app(app).(platform.AcceptedPublisher); ok &&
+	if publisher, ok := d.tenant.App(app).(platform.AcceptedPublisher); ok &&
 		slices.Contains(publisher.AcceptedPublicationSchemas(), receipt.GetSubmission().GetSchema().GetName()) {
 		kind = "publication"
-	} else if build.CallbackFreeTransition(d.tenant.app(app).Manifest(), receipt.GetSubmission().GetSchema().GetName()) {
+	} else if build.CallbackFreeTransition(d.tenant.App(app).Manifest(), receipt.GetSubmission().GetSchema().GetName()) {
 		kind = "pure-transition"
 	}
 	plan, refusal := d.tenant.planAcceptedEvent(d.events[0])
@@ -186,7 +186,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	if result.Version == 3 || result.Version == 5 && result.Kind == "publication" {
 		schema := receipt.GetSubmission().GetSchema().GetName()
 		var ok bool
-		publisher, ok = t.app(result.App).(platform.AcceptedPublisher)
+		publisher, ok = t.App(result.App).(platform.AcceptedPublisher)
 		if !ok || !slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
 			draft.Unlock()
 			return false, fmt.Errorf("accepted publication has no installer")

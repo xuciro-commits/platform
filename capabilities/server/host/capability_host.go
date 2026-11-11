@@ -62,7 +62,7 @@ func (t *Tenant) describeCapability(m platform.Member, ref platform.AssetRef, ve
 
 func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, bool) {
 	m = t.authorizationMember(m)
-	app := t.app(ref.App)
+	app := t.App(ref.App)
 	if app == nil || version < 1 {
 		return platform.CapabilityDescriptor{}, false
 	}
@@ -110,7 +110,7 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 }
 
 func (t *Tenant) memberQueryVersion(m platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, string, bool) {
-	app := t.app(ref.App)
+	app := t.App(ref.App)
 	if app == nil || ref.Kind != platform.AssetQuery || version < 0 || version > 64 {
 		return platform.NamedQuery{}, "", false
 	}

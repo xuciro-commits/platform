@@ -480,7 +480,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		}
 		for _, member := range []string{"builder", "admin"} {
 			if member == "admin" {
-				live.app("probe").(*monitoringFixture).undoBlocked.Store(false)
+				live.App("probe").(*monitoringFixture).undoBlocked.Store(false)
 			}
 			s := &pb.Submission{TenantId: live.ID, PrincipalId: member, Authority: platform.FlowApp, IdempotencyKey: "monitoring-flow-retry:" + member,
 				Target: &pb.EntityRef{Type: run.RetryTarget.Type, Id: run.RetryTarget.ID}, Schema: &pb.SchemaRef{Name: run.RetrySchema, Version: run.RetrySchemaVersion.Family}, Payload: platform.Raw(map[string]any{})}

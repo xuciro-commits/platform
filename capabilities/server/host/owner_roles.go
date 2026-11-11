@@ -93,12 +93,12 @@ func (s ownerSet) with(apps []platform.App) ownerSet {
 func (s ownerSet) rehome(routes map[string]platform.App) map[string]platform.App {
 	out := make(map[string]platform.App, len(routes))
 	for key, a := range routes {
-		out[key] = s.app(a.Manifest().ID)
+		out[key] = s.App(a.Manifest().ID)
 	}
 	return out
 }
 
-func (s ownerSet) app(id string) platform.App {
+func (s ownerSet) App(id string) platform.App {
 	i, found := s.appIndex[id]
 	if !found {
 		return nil

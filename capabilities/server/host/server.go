@@ -83,7 +83,7 @@ func (h *Host) currentTenants() []*Tenant {
 }
 
 func consoleOf(t *Tenant) platform.IdentitySessions {
-	d, _ := t.app(controlowner.PlatformApp).(platform.IdentitySessions)
+	d, _ := t.App(controlowner.PlatformApp).(platform.IdentitySessions)
 	return d
 }
 
@@ -133,7 +133,7 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 
 func (h *Host) join(t *Tenant, _ platform.IdentitySessions, subject string, now time.Time) bool {
 	_, refusal := decideOnImage(t, context.Background(), "identity:join", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
-		d, ok := t.app(controlowner.PlatformApp).(platform.IdentitySessions)
+		d, ok := t.App(controlowner.PlatformApp).(platform.IdentitySessions)
 		if !ok {
 			return nil, unknown()
 		}
@@ -165,7 +165,7 @@ func (h *Host) tenantsOf(r *http.Request) []MeTenant {
 				continue
 			}
 			name := ""
-			if p, ok := t.app(controlowner.PlatformApp).(platform.IdentityProfile); ok {
+			if p, ok := t.App(controlowner.PlatformApp).(platform.IdentityProfile); ok {
 				name = p.TenantRecord().Name
 			}
 			out = append(out, MeTenant{ID: t.ID, Name: name})

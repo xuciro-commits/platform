@@ -125,7 +125,7 @@ func (t *Tenant) applyOperationCancellations(saved []acceptedformat.OperationCan
 	return nil
 }
 func (h hostView) Operation(app, name string, version int) (platform.Operation, int, bool) {
-	owner := h.t.app(app)
+	owner := h.t.App(app)
 	if owner == nil {
 		return platform.Operation{}, 0, false
 	}

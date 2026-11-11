@@ -200,15 +200,15 @@ func (r *flowExecutionRuntime) DecisionCatalog(ledger *platform.Ledger) *platfor
 }
 func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if app.Manifest().ID == platform.WorkApp {
-		private := r.stateApp(r.tenant.app(platform.WorkApp))
+		private := r.stateApp(r.tenant.App(platform.WorkApp))
 		context := hostView{t: r.tenant, app: private, decision: r.stagedDecision}
 		bindings := context.ownerBindings()
 		bindings.Work = flowExecution{hostView: context, rt: r}
 		r.tenant.services.BindOwner(private, bindings)
 		return r.decideAppFrom(c, private, s, at, r.view, r.release, r.assets)
 	}
-	if bound := r.view.app(app.Manifest().ID); bound != nil {
-		if bound != r.tenant.app(app.Manifest().ID) {
+	if bound := r.view.App(app.Manifest().ID); bound != nil {
+		if bound != r.tenant.App(app.Manifest().ID) {
 			return r.decideAppFrom(c, bound, s, at, r.view, r.release, r.assets)
 		}
 	}
@@ -397,7 +397,7 @@ func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string,
 	if err != nil {
 		return nil, nil, err
 	}
-	return automation.ReadRecordPath(c, typ, id, path, at, view.entity, func(typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
+	return automation.ReadRecordPath(c, typ, id, path, at, view.Entity, func(typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
 		return r.ReadRecord(c, typ, id, at)
 	})
 }

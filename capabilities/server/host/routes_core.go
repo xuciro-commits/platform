@@ -148,7 +148,7 @@ func (h *Host) routesCore(rt *routes) {
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/apps/{app}/reads/{read}", Summary: "A named read selected by its original app; the same owner authorization and field filtering apply"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		name := r.PathValue("read")
-		inputs, err := namedReadInputs(t.app(r.PathValue("app")), name, r.URL.Query())
+		inputs, err := namedReadInputs(t.App(r.PathValue("app")), name, r.URL.Query())
 		if err != nil {
 			Reply(w, nil, err)
 			return
@@ -173,7 +173,7 @@ func (h *Host) routesCore(rt *routes) {
 		} else if h.Development {
 			out.Identities = []platform.LoginIdentity{}
 			for _, t := range h.currentTenants() {
-				if d, ok := t.app(controlowner.PlatformApp).(platform.HostIdentities); ok {
+				if d, ok := t.App(controlowner.PlatformApp).(platform.HostIdentities); ok {
 					out.Identities = append(out.Identities, d.Identities()...)
 				}
 			}

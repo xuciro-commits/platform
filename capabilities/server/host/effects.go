@@ -69,7 +69,7 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 }
 
 func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *kernel.Error) {
-	a := t.app(c.App)
+	a := t.App(c.App)
 	if a == nil || key == "" {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -115,7 +115,7 @@ func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, dat
 }
 
 func (t *Tenant) askHeldEffects(c platform.Caller, kind, entity string, planned []platform.Effect, now time.Time) {
-	a := t.app(c.App)
+	a := t.App(c.App)
 	i := slices.IndexFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind })
 	console := t.automated(c, controlowner.PlatformApp)
 	for _, x := range planned {
@@ -301,7 +301,7 @@ func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, repl
 	if x.Endpoint == acceptedformat.ModelEndpoint {
 		return
 	}
-	if a, ok := t.app(x.App).(platform.Answerer); ok && x.App != "" {
+	if a, ok := t.App(x.App).(platform.Answerer); ok && x.App != "" {
 		a.Answer(t.automation(x.App, replaying), x, o, now)
 	}
 }
@@ -359,7 +359,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 			return nil, invalid
 		}
 		for _, app := range ep.Notifications {
-			if t.app(app) == nil {
+			if t.App(app) == nil {
 				return nil, invalid
 			}
 		}
@@ -373,7 +373,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 	}
 	for _, kind := range ep.Effects {
 		app, name, _ := strings.Cut(kind, "/")
-		if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == name }) {
+		if a := t.App(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == name }) {
 			return nil, invalid
 		}
 	}

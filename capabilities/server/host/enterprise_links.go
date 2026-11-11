@@ -17,7 +17,7 @@ import (
 type enterpriseLinkModel interface{ Model() enterprisemodel.Model }
 
 func (t *Tenant) tenantLinkModel() (enterprisemodel.Model, *kernel.Error) {
-	owner, ok := t.app(enterprisemodel.ID).(enterpriseLinkModel)
+	owner, ok := t.App(enterprisemodel.ID).(enterpriseLinkModel)
 	if !ok {
 		return enterprisemodel.Model{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The enterprise model is unavailable")
 	}

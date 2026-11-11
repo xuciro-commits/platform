@@ -15,7 +15,7 @@ func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, 
 	if rec.GetChangeId() == "" {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	app := t.app(c.App)
+	app := t.App(c.App)
 	if app == nil {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}

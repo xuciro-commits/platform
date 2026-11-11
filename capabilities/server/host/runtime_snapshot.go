@@ -61,7 +61,7 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	if err = t.verifyRuntimeSnapshotTail(ctx, j, seq, current, entries); err != nil {
 		return err
 	}
-	if console, ok := t.app(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
+	if console, ok := t.App(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
 		console.CloseTokenSecretWindows()
 	}
 	if t.procs != nil {

@@ -23,7 +23,7 @@ import (
 )
 
 func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	a, ok := d.tenant.app(app).(platform.App)
+	a, ok := d.tenant.App(app).(platform.App)
 	if !ok || c.Automation || c.Tenant != d.tenant.ID || s.GetAuthority() != app || s.GetPrincipalId() != c.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
 	}
@@ -41,7 +41,7 @@ func (d *stagedDecision) requestApproval(a platform.App, m platform.Member, s *p
 	}); err != nil {
 		return nil, err
 	}
-	owner, ok := d.tenant.app(platform.WorkApp).(platform.ApprovalOwner)
+	owner, ok := d.tenant.App(platform.WorkApp).(platform.ApprovalOwner)
 	if !ok {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The approval owner is unavailable")
 	}
@@ -99,7 +99,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	}
 	seen := map[string]bool{}
 	for _, event := range d.events {
-		owner, ok := d.tenant.app(event.App).(platform.App)
+		owner, ok := d.tenant.App(event.App).(platform.App)
 		if !ok || d.logs[owner.AcceptedLedger()] == nil {
 			return nil, fmt.Errorf("batch decision has no staged ledger for %s", event.App)
 		}
@@ -233,7 +233,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err != nil {
 		return nil, err
 	}
-	owner, ok := t.app(result.App).(platform.App)
+	owner, ok := t.App(result.App).(platform.App)
 	if result.Tenant != t.ID || !ok || owner.AcceptedLedger() != l {
 		return nil, fmt.Errorf("record batch belongs to another tenant or ledger")
 	}
@@ -251,7 +251,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		}
 		return nil, nil
 	}
-	answerOwner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.App)
+	answerOwner, ok := t.App(receipt.GetSubmission().GetAuthority()).(platform.App)
 	if !ok {
 		return nil, fmt.Errorf("record batch answer has no authority")
 	}
@@ -264,13 +264,13 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	ledgers := map[string]*platform.Ledger{}
 	changes := map[string]*pb.ChangeRecord{}
 	for _, decision := range result.Decisions {
-		ra, ok := t.app(decision.Event.App).(platform.App)
+		ra, ok := t.App(decision.Event.App).(platform.App)
 		if !ok {
 			return nil, fmt.Errorf("record batch needs missing authority %s", decision.Event.App)
 		}
 		ledgers[decision.Event.App] = ra.AcceptedLedger()
 		for _, subscriber := range decision.Event.Subscribers {
-			if t.app(subscriber) == nil {
+			if t.App(subscriber) == nil {
 				return nil, fmt.Errorf("record batch needs missing subscriber %s", subscriber)
 			}
 		}
@@ -306,7 +306,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		if decision.Publication == nil {
 			continue
 		}
-		publisher, ok := t.app(decision.Event.App).(platform.AcceptedPublisher)
+		publisher, ok := t.App(decision.Event.App).(platform.AcceptedPublisher)
 		if !ok || !slices.Contains(publisher.AcceptedPublicationSchemas(), decision.Publication.Schema) ||
 			decision.Publication.Schema != decision.Event.Names[0] {
 			return nil, fmt.Errorf("record batch has an invalid publication")
@@ -429,7 +429,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	}
 	for _, decision := range result.Decisions {
 		if p := decision.Publication; p != nil {
-			if err := t.app(decision.Event.App).(platform.AcceptedPublisher).ApplyAcceptedPublication(p.Schema, p.Image); err != nil {
+			if err := t.App(decision.Event.App).(platform.AcceptedPublisher).ApplyAcceptedPublication(p.Schema, p.Image); err != nil {
 				return false, err
 			}
 		}
@@ -462,7 +462,7 @@ func (t *Tenant) applyBatchRows(draft *records.Store, result acceptedformat.Batc
 	for _, image := range result.Rows {
 		ledger := ledgers[image.App]
 		if ledger == nil {
-			if owner, ok := t.app(image.App).(platform.App); ok {
+			if owner, ok := t.App(image.App).(platform.App); ok {
 				ledger = owner.AcceptedLedger()
 			}
 		}
@@ -643,7 +643,7 @@ func (t *Tenant) prepareCallbackRows(target *records.Store, rows []acceptedforma
 			return fmt.Errorf("callback row has an invalid source or owner")
 		}
 		seen[ref] = true
-		if _, ok := t.app(row.App).(platform.Answerer); !ok {
+		if _, ok := t.App(row.App).(platform.Answerer); !ok {
 			return fmt.Errorf("callback row has no effect answer owner")
 		}
 		queued, _ := t.outbound.Get(source.ID)

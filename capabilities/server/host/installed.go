@@ -29,7 +29,7 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 		if err := t.checkRecordSetDeclarations(info); err != nil {
 			return err
 		}
-		if err := platform.CheckConstraints(info, t.entity, true); err != nil {
+		if err := platform.CheckConstraints(info, t.Entity, true); err != nil {
 			return err
 		}
 	}
@@ -40,7 +40,7 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 		if action.Target != e.Type {
 			return fmt.Errorf("%s: action %s targets %s", e.Type, action.Schema, action.Target)
 		}
-		owner := t.app(id)
+		owner := t.App(id)
 		if owner == nil {
 			owner = app
 		}
@@ -53,7 +53,7 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 	}
 	for _, protocol := range e.Protocols {
 		for _, name := range protocol.Reads {
-			t.owner["read:"+name] = t.app(id)
+			t.owner["read:"+name] = t.App(id)
 		}
 	}
 	kept := slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
@@ -86,7 +86,7 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 		if describeErr != nil {
 			return
 		}
-		def, describeErr = t.describeDefinition(def)
+		def, describeErr = t.describer().DescribeDefinition(def)
 		if describeErr != nil {
 			return
 		}
@@ -162,10 +162,10 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, en
 			}
 		}
 	}
-	if err := p.CheckModelBindings(t.entity, t.modelCriteria, engines...); err != nil {
+	if err := p.CheckModelBindings(t.Entity, t.modelCriteria, engines...); err != nil {
 		return err
 	}
-	if err := pageowner.CheckModelQueries(p, t.definitions, t.entity); err != nil {
+	if err := pageowner.CheckModelQueries(p, t.definitions, t.Entity); err != nil {
 		return err
 	}
 	if err := t.checkPageQueries(p); err != nil {
@@ -175,7 +175,7 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, en
 		for _, ports := range []map[string]platform.PagePort{iface.Inputs, iface.Outputs} {
 			for id, port := range ports {
 				if port.Object != nil {
-					info, ok := t.entity(port.Object.Name)
+					info, ok := t.Entity(port.Object.Name)
 					if !ok || info.App != port.Object.App {
 						return fmt.Errorf("page port %s has an unknown object", id)
 					}
@@ -183,7 +183,7 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, en
 			}
 		}
 	}
-	info, known := t.entity(p.Object.Name)
+	info, known := t.Entity(p.Object.Name)
 	if p.Name == "" || !known {
 		return fmt.Errorf("page %s object %s is unavailable", p.Name, p.Object.Name)
 	}
@@ -211,7 +211,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 	if err != nil {
 		return err
 	}
-	if err := pageowner.CheckSelections(safe, t.entity, func(name string) (platform.Action, bool) {
+	if err := pageowner.CheckSelections(safe, t.Entity, func(name string) (platform.Action, bool) {
 		if owner := t.owner["action:"+name]; owner != nil {
 			return owner.Manifest().Actions.Action(name)
 		}
@@ -226,7 +226,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 		return err
 	}
 	for _, binding := range safe.DataBindings {
-		if err := safe.CheckDataBinding(binding, t.entity, t.modelCriteria, t.services.Rules); err != nil {
+		if err := safe.CheckDataBinding(binding, t.Entity, t.modelCriteria, t.services.Rules); err != nil {
 			return fmt.Errorf("page %s binding %s: %w", p.Name, binding.ID, err)
 		}
 		if binding.Query != nil {
@@ -243,7 +243,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if resource.Kind == "service" {
 				switch ref.Kind {
 				case platform.AssetObject:
-					info, ok := t.entity(ref.Name)
+					info, ok := t.Entity(ref.Name)
 					if !ok || info.App != ref.App {
 						return fmt.Errorf("page service owner is unavailable")
 					}
@@ -281,7 +281,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 			owner := t.owner["action:"+trigger.InlineEdit.Action.Name]
 			action, _ := owner.Manifest().Actions.Action(trigger.InlineEdit.Action.Name)
-			info, _ := t.entity(object)
+			info, _ := t.Entity(object)
 			if err := trigger.InlineEdit.CheckTableEdit(info, action); err != nil {
 				return err
 			}
@@ -295,7 +295,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("action parameter owner is unavailable")
 			}
 			action, _ := owner.Manifest().Actions.Action(trigger.Actions[0].Name)
-			info, _ := t.entity(object)
+			info, _ := t.Entity(object)
 			for _, mapping := range trigger.Defaults {
 				field, found := info.Field(mapping.Field)
 				parameter := slices.IndexFunc(action.Payload, func(value platform.Field) bool { return value.Name == mapping.Parameter })
@@ -305,7 +305,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 		}
 		if trigger.Operation != nil {
-			info, ok := t.entity(object)
+			info, ok := t.Entity(object)
 			if !ok {
 				return fmt.Errorf("page operation input object is unavailable")
 			}
@@ -314,7 +314,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 		}
 		if trigger.Function != nil {
-			owner, ok := t.app(trigger.Function.Ref.App).(platform.RetainedFunctionAssets)
+			owner, ok := t.App(trigger.Function.Ref.App).(platform.RetainedFunctionAssets)
 			if !ok {
 				return fmt.Errorf("page function owner is unavailable")
 			}
@@ -352,7 +352,7 @@ func (t *Tenant) checkAction(page, schema, object string) error {
 	return nil
 }
 
-func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
+func (t *Tenant) Entity(typ string) (platform.EntityInfo, bool) {
 	t.Projection.Lock()
 	defer t.Projection.Unlock()
 	et := t.Projection.Type(typ)
@@ -427,7 +427,7 @@ func (t *Tenant) storeApplication(app platform.App, a platform.Application) erro
 	installed := a
 	def := platform.Definition{Ref: platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, Source: "tenant", Version: "1",
 		ContractVersion: 1, Application: &installed}
-	def, err := t.describeDefinition(def)
+	def, err := t.describer().DescribeDefinition(def)
 	if err != nil {
 		return err
 	}
@@ -436,7 +436,7 @@ func (t *Tenant) storeApplication(app platform.App, a platform.Application) erro
 }
 
 func (t *Tenant) checkPageQueries(p platform.Page) error {
-	bindings := pageowner.Bindings{Entity: t.entity, Criteria: t.modelCriteria, Rules: t.services.Rules,
+	bindings := pageowner.Bindings{Entity: t.Entity, Criteria: t.modelCriteria, Rules: t.services.Rules,
 		Operation: t.pageOperation, Definitions: t.definitions, Interface: t.bindInterfaceQuery}
 	return bindings.CheckQueries(p)
 }

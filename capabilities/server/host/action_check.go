@@ -93,7 +93,7 @@ func (t *Tenant) actionCheck(m platform.Member, schema string, request ActionChe
 				result.Conditions = append(result.Conditions, check)
 				continue
 			}
-			outcome, refusal := platform.EvaluateRule(condition.Expr, transition.Criteria.Reads, caller, record, inputs, at, t.entity)
+			outcome, refusal := platform.EvaluateRule(condition.Expr, transition.Criteria.Reads, caller, record, inputs, at, t.Entity)
 			if refusal != nil {
 				check.Message = refusal.Message
 			} else {

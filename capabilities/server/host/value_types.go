@@ -51,7 +51,7 @@ func (h hostView) InstallValueType(c platform.Caller, v platform.ValueType, vers
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetValueType, Name: v.Name}
 	d := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".value-" + strconv.Itoa(version), ContractVersion: 1, ValueType: &v, ValueVersions: map[string]platform.ValueType{}}
-	d, err := h.t.describeDefinition(d)
+	d, err := h.t.describer().DescribeDefinition(d)
 	if err != nil {
 		return err
 	}

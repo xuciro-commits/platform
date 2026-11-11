@@ -35,7 +35,7 @@ func (h hostView) InstallInterface(c platform.Caller, i platform.Interface, vers
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetInterface, Name: i.Name}
 	definition := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".interface-" + strconv.Itoa(version), ContractVersion: 1, Interface: &i}
-	definition, err := h.t.describeDefinition(definition)
+	definition, err := h.t.describer().DescribeDefinition(definition)
 	if err != nil {
 		return err
 	}

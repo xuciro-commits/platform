@@ -411,7 +411,7 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, usage *platform.AIUsage) (platform.App, *pb.Submission) {
 	var ask modelAsk
 	json.Unmarshal([]byte(x.Body), &ask)
-	app := t.app(x.App)
+	app := t.App(x.App)
 	if app == nil || ask.Reply == "" {
 		return nil, nil
 	}
@@ -429,7 +429,7 @@ func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, us
 	}
 	typ, id, _ := strings.Cut(ask.Record, "/")
 	payload, _ := json.Marshal(answer)
-	reply := &pb.Submission{TenantId: t.ID, PrincipalId: "app:" + x.App, Authority: t.authorityOf(typ), Target: &pb.EntityRef{Type: typ, Id: id},
+	reply := &pb.Submission{TenantId: t.ID, PrincipalId: "app:" + x.App, Authority: t.AuthorityOf(typ), Target: &pb.EntityRef{Type: typ, Id: id},
 		Schema: &pb.SchemaRef{Name: ask.Reply, Version: 1}, IdempotencyKey: "answer:" + x.ID, Payload: payload}
 	return app, reply
 }

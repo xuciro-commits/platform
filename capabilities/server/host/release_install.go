@@ -125,9 +125,9 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade, allowContraction b
 }
 func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 	return releaseowner.ValidateSet(releaseowner.ValidationContext{
-		Entities: t.releaseStoredShapes(), Definitions: t.definitions, Lookup: t.entity, Properties: t.checkObjectProperties, RecordSets: t.checkRecordSetDeclarations,
+		Entities: t.releaseStoredShapes(), Definitions: t.definitions, Lookup: t.Entity, Properties: t.checkObjectProperties, RecordSets: t.checkRecordSetDeclarations,
 		Link: func(app string, link platform.LinkType) error {
-			return (hostView{t: t, app: t.app(app)}).ValidateInstallLinkType(link)
+			return (hostView{t: t, app: t.App(app)}).ValidateInstallLinkType(link)
 		},
 		Application: t.checkApplicationExtension, PageQueries: t.checkPageQueries,
 		Navigation: func(page platform.Page, app string) error { return pageowner.CheckNavigation(page, app, t.definitions) },
@@ -142,14 +142,14 @@ func (t *Tenant) releaseStoredShapes() []platform.EntityInfo {
 	return entities
 }
 func (t *Tenant) checkExtensionSet() error {
-	return releaseowner.CheckExtensions(t.releaseStoredShapes(), t.entity)
+	return releaseowner.CheckExtensions(t.releaseStoredShapes(), t.Entity)
 }
 func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]releaseowner.ReleaseExtensionReview, error) {
 	shapes, err := releaseowner.AssetShapes(t.apps, candidate.Assets)
 	if err != nil {
 		return nil, err
 	}
-	return releaseowner.ExtensionReview(candidate, t.releaseStoredShapes(), shapes, t.entity, (hostView{t: t}).EntitySource)
+	return releaseowner.ExtensionReview(candidate, t.releaseStoredShapes(), shapes, t.Entity, (hostView{t: t}).EntitySource)
 }
 
 func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, members ...platform.Member) (*releaseowner.ReleaseUpgradePlan, error) {
@@ -163,7 +163,7 @@ func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, m
 	}
 	records := t.Projection
 	if len(bootstrap) > 0 {
-		prepared, err := t.prepareAcceptedBatch(t.app("build").AcceptedLedger(), bootstrap)
+		prepared, err := t.prepareAcceptedBatch(t.App("build").AcceptedLedger(), bootstrap)
 		if err != nil || prepared == nil {
 			return nil, fmt.Errorf("upgrade bootstrap cannot prepare: %v", err)
 		}

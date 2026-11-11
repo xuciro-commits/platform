@@ -290,7 +290,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before acceptedformat.EffectState, after platform.Effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (*stagedDecision, error) {
 	draft := t.newStagedDecision()
 	draft.at = at
-	if after.State == "failed" && t.app(controlowner.PlatformApp) != nil {
+	if after.State == "failed" && t.App(controlowner.PlatformApp) != nil {
 		admin := platform.NewCaller(draft, platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, controlowner.PlatformApp, false, true)
 		admin.Notify(platform.Notification{Title: "Effect to " + after.Endpoint + " failed: " + after.Event,
 			Body: after.Error + ". Retry it in Settings → Automation once the cause is fixed.",
@@ -308,11 +308,11 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 		}
 	}
 	if before.Endpoint == acceptedformat.ModelEndpoint && (after.State == "rejected" || after.State == "failed" || after.State == "unknown") {
-		recipients := (hostView{t: t, app: t.app(before.App)}).Holding(controlowner.PlatformApp, controlowner.Admin)
+		recipients := (hostView{t: t, app: t.App(before.App)}).Holding(controlowner.PlatformApp, controlowner.Admin)
 		if len(recipients) > 0 && t.tasks != nil {
 			change, _, _ := strings.Cut(before.Key, "#")
 			var receipt *pb.ChangeRecord
-			for _, saved := range t.app(before.App).AcceptedLedger().RecordsFor(t.ID) {
+			for _, saved := range t.App(before.App).AcceptedLedger().RecordsFor(t.ID) {
 				if saved.GetChangeId() == change {
 					receipt = saved
 					break
@@ -403,7 +403,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 	}()
 	if x.App != "" {
 		c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
-		if refusal := draft.authorizeNative(c, "effect:"+x.Endpoint, "action", nil, t.app(x.App) != nil); refusal != nil {
+		if refusal := draft.authorizeNative(c, "effect:"+x.Endpoint, "action", nil, t.App(x.App) != nil); refusal != nil {
 			return refusal
 		}
 	}
@@ -436,7 +436,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		}
 	}
 	c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
-	if app, ok := draft.stateApp(t.app(x.App)).(platform.Answerer); ok {
+	if app, ok := draft.stateApp(t.App(x.App)).(platform.Answerer); ok {
 		source, _ := t.outbound.Get(x.ID)
 		if source.ID == "" || source.App != x.App {
 			return fmt.Errorf("effect callback has no accepted source")
@@ -518,7 +518,7 @@ func (d *stagedDecision) answerRequest(q request, now time.Time) (refusal *kerne
 	reply := &pb.Submission{TenantId: d.tenant.ID, PrincipalId: c.ID, Authority: s.GetAuthority(), Target: s.GetTarget(),
 		Schema: &pb.SchemaRef{Name: q.Reply, Version: 1}, IdempotencyKey: "answer:" + key,
 		CorrelationId: s.GetIdempotencyKey(), Payload: payload}
-	if _, err := platform.Decide(c, d.tenant.app(c.App), reply, now); err != nil {
+	if _, err := platform.Decide(c, d.tenant.App(c.App), reply, now); err != nil {
 		return err
 	}
 	return d.failure

@@ -120,7 +120,7 @@ func (d *stagedDecision) ReadRecord(c platform.Caller, typ, id string, now time.
 }
 
 func (t *Tenant) readRecordPathFrom(store *records.Store, c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
-	return automation.ReadRecordPath(c, typ, id, path, now, t.entity, func(typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
+	return automation.ReadRecordPath(c, typ, id, path, now, t.Entity, func(typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
 		return t.readRecordFrom(store, c, typ, id, at)
 	})
 }
@@ -137,7 +137,7 @@ func (t *Tenant) readRuleQueryFrom(store *records.Store, c platform.Caller, set 
 	if !ok || q.Object != set.Object || (q.By == "") != (set.Of == "") {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule collection declaration is unavailable")
 	}
-	info, known := t.entity(q.Object)
+	info, known := t.Entity(q.Object)
 	if !known {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule collection object is unavailable")
 	}

@@ -139,7 +139,7 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 			return prepared{answer: answer}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 		decision := plan.info.Definition.Decision
-		owner := t.app(decision.Action.App)
+		owner := t.App(decision.Action.App)
 		if owner == nil {
 			return prepared{answer: answer}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Observation decision action is unavailable")
 		}
@@ -208,7 +208,7 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 		if refusal := t.delegatedBound(m, submission); refusal != nil {
 			return answer, refusal
 		}
-		owner := t.app(decision.Action.App)
+		owner := t.App(decision.Action.App)
 		if owner == nil {
 			return answer, unknown()
 		}

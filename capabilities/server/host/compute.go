@@ -92,7 +92,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation needs an explicit authorised member")
 		}
 	}
-	app := t.app(owner)
+	app := t.App(owner)
 	if app == nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation owner is not installed")
 	}
@@ -181,14 +181,14 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 		}
 		aggregate := platform.Expr{}
 		for _, row := range op.Rules.Rows {
-			schema, err := platform.RuleSchema(row.Condition, op.Rules.Reads, t.entity, t.services.Rules)
+			schema, err := platform.RuleSchema(row.Condition, op.Rules.Reads, t.Entity, t.services.Rules)
 			if err != nil {
 				return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			binding.RuleSchemas = append(binding.RuleSchemas, schema)
 			aggregate.Args = append(aggregate.Args, row.Condition)
 		}
-		facts, err := ruleCaller.RuleContext(aggregate, op.Rules.Reads, t.entity, nil, values, r.GetRecordedTime().AsTime())
+		facts, err := ruleCaller.RuleContext(aggregate, op.Rules.Reads, t.Entity, nil, values, r.GetRecordedTime().AsTime())
 		if err != nil {
 			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
 		}
@@ -452,7 +452,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 					if !ok || query.Object != set.Object {
 						return "Rule collection permission was revoked", nil
 					}
-					info, _ := t.entity(set.Object)
+					info, _ := t.Entity(set.Object)
 					if set.Policy == "complete" && info.Scope.LevelFor(member.RolesIn(info.App), t.services.Authorization) != platform.ScopeTenant {
 						return "Complete collection permission was revoked", nil
 					}
@@ -476,7 +476,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 				output, err = op.Rules.DecideSchemas(*b.RuleFacts, b.RuleSchemas, t.services.Rules)
 			}
 		} else if op.Binding.Kind == "native" {
-			executor, ok := t.app(x.App).(platform.OperationExecutor)
+			executor, ok := t.App(x.App).(platform.OperationExecutor)
 			if !ok {
 				err = fmt.Errorf("Native operation executor is not available")
 			} else {

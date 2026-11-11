@@ -32,7 +32,7 @@ type AppPermissions struct {
 }
 
 func (t *Tenant) Permissions() []AppPermissions {
-	d, _ := t.app(controlowner.PlatformApp).(platform.IdentityDirectory)
+	d, _ := t.App(controlowner.PlatformApp).(platform.IdentityDirectory)
 	out := []AppPermissions{}
 	for _, a := range t.liveApps() {
 		m := a.Manifest()
@@ -77,7 +77,7 @@ func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (
 		m = platform.Member{ID: request.Principal, Tenant: request.Tenant}
 	}
 	app := ""
-	if info, exists := t.entity(request.Type); exists {
+	if info, exists := t.Entity(request.Type); exists {
 		app = info.App
 	}
 	c := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
@@ -91,7 +91,7 @@ func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error)
 	}
 	out := Explanation{Member: member, Permission: permission, Roles: []string{}, Allowed: []string{}}
 	if app, name, isRead := strings.Cut(permission, ":read:"); isRead {
-		a := t.app(app)
+		a := t.App(app)
 		if a == nil {
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No app {app}", app)
 		}

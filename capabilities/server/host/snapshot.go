@@ -601,7 +601,7 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]records.St
 func (t *Tenant) verifyCommitted(s *tenantState) error {
 	for key, binding := range s.SubmissionSchemas {
 		app, request, _ := strings.Cut(key, "/")
-		owner := t.app(app)
+		owner := t.App(app)
 		if owner == nil || request == "" || binding.Check() != nil {
 			return fmt.Errorf("tenant %s: schema snapshot %s is incompatible", t.ID, key)
 		}
@@ -648,7 +648,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 				if protojson.Unmarshal(decision.Receipt, receipt) != nil {
 					return fmt.Errorf("invalid composite snapshot receipt")
 				}
-				owner := t.app(decision.Event.App)
+				owner := t.App(decision.Event.App)
 				if owner == nil || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 					return fmt.Errorf("composite snapshot has no accepted receipt")
 				}
@@ -684,7 +684,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 			!result.HasSavedAnswer(sub) || key != result.App+"/"+sub.GetIdempotencyKey() {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s is incompatible", t.ID, key)
 		}
-		owner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.App)
+		owner, ok := t.App(receipt.GetSubmission().GetAuthority()).(platform.App)
 		if !ok || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", t.ID, key)
 		}

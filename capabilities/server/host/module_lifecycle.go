@@ -35,7 +35,7 @@ func (t *Tenant) desiredDisabledOwners() []string {
 func (t *Tenant) checkOwnerRemoval(disabled []string) error {
 	removed := map[string]bool{}
 	for _, id := range disabled {
-		if removed[id] || t.app(id) == nil {
+		if removed[id] || t.App(id) == nil {
 			return fmt.Errorf("Unknown or repeated platform module %s", id)
 		}
 		removed[id] = true

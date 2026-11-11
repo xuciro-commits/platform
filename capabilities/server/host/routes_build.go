@@ -146,7 +146,7 @@ func (h *Host) routesBuild(rt *routes) {
 			if refusal != nil {
 				return ProcessDiagnostics{}, refusal
 			}
-			owner, ok := world.app(build.ID).(build.ConstructionDrafts)
+			owner, ok := world.App(build.ID).(build.ConstructionDrafts)
 			if !ok {
 				return ProcessDiagnostics{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
@@ -399,7 +399,7 @@ func (h *Host) routesBuild(rt *routes) {
 		WriteJSON(w, http.StatusOK, out)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/projects/{id}/access", Summary: "A project's members and roles; owners, builders and administrators also get the people they may add", Answer: platform.ProjectAccessView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		d, _ := t.app(controlowner.PlatformApp).(platform.ProjectAccess)
+		d, _ := t.App(controlowner.PlatformApp).(platform.ProjectAccess)
 		if d == nil || !m.Holds(build.ID, build.Builder) && !m.Holds(controlowner.PlatformApp, controlowner.Admin) {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED})
 			return

@@ -71,11 +71,11 @@ func (h hostView) TrainingEvidence(event platform.Event) platform.AITrainingEvid
 		if len(run.Signals) > 0 {
 			candidate.Critique = run.Signals[len(run.Signals)-1].Detail
 		}
-		owner := h.t.app(draft.Owner)
+		owner := h.t.App(draft.Owner)
 		if owner != nil {
 			action, _ := owner.Manifest().Actions.Action(draft.Action)
 			allowed := map[string]bool{}
-			info, _ := h.t.entity(draft.Type)
+			info, _ := h.t.Entity(draft.Type)
 			for _, field := range action.Payload {
 				if field.Type != "string" && field.Type != "text" && field.Type != "integer" && field.Type != "decimal" && field.Type != "boolean" && field.Type != "number" {
 					continue
@@ -119,7 +119,7 @@ func (h hostView) TrainingReadable(member platform.Member, candidate platform.AI
 	}
 	c := platform.NewCaller(runtime{t: h.t}, member, platform.AIApp, false, false)
 	if candidate.ActionDefinition != "" {
-		owner := h.t.app(candidate.App)
+		owner := h.t.App(candidate.App)
 		if owner == nil {
 			return "The proposed action definition changed"
 		}

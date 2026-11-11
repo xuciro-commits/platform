@@ -91,7 +91,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	for ledger, log := range d.logs {
 		suspended := d.receiving[ledger]
 		for id := range d.active {
-			owner := d.tenant.app(id)
+			owner := d.tenant.App(id)
 			if owner != nil && owner.AcceptedLedger() == ledger {
 				suspended = true
 				break
@@ -231,7 +231,7 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 
 func (t *Tenant) validateAcceptedObservations(saved []acceptedformat.Observation) error {
 	for _, item := range saved {
-		owner, ok := t.app(item.App).(platform.AcceptedObserver)
+		owner, ok := t.App(item.App).(platform.AcceptedObserver)
 		if !ok || len(item.Body) == 0 {
 			return fmt.Errorf("accepted observation needs missing projection %s", item.App)
 		}
@@ -244,7 +244,7 @@ func (t *Tenant) validateAcceptedObservations(saved []acceptedformat.Observation
 
 func (t *Tenant) applyAcceptedObservations(saved []acceptedformat.Observation) error {
 	for _, item := range saved {
-		if err := t.app(item.App).(platform.AcceptedObserver).ApplyObserved(item.Body); err != nil {
+		if err := t.App(item.App).(platform.AcceptedObserver).ApplyObserved(item.Body); err != nil {
 			return err
 		}
 	}

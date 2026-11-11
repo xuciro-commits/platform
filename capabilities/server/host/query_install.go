@@ -18,7 +18,7 @@ func (h hostView) ValidateInstallQuery(q platform.NamedQuery) error {
 		_, err := h.t.bindInterfaceQuery(q)
 		return err
 	}
-	info, ok := h.t.entity(q.Object)
+	info, ok := h.t.Entity(q.Object)
 	if !ok || info.App != h.app.Manifest().ID {
 		return fmt.Errorf("query needs its owner's published object")
 	}
@@ -44,7 +44,7 @@ func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetQuery, Name: q.Name}
 	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".query-" + strconv.Itoa(version), ContractVersion: 1, Query: &q}
-	def, err := h.t.describeDefinition(def)
+	def, err := h.t.describer().DescribeDefinition(def)
 	if err != nil {
 		return err
 	}

@@ -48,7 +48,7 @@ func (t *Tenant) registerDefinitions() error {
 		}
 		if def.Flow == nil {
 			var err error
-			def, err = t.describeDefinition(def)
+			def, err = t.describer().DescribeDefinition(def)
 			if err != nil {
 				return err
 			}
@@ -246,14 +246,14 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 }
 
 func (t *Tenant) buildDefinitions(m platform.Member) []platform.Definition {
-	definitions, err := t.definitionsFor(m)
+	definitions, err := t.DefinitionsFor(m)
 	if err != nil {
 		return []platform.Definition{}
 	}
 	return definitions
 }
 
-func (t *Tenant) definitionsFor(m platform.Member) ([]platform.Definition, error) {
+func (t *Tenant) DefinitionsFor(m platform.Member) ([]platform.Definition, error) {
 	registered, err := t.ownedAssetDefinitions(t.definitions)
 	if err != nil {
 		return nil, err

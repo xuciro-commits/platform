@@ -18,7 +18,7 @@ import (
 )
 
 func (d *stagedDecision) DispatchTransport() platform.DispatchTransport {
-	return hostView{t: d.tenant, app: d.tenant.app(build.ID), decision: d}
+	return hostView{t: d.tenant, app: d.tenant.App(build.ID), decision: d}
 }
 
 func (h hostView) FreezeDispatch(c platform.Caller, subject, action string, spec platform.Dispatch, at time.Time) (string, []platform.ReleaseAsset, error) {

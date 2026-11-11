@@ -106,7 +106,7 @@ func (t *Tenant) prepareEvaluateRelease(m platform.Member, request ReleaseEvalua
 	if asset.Ref.Name == "" {
 		return "", fmt.Errorf("the saved candidate does not contain the plan's function")
 	}
-	versionText, found := strings.CutPrefix(asset.SourceVersion, t.app(build.ID).Manifest().Version+".function-")
+	versionText, found := strings.CutPrefix(asset.SourceVersion, t.App(build.ID).Manifest().Version+".function-")
 	version, parseErr := strconv.Atoi(versionText)
 	var definition platform.AIFunction
 	if !found || parseErr != nil || version < 1 || json.Unmarshal(asset.Body, &definition) != nil ||
@@ -172,7 +172,7 @@ func (t *Tenant) prepareEvaluateRelease(m platform.Member, request ReleaseEvalua
 	sub := &pb.Submission{TenantId: t.ID, PrincipalId: "app:" + build.ID, Authority: build.ID,
 		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: build.EvaluationType, Id: id},
 		Schema: &pb.SchemaRef{Name: build.SchemaEvaluationStart, Version: 1}, Payload: platform.Raw(start)}
-	app := t.app(build.ID).(platform.App)
+	app := t.App(build.ID).(platform.App)
 	if _, refusal := t.accept(app, platform.Member{ID: sub.PrincipalId, Tenant: t.ID}, sub, now, acceptOptions{automation: true}); refusal != nil {
 		return "", fmt.Errorf("function evaluation was refused: %s", refusal.Message)
 	}

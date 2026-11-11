@@ -156,7 +156,7 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 		counts[resource.Type]++
 	}
 	resources := map[string]bool{}
-	if owner := t.app(build.ID); owner != nil {
+	if owner := t.App(build.ID); owner != nil {
 		for _, entity := range owner.Manifest().Entities {
 			resources[entity.Type] = true
 		}

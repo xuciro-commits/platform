@@ -138,7 +138,7 @@ func (t *Tenant) AppIDs() []string {
 }
 
 func (t *Tenant) manifestById(id string) platform.Manifest {
-	a := t.app(id)
+	a := t.App(id)
 	if a == nil {
 		return platform.Manifest{}
 	}

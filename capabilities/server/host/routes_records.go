@@ -21,7 +21,7 @@ import (
 )
 
 func enterpriseApp(t *Tenant) platform.EnterpriseQueries {
-	d, _ := t.app(enterprisemodel.ID).(platform.EnterpriseQueries)
+	d, _ := t.App(enterprisemodel.ID).(platform.EnterpriseQueries)
 	return d
 }
 
@@ -65,7 +65,7 @@ func (h *Host) routesRecords(rt *routes) {
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/record-sets/{type}/{id}/{name}", Summary: "Read a bounded declared collection through its original owner", Answer: platform.RecordSetResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 
-		info, ok := t.entity(r.PathValue("type"))
+		info, ok := t.Entity(r.PathValue("type"))
 		if !ok {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable"))
 			return
@@ -322,7 +322,7 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.
 	if !ok || !m.Holds(build.ID, build.Builder) {
 		return record, nil
 	}
-	owner, ok := t.app(build.ID).(build.ConstructionDraftReader)
+	owner, ok := t.App(build.ID).(build.ConstructionDraftReader)
 	if !ok {
 		return record, nil
 	}

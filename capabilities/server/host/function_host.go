@@ -32,7 +32,7 @@ func (d *stagedDecision) RequestFunction(c platform.Caller, r *pb.ChangeRecord, 
 }
 
 func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest, store *records.Store, pending []platform.Effect) (platform.FunctionCall, platform.Effect, *kernel.Error) {
-	ctx := agentowner.FunctionContext{Tenant: t.ID, App: t.app, Member: t.Member, AuthorityOf: t.authorityOf,
+	ctx := agentowner.FunctionContext{Tenant: t.ID, App: t.App, Member: t.Member, AuthorityOf: t.AuthorityOf,
 		Authorize: func(c platform.Caller, owner string, f platform.AIFunction, sources []string, definition string, at time.Time) *kernel.Error {
 			return authorizationRefusal(t.authorizeCapability(c, owner, f.Name, f.Roles, f.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition}))
 		},
@@ -121,7 +121,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 }
 
 func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
-	ctx := agentowner.FunctionAccess{Tenant: t.ID, Member: t.Member, AuthorityOf: t.authorityOf, Suspended: t.suspended,
+	ctx := agentowner.FunctionAccess{Tenant: t.ID, Member: t.Member, AuthorityOf: t.AuthorityOf, Suspended: t.suspended,
 		Authorize: func(member platform.Member, owner string, f platform.AIFunction, sources []string, definition string, at time.Time) bool {
 			c := platform.NewCaller(runtime{t: t, scoped: true}, member, owner, false, false)
 			return t.authorizeCapability(c, owner, f.Name, f.Roles, true, authorizationDetails{At: at, Sources: sources, Definition: definition}).Allow
@@ -177,7 +177,7 @@ func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, vers
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetFunction, Name: f.Name}
 	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".function-" + strconv.Itoa(version), ContractVersion: 1, Function: &f}
-	def, err := h.t.describeDefinition(def)
+	def, err := h.t.describer().DescribeDefinition(def)
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, vers
 }
 
 func (h hostView) Function(app, name string, version int) (platform.AIFunction, int, bool) {
-	return agentowner.FunctionDefinition(h.t.app(app), name, version)
+	return agentowner.FunctionDefinition(h.t.App(app), name, version)
 }
 
 func (t *Tenant) functionClosure(app string, f platform.AIFunction, version int, retained *string) (platform.ReleaseCandidate, string, error) {
@@ -208,7 +208,7 @@ func (t *Tenant) functionClosure(app string, f platform.AIFunction, version int,
 	}
 	sourceVersion := ""
 	if version > 0 {
-		sourceVersion = t.app(app).Manifest().Version + ".function-" + strconv.Itoa(version)
+		sourceVersion = t.App(app).Manifest().Version + ".function-" + strconv.Itoa(version)
 	}
 	return t.capabilityClosure(platform.AssetRef{App: app, Kind: platform.AssetFunction, Name: f.Name}, body, sourceVersion, retained)
 }

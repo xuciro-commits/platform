@@ -90,7 +90,7 @@ func (t *Tenant) ResourceRole(m platform.Member, project string) string {
 	if m.Holds("platform", "admin") || build.HoldsIndependentRole(m, build.Builder) {
 		return platform.ProjectOwnerRole
 	}
-	if access, ok := t.app("platform").(platform.ProjectAccess); ok {
+	if access, ok := t.App("platform").(platform.ProjectAccess); ok {
 		return access.ProjectRole(m.ID, project)
 	}
 	return ""
@@ -220,7 +220,7 @@ func (t *Tenant) resourceDirectory(m platform.Member) ResourceDirectory {
 }
 
 func (t *Tenant) initializeResources(now time.Time) error {
-	owner := t.app(build.ID)
+	owner := t.App(build.ID)
 	if owner == nil {
 		return nil
 	}
@@ -390,7 +390,7 @@ type WorkingStateList struct {
 
 func (h *Host) routesResources(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/markings/{id}/resources", Summary: "Resources carrying a marking, without their data", Answer: []ResourceEntry{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		caller := t.caller(m, t.app("platform"), false)
+		caller := t.caller(m, t.App("platform"), false)
 		if refusal := authorizationRefusal(t.authorizeNative(caller, "GET /v1/markings/{id}/resources", "read", []string{"admin", platform.Auditor}, true)); refusal != nil {
 			Reply(w, nil, refusal)
 			return
@@ -422,7 +422,7 @@ func (h *Host) routesResources(rt *routes) {
 			Reply(w, nil, refusal)
 			return
 		}
-		projects, required, err := t.app(build.ID).(*build.Build).BranchReviewRequirement(t.branchCaller(m), branch)
+		projects, required, err := t.App(build.ID).(*build.Build).BranchReviewRequirement(t.branchCaller(m), branch)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -443,7 +443,7 @@ func (h *Host) routesResources(rt *routes) {
 			}
 			if eligible {
 				name := id
-				if profile, ok := t.app("platform").(platform.IdentityProfile); ok {
+				if profile, ok := t.App("platform").(platform.IdentityProfile); ok {
 					if display := profile.Account(id).DisplayName; display != "" {
 						name = display
 					}

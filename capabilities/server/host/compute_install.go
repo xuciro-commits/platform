@@ -33,7 +33,7 @@ func (h hostView) validateOperation(o platform.Operation, engine platform.RuleEn
 			if row.Condition.Kind != "boolean" {
 				return fmt.Errorf("row %d requires boolean", i+1)
 			}
-			if _, err := platform.RuleSchema(row.Condition, o.Rules.Reads, h.t.entity, engine); err != nil {
+			if _, err := platform.RuleSchema(row.Condition, o.Rules.Reads, h.t.Entity, engine); err != nil {
 				return err
 			}
 			if err := o.Output.Validate(row.Result, o.Limits.MaxOutputBytes); err != nil {
@@ -77,7 +77,7 @@ func (h hostView) InstallOperation(c platform.Caller, o platform.Operation, vers
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetCompute, Name: o.Name}
 	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".compute-" + strconv.Itoa(version), ContractVersion: 1, Operation: &o}
-	def, err := h.t.describeDefinition(def)
+	def, err := h.t.describer().DescribeDefinition(def)
 	if err != nil {
 		return err
 	}

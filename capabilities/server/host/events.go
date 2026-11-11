@@ -31,7 +31,7 @@ func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan
 		}
 	}
 	for _, id := range t.listeners {
-		if id != e.App && t.app(id).(platform.Listener).Interested(names, e) &&
+		if id != e.App && t.App(id).(platform.Listener).Interested(names, e) &&
 			!slices.Contains(plan.Subscribers, id) {
 			plan.Subscribers = append(plan.Subscribers, id)
 		}

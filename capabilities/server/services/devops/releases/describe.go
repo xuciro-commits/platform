@@ -1,7 +1,4 @@
-package host
-
-import releaseowner "platformserver/services/devops/releases"
-import "platformserver/services/functions/authoring"
+package releases
 
 import (
 	"encoding/json"
@@ -13,6 +10,19 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
+
+type DescribeHost interface {
+	App(id string) platform.App
+	Entity(typ string) (platform.EntityInfo, bool)
+	AuthorityOf(dataClass string) string
+	ProtocolProvider(protocol string) (string, bool)
+	Admits(platform.Member) *kernel.Error
+	DefinitionsFor(platform.Member) ([]platform.Definition, error)
+}
+
+type Describer struct{ host DescribeHost }
+
+func NewDescriber(host DescribeHost) Describer { return Describer{host: host} }
 
 type DependencyView struct {
 	Descriptors []platform.Dependencies `json:"descriptors"`
@@ -26,7 +36,7 @@ type ProvidedCapability struct {
 	Capability platform.Capability `json:"capability"`
 }
 
-func (t *Tenant) definitionAsset(def platform.Definition) (platform.ReleaseAsset, error) {
+func (ds Describer) DefinitionAsset(def platform.Definition) (platform.ReleaseAsset, error) {
 	var body any
 	switch {
 	case def.Entity != nil:
@@ -35,17 +45,17 @@ func (t *Tenant) definitionAsset(def platform.Definition) (platform.ReleaseAsset
 			Entity platform.EntityInfo `json:"entity"`
 		}{def.Ref.Name, *def.Entity}
 		if def.Source == "code" {
-			if owner := t.app(def.Ref.App); owner != nil {
+			if owner := ds.host.App(def.Ref.App); owner != nil {
 				for _, entity := range owner.Manifest().Entities {
 					if entity.Type == def.Ref.Name {
-						body = releaseowner.CodeObjectDescriptor(entity, *def.Entity)
+						body = CodeObjectDescriptor(entity, *def.Entity)
 						break
 					}
 				}
 			}
 		}
 	case def.Action != nil:
-		body = releaseowner.CodeActionDescriptor(*def.Action)
+		body = CodeActionDescriptor(*def.Action)
 	case def.Page != nil:
 		body = def.Page
 	case def.Application != nil:
@@ -81,7 +91,7 @@ func (t *Tenant) definitionAsset(def platform.Definition) (platform.ReleaseAsset
 	return platform.ReleaseAsset{Ref: def.Ref, SourceVersion: def.Version, ContractVersion: def.ContractVersion, Body: raw}, err
 }
 
-func (t *Tenant) describeOwnedAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
+func (ds Describer) DescribeOwnedAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
 	if !slices.Contains([]platform.AssetKind{platform.AssetObject, platform.AssetAction, platform.AssetAgent, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute}, asset.Ref.Kind) {
 		return platform.WithDependencies(asset)
 	}
@@ -97,12 +107,12 @@ func (t *Tenant) describeOwnedAsset(asset platform.ReleaseAsset) (platform.Relea
 			for key, item := range value {
 				if key == "ref" || key == "target" || key == "object" || key == "extends" {
 					if name, ok := item.(string); ok && name != "" {
-						if info, exists := t.entity(name); exists {
+						if info, exists := ds.host.Entity(name); exists {
 							prefix, _, _ := strings.Cut(name, ".")
 							if prefix != info.App {
 								bindings[name] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: name}
 							}
-						} else if name == "enterprise.element" || key == "target" && t.authorityOf(name) != "" {
+						} else if name == "enterprise.element" || key == "target" && ds.host.AuthorityOf(name) != "" {
 							bindings[name] = platform.AssetRef{}
 						}
 					}
@@ -111,7 +121,7 @@ func (t *Tenant) describeOwnedAsset(asset platform.ReleaseAsset) (platform.Relea
 					if types, ok := item.([]any); ok {
 						for _, value := range types {
 							if name, ok := value.(string); ok {
-								if info, exists := t.entity(name); exists && strings.SplitN(name, ".", 2)[0] != info.App {
+								if info, exists := ds.host.Entity(name); exists && strings.SplitN(name, ".", 2)[0] != info.App {
 									bindings[name] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: name}
 								}
 							}
@@ -166,7 +176,7 @@ func (t *Tenant) describeOwnedAsset(asset platform.ReleaseAsset) (platform.Relea
 			}
 			if name, ok := strings.CutPrefix(tool, "query:"); ok {
 				toolBindings[tool] = platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetQuery, Name: name}
-			} else if owner := t.app(asset.Ref.App); owner != nil {
+			} else if owner := ds.host.App(asset.Ref.App); owner != nil {
 				if _, ok := owner.Manifest().Actions.Action(tool); ok {
 					toolBindings[tool] = platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetAction, Name: tool}
 				}
@@ -184,8 +194,8 @@ func (t *Tenant) describeOwnedAsset(asset platform.ReleaseAsset) (platform.Relea
 		protocol, _, _ := strings.Cut(use, "#")
 		name, _, _ := strings.Cut(protocol, "/")
 		ref := platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetProtocol, Name: name}
-		if provider, ok := t.resolve(protocol); ok {
-			ref.App = provider.provider.Manifest().ID
+		if provider, ok := ds.host.ProtocolProvider(protocol); ok {
+			ref.App = provider
 		}
 		protocols[protocol] = ref
 	}
@@ -204,45 +214,17 @@ func (t *Tenant) describeOwnedAsset(asset platform.ReleaseAsset) (platform.Relea
 	return platform.WithDependencies(asset)
 }
 
-func (t *Tenant) describeDefinition(def platform.Definition) (platform.Definition, error) {
-	asset, err := t.definitionAsset(def)
+func (ds Describer) DescribeDefinition(def platform.Definition) (platform.Definition, error) {
+	asset, err := ds.DefinitionAsset(def)
 	if err != nil {
 		return def, err
 	}
-	asset, err = t.describeOwnedAsset(asset)
+	asset, err = ds.DescribeOwnedAsset(asset)
 	if err != nil {
 		return def, err
 	}
 	def.Requires, def.Provides = asset.Requires, asset.Provides
 	return def, nil
-}
-
-func (t *Tenant) visibleProvides(def platform.Definition, m platform.Member, entities map[string]platform.EntityInfo) []platform.Capability {
-	provided := def.Provides
-	if def.Action != nil || def.Query != nil || def.Function != nil || def.Operation != nil || def.Entity != nil || def.Protocol != nil || def.Observation != nil {
-		if projected, err := t.describeDefinition(def); err == nil {
-			provided = projected.Provides
-		} else {
-			return []platform.Capability{}
-		}
-	}
-	out := []platform.Capability{}
-	for _, capability := range provided {
-		if len(capability.Roles) > 0 && !m.May(def.Ref.App, capability.Name, capability.Roles).Allow {
-			continue
-		}
-		if capability.Kind == "query" && def.Query != nil {
-			input, output := authoring.QueryCapabilitySchemas(*def.Query, entities[def.Query.Object])
-			if input != nil {
-				capability.Inputs = *input
-			}
-			if output != nil {
-				capability.Outputs = *output
-			}
-		}
-		out = append(out, capability)
-	}
-	return out
 }
 
 func dependencyDirections(descriptors []platform.Dependencies, focus platform.AssetRef) ([]platform.AssetRef, []platform.AssetRef, error) {
@@ -261,12 +243,12 @@ func dependencyDirections(descriptors []platform.Dependencies, focus platform.As
 	return slices.DeleteFunc(requires, func(ref platform.AssetRef) bool { return ref == focus }), slices.DeleteFunc(usedBy, func(ref platform.AssetRef) bool { return ref == focus }), nil
 }
 
-func (t *Tenant) DependencyView(m platform.Member, focus platform.AssetRef, app string) (DependencyView, *kernel.Error) {
+func (ds Describer) DependencyView(m platform.Member, focus platform.AssetRef, app string) (DependencyView, *kernel.Error) {
 	view := DependencyView{Descriptors: []platform.Dependencies{}, Requires: []platform.AssetRef{}, UsedBy: []platform.AssetRef{}}
-	if err := t.Admits(m); err != nil {
+	if err := ds.host.Admits(m); err != nil {
 		return view, err
 	}
-	definitions, err := t.definitionsFor(m)
+	definitions, err := ds.host.DefinitionsFor(m)
 	if err != nil {
 		return view, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Asset dependencies are unavailable")
 	}
@@ -295,15 +277,15 @@ func (t *Tenant) DependencyView(m platform.Member, focus platform.AssetRef, app 
 	return view, nil
 }
 
-func (t *Tenant) ProvidedCapabilities(m platform.Member, kind, side string) ([]ProvidedCapability, *kernel.Error) {
-	if err := t.Admits(m); err != nil {
+func (ds Describer) ProvidedCapabilities(m platform.Member, kind, side string) ([]ProvidedCapability, *kernel.Error) {
+	if err := ds.host.Admits(m); err != nil {
 		return nil, err
 	}
 	if kind != "" && !slices.Contains([]string{"action", "query", "function", "operation", "protocol", "interface"}, kind) ||
 		side != "" && !slices.Contains([]string{"pure", "effect", "authoritative"}, side) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a valid capability kind and side")
 	}
-	definitions, err := t.definitionsFor(m)
+	definitions, err := ds.host.DefinitionsFor(m)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Asset capabilities are unavailable")
 	}

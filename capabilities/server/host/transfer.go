@@ -104,7 +104,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 			}
 			key := fmt.Sprintf("import:%s:%d", file, r.Row)
 			verb, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
-				ledger := t.app(view.Info().App).AcceptedLedger()
+				ledger := t.App(view.Info().App).AcceptedLedger()
 				if ledger.AcceptedFor(t.ID, key) != nil {
 					return ".create", nil
 				}

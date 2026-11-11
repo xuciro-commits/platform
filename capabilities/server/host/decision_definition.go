@@ -12,7 +12,7 @@ import (
 type DecisionDefinition = platform.DecisionDefinition
 
 func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, release string, retained ...[]platform.ReleaseAsset) (*platform.DecisionDefinition, error) {
-	if declared := t.app(owner.Manifest().ID); declared != nil {
+	if declared := t.App(owner.Manifest().ID); declared != nil {
 		owner = declared
 	}
 	action, exists := owner.Manifest().Actions.Action(request.GetSchema().GetName())

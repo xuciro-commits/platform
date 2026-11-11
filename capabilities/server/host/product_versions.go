@@ -54,7 +54,7 @@ func (t *Tenant) productDescriptor(candidate platform.ReleaseCandidate, request 
 	product := platform.PackageDescriptor{ID: request.ID, Version: request.Version, Title: request.Title, Namespace: request.Namespace, Requires: request.Requires}
 	external := map[platform.AssetRef]bool{}
 	if len(product.Requires) > 0 {
-		views := t.app("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
+		views := t.App("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
 		index := &platform.PackageIndex{}
 		installed := map[string]platform.PackageDescriptor{}
 		for _, view := range views {

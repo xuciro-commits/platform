@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	dataowner "platformserver/services/data"
+	releaseowner "platformserver/services/devops/releases"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"strconv"
@@ -25,7 +26,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 		lang := t.Language(m, r)
 		view := MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
 			Language: lang, Languages: t.i18n.Languages(), Preferred: m.Language, Currency: t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)}
-		if d, ok := t.app(controlowner.PlatformApp).(platform.IdentityProfile); ok {
+		if d, ok := t.App(controlowner.PlatformApp).(platform.IdentityProfile); ok {
 			view.Account, view.Tenant = d.Account(m.ID), d.TenantRecord()
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(view, lang))
@@ -112,28 +113,28 @@ func (h *Host) routesDiscovery(rt *routes) {
 		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		definitions, err := t.definitionsFor(m)
+		definitions, err := t.DefinitionsFor(m)
 		if err != nil {
 			http.Error(w, "Asset discovery is unavailable because accepted owner metadata could not be read", http.StatusInternalServerError)
 			return
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(definitions, t.Language(m, r)))
 	})
-	rt.metadata(transport.Route{Pattern: "GET /v1/dependencies", Summary: "Authorized declarations with forward dependencies and reverse impact from the same frozen description", Query: []transport.Param{{Name: "app", Description: "Asset owner; used alone to select an application"}, {Name: "kind", Description: "Focused asset kind"}, {Name: "name", Description: "Focused asset name"}}, Answer: DependencyView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/dependencies", Summary: "Authorized declarations with forward dependencies and reverse impact from the same frozen description", Query: []transport.Param{{Name: "app", Description: "Asset owner; used alone to select an application"}, {Name: "kind", Description: "Focused asset kind"}, {Name: "name", Description: "Focused asset name"}}, Answer: releaseowner.DependencyView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		query := r.URL.Query()
 		var focus platform.AssetRef
 		if query.Get("kind") != "" || query.Get("name") != "" {
 			focus = platform.AssetRef{App: query.Get("app"), Kind: platform.AssetKind(query.Get("kind")), Name: query.Get("name")}
 		}
-		answer, err := t.DependencyView(m, focus, query.Get("app"))
+		answer, err := t.describer().DependencyView(m, focus, query.Get("app"))
 		if err != nil {
 			Reply(w, nil, err)
 			return
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
-	rt.metadata(transport.Route{Pattern: "GET /v1/provides", Summary: "Capabilities offered by the same authorized asset descriptions, optionally selected by kind and side", Query: []transport.Param{{Name: "kind", Description: "action, query, function, operation, protocol or interface"}, {Name: "side", Description: "pure, effect or authoritative"}}, Answer: []ProvidedCapability{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		answer, err := t.ProvidedCapabilities(m, r.URL.Query().Get("kind"), r.URL.Query().Get("side"))
+	rt.metadata(transport.Route{Pattern: "GET /v1/provides", Summary: "Capabilities offered by the same authorized asset descriptions, optionally selected by kind and side", Query: []transport.Param{{Name: "kind", Description: "action, query, function, operation, protocol or interface"}, {Name: "side", Description: "pure, effect or authoritative"}}, Answer: []releaseowner.ProvidedCapability{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, err := t.describer().ProvidedCapabilities(m, r.URL.Query().Get("kind"), r.URL.Query().Get("side"))
 		if err != nil {
 			Reply(w, nil, err)
 			return

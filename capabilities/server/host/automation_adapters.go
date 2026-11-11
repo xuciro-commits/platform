@@ -10,7 +10,7 @@ import (
 )
 
 func (h hostView) flowBindings() automation.FlowBindingContext {
-	return automation.FlowBindingContext{App: h.t.app, Asset: h.t.flowReleaseAsset, Assets: func() ([]platform.ReleaseAsset, error) { return h.t.releaseAssetsLocked(nil, false) }, Active: h.t.releases.Active, Candidate: h.t.releases.Candidate, Applications: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
+	return automation.FlowBindingContext{App: h.t.App, Asset: h.t.flowReleaseAsset, Assets: func() ([]platform.ReleaseAsset, error) { return h.t.releaseAssetsLocked(nil, false) }, Active: h.t.releases.Active, Candidate: h.t.releases.Candidate, Applications: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 		return h.t.bindApplications(ref, release, dependencies)
 	}, CloseCandidate: h.t.candidateWithBindings, SameRetained: sameRetainedCapability, CodeMatches: releaseowner.ImmutableCodeAssetMatches}
 }
@@ -32,7 +32,7 @@ func (t *Tenant) nativeFlowAsset(owner platform.App, name string, version int) (
 	return provider.NativeFlowAsset(manifest, name, version, releaseowner.UniqueRefs(refs))
 }
 func (t *Tenant) flowReleaseAsset(app, name string, version int) (platform.ReleaseAsset, error) {
-	owner := t.app(app)
+	owner := t.App(app)
 	if owner == nil {
 		return platform.ReleaseAsset{}, fmt.Errorf("flow owner is unavailable")
 	}

@@ -24,7 +24,7 @@ func (s authorizationSources) LookupMember(id string) (platform.Member, bool) { 
 func (s authorizationSources) DeclaredPrincipal(id string) bool {
 	declared := s.t.identity == nil || id == "host:maintenance"
 	if app, service := strings.CutPrefix(id, "app:"); service {
-		declared = s.t.app(app) != nil
+		declared = s.t.App(app) != nil
 	}
 	if agent, generated := strings.CutPrefix(id, "agent:"); generated && s.t.agents != nil {
 		_, declared = s.t.agents.AgentDeclaration(agent)
@@ -32,7 +32,7 @@ func (s authorizationSources) DeclaredPrincipal(id string) bool {
 	return declared
 }
 
-func (s authorizationSources) App(id string) platform.App { return s.t.app(id) }
+func (s authorizationSources) App(id string) platform.App { return s.t.App(id) }
 
 func (s authorizationSources) ActionOwner(action string) platform.App {
 	if !s.t.resourceActionActive(action) {

@@ -5,6 +5,7 @@ import records "platformserver/kernel/records"
 import (
 	"maps"
 	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/functions/authoring"
 	"slices"
 	"strconv"
 	"strings"
@@ -252,7 +253,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				return !ok
 			})
 			projected.Reads = slices.DeleteFunc(slices.Clone(projected.Reads), func(name string) bool {
-				for _, provision := range t.app(def.Ref.App).Manifest().Provides {
+				for _, provision := range t.App(def.Ref.App).Manifest().Provides {
 					if provision.Protocol.Name == projected.Name {
 						return !t.authorizeEntry(m, def.Ref.App, provision.Reads[name], "read", Now()).Allow
 					}
@@ -404,7 +405,7 @@ func retainVisibleDefinitionVersions[V any](versions map[string]V, current strin
 type retainedPageDefinitionSources struct{ tenant *Tenant }
 
 func (s retainedPageDefinitionSources) function(binding platform.AssetBinding) (platform.AIFunction, bool) {
-	app := s.tenant.app(binding.Ref.App)
+	app := s.tenant.App(binding.Ref.App)
 	owner, ok := app.(platform.FunctionDefinitions)
 	if !ok {
 		return platform.AIFunction{}, false
@@ -420,4 +421,32 @@ func (s retainedPageDefinitionSources) function(binding platform.AssetBinding) (
 func (s retainedPageDefinitionSources) operation(binding *platform.AssetBinding) (platform.Operation, bool) {
 	value, _, err := s.tenant.pageOperation(binding)
 	return value, err == nil
+}
+
+func (t *Tenant) visibleProvides(def platform.Definition, m platform.Member, entities map[string]platform.EntityInfo) []platform.Capability {
+	provided := def.Provides
+	if def.Action != nil || def.Query != nil || def.Function != nil || def.Operation != nil || def.Entity != nil || def.Protocol != nil || def.Observation != nil {
+		if projected, err := t.describer().DescribeDefinition(def); err == nil {
+			provided = projected.Provides
+		} else {
+			return []platform.Capability{}
+		}
+	}
+	out := []platform.Capability{}
+	for _, capability := range provided {
+		if len(capability.Roles) > 0 && !m.May(def.Ref.App, capability.Name, capability.Roles).Allow {
+			continue
+		}
+		if capability.Kind == "query" && def.Query != nil {
+			input, output := authoring.QueryCapabilitySchemas(*def.Query, entities[def.Query.Object])
+			if input != nil {
+				capability.Inputs = *input
+			}
+			if output != nil {
+				capability.Outputs = *output
+			}
+		}
+		out = append(out, capability)
+	}
+	return out
 }

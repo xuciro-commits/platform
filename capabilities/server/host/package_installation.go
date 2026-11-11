@@ -61,7 +61,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 			}
 		}, nil
 	}
-	owner := h.t.app(build.ID).(build.ConstructionDrafts)
+	owner := h.t.App(build.ID).(build.ConstructionDrafts)
 	code, err := h.CodeReleaseAssets()
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())

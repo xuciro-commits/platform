@@ -121,7 +121,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Observation is unavailable to this member")
 	}
 	definition := plan.info.Definition
-	entity, found := t.entity(definition.Object.Name)
+	entity, found := t.Entity(definition.Object.Name)
 	if !found || entity.App != definition.Object.App {
 		return plan, observationUnavailable(fmt.Errorf("observation object is unavailable"))
 	}
@@ -203,7 +203,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	}
 	var actionVersion *platform.SchemaVersion
 	if evaluate {
-		owner := t.app(definition.Decision.Action.App)
+		owner := t.App(definition.Decision.Action.App)
 		if owner == nil {
 			return plan, observationUnavailable(fmt.Errorf("observation decision owner is unavailable"))
 		}

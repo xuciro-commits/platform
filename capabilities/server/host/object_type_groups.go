@@ -33,7 +33,7 @@ func (h hostView) InstallObjectTypeGroup(c platform.Caller, g platform.ObjectTyp
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetObjectTypeGroup, Name: g.Name}
 	definition := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".objecttypegroup-" + strconv.Itoa(version), ContractVersion: 1, ObjectTypeGroup: &g}
-	definition, err := h.t.describeDefinition(definition)
+	definition, err := h.t.describer().DescribeDefinition(definition)
 	if err != nil {
 		return err
 	}

@@ -53,7 +53,7 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	}
 	submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": inspected.Digest})
 	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
-	views := target.app("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
+	views := target.App("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
 	var receipt *platform.PackageView
 	for i := range views {
 		if views[i].Descriptor.ID == descriptor.ID && views[i].Installed != nil && views[i].Installed.Version == descriptor.Version {
@@ -132,7 +132,7 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	submit(packages.SchemaPackageUpgrade, map[string]any{"id": next.ID, "version": next.Version})
 	submit(packages.SchemaPackageDowngrade, map[string]any{"id": next.ID, "version": descriptor.Version})
 	installedVersion := func() string {
-		for _, view := range target.app("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews() {
+		for _, view := range target.App("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews() {
 			if view.Descriptor.ID == descriptor.ID && view.Installed != nil {
 				return view.Installed.Version
 			}

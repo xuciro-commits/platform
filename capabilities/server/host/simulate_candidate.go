@@ -149,7 +149,7 @@ func (t *Tenant) simulateStagedCandidateRead(builder platform.Member, request tr
 		candidate, err = t.releases.Candidate(request.CandidateID)
 	} else {
 		if len(request.Roots) > 0 {
-			owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+			owner, ok := t.App(build.ID).(build.ConstructionDrafts)
 			if !ok {
 				err = fmt.Errorf("Construction draft owner is unavailable")
 			} else {
@@ -157,7 +157,7 @@ func (t *Tenant) simulateStagedCandidateRead(builder platform.Member, request tr
 			}
 		}
 		if request.ApplicationID != "" {
-			owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+			owner, ok := t.App(build.ID).(build.ConstructionDrafts)
 			if !ok {
 				err = fmt.Errorf("Construction draft owner is unavailable")
 			} else {
@@ -299,7 +299,7 @@ func (r *candidateRun) Step(i int, step trialowner.SimulationStep) (trialowner.S
 		}) {
 			return trialowner.Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A read step needs a candidate object and record ID")
 		}
-		caller := r.sandbox.caller(actor, r.sandbox.app(build.ID), false)
+		caller := r.sandbox.caller(actor, r.sandbox.App(build.ID), false)
 		read, refusal = caller.ReadRecord(step.Type, step.ID, r.now)
 	} else if step.Answer != "" {
 		if step.Action != "" || step.Flow == "" || step.Step == "" || step.ID == "" {
@@ -429,7 +429,7 @@ func (r *candidateRun) Step(i int, step trialowner.SimulationStep) (trialowner.S
 		}
 
 	}
-	if r.sandbox.app(platform.FlowApp) != nil {
+	if r.sandbox.App(platform.FlowApp) != nil {
 		page, _ := r.sandbox.recordsRead(actor, platform.FlowInstanceType, platform.Query{Limit: 100}, r.now)
 		for _, record := range page.Records {
 			raw, _ := json.Marshal(record)

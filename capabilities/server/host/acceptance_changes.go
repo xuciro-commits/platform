@@ -55,7 +55,7 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 		if err != nil || batch.Tenant != t.ID || !batch.At.Equal(plan.At) {
 			return nil, fmt.Errorf("accepted result has an invalid child decision: %v", err)
 		}
-		owner := t.app(batch.App)
+		owner := t.App(batch.App)
 		if owner == nil {
 			return nil, fmt.Errorf("accepted result needs missing child authority")
 		}

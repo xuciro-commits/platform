@@ -285,7 +285,7 @@ func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions 
 	if err != nil {
 		return fail("%s", err.Error())
 	}
-	owner, ok := view.app(build.ID).(build.ConstructionDrafts)
+	owner, ok := view.App(build.ID).(build.ConstructionDrafts)
 	if !ok {
 		return fail("The staged definition graph has no builder")
 	}
@@ -645,7 +645,7 @@ func (t *Tenant) saveBranchCandidate(m platform.Member, branchID string, merged 
 		candidate platform.ReleaseCandidate
 	}
 	prepared, err := readWithError(t, context.Background(), func(t *Tenant) (preparation, error) {
-		owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+		owner, ok := t.App(build.ID).(build.ConstructionDrafts)
 		if !ok {
 			return preparation{}, fmt.Errorf("the tenant has no builder")
 		}

@@ -92,13 +92,13 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 		if err := draft.checkRecordSetDeclarations(et.Info(), engine); err != nil {
 			return err
 		}
-		if err := platform.CheckConstraints(et.Info(), draft.entity, true, engine); err != nil {
+		if err := platform.CheckConstraints(et.Info(), draft.Entity, true, engine); err != nil {
 			return err
 		}
 	}
 	for _, def := range h.t.definitions {
 		if def.LinkType != nil {
-			view := hostView{t: draft, app: h.t.app(def.Ref.App)}
+			view := hostView{t: draft, app: h.t.App(def.Ref.App)}
 			if err := view.ValidateInstallLinkType(*def.LinkType); err != nil {
 				return err
 			}
@@ -119,7 +119,7 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 			}
 		}
 		if def.Query != nil && def.Query.Object == e.Type {
-			view := hostView{t: draft, app: h.t.app(def.Ref.App)}
+			view := hostView{t: draft, app: h.t.App(def.Ref.App)}
 			if err := view.ValidateInstallQuery(*def.Query); err != nil {
 				return err
 			}
@@ -130,7 +130,7 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 			}
 		}
 		if def.Function != nil && def.Function.Object == e.Type {
-			if err := (hostView{t: draft, app: h.t.app(def.Ref.App)}).ValidateInstallFunction(*def.Function); err != nil {
+			if err := (hostView{t: draft, app: h.t.App(def.Ref.App)}).ValidateInstallFunction(*def.Function); err != nil {
 				return err
 			}
 		}
@@ -162,7 +162,7 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 				}
 			}
 		}
-		owner := draft.app(def.Ref.App)
+		owner := draft.App(def.Ref.App)
 		if owner == nil {
 			return fmt.Errorf("page %s has no owner %s", def.Ref, def.Ref.App)
 		}
@@ -340,7 +340,7 @@ func (h hostView) ValidateInstallApplication(a platform.Application) error {
 	return h.installationDraft().InstallApplication(h.app, a)
 }
 
-func (h hostView) Entity(typ string) (platform.EntityInfo, bool) { return h.t.entity(typ) }
+func (h hostView) Entity(typ string) (platform.EntityInfo, bool) { return h.t.Entity(typ) }
 
 func (h hostView) EntitySource(typ string) (platform.AssetBinding, bool) {
 	for _, definition := range h.t.definitions {
@@ -437,7 +437,7 @@ func (h hostView) Holders(structure, unit, role string, day platform.Date) []str
 }
 
 func (h hostView) RuleQuery(app, name string, version int) (platform.NamedQuery, int, bool) {
-	owner := h.t.app(app)
+	owner := h.t.App(app)
 	if owner == nil {
 		return platform.NamedQuery{}, 0, false
 	}
@@ -466,7 +466,7 @@ func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
 	if err := p.CheckModelBindings(h.t.modelVisibleLookup(c.Member), h.t.modelCriteria, c.Rules()); err != nil {
 		return err
 	}
-	return pageowner.CheckModelQueries(p, h.t.definitions, h.t.entity)
+	return pageowner.CheckModelQueries(p, h.t.definitions, h.t.Entity)
 }
 
 func (h hostView) ownerBindings() platform.OwnerBindings {
@@ -488,7 +488,7 @@ func (h hostView) BuildProcessConsumptions() []platform.Consumption {
 }
 
 func (h hostView) ProjectApprovals(project string) int {
-	if access, ok := h.t.app("platform").(interface {
+	if access, ok := h.t.App("platform").(interface {
 		SnapshotState() platform.AuthorizationState
 	}); ok {
 		if config := access.SnapshotState().Projects[project]; config != nil {
@@ -511,7 +511,7 @@ func (h hostView) CheckResourceSchema(schema string, version *platform.SchemaVer
 }
 
 func (h hostView) CompartmentExists(id string) bool {
-	for _, marking := range h.t.app("platform").(interface{ MarkingViews() []platform.Marking }).MarkingViews() {
+	for _, marking := range h.t.App("platform").(interface{ MarkingViews() []platform.Marking }).MarkingViews() {
 		if marking.ID == id && !marking.Classification && !marking.Archived {
 			return true
 		}

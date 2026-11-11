@@ -134,7 +134,7 @@ func firstDecisions(t *Tenant, spec platform.TenantSpec, tpl platform.TenantTemp
 	}
 	slices.Sort(apps)
 	for _, app := range apps {
-		if t.app(app) == nil {
+		if t.App(app) == nil {
 			continue
 		}
 		if err := decide(controlowner.SchemaGrant, controlowner.MemberType, admin.ID, map[string]string{"app": app, "role": roles[app]}); err != nil {
