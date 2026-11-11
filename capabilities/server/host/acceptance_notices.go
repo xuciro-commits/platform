@@ -1,37 +1,19 @@
 package host
 
 import (
-	"fmt"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	controlowner "platformserver/services/security/control"
 	"slices"
-	"strings"
 	"time"
 )
 
 func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
-	ids := map[string]bool{}
-	for _, x := range intents {
-		if err := platform.CheckApplicationBindings(x.Applications); err != nil {
-			return err
-		}
-		kind, ok := strings.CutPrefix(x.Event, x.App+"/")
-		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, x.App, kind, x.Key, x.Endpoint)
-		if kind == "model" && x.Endpoint == acceptedformat.ModelEndpoint {
-			id = fmt.Sprintf("%s:%s:model:%s", t.ID, x.App, x.Key)
-		}
-		if !ok || kind == "" || x.App == "" || t.App(x.App) == nil || x.Key == "" || x.Endpoint == "" ||
-			x.ID != id ||
-			ids[x.ID] || x.State != "pending" && x.State != "held" || x.At.IsZero() || !x.Due.Equal(x.At) ||
-			x.Attempts != 0 || !x.Last.IsZero() || x.Error != "" || x.Digest != "" ||
-			x.State == "held" && x.Agent == "" || t.outbound.Any(func(e actions.Queued) bool { return e.ID == x.ID }) {
-			return fmt.Errorf("accepted result has an invalid or duplicate outbound intent")
-		}
-		ids[x.ID] = true
-	}
-	return nil
+	return runtimekernel.CheckIntents(t.ID, intents, func(app string) bool { return t.App(app) != nil }, func(id string) bool {
+		return t.outbound.Any(func(e actions.Queued) bool { return e.ID == id })
+	})
 }
 
 func (t *Tenant) installAcceptedIntents(intents []platform.Effect) {
