@@ -6,12 +6,10 @@ import (
 	controlowner "platformserver/services/security/control"
 
 	"encoding/json"
-	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	acceptedformat "platformserver/kernel/acceptedformat"
-	agentowner "platformserver/services/ai/runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -244,20 +242,6 @@ type doer func(*http.Request) (*http.Response, error)
 
 func (d doer) Do(r *http.Request) (*http.Response, error) { return d(r) }
 
-type modelAsk struct {
-	Model              string                      `json:"model"`
-	Binding            *platform.AIModelBinding    `json:"binding,omitempty"`
-	ConfigurationError string                      `json:"configurationError,omitempty"`
-	Prompt             platform.Prompt             `json:"prompt"`
-	Reply              string                      `json:"reply"`
-	Record             string                      `json:"record"`
-	Call               string                      `json:"call"`
-	Function           *agentowner.FunctionBinding `json:"function,omitempty"`
-	Evaluation         bool                        `json:"evaluation,omitempty"`
-	EvaluationConfig   string                      `json:"evaluationConfig,omitempty"`
-	EvaluationFunction *platform.AIFunction        `json:"evaluationFunction,omitempty"`
-}
-
 func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
 	t.outbound.Add(t.current(), t.planModelRequest(c, rec, q, nil))
 }
@@ -291,7 +275,7 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 			}
 		}
 	}
-	body, _ := json.Marshal(modelAsk{Model: model, Binding: binding, ConfigurationError: failure, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target, Evaluation: q.Evaluation, EvaluationConfig: q.EvaluationConfig, EvaluationFunction: q.EvaluationFunction})
+	ask := aigateway.ModelAsk{Model: model, Binding: binding, ConfigurationError: failure, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target, Evaluation: q.Evaluation, EvaluationConfig: q.EvaluationConfig, EvaluationFunction: q.EvaluationFunction}
 	ours := func(x platform.Effect) bool {
 		return x.Endpoint == acceptedformat.ModelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#")
 	}
@@ -301,14 +285,12 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 			n++
 		}
 	}
-	key := fmt.Sprintf("%s#%d", rec.GetChangeId(), n)
-	return platform.Effect{ID: fmt.Sprintf("%s:%s:model:%s", t.ID, c.App, key), Endpoint: acceptedformat.ModelEndpoint,
-		Event: c.App + "/model", App: c.App, Key: key, Target: q.Target, At: rec.GetRecordedTime().AsTime(), State: "pending", Due: rec.GetRecordedTime().AsTime(), Body: string(body)}
+	return ask.Effect(t.ID, c.App, rec, q.Target, n, acceptedformat.ModelEndpoint)
 }
 
 func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
 	out := platform.Outcome{Effect: x.ID}
-	var ask modelAsk
+	var ask aigateway.ModelAsk
 	if json.Unmarshal([]byte(x.Body), &ask) != nil {
 		out.Result, out.Detail = "rejected", "The saved model request is invalid"
 		return out, nil
@@ -383,57 +365,16 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 	if !ready {
 		return out, nil
 	}
-	messages := []platform.Message{{Role: "user", Content: ask.Prompt.User}}
-	if ask.Prompt.System != "" {
-		messages = append([]platform.Message{{Role: "system", Content: ask.Prompt.System}}, messages...)
-	}
-	answer, failure := t.call(pv, enabled, m, platform.ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, Binding: ask.Binding, Run: x.ID, Call: fmt.Sprintf("effect:%s:%d", x.ID, x.Attempts)}, now)
-	switch {
-	case failure != nil && (failure.Quota || failure.Status == 409 || strings.Contains(failure.Detail, "failed repeatedly")):
-		out.Result, out.Detail = "rejected", failure.Detail
-	case failure != nil && aigateway.Unavailable(failure):
-		out.Result, out.Detail = "retry", failure.Detail
-	case failure != nil:
-		out.Result, out.Detail = "rejected", failure.Detail
-	default:
-		out.Result, out.Answer = "delivered", json.RawMessage(strconv.Quote(answer.Content))
-		definition := ask.EvaluationFunction
-		if ask.Function != nil {
-			definition = &ask.Function.Definition
-		}
-		if definition != nil && (len(answer.ToolCalls) != 0 || answer.Usage.Output > definition.MaxTokens ||
-			definition.ValidateOutput([]byte(answer.Content)) != nil) {
-			out.Result, out.Detail, out.Answer = "rejected", "The AI function answer failed its type or budget checks", nil
-		}
-	}
-	if answer.Usage.Model == "" {
-		return out, nil
-	}
-	return out, &answer.Usage
+	answer, failure := t.call(pv, enabled, m, ask.Request(x), now)
+	return ask.Outcome(out, answer, failure)
 }
 
 func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, usage *platform.AIUsage) (platform.App, *pb.Submission) {
-	var ask modelAsk
+	var ask aigateway.ModelAsk
 	json.Unmarshal([]byte(x.Body), &ask)
 	app := t.App(x.App)
 	if app == nil || ask.Reply == "" {
 		return nil, nil
 	}
-	answer := platform.Answer{Call: ask.Call, Action: "ask", Outcome: "accepted"}
-	if (ask.Function != nil || ask.Evaluation) && usage != nil {
-		answer.Metered, answer.TokensReported = true, usage.TokensReported
-		answer.InputTokens, answer.OutputTokens = usage.Input, usage.Output
-		answer.CostReported, answer.CostUSD = usage.CostReported, usage.Cost
-		answer.LatencyMillis, answer.ServedModel = usage.Millis, usage.Served
-	}
-	if x.State == "delivered" {
-		json.Unmarshal(o.Answer, &answer.Text)
-	} else {
-		answer.Outcome, answer.Code = "refused", o.Detail
-	}
-	typ, id, _ := strings.Cut(ask.Record, "/")
-	payload, _ := json.Marshal(answer)
-	reply := &pb.Submission{TenantId: t.ID, PrincipalId: "app:" + x.App, Authority: t.AuthorityOf(typ), Target: &pb.EntityRef{Type: typ, Id: id},
-		Schema: &pb.SchemaRef{Name: ask.Reply, Version: 1}, IdempotencyKey: "answer:" + x.ID, Payload: payload}
-	return app, reply
+	return app, ask.Submission(t.ID, x, o, usage, t.AuthorityOf)
 }

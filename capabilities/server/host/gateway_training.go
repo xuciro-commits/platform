@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/services/ai/gateway"
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -28,7 +29,7 @@ func (h hostView) TrainingEvidence(event platform.Event) platform.AITrainingEvid
 	for i := range out.Candidates {
 		candidate := &out.Candidates[i]
 		for _, effect := range models {
-			var ask modelAsk
+			var ask aigateway.ModelAsk
 			if json.Unmarshal([]byte(effect.Body), &ask) == nil && ask.Record == candidate.Run && ask.Binding != nil {
 				candidate.ModelConfig, _ = platform.CanonicalDigest(ask.Binding)
 				candidate.PolicyRevision = ask.Binding.PolicyRevision

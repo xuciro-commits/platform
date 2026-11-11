@@ -11,6 +11,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	"platformserver/services/ai/gateway"
 	"platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 	"slices"
@@ -207,7 +208,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		copy.Applications = slices.Clone(before.Effect.Applications)
 		copy.Run = before.Effect.ID
 		if before.Effect.Endpoint == acceptedformat.ModelEndpoint {
-			var ask modelAsk
+			var ask aigateway.ModelAsk
 			if json.Unmarshal([]byte(before.Effect.Body), &ask) == nil && ask.Function != nil {
 				owner := ask.Function.Owner
 				if owner == "" {

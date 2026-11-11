@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/kernel/records"
+	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/resources/authoring"
 
@@ -91,7 +92,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		},
 		Model: func(c platform.Caller, r *pb.ChangeRecord, q platform.Request, pending []platform.Effect, options platform.ModelOptions) (agentowner.FunctionDispatch, *kernel.Error) {
 			effect := t.planModelRequest(c, r, q, pending)
-			var ask modelAsk
+			var ask aigateway.ModelAsk
 			_ = json.Unmarshal([]byte(effect.Body), &ask)
 			binding, provider, problem := t.modelResolver().Resolve("generation", ask.Model, options)
 			if problem != nil {
@@ -107,7 +108,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			}
 			return agentowner.FunctionDispatch{Model: ask.Model, Binding: binding, Effect: effect}, nil
 		}, Bind: func(effect platform.Effect, binding agentowner.FunctionBinding, model platform.AIModelBinding) platform.Effect {
-			var ask modelAsk
+			var ask aigateway.ModelAsk
 			_ = json.Unmarshal([]byte(effect.Body), &ask)
 			ask.Function = &binding
 			ask.Binding = &model
@@ -120,7 +121,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	return agentowner.PlanFunction(ctx, c, r, request, pending)
 }
 
-func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
+func (t *Tenant) functionAllowed(app string, ask aigateway.ModelAsk, at time.Time) bool {
 	ctx := agentowner.FunctionAccess{Tenant: t.ID, Member: t.Member, AuthorityOf: t.AuthorityOf, Suspended: t.suspended,
 		Authorize: func(member platform.Member, owner string, f platform.AIFunction, sources []string, definition string, at time.Time) bool {
 			c := platform.NewCaller(runtime{t: t, scoped: true}, member, owner, false, false)

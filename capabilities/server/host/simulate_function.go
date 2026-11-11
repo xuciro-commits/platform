@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/services/ai/gateway"
 	controlowner "platformserver/services/security/control"
 
 	"strings"
@@ -52,7 +53,7 @@ func configureFunctionFixtureModel(t *Tenant, model string, at time.Time) error 
 func pendingFunctionEffects(t *Tenant) []platform.Effect {
 	var pending []platform.Effect
 	for _, effect := range t.outbound.Select(nil) {
-		var ask modelAsk
+		var ask aigateway.ModelAsk
 		if effect.Endpoint == acceptedformat.ModelEndpoint && !platform.EffectSettled(effect.State) && json.Unmarshal([]byte(effect.Body), &ask) == nil && ask.Function != nil {
 			pending = append(pending, effect.Effect)
 		}
@@ -69,7 +70,7 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture platform.Fu
 		return false, fmt.Errorf("one fixed answer needs exactly one pending function call")
 	}
 	effect := pending[0]
-	var ask modelAsk
+	var ask aigateway.ModelAsk
 	if err := json.Unmarshal([]byte(effect.Body), &ask); err != nil {
 		return false, err
 	}
