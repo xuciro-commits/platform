@@ -16,7 +16,7 @@ import (
 
 func (d *stagedDecision) savedChangePlan() (acceptedformat.ChangePlan, error) {
 	plan := acceptedformat.ChangePlan{Notices: d.notices.Saved(), Intents: slices.Clone(d.intents),
-		Deliveries: slices.Clone(d.deliveries), Sequences: maps.Clone(d.allocated),
+		Sequences:     maps.Clone(d.allocated),
 		SequenceBases: maps.Clone(d.sequenceBases), Unique: d.savedUniqueChanges()}
 	var err error
 	plan.States, err = d.savedStates()
@@ -43,9 +43,6 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 		return nil, err
 	}
 	if err := t.validateAcceptedStates(plan.States); err != nil {
-		return nil, err
-	}
-	if err := t.validateControlDeliveries(plan.Control, plan.Deliveries); err != nil {
 		return nil, err
 	}
 	if err := t.sequences.Check(plan.SequenceBases, plan.Sequences); err != nil {
@@ -127,9 +124,6 @@ func (p *preparedAcceptedChanges) apply(t *Tenant) error {
 		return err
 	}
 	if err := t.applyAcceptedStates(p.plan.States); err != nil {
-		return err
-	}
-	if err := t.applyAcceptedDeliveries(p.plan.Deliveries); err != nil {
 		return err
 	}
 	t.applyAcceptedNotices(p.plan.Notices)

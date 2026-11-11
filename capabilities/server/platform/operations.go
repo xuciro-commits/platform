@@ -527,13 +527,6 @@ func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string 
 	return c.rt.Notify(c, n, now, to)
 }
 
-func (c Caller) Deliver(dataClass, from, to string, now time.Time) *kernel.Error {
-	if c.rt == nil {
-		return notFound()
-	}
-	return c.rt.Deliver(c, dataClass, from, to, now)
-}
-
 type WasmRequest struct {
 	ABI    string          `json:"abi,omitempty"`
 	Data   *WasmDataInput  `json:"data,omitempty"`

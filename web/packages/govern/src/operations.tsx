@@ -80,7 +80,6 @@ export function Integrations() {
     { accessorKey: "health", header: t("Health"), meta: { width: 100 }, cell: (c) => <Tag label={c.getValue()} tone={tone(c.getValue())} /> },
     { accessorKey: "lastSeen", header: t("Last seen"), meta: { width: 170 }, cell: (c) => when(c.getValue()) },
     { accessorKey: "heartbeat", header: t("Expected every"), meta: { width: 120 } },
-    { accessorKey: "cursor", header: t("Cursor"), meta: { width: 110 }, cell: (c) => <span className="font-mono text-xs">{c.getValue() ?? ""}</span> },
     { id: "error", header: t("Last refused input"), accessorFn: (c) => c.lastError ? `${c.lastError.input}: ${c.lastError.error}` : "",
       cell: ({ row: { original: c } }) => c.lastError ? <span className="text-xs"><Tag label={c.lastError.error} tone="danger" /> {c.lastError.input} · {when(c.lastError.at)}</span> : "" },
     { id: "switch", header: "", meta: { width: 90 }, cell: ({ row: { original: c } }) =>
@@ -89,7 +88,7 @@ export function Integrations() {
   ];
   return (
     <>
-      <PageHeader title={t("Connectors")} help={t("Connectors bring facts in, with health, cursors and the last refused input. A connector registers itself with the host when its runtime starts; an application's connections are declared in the builder.")} />
+      <PageHeader title={t("Connectors")} help={t("Connectors bring facts in, with health and the last refused input. A connector registers itself with the host when its runtime starts; an application's connections are declared in the builder.")} />
       <ReadResult query={connectors}>{(rows) => (
         <DataTable storageKey="monitoring:connections" data={rows} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 300px)" searchable={false}
           empty={<EmptyState title={t("No connectors in this tenant")} hint={t("A connector appears here when its runtime registers with the host. Declare the application's connections in the builder.")}

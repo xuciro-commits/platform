@@ -38,7 +38,6 @@ type Batch struct {
 	Intents        []platform.Effect              `json:"intents,omitempty"`
 	Observations   []Observation                  `json:"observations,omitempty"`
 	States         []State                        `json:"states,omitempty"`
-	Deliveries     []ConnectorDelivery            `json:"deliveries,omitempty"`
 	Operations     []OperationCancellation        `json:"operations,omitempty"`
 	Control        *Control                       `json:"control,omitempty"`
 	DirectRows     []CallbackRow                  `json:"directRows,omitempty"`

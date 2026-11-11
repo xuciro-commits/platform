@@ -190,7 +190,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		if err != nil {
 			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 		}
-	} else if draft.records.WriteCount() > 0 || len(draft.deliveries) > 0 || draft.failure != nil ||
+	} else if draft.records.WriteCount() > 0 || draft.failure != nil ||
 		len(draft.observations) > 0 || len(draft.allocated) > 0 || len(draft.logs) > 0 || len(draft.operationCancels) > 0 || len(draft.requests) > 0 {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	} else {

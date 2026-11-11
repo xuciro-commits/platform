@@ -289,7 +289,6 @@ type ConnectorView struct {
 	Heartbeat   string          `json:"heartbeat"`
 	Health      string          `json:"health"`
 	LastSeen    *time.Time      `json:"lastSeen,omitempty"`
-	Cursor      string          `json:"cursor,omitempty"`
 	Disabled    bool            `json:"disabled"`
 	LastError   *ConnectorError `json:"lastError,omitempty"`
 }
@@ -326,7 +325,7 @@ func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 	for _, d := range t.connectors.kernel.Descriptors(t.ID) {
 		s, _ := t.connectors.kernel.Status(t.ID, d.GetConnectorId(), now)
 		v := ConnectorView{ID: d.GetConnectorId(), Direction: strings.ToLower(strings.TrimPrefix(d.GetDirection().String(), "CONNECTOR_DIRECTION_")),
-			DataClasses: d.GetDataClasses(), Heartbeat: d.GetHeartbeat().AsDuration().String(), Cursor: s.GetCursor(), Disabled: d.GetDisabled(),
+			DataClasses: d.GetDataClasses(), Heartbeat: d.GetHeartbeat().AsDuration().String(), Disabled: d.GetDisabled(),
 			Health: strings.ToLower(strings.TrimPrefix(s.GetHealth().String(), "CONNECTOR_HEALTH_"))}
 		if s.GetLastSeen() != nil {
 			seen := s.GetLastSeen().AsTime()

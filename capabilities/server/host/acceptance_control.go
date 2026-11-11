@@ -541,23 +541,3 @@ func (d *stagedDecision) routingTenant() *Tenant {
 	}
 	return d.tenant
 }
-
-func (t *Tenant) validateControlDeliveries(saved *acceptedformat.Control, deliveries []acceptedformat.ConnectorDelivery) error {
-	if saved == nil || len(deliveries) == 0 {
-		return t.validateAcceptedDeliveries(deliveries)
-	}
-	images, err := t.captureControl()
-	if err != nil {
-		return err
-	}
-	for _, change := range saved.Changes {
-		if change.Kind == "connectors" {
-			images[change.Kind] = change.Image
-		}
-	}
-	view, err := t.forkControl(images)
-	if err != nil {
-		return err
-	}
-	return view.validateAcceptedDeliveries(deliveries)
-}

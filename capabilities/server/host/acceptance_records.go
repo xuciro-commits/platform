@@ -61,8 +61,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	result := acceptedformat.Batch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
 		Definitions: slices.Clone(d.installations),
 		App:         app, At: at.UTC(), Sequences: maps.Clone(d.allocated), SequenceBases: maps.Clone(d.sequenceBases),
-		Notices: d.notices.Saved(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
-		Deliveries: slices.Clone(d.deliveries)}
+		Notices: d.notices.Saved(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations)}
 	var err error
 	result.Authorizations, err = d.savedAuthorizations()
 	if err != nil {
@@ -303,9 +302,6 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err := t.validateOperationCancellations(result.Operations); err != nil {
 		return nil, err
 	}
-	if err := t.validateControlDeliveries(result.Control, result.Deliveries); err != nil {
-		return nil, err
-	}
 	for i, decision := range result.Decisions {
 		if decision.Publication == nil {
 			continue
@@ -429,9 +425,6 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 		return false, err
 	}
 	if err := t.applyOperationCancellations(result.Operations); err != nil {
-		return false, err
-	}
-	if err := t.applyAcceptedDeliveries(result.Deliveries); err != nil {
 		return false, err
 	}
 	for _, decision := range result.Decisions {
@@ -682,61 +675,6 @@ func (t *Tenant) prepareCallbackRows(target *records.Store, rows []acceptedforma
 			target.MarkDirty(ref)
 		}
 		target.Unlock()
-	}
-	return nil
-}
-
-func markFor(marks []kernel.ConnectorMark, tenant, connector string) kernel.ConnectorMark {
-	for _, mark := range marks {
-		if mark.Tenant == tenant && mark.Connector == connector {
-			return mark
-		}
-	}
-	return kernel.ConnectorMark{}
-}
-
-func (t *Tenant) validateAcceptedDeliveries(deliveries []acceptedformat.ConnectorDelivery) error {
-	if len(deliveries) == 0 {
-		return nil
-	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	descriptors, marks := t.connectors.kernel.State()
-	private := kernel.NewConnectors()
-	private.Restore(descriptors, marks)
-	for _, delivery := range deliveries {
-		if delivery.Connector == "" || delivery.DataClass == "" || delivery.At.IsZero() || delivery.Before == "" {
-			return fmt.Errorf("accepted connector delivery is incomplete")
-		}
-		_, current := private.State()
-		before, err := platform.CanonicalDigest(markFor(current, t.ID, delivery.Connector))
-		if err != nil || before != delivery.Before {
-			return fmt.Errorf("accepted connector %s predecessor differs", delivery.Connector)
-		}
-		if err := private.Deliver(t.ID, delivery.Connector, delivery.DataClass,
-			delivery.From, delivery.To, delivery.At); err != nil {
-			return fmt.Errorf("accepted connector %s delivery: %w", delivery.Connector, err)
-		}
-	}
-	return nil
-}
-
-func (t *Tenant) applyAcceptedDeliveries(deliveries []acceptedformat.ConnectorDelivery) error {
-	if len(deliveries) == 0 {
-		return nil
-	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	for _, delivery := range deliveries {
-		_, marks := t.connectors.kernel.State()
-		before, err := platform.CanonicalDigest(markFor(marks, t.ID, delivery.Connector))
-		if err != nil || before != delivery.Before {
-			return fmt.Errorf("accepted connector %s predecessor changed during application", delivery.Connector)
-		}
-		if err := t.connectors.kernel.Deliver(t.ID, delivery.Connector, delivery.DataClass,
-			delivery.From, delivery.To, delivery.At); err != nil {
-			return fmt.Errorf("accepted connector %s changed during application: %w", delivery.Connector, err)
-		}
 	}
 	return nil
 }

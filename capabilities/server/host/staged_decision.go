@@ -66,7 +66,6 @@ type stagedDecision struct {
 	states                 map[string]platform.AcceptedStateApp
 	stateBases             map[string]json.RawMessage
 	connectors             *kernel.Connectors
-	deliveries             []acceptedformat.ConnectorDelivery
 	operationAnswers       map[string]platform.OperationResult
 	operationCancels       map[string]bool
 	operationInputs        map[string][]*preparedOperationInput
@@ -109,13 +108,8 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	sequences := t.sequences.Clone()
 	t.opsMu.Lock()
-	descriptors, marks := t.connectors.kernel.State()
+	connectors := runtimekernel.CloneConnectors(t.connectors.kernel)
 	t.opsMu.Unlock()
-	for i, descriptor := range descriptors {
-		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
-	}
-	connectors := kernel.NewConnectors()
-	connectors.Restore(descriptors, marks)
 	return &stagedDecision{simulation: t.simulation, tenant: t, records: base,
 		logs: map[*platform.Ledger]*kernel.ChangeLog{}, sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
@@ -399,32 +393,6 @@ func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key str
 		d.failure = err
 	}
 	return err
-}
-func (d *stagedDecision) Deliver(c platform.Caller, dataClass, from, to string, now time.Time) *kernel.Error {
-	if c.Tenant != d.tenant.ID || c.ID == "" || dataClass == "" || now.IsZero() {
-		unsupportedStagedEffect()
-	}
-	_, marks := d.connectors.State()
-	var prior kernel.ConnectorMark
-	for _, mark := range marks {
-		if mark.Tenant == c.Tenant && mark.Connector == c.ID {
-			prior = mark
-			break
-		}
-	}
-	before, err := platform.CanonicalDigest(prior)
-	if err != nil {
-		unsupportedStagedEffect()
-	}
-	if refusal := d.connectors.Deliver(c.Tenant, c.ID, dataClass, from, to, now); refusal != nil {
-		if d.failure == nil {
-			d.failure = refusal
-		}
-		return refusal
-	}
-	d.deliveries = append(d.deliveries, acceptedformat.ConnectorDelivery{
-		Connector: c.ID, DataClass: dataClass, From: from, To: to, At: now, Before: before})
-	return nil
 }
 func (d *stagedDecision) Find(c platform.Caller, typ reflect.Type, q platform.Query) ([]any, int, *kernel.Error) {
 	d.records.Lock()

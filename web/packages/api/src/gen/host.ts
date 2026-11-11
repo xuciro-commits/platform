@@ -1417,7 +1417,6 @@ export type ConnectorView = {
   heartbeat: string;
   health: string;
   lastSeen?: string;
-  cursor?: string;
   disabled: boolean;
   lastError?: ConnectorError;
 };

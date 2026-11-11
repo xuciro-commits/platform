@@ -31,7 +31,6 @@ type Input struct {
 	Refusal        *kernel.Error             `json:"refusal,omitempty"`
 	Changes        json.RawMessage           `json:"changes,omitempty"`
 	Rows           []InputRow                `json:"rows,omitempty"`
-	Deliveries     []ConnectorDelivery       `json:"deliveries,omitempty"`
 	States         []State                   `json:"states,omitempty"`
 	Notices        *Notices                  `json:"notices,omitempty"`
 }
@@ -72,7 +71,7 @@ func DecodeInput(raw []byte) (Input, error) {
 		result.Tenant == "" || result.App == "" || result.Name == "" || result.Member == "" ||
 		result.At.IsZero() || result.RequestHash != hash || result.Key != "input:"+hash ||
 		result.Refusal != nil && (result.Refusal.Code == pb.ErrorCode_ERROR_CODE_UNSPECIFIED ||
-			len(result.Changes) > 0 || len(result.Rows) > 0 || len(result.Deliveries) > 0 ||
+			len(result.Changes) > 0 || len(result.Rows) > 0 ||
 			len(result.States) > 0 || len(result.Unique) > 0 || result.Notices != nil) ||
 		result.Refusal == nil && len(result.Answer) == 0 {
 		return result, fmt.Errorf("connector result has inconsistent identity or effects")
@@ -83,7 +82,7 @@ func DecodeInput(raw []byte) (Input, error) {
 		if err != nil || protojson.Unmarshal(result.Answer, answer) != nil ||
 			batch.Tenant != result.Tenant || batch.App != result.App || !batch.At.Equal(result.At) ||
 			receipt.GetSubmission().GetPrincipalId() != result.Member || !proto.Equal(receipt, answer) ||
-			len(result.Rows) > 0 || len(result.Deliveries) > 0 || len(result.States) > 0 || len(result.Unique) > 0 || result.Notices != nil {
+			len(result.Rows) > 0 || len(result.States) > 0 || len(result.Unique) > 0 || result.Notices != nil {
 			return result, fmt.Errorf("connector result has a foreign child decision: %v", err)
 		}
 	}

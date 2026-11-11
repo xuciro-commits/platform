@@ -23,7 +23,6 @@ type ChangePlan struct {
 	States        []State
 	Control       *Control
 	Intents       []platform.Effect
-	Deliveries    []ConnectorDelivery
 	Notices       *Notices
 	Sequences     map[string]int
 	SequenceBases map[string]int
@@ -33,7 +32,7 @@ type ChangePlan struct {
 
 func (r Input) ChangePlan() ChangePlan {
 	return ChangePlan{Rows: r.Rows, Member: r.Member, At: r.At, Changes: r.Changes,
-		States: r.States, Deliveries: r.Deliveries, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 2 && len(r.Changes) == 0}
+		States: r.States, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 2 && len(r.Changes) == 0}
 }
 
 func (r Effect) ChangePlan() ChangePlan {
@@ -43,7 +42,7 @@ func (r Effect) ChangePlan() ChangePlan {
 
 func (r Batch) ChangePlan() ChangePlan {
 	return ChangePlan{At: r.At, States: r.States, Control: r.Control, Intents: r.Intents,
-		Deliveries: r.Deliveries, Notices: r.Notices, Sequences: r.Sequences,
+		Notices: r.Notices, Sequences: r.Sequences,
 		SequenceBases: r.SequenceBases, Unique: r.Unique, CheckUnique: r.Version >= 8}
 }
 
@@ -76,15 +75,6 @@ type ControlChange struct {
 	Kind   string          `json:"kind"`
 	Before string          `json:"before"`
 	Image  json.RawMessage `json:"image"`
-}
-
-type ConnectorDelivery struct {
-	Connector string    `json:"connector"`
-	DataClass string    `json:"dataClass"`
-	From      string    `json:"from,omitempty"`
-	To        string    `json:"to,omitempty"`
-	At        time.Time `json:"at"`
-	Before    string    `json:"before"`
 }
 
 type Observation struct {

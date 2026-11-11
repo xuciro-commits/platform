@@ -333,7 +333,6 @@ type Runtime interface {
 	Related(c Caller, element, stereotype string, outgoing bool, now time.Time) []string
 	Links(c Caller, entity string) []string
 	Link(c Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error
-	Deliver(c Caller, dataClass, from, to string, now time.Time) *kernel.Error
 	Put(c Caller, r *pb.ChangeRecord, entity any) *kernel.Error
 	Get(c Caller, t reflect.Type, id string) (any, bool)
 	Find(c Caller, t reflect.Type, q Query) ([]any, int, *kernel.Error)

@@ -45,7 +45,7 @@ func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt 
 func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedAt time.Time) ([]byte, error) {
 	if d.control != nil || d.failure != nil || len(d.allocated) > 0 || d.notices.Changed() ||
 		len(d.intents) > 0 || len(d.observations) > 0 || len(d.states) > 0 ||
-		len(d.deliveries) > 0 || len(d.operationCancels) > 0 ||
+		len(d.operationCancels) > 0 ||
 		d.observed && len(d.tenant.observers) > 0 {
 		return nil, fmt.Errorf("decision needs a result carrying all state and intents")
 	}

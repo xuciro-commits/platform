@@ -12,10 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	trialowner "platformserver/services/devops/trials"
@@ -231,14 +230,10 @@ func (t *Tenant) stageViewLocked(stage branchStage, now time.Time) (*Tenant, err
 	if err != nil {
 		return nil, fmt.Errorf("The staged definition graph could not be assembled: %s", err)
 	}
-	t.opsMu.Lock()
-	descriptors, marks := t.connectors.kernel.State()
-	t.opsMu.Unlock()
-	for i, descriptor := range descriptors {
-		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
-	}
 	view.connectors = newConnectorRoster()
-	view.connectors.kernel.Restore(descriptors, marks)
+	t.opsMu.Lock()
+	view.connectors.kernel = runtimekernel.CloneConnectors(t.connectors.kernel)
+	t.opsMu.Unlock()
 	return view, nil
 }
 

@@ -3,10 +3,10 @@ package host
 import (
 	"encoding/json"
 	"fmt"
-	"google.golang.org/protobuf/proto"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"slices"
@@ -115,13 +115,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	fork.active = maps.Clone(d.active)
 	fork.receiving = maps.Clone(d.receiving)
 	fork.requests, fork.requestCounts = slices.Clone(d.requests), maps.Clone(d.requestCounts)
-	descriptors, marks := d.connectors.State()
-	for i, descriptor := range descriptors {
-		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
-	}
-	fork.connectors = kernel.NewConnectors()
-	fork.connectors.Restore(descriptors, marks)
-	fork.deliveries = slices.Clone(d.deliveries)
+	fork.connectors = runtimekernel.CloneConnectors(d.connectors)
 	fork.privateApps = map[string]platform.App{}
 	fork.states, fork.stateBases = map[string]platform.AcceptedStateApp{}, map[string]json.RawMessage{}
 	for id, base := range d.stateBases {

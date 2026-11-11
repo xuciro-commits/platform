@@ -23,7 +23,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	}
 	result := acceptedformat.Input{Version: 2, Kind: "input-result", Tenant: d.tenant.ID, App: app,
 		Name: name, Member: m.ID, Key: "input:" + hash, At: at.UTC(), Body: slices.Clone(body),
-		RequestHash: hash, Deliveries: slices.Clone(d.deliveries), Notices: d.notices.Saved(), Authorizations: slices.Clone(d.authorizations)}
+		RequestHash: hash, Notices: d.notices.Saved(), Authorizations: slices.Clone(d.authorizations)}
 	if message, ok := answer.(proto.Message); ok {
 		result.Answer, err = protojson.Marshal(message)
 	} else {
@@ -41,7 +41,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 		if err != nil {
 			return nil, err
 		}
-		result.Deliveries, result.Notices = nil, nil
+		result.Notices = nil
 		result.Digest, err = acceptedformat.DigestInput(result)
 		if err != nil {
 			return nil, err
@@ -67,7 +67,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if err != nil {
 		return nil, err
 	}
-	result.States, result.Deliveries, result.Notices, result.Unique = plan.States, plan.Deliveries, plan.Notices, plan.Unique
+	result.States, result.Notices, result.Unique = plan.States, plan.Notices, plan.Unique
 	result.Rows, err = captureDirectRows(d, app, nil, nil, "connector input")
 	if err != nil {
 		return nil, err

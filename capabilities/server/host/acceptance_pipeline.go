@@ -351,7 +351,7 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 		return draft, draft.failure
 	}
 	var err error
-	if len(draft.events) == 0 && (len(draft.deliveries) > 0 || len(draft.observations) > 0 || len(draft.allocated) > 0 ||
+	if len(draft.events) == 0 && (len(draft.observations) > 0 || len(draft.allocated) > 0 ||
 		len(draft.logs) > 0 || len(draft.requests) > 0) {
 		err = fmt.Errorf("effect answer has unrepresented changes")
 	} else {

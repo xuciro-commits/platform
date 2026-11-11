@@ -106,12 +106,6 @@ func (r runtime) Link(c platform.Caller, from, to *pb.EntityRef, key string, now
 	return r.t.linker.Link(c, from, to, key, now)
 }
 
-func (r runtime) Deliver(c platform.Caller, dataClass, from, to string, now time.Time) *kernel.Error {
-	r.t.opsMu.Lock()
-	defer r.t.opsMu.Unlock()
-	return r.t.connectors.kernel.Deliver(c.Tenant, c.ID, dataClass, from, to, now)
-}
-
 func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
 	if r.t.tasks == nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
