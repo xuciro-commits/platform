@@ -1,10 +1,8 @@
 package host
 
 import (
-	"encoding/json"
 	"fmt"
 	releaseowner "platformserver/services/devops/releases"
-	"platformserver/services/objects"
 
 	pageowner "platformserver/services/apps/pages"
 	"reflect"
@@ -134,223 +132,36 @@ func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 }
 
 func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, engines ...platform.RuleEngine) error {
-	canonical := p
-	safe, err := p.Safety()
+	canonical, info, err := t.pageBindings().CheckInstall(p, app.Manifest().ID, targets, engines...)
 	if err != nil {
 		return err
 	}
-	p = safe
-	if err := p.CheckSafety(); err != nil {
-		return err
-	}
-	for _, trigger := range p.ActionTriggers {
-		refs := slices.Clone(trigger.Actions)
-		if trigger.InlineEdit != nil {
-			refs = append(refs, trigger.InlineEdit.Action)
-		}
-		for _, event := range trigger.Events {
-			for _, effect := range event.Effects {
-				if effect.Action != nil {
-					refs = append(refs, effect.Action.Ref)
-				}
-			}
-		}
-		for _, ref := range refs {
-			if owner := t.owner["action:"+ref.Name]; owner != nil {
-				if action, ok := owner.Manifest().Actions.Action(ref.Name); ok && platform.StaticControlAction(action) {
-					return fmt.Errorf("page %s cannot bind static control action %s", p.Name, ref.Name)
-				}
-			}
-		}
-	}
-	if err := p.CheckModelBindings(t.Entity, t.modelCriteria, engines...); err != nil {
-		return err
-	}
-	if err := pageowner.CheckModelQueries(p, t.definitions, t.Entity); err != nil {
-		return err
-	}
-	if err := t.checkPageQueries(p); err != nil {
-		return err
-	}
-	if iface := p.InputSchema.Interface; iface != nil {
-		for _, ports := range []map[string]platform.PagePort{iface.Inputs, iface.Outputs} {
-			for id, port := range ports {
-				if port.Object != nil {
-					info, ok := t.Entity(port.Object.Name)
-					if !ok || info.App != port.Object.App {
-						return fmt.Errorf("page port %s has an unknown object", id)
-					}
-				}
-			}
-		}
-	}
-	info, known := t.Entity(p.Object.Name)
-	if p.Name == "" || !known {
-		return fmt.Errorf("page %s object %s is unavailable", p.Name, p.Object.Name)
-	}
-	if err := t.checkSections(p, info); err != nil {
-		return err
-	}
-	id := app.Manifest().ID
-	if targets {
-		for _, d := range t.definitions {
-			if d.Application != nil && d.Ref.App == id && slices.Contains(d.Application.Pages, p.Name) {
-				if err := d.Application.CheckPageVariables(p); err != nil {
-					return err
-				}
-			}
-		}
-		if err := pageowner.CheckNavigation(p, id, t.definitions); err != nil {
-			return err
-		}
-	}
-	return t.installDefinitions(id, info, nil, []platform.Page{canonical})
+	return t.installDefinitions(app.Manifest().ID, info, nil, []platform.Page{canonical})
 }
 
 func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
-	safe, err := p.Safety()
-	if err != nil {
-		return err
-	}
-	if err := pageowner.CheckSelections(safe, t.Entity, func(name string) (platform.Action, bool) {
-		if owner := t.owner["action:"+name]; owner != nil {
-			return owner.Manifest().Actions.Action(name)
-		}
-		return platform.Action{}, false
-	}); err != nil {
-		return err
-	}
-	if err := safe.CheckSafety(); err != nil {
-		return err
-	}
-	if err := safe.CheckRecordPorts(); err != nil {
-		return err
-	}
-	for _, binding := range safe.DataBindings {
-		if err := safe.CheckDataBinding(binding, t.Entity, t.modelCriteria, t.services.Rules); err != nil {
-			return fmt.Errorf("page %s binding %s: %w", p.Name, binding.ID, err)
-		}
-		if binding.Query != nil {
-			query := objects.QuerySourceDefinition(t.definitions, binding.Query)
-			if query == nil || query.Query == nil || query.Query.Object != binding.Object.Name {
-				return fmt.Errorf("page binding query owner or version is unavailable")
-			}
-		}
-		for _, resource := range binding.Resources {
-			if resource.Asset == nil {
-				continue
-			}
-			ref := resource.Asset.Ref
-			if resource.Kind == "service" {
-				switch ref.Kind {
-				case platform.AssetObject:
-					info, ok := t.Entity(ref.Name)
-					if !ok || info.App != ref.App {
-						return fmt.Errorf("page service owner is unavailable")
-					}
-				case platform.AssetAction:
-					owner := t.owner["action:"+ref.Name]
-					if owner == nil || owner.Manifest().ID != ref.App {
-						return fmt.Errorf("page service action owner is unavailable")
-					}
-				}
-			} else if !pageowner.ExplorationAssetAvailable(t.definitions, *resource.Asset) {
-				return fmt.Errorf("page resource version is unavailable")
-			}
-		}
-	}
-	for _, trigger := range safe.ActionTriggers {
-		object := p.Object.Name
-		for _, binding := range safe.DataBindings {
-			if binding.ID == trigger.Binding {
-				if binding.Object.Name != "" {
-					object = binding.Object.Name
-				}
-				if binding.Model != nil {
-					object = binding.Model.Type
-				}
-			}
-		}
-		for _, action := range trigger.Actions {
-			if err := t.checkAction(p.Name, action.Name, object); err != nil {
-				return err
-			}
-		}
-		if trigger.InlineEdit != nil {
-			if err := t.checkAction(p.Name, trigger.InlineEdit.Action.Name, object); err != nil {
-				return err
-			}
-			owner := t.owner["action:"+trigger.InlineEdit.Action.Name]
-			action, _ := owner.Manifest().Actions.Action(trigger.InlineEdit.Action.Name)
-			info, _ := t.Entity(object)
-			if err := trigger.InlineEdit.CheckTableEdit(info, action); err != nil {
-				return err
-			}
-		}
-		if len(trigger.Defaults) > 0 {
-			if len(trigger.Actions) != 1 {
-				return fmt.Errorf("action parameters require one exact action")
-			}
-			owner := t.owner["action:"+trigger.Actions[0].Name]
-			if owner == nil {
-				return fmt.Errorf("action parameter owner is unavailable")
-			}
-			action, _ := owner.Manifest().Actions.Action(trigger.Actions[0].Name)
-			info, _ := t.Entity(object)
-			for _, mapping := range trigger.Defaults {
-				field, found := info.Field(mapping.Field)
-				parameter := slices.IndexFunc(action.Payload, func(value platform.Field) bool { return value.Name == mapping.Parameter })
-				if !found || parameter < 0 || !platform.ActionParameterCompatible(field, action.Payload[parameter]) {
-					return fmt.Errorf("action parameter field type does not match its original signature")
-				}
-			}
-		}
-		if trigger.Operation != nil {
-			info, ok := t.Entity(object)
-			if !ok {
-				return fmt.Errorf("page operation input object is unavailable")
-			}
-			if err := (pageowner.Bindings{Operation: t.pageOperation}).CheckOperation(trigger, info); err != nil {
-				return err
-			}
-		}
-		if trigger.Function != nil {
-			owner, ok := t.App(trigger.Function.Ref.App).(platform.RetainedFunctionAssets)
-			if !ok {
-				return fmt.Errorf("page function owner is unavailable")
-			}
-			asset, err := owner.FunctionReleaseAsset(trigger.Function.Ref.Name, trigger.Function.SourceVersion)
-			if err != nil {
-				return err
-			}
-			var function platform.AIFunction
-			if json.Unmarshal(asset.Body, &function) != nil || function.Object != object {
-				return fmt.Errorf("page function input type is unavailable")
-			}
-		}
-		for _, event := range trigger.Events {
-			for _, effect := range event.Effects {
-				if effect.Action != nil {
-					if err := t.checkAction(p.Name, effect.Action.Ref.Name, object); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-	return nil
+	return t.pageBindings().CheckSections(p, page)
 }
 
-func (t *Tenant) checkAction(page, schema, object string) error {
-	owner := t.owner["action:"+schema]
-	action, ok := platform.Action{}, false
-	if owner != nil {
-		action, ok = owner.Manifest().Actions.Action(schema)
+func (t *Tenant) pageBindings() pageowner.Bindings {
+	return pageowner.Bindings{Entity: t.Entity, Criteria: t.modelCriteria, Rules: t.services.Rules,
+		Operation: t.pageOperation, Definitions: t.definitions, Interface: t.bindInterfaceQuery,
+		Action: func(name string) (string, platform.Action, bool) {
+			owner := t.owner["action:"+name]
+			if owner == nil {
+				return "", platform.Action{}, false
+			}
+			action, ok := owner.Manifest().Actions.Action(name)
+			return owner.Manifest().ID, action, ok
+		},
+		FunctionAsset: func(ref platform.AssetRef, version string) (platform.ReleaseAsset, error) {
+			owner, ok := t.App(ref.App).(platform.RetainedFunctionAssets)
+			if !ok {
+				return platform.ReleaseAsset{}, fmt.Errorf("page function owner is unavailable")
+			}
+			return owner.FunctionReleaseAsset(ref.Name, version)
+		},
 	}
-	if !ok || action.Target != object {
-		return fmt.Errorf("page %s: no action %s about %s", page, schema, object)
-	}
-	return nil
 }
 
 func (t *Tenant) Entity(typ string) (platform.EntityInfo, bool) {
@@ -437,9 +248,7 @@ func (t *Tenant) storeApplication(app platform.App, a platform.Application) erro
 }
 
 func (t *Tenant) checkPageQueries(p platform.Page) error {
-	bindings := pageowner.Bindings{Entity: t.Entity, Criteria: t.modelCriteria, Rules: t.services.Rules,
-		Operation: t.pageOperation, Definitions: t.definitions, Interface: t.bindInterfaceQuery}
-	return bindings.CheckQueries(p)
+	return t.pageBindings().CheckQueries(p)
 }
 
 func (t *Tenant) checkApplicationExtension(ref platform.AssetRef, a platform.Application) error {

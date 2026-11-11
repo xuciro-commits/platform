@@ -113,12 +113,14 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 }
 
 type Bindings struct {
-	Entity      func(string) (platform.EntityInfo, bool)
-	Criteria    func(platform.AssetRef) (*platform.RuleCriteria, bool)
-	Rules       platform.RuleEngine
-	Operation   func(*platform.AssetBinding) (platform.Operation, int, error)
-	Definitions []platform.Definition
-	Interface   func(platform.NamedQuery, ...platform.EntityInfo) (platform.NamedQuery, error)
+	Entity        func(string) (platform.EntityInfo, bool)
+	Criteria      func(platform.AssetRef) (*platform.RuleCriteria, bool)
+	Rules         platform.RuleEngine
+	Operation     func(*platform.AssetBinding) (platform.Operation, int, error)
+	Definitions   []platform.Definition
+	Interface     func(platform.NamedQuery, ...platform.EntityInfo) (platform.NamedQuery, error)
+	Action        func(name string) (owner string, action platform.Action, ok bool)
+	FunctionAsset func(ref platform.AssetRef, version string) (platform.ReleaseAsset, error)
 }
 
 func VisibleQuery(q platform.NamedQuery, entities map[string]platform.EntityInfo) (platform.NamedQuery, bool) {
