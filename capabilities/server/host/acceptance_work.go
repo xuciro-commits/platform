@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	automation "platformserver/services/automate/runtime"
@@ -312,96 +312,42 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 }
 
 func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
-	result, err := acceptedformat.DecodeWork(raw)
-	if err != nil || result.Tenant != t.ID || t.App(result.App) == nil {
-		return false, fmt.Errorf("work result cannot be applied: %v", err)
-	}
-	finished := new(pb.Work)
-	_ = protojson.Unmarshal(result.Work, finished)
-	previous, previousErr := t.works.Get(result.Input.ID)
-	if previousErr == nil && previous.GetGeneration() >= finished.GetGeneration() {
-		if previous.GetGeneration() == finished.GetGeneration() && !proto.Equal(previous, finished) {
-			return false, fmt.Errorf("work result generation differs")
-		}
-		return false, nil
-	}
-	var task *automation.Task
-	t.work.Lock()
-	if result.Input.Kind == "job" {
-		task = t.work.Job(result.Input.ID)
-	} else {
-		task = t.work.Delivery(result.App, result.Input.ID)
-	}
-	t.work.Unlock()
-	if task == nil {
-		return false, fmt.Errorf("work result needs missing work %s", result.Input.ID)
-	}
-	before, err := automation.StateOfTask(task)
-	var prior json.RawMessage
-	if previousErr == nil {
-		prior, _ = protojson.Marshal(previous)
-	}
-	hash, hashErr := acceptedformat.WorkInputHash(before, prior)
-	if err != nil || hashErr != nil || hash != result.RequestHash {
-		return false, fmt.Errorf("work result predecessor differs")
-	}
-	works := t.forkWorkState()
-	generation, _, refusal := works.Start(task.ID, "host")
-	if refusal != nil || int(generation) != result.After.Attempts ||
-		works.Finish(task.ID, generation, result.Outcome != "ok") != nil {
-		return false, fmt.Errorf("work result K9 generation differs")
-	}
-	expected, _ := works.Get(task.ID)
-	if !proto.Equal(expected, finished) {
-		return false, fmt.Errorf("work result K9 state differs")
-	}
-	prepared, err := t.prepareAcceptedChanges(result.ChangePlan())
-	if err != nil {
-		return false, err
-	}
-	if err := t.applyAcceptedChanges(prepared); err != nil {
-		return false, err
-	}
-	t.installAcceptedWork(finished)
-	t.work.Lock()
-	task.RestoreOutcome(automation.Task{ScheduledTask: result.After})
-	if task.Kind == "delivery" {
-		switch task.State {
-		case "done", "failed":
-			t.work.Settled(task)
-		}
-	}
-	t.work.Unlock()
-	if task.Kind == "delivery" {
-		s := task.Event.Record.GetSubmission()
-		t.delivered(platform.Delivery{At: result.At, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s),
-			Subscriber: task.App, Outcome: result.Outcome, Attempt: task.Attempts})
-	}
-	t.publishAcceptedChanges(prepared)
-	return true, nil
+	return t.ApplyWorkResult(raw, runtimekernel.WorkApply{Changes: t.changeApply(), Works: t.works, App: t.App, Published: t.publishAcceptedChanges,
+		Task: func(result acceptedformat.Work) (platform.ScheduledTaskState, string, func(*pb.Work), error) {
+			var task *automation.Task
+			t.work.Lock()
+			if result.Input.Kind == "job" {
+				task = t.work.Job(result.Input.ID)
+			} else {
+				task = t.work.Delivery(result.App, result.Input.ID)
+			}
+			t.work.Unlock()
+			if task == nil {
+				return platform.ScheduledTaskState{}, "", nil, fmt.Errorf("work result needs missing work %s", result.Input.ID)
+			}
+			before, err := automation.StateOfTask(task)
+			if err != nil {
+				return before, "", nil, fmt.Errorf("work result predecessor differs")
+			}
+			return before, task.ID, func(*pb.Work) {
+				t.work.Lock()
+				task.RestoreOutcome(automation.Task{ScheduledTask: result.After})
+				if task.Kind == "delivery" {
+					switch task.State {
+					case "done", "failed":
+						t.work.Settled(task)
+					}
+				}
+				t.work.Unlock()
+				if task.Kind == "delivery" {
+					s := task.Event.Record.GetSubmission()
+					t.delivered(platform.Delivery{At: result.At, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s),
+						Subscriber: task.App, Outcome: result.Outcome, Attempt: task.Attempts})
+				}
+			}, nil
+		}})
 }
 
-func (t *Tenant) forkWorkState() *kernel.Works {
-	items := t.works.All()
-	for i, item := range items {
-		items[i] = proto.Clone(item).(*pb.Work)
-	}
-	draft := kernel.NewWorks()
-	draft.Restore(items)
-	return draft
-}
+func (t *Tenant) forkWorkState() *kernel.Works { return runtimekernel.ForkWorks(t.works) }
 
-func (t *Tenant) installAcceptedWork(finished *pb.Work) {
-	all := t.works.All()
-	found := false
-	for i, work := range all {
-		if work.GetWorkId() == finished.GetWorkId() {
-			all[i], found = finished, true
-			break
-		}
-	}
-	if !found {
-		all = append(all, finished)
-	}
-	t.works.Restore(all)
-}
+func (t *Tenant) installAcceptedWork(finished *pb.Work) { runtimekernel.InstallWork(t.works, finished) }
