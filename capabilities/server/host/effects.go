@@ -298,118 +298,35 @@ func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, repl
 	}
 }
 
-func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	id := s.GetTarget().GetId()
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	known := t.endpoints.Has(id)
-	if s.GetSchema().GetName() == controlowner.SchemaEndpointRemove {
-		if !known {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-		}
-		unknown := t.outbound.Any(func(x actions.Queued) bool { return x.Endpoint == id && x.State == "unknown" })
-		if unknown {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Resolve unknown deliveries before removing their endpoint")
-		}
-		return func(*pb.ChangeRecord) {
-			t.endpoints.Remove(id)
-			var dropped []platform.Effect
-			t.outbound.UpdateAll(func(x *actions.Queued) {
-				if x.Endpoint == id && !platform.EffectSettled(x.State) {
-					x.State = "discarded"
-					dropped = append(dropped, x.Effect)
-				}
+func (t *Tenant) effectControl() actions.EffectControl {
+	return actions.EffectControl{Outbox: &t.outbound, Endpoints: &t.endpoints, Agents: t.agents, Told: t.told,
+		Valid: func(ep actions.Endpoint) bool {
+			return ep.Valid(t.App, func(event string) bool {
+				_, declared := t.router().Event(event)
+				return t.owner["action:"+event] != nil || declared
 			})
-			for _, x := range dropped {
-				t.told(x, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "its endpoint was removed by " + c.ID}, now, c.Replaying)
-			}
-		}, nil
+		},
+		Reviewed: func(x actions.Queued) bool { return x.App == build.ID && x.Event == build.ID+"/dispatch" }}
+}
+
+func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	if s.GetSchema().GetName() == controlowner.SchemaEndpointRemove {
+		return t.effectControl().RemoveEndpoint(c, s.GetTarget().GetId(), now)
 	}
-	var ep actions.Endpoint
-	if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" {
-		return nil, invalid
-	}
-	if !ep.Valid(t.App, func(event string) bool {
-		_, declared := t.router().Event(event)
-		return t.owner["action:"+event] != nil || declared
-	}) {
-		return nil, invalid
-	}
-	if known {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	ep.ID = id
-	return func(*pb.ChangeRecord) { t.endpoints.Add(ep) }, nil
+	return t.effectControl().AddEndpoint(s.GetTarget().GetId(), s.GetPayload())
 }
 
 func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	id := s.GetTarget().GetId()
-	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	x, found := t.outbound.Get(id)
-	if found && x.App == build.ID && x.Event == build.ID+"/dispatch" {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Manage this command through its dispatch review and declared reviewer role")
+	control, id := t.effectControl(), s.GetTarget().GetId()
+	switch s.GetSchema().GetName() {
+	case controlowner.SchemaEffectApprove:
+		return control.Approve(c, id, now)
+	case controlowner.SchemaEffectDiscard:
+		return control.Discard(c, id, now)
+	case controlowner.SchemaEffectResolve:
+		return control.Resolve(c, id, s.GetPayload(), now)
 	}
-	if s.GetSchema().GetName() == controlowner.SchemaEffectApprove {
-		if !found || x.State != "held" {
-			return nil, notFound
-		}
-		if c.Agent {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
-		}
-		return func(r *pb.ChangeRecord) {
-			t.outbound.Update(id, func(q *actions.Queued) { q.State, q.Due = "pending", now })
-			if x.Run != "" && t.agents != nil {
-				t.agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
-			}
-		}, nil
-	}
-	if s.GetSchema().GetName() == controlowner.SchemaEffectDiscard {
-		if found && x.State == "unknown" {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An unknown delivery needs reconciliation or a recorded human decision")
-		}
-		if !found || platform.EffectSettled(x.State) {
-			return nil, notFound
-		}
-		return func(r *pb.ChangeRecord) {
-			held := false
-			t.outbound.Update(id, func(q *actions.Queued) {
-				held = q.State == "held"
-				q.State = "discarded"
-				x = *q
-			})
-			if held && x.Run != "" && t.agents != nil {
-				t.agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
-			}
-			if t.agents != nil {
-				t.agents.AgentEffectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)
-			}
-			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "discarded by " + c.ID}, now, c.Replaying)
-		}, nil
-	}
-	if s.GetSchema().GetName() == controlowner.SchemaEffectResolve {
-		var input struct {
-			Outcome, Reason string
-			Answer          json.RawMessage
-		}
-		if !found || x.State != "unknown" || x.Sending || c.Agent || json.Unmarshal(s.GetPayload(), &input) != nil || !slices.Contains([]string{"delivered", "rejected"}, input.Outcome) || strings.TrimSpace(input.Reason) == "" || len(input.Reason) > 4096 || len(input.Answer) > 64<<10 {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An unknown delivery needs a human result and bounded evidence")
-		}
-		return func(*pb.ChangeRecord) {
-			t.outbound.Update(id, func(q *actions.Queued) {
-				q.State, q.Error, q.Last = input.Outcome, "Resolved by "+c.ID+": "+input.Reason, now
-				x = *q
-			})
-			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: input.Outcome, Detail: x.Error, Answer: input.Answer}, now, c.Replaying)
-		}, nil
-	}
-	if !found || (x.State != "failed" && x.State != "rejected") {
-		return nil, notFound
-	}
-	return func(*pb.ChangeRecord) {
-		t.outbound.Update(id, func(q *actions.Queued) {
-			q.State, q.Due, q.Since = "pending", now, q.Attempts
-			q.CallbackError = ""
-		})
-	}, nil
+	return control.Retry(id, now)
 }
 
 func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
