@@ -46,7 +46,7 @@ func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	connectors := t.connectors.Clone()
 	return &stagedDecision{tenant: t, Decision: runtimekernel.Decision{Logs: map[*platform.Ledger]*kernel.ChangeLog{}, Simulation: t.simulation, Records: base,
 		Sequences: sequences, Allocated: map[string]int{}, SequenceBases: map[string]int{}, Active: map[string]bool{},
-		Notices: t.notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: connectors}}
+		Notices: t.notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: connectors, BusinessQuery: businessQuery}}
 }
 
 func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {

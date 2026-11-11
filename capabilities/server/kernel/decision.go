@@ -54,6 +54,7 @@ type Decision struct {
 	OperationAnswers  map[string]platform.OperationResult
 	OperationCancels  map[string]bool
 	ObservationInput  *platform.ObservationDecisionEvidence
+	BusinessQuery     func(platform.EntityInfo, platform.Query, platform.Member, time.Time) platform.Query
 }
 
 func (d *Decision) HoldChanges(ledger *platform.Ledger) (func(), *kernel.Error) {
