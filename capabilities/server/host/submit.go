@@ -115,7 +115,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 			}
 		}
 		end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
-			attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
+			attribute.String("platform.target", runtimekernel.Target(s)), attribute.String("platform.member", m.ID))
 		defer func() { end(outcomeOf(err)) }()
 		out.record, err = t.accept(a, m, s, now, decision)
 		if err == nil {
@@ -230,7 +230,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	}
 	var raw []byte
 	if refusal != nil {
-		refusal = actions.Explained(refusal, a, s.GetSchema().GetName(), target(s))
+		refusal = actions.Explained(refusal, a, s.GetSchema().GetName(), runtimekernel.Target(s))
 		fact, business := draft.BusinessRefusals[refusal]
 		var businessFact *platform.BusinessRefusalFact
 		if business {

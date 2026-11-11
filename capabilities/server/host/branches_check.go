@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	runtimekernel "platformserver/kernel"
 	"platformserver/services/actions"
 	"platformserver/services/resources/merge"
 	"slices"
@@ -85,12 +86,12 @@ func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, sche
 	}
 	s := t.currentSubmissionSchema(a, submission)
 	if refusal := t.delegatedBound(m, s); refusal != nil {
-		return branchChild{refusal: actions.Explained(refusal, a, s.GetSchema().GetName(), target(s))}
+		return branchChild{refusal: actions.Explained(refusal, a, s.GetSchema().GetName(), runtimekernel.Target(s))}
 	}
 	receipt, refusal := platform.Decide(platform.NewCaller(draft, m, build.ID, false, automation), a, s, now)
 	if refusal != nil {
 		issues := t.readableFieldIssues(m, draft.InputIssues[refusal], now)
-		return branchChild{issues: issues, refusal: actions.Explained(refusal, a, s.GetSchema().GetName(), target(s))}
+		return branchChild{issues: issues, refusal: actions.Explained(refusal, a, s.GetSchema().GetName(), runtimekernel.Target(s))}
 	}
 	return branchChild{receipt: receipt}
 }

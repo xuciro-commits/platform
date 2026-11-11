@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	runtimekernel "platformserver/kernel"
 	controlowner "platformserver/services/security/control"
 
 	"slices"
@@ -46,7 +47,7 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 		if role := d.ProjectRole(m.ID, payload.Project); role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
 			return nil
 		}
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project roles cover only the resources of projects where you are an owner or editor; {action} on {target} is outside them", s.GetSchema().GetName(), target(s))
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project roles cover only the resources of projects where you are an owner or editor; {action} on {target} is outside them", s.GetSchema().GetName(), runtimekernel.Target(s))
 	}
 	ref, ok := delegatedAsset(s)
 	names := []string{ref.Name}
@@ -54,7 +55,7 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 		names = append(names, name)
 	}
 	if m.Agent || d == nil || !ok || !t.projectEdits(m.ID, d, ref.Kind, names) {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project roles cover only the resources of projects where you are an owner or editor; {action} on {target} is outside them", s.GetSchema().GetName(), target(s))
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project roles cover only the resources of projects where you are an owner or editor; {action} on {target} is outside them", s.GetSchema().GetName(), runtimekernel.Target(s))
 	}
 	return nil
 }

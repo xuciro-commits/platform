@@ -104,3 +104,5 @@ func (d *Decision) BusinessRefused(answer *kernel.Error, fact platform.BusinessR
 	d.BusinessRefusals[answer] = acceptedformat.CloneBusinessFact(fact)
 	d.InputRefused(answer, []platform.FieldIssue{{Code: "business_refusal", BusinessCode: fact.Code, Record: fact.Subject, Message: fact.Message, Translations: maps.Clone(fact.Translations), Path: []string{"$business"}}})
 }
+
+func Target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }

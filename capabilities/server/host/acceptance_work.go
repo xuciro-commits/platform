@@ -101,7 +101,7 @@ func (t *Tenant) applyAcceptedUsage(raw []byte) (acceptedformat.Usage, error) {
 func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome string) {
 	if task.Event != nil {
 		end := t.begin("deliver "+task.Event.Record.GetSubmission().GetSchema().GetName()+" to "+task.App, task.Event.Span,
-			attribute.String("platform.app", task.App), attribute.String("platform.target", target(task.Event.Record.GetSubmission())))
+			attribute.String("platform.app", task.App), attribute.String("platform.target", runtimekernel.Target(task.Event.Record.GetSubmission())))
 		defer func() { end(outcome); counted(t, "delivery", task.App, outcome) }()
 	}
 	defer func() {
@@ -330,7 +330,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 				t.work.Unlock()
 				if task.Kind == "delivery" {
 					s := task.Event.Record.GetSubmission()
-					t.delivered(platform.Delivery{At: result.At, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s),
+					t.delivered(platform.Delivery{At: result.At, App: task.Event.App, Action: s.GetSchema().GetName(), Target: runtimekernel.Target(s),
 						Subscriber: task.App, Outcome: result.Outcome, Attempt: task.Attempts})
 				}
 			}, nil

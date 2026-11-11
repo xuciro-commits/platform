@@ -43,7 +43,7 @@ func (t *Tenant) enqueue(now time.Time) {
 		names := append([]string{s.GetSchema().GetName()}, t.router().Events(e.Event)...)
 		if e.Plan != nil {
 			for _, id := range e.Plan.Stopped {
-				t.delivered(platform.Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: id,
+				t.delivered(platform.Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: runtimekernel.Target(s), Subscriber: id,
 					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", acceptedformat.MaxHops)})
 			}
 			names = e.Plan.Names
@@ -70,7 +70,7 @@ func (t *Tenant) enqueue(now time.Time) {
 			}
 			id := a.Manifest().ID
 			if e.Hops > acceptedformat.MaxHops {
-				t.delivered(platform.Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: id,
+				t.delivered(platform.Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: runtimekernel.Target(s), Subscriber: id,
 					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", acceptedformat.MaxHops)})
 				continue
 			}
@@ -89,10 +89,8 @@ func (t *Tenant) deliver(subscriber string, e automation.QueuedEvent, now time.T
 	t.work.Lock()
 	defer t.work.Unlock()
 	t.work.Queue(subscriber, &automation.Task{ScheduledTask: platform.ScheduledTask{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
-		Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now.UTC()}, Event: &e})
+		Title: s.GetSchema().GetName() + " " + runtimekernel.Target(s), State: "queued", Due: now.UTC()}, Event: &e})
 }
-
-func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }
 
 func (t *Tenant) delivered(d platform.Delivery) { t.audit.Delivered(d) }
 
@@ -184,7 +182,7 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 	end := func(string) {}
 	if !replaying {
 		end = t.begin("deliver "+task.Event.Record.GetSubmission().GetSchema().GetName()+" to "+task.App, task.Event.Span,
-			attribute.String("platform.app", task.App), attribute.String("platform.target", target(task.Event.Record.GetSubmission())))
+			attribute.String("platform.app", task.App), attribute.String("platform.target", runtimekernel.Target(task.Event.Record.GetSubmission())))
 		defer func() { end(outcome); counted(t, "delivery", task.App, outcome) }()
 	}
 	var err *kernel.Error
@@ -203,7 +201,7 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 	t.hops = 0
 	t.works.Finish(task.ID, generation, outcome != "ok")
 	s := task.Event.Record.GetSubmission()
-	t.delivered(platform.Delivery{At: now, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: task.App,
+	t.delivered(platform.Delivery{At: now, App: task.Event.App, Action: s.GetSchema().GetName(), Target: runtimekernel.Target(s), Subscriber: task.App,
 		Outcome: outcome, Attempt: int(generation)})
 	t.work.Lock()
 	task.Attempts, task.Last = int(generation), now
@@ -228,7 +226,7 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 	if outcome != "ok" {
 		runStatus = "failed"
 	}
-	t.observeOwnerRun(now, "run", task.Kind+":"+task.App+":"+task.ID, task.App, target(s), runStatus,
+	t.observeOwnerRun(now, "run", task.Kind+":"+task.App+":"+task.ID, task.App, runtimekernel.Target(s), runStatus,
 		"Delivery to "+task.App, outcome)
 
 	t.enqueue(now)

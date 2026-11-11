@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	runtimekernel "platformserver/kernel"
 	dataowner "platformserver/services/data"
 	"platformserver/services/functions/runtime"
 	"slices"
@@ -497,7 +498,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 				run.When = task.Due
 			}
 			if task.Kind == "delivery" && task.Event != nil {
-				run.RecordRef = target(task.Event.Record.GetSubmission())
+				run.RecordRef = runtimekernel.Target(task.Event.Record.GetSubmission())
 			}
 			if task.Kind == "job" || task.State == "failed" {
 				retry(&run, controlowner.SchemaWorkRetry, controlowner.WorkType, task.ID, map[bool]string{true: "rerun", false: "retry"}[task.Kind == "job"])

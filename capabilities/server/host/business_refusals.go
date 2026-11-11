@@ -5,6 +5,7 @@ import records "platformserver/kernel/records"
 import (
 	"context"
 	"encoding/json"
+	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/services/actions"
 
@@ -58,7 +59,7 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 			return
 		}
 		own := sub.GetPrincipalId() == m.ID
-		readable := t.readable(m, target(sub), at)
+		readable := t.readable(m, runtimekernel.Target(sub), at)
 		exists := false
 		func() {
 			t.Projection.Lock()
@@ -133,7 +134,7 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 			child := accepted.GetSubmission()
 			facts := []platform.BusinessRefusalFact{}
 			for _, f := range r.Business {
-				if f.Subject == target(child) && f.Action == child.GetSchema().GetName() && f.Member == child.GetPrincipalId() {
+				if f.Subject == runtimekernel.Target(child) && f.Action == child.GetSchema().GetName() && f.Member == child.GetPrincipalId() {
 					facts = append(facts, f)
 				}
 			}

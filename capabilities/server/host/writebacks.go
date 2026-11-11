@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	runtimekernel "platformserver/kernel"
 	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
 
@@ -129,7 +130,7 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 		body, _ := json.Marshal(req)
 		at := e.Record.GetRecordedTime().AsTime()
 		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, build.ID, e.Record.GetChangeId(), w.ID),
-			Endpoint: dataowner.WritebackEndpoint + conn.ID, Event: "writeback/" + w.Name, App: build.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at,
+			Endpoint: dataowner.WritebackEndpoint + conn.ID, Event: "writeback/" + w.Name, App: build.ID, Key: e.Record.GetChangeId(), Target: runtimekernel.Target(s), At: at,
 			State: "pending", Due: at, Body: string(body)})
 	}
 	return planned, nil

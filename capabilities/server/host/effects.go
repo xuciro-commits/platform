@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -47,10 +48,10 @@ func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) 
 		}
 		at := e.Record.GetRecordedTime().AsTime()
 		body, _ := json.Marshal(map[string]any{"type": names[i], "timestamp": at, "data": map[string]any{
-			"app": e.App, "action": s.GetSchema().GetName(), "schemaVersion": s.GetSchema().GetVersion(), "entity": target(s), "changeId": e.Record.GetChangeId(),
+			"app": e.App, "action": s.GetSchema().GetName(), "schemaVersion": s.GetSchema().GetVersion(), "entity": runtimekernel.Target(s), "changeId": e.Record.GetChangeId(),
 			"principal": s.GetPrincipalId(), "revision": e.Record.GetRevision(), "payload": payload}})
 		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
-			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)})
+			Endpoint: ep.ID, Event: names[i], Target: runtimekernel.Target(s), At: at, State: "pending", Due: at, Body: string(body)})
 	}
 	return planned, nil
 }
