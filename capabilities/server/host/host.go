@@ -46,21 +46,10 @@ type Tenant struct {
 	observationScheduleMu sync.Mutex
 	confirmationReads     statusReadSchedule
 	dispatchReads         statusReadSchedule
-	observationMu         sync.Mutex
-	observationPending    []platform.Observation
-	observationDropped    atomic.Int64
-	observationWritten    atomic.Int64
-	observationFailed     atomic.Int64
-	observationPurged     atomic.Int64
-	observationLastWrite  atomic.Int64
-	observationLastPurge  atomic.Int64
-	observationUsageDay   time.Time
-	observationUsageBytes int64
+	observations          runtimekernel.ObservationBuffer
 	runIndexMu            sync.Mutex
 	runIndexAt            map[string]runIndexCache
 	runIndexGen           atomic.Int64
-	observationPurgeMu    sync.Mutex
-	lastObservationPurge  time.Time
 	controlAnswer         func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity              platform.IdentityDirectory
 	claims                platform.Facts

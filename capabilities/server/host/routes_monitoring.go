@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
@@ -165,7 +166,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 		if !tenantWide {
 			page.Coverage.Filtered = true
 		}
-		page.Coverage.Dropped = t.observationDropped.Load()
+		page.Coverage.Dropped = t.observations.Dropped()
 		if (query.Source == "" || query.Source == "request") && t.logRequestPercent() < 100 {
 			page.Coverage.Sampled = true
 		}
@@ -194,7 +195,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: "Traces are unavailable"})
 			return
 		}
-		page.Coverage.Dropped = t.observationDropped.Load()
+		page.Coverage.Dropped = t.observations.Dropped()
 		if t.logRequestPercent() < 100 {
 			page.Coverage.Sampled = true
 		}
@@ -217,7 +218,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: "Metrics are unavailable"})
 			return
 		}
-		summary.Dropped = t.observationDropped.Load()
+		summary.Dropped = t.observations.Dropped()
 		t.audit.Remember(platform.AuditEntry{At: now, Member: m.ID, App: controlowner.PlatformApp, Action: "platform.metrics.read", Target: observationFilterSummary(query)})
 		WriteJSON(w, http.StatusOK, summary)
 	})
@@ -375,7 +376,7 @@ func observationQuery(r *http.Request, tenant string, now time.Time) (platform.O
 		limit = parsed
 	}
 	level := values.Get("level")
-	if level != "" && levelRank(level) < 0 {
+	if level != "" && runtimekernel.ObservationLevelRank(level) < 0 {
 		return invalid()
 	}
 	source := values.Get("source")

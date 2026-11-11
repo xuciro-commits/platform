@@ -100,7 +100,7 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 	if fault := operational.Fault.Load(); fault != nil {
 		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: Started,
 			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []platform.Breaker{},
-			Observations: ObservationHealth{Dropped: t.observationDropped.Load()},
+			Observations: ObservationHealth{Dropped: t.observations.Dropped()},
 			Readiness:    []HealthCondition{{Name: "journal", Ready: false, Detail: fault.Reason}, {Name: "observations", Ready: false, Detail: "tenant is quarantined"}, {Name: "work-loop", Ready: false, Detail: "tenant is quarantined"}}}
 	}
 	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.workLoop().Deferred(now), Breakers: t.Breakers(now)}
@@ -129,20 +129,12 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 	if t.console.Suspended() {
 		h.Status = "suspended"
 	}
-	operational.observationMu.Lock()
+	counts := operational.observations.Counts()
 	h.Observations = ObservationHealth{
-		Enabled: t.logRetentionDays() > 0, Pending: len(operational.observationPending),
-		Dropped: operational.observationDropped.Load(), Written: operational.observationWritten.Load(),
-		WriteFailures: operational.observationFailed.Load(), Purged: operational.observationPurged.Load(),
-		QuotaBytes: t.logQuotaBytes(),
+		Enabled: t.logRetentionDays() > 0, Pending: counts.Pending, Dropped: counts.Dropped, Written: counts.Written,
+		WriteFailures: counts.WriteFailures, Purged: counts.Purged, QuotaBytes: t.logQuotaBytes(),
+		LastWrite: counts.LastWrite, LastPurge: counts.LastPurge,
 	}
-	if last := operational.observationLastWrite.Load(); last > 0 {
-		h.Observations.LastWrite = time.Unix(0, last).UTC()
-	}
-	if last := operational.observationLastPurge.Load(); last > 0 {
-		h.Observations.LastPurge = time.Unix(0, last).UTC()
-	}
-	operational.observationMu.Unlock()
 	return h
 }
 

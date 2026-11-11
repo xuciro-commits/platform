@@ -294,12 +294,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.i18n.InstallApplications(view.definitions)
 	view.audit = t.audit.Fork()
 	view.audit.SetSink(view.readOrigin.audit.Remember, view.readOrigin.audit.ReadPersonal)
-	view.observationDropped.Store(t.observationDropped.Load())
-	view.observationWritten.Store(t.observationWritten.Load())
-	view.observationFailed.Store(t.observationFailed.Load())
-	view.observationPurged.Store(t.observationPurged.Load())
-	view.observationLastWrite.Store(t.observationLastWrite.Load())
-	view.observationLastPurge.Store(t.observationLastPurge.Load())
+	view.observations.CopyCounts(&t.observations)
 	view.LastSlowHold.Store(t.LastSlowHold.Load())
 	for _, app := range view.apps {
 		(hostView{t: view, app: app}).bindOwner(app)

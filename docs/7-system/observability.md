@@ -1,6 +1,6 @@
 ---
 level: 7 系统架构
-covers: [capabilities/server/kernel/store/**, capabilities/server/host/observability*.go, capabilities/server/host/routes_monitoring.go, capabilities/server/host/routes.go, capabilities/server/kernel/transport/transport_http.go, web/packages/govern/src/monitoring.tsx, web/packages/govern/src/observability/**, web/packages/govern/src/index.tsx]
+covers: [capabilities/server/kernel/store/**, capabilities/server/kernel/observations.go, capabilities/server/host/observability*.go, capabilities/server/host/routes_monitoring.go, capabilities/server/host/routes.go, capabilities/server/kernel/transport/transport_http.go, web/packages/govern/src/monitoring.tsx, web/packages/govern/src/observability/**, web/packages/govern/src/index.tsx]
 read-when: 改动日志、审计、运行诊断、健康检查、指标、降噪、保留、导出或日志访问权限
 ---
 

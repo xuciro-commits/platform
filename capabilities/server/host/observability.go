@@ -17,6 +17,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 )
@@ -30,8 +31,6 @@ type requestCorrelation struct {
 type requestCorrelationKey struct{}
 
 var fallbackCorrelationID atomic.Uint64
-
-const observationPendingLimit = 2000
 
 type LogPolicyView struct {
 	App           string `json:"app"`
@@ -168,30 +167,16 @@ func (t *Tenant) platformSetting(name string) string {
 
 func (t *Tenant) logLevel() string {
 	level := t.platformSetting(controlowner.SettingLogLevel)
-	if levelRank(level) < 0 || level == "debug" {
+	if runtimekernel.ObservationLevelRank(level) < 0 || level == "debug" {
 		return "info"
 	}
 	return level
 }
 
-func levelRank(level string) int {
-	switch level {
-	case "debug":
-		return 0
-	case "info":
-		return 1
-	case "warn":
-		return 2
-	case "error":
-		return 3
-	}
-	return -1
-}
-
 func (t *Tenant) logLevelFor(app string) string {
 	level := t.logLevel()
 	policy := t.logPolicy(app)
-	if levelRank(policy.Level) >= 0 && policy.Level != "debug" {
+	if runtimekernel.ObservationLevelRank(policy.Level) >= 0 && policy.Level != "debug" {
 		level = policy.Level
 	}
 	if debugUntil := t.logDebugUntil(app); !debugUntil.IsZero() {
@@ -201,11 +186,11 @@ func (t *Tenant) logLevelFor(app string) string {
 }
 
 func (t *Tenant) logLevelAllows(level, app string) bool {
-	rank := levelRank(level)
+	rank := runtimekernel.ObservationLevelRank(level)
 	if rank < 0 {
-		rank = levelRank("info")
+		rank = runtimekernel.ObservationLevelRank("info")
 	}
-	return rank >= levelRank(t.logLevelFor(app))
+	return rank >= runtimekernel.ObservationLevelRank(t.logLevelFor(app))
 }
 
 func (t *Tenant) logRequestPercent() int {
@@ -299,45 +284,9 @@ func (t *Tenant) recordObservation(event platform.Observation) {
 	}
 	event.At = event.At.UTC()
 	event.Tenant = t.ID
-	t.observationMu.Lock()
-	defer t.observationMu.Unlock()
-	day := event.At.Truncate(24 * time.Hour)
-	if !t.observationUsageDay.Equal(day) {
-		usage, err := t.Log().ObservationUsage(t.ID, day)
-		if err != nil {
-			log.Printf("observation usage %s: %v", t.ID, err)
-		}
-		t.observationUsageDay = day
-		t.observationUsageBytes = usage
+	if err := t.observations.Record(t.Log(), event, t.logQuotaBytes()); err != nil {
+		log.Printf("observation usage %s: %v", t.ID, err)
 	}
-	raw, _ := json.Marshal(event)
-	if t.observationUsageBytes+int64(len(raw)) > t.logQuotaBytes() {
-		if levelRank(event.Level) < levelRank("warn") {
-			t.observationDropped.Add(1)
-			return
-		}
-	}
-	t.observationUsageBytes += int64(len(raw))
-	if len(t.observationPending) >= observationPendingLimit {
-		drop := -1
-		for index, pending := range t.observationPending {
-			if pending.Level == "debug" || pending.Level == "info" {
-				drop = index
-				break
-			}
-		}
-		if drop < 0 && levelRank(event.Level) < levelRank("error") {
-			t.observationDropped.Add(1)
-			return
-		}
-		if drop >= 0 {
-			t.observationPending = append(t.observationPending[:drop], t.observationPending[drop+1:]...)
-		} else {
-			t.observationPending = t.observationPending[1:]
-		}
-		t.observationDropped.Add(1)
-	}
-	t.observationPending = append(t.observationPending, event)
 }
 
 func (t *Tenant) observeOwnerRun(at time.Time, source, runID, app, resource, status, title, detail string) {
@@ -365,31 +314,9 @@ func (t *Tenant) observeOwnerRun(at time.Time, source, runID, app, resource, sta
 }
 
 func (t *Tenant) FlushObservations() {
-	t.observationMu.Lock()
-	events := t.observationPending
-	t.observationPending = nil
-	t.observationMu.Unlock()
-	if len(events) == 0 {
-		return
-	}
-	if err := t.Log().SaveObservations(events); err != nil {
+	if err := t.observations.Flush(t.Log(), Now()); err != nil {
 		log.Printf("observation %s: %v", t.ID, err)
-		t.observationFailed.Add(1)
-		t.observationMu.Lock()
-		lost := len(events) + len(t.observationPending) - observationPendingLimit
-		if lost > 0 {
-			t.observationDropped.Add(int64(lost))
-		}
-		kept := append(events, t.observationPending...)
-		if len(kept) > observationPendingLimit {
-			kept = kept[len(kept)-observationPendingLimit:]
-		}
-		t.observationPending = kept
-		t.observationMu.Unlock()
-		return
 	}
-	t.observationWritten.Add(int64(len(events)))
-	t.observationLastWrite.Store(Now().UnixNano())
 }
 
 func (h *Host) observeRequest(t *Tenant, m platform.Member, correlation requestCorrelation, route string, status int, duration time.Duration) {
@@ -463,21 +390,12 @@ func (t *Tenant) PurgeObservations(now time.Time) {
 		return
 	}
 	t.FlushObservations()
-	t.observationPurgeMu.Lock()
-	if !t.lastObservationPurge.IsZero() && now.Sub(t.lastObservationPurge) < time.Hour {
-		t.observationPurgeMu.Unlock()
-		return
-	}
-	t.lastObservationPurge = now
-	t.observationPurgeMu.Unlock()
-	removed, err := t.Log().PurgeObservations(t.ID, now.AddDate(0, 0, -days))
+	removed, err := t.observations.Purge(t.Log(), t.ID, now, now.AddDate(0, 0, -days))
 	if err != nil {
 		log.Printf("purge observations %s: %v", t.ID, err)
 		return
 	}
-	t.observationLastPurge.Store(now.UTC().UnixNano())
 	if removed > 0 {
-		t.observationPurged.Add(int64(removed))
 		log.Printf("purged %d observations for %s", removed, t.ID)
 	}
 }
