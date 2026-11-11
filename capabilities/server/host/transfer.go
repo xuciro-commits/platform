@@ -1,18 +1,11 @@
 package host
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/csv"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"platformserver/services/objects"
 	controlowner "platformserver/services/security/control"
-	"reflect"
 	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -21,7 +14,6 @@ import (
 )
 
 func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]platform.ImportRow, *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
@@ -32,55 +24,15 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	view, _ := viewOf(m, et)
-	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
-	if err != nil || len(rows) < 1 || !slices.Contains(rows[0], "id") {
-		return nil, invalid
-	}
-	header := rows[0]
-	sum := sha256.Sum256(data)
-	file := hex.EncodeToString(sum[:8])
 	currency := t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)
+	file, lines, ok := objects.ParseImport(view.Info(), data, currency)
+	if !ok {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
 	out := []platform.ImportRow{}
-	for i, row := range rows[1:] {
-		r := platform.ImportRow{Row: i + 1}
-		payload := map[string]any{}
-		for j, name := range header {
-			if j >= len(row) {
-				continue
-			}
-			value := strings.TrimSpace(row[j])
-			if name == "id" {
-				r.ID = value
-				continue
-			}
-			f, ok := view.Info().Field(name)
-			if !ok {
-				r.Outcome = "ERROR_CODE_INVALID_ARGUMENT: " + name
-				break
-			}
-			if f.ReadOnly {
-				continue
-			}
-			if value == "" {
-				if f.Type == "text" || f.Type == "longtext" || f.Type == "reference" || f.Type == "choice" || f.Type == "date" {
-					payload[name] = ""
-				} else {
-					payload[name] = nil
-				}
-				continue
-			}
-			v, err := fromCSV(f, value, currency)
-			if err != nil {
-				r.Outcome = "ERROR_CODE_INVALID_ARGUMENT: " + name
-				break
-			}
-			payload[name] = v
-		}
-		if r.Outcome == "" && r.ID == "" {
-			r.Outcome = "ERROR_CODE_INVALID_ARGUMENT"
-		}
+	for _, line := range lines {
+		r := platform.ImportRow{Row: line.Row, ID: line.ID, Outcome: line.Outcome}
 		if r.Outcome == "" {
-			raw, _ := json.Marshal(payload)
 			try := func(verb, key string) *kernel.Error {
 				r.Error = nil
 				r.Action = typ + verb
@@ -88,7 +40,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 					return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 				}
 				s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: view.Info().App, IdempotencyKey: key,
-					Target: &pb.EntityRef{Type: typ, Id: r.ID}, Schema: &pb.SchemaRef{Name: r.Action, Version: 1}, Payload: raw}
+					Target: &pb.EntityRef{Type: typ, Id: r.ID}, Schema: &pb.SchemaRef{Name: r.Action, Version: 1}, Payload: line.Payload}
 				if preview {
 					refusal, issues := t.probeDiagnosed(m, s, now)
 					if refusal != nil {
@@ -145,36 +97,6 @@ func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Ti
 	return refusal, issues
 }
 
-func fromCSV(f platform.FieldInfo, value, currency string) (any, error) {
-	switch f.Type {
-	case "integer":
-		return strconv.Atoi(value)
-	case "decimal":
-		return strconv.ParseFloat(value, 64)
-	case "boolean":
-		return strconv.ParseBool(value)
-	case "money":
-		amount, cur, _ := strings.Cut(value, " ")
-		x, err := strconv.ParseFloat(amount, 64)
-		if cur == "" {
-			cur = currency
-		}
-		return platform.Money{Amount: int64(x*100 + 0.5*sign(x)), Currency: cur}, err
-	case "references", "tags":
-		return strings.Split(value, ";"), nil
-	case "lines":
-		return nil, fmt.Errorf("lines are not imported")
-	}
-	return value, nil
-}
-
-func sign(x float64) float64 {
-	if x < 0 {
-		return -1
-	}
-	return 1
-}
-
 func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
 	m = t.authorizationMember(m)
 	if err := t.Admits(m); err != nil {
@@ -191,16 +113,7 @@ func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now
 		return nil, err
 	}
 	view, _ := viewOf(m, et)
-	var fields []platform.FieldInfo
-	header := []string{"id"}
-	for _, f := range view.Info().Fields {
-		if f.Type != "lines" {
-			fields, header = append(fields, f), append(header, f.Name)
-		}
-	}
-	var buf bytes.Buffer
-	w := csv.NewWriter(&buf)
-	w.Write(header)
+	export := objects.NewExport(view.Info())
 	q.Offset, q.Limit = 0, 500
 	for {
 		page, err := t.recordsRead(m, typ, q, now)
@@ -208,50 +121,12 @@ func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now
 			return nil, err
 		}
 		for _, r := range page.Records {
-			v := reflect.ValueOf(r)
-			line := []string{v.FieldByName("Record").Interface().(platform.Record).ID}
-			for _, f := range fields {
-				line = append(line, toCSV(v.FieldByIndex(f.Index).Interface()))
-			}
-			w.Write(line)
+			export.Add(r)
 		}
 		q.Offset += len(page.Records)
 		if len(page.Records) == 0 || q.Offset >= page.Total {
 			break
 		}
 	}
-	w.Flush()
-	return buf.Bytes(), nil
-}
-
-func toCSV(v any) string {
-	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Pointer {
-		if rv.IsNil() {
-			return ""
-		}
-		return toCSV(rv.Elem().Interface())
-	}
-	switch x := v.(type) {
-	case platform.Money:
-		if x.Currency == "" {
-			return ""
-		}
-		return fmt.Sprintf("%.2f %s", float64(x.Amount)/100, x.Currency)
-	case []string:
-		return strings.Join(x, ";")
-	case time.Time:
-		if x.IsZero() {
-			return ""
-		}
-		return x.Format(time.RFC3339)
-	}
-	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Slice {
-		var parts []string
-		for i := range rv.Len() {
-			parts = append(parts, toCSV(rv.Index(i).Interface()))
-		}
-		return strings.Join(parts, ";")
-	}
-	return fmt.Sprint(v)
+	return export.Bytes(), nil
 }
