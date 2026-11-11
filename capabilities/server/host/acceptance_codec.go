@@ -1,14 +1,12 @@
 package host
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
@@ -146,34 +144,12 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.Unlock()
 		return false, fmt.Errorf("accepted result needs installed entity %s", result.Row.Type)
 	}
-	value := reflect.New(et.Info().Go).Elem()
-	decoded, err := records.DecodeFormattedImage(et.Info(), result.Row.Value, result.Row.Projection, draft.Current().Release(), result.Row.Format)
+	value, decoded, err := runtimekernel.DecodeAcceptedRecord(et, draft, result, receipt, checkRunApplicationBindings)
 	if err != nil {
 		draft.Unlock()
 		return false, err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(decoded))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(value.Addr().Interface()); err != nil {
-		draft.Unlock()
-		return false, fmt.Errorf("accepted record image: %w", err)
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		draft.Unlock()
-		return false, fmt.Errorf("accepted record has trailing data")
-	}
-	if err := checkRunApplicationBindings(value.Interface()); err != nil {
-		draft.Unlock()
-		return false, err
-	}
 	rec := records.Header(value)
-	if rec.ID != result.Row.ID || rec.Revision != receipt.GetRevision() ||
-		rec.Changed.By != receipt.GetSubmission().GetPrincipalId() ||
-		rec.Changed.Change != receipt.GetChangeId() ||
-		!rec.Changed.At.Equal(receipt.GetRecordedTime().AsTime()) {
-		draft.Unlock()
-		return false, fmt.Errorf("accepted record image differs from receipt")
-	}
 	var source *preparedSourceClaim
 	if len(result.Claims) > 0 {
 		source = &preparedSourceClaim{origin: result.Origin, claims: result.Claims}
@@ -208,41 +184,9 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		}
 		return changed, err
 	}
-	if result.Version >= 5 {
-		if err := records.CheckHistoryPredecessor(result.Row, prior); err != nil {
-			draft.Unlock()
-			return false, err
-		}
-		before, err := records.Predecessor(result.Row.Type, result.Row.ID, prior)
-		if err != nil || before != result.Row.Predecessor || prior != nil && !reflect.DeepEqual(records.Header(prior.Value).Created, rec.Created) || prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) {
-			draft.Unlock()
-			return false, fmt.Errorf("accepted record predecessor differs: %v", err)
-		}
-	} else {
-		verb, _ := strings.CutPrefix(receipt.GetSubmission().GetSchema().GetName(), result.Row.Type+".")
-		before := len(result.Row.History) - 1
-		if verb == "create" && prior != nil || verb != "create" && prior == nil ||
-			prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) ||
-			prior == nil && before != 0 || prior != nil && (len(prior.RecordHistory()) != before ||
-			before > 0 && !reflect.DeepEqual(prior.RecordHistory(), result.Row.History[:before]) ||
-			!reflect.DeepEqual(records.Header(prior.Value).Created, rec.Created)) {
-			draft.Unlock()
-			return false, fmt.Errorf("accepted record is missing its predecessor")
-		}
-	}
-	recovered := &records.Row{Value: value, Format: result.Row.Format, History: records.CopyHistory(result.Row.History)}
-	if result.Version >= 5 {
-		if err := records.AppendRowHistory(recovered, prior, result.Row.History); err != nil {
-			draft.Unlock()
-			return false, err
-		}
-	}
-	recovered.RetainOriginal(result.Row.Value)
-	et.SetRow(rec.ID, recovered)
-	draft.TrackWrite(result.Row.Type + "/" + rec.ID)
-	draft.RememberChange(result.App+"/"+receipt.GetChangeId(), result.Row.Type+"/"+rec.ID)
-	if et.Knowledge() {
-		draft.MarkDirty(result.Row.Type + "/" + rec.ID)
+	if err := runtimekernel.InstallAcceptedRecord(draft, et, result, receipt, value, prior); err != nil {
+		draft.Unlock()
+		return false, err
 	}
 	draft.Unlock()
 	if result.Version >= 5 {
