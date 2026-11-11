@@ -23,7 +23,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	}
 	result := acceptedformat.Input{Version: 2, Kind: "input-result", Tenant: d.tenant.ID, App: app,
 		Name: name, Member: m.ID, Key: "input:" + hash, At: at.UTC(), Body: slices.Clone(body),
-		RequestHash: hash, Deliveries: slices.Clone(d.deliveries), Notices: d.savedNotices(), Authorizations: slices.Clone(d.authorizations)}
+		RequestHash: hash, Deliveries: slices.Clone(d.deliveries), Notices: d.notices.Saved(), Authorizations: slices.Clone(d.authorizations)}
 	if message, ok := answer.(proto.Message); ok {
 		result.Answer, err = protojson.Marshal(message)
 	} else {

@@ -103,11 +103,11 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 			fork.logs[ledger] = log.Fork()
 		}
 	}
-	fork.events, fork.notices = slices.Clone(d.events), slices.Clone(d.notices)
+	fork.events, fork.notices = slices.Clone(d.events), d.notices.Clone()
 	fork.definitions = maps.Clone(d.definitions)
 	fork.sequences, fork.allocated, fork.sequenceBases = maps.Clone(d.sequences), maps.Clone(d.allocated), maps.Clone(d.sequenceBases)
 	fork.writers, fork.changed = cloneLists(d.writers), cloneLists(d.changed)
-	fork.noticeEffects, fork.publications = slices.Clone(d.noticeEffects), maps.Clone(d.publications)
+	fork.publications = maps.Clone(d.publications)
 	fork.intents = slices.Clone(d.intents)
 	fork.iterations = slices.Clone(d.iterations)
 	fork.authorizations = slices.Clone(d.authorizations)

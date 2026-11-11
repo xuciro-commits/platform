@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 
 	"platformserver/kernel/records"
@@ -49,12 +50,7 @@ type stagedDecision struct {
 	active                 map[string]bool
 	at                     time.Time
 	probing                bool
-	notices                []platform.Notification
-	noticeBase             int
-	noticeSeq              int
-	noticeBefore           string
-	noticeEffects          []platform.Effect
-	noticeChanged          bool
+	notices                *runtimekernel.NoticeDraft
 	writers                map[string][]string
 	changed                map[string][]string
 	publications           map[string]*acceptedformat.Publication
@@ -112,7 +108,6 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 
 func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	sequences := t.sequences.Clone()
-	notices, noticeSeq := t.notices.State()
 	t.opsMu.Lock()
 	descriptors, marks := t.connectors.kernel.State()
 	t.opsMu.Unlock()
@@ -121,11 +116,10 @@ func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	}
 	connectors := kernel.NewConnectors()
 	connectors.Restore(descriptors, marks)
-	before, _ := platform.CanonicalDigest(notices)
 	return &stagedDecision{simulation: t.simulation, tenant: t, records: base,
 		logs: map[*platform.Ledger]*kernel.ChangeLog{}, sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
-		notices: notices, noticeBase: noticeSeq, noticeSeq: noticeSeq, noticeBefore: before,
+		notices: t.notices.Draft(),
 		writers: map[string][]string{}, changed: map[string][]string{}, connectors: connectors}
 }
 

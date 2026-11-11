@@ -480,14 +480,14 @@ func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at
 	}
 	if s.GetTarget().GetType() == controlowner.NotificationType {
 		id := s.GetTarget().GetId()
-		i := slices.IndexFunc(d.notices, func(n platform.Notification) bool { return n.ID == id })
-		if i < 0 {
+		owner, found := d.notices.Owner(id)
+		if !found {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "")
 		}
-		if d.notices[i].Member != c.ID {
+		if owner != c.ID {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "")
 		}
-		return func(*pb.ChangeRecord) { d.notices[i].Read = true; d.noticeChanged = true }, nil
+		return func(*pb.ChangeRecord) { d.notices.MarkRead(id) }, nil
 	}
 	if s.GetTarget().GetType() == controlowner.EffectType && s.GetSchema().GetName() == controlowner.SchemaEffectDiscard {
 		d.tenant.opsMu.Lock()

@@ -61,7 +61,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	result := acceptedformat.Batch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
 		Definitions: slices.Clone(d.installations),
 		App:         app, At: at.UTC(), Sequences: maps.Clone(d.allocated), SequenceBases: maps.Clone(d.sequenceBases),
-		Notices: d.savedNotices(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
+		Notices: d.notices.Saved(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
 		Deliveries: slices.Clone(d.deliveries)}
 	var err error
 	result.Authorizations, err = d.savedAuthorizations()
@@ -288,7 +288,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err := t.validateAcceptedControl(result.Control); err != nil {
 		return nil, err
 	}
-	if err := t.validateAcceptedNotices(result.Notices); err != nil {
+	if err := t.notices.Check(result.Notices); err != nil {
 		return nil, err
 	}
 	if err := t.validateAcceptedIntents(result.Intents); err != nil {

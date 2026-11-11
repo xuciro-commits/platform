@@ -2,11 +2,9 @@ package host
 
 import (
 	"fmt"
-	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
-	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -56,119 +54,33 @@ func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platf
 }
 
 func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
+	console, _ := d.tenant.app(controlowner.PlatformApp).(platform.IdentityProfile)
+	if private, ok := d.states[controlowner.PlatformApp].(platform.IdentityProfile); ok {
+		console = private
+	}
 	var out []string
 	for _, member := range d.recipients(c, now, to) {
-		if n.Key != "" && slices.ContainsFunc(d.notices, func(x platform.Notification) bool {
-			return x.Member == member && x.App == c.App && x.Key == n.Key
-		}) {
+		var reach platform.Reach
+		if console != nil {
+			reach = console.Reach(member)
+		}
+		n.Member, n.App, n.At = member, c.App, now
+		x, added := d.notices.Add(n, console != nil && !reach.InApp)
+		if !added {
 			continue
 		}
-		d.noticeSeq++
-		x := n
-		x.ID, x.Member, x.App, x.At, x.Read = fmt.Sprintf("n-%d", d.noticeSeq), member, c.App, now, false
-		d.notices = append(d.notices, x)
-		d.noticeChanged = true
 		out = append(out, member)
-		console, _ := d.tenant.app(controlowner.PlatformApp).(platform.IdentityProfile)
-		if private, ok := d.states[controlowner.PlatformApp].(platform.IdentityProfile); ok {
-			console = private
-		}
 		if console != nil {
-			to := console.Reach(member)
-			if !to.InApp {
-				d.notices[len(d.notices)-1].Read = true
-			}
 			router := d.routingTenant()
 			router.opsMu.Lock()
-			d.noticeEffects = append(d.noticeEffects, router.planMailNotice(x, to)...)
+			d.notices.Mail(router.planMailNotice(x, reach)...)
 			router.opsMu.Unlock()
 		}
-	}
-	if len(d.notices) > runtimekernel.NoticesKept {
-		d.notices = d.notices[len(d.notices)-runtimekernel.NoticesKept:]
 	}
 	return out
 }
 
-func (d *stagedDecision) Seen(c platform.Caller, keys ...string) {
-	for i, n := range d.notices {
-		if n.App == c.App && slices.Contains(keys, n.Key) && !n.Read {
-			d.notices[i].Read = true
-			d.noticeChanged = true
-		}
-	}
-}
-
-func (d *stagedDecision) savedNotices() *acceptedformat.Notices {
-	if !d.noticeChanged {
-		return nil
-	}
-	return &acceptedformat.Notices{Base: d.noticeBase, Seq: d.noticeSeq, Before: d.noticeBefore,
-		Notices: slices.Clone(d.notices), Effects: slices.Clone(d.noticeEffects)}
-}
-
-func (t *Tenant) validateAcceptedNotices(n *acceptedformat.Notices) error {
-	if n == nil {
-		return nil
-	}
-	current, seq := t.notices.State()
-	before, err := platform.CanonicalDigest(current)
-	if err != nil || n.Base != seq || n.Before != before || n.Seq < n.Base || len(n.Notices) > runtimekernel.NoticesKept {
-		return fmt.Errorf("notification result predecessor differs")
-	}
-	ids := map[string]bool{}
-	prior := map[string]platform.Notification{}
-	for _, x := range current {
-		prior[x.ID] = x
-	}
-	for _, x := range n.Notices {
-		if x.ID == "" || x.App == "" || x.Member == "" || x.At.IsZero() || ids[x.ID] {
-			return fmt.Errorf("notification result has an invalid notification")
-		}
-		ids[x.ID] = true
-		if p, ok := prior[x.ID]; ok {
-			p.Read = x.Read
-			if p != x || prior[x.ID].Read && !x.Read {
-				return fmt.Errorf("notification result rewrites an existing notice")
-			}
-		}
-	}
-	expected := current
-	for i, x := range expected {
-		if found := slices.IndexFunc(n.Notices, func(n platform.Notification) bool { return n.ID == x.ID }); found >= 0 {
-			expected[i].Read = n.Notices[found].Read
-		}
-	}
-	added := 0
-	for _, x := range n.Notices {
-		if _, known := prior[x.ID]; !known {
-			added++
-			want := n.Base + added
-			if n.Seq-n.Base > runtimekernel.NoticesKept {
-				want = n.Seq - runtimekernel.NoticesKept + added
-			}
-			if x.ID != fmt.Sprintf("n-%d", want) {
-				return fmt.Errorf("notification result numbering differs")
-			}
-			expected = append(expected, x)
-		}
-	}
-	if added != min(n.Seq-n.Base, runtimekernel.NoticesKept) {
-		return fmt.Errorf("notification result omits an allocated notice")
-	}
-	if len(expected) > runtimekernel.NoticesKept {
-		expected = expected[len(expected)-runtimekernel.NoticesKept:]
-	}
-	if !reflect.DeepEqual(expected, n.Notices) {
-		return fmt.Errorf("notification result omits or reorders existing notices")
-	}
-	for _, effect := range n.Effects {
-		if effect.ID == "" || effect.Endpoint == "" || effect.State != "pending" || effect.At.IsZero() {
-			return fmt.Errorf("notification result has an invalid mail intent")
-		}
-	}
-	return nil
-}
+func (d *stagedDecision) Seen(c platform.Caller, keys ...string) { d.notices.Seen(c.App, keys) }
 
 func (t *Tenant) applyAcceptedNotices(n *acceptedformat.Notices) {
 	if n == nil {
