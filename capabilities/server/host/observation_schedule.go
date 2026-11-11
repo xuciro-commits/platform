@@ -14,11 +14,6 @@ import (
 	"platformserver/platform"
 )
 
-type observationWindowAttempt struct {
-	Key  string
-	Busy bool
-}
-
 func (t *Tenant) EvaluateObservations(at time.Time) {
 	if t.businessStopped() || !t.ownerActive(controlowner.BuildApp) {
 		return
@@ -94,25 +89,16 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 					continue
 				}
 				slot := source.ref.String() + "/" + row.ID
-				t.observationScheduleMu.Lock()
-				prior := t.observationWindows[slot]
-				if prior.Busy || prior.Key == identity {
-					t.observationScheduleMu.Unlock()
+				prior, started := t.schedules.Windows.Begin(slot, identity)
+				if !started {
 					continue
 				}
-				if t.observationWindows == nil {
-					t.observationWindows = map[string]observationWindowAttempt{}
-				}
-				t.observationWindows[slot] = observationWindowAttempt{Key: prior.Key, Busy: true}
-				t.observationScheduleMu.Unlock()
 				_, problem := t.EvaluateObservation(context.Background(), member, source.ref, ObservationEvaluate{Record: row.ID, Until: until, Key: "scheduled-" + identity}, at)
-				t.observationScheduleMu.Lock()
 				if problem == nil {
-					t.observationWindows[slot] = observationWindowAttempt{Key: identity}
+					t.schedules.Windows.End(slot, identity)
 				} else {
-					t.observationWindows[slot] = observationWindowAttempt{Key: prior.Key}
+					t.schedules.Windows.End(slot, prior)
 				}
-				t.observationScheduleMu.Unlock()
 			}
 			offset += len(page.Records)
 			if len(page.Records) == 0 || offset >= page.Total {

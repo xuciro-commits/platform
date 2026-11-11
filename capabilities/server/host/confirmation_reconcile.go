@@ -38,13 +38,13 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			}
 		}
 	}
-	t.confirmationReads.retain(active)
+	t.schedules.Confirmations.Retain(active)
 	due := func(r platform.ConfirmationRun) time.Time {
 		var earliest time.Time
 		found := false
 		for i, p := range r.Parties {
 			if (p.State == "pending" || p.State == "unknown") && i < len(r.Definition.Parties) && r.Definition.Parties[i].Reconcile != nil {
-				next := t.confirmationReads.next(r.ID+":"+p.Name, p.ReconcileDue)
+				next := t.schedules.Confirmations.Next(r.ID+":"+p.Name, p.ReconcileDue)
 				if !found || next.Before(earliest) {
 					earliest, found = next, true
 				}
@@ -91,10 +91,10 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			if refusal != nil || !valid {
 				continue
 			}
-			if reads >= statusReadLimit {
+			if reads >= dataowner.StatusReadLimit {
 				return
 			}
-			if !t.confirmationReads.start(slot, run.Parties[i].ReconcileDue, at, &reads) {
+			if !t.schedules.Confirmations.Start(slot, run.Parties[i].ReconcileDue, at, &reads) {
 				continue
 			}
 			p := run.Parties[i]
@@ -155,7 +155,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			if diff.Matched {
 				outcome = "accepted"
 			}
-			t.confirmationReads.finished(slot, at.Add(time.Duration(policy.EverySeconds)*time.Second))
+			t.schedules.Confirmations.Finished(slot, at.Add(time.Duration(policy.EverySeconds)*time.Second))
 			_, _ = decideOnImage(t, context.Background(), "confirmation:answer", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
 				current, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), run.ID)
 				valid := exists && current.Revision == run.Revision && i < len(current.Parties) && current.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, current.State)

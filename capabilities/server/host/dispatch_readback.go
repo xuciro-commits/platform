@@ -31,9 +31,9 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 	for _, run := range runs {
 		active[run.Intent] = true
 	}
-	t.dispatchReads.retain(active)
+	t.schedules.Dispatches.Retain(active)
 	due := func(run platform.DispatchRun) time.Time {
-		return t.dispatchReads.next(run.Intent, run.ReadDue)
+		return t.schedules.Dispatches.Next(run.Intent, run.ReadDue)
 	}
 	slices.SortStableFunc(runs, func(a, b platform.DispatchRun) int { return due(a).Compare(due(b)) })
 	reads := 0
@@ -63,14 +63,14 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		if refusal != nil || !valid {
 			continue
 		}
-		if reads >= statusReadLimit {
+		if reads >= dataowner.StatusReadLimit {
 			return
 		}
-		if !t.dispatchReads.start(run.Intent, run.ReadDue, at, &reads) {
+		if !t.schedules.Dispatches.Start(run.Intent, run.ReadDue, at, &reads) {
 			continue
 		}
 		reading := t.readDispatchStatus(run, at)
-		t.dispatchReads.finished(run.Intent, at.Add(time.Duration(run.Definition.Readback.EverySeconds)*time.Second))
+		t.schedules.Dispatches.Finished(run.Intent, at.Add(time.Duration(run.Definition.Readback.EverySeconds)*time.Second))
 		_, _ = decideOnImage(t, context.Background(), "dispatch:answer", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
 			current, found := platform.Get[platform.DispatchRun](t.automation(build.ID, false), run.ID)
 			currentStamp, valid := t.statusReadStamp(current.Revision, current.Member, current.Source, current.Connection, current.Definition.Readback.Record != "")

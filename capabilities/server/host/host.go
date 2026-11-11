@@ -21,6 +21,7 @@ import (
 	controlowner "platformserver/services/security/control"
 
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
 	"sync"
 	"sync/atomic"
@@ -29,87 +30,84 @@ import (
 
 type Tenant struct {
 	runtimekernel.Sequence
-	agentEvaluator        platform.AgentEvaluator
-	agentRun              string
-	services              platform.RuntimeCapabilities
-	disabledOwners        map[string]bool
-	installingSet         bool
-	currentReadScopes     bool
-	readScope             *recordReadScope
-	readOrigin            *Tenant
-	readImage             atomic.Pointer[tenantReadImage]
-	preparedResult        *preparedAccepted
-	startupSnapshot       *snapshotCompatibility
-	simulation            bool
-	simulationTrace       func(platform.DecisionTrace)
-	observationWindows    map[string]observationWindowAttempt
-	observationScheduleMu sync.Mutex
-	confirmationReads     statusReadSchedule
-	dispatchReads         statusReadSchedule
-	observations          runtimekernel.ObservationBuffer
-	runIndexMu            sync.Mutex
-	runIndexAt            map[string]runIndexCache
-	runIndexGen           atomic.Int64
-	controlAnswer         func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
-	identity              platform.IdentityDirectory
-	claims                platform.Facts
-	claimSchemas          platform.SchemaRegistry
-	entityIDs             platform.Identity
-	Record                func(Entry)
-	AcceptResult          func(Entry, string, string) ([]byte, error)
-	knowledge             platform.Glossary
-	index                 *knowledgeindex.Index
-	i18n                  transport.Translator
-	views                 transport.ViewCache
-	readViews             *transport.ViewCache
-	defGen                atomic.Uint64
-	streamMu              sync.Mutex
-	lineageCache          lineage.Cache[*branchWorld]
-	markings              lineage.MarkingCache[*records.Store]
-	apps                  []platform.App
-	appIndex              map[string]int
-	releases              releases.Store
-	console               controlowner.HostState
-	staged                computeowner.Channel
-	definitions           []platform.Definition
-	owner                 map[string]platform.App
-	flowArtifacts         flowArtifactGC
-	audit                 runtimekernel.AuditLog
-	events                []automation.QueuedEvent
-	bindings              map[string]binding
-	observers             []platform.Observer
-	change                changes
-	linker                platform.Linker
-	directory             platform.Directory
-	hops                  int
-	acted                 int
-	works                 platform.Works
-	opsMu                 sync.Mutex
-	work                  automation.WorkBoard
-	Quota                 int
-	quota                 automation.Quota
-	breakers              integrations.Breakers
-	connectors            connectorRoster
-	notices               runtimekernel.NoticeBoard
-	settings              controlowner.Settings
-	words                 controlowner.Words
-	sequences             runtimekernel.Sequences
-	endpoints             []*Endpoint
-	outbound              []*effect
-	Secrets               func(name string) ([]byte, bool)
-	Outbound              func(req *http.Request, allowPrivate bool) (*http.Response, error)
-	AIClient              func(req *http.Request) (*http.Response, error)
-	ai                    models
-	tasks                 platform.Tasks
-	procs                 platform.Processes
-	listeners             []string
-	agents                platform.AgentRuntime
-	Files                 platform.FileStore
-	ComputeWorker         platform.WasmWorker
-	Compiler              platform.CodeCompiler
-	cancels               computeowner.Cancels
-	memFiles              resources.MemoryFiles
-	uploads               resources.Uploads
+	agentEvaluator    platform.AgentEvaluator
+	agentRun          string
+	services          platform.RuntimeCapabilities
+	disabledOwners    map[string]bool
+	installingSet     bool
+	currentReadScopes bool
+	readScope         *recordReadScope
+	readOrigin        *Tenant
+	readImage         atomic.Pointer[tenantReadImage]
+	preparedResult    *preparedAccepted
+	startupSnapshot   *snapshotCompatibility
+	simulation        bool
+	simulationTrace   func(platform.DecisionTrace)
+	schedules         dataowner.ReadSchedules
+	observations      runtimekernel.ObservationBuffer
+	runIndexMu        sync.Mutex
+	runIndexAt        map[string]runIndexCache
+	runIndexGen       atomic.Int64
+	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
+	identity          platform.IdentityDirectory
+	claims            platform.Facts
+	claimSchemas      platform.SchemaRegistry
+	entityIDs         platform.Identity
+	Record            func(Entry)
+	AcceptResult      func(Entry, string, string) ([]byte, error)
+	knowledge         platform.Glossary
+	index             *knowledgeindex.Index
+	i18n              transport.Translator
+	views             transport.ViewCache
+	readViews         *transport.ViewCache
+	defGen            atomic.Uint64
+	streamMu          sync.Mutex
+	lineageCache      lineage.Cache[*branchWorld]
+	markings          lineage.MarkingCache[*records.Store]
+	apps              []platform.App
+	appIndex          map[string]int
+	releases          releases.Store
+	console           controlowner.HostState
+	staged            computeowner.Channel
+	definitions       []platform.Definition
+	owner             map[string]platform.App
+	flowArtifacts     flowArtifactGC
+	audit             runtimekernel.AuditLog
+	events            []automation.QueuedEvent
+	bindings          map[string]binding
+	observers         []platform.Observer
+	change            changes
+	linker            platform.Linker
+	directory         platform.Directory
+	hops              int
+	acted             int
+	works             platform.Works
+	opsMu             sync.Mutex
+	work              automation.WorkBoard
+	Quota             int
+	quota             automation.Quota
+	breakers          integrations.Breakers
+	connectors        connectorRoster
+	notices           runtimekernel.NoticeBoard
+	settings          controlowner.Settings
+	words             controlowner.Words
+	sequences         runtimekernel.Sequences
+	endpoints         []*Endpoint
+	outbound          []*effect
+	Secrets           func(name string) ([]byte, bool)
+	Outbound          func(req *http.Request, allowPrivate bool) (*http.Response, error)
+	AIClient          func(req *http.Request) (*http.Response, error)
+	ai                models
+	tasks             platform.Tasks
+	procs             platform.Processes
+	listeners         []string
+	agents            platform.AgentRuntime
+	Files             platform.FileStore
+	ComputeWorker     platform.WasmWorker
+	Compiler          platform.CodeCompiler
+	cancels           computeowner.Cancels
+	memFiles          resources.MemoryFiles
+	uploads           resources.Uploads
 
 	includeArchivedDefinitions bool
 }

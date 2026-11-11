@@ -32,7 +32,10 @@ func newListenerProbe(tenant string) *listenerProbe {
 	return &listenerProbe{ledger: platform.NewLedger(tenant, "listenerprobe", platform.NewCatalog(platform.Action{Schema: "listenerprobe.receive", Target: "listenerprobe.event", Title: "Receive event", Description: "Accept one connector event.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "title", Type: "string", Required: true, Description: "Event title"}}}), "listenerprobe.event")}
 }
 
-func (p *listenerProbe) AcceptedLedger() *platform.Ledger         { return p.ledger }
+func (p *listenerProbe) AcceptedLedger() *platform.Ledger { return p.ledger }
+func (p *listenerProbe) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+	return &listenerProbe{ledger: ledger}, nil
+}
 func (p *listenerProbe) Declarations() []*pb.AuthorityDeclaration { return p.ledger.Declarations() }
 func (p *listenerProbe) SnapshotFormat() string                   { return "platform.ledger.v1" }
 func (p *listenerProbe) Snapshot() (json.RawMessage, error)       { return p.ledger.Snapshot() }
@@ -67,7 +70,7 @@ func (p *listenerProbe) Submit(c platform.Caller, s *pb.Submission, at time.Time
 	})
 }
 
-func TestAcceptanceListenersAndMonitoringViews(t *testing.T) {
+func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 	const tenant = "listeners-monitoring"
 	seats := []platform.Seat{
 		{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin"}}},
