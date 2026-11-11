@@ -39,14 +39,9 @@ func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan
 	return plan, nil
 }
 
-func (t *Tenant) publishAccepted(e platform.Event, plan platform.AcceptedEventPlan, version int) {
+func (t *Tenant) publishAccepted(e platform.Event, plan platform.AcceptedEventPlan) {
 	t.acted++
-	c := automation.QueuedEvent{Event: e, Hops: t.hops, Span: t.current()}
-	if version >= 2 {
-		c.Plan = &plan
-		c.Hops = plan.Hops
-	}
-	t.events = append(t.events, c)
+	t.events = append(t.events, automation.QueuedEvent{Event: e, Hops: plan.Hops, Span: t.current(), Plan: &plan})
 }
 
 func (t *Tenant) Deliveries() []platform.Delivery { return t.audit.RecentDeliveries() }

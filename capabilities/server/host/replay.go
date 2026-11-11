@@ -167,8 +167,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	if decodeErr != nil {
 		return fmt.Errorf("entry %d: invalid accepted result: %v", i+1, decodeErr)
 	}
-	if saved.App != e.App || receipt.GetSubmission().GetPrincipalId() != m.ID ||
-		saved.Version >= 2 && !persistence.SameTime(saved.At, e.At) {
+	if saved.App != e.App || receipt.GetSubmission().GetPrincipalId() != m.ID || !persistence.SameTime(saved.At, e.At) {
 		return fmt.Errorf("entry %d: accepted result app or input clock differs from journal entry", i+1)
 	}
 	if _, refused := t.Committed.Refusal(e.App + "/" + receipt.GetSubmission().GetIdempotencyKey()); refused {
@@ -179,7 +178,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		return fmt.Errorf("entry %d: accepted result: %v (applied=%t)", i+1, applyErr, applied)
 	}
 	t.audit.Remember(submitted(m.ID, a, receipt.GetSubmission(), e.At))
-	t.publishAccepted(platform.Event{App: e.App, Record: receipt, Changed: saved.Event.Changed}, saved.Event, saved.Version)
+	t.publishAccepted(platform.Event{App: e.App, Record: receipt, Changed: saved.Event.Changed}, saved.Event)
 	t.enqueue(e.At)
 	return nil
 }

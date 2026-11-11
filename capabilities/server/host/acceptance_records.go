@@ -54,7 +54,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if err := d.records.ValidateChangedLinkConstraints(); err != nil {
 		return nil, fmt.Errorf("batch links: %w", err)
 	}
-	result := acceptedformat.Batch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
+	result := acceptedformat.Batch{Version: 8, Kind: "record-batch", Tenant: d.tenant.ID,
 		Definitions: slices.Clone(d.installations),
 		App:         app, At: at.UTC(), Sequences: maps.Clone(d.allocated), SequenceBases: maps.Clone(d.sequenceBases),
 		Notices: d.notices.Saved(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations)}
@@ -66,9 +66,6 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	result.Control, err = d.savedControl()
 	if err != nil {
 		return nil, fmt.Errorf("batch control: %w", err)
-	}
-	if result.Control != nil {
-		result.Version = 3
 	}
 	result.Operations, err = d.savedOperationCancellations()
 	if err != nil {
@@ -146,17 +143,13 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		if len(seen)+len(result.DirectRows) != d.records.WriteCount() {
 			return nil, fmt.Errorf("batch event omits a written record")
 		}
-		result.Version = 4
 	}
 	if len(d.iterations) > 0 {
 		result.Iterations = slices.Clone(d.iterations)
-		result.Version = 5
 	}
 	if len(d.businessFacts) > 0 {
 		result.Business = slices.Clone(d.businessFacts)
-		result.Version = 7
 	}
-	result.Version = 8
 	if len(result.Iterations) > 0 {
 		result.Version = 9
 	}
@@ -290,8 +283,7 @@ func (t *Tenant) publishAcceptedBatch(result acceptedformat.Batch) {
 	for _, decision := range result.Decisions {
 		r := new(pb.ChangeRecord)
 		_ = protojson.Unmarshal(decision.Receipt, r)
-		t.publishAccepted(platform.Event{App: decision.Event.App, Record: r, Changed: decision.Event.Changed},
-			decision.Event, 2)
+		t.publishAccepted(platform.Event{App: decision.Event.App, Record: r, Changed: decision.Event.Changed}, decision.Event)
 	}
 }
 

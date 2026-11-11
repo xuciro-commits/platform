@@ -348,7 +348,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 	}
 	if applied {
 		t.audit.Remember(submitted(m.ID, a, receipt.GetSubmission(), saved.At))
-		t.publishAccepted(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed}, saved.Event, saved.Version)
+		t.publishAccepted(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed}, saved.Event)
 		t.changedOwner(saved.App)
 	}
 	t.enqueue(saved.At)
