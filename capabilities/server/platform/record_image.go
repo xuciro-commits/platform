@@ -165,10 +165,6 @@ type RecordSetRef struct {
 	Name   string `json:"name"`
 }
 
-type RecordSetRuntime interface {
-	ReadRecordSet(Caller, string, string, string, time.Time) (RecordSetResult, *kernel.Error)
-}
-
 type RecordSetCandidateRuntime interface {
 	ReadRecordSetCandidate(Caller, string, string, string, json.RawMessage, time.Time) (RecordSetResult, *kernel.Error)
 }
@@ -219,11 +215,10 @@ func LowerRecordSetPredicate(set RecordSet, expr Expr, lookup func(string) (Enti
 }
 
 func (c Caller) ReadRecordSet(object, id, name string, at time.Time) (RecordSetResult, *kernel.Error) {
-	runtime, ok := c.rt.(RecordSetRuntime)
-	if !ok {
+	if c.rt == nil {
 		return RecordSetResult{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Declared record sets require the host")
 	}
-	return runtime.ReadRecordSet(c, object, id, name, at)
+	return c.rt.ReadRecordSet(c, object, id, name, at)
 }
 
 func (s *RecordSet) UnmarshalJSON(raw []byte) error {

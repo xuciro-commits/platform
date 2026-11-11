@@ -187,11 +187,9 @@ type AcceptedInputApp interface {
 	DecodeAcceptedInput(json.RawMessage) (any, error)
 }
 
-type AuthorizationEngineRuntime interface{ AuthorizationEngine() AuthorizationEngine }
-
 func NewCaller(rt Runtime, m Member, app string, replaying, automation bool) Caller {
-	if provider, ok := rt.(AuthorizationEngineRuntime); ok {
-		m = m.WithAuthorization(provider.AuthorizationEngine())
+	if rt != nil {
+		m = m.WithAuthorization(rt.AuthorizationEngine())
 	}
 	return Caller{Member: m, App: app, Replaying: replaying, Automation: automation, rt: rt}
 }
@@ -257,10 +255,6 @@ type ReadRuntime interface {
 	ReadQueryVersion(Caller, string, string, int, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
 	ReadRecord(Caller, string, string, time.Time) (json.RawMessage, *kernel.Error)
 	ReadRecordPath(Caller, string, string, []string, time.Time) (json.RawMessage, []string, *kernel.Error)
-}
-
-type RuleReadRuntime interface {
-	ReadRuleQuery(Caller, RuleCollection, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
 }
 
 type OperationRuntime interface {
@@ -334,6 +328,22 @@ type Runtime interface {
 	Probing() bool
 	Readable(c Caller, ref string) bool
 	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error)
+	Authorize(Caller, AuthzRequest, time.Time) AuthzDecision
+	AuthorizationEngine() AuthorizationEngine
+	Kernel() KernelFactory
+	Rules() RuleEngine
+	ReadRuleQuery(Caller, RuleCollection, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
+	ReadRecordSet(Caller, string, string, string, time.Time) (RecordSetResult, *kernel.Error)
+	ResolveValueType(AssetBinding) (ValueType, bool)
+	Simulating() bool
+	OwnedRelations(Caller, string) []RelationLink
+	LegacyRelationActive(Caller, RelationLink) bool
+	LegacyRelationWritable(Caller, string, string) bool
+	CheckEnterpriseUsage(Caller, string, string, bool, time.Time) *kernel.Error
+	CheckEnterpriseTenantConnection(Caller, string, time.Time) *kernel.Error
+	VisibleApplications(Caller) []AssetRef
+	TraceEnabled() bool
+	RecordDecisionTrace(DecisionTrace)
 }
 
 type Manifest struct {
@@ -547,10 +557,6 @@ type AuthzElement struct {
 	Decision AuthzDecision `json:"decision"`
 }
 
-type AuthorizationRuntime interface {
-	Authorize(Caller, AuthzRequest, time.Time) AuthzDecision
-}
-
 type AuthorizationRecorder interface {
 	RecordAuthorization(Caller, AuthzRequest, AuthzDecision)
 }
@@ -563,8 +569,8 @@ func (c Caller) AuthorizationRecorder() AuthorizationRecorder {
 }
 
 func (c Caller) Authorize(request AuthzRequest, at time.Time) AuthzDecision {
-	if r, ok := c.rt.(AuthorizationRuntime); ok {
-		return r.Authorize(c, request, at)
+	if c.rt != nil {
+		return c.rt.Authorize(c, request, at)
 	}
 	return AuthzDecision{Rule: "none", Reason: "Authorization requires the owner runtime", Layers: []AuthzLayer{{Name: "principal", Reason: "Authorization requires the owner runtime"}}}
 }

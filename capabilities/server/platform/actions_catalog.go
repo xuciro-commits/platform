@@ -157,7 +157,7 @@ func (c *Catalog) Decide(caller Caller, schema string) AuthzDecision {
 }
 
 func (c *Catalog) DecideOn(caller Caller, schema, target string) AuthzDecision {
-	if _, ok := caller.rt.(AuthorizationRuntime); ok && !caller.Replaying {
+	if caller.rt != nil && !caller.Replaying {
 		typ, id, _ := strings.Cut(target, "/")
 		kind := "action"
 		if strings.HasSuffix(schema, ".create") {
@@ -173,7 +173,7 @@ func (c *Catalog) DecideOn(caller Caller, schema, target string) AuthzDecision {
 }
 
 func (c *Catalog) DecideSubmission(caller Caller, s *pb.Submission, at time.Time) AuthzDecision {
-	if _, hosted := caller.rt.(AuthorizationRuntime); !hosted || caller.Replaying {
+	if caller.rt == nil || caller.Replaying {
 		return c.DecideOn(caller, s.GetSchema().GetName(), s.GetTarget().GetType()+"/"+s.GetTarget().GetId())
 	}
 	typ, schema := s.GetTarget().GetType(), s.GetSchema().GetName()

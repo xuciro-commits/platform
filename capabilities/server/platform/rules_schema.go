@@ -538,9 +538,8 @@ func ruleInputName(name string) string {
 }
 
 func (c Caller) readRuleQuery(set RuleCollection, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
-	reader, ok := c.rt.(RuleReadRuntime)
-	if !ok {
+	if c.rt == nil {
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Scoped rule collections require the host")
 	}
-	return reader.ReadRuleQuery(c, set, inputs, now)
+	return c.rt.ReadRuleQuery(c, set, inputs, now)
 }

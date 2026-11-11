@@ -252,11 +252,9 @@ type Definition struct {
 	Operation          *Operation                 `json:"operation,omitempty"`
 }
 
-type ApplicationVisibility interface{ VisibleApplications(Caller) []AssetRef }
-
 func (c Caller) VisibleApplications() []AssetRef {
-	if rt, ok := c.rt.(ApplicationVisibility); ok {
-		return rt.VisibleApplications(c)
+	if c.rt != nil {
+		return c.rt.VisibleApplications(c)
 	}
 	return nil
 }

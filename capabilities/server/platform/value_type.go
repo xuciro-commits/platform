@@ -125,13 +125,9 @@ func (d Definition) ValueVersion(version string) *Definition {
 	return &d
 }
 
-type ValueTypeRuntime interface {
-	ResolveValueType(AssetBinding) (ValueType, bool)
-}
-
 func (c Caller) ResolveValueType(binding AssetBinding) (ValueType, bool) {
-	if r, ok := c.rt.(ValueTypeRuntime); ok {
-		return r.ResolveValueType(binding)
+	if c.rt != nil {
+		return c.rt.ResolveValueType(binding)
 	}
 	return ValueType{}, false
 }

@@ -32,7 +32,7 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 			caller.Trace(event)
 		}()
 	}
-	if _, supported := caller.rt.(AuthorizationRuntime); supported && !caller.Replaying && reads.Object != "" {
+	if caller.rt != nil && !caller.Replaying && reads.Object != "" {
 		var subject struct {
 			ID string `json:"id"`
 		}
@@ -231,11 +231,9 @@ type RuleEngine interface {
 
 type NativeRules struct{}
 
-type RuleRuntime interface{ Rules() RuleEngine }
-
 func (c Caller) Rules() RuleEngine {
-	if runtime, ok := c.rt.(RuleRuntime); ok {
-		return runtime.Rules()
+	if c.rt != nil {
+		return c.rt.Rules()
 	}
 	return NativeRules{}
 }

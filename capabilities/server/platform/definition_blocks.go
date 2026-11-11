@@ -122,9 +122,7 @@ func (p ProposalAdoption) Check() error {
 	return nil
 }
 
-type SimulationRuntime interface{ Simulating() bool }
-
-func (c Caller) Simulating() bool { r, ok := c.rt.(SimulationRuntime); return ok && r.Simulating() }
+func (c Caller) Simulating() bool { return c.rt != nil && c.rt.Simulating() }
 
 func (p ProposalAdoption) CheckMapping(f AIFunction, inputs []Field) error {
 	if err := p.Check(); err != nil {

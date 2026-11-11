@@ -76,11 +76,9 @@ type Facts interface {
 	Restore(string, []*pb.FactRecord)
 }
 
-type KernelRuntime interface{ Kernel() KernelFactory }
-
 func (c Caller) Kernel() KernelFactory {
-	if runtime, ok := c.rt.(KernelRuntime); ok {
-		return runtime.Kernel()
+	if c.rt != nil {
+		return c.rt.Kernel()
 	}
 	return NativeKernel{}
 }

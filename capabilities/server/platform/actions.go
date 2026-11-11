@@ -287,18 +287,12 @@ type DecisionTrace struct {
 	Refusal       string          `json:"refusal,omitempty"`
 }
 
-type DecisionTraceRecorder interface {
-	TraceEnabled() bool
-	RecordDecisionTrace(DecisionTrace)
-}
-
 func (c Caller) TraceEnabled() bool {
-	r, ok := c.rt.(DecisionTraceRecorder)
-	return ok && r.TraceEnabled()
+	return c.rt != nil && c.rt.TraceEnabled()
 }
 
 func (c Caller) Trace(event DecisionTrace) {
-	if r, ok := c.rt.(DecisionTraceRecorder); ok && r.TraceEnabled() {
-		r.RecordDecisionTrace(event)
+	if c.TraceEnabled() {
+		c.rt.RecordDecisionTrace(event)
 	}
 }

@@ -70,29 +70,23 @@ func (c Caller) MigrateOwnedRelations(receipt *pb.ChangeRecord, binding AssetBin
 
 type LegacyRelationSource interface{ LegacyRelations() []RelationLink }
 
-type OwnedRelationReadRuntime interface {
-	OwnedRelations(Caller, string) []RelationLink
-	LegacyRelationActive(Caller, RelationLink) bool
-	LegacyRelationWritable(Caller, string, string) bool
-}
-
 func (c Caller) OwnedRelations(entity string) []RelationLink {
-	if runtime, ok := c.rt.(OwnedRelationReadRuntime); ok {
-		return runtime.OwnedRelations(c, entity)
+	if c.rt != nil {
+		return c.rt.OwnedRelations(c, entity)
 	}
 	return nil
 }
 
 func (c Caller) LegacyRelationActive(link RelationLink) bool {
-	if runtime, ok := c.rt.(OwnedRelationReadRuntime); ok {
-		return runtime.LegacyRelationActive(c, link)
+	if c.rt != nil {
+		return c.rt.LegacyRelationActive(c, link)
 	}
 	return true
 }
 
 func (c Caller) LegacyRelationWritable(from, to string) bool {
-	if runtime, ok := c.rt.(OwnedRelationReadRuntime); ok {
-		return runtime.LegacyRelationWritable(c, from, to)
+	if c.rt != nil {
+		return c.rt.LegacyRelationWritable(c, from, to)
 	}
 	return true
 }

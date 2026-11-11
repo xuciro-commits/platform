@@ -115,17 +115,12 @@ type Enterprise struct{ c Caller }
 
 func (c Caller) Enterprise() Enterprise { return Enterprise{c} }
 
-type EnterpriseUsageRuntime interface {
-	CheckEnterpriseUsage(Caller, string, string, bool, time.Time) *kernel.Error
-	CheckEnterpriseTenantConnection(Caller, string, time.Time) *kernel.Error
-}
-
 func (e Enterprise) CheckUsage(id, until string, deleting bool, now time.Time) *kernel.Error {
 	if e.c.Replaying {
 		return nil
 	}
-	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
-		return runtime.CheckEnterpriseUsage(e.c, id, until, deleting, now)
+	if e.c.rt != nil {
+		return e.c.rt.CheckEnterpriseUsage(e.c, id, until, deleting, now)
 	}
 	return nil
 }
@@ -134,8 +129,8 @@ func (e Enterprise) CheckTenantConnection(id string, now time.Time) *kernel.Erro
 	if e.c.Replaying {
 		return nil
 	}
-	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
-		return runtime.CheckEnterpriseTenantConnection(e.c, id, now)
+	if e.c.rt != nil {
+		return e.c.rt.CheckEnterpriseTenantConnection(e.c, id, now)
 	}
 	return nil
 }
