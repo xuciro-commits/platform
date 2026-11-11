@@ -392,7 +392,9 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	if s.Works, err = platform.Protos(t.works.All()); err != nil {
 		return tenantState{}, nil, 0, err
 	}
+	t.work.Lock()
 	work, workErr := t.work.Snapshot()
+	t.work.Unlock()
 	s.Queues = work.Queues
 	s.Failed = append(s.Failed, work.Failed...)
 	s.Tasks = append(s.Tasks, work.Tasks...)
@@ -736,7 +738,10 @@ func (t *Tenant) restoreOperations(s *tenantState) error {
 	defer t.opsMu.Unlock()
 	t.acted = s.Acted
 	t.works.Restore(works)
-	if err := t.work.Restore(t.ID, automation.WorkState{Queues: s.Queues, Failed: s.Failed, Tasks: s.Tasks, Jobs: s.Jobs}); err != nil {
+	t.work.Lock()
+	err = t.work.Restore(t.ID, automation.WorkState{Queues: s.Queues, Failed: s.Failed, Tasks: s.Tasks, Jobs: s.Jobs})
+	t.work.Unlock()
+	if err != nil {
 		return err
 	}
 	t.connectors.Restore(descriptors, s.Marks, s.LastError)

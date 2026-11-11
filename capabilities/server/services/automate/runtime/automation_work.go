@@ -7,6 +7,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"slices"
+	"sync"
 	"time"
 )
 
@@ -18,10 +19,8 @@ type WorkState struct {
 }
 type WorkLoop struct {
 	Board        *WorkBoard
-	Rotation     *Rotation
 	Apps         []platform.App
 	Active       func(string) bool
-	Lock, Unlock func()
 	Attempt, Run func(*Task, time.Time, bool) string
 }
 
@@ -59,9 +58,11 @@ type Rotation struct{ turn int }
 func (r *Rotation) Next(n int) { r.turn = (r.turn + 1) % max(n, 1) }
 
 type WorkBoard struct {
-	Queues map[string][]*Task
-	Failed []*Task
-	Jobs   []*Task
+	sync.Mutex
+	Queues   map[string][]*Task
+	Failed   []*Task
+	Jobs     []*Task
+	Rotation Rotation
 }
 
 func NewWorkBoard() WorkBoard { return WorkBoard{Queues: map[string][]*Task{}} }
@@ -223,6 +224,66 @@ func (b *WorkBoard) Restore(tenant string, s WorkState) error {
 	return nil
 }
 
+func (b *WorkBoard) Install(tenant string, s WorkState, known func(app string) bool) error {
+	tasks := map[string]bool{}
+	for _, task := range s.Tasks {
+		if task.ID == "" || tasks[task.ID] || !known(task.App) {
+			return fmt.Errorf("control work identity differs")
+		}
+		tasks[task.ID] = true
+	}
+	indexed := map[string]bool{}
+	for app, queue := range s.Queues {
+		if !known(app) {
+			return fmt.Errorf("control queue owner missing")
+		}
+		for _, id := range queue {
+			if !tasks[id] || indexed[id] {
+				return fmt.Errorf("control queue references missing or duplicate work")
+			}
+			indexed[id] = true
+		}
+	}
+	for _, id := range s.Failed {
+		if !tasks[id] || indexed[id] {
+			return fmt.Errorf("control failed work identity differs")
+		}
+		indexed[id] = true
+	}
+	if len(indexed) != len(tasks) {
+		return fmt.Errorf("control work is unassigned")
+	}
+	old := map[string]*Task{}
+	for _, queue := range b.Queues {
+		for _, task := range queue {
+			old[task.ID] = task
+		}
+	}
+	for _, task := range b.Failed {
+		old[task.ID] = task
+	}
+	if err := b.Restore(tenant, s); err != nil {
+		return err
+	}
+	reuse := func(task *Task) *Task {
+		if prior := old[task.ID]; prior != nil {
+			prior.RestoreOutcome(*task)
+			prior.Since = task.Since
+			return prior
+		}
+		return task
+	}
+	for app, queue := range b.Queues {
+		for i, task := range queue {
+			b.Queues[app][i] = reuse(task)
+		}
+	}
+	for i, task := range b.Failed {
+		b.Failed[i] = reuse(task)
+	}
+	return nil
+}
+
 func Ready(q []*Task, now time.Time) *Task {
 	held := map[string]bool{}
 	for _, x := range q {
@@ -245,13 +306,15 @@ func (s WorkLoop) Round(now time.Time, budget int) (bool, int) {
 			if took >= budget {
 				break
 			}
-			a := s.Apps[(s.Rotation.turn+i)%n].Manifest().ID
+			s.Board.Lock()
+			a := s.Apps[(s.Board.Rotation.turn+i)%n].Manifest().ID
+			s.Board.Unlock()
 			if !s.Active(a) {
 				continue
 			}
-			s.Lock()
+			s.Board.Lock()
 			next := Ready(s.Board.Queued(a), now)
-			s.Unlock()
+			s.Board.Unlock()
 			if next == nil {
 				continue
 			}
@@ -266,14 +329,16 @@ func (s WorkLoop) Round(now time.Time, budget int) (bool, int) {
 		}
 	}
 	if took > 0 {
-		s.Rotation.Next(n)
+		s.Board.Lock()
+		s.Board.Rotation.Next(n)
+		s.Board.Unlock()
 	}
 	return s.Pending(now), took
 }
 
 func (s WorkLoop) Pending(now time.Time) bool {
-	s.Lock()
-	defer s.Unlock()
+	s.Board.Lock()
+	defer s.Board.Unlock()
 	for app, q := range s.Board.Queues {
 		if s.Active(app) && Ready(q, now) != nil {
 			return true

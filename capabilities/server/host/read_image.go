@@ -184,11 +184,13 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	if err != nil {
 		return nil, err
 	}
+	t.work.Lock()
 	for _, job := range t.work.Jobs {
 		if current := view.work.Job(job.ID); current != nil {
 			current.NextRun = job.NextRun
 		}
 	}
+	t.work.Unlock()
 	view.readScope = &recordReadScope{ctx: ctx}
 	view.readOrigin = t
 	if t.readOrigin != nil {
@@ -235,9 +237,9 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 		view.agentEvaluator = t.services.NewAgentEvaluator()
 	}
 	view.breakers = t.breakers.Fork()
-	t.opsMu.Lock()
-	view.rotation = t.rotation
-	t.opsMu.Unlock()
+	t.work.Lock()
+	view.work.Rotation = t.work.Rotation
+	t.work.Unlock()
 	view.staged = compute.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())
 	view.claims = t.claims.Fork(t.ID)

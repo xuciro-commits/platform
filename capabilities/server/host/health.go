@@ -161,8 +161,8 @@ func (t *Tenant) finishHealth(h *TenantHealth, now time.Time) {
 
 func (t *Tenant) queueHealth(now time.Time) ([]QueueHealth, int) {
 	queues := []QueueHealth{}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
+	t.work.Lock()
+	defer t.work.Unlock()
 	for _, a := range t.apps {
 		q := t.work.Queued(a.Manifest().ID)
 		if len(q) == 0 {

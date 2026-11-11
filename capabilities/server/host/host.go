@@ -73,7 +73,6 @@ type Tenant struct {
 	works         *kernel.Works
 	opsMu         sync.Mutex
 	work          automation.WorkBoard
-	rotation      automation.Rotation
 	breakers      integrations.Breakers
 	connectors    *runtimekernel.ConnectorRoster
 	notices       runtimekernel.NoticeBoard

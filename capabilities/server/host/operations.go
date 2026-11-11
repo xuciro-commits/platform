@@ -86,8 +86,8 @@ func (t *Tenant) enqueue(now time.Time) {
 
 func (t *Tenant) deliver(subscriber string, e automation.QueuedEvent, now time.Time) {
 	s := e.Record.GetSubmission()
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
+	t.work.Lock()
+	defer t.work.Unlock()
 	t.work.Queue(subscriber, &automation.Task{ScheduledTask: platform.ScheduledTask{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
 		Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now.UTC()}, Event: &e})
 }
@@ -156,14 +156,17 @@ func (t *Tenant) step(now time.Time) (more bool) {
 				return progress{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 		}
-		t.opsMu.Lock()
-		t.rotation = value.scope.rotation
-		for _, job := range value.scope.work.Jobs {
+		value.scope.work.Lock()
+		rotation, jobs := value.scope.work.Rotation, slices.Clone(value.scope.work.Jobs)
+		value.scope.work.Unlock()
+		t.work.Lock()
+		t.work.Rotation = rotation
+		for _, job := range jobs {
 			if current := t.work.Job(job.ID); current != nil {
 				current.NextRun = job.NextRun
 			}
 		}
-		t.opsMu.Unlock()
+		t.work.Unlock()
 		t.WorkEpoch.Add(1)
 		value.more = t.workLoop().Pending(now)
 		return value, refusal
@@ -202,7 +205,7 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 	s := task.Event.Record.GetSubmission()
 	t.delivered(platform.Delivery{At: now, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: task.App,
 		Outcome: outcome, Attempt: int(generation)})
-	t.opsMu.Lock()
+	t.work.Lock()
 	task.Attempts, task.Last = int(generation), now
 	retry := t.retryOf(task.App)
 	done := outcome == "ok" || task.Attempts-task.Since >= retry.Attempts
@@ -217,7 +220,7 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 	if done {
 		t.work.Settled(task)
 	}
-	t.opsMu.Unlock()
+	t.work.Unlock()
 	if task.State == "failed" {
 		t.failedWork("Delivery to "+task.App+" failed: "+task.Title, outcome, task.ID, now, replaying)
 	}
@@ -235,9 +238,9 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) string {
 	if !replaying {
 		outcome := t.acceptWork(task, now)
-		t.opsMu.Lock()
+		t.work.Lock()
 		task.NextRun = now.Add(task.Job.Every)
-		t.opsMu.Unlock()
+		t.work.Unlock()
 		return outcome
 	}
 	generation, _, _ := t.works.Start(task.ID, "host")
@@ -246,9 +249,9 @@ func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) strin
 		outcome = err.Error()
 	}
 	t.works.Finish(task.ID, generation, outcome != "ok")
-	t.opsMu.Lock()
+	t.work.Lock()
 	task.Attempts, task.Last, task.Due, task.Error = int(generation), now, now.Add(task.Job.Every), map[bool]string{true: "", false: outcome}[outcome == "ok"]
-	t.opsMu.Unlock()
+	t.work.Unlock()
 	runStatus := "ok"
 	if outcome != "ok" {
 		runStatus = "failed"
@@ -268,14 +271,14 @@ func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool
 }
 
 func (t *Tenant) Tasks() []automation.Task {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
+	t.work.Lock()
+	defer t.work.Unlock()
 	return t.work.All(t.apps)
 }
 
 func (t *Tenant) retry(id string, now time.Time) bool {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
+	t.work.Lock()
+	defer t.work.Unlock()
 	return t.work.Retry(id, now)
 }
 
@@ -541,9 +544,9 @@ func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time)
 
 func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
-	t.opsMu.Lock()
+	t.work.Lock()
 	known := t.work.Knows(id)
-	t.opsMu.Unlock()
+	t.work.Unlock()
 	if !known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
@@ -563,5 +566,5 @@ func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.
 }
 
 func (t *Tenant) workLoop() automation.WorkLoop {
-	return automation.WorkLoop{Board: &t.work, Rotation: &t.rotation, Apps: t.apps, Active: t.OwnerActive, Lock: t.opsMu.Lock, Unlock: t.opsMu.Unlock, Attempt: t.attempt, Run: t.run}
+	return automation.WorkLoop{Board: &t.work, Apps: t.apps, Active: t.OwnerActive, Attempt: t.attempt, Run: t.run}
 }

@@ -47,7 +47,9 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 		return nil, err
 	}
 	state := tenantState{Queues: map[string][]string{}}
+	t.work.Lock()
 	work, workErr := t.work.Snapshot()
+	t.work.Unlock()
 	state.Queues = work.Queues
 	state.Failed = append(state.Failed, work.Failed...)
 	state.Tasks = append(state.Tasks, work.Tasks...)
@@ -77,10 +79,12 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), identity: t.identity, ownerSet: t.ownerSet, definitions: t.definitions, Projection: t.Projection, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
 		bindings: t.bindings.Clone(), connectors: runtimekernel.NewConnectorRoster(t.ID), work: automation.NewWorkBoard(), works: t.forkWorkState()}
+	t.work.Lock()
 	for _, j := range t.work.Jobs {
 		copy := *j
 		view.work.AddJob(&copy)
 	}
+	t.work.Unlock()
 	_, marks := t.connectors.State()
 	view.connectors.RestoreMarks(marks)
 	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps }, nil, view.words.Clone, PlatformLanguages)
@@ -121,72 +125,14 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 			}
 		}
 	case "work":
-		t.opsMu.Lock()
-		defer t.opsMu.Unlock()
 		var w controlWork
 		if err := acceptedformat.DecodeControl(raw, &w); err != nil {
 			return err
 		}
-		state := tenantState{Queues: w.Queues, Failed: w.Failed, Tasks: w.Tasks, Jobs: w.Jobs}
-		known := map[string]bool{}
-		for _, task := range w.Tasks {
-			if task.ID == "" || known[task.ID] || t.App(task.App) == nil {
-				return fmt.Errorf("control work identity differs")
-			}
-			known[task.ID] = true
-		}
-		indexed := map[string]bool{}
-		for app, queue := range w.Queues {
-			if t.App(app) == nil {
-				return fmt.Errorf("control queue owner missing")
-			}
-			for _, id := range queue {
-				if !known[id] || indexed[id] {
-					return fmt.Errorf("control queue references missing or duplicate work")
-				}
-				indexed[id] = true
-			}
-		}
-		for _, id := range w.Failed {
-			if !known[id] || indexed[id] {
-				return fmt.Errorf("control failed work identity differs")
-			}
-			indexed[id] = true
-		}
-		if len(indexed) != len(known) {
-			return fmt.Errorf("control work is unassigned")
-		}
-		old := map[string]*automation.Task{}
-		for _, queue := range t.work.Queues {
-			for _, task := range queue {
-				old[task.ID] = task
-			}
-		}
-		for _, task := range t.work.Failed {
-			old[task.ID] = task
-		}
-		if err := t.work.Restore(t.ID, automation.WorkState{Queues: state.Queues, Failed: state.Failed, Tasks: state.Tasks, Jobs: state.Jobs}); err != nil {
-			return err
-		}
-		reuse := func(task *automation.Task) *automation.Task {
-			if prior := old[task.ID]; prior != nil {
-				prior.RestoreOutcome(*task)
-				prior.Since = task.Since
-				return prior
-			}
-			return task
-		}
-		for app, queue := range t.work.Queues {
-			for i, task := range queue {
-				t.work.Queues[app][i] = reuse(task)
-			}
-		}
-		for i, task := range t.work.Failed {
-			t.work.Failed[i] = reuse(task)
-		}
+		t.work.Lock()
+		defer t.work.Unlock()
+		return t.work.Install(t.ID, automation.WorkState{Queues: w.Queues, Failed: w.Failed, Tasks: w.Tasks, Jobs: w.Jobs}, func(app string) bool { return t.App(app) != nil })
 	case "endpoints":
-		t.opsMu.Lock()
-		defer t.opsMu.Unlock()
 		var endpoints []*actions.Endpoint
 		if err := acceptedformat.DecodeControl(raw, &endpoints); err != nil {
 			return err
@@ -200,8 +146,6 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		}
 		t.endpoints.Restore(endpoints)
 	case "effects":
-		t.opsMu.Lock()
-		defer t.opsMu.Unlock()
 		var states []acceptedformat.EffectState
 		if err := acceptedformat.DecodeControl(raw, &states); err != nil {
 			return err

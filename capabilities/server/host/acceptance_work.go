@@ -326,13 +326,13 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 		return false, nil
 	}
 	var task *automation.Task
-	t.opsMu.Lock()
+	t.work.Lock()
 	if result.Input.Kind == "job" {
 		task = t.work.Job(result.Input.ID)
 	} else {
 		task = t.work.Delivery(result.App, result.Input.ID)
 	}
-	t.opsMu.Unlock()
+	t.work.Unlock()
 	if task == nil {
 		return false, fmt.Errorf("work result needs missing work %s", result.Input.ID)
 	}
@@ -363,7 +363,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 		return false, err
 	}
 	t.installAcceptedWork(finished)
-	t.opsMu.Lock()
+	t.work.Lock()
 	task.RestoreOutcome(automation.Task{ScheduledTask: result.After})
 	if task.Kind == "delivery" {
 		switch task.State {
@@ -371,7 +371,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 			t.work.Settled(task)
 		}
 	}
-	t.opsMu.Unlock()
+	t.work.Unlock()
 	if task.Kind == "delivery" {
 		s := task.Event.Record.GetSubmission()
 		t.delivered(platform.Delivery{At: result.At, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s),
