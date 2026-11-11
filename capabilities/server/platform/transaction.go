@@ -258,11 +258,9 @@ type TxnTransport interface {
 	QueueTxnEffect(Caller, *pb.ChangeRecord, string, TxnRef, json.RawMessage, time.Time) *kernel.Error
 }
 
-type TxnRuntime interface{ TxnTransport() TxnTransport }
-
 func (c Caller) TxnTransport() TxnTransport {
-	rt, ok := c.rt.(TxnRuntime)
-	if !ok || !c.Staging() || c.Replaying {
+	rt := c.StagedDecision()
+	if rt == nil || c.Replaying {
 		return nil
 	}
 	return rt.TxnTransport()
@@ -292,13 +290,9 @@ type TxnIteration struct {
 	IDs        []string `json:"ids"`
 }
 
-type TxnIterationRuntime interface {
-	CaptureTxnIteration(Caller, *pb.ChangeRecord, TxnIteration) *kernel.Error
-}
-
 func (c Caller) CaptureTxnIteration(receipt *pb.ChangeRecord, iteration TxnIteration) *kernel.Error {
-	runtime, ok := c.rt.(TxnIterationRuntime)
-	if !ok {
+	runtime := c.StagedDecision()
+	if runtime == nil {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction iteration requires a private decision")
 	}
 	return runtime.CaptureTxnIteration(c, receipt, iteration)

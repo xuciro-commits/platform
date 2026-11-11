@@ -31,13 +31,9 @@ type TxnLink struct {
 	Child   TxnRef       `json:"child"`
 }
 
-type OwnedRelationRuntime interface {
-	PutOwnedRelation(Caller, *pb.ChangeRecord, TxnLink, bool, time.Time) *kernel.Error
-}
-
 func (c Caller) PutOwnedRelation(receipt *pb.ChangeRecord, link TxnLink, remove bool, at time.Time) *kernel.Error {
-	runtime, ok := c.rt.(OwnedRelationRuntime)
-	if !ok {
+	runtime := c.StagedDecision()
+	if runtime == nil {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Owned relation writes require a private host")
 	}
 	return runtime.PutOwnedRelation(c, receipt, link, remove, at)
@@ -56,13 +52,9 @@ type RelationMigrationPlan struct {
 	Migrated bool           `json:"migrated"`
 }
 
-type OwnedRelationMigrationRuntime interface {
-	MigrateOwnedRelations(Caller, *pb.ChangeRecord, AssetBinding, time.Time) *kernel.Error
-}
-
 func (c Caller) MigrateOwnedRelations(receipt *pb.ChangeRecord, binding AssetBinding, at time.Time) *kernel.Error {
-	runtime, ok := c.rt.(OwnedRelationMigrationRuntime)
-	if !ok {
+	runtime := c.StagedDecision()
+	if runtime == nil {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Relationship migration requires a private decision")
 	}
 	return runtime.MigrateOwnedRelations(c, receipt, binding, at)

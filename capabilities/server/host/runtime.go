@@ -119,7 +119,7 @@ func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assi
 	return r.t.tasks.Assign(c, rec, a)
 }
 
-func (runtime) Probing() bool { return false }
+func (runtime) StagedDecision() platform.StagedDecision { return nil }
 
 func (r runtime) Readable(c platform.Caller, ref string) bool {
 	return r.t.readable(c.Member, ref, time.Now())

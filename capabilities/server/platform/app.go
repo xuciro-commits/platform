@@ -137,20 +137,43 @@ func (c Caller) WithInputDiagnostics(report func(*kernel.Error, []FieldIssue)) C
 
 func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 
-func (c Caller) Staging() bool {
-	_, ok := c.rt.(StagedRuntime)
-	return ok
+type StagedDecision interface {
+	HoldChanges(*Ledger) (release func(), refusal *kernel.Error)
+	DraftChanges(*Ledger, func() ChangeLog) ChangeLog
+	FailDecision(*kernel.Error)
+	RecordAuthorization(Caller, AuthzRequest, AuthzDecision)
+	BusinessRefused(*kernel.Error, BusinessRefusalFact)
+	CaptureBusinessRefusal(Caller, *pb.ChangeRecord, BusinessRefusalFact) *kernel.Error
+	RefuseBusinessCondition(Caller, string, string, any, map[string]any, time.Time) *kernel.Error
+	PendingRefusalEscalations(Caller, time.Time) ([]RefusalEscalationRequest, *kernel.Error)
+	PrepareBusinessVersions(Caller, any, time.Time) *kernel.Error
+	ConfirmationTransport() ConfirmationTransport
+	ConfirmationCompletion(Caller, string, string, string) bool
+	DispatchTransport() DispatchTransport
+	ReadRecordSetCandidate(Caller, string, string, string, json.RawMessage, time.Time) (RecordSetResult, *kernel.Error)
+	ObservationContext(Caller) *ObservationContext
+	TxnTransport() TxnTransport
+	CaptureTxnIteration(Caller, *pb.ChangeRecord, TxnIteration) *kernel.Error
+	PutOwnedRelation(Caller, *pb.ChangeRecord, TxnLink, bool, time.Time) *kernel.Error
+	MigrateOwnedRelations(Caller, *pb.ChangeRecord, AssetBinding, time.Time) *kernel.Error
+	Probing() bool
 }
 
-func (c Caller) ReadScoped() bool {
-	if c.Staging() {
-		return true
+func (c Caller) StagedDecision() StagedDecision {
+	if c.rt == nil {
+		return nil
 	}
-	scope, ok := c.rt.(interface{ ReadScoped() bool })
-	return ok && scope.ReadScoped()
+	return c.rt.StagedDecision()
 }
 
-type DecisionFailureRuntime interface{ FailDecision(*kernel.Error) }
+func (c Caller) Staging() bool { return c.StagedDecision() != nil }
+
+func (c Caller) probing() bool {
+	decision := c.StagedDecision()
+	return decision != nil && decision.Probing()
+}
+
+func (c Caller) ReadScoped() bool { return c.rt != nil && c.rt.ReadScoped() }
 
 type DecisionDeclarationRuntime interface {
 	DecisionCatalog(*Ledger) *Catalog
@@ -160,11 +183,11 @@ func (c Caller) FailDecision(err *kernel.Error) {
 	if err == nil {
 		return
 	}
-	runtime, ok := c.rt.(DecisionFailureRuntime)
-	if !ok || c.Replaying || !c.Staging() {
+	decision := c.StagedDecision()
+	if decision == nil || c.Replaying {
 		panic("decision failure requires private staging")
 	}
-	runtime.FailDecision(err)
+	decision.FailDecision(err)
 }
 
 type AcceptedPublisher interface {
@@ -292,12 +315,6 @@ func ControlDecision(c Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeR
 	return c.rt.ControlDecision(c, s, at)
 }
 
-type StagedRuntime interface {
-	Runtime
-	HoldChanges(*Ledger) (release func(), refusal *kernel.Error)
-	DraftChanges(*Ledger, func() ChangeLog) ChangeLog
-}
-
 type Runtime interface {
 	DecisionRuntime
 	ReadRuntime
@@ -325,7 +342,6 @@ type Runtime interface {
 	Find(c Caller, t reflect.Type, q Query) ([]any, int, *kernel.Error)
 	Check(c Caller, entity any) *kernel.Error
 	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *kernel.Error
-	Probing() bool
 	Readable(c Caller, ref string) bool
 	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error)
 	Authorize(Caller, AuthzRequest, time.Time) AuthzDecision
@@ -344,6 +360,8 @@ type Runtime interface {
 	VisibleApplications(Caller) []AssetRef
 	TraceEnabled() bool
 	RecordDecisionTrace(DecisionTrace)
+	StagedDecision() StagedDecision
+	ReadScoped() bool
 }
 
 type Manifest struct {
@@ -555,17 +573,6 @@ type AuthzCollection struct {
 type AuthzElement struct {
 	Record   string        `json:"record"`
 	Decision AuthzDecision `json:"decision"`
-}
-
-type AuthorizationRecorder interface {
-	RecordAuthorization(Caller, AuthzRequest, AuthzDecision)
-}
-
-func (c Caller) AuthorizationRecorder() AuthorizationRecorder {
-	if recorder, ok := c.rt.(AuthorizationRecorder); ok {
-		return recorder
-	}
-	return nil
 }
 
 func (c Caller) Authorize(request AuthzRequest, at time.Time) AuthzDecision {

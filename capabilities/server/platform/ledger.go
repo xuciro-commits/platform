@@ -269,7 +269,7 @@ func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
 func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
 	catalog := l.catalogFor(c)
-	if draft, ok := c.rt.(StagedRuntime); ok {
+	if draft := c.StagedDecision(); draft != nil {
 		release, refusal := draft.HoldChanges(l)
 		if refusal != nil {
 			return nil, refusal
@@ -285,11 +285,11 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
 	rules = l.checked(c, s, now, catalog, rules)
-	probing := c.rt != nil && c.rt.Probing()
+	probing := c.probing()
 	refused := false
 	var decision AuthzDecision
 	changes := l.changes
-	if draft, ok := c.rt.(StagedRuntime); ok {
+	if draft := c.StagedDecision(); draft != nil {
 		changes = draft.DraftChanges(l, l.changes.ForkLog)
 		if changes == nil || changes == l.changes {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -480,7 +480,7 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 	v.Elem().Set(reflect.ValueOf(existing))
 	status := v.Elem().FieldByIndex(f.Index)
 	from := status.String()
-	pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.rt.Probing()
+	pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.probing()
 	id := s.GetTarget().GetId()
 	if v.Elem().Field(0).Interface().(Record).Archived {
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
@@ -629,5 +629,5 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 }
 
 func inScope(c Caller, typ, id string) bool {
-	return c.Replaying || c.Automation || c.rt.Probing() || c.rt.Readable(c, typ+"/"+id)
+	return c.Replaying || c.Automation || c.probing() || c.rt.Readable(c, typ+"/"+id)
 }

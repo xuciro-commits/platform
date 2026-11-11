@@ -95,7 +95,9 @@ func (d *stagedDecision) InputRefused(err *kernel.Error, issues []platform.Field
 	d.inputIssues[err] = issues
 }
 
-var _ platform.StagedRuntime = (*stagedDecision)(nil)
+func (d *stagedDecision) StagedDecision() platform.StagedDecision { return d }
+func (d *stagedDecision) ReadScoped() bool                        { return true }
+func (d *stagedDecision) Probing() bool                           { return d.probing }
 
 func (d *stagedDecision) FailDecision(err *kernel.Error) {
 	if d.failure == nil {
@@ -304,8 +306,6 @@ func (d *stagedDecision) Readable(c platform.Caller, ref string) bool {
 	}
 	return d.tenant.readableIn(d.records, c.Member, ref, at)
 }
-
-func (d *stagedDecision) Probing() bool { return d.probing }
 
 type stagedEffectPanic struct{}
 

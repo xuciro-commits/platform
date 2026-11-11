@@ -83,7 +83,7 @@ func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string
 	c = platform.RouteCaller(c, owner)
 	c.Automation = false
 	decision := t.authorizeNative(c, permission, "action", allowed, declared, detail)
-	if draft := c.AuthorizationRecorder(); draft != nil {
+	if draft := c.StagedDecision(); draft != nil {
 		draft.RecordAuthorization(c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Action: permission}, decision)
 	}
 	return decision

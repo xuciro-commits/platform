@@ -23,20 +23,14 @@ type ConfirmationTransport interface {
 	CheckConfirmationRead(ConfirmationRun, int, time.Time) *kernel.Error
 }
 
-type ConfirmationRuntime interface{ ConfirmationTransport() ConfirmationTransport }
-
-type ConfirmationCompletionRuntime interface {
-	ConfirmationCompletion(Caller, string, string, string) bool
-}
-
 func (c Caller) ConfirmationCompletion(object, id, action string) bool {
-	runtime, ok := c.rt.(ConfirmationCompletionRuntime)
-	return ok && runtime.ConfirmationCompletion(c, object, id, action)
+	decision := c.StagedDecision()
+	return decision != nil && decision.ConfirmationCompletion(c, object, id, action)
 }
 
 func (c Caller) ConfirmationTransport() ConfirmationTransport {
-	rt, ok := c.rt.(ConfirmationRuntime)
-	if !ok || !c.Staging() || c.Replaying {
+	rt := c.StagedDecision()
+	if rt == nil || c.Replaying {
 		return nil
 	}
 	return rt.ConfirmationTransport()
@@ -327,11 +321,9 @@ type DispatchTransport interface {
 	RetargetDispatch(Caller, DispatchRun, string, time.Time) (json.RawMessage, json.RawMessage, *kernel.Error)
 }
 
-type DispatchRuntime interface{ DispatchTransport() DispatchTransport }
-
 func (c Caller) DispatchTransport() DispatchTransport {
-	rt, ok := c.rt.(DispatchRuntime)
-	if !ok || !c.Staging() || c.Replaying {
+	rt := c.StagedDecision()
+	if rt == nil || c.Replaying {
 		return nil
 	}
 	return rt.DispatchTransport()
@@ -580,7 +572,7 @@ func FunctionAnswerFields() []Field {
 }
 
 func (c Caller) Request(r *pb.ChangeRecord, q Request) {
-	if c.rt != nil && !c.rt.Probing() {
+	if c.rt != nil && !c.probing() {
 		c.rt.Request(c, r, q)
 	}
 }

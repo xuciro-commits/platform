@@ -165,12 +165,8 @@ type RecordSetRef struct {
 	Name   string `json:"name"`
 }
 
-type RecordSetCandidateRuntime interface {
-	ReadRecordSetCandidate(Caller, string, string, string, json.RawMessage, time.Time) (RecordSetResult, *kernel.Error)
-}
-
 func (c Caller) ruleRecordSet(object, id, name string, record any, at time.Time) (RecordSetResult, *kernel.Error) {
-	if runtime, ok := c.rt.(RecordSetCandidateRuntime); ok && c.Staging() {
+	if runtime := c.StagedDecision(); runtime != nil {
 		return runtime.ReadRecordSetCandidate(c, object, id, name, Raw(record), at)
 	}
 	return c.ReadRecordSet(object, id, name, at)

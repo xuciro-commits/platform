@@ -16,15 +16,8 @@ type ObservationContext struct {
 	Intervals  *ObservationIntervalResult
 }
 
-type ObservationContextRuntime interface {
-	ObservationContext(Caller) *ObservationContext
-}
-
 func (c Caller) ObservationContext() *ObservationContext {
-	if c.Replaying || !c.Staging() {
-		return nil
-	}
-	if runtime, ok := c.rt.(ObservationContextRuntime); ok {
+	if runtime := c.StagedDecision(); runtime != nil && !c.Replaying {
 		return runtime.ObservationContext(c)
 	}
 	return nil

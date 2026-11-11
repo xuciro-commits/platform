@@ -116,15 +116,11 @@ func VersioningConstraints(v *Versioning) []Constraint {
 	}
 }
 
-type BusinessVersionRuntime interface {
-	PrepareBusinessVersions(Caller, any, time.Time) *kernel.Error
-}
-
 func (c Caller) PrepareBusinessVersions(record any, at time.Time) *kernel.Error {
 	if c.Replaying {
 		return nil
 	}
-	if r, ok := c.rt.(BusinessVersionRuntime); ok {
+	if r := c.StagedDecision(); r != nil {
 		return r.PrepareBusinessVersions(c, record, at)
 	}
 	return nil

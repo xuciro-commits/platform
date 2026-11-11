@@ -41,14 +41,9 @@ type BusinessRefusalFact struct {
 	Escalation   *RefusalEscalation         `json:"escalation,omitempty"`
 }
 
-type BusinessRefusalRuntime interface {
-	BusinessRefused(*kernel.Error, BusinessRefusalFact)
-	CaptureBusinessRefusal(Caller, *pb.ChangeRecord, BusinessRefusalFact) *kernel.Error
-}
-
 func (c Caller) RefuseBusiness(fact BusinessRefusalFact) *kernel.Error {
-	owner, ok := c.rt.(BusinessRefusalRuntime)
-	if !ok || !c.Staging() || c.Replaying {
+	owner := c.StagedDecision()
+	if owner == nil || c.Replaying {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal facts need the accepted decision owner / 业务拒绝事实须经接受决策归属方")
 	}
 	answer := Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{message}", fact.Message)
@@ -57,19 +52,15 @@ func (c Caller) RefuseBusiness(fact BusinessRefusalFact) *kernel.Error {
 }
 
 func (c Caller) CaptureBusinessRefusal(receipt *pb.ChangeRecord, fact BusinessRefusalFact) *kernel.Error {
-	owner, ok := c.rt.(BusinessRefusalRuntime)
-	if !ok || !c.Staging() || c.Replaying {
+	owner := c.StagedDecision()
+	if owner == nil || c.Replaying {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal facts need the accepted decision owner / 业务拒绝事实须经接受决策归属方")
 	}
 	return owner.CaptureBusinessRefusal(c, receipt, fact)
 }
 
-type BusinessConditionRuntime interface {
-	RefuseBusinessCondition(Caller, string, string, any, map[string]any, time.Time) *kernel.Error
-}
-
 func (c Caller) RefuseBusinessCondition(code, message string, record any, inputs map[string]any, at time.Time) *kernel.Error {
-	if owner, ok := c.rt.(BusinessConditionRuntime); ok && c.Staging() && !c.Replaying {
+	if owner := c.StagedDecision(); owner != nil && !c.Replaying {
 		return owner.RefuseBusinessCondition(c, code, message, record, inputs, at)
 	}
 	return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{message}", message)
@@ -108,13 +99,9 @@ type RefusalEscalationRequest struct {
 
 func (r RefusalEscalationRequest) TaskID() string { return r.App + ":refusal:" + r.Key }
 
-type RefusalEscalationRuntime interface {
-	PendingRefusalEscalations(Caller, time.Time) ([]RefusalEscalationRequest, *kernel.Error)
-}
-
 func PendingRefusalEscalations(c Caller, at time.Time) ([]RefusalEscalationRequest, *kernel.Error) {
-	rt, ok := c.rt.(RefusalEscalationRuntime)
-	if !ok || !c.Staging() || c.Replaying || !c.Automation || c.App != WorkApp || c.ID != "app:"+WorkApp {
+	rt := c.StagedDecision()
+	if rt == nil || c.Replaying || !c.Automation || c.App != WorkApp || c.ID != "app:"+WorkApp {
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal escalation requires the private Work owner")
 	}
 	return rt.PendingRefusalEscalations(c, at)
