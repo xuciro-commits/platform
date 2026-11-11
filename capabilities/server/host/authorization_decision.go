@@ -153,7 +153,7 @@ func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et 
 	}
 	if et.Info().Type == dataowner.DatasetVersionType {
 		index := t.markingsIn(store, true)
-		return func(value reflect.Value) bool { return index.visible(c.Member, value) && policy.Match(value) }, nil
+		return func(value reflect.Value) bool { return index.Visible(c.Member, value) && policy.Match(value) }, nil
 	}
 	return func(value reflect.Value) bool {
 		id := records.Header(value).ID

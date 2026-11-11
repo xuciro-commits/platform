@@ -6,6 +6,7 @@ import (
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/data/lineage"
 	"platformserver/services/security"
 )
 
@@ -72,10 +73,14 @@ func (t *Tenant) authorizationMember(m platform.Member) platform.Member {
 	return t.authorizer().Member(m)
 }
 
-type securityMarkings struct{ markingIndex }
+type securityMarkings struct{ index lineage.MarkingIndex }
 
-func (m securityMarkings) Row(typ string, row *records.Row) string { return m.row(typ, row) }
-func (m securityMarkings) Compartments(typ string, row *records.Row) []string {
-	return m.compartments(typ, row)
+func (m securityMarkings) Row(typ string, row *records.Row) string {
+	return m.index.Row(typ, rowValue(row))
 }
-func (m securityMarkings) Highest(typ string, row *records.Row) string { return m.highest(typ, row) }
+func (m securityMarkings) Compartments(typ string, row *records.Row) []string {
+	return m.index.Compartments(typ, rowValue(row))
+}
+func (m securityMarkings) Highest(typ string, row *records.Row) string {
+	return m.index.Highest(typ, rowValue(row))
+}

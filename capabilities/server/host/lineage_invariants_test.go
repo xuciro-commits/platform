@@ -123,7 +123,7 @@ func TestInvariantK12ExportUsesTheDatasetMarking(t *testing.T) {
 		t.Fatal("open dataset version is missing")
 	}
 	index := live.markingsIn(live.Projection, false)
-	if got := index.highest(dataowner.DatasetVersionType, row); got == "restricted" {
+	if got := index.Highest(dataowner.DatasetVersionType, row.Value); got == "restricted" {
 		t.Fatal("open dataset inherited another dataset's restriction")
 	}
 }

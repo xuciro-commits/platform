@@ -472,18 +472,18 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 				t.Fatal("the object and pipeline must inherit their effective markings without declaring one")
 			}
 			index := live.markingsIn(live.Projection, false)
-			if got := index.types["build.alpha"]; got != phase.downstream {
+			if got := index.Type("build.alpha"); got != phase.downstream {
 				t.Fatalf("object marking index: %q; want %q", got, phase.downstream)
 			}
 			for id, want := range map[string]string{"INPUT": "confidential", "OTHER": phase.other, "OUTPUT": phase.downstream} {
-				if got := index.datasets[id]; got != want {
+				if got := index.Dataset(id); got != want {
 					t.Fatalf("dataset %s marking index: %q; want %q", id, got, want)
 				}
 				row := live.Projection.Type(dataowner.DatasetVersionType).Rows().Get(dataowner.VersionID(id, 1))
 				if row == nil {
 					t.Fatalf("dataset %s has no first version", id)
 				}
-				if got := index.row(dataowner.DatasetVersionType, row); got != want {
+				if got := index.Row(dataowner.DatasetVersionType, row.Value); got != want {
 					t.Fatalf("dataset version %s marking: %q; want %q", dataowner.VersionID(id, 1), got, want)
 				}
 			}

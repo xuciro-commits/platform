@@ -404,7 +404,7 @@ func (h *Host) routesResources(rt *routes) {
 		}
 		id := r.PathValue("id")
 		marked := map[platform.AssetRef]bool{}
-		for _, node := range t.markingsIn(t.Projection, false).graph.Nodes {
+		for _, node := range t.markingsIn(t.Projection, false).Graph.Nodes {
 			if slices.Contains(node.EffectiveCompartments, id) || slices.Contains(platform.Markings[1:], id) && platform.MarkingRank(node.Effective) >= platform.MarkingRank(id) {
 				marked[platform.AssetRef{App: build.ID, Kind: platform.AssetKind(node.Kind), Name: node.Name}] = true
 			}

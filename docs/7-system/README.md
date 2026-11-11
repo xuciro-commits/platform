@@ -139,7 +139,7 @@ POST /v1/submissions
 - 依赖差距：`services/objects` → `kernel/acceptedformat`、`kernel/records`、`services/apps/pages`、`services/security`。
 - 依赖差距：`services/resources` → `services/apps/authoring`、`services/automate/authoring`、`services/data`、`services/functions/authoring`、`services/ontology`。
 - 依赖差距：`services/security` → `kernel/records`。
-- 内核位置（7.2）：提交序列的字段已是 `kernel.Sequence`（车道、日志、已提交状态、记录投影、位置、隔离状态），但操作它的方法仍在 `host`。`host` 是一个 4.5 万行的包；`host/host.go` 的 `Tenant` 嵌入 `kernel.Sequence`，另有 95 个字段、约 820 个方法，持有全部服务状态；读取映像（`host/read_image.go`）复制整个 `Tenant`，因此仍在 `host`；接受路径在 `host/acceptance_*.go` 12 个文件中。
+- 内核位置（7.2）：提交序列的字段已是 `kernel.Sequence`（车道、日志、已提交状态、记录投影、位置、隔离状态），但操作它的方法仍在 `host`。`host` 是一个 4.5 万行的包；`host/host.go` 的 `Tenant` 嵌入 `kernel.Sequence`，另有 93 个字段、约 820 个方法，持有全部服务状态；读取映像（`host/read_image.go`）复制整个 `Tenant`，因此仍在 `host`；接受路径在 `host/acceptance_*.go` 12 个文件中。
 - 三处内核（7.2）：`contract/go/kernel`、`kernel` 与 `platform/ledger.go` 的规则引擎各持一部分接受语义。`contract/go/kernel` 的实现（Receiver、ChangeLog、FactLog、Authorities、Works、Connectors、Identity、SchemaRegistry）只经 `platform/ledger.go` 的接口与其唯一实现 `NativeKernel` 进入宿主，由各服务在构造时调用 `platform.NewLedger` 创建；值类型 `Error`、`Caller`、`Policy`、`Ref`、`IdentityState`、`ConnectorMark`、`ChangeArchive` 被直接导入。`platform` 不能依赖 `kernel`，因此这些实现只能与 Ledger 一起离开 `platform`。
 - 提交入口（7.3）：`host/submit.go` 有 `submit → submitHeld → submitAccepted → submitAcceptedVersion → submitAcceptedWith` 五层，末层 11 个参数；幂等在 `committed.Answer`、`ledger.AcceptedFor`、`committed.Refusal` 上重复判定（后两者各约 20 处调用），身份与权威校验同 `Receiver.Receive` 重复；`t.quarantine(` 约 67 处，远多于两种不一致。
 - 服务注册（7.2、7.7）：`platform/app.go` 的 `Runtime` 接口有 30 余个方法并嵌入 8 个接口；另有 38 个 `*Runtime` 接口与 6 个可选 `*App` 接口，经约 330 处类型断言探测（形状棘轮的 `capabilityProbes`）；约 200 个函数用可变参数表达可选项。

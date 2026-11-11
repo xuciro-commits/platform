@@ -73,12 +73,10 @@ type Tenant struct {
 	i18n                  transport.Translator
 	views                 transport.ViewCache
 	readViews             *transport.ViewCache
-	readMarkings          *readMarkingCache
 	defGen                atomic.Uint64
 	streamMu              sync.Mutex
 	lineageCache          lineage.Cache[*branchWorld]
-	markingMu             sync.Mutex
-	markings              markingIndex
+	markings              lineage.MarkingCache[*records.Store]
 	apps                  []platform.App
 	appIndex              map[string]int
 	releases              releases.Store

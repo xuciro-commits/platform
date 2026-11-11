@@ -17,6 +17,7 @@ import (
 	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/data/lineage"
 	computeowner "platformserver/services/functions/runtime"
 )
 
@@ -70,7 +71,7 @@ func (t *Tenant) endLane() {
 		return
 	}
 	if previous := t.readImage.Load(); previous != nil && previous.records == generation && previous.definitions == definitions {
-		state.readMarkings = previous.state.readMarkings
+		state.markings.Image = previous.state.markings.Image
 	}
 	image := &tenantReadImage{state: state, epoch: epoch, work: work, definitions: definitions, records: generation, operations: operations, position: position, next: make(chan struct{})}
 	if previous := t.readImage.Swap(image); previous != nil {
@@ -197,10 +198,10 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	if t.readOrigin != nil {
 		view.readOrigin = t.readOrigin
 		view.readViews = t.viewCache()
-		view.readMarkings = t.readMarkings
+		view.markings.Image = t.markings.Image
 	} else {
 		view.readViews = &view.views
-		view.readMarkings = &readMarkingCache{}
+		view.markings.Image = &lineage.ImageMarkings{}
 	}
 	view.currentReadScopes = t.currentReadScopes
 	view.Projection = t.Projection.ForkRecords()
