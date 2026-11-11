@@ -57,7 +57,7 @@ database="postgres://platform:${POSTGRES_PASSWORD}@127.0.0.1:${PG_PORT}/${db}"
 
 start() {
   .build/host/platform-server -addr "127.0.0.1:${port}" -tenants "$work/tenants.json" \
-    -database "$database" -web web/apps/workspace/dist >"$work/server.log" 2>&1 &
+    -database "$database" -project -web web/apps/workspace/dist >"$work/server.log" 2>&1 &
   pid=$!
   for _ in $(seq 1 120); do
     if curl -fsS "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1; then
@@ -227,6 +227,9 @@ audit_rows="$(docker exec platform-postgres-1 sh -ec "psql -U \"\$POSTGRES_USER\
 [[ "${audit_rows//[[:space:]]/}" -gt 0 ]]
 run_rows="$(docker exec platform-postgres-1 sh -ec "psql -U \"\$POSTGRES_USER\" -d \"${db}\" -tAc \"select count(*) from run_index where tenant = '${tenant}'\"")"
 [[ "${run_rows//[[:space:]]/}" -gt 0 ]]
+reader_schema="tenant_$(printf '%s' "$tenant" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]\{1,\}/_/g')"
+projected_tables="$(docker exec platform-postgres-1 sh -ec "psql -U \"\$POSTGRES_USER\" -d \"${db}\" -tAc \"select count(*) from information_schema.tables where table_schema = '${reader_schema}'\"")"
+[[ "${projected_tables//[[:space:]]/}" -gt 0 ]]
 python3 - "$work/recovered-resources.json" <<'PY'
 import json
 import sys

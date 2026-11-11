@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"platformserver/kernel/records"
 
 	"time"
 
@@ -201,4 +202,15 @@ func (t *Tenant) Search(ctx context.Context, reader *platform.Member, q string, 
 func (t *Tenant) Readable(ctx context.Context, m platform.Member, ref string, now time.Time) bool {
 	out, _ := recordRead(t, ctx, func(t *Tenant) (bool, *kernel.Error) { return t.readable(m, ref, now), nil })
 	return out
+}
+
+func (t *Tenant) readRecords(ctx context.Context, read func(*records.Store)) error {
+	_, refusal := recordRead(t, ctx, func(t *Tenant) (struct{}, *kernel.Error) {
+		read(t.Projection)
+		return struct{}{}, nil
+	})
+	if refusal != nil {
+		return refusal
+	}
+	return nil
 }

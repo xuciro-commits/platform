@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	fileowner "platformserver/services/data/blobs"
@@ -477,12 +478,12 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 			if t.quarantined() {
 				continue
 			}
-			p, err := Project(ctx, pgPool, t)
+			p, err := records.ProjectSQL(ctx, pgPool, t.ID, t.Projection, t.readRecords)
 			if err != nil {
 				log.Printf("projection %s: %v", t.ID, err)
 				continue
 			}
-			log.Printf("projected %s into schema %s (reader role %s)", t.ID, ProjectionSchema(t.ID), ReaderRole(t.ID))
+			log.Printf("projected %s into schema %s (reader role %s)", t.ID, records.ProjectionSchema(t.ID), records.ReaderRole(t.ID))
 			d.runProjection(registry, t, p)
 		}
 	}

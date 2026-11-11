@@ -1,4 +1,4 @@
-package host
+package records
 
 import (
 	"context"
@@ -6,8 +6,6 @@ import (
 	"fmt"
 	pgx "github.com/jackc/pgx/v5"
 	"log"
-	"platformkernel/kernel"
-	"platformserver/kernel/records"
 	"reflect"
 	"regexp"
 	"slices"
@@ -20,9 +18,13 @@ import (
 	"platformserver/platform"
 )
 
-type Projection struct {
+type ReadRecords func(context.Context, func(*Store)) error
+
+type SQLProjection struct {
 	pool    *pgxpool.Pool
-	tenant  *Tenant
+	tenant  string
+	live    *Store
+	read    ReadRecords
 	schema  string
 	mu      sync.Mutex
 	dirty   map[string]map[string]bool
@@ -48,9 +50,9 @@ func columns(info platform.EntityInfo) []column {
 	stamp := func(created bool) func(reflect.Value) platform.Stamp {
 		return func(v reflect.Value) platform.Stamp {
 			if created {
-				return records.Header(v).Created
+				return Header(v).Created
 			}
-			return records.Header(v).Changed
+			return Header(v).Changed
 		}
 	}
 	at := func(s func(reflect.Value) platform.Stamp) func(reflect.Value) any {
@@ -62,13 +64,13 @@ func columns(info platform.EntityInfo) []column {
 		}
 	}
 	out := []column{
-		{"id", "text primary key", func(v reflect.Value) any { return records.Header(v).ID }},
-		{"revision", "bigint", func(v reflect.Value) any { return records.Header(v).Revision }},
+		{"id", "text primary key", func(v reflect.Value) any { return Header(v).ID }},
+		{"revision", "bigint", func(v reflect.Value) any { return Header(v).Revision }},
 		{"created_at", "timestamptz", at(stamp(true))},
-		{"created_by", "text", func(v reflect.Value) any { return records.Header(v).Created.By }},
+		{"created_by", "text", func(v reflect.Value) any { return Header(v).Created.By }},
 		{"changed_at", "timestamptz", at(stamp(false))},
-		{"changed_by", "text", func(v reflect.Value) any { return records.Header(v).Changed.By }},
-		{"archived", "boolean", func(v reflect.Value) any { return records.Header(v).Archived }},
+		{"changed_by", "text", func(v reflect.Value) any { return Header(v).Changed.By }},
+		{"archived", "boolean", func(v reflect.Value) any { return Header(v).Archived }},
 	}
 	out = slices.DeleteFunc(out, func(c column) bool {
 		return slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return ident(f.Name) == c.name })
@@ -79,7 +81,7 @@ func columns(info platform.EntityInfo) []column {
 		}
 		read := func(project func(reflect.Value) any) func(reflect.Value) any {
 			return func(row reflect.Value) any {
-				value := records.FieldValue(row, f.Index)
+				value := FieldValue(row, f.Index)
 				if !value.IsValid() {
 					return nil
 				}
@@ -93,9 +95,9 @@ func columns(info platform.EntityInfo) []column {
 				column{name + "_amount", "bigint", read(func(v reflect.Value) any { return v.Interface().(platform.Money).Amount })},
 				column{name + "_currency", "text", read(func(v reflect.Value) any { return v.Interface().(platform.Money).Currency })})
 		case "integer":
-			out = append(out, column{name, "bigint", read(func(v reflect.Value) any { x, _ := records.Comparable(v.Interface()).(float64); return int64(x) })})
+			out = append(out, column{name, "bigint", read(func(v reflect.Value) any { x, _ := Comparable(v.Interface()).(float64); return int64(x) })})
 		case "decimal":
-			out = append(out, column{name, "double precision", read(func(v reflect.Value) any { return records.Comparable(v.Interface()) })})
+			out = append(out, column{name, "double precision", read(func(v reflect.Value) any { return Comparable(v.Interface()) })})
 		case "boolean":
 			out = append(out, column{name, "boolean", read(func(v reflect.Value) any { return v.Bool() })})
 		case "date":
@@ -133,19 +135,19 @@ func tableOf(typ string) string { return ident(typ) }
 
 func q(parts ...string) string { return pgx.Identifier(parts).Sanitize() }
 
-func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, error) {
-	p := &Projection{pool: pool, tenant: t, schema: ProjectionSchema(t.ID), dirty: map[string]map[string]bool{}, history: map[string]int{}}
+func ProjectSQL(ctx context.Context, pool *pgxpool.Pool, tenant string, live *Store, read ReadRecords) (*SQLProjection, error) {
+	p := &SQLProjection{pool: pool, tenant: tenant, live: live, read: read, schema: ProjectionSchema(tenant), dirty: map[string]map[string]bool{}, history: map[string]int{}}
 	if err := p.refresh(ctx); err != nil {
 		return nil, err
 	}
-	t.Projection.Lock()
-	t.Projection.SetTouched(p.touch)
-	t.Projection.Unlock()
+	live.Lock()
+	live.SetTouched(p.touch)
+	live.Unlock()
 	return p, nil
 }
 
-func (p *Projection) refresh(ctx context.Context) error {
-	s := p.tenant.Projection
+func (p *SQLProjection) refresh(ctx context.Context) error {
+	s := p.live
 	s.Lock()
 	infos := []platform.EntityInfo{}
 	for _, et := range s.Types() {
@@ -262,16 +264,16 @@ func (p *Projection) refresh(ctx context.Context) error {
 	return nil
 }
 
-func (p *Projection) grant(ctx context.Context) {
-	role := ReaderRole(p.tenant.ID)
+func (p *SQLProjection) grant(ctx context.Context) {
+	role := ReaderRole(p.tenant)
 	if _, err := p.pool.Exec(ctx, fmt.Sprintf(`do $$ begin
 			if not exists (select from pg_roles where rolname = '%s') then create role %s nologin; end if;
 		end $$; grant usage on schema %s to %s; grant select on all tables in schema %s to %s`, role, role, p.schema, role, p.schema, role)); err != nil {
-		log.Printf("projection %s: reader role: %v", p.tenant.ID, err)
+		log.Printf("projection %s: reader role: %v", p.tenant, err)
 	}
 }
 
-func (p *Projection) touch(typ, id string) {
+func (p *SQLProjection) touch(typ, id string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.dirty[typ] == nil {
@@ -285,18 +287,17 @@ type projectionRows struct {
 	ends          map[string]int
 }
 
-func (p *Projection) rows(ctx context.Context, typ string, ids map[string]bool) ([][]any, [][]any, map[string]int, error) {
-	out, refusal := recordRead(p.tenant, ctx, func(t *Tenant) (projectionRows, *kernel.Error) {
-		rows, changes, ends := p.readRows(t, typ, ids)
-		return projectionRows{rows, changes, ends}, nil
-	})
-	if refusal != nil {
-		return nil, nil, nil, refusal
+func (p *SQLProjection) rows(ctx context.Context, typ string, ids map[string]bool) ([][]any, [][]any, map[string]int, error) {
+	var out projectionRows
+	if err := p.read(ctx, func(s *Store) {
+		out.rows, out.changes, out.ends = p.readRows(s, typ, ids)
+	}); err != nil {
+		return nil, nil, nil, err
 	}
 	return out.rows, out.changes, out.ends, nil
 }
 
-func (p *Projection) readRows(t *Tenant, typ string, ids map[string]bool) (rows [][]any, changes [][]any, ends map[string]int) {
+func (p *SQLProjection) readRows(s *Store, typ string, ids map[string]bool) (rows [][]any, changes [][]any, ends map[string]int) {
 	p.mu.Lock()
 	written := make(map[string]int, len(ids))
 	if ids == nil {
@@ -313,13 +314,12 @@ func (p *Projection) readRows(t *Tenant, typ string, ids map[string]bool) (rows 
 		}
 	}
 	p.mu.Unlock()
-	s := t.Projection
 	s.Lock()
 	defer s.Unlock()
 	et := s.Type(typ)
 	cols := columns(et.Info())
 	ends = map[string]int{}
-	take := func(id string, r *records.Row) {
+	take := func(id string, r *Row) {
 		if r == nil {
 			return
 		}
@@ -347,7 +347,7 @@ func (p *Projection) readRows(t *Tenant, typ string, ids map[string]bool) (rows 
 	return rows, changes, ends
 }
 
-func (p *Projection) recordHistory(ends map[string]int) {
+func (p *SQLProjection) recordHistory(ends map[string]int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.history == nil {
@@ -358,8 +358,8 @@ func (p *Projection) recordHistory(ends map[string]int) {
 	}
 }
 
-func (p *Projection) Flush(ctx context.Context) (err error) {
-	s := p.tenant.Projection
+func (p *SQLProjection) Flush(ctx context.Context) (err error) {
+	s := p.live
 	s.Lock()
 	changed := s.TypeCount() != len(p.shapes)
 	for typ, et := range s.Types() {
@@ -399,7 +399,7 @@ func (p *Projection) Flush(ctx context.Context) (err error) {
 	batch := &pgx.Batch{}
 	history := map[string]int{}
 	for typ, ids := range dirty {
-		s := p.tenant.Projection
+		s := p.live
 		s.Lock()
 		info := s.Type(typ).Info()
 		s.Unlock()
@@ -425,7 +425,7 @@ func (p *Projection) Flush(ctx context.Context) (err error) {
 	return nil
 }
 
-func (p *Projection) writeSQL(info platform.EntityInfo) (string, string) {
+func (p *SQLProjection) writeSQL(info platform.EntityInfo) (string, string) {
 	cols := columns(info)
 	names, params, updates := make([]string, len(cols)), make([]string, len(cols)), []string{}
 	for i, c := range cols {

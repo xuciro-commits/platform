@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"platformserver/kernel/records"
 	controlowner "platformserver/services/security/control"
 	"reflect"
 	"time"
@@ -66,9 +67,9 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 			return fmt.Errorf("process recovery for tenant %s: %w", id, err)
 		}
 	}
-	var projection *Projection
+	var projection *records.SQLProjection
 	if pgPool, pg := journalPool(journal); d.Project && pg {
-		projection, err = Project(ctx, pgPool, fresh)
+		projection, err = records.ProjectSQL(ctx, pgPool, fresh.ID, fresh.Projection, fresh.readRecords)
 		if err != nil {
 			return fmt.Errorf("rebuild tenant %s projection: %w", id, err)
 		}
@@ -104,7 +105,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	return nil
 }
 
-func (d *Deployment) runProjection(registry *controlowner.Registry[*Tenant], tenant *Tenant, projection *Projection) {
+func (d *Deployment) runProjection(registry *controlowner.Registry[*Tenant], tenant *Tenant, projection *records.SQLProjection) {
 	if d.background == nil || d.runtimeContext == nil {
 		return
 	}
