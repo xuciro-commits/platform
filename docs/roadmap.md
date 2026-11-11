@@ -34,15 +34,14 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范：[7-system §7.2–7.3](7-system/README.md)、[concurrency](7-system/concurrency.md)。完成标准（整段）：`host` 不超过 1.5 万行且没有 `acceptance_*.go`；`kernel` 不导入任何服务；K1、K2、K3、K13（含 `-race`）不改断言通过。
 
-- [ ] N3 一个拥有者接口：决定、应用、分叉、读取四个方法；分叉已是 `platform.App.Fork(ledger)`（读取映像传入分叉账本，暂存决定与安装传入原账本），快照、恢复与快照格式已是 `platform.App` 的方法；`AcceptedStateApp`（4 个拥有者的状态映像，应用与恢复语义不同，如 Console 应用时结束停用成员的会话）与 `AcceptedInputApp`（只有 AI）是少数拥有者的真实能力，不给其余拥有者写空实现，改为注册时按类型登记；两种运行时都实现的扩展已并入 `platform.Runtime`，只由暂存决定实现的能力已是 `platform.StagedDecision` 句柄；拥有者角色（身份、目录、链接、模型、任务、流程、智能体、术语、观察者、监听）已由 `host/owner_roles.go` 按启用的拥有者一次登记；保留发布执行的决定目录已是暂存决定句柄的方法；拥有者列表、索引、路由与按类型登记的状态、输入、资产拥有者已是 `host/owner_roles.go` 的 `ownerSet`，读取映像与暂存视图替换拥有者只经 `ownerSet.with` 一次重建；余下约 233 处探测（多为服务与宿主之间的可选接口）继续按注册时类型收敛。内核只有一个实现，`KernelFactory` 与其七个接口已删除，Ledger 直接持有 `contract/go/kernel` 的具体类型。服务不再自建 Ledger：`platform/ledger.go` 的接受语义与 `contract/go/kernel` 的实现并入 `kernel`，`Error` 等值类型进 `platform`，`contract/go` 只留协议生成代码。各服务经此接口持有自己的状态：`host.Tenant` 余下的 57 个字段（副作用队列 `outbound` 与 `endpoints` 及与工作板、配额共用的 `opsMu`，各服务的拥有者绑定与运行状态）随各服务实现该接口移出；之后读取映像不再复制整个 `Tenant`，随之进 `kernel.Sequence`。
 - [ ] N4 一个提交入口：`submit` 五层合为一个函数加选项结构；幂等只留映像预检与车道内提交两处；`quarantine` 只留应用不一致与位置不一致两处，其余改为拒绝或运行失败。
-- [ ] N5 接受路径迁入 `kernel`：`host/acceptance_*.go` 中属于接受语义的部分进 `kernel`，属于某类资源的部分进它的服务；`host` 只剩 HTTP、身份、租户装配与后台调度。
+- [ ] N5 接受路径迁入 `kernel`：`host/acceptance_*.go` 中属于接受语义的部分进 `kernel`，属于某类资源的部分进它的服务；`host` 只剩 HTTP、身份、租户装配与后台调度。各服务持有自己的状态：`host.Tenant` 余下的 57 个字段（副作用队列 `outbound` 散在约 30 个宿主文件，与 `endpoints`、连接器、工作板共用 `opsMu`；各服务的拥有者绑定与运行状态）随所属路径迁出，读取映像不再复制整个 `Tenant`，随之进 `kernel.Sequence`；服务与宿主之间约 233 处可选接口探测随之按注册时类型收敛（拥有者集合与角色已在 `host/owner_roles.go` 一次登记）。
 
 ### 三、领域模型收敛
 
 目标规范：[6-domain R8](6-domain/README.md)、[7-system §7.2、§7.5.1、§7.7](7-system/README.md)。完成标准（整段）：`platform` 不超过 8 千行且只含 SDK 契约；7-system 的十条依赖差距清零；包名与目录名不一致为 0。
 
-- [ ] U1 动作引擎归位：`platform/ledger.go` 的规则引擎与 `entity.go` 的转换移入 `services/actions`，按动作类型的规则与提交条件表达；`Entity`、`Transition`、`Ledger` 不再是公开类型。
+- [ ] U1 动作引擎归位：`platform/ledger.go` 的规则引擎与 `entity.go` 的转换移入 `services/actions`，按动作类型的规则与提交条件表达；`Entity`、`Transition`、`Ledger` 不再是公开类型；`contract/go/kernel` 的实现随 Ledger 并入 `kernel`（Ledger 已直接持有其具体类型），`Error` 等值类型进 `platform`，`contract/go` 只留协议生成代码。
 - [ ] U2 业务事务出平台：`platform/transaction.go` 的 `BusinessTxn`、`TxnPost`、`TxnJournal` 改由产品包的本体与动作表达，平台只留通用的原子编辑集。
 - [ ] U3 页面模型归位：`platform/page_*` 移入 `services/apps`；`platform` 只留页面组件契约的生成入口。
 - [ ] U4 发布路径一张表：record 族与 versioned 族的发布步骤移入拥有它的服务并实现同一组钩子；`services/resources` 只编排，删除 Build 的“兼容公共类型”。
