@@ -72,7 +72,6 @@ contract:
 check:
 	cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"
 	node scripts/check-boundaries.mjs
-	node scripts/check-invariants.mjs
 	@mkdir -p .build/contract
 	@cp web/packages/api/src/gen/host.ts .build/contract/host.ts
 	@cp web/packages/api/src/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts
@@ -87,14 +86,19 @@ check:
 	@cmp .build/contract/apps.ts web/packages/app/src/gen/apps.ts
 	@cmp .build/contract/resources.ts web/packages/build/src/gen/resources.ts
 	@cmp .build/contract/page_compat.json capabilities/server/platform/page_compat.json
-	cd web && $(PNPM) typecheck && $(PNPM) build
 	node scripts/check-i18n.mjs
 	git diff HEAD --check
+
+check-web:
+	cd web && $(PNPM) typecheck && $(PNPM) build
+
+test:
+	node scripts/check-invariants.mjs $(RUN)
 
 e2e:
 	cd web/e2e && $(PNPM) exec playwright test $(SPEC)
 
-verify: check e2e
+verify: check check-web test e2e
 
 verify-sql:
 	mkdir -p .build/host

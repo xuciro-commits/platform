@@ -15,7 +15,7 @@ const compiled = Date.now();
 const known = existsSync(timings) ? JSON.parse(readFileSync(timings, "utf8")) : {};
 const tests = execFileSync(binary, ["-test.list", "^TestInvariant"], { cwd: pkg, encoding: "utf8" })
   .split("\n")
-  .filter((name) => name.startsWith("TestInvariant"))
+  .filter((name) => name.startsWith("TestInvariant") && (!process.argv[2] || new RegExp(process.argv[2]).test(name)))
   .sort((a, b) => (known[b] ?? Infinity) - (known[a] ?? Infinity));
 
 const failures = [];
@@ -37,7 +37,7 @@ const worker = async () => {
 await Promise.all(Array.from({ length: Math.min(availableParallelism(), tests.length) }, worker));
 
 slow.sort((a, b) => b[0] - a[0]);
-writeFileSync(timings, JSON.stringify(Object.fromEntries(slow.map(([ms, name]) => [name, ms]))));
+writeFileSync(timings, JSON.stringify({ ...known, ...Object.fromEntries(slow.map(([ms, name]) => [name, ms])) }));
 const seconds = (ms) => (ms / 1000).toFixed(1) + "s";
 if (failures.length) {
   console.error(failures.join("\n\n"));

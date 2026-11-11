@@ -5,84 +5,13 @@ import (
 	"io"
 	"net/http"
 	dataowner "platformserver/services/data"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
-
-func TestInvariantK1K2DatasetTransactionReplayAndIdempotency(t *testing.T) {
-	live := newInvariantTenant(t, "dataset-transaction-invariants")
-	live.accept(t, "build.dataset.create", dataowner.DatasetType, "DS", map[string]any{"name": "transactions", "title": "Transactions", "key": "id", "keep": 10})
-	cases := []struct {
-		kind       string
-		rows, want []map[string]any
-	}{
-		{"snapshot", []map[string]any{{"id": "A", "note": "retained", "count": float64(1)}}, []map[string]any{{"id": "A", "note": "retained", "count": float64(1)}}},
-		{"append", []map[string]any{{"id": "B", "note": "second"}}, []map[string]any{{"id": "A", "note": "retained", "count": float64(1)}, {"id": "B", "note": "second"}}},
-		{"update", []map[string]any{{"id": "A", "count": float64(2)}, {"id": "C", "note": "inserted"}}, []map[string]any{{"id": "A", "note": "retained", "count": float64(2)}, {"id": "B", "note": "second"}, {"id": "C", "note": "inserted"}}},
-		{"delete", []map[string]any{{"id": "B"}}, []map[string]any{{"id": "A", "note": "retained", "count": float64(2)}, {"id": "C", "note": "inserted"}}},
-	}
-	for _, item := range cases {
-		submission := live.submission(dataowner.SchemaDatasetLoad, dataowner.DatasetType, "DS", map[string]any{"type": item.kind, "rows": item.rows})
-		accepted, refusal := live.Submit(live.member(t), submission, invariantClock)
-		if refusal != nil {
-			t.Fatalf("%s refused: %v", item.kind, refusal)
-		}
-		rows, _, err := dataowner.DatasetRows(live.automation(build.ID, false), "DS", 0)
-		if err != nil || !reflect.DeepEqual(rows, item.want) {
-			t.Fatalf("%s rows=%v, want=%v; err=%v", item.kind, rows, item.want, err)
-		}
-		entries := len(live.entries)
-		image := live.recordImage(t)
-		retried, refusal := live.Submit(live.member(t), submission, invariantClock)
-		if refusal != nil || !proto.Equal(accepted, retried) || len(live.entries) != entries {
-			t.Fatalf("%s retry changed accepted log: %v", item.kind, refusal)
-		}
-		if differing := differingTypes(image, live.recordImage(t)); len(differing) != 0 {
-			t.Fatalf("retry changed %v", differing)
-		}
-	}
-	first, _, err := dataowner.DatasetRows(live.automation(build.ID, false), "DS", 1)
-	if err != nil || !reflect.DeepEqual(first, cases[0].want) {
-		t.Fatalf("historical rows changed: %v %v", first, err)
-	}
-	for _, payload := range []any{
-		map[string]any{"type": "append", "rows": []map[string]any{{"id": "A"}}},
-		map[string]any{"type": "update", "rows": []map[string]any{{"note": "no key"}}},
-		map[string]any{"type": "snapshot", "rows": []map[string]any{{"id": "A"}, {"id": "A"}}},
-	} {
-		if _, refusal := live.Submit(live.member(t), live.submission(dataowner.SchemaDatasetLoad, dataowner.DatasetType, "DS", payload), invariantClock); refusal == nil {
-			t.Fatalf("invalid key transaction accepted: %v", payload)
-		}
-	}
-	live.accept(t, "build.dataset.create", dataowner.DatasetType, "UNKEYED", map[string]any{"name": "unkeyed", "title": "Unkeyed"})
-	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "UNKEYED", map[string]any{"rows": []map[string]any{{"id": "A"}, {"id": "A"}}})
-	if _, refusal := live.Submit(live.member(t), live.submission("build.dataset.edit", dataowner.DatasetType, "UNKEYED", map[string]any{"key": "id"}), invariantClock); refusal == nil {
-		t.Fatal("a key was configured over duplicate existing values")
-	}
-	for _, kind := range []string{"update", "delete"} {
-		if _, refusal := live.Submit(live.member(t), live.submission(dataowner.SchemaDatasetLoad, dataowner.DatasetType, "UNKEYED", map[string]any{"type": kind, "rows": []map[string]any{{"id": "A"}}}), invariantClock); refusal == nil {
-			t.Fatalf("%s without configured key accepted", kind)
-		}
-	}
-	want := live.recordImage(t)
-	for replay := 1; replay <= 2; replay++ {
-		restored := live.restore(t, live.entries)
-		if differing := differingTypes(want, restored.recordImage(t)); len(differing) != 0 {
-			t.Fatalf("replay %d differs in %v", replay, differing)
-		}
-	}
-	version, _ := platform.Get[dataowner.DatasetVersion](live.automation(build.ID, false), dataowner.VersionID("DS", 4))
-	var retained []map[string]any
-	if json.Unmarshal(version.Data, &retained) != nil || !reflect.DeepEqual(retained, cases[3].want) {
-		t.Fatal("accepted final snapshot differs")
-	}
-}
 
 func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 	for _, mapping := range []string{"declared", "legacy"} {

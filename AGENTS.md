@@ -57,8 +57,9 @@
 | 宿主类型与页面契约 | `make contract`（生成 `api/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json`） |
 | Web 检查 | 改动的包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 空白 | `git diff --check` |
-| 快速检查 | `make check`（≤60 秒：构建、包边界、并行内核不变量、契约、类型、空白；提交钩子自动运行） |
-| 验收 | `make e2e SPEC=F17` 跑指定用例；`make verify` 为 check 加全部验收（验收自带隔离宿主） |
+| 快速检查 | `make check`（约 5 秒：Go 构建与 vet、包边界与形状、契约、文案、空白）；改了 `web/` 加 `make check-web`；提交钩子自动运行两者 |
+| 不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部（不在提交关口） |
+| 验收 | `make e2e SPEC=F17` 只跑改动路径的用例；`make verify` 跑全部，只在里程碑与段落完成时 |
 | SQL 模式 | `make verify-sql`（隔离临时 PostgreSQL 库：写入、重启、读取） |
 
 长命令一律加超时（如 `perl -e 'alarm 400; exec @ARGV' go build ./...`）。

@@ -36,16 +36,6 @@
         "roles": {
           "build": "user"
         }
-      },
-      {
-        "id": "cleared-1",
-        "subjects": [
-          "cleared"
-        ],
-        "roles": {
-          "platform": "restricted",
-          "build": "builder"
-        }
       }
     ]
   },

@@ -213,3 +213,33 @@ func differingTypes(a, b map[string]json.RawMessage) []string {
 func invariantObject(name, title string) map[string]any {
 	return map[string]any{"name": name, "title": title, "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}
 }
+
+func invariantPublishData(t *testing.T, tenant *invariantTenant, member platform.Member, drafts []build.JointDraftRef, key string) string {
+	t.Helper()
+	preview, err := tenant.PreviewReleaseDrafts(member, drafts, "", invariantClock)
+	if err != nil || preview.Diagnostic != "" {
+		t.Fatalf("preview %s: %+v: %v", key, preview, err)
+	}
+	id, err := tenant.SaveReleaseCandidates(member, drafts, preview.CandidateID, key, invariantClock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tenant.ActivateRelease(member, id, key, invariantClock); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func resourceRecord(t *testing.T, live *invariantTenant, ref platform.AssetRef) build.Resource {
+	t.Helper()
+	rid := platform.ResourceID(live.ID, ref)
+	view, refusal := live.RecordOf(t.Context(), live.member(t), build.ResourceType, rid, invariantClock)
+	if refusal != nil {
+		t.Fatalf("read resource %s: %v", ref, refusal)
+	}
+	var record build.Resource
+	if err := json.Unmarshal(platform.Raw(view.Record), &record); err != nil {
+		t.Fatal(err)
+	}
+	return record
+}

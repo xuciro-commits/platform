@@ -39,7 +39,7 @@ A batch is one thin, usable slice across layers. It ends committed and pushed, w
 
 ## 5 Verify
 
-- Run `make check` (under a minute; the commit hook runs it too) and `make e2e SPEC=…` for the acceptance specs on the touched path. Run `make verify` when the change touches the shared shell, host composition, contracts or several task paths (docs/7-system/verification §7.12).
+- Keep the write-test-fix loop fast. Run `make check` (seconds; the commit hook runs it, plus `make check-web` when `web/` changed). Run `make test RUN=<K-number>` only for the kernel properties the change touches, and `make e2e SPEC=…` only for the task path it touches. Run `-race` only on K13 when lanes or concurrency change. Run `make verify` only at milestones and segment ends (docs/7-system/verification §7.12).
 - For large or risky diffs, have a fresh-context read-only subagent review the changes against the specs, and fix confirmed findings.
 - Lower every value in `scripts/shape-baseline.json` that the batch improved (the check fails until you do).
 - The commit hook runs `make check`, and lists specs whose `covers` match the change. Update them, or re-run the same commit if they are still true.
