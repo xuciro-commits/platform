@@ -422,7 +422,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 		}
 	}
 	if slices.ContainsFunc(result.Rows, func(row acceptedformat.BatchRow) bool { return row.Type == build.AppType }) {
-		t.defGen.Add(1)
+		t.DefinitionEpoch.Add(1)
 	}
 	if err := t.applyAcceptedControl(result.Control); err != nil {
 		return false, err

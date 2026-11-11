@@ -55,7 +55,6 @@ type Tenant struct {
 	i18n              transport.Translator
 	views             transport.ViewCache
 	readViews         *transport.ViewCache
-	defGen            atomic.Uint64
 	streamMu          sync.Mutex
 	lineageCache      lineage.Cache[*branchWorld]
 	markings          lineage.MarkingCache[*records.Store]

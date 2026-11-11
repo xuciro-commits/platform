@@ -27,7 +27,7 @@ func (t *Tenant) matchesReadImage(image *tenantReadImage) bool {
 	t.Projection.Lock()
 	generation := t.Projection.Generation()
 	t.Projection.Unlock()
-	return image.epoch == t.StateEpoch.Load() && image.definitions == t.defGen.Load() && image.records == generation && image.position == t.Projection.Current().Applied()
+	return image.epoch == t.StateEpoch.Load() && image.definitions == t.DefinitionEpoch.Load() && image.records == generation && image.position == t.Projection.Current().Applied()
 }
 
 func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare func(*Tenant) (T, *kernel.Error), finish func(*Tenant, preparedAccepted, T, *kernel.Error) (T, *kernel.Error)) (value T, refusal *kernel.Error) {

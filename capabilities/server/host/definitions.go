@@ -274,10 +274,10 @@ func (d *stagedDecision) VisibleApplications(c platform.Caller) []platform.Asset
 	return (runtime{t: d.tenant}).VisibleApplications(c)
 }
 
-func (t *Tenant) definitionsFingerprint() uint64 { return t.defGen.Load() }
+func (t *Tenant) definitionsFingerprint() uint64 { return t.DefinitionEpoch.Load() }
 
 func (t *Tenant) setDefinitions(definitions []platform.Definition) {
 	t.definitions = definitions
-	t.defGen.Add(1)
+	t.DefinitionEpoch.Add(1)
 	t.i18n.InstallApplications(definitions)
 }

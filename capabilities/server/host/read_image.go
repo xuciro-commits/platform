@@ -58,7 +58,7 @@ func (t *Tenant) endLane() {
 	t.change.mu.Lock()
 	operations := t.change.seq + int64(len(t.change.pendingData))
 	t.change.mu.Unlock()
-	epoch, work, definitions, position := t.StateEpoch.Load(), t.WorkEpoch.Load(), t.defGen.Load(), t.Projection.Current().Applied()
+	epoch, work, definitions, position := t.StateEpoch.Load(), t.WorkEpoch.Load(), t.DefinitionEpoch.Load(), t.Projection.Current().Applied()
 	t.Projection.Lock()
 	generation := t.Projection.Generation()
 	t.Projection.Unlock()
@@ -280,7 +280,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.staged = computeowner.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())
 	view.claims = t.claims.Fork(t.services.Kernel, t.ID)
-	view.defGen.Store(t.defGen.Load())
+	view.DefinitionEpoch.Store(t.DefinitionEpoch.Load())
 	view.runIndex.CopyGeneration(&t.runIndex)
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions
 	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps },

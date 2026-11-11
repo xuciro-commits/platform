@@ -335,7 +335,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		return false, err
 	}
 	if result.Row.Type == build.AppType {
-		t.defGen.Add(1)
+		t.DefinitionEpoch.Add(1)
 	}
 	t.Committed.SaveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
 	t.Committed.SaveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)

@@ -19,6 +19,7 @@ type Sequence struct {
 	Fault            atomic.Pointer[Fault]
 	StateEpoch       atomic.Uint64
 	WorkEpoch        atomic.Uint64
+	DefinitionEpoch  atomic.Uint64
 	SnapshotPosition int64
 	RuntimePosition  func() int64
 }
