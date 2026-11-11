@@ -9,7 +9,6 @@ import (
 	"platformserver/kernel/records"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	"platformkernel/kernel"
@@ -128,10 +127,7 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 }
 
 func (t *Tenant) connectorInputGranted(m platform.Member, app, name string) bool {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	connector := t.connectors.byID[m.ID]
-	return connector != nil && connector.GetTenantId() == t.ID && (name == "heartbeat" || slices.ContainsFunc(connector.GetDataClasses(), func(class string) bool { return strings.HasPrefix(class, app+".") }))
+	return t.connectors.Granted(m.ID, app, name)
 }
 
 func (t *Tenant) visibleIn(store *records.Store, m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {

@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
@@ -279,61 +279,16 @@ func (t *Tenant) retry(id string, now time.Time) bool {
 	return t.work.Retry(id, now)
 }
 
-type ConnectorView struct {
-	ID          string          `json:"id"`
-	Direction   string          `json:"direction"`
-	DataClasses []string        `json:"dataClasses"`
-	Heartbeat   string          `json:"heartbeat"`
-	Health      string          `json:"health"`
-	LastSeen    *time.Time      `json:"lastSeen,omitempty"`
-	Disabled    bool            `json:"disabled"`
-	LastError   *ConnectorError `json:"lastError,omitempty"`
-}
-
-type ConnectorError struct {
-	At    time.Time `json:"at"`
-	Input string    `json:"input"`
-	Error string    `json:"error"`
-}
-
 func (t *Tenant) Connect(descriptors ...*pb.ConnectorDescriptor) error {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	for _, d := range descriptors {
-		d = proto.Clone(d).(*pb.ConnectorDescriptor)
-		d.TenantId = t.ID
-		if err := t.connectors.register(d); err != nil {
-			return fmt.Errorf("tenant %s: connector %s: %v", t.ID, d.GetConnectorId(), err)
-		}
-	}
-	return nil
+	return t.connectors.Register(descriptors...)
 }
 
 func (t *Tenant) refused(member, input string, err *kernel.Error, now time.Time) {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	t.connectors.refused(member, input, err, now)
+	t.connectors.Refused(member, input, err, now)
 }
 
-func (t *Tenant) Connectors(now time.Time) []ConnectorView {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	out := []ConnectorView{}
-	for _, d := range t.connectors.kernel.Descriptors(t.ID) {
-		s, _ := t.connectors.kernel.Status(t.ID, d.GetConnectorId(), now)
-		v := ConnectorView{ID: d.GetConnectorId(), Direction: strings.ToLower(strings.TrimPrefix(d.GetDirection().String(), "CONNECTOR_DIRECTION_")),
-			DataClasses: d.GetDataClasses(), Heartbeat: d.GetHeartbeat().AsDuration().String(), Disabled: d.GetDisabled(),
-			Health: strings.ToLower(strings.TrimPrefix(s.GetHealth().String(), "CONNECTOR_HEALTH_"))}
-		if s.GetLastSeen() != nil {
-			seen := s.GetLastSeen().AsTime()
-			v.LastSeen = &seen
-		}
-		if e, ok := t.connectors.lastError[d.GetConnectorId()]; ok {
-			v.LastError = &e
-		}
-		out = append(out, v)
-	}
-	return out
+func (t *Tenant) Connectors(now time.Time) []runtimekernel.ConnectorView {
+	return t.connectors.Views(now)
 }
 
 func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
@@ -448,14 +403,12 @@ func (t *Tenant) Settings() []AppSettings {
 }
 
 func (t *Tenant) decideConnector(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	t.opsMu.Lock()
-	d := t.connectors.byID[s.GetTarget().GetId()]
-	t.opsMu.Unlock()
-	if d == nil {
+	id := s.GetTarget().GetId()
+	if !t.connectors.Known(id) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	off := s.GetSchema().GetName() == controlowner.SchemaConnectorOff
-	return func(*pb.ChangeRecord) { t.opsMu.Lock(); d.Disabled = off; t.opsMu.Unlock() }, nil
+	return func(*pb.ChangeRecord) { t.connectors.SetDisabled(id, off) }, nil
 }
 
 func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {

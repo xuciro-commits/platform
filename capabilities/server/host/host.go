@@ -75,7 +75,7 @@ type Tenant struct {
 	work          automation.WorkBoard
 	rotation      automation.Rotation
 	breakers      integrations.Breakers
-	connectors    connectorRoster
+	connectors    *runtimekernel.ConnectorRoster
 	notices       runtimekernel.NoticeBoard
 	settings      controlowner.Settings
 	words         controlowner.Words
@@ -107,7 +107,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		return nil, fmt.Errorf("tenant %s: %w", id, err)
 	}
 	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), works: kernel.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
-		connectors: newConnectorRoster(), Projection: records.NewStore()}
+		connectors: runtimekernel.NewConnectorRoster(id), Projection: records.NewStore()}
 	t.bindAuditStore()
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)
 	t.observeLane()

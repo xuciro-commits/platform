@@ -58,7 +58,7 @@ type tenantState struct {
 	Jobs                []automation.Task                       `json:"jobs"`
 	Connectors          json.RawMessage                         `json:"connectors"`
 	Marks               []kernel.ConnectorMark                  `json:"marks"`
-	LastError           map[string]ConnectorError               `json:"lastError"`
+	LastError           map[string]runtimekernel.ConnectorError `json:"lastError"`
 	Notices             []platform.Notification                 `json:"notices"`
 	NoticeSeq           int                                     `json:"noticeSeq"`
 	Settings            map[string]string                       `json:"settings"`
@@ -400,12 +400,12 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	if err := workErr; err != nil {
 		return tenantState{}, nil, 0, err
 	}
-	descriptors, marks := t.connectors.kernel.State()
+	descriptors, marks := t.connectors.State()
 	if s.Connectors, err = platform.Protos(descriptors); err != nil {
 		return tenantState{}, nil, 0, err
 	}
 	s.Marks = marks
-	t.connectors.snapshot(&s)
+	s.LastError = t.connectors.LastErrors()
 	s.Notices, s.NoticeSeq = t.notices.State()
 	s.Settings, s.Endpoints, s.Words = t.settings.Snapshot(), t.endpoints.Saved(), t.words.Clone()
 	s.Sequences = t.sequences.Clone()
@@ -739,7 +739,7 @@ func (t *Tenant) restoreOperations(s *tenantState) error {
 	if err := t.work.Restore(t.ID, automation.WorkState{Queues: s.Queues, Failed: s.Failed, Tasks: s.Tasks, Jobs: s.Jobs}); err != nil {
 		return err
 	}
-	t.connectors.restore(t.ID, descriptors, s)
+	t.connectors.Restore(descriptors, s.Marks, s.LastError)
 	t.notices.Restore(s.Notices, s.NoticeSeq)
 	t.settings.Restore(s.Settings)
 	t.words.Restore(s.Words)

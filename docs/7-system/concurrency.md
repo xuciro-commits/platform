@@ -108,7 +108,7 @@ SQL 来源行仍从 PostgreSQL 可重复读事务读取：
 ### C6 后台工作
 
 - `Tenant.Round` 每个任务、每个作业在映像分叉上决定（`WorkLoop.Round(now, 1)`），提交各取一次车道，任务之间前台提交可以进入。冲突与回退复用 C5；无变化作业只推进内存调度时间，不追加空接受结果。
-- `WorkLoop` 的轮转与 `opsMu` 不变；轮转按任务推进。副作用队列 `actions.Outbox` 自带互斥，只经其方法读写；持有 `opsMu` 时可以调用它，其回调不取其他锁，锁序固定为 `opsMu` 在前。协议绑定 `actions.Bindings` 与端点登记 `actions.Endpoints` 同样自带互斥，不经 `opsMu`。
+- `WorkLoop` 的轮转与 `opsMu` 不变；轮转按任务推进。副作用队列 `actions.Outbox` 自带互斥，只经其方法读写；持有 `opsMu` 时可以调用它，其回调不取其他锁，锁序固定为 `opsMu` 在前。协议绑定 `actions.Bindings`、端点登记 `actions.Endpoints` 与连接器名册 `kernel.ConnectorRoster` 同样自带互斥，不经 `opsMu`。
 - 投递、同步、构建、管道运行、智能体步骤：外部部分按 C-R6 在车道外执行；结果以接受结果回到 C5。
 - 调度器按租户轮转不变；一个租户的长任务只延迟该租户的下一任务，不占用其他租户的车道。
 

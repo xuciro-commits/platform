@@ -6,6 +6,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
@@ -33,7 +34,7 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 	defer t.opsMu.Unlock()
 	out := map[string]json.RawMessage{}
 	save := func(kind string, v any) error { raw, err := json.Marshal(v); out[kind] = raw; return err }
-	descriptors, _ := t.connectors.kernel.State()
+	descriptors, _ := t.connectors.State()
 	raw, err := platform.Protos(descriptors)
 	if err != nil {
 		return nil, err
@@ -75,15 +76,13 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), identity: t.identity, ownerSet: t.ownerSet, definitions: t.definitions, Projection: t.Projection, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
-		bindings: t.bindings.Clone(), connectors: newConnectorRoster(), work: automation.NewWorkBoard(), works: t.forkWorkState()}
+		bindings: t.bindings.Clone(), connectors: runtimekernel.NewConnectorRoster(t.ID), work: automation.NewWorkBoard(), works: t.forkWorkState()}
 	for _, j := range t.work.Jobs {
 		copy := *j
 		view.work.AddJob(&copy)
 	}
-	t.opsMu.Lock()
-	_, marks := t.connectors.kernel.State()
-	t.opsMu.Unlock()
-	view.connectors.kernel.Restore(nil, marks)
+	_, marks := t.connectors.State()
+	view.connectors.RestoreMarks(marks)
 	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps }, nil, view.words.Clone, PlatformLanguages)
 	view.i18n.InstallApplications(view.definitions)
 	for _, kind := range []string{"connectors", "settings", "bindings", "work", "endpoints", "effects", "words"} {
@@ -97,21 +96,12 @@ func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error)
 func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 	switch kind {
 	case "connectors":
-		t.opsMu.Lock()
-		defer t.opsMu.Unlock()
 		descriptors, err := platform.Unprotos[*pb.ConnectorDescriptor](raw)
 		if err != nil {
 			return err
 		}
-		_, marks := t.connectors.kernel.State()
-		t.connectors.kernel = kernel.NewConnectors()
-		t.connectors.kernel.Restore(descriptors, marks)
-		t.connectors.byID = map[string]*pb.ConnectorDescriptor{}
-		for _, desc := range descriptors {
-			if desc.GetTenantId() != t.ID || t.connectors.byID[desc.GetConnectorId()] != nil {
-				return fmt.Errorf("control connector identity differs")
-			}
-			t.connectors.byID[desc.GetConnectorId()] = desc
+		if err := t.connectors.Install(descriptors); err != nil {
+			return err
 		}
 	case "settings":
 		var values map[string]string
@@ -257,12 +247,7 @@ func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tena
 		unsupportedStagedEffect()
 	}
 	view.Projection = d.records
-	view.connectors.kernel = d.connectors
-	view.connectors.byID = map[string]*pb.ConnectorDescriptor{}
-	connectors, _ := d.connectors.State()
-	for _, descriptor := range connectors {
-		view.connectors.byID[descriptor.GetConnectorId()] = descriptor
-	}
+	view.connectors.Use(d.connectors)
 	view.controlAnswer = func(x platform.Effect, out platform.Outcome, at time.Time) *kernel.Error {
 		if err := d.tenant.stageEffectAnswer(d, x, out, nil, at); err != nil {
 			if refusal, ok := err.(*kernel.Error); ok {
