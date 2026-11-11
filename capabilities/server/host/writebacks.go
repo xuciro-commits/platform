@@ -144,14 +144,14 @@ func (t *Tenant) checkWritebackCredential(request dataowner.WritebackRequest) *k
 	return nil
 }
 
-func (t *Tenant) connectionEndpoints() []*actions.Endpoint {
-	var out []*actions.Endpoint
+func (t *Tenant) connectionEndpoints() []actions.Endpoint {
+	var out []actions.Endpoint
 	for _, x := range t.outbound.Select(nil) {
 		if !strings.HasPrefix(x.Endpoint, dataowner.WritebackEndpoint) || platform.EffectSettled(x.State) {
 			continue
 		}
-		if !slices.ContainsFunc(out, func(ep *actions.Endpoint) bool { return ep.ID == x.Endpoint }) {
-			out = append(out, &actions.Endpoint{ID: x.Endpoint, Kind: "connection"})
+		if !slices.ContainsFunc(out, func(ep actions.Endpoint) bool { return ep.ID == x.Endpoint }) {
+			out = append(out, actions.Endpoint{ID: x.Endpoint, Kind: "connection"})
 		}
 	}
 	return out

@@ -57,7 +57,7 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 	if err := save("work", controlWork{state.Queues, state.Failed, state.Tasks, state.Jobs}); err != nil {
 		return nil, err
 	}
-	if err := save("endpoints", t.endpoints); err != nil {
+	if err := save("endpoints", t.endpoints.Saved()); err != nil {
 		return nil, err
 	}
 	effects := []acceptedformat.EffectState{}
@@ -208,7 +208,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 			}
 			ids[endpoint.ID] = true
 		}
-		t.endpoints = endpoints
+		t.endpoints.Restore(endpoints)
 	case "effects":
 		t.opsMu.Lock()
 		defer t.opsMu.Unlock()

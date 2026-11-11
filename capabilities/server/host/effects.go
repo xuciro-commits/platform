@@ -8,7 +8,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -37,9 +36,7 @@ func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) 
 	if refusal != nil {
 		return nil, refusal
 	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	for _, ep := range t.endpoints {
+	for _, ep := range t.endpoints.All() {
 		i := slices.IndexFunc(names, func(n string) bool { return slices.Contains(ep.Events, n) })
 		if i < 0 {
 			continue
@@ -95,10 +92,8 @@ func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, dat
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
 	var planned []platform.Effect
-	for _, ep := range t.endpoints {
+	for _, ep := range t.endpoints.All() {
 		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, c.App, kind, key, ep.ID)
 		if !slices.Contains(ep.Effects, name) || t.outbound.Any(func(x actions.Queued) bool { return x.ID == id }) ||
 			slices.ContainsFunc(staged, func(x platform.Effect) bool { return x.ID == id }) {
@@ -151,11 +146,9 @@ type EndpointView struct {
 
 func (t *Tenant) Endpoints() []EndpointView {
 	all := t.outbound.Select(nil)
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
 	out := []EndpointView{}
-	for _, ep := range t.endpoints {
-		v := EndpointView{Endpoint: *ep, Health: "ok"}
+	for _, ep := range t.endpoints.All() {
+		v := EndpointView{Endpoint: ep, Health: "ok"}
 		for _, x := range all {
 			switch {
 			case x.Endpoint != ep.ID:
@@ -201,16 +194,15 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		span     trace.SpanContext
 	}
 	var jobs []job
-	t.opsMu.Lock()
-	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), &actions.Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
+	endpoints := append(t.endpoints.All(), t.connectionEndpoints()...)
+	for _, ep := range append(endpoints, actions.Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
 		if ep.Kind != acceptedformat.ModelEndpoint && !t.breakers.Allow("endpoint:"+ep.ID, now, true) {
 			continue
 		}
 		if x, ok := t.outbound.Claim(ep.ID, now); ok {
-			jobs = append(jobs, job{x.Effect, *ep, x.Span})
+			jobs = append(jobs, job{x.Effect, ep, x.Span})
 		}
 	}
-	t.opsMu.Unlock()
 	var sends []func()
 	for _, j := range jobs {
 		sends = append(sends, func() {
@@ -309,9 +301,7 @@ func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, repl
 func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	t.opsMu.Lock()
-	known := slices.IndexFunc(t.endpoints, func(e *actions.Endpoint) bool { return e.ID == id }) >= 0
-	t.opsMu.Unlock()
+	known := t.endpoints.Has(id)
 	if s.GetSchema().GetName() == controlowner.SchemaEndpointRemove {
 		if !known {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -321,9 +311,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Resolve unknown deliveries before removing their endpoint")
 		}
 		return func(*pb.ChangeRecord) {
-			t.opsMu.Lock()
-			t.endpoints = slices.DeleteFunc(t.endpoints, func(e *actions.Endpoint) bool { return e.ID == id })
-			t.opsMu.Unlock()
+			t.endpoints.Remove(id)
 			var dropped []platform.Effect
 			t.outbound.UpdateAll(func(x *actions.Queued) {
 				if x.Endpoint == id && !platform.EffectSettled(x.State) {
@@ -340,48 +328,17 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 	if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" {
 		return nil, invalid
 	}
-	u, err := url.Parse(ep.URL)
-	if err != nil || u.Host == "" {
+	if !ep.Valid(t.App, func(event string) bool {
+		_, declared := t.router().Event(event)
+		return t.owner["action:"+event] != nil || declared
+	}) {
 		return nil, invalid
-	}
-	switch ep.Kind {
-	case "", "webhook":
-		if ep.Secret == "" || len(ep.Events)+len(ep.Effects) == 0 || len(ep.Notifications) > 0 || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
-			return nil, invalid
-		}
-		ep.Kind = "webhook"
-	case "a2a":
-		if len(ep.Effects) == 0 || len(ep.Events)+len(ep.Notifications) > 0 || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
-			return nil, invalid
-		}
-	case "email":
-		if u.Scheme != "smtp" || !strings.Contains(ep.From, "@") || len(ep.Notifications) == 0 || len(ep.Events)+len(ep.Effects) > 0 || u.User != nil && ep.Secret == "" {
-			return nil, invalid
-		}
-		for _, app := range ep.Notifications {
-			if t.App(app) == nil {
-				return nil, invalid
-			}
-		}
-	default:
-		return nil, invalid
-	}
-	for _, event := range ep.Events {
-		if _, declared := t.router().Event(event); t.owner["action:"+event] == nil && !declared {
-			return nil, invalid
-		}
-	}
-	for _, kind := range ep.Effects {
-		app, name, _ := strings.Cut(kind, "/")
-		if a := t.App(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == name }) {
-			return nil, invalid
-		}
 	}
 	if known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	ep.ID = id
-	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.endpoints = append(t.endpoints, &ep); t.opsMu.Unlock() }, nil
+	return func(*pb.ChangeRecord) { t.endpoints.Add(ep) }, nil
 }
 
 func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {

@@ -407,7 +407,7 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	s.Marks = marks
 	t.connectors.snapshot(&s)
 	s.Notices, s.NoticeSeq = t.notices.State()
-	s.Settings, s.Endpoints, s.Words = t.settings.Snapshot(), t.endpoints, t.words.Clone()
+	s.Settings, s.Endpoints, s.Words = t.settings.Snapshot(), t.endpoints.Saved(), t.words.Clone()
 	s.Sequences = t.sequences.Clone()
 	for _, x := range t.outbound.Select(nil) {
 		s.Outbound = append(s.Outbound, acceptedformat.EffectState{Effect: x.Effect, Since: x.Since})
@@ -744,7 +744,7 @@ func (t *Tenant) restoreOperations(s *tenantState) error {
 	t.settings.Restore(s.Settings)
 	t.words.Restore(s.Words)
 	t.i18n.Reset()
-	t.endpoints = s.Endpoints
+	t.endpoints.Restore(s.Endpoints)
 	t.sequences.Restore(s.Sequences)
 	effects := make([]actions.Queued, 0, len(s.Outbound))
 	for _, x := range s.Outbound {

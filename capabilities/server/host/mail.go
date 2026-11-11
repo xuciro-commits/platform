@@ -17,7 +17,7 @@ func (t *Tenant) planMailNotice(n platform.Notification, to platform.Reach) []pl
 		return effects
 	}
 	due := to.Due(n.At)
-	for _, ep := range t.endpoints {
+	for _, ep := range t.endpoints.All() {
 		if ep.Kind != "email" || !slices.Contains(ep.Notifications, n.App) {
 			continue
 		}
