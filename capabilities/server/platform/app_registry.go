@@ -101,16 +101,3 @@ func loadApplicationRegistry() applicationRegistryContents {
 func BuiltinManifestTitle(id string) string {
 	return builtinManifests[id]
 }
-
-func BuiltinManifestIDs() []string {
-	out := make([]string, 0, len(builtinManifests))
-	for id := range builtinManifests {
-		out = append(out, id)
-	}
-	slices.Sort(out)
-	return out
-}
-
-func BuiltinApplicationAccessRules() []BuiltinApplicationAccess {
-	return slices.Clone(builtinRegistry.access)
-}

@@ -438,9 +438,8 @@ func CheckPageContentVersion(version string) error {
 }
 
 type PageExternalFrame struct {
-	LegacyVisual map[string]json.RawMessage `json:"-"`
-	URL          string                     `json:"url"`
-	Origin       string                     `json:"origin"`
+	URL    string `json:"url"`
+	Origin string `json:"origin"`
 }
 
 type PageActionParameter struct {

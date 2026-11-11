@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"platformserver/platform"
-	dataowner "platformserver/services/data"
 	build "platformserver/services/resources/authoring"
 )
 
@@ -471,13 +470,4 @@ func statuses(g *Graph, in Input) {
 		}
 		node.Status = status
 	}
-}
-
-func (in Input) source(id string) (dataowner.Source, bool) {
-	for _, item := range in.Sources {
-		if item.ID == id {
-			return item, true
-		}
-	}
-	return dataowner.Source{}, false
 }

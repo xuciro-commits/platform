@@ -241,27 +241,6 @@ func containsDot(value string) bool {
 	return false
 }
 
-func (g Graph) visible() Graph {
-	nodes := make([]Node, 0, len(g.Nodes))
-	for _, node := range g.Nodes {
-		if !node.Unreadable {
-			nodes = append(nodes, node)
-		}
-	}
-	ids := make(map[string]bool, len(nodes))
-	for _, node := range nodes {
-		ids[node.ID] = true
-	}
-	edges := make([]Edge, 0, len(g.Edges))
-	for _, edge := range g.Edges {
-		if ids[edge.From] && ids[edge.To] {
-			edges = append(edges, edge)
-		}
-	}
-	g.Nodes, g.Edges = nodes, edges
-	return g
-}
-
 func (g Graph) normalized() Graph {
 	slices.SortStableFunc(g.Nodes, func(a, b Node) int {
 		if a.Distance != b.Distance {

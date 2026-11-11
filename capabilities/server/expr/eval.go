@@ -693,29 +693,6 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 	return fold.Result()
 }
 
-func EvalJSON(raw []byte) ([]byte, error) {
-	if len(raw) > MaxContextBytes+2*MaxBytes {
-		return nil, fail("budget", "$", "evaluation request budget exceeded")
-	}
-	var req struct {
-		Expr    Expr    `json:"expr"`
-		Schema  Schema  `json:"schema"`
-		Context Context `json:"context"`
-	}
-	if err := json.Unmarshal(raw, &req); err != nil {
-		return nil, err
-	}
-	p, err := Compile(req.Expr, req.Schema)
-	if err != nil {
-		return nil, err
-	}
-	result, err := p.Eval(req.Context)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(result)
-}
-
 func frozenNumeric(v Value, at string) (Value, error) {
 	n := 0.0
 	if v.Status != "missing" && v.Status != "null" {

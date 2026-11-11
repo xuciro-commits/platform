@@ -6,13 +6,6 @@ import (
 	"slices"
 )
 
-type PageOverlay struct {
-	LegacyVisual map[string]json.RawMessage `json:"-"`
-	Root         string                     `json:"root"`
-	Kind         string                     `json:"kind"`
-	OpenVariable string                     `json:"openVariable"`
-}
-
 type PageEventBinding struct {
 	Control string       `json:"control,omitempty"`
 	Source  string       `json:"source"`
@@ -191,16 +184,6 @@ func (p Page) checkEvents() error {
 	}
 
 	return nil
-}
-
-func (p *PageOverlay) UnmarshalJSON(raw []byte) error {
-	type value PageOverlay
-	return RetainPageSection(raw, (*value)(p), &p.LegacyVisual)
-}
-
-func (p PageOverlay) MarshalJSON() ([]byte, error) {
-	type value PageOverlay
-	return MarshalPageSection(value(p), p.LegacyVisual)
 }
 
 type PageInterface struct {

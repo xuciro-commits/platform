@@ -126,15 +126,6 @@ var pageWidgets = func() pageUIContract {
 	return frozen.RetainedContract
 }()
 
-func PageUIProfile() string {
-	return pageWidgets.UIProfile
-}
-
-func WidgetReadsSelection(id string) bool {
-	w := pageWidget(id)
-	return w != nil && (w.SelectionMode == "read" || w.SelectionMode == "write")
-}
-
 func SupportsPageUIProfile(profile string) bool {
 	if profile == "platform.page.v3" {
 		return true
