@@ -230,9 +230,9 @@ func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, 
 		provider platform.AIProvider
 	}
 	value, refusal := readAgentHost(h, func(t *Tenant) (selection, *kernel.Error) {
-		binding, provider, refusal := t.resolveModel("agent", name, options)
+		binding, provider, refusal := t.modelResolver().Resolve("agent", name, options)
 		if refusal == nil {
-			binding, refusal = t.modelStage(binding, provider, stage)
+			binding, refusal = t.modelResolver().Stage(binding, provider, stage)
 		}
 		return selection{binding: binding, provider: provider}, refusal
 	})
@@ -366,7 +366,7 @@ func (t *Tenant) candidateAgentModel(candidate, name string) (string, platform.M
 	if model == "" {
 		model = t.setting(t.automation(platform.AgentApp, false), platform.SettingAgentModel)
 	}
-	binding, _, problem := t.resolveModel("agent", model, defs[0].ModelOptions)
+	binding, _, problem := t.modelResolver().Resolve("agent", model, defs[0].ModelOptions)
 	if problem != nil {
 		return "", platform.ModelOptions{}, fmt.Errorf("%s", problem.Message)
 	}

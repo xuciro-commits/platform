@@ -135,11 +135,11 @@ func (t *Tenant) prepareEvaluateRelease(m platform.Member, request ReleaseEvalua
 	if refusal != nil {
 		return "", fmt.Errorf("the plan model is not enabled")
 	}
-	binding, _, refusal := t.resolveModel("generation", model.Name(), definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens}))
+	binding, _, refusal := t.modelResolver().Resolve("generation", model.Name(), definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens}))
 	if refusal != nil {
 		return "", fmt.Errorf("model options: %s", refusal.Message)
 	}
-	binding, refusal = t.modelStage(binding, provider, platform.AIStageDesign)
+	binding, refusal = t.modelResolver().Stage(binding, provider, platform.AIStageDesign)
 	if refusal != nil {
 		return "", fmt.Errorf("model stage: %s", refusal.Message)
 	}

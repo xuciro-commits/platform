@@ -27,10 +27,10 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 			}
 			item := platform.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []platform.ApplicationAIEvaluation{}}
 			currentConfig := ""
-			if binding, pv, err := t.resolveModel("agent", definition.Model, definition.ModelOptions); err == nil {
+			if binding, pv, err := t.modelResolver().Resolve("agent", definition.Model, definition.ModelOptions); err == nil {
 				item.Model = binding.Model
 				model, _, _ := t.ai.Model(binding.Model)
-				if pinned, refusal := t.modelStage(binding, pv, platform.AIStageDesign); refusal == nil {
+				if pinned, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageDesign); refusal == nil {
 					currentConfig, _ = aigateway.ConfigurationDigest(model, pv, &pinned)
 				}
 			}
@@ -80,10 +80,10 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 		}
 		item := platform.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, Adoptions: []string{}, Checkpoints: []string{}, Evaluations: []platform.ApplicationAIEvaluation{}}
 		currentConfig := ""
-		if binding, pv, err := t.resolveModel("generation", definition.Model, definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens})); err == nil {
+		if binding, pv, err := t.modelResolver().Resolve("generation", definition.Model, definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens})); err == nil {
 			item.Model = binding.Model
 			model, _, _ := t.ai.Model(binding.Model)
-			if pinned, refusal := t.modelStage(binding, pv, platform.AIStageDesign); refusal == nil {
+			if pinned, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageDesign); refusal == nil {
 				currentConfig, _ = aigateway.ConfigurationDigest(model, pv, &pinned)
 			}
 		}

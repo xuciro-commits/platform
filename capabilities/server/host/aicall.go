@@ -105,11 +105,6 @@ func (t *Tenant) releaseCall(call string, now time.Time) *kernel.Error {
 	return refusal
 }
 
-func (t *Tenant) mostTokens() int {
-	n, _ := strconv.Atoi(t.setting(t.automation(platform.AIApp, false), platform.AISettingMaxTokens))
-	return n
-}
-
 func (t *Tenant) Chat(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
 	return t.chatForStage(m, req, now, platform.AIStageRuntime, delta...)
 }
@@ -151,15 +146,15 @@ func (t *Tenant) chatForStage(m platform.Member, req platform.ChatRequest, now t
 		if req.MaxTokens > 0 {
 			options.MaxTokens = req.MaxTokens
 		}
-		if ceiling := t.mostTokens(); ceiling > 0 && options.MaxTokens > ceiling && req.Options.MaxTokens == 0 {
+		if ceiling := t.modelResolver().MostTokens(); ceiling > 0 && options.MaxTokens > ceiling && req.Options.MaxTokens == 0 {
 			options.MaxTokens = ceiling
 		}
-		binding, problem := model.Resolve("generation", options, t.mostTokens())
+		binding, problem := model.Resolve("generation", options, t.modelResolver().MostTokens())
 		if problem != nil {
 			return struct{}{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, problem.Error())
 		}
 		binding.Provider = &pv
-		binding, err = t.modelStage(binding, pv, stage)
+		binding, err = t.modelResolver().Stage(binding, pv, stage)
 		if err != nil {
 			return struct{}{}, err
 		}
@@ -186,7 +181,7 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 	if t.services.AIInference != nil {
 		policy = *t.services.AIInference
 	}
-	ceiling, _ := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) { return t.mostTokens(), nil })
+	ceiling, _ := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) { return t.modelResolver().MostTokens(), nil })
 	gateway := aigateway.Calls{Inference: policy, MostTokens: func() int { return ceiling }, Reserve: t.reserveCall, Release: t.releaseCall,
 		Available: func(provider string, at time.Time, claim bool) bool {
 			return t.breakers.Allow("ai:"+provider, at, claim)
@@ -274,7 +269,7 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 	var binding *platform.AIModelBinding
 	failure := ""
 	if c.Staging() && !c.Replaying {
-		if resolved, _, err := t.resolveModel("generation", model, options); err != nil {
+		if resolved, _, err := t.modelResolver().Resolve("generation", model, options); err != nil {
 			failure = err.Message
 			if failure == "" {
 				failure = "The selected model is disabled or missing"
@@ -285,7 +280,7 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 				stage = platform.AIStageDesign
 			}
 			_, provider, _ := t.ai.Model(resolved.Model)
-			if pinned, refusal := t.modelStage(resolved, provider, stage); refusal != nil {
+			if pinned, refusal := t.modelResolver().Stage(resolved, provider, stage); refusal != nil {
 				failure = refusal.Message
 			} else {
 				binding = &pinned
@@ -357,12 +352,12 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 			}
 			var evaluatedBinding *platform.AIModelBinding
 			if ask.Binding != nil {
-				current, _, refusal := t.resolveModel("generation", model, ask.EvaluationFunction.ModelOptions.Override(platform.ModelOptions{MaxTokens: ask.EvaluationFunction.MaxTokens}))
+				current, _, refusal := t.modelResolver().Resolve("generation", model, ask.EvaluationFunction.ModelOptions.Override(platform.ModelOptions{MaxTokens: ask.EvaluationFunction.MaxTokens}))
 				if refusal != nil {
 					out.Result, out.Detail = "rejected", refusal.Message
 					return false, nil
 				}
-				current, refusal = t.modelStage(current, pv, platform.AIStageDesign)
+				current, refusal = t.modelResolver().Stage(current, pv, platform.AIStageDesign)
 				if refusal != nil {
 					out.Result, out.Detail = "rejected", refusal.Message
 					return false, nil

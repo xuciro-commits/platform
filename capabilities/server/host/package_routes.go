@@ -93,7 +93,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 		answer, err := packages.Preparation(id, version, blueprint, installed, candidate, m, packages.PreparationSource{
 			Find: find, App: (hostView{t: t}).App,
 			Model: func(purpose, model string, options platform.ModelOptions) (string, string) {
-				binding, _, refusal := t.resolveModel(purpose, model, options)
+				binding, _, refusal := t.modelResolver().Resolve(purpose, model, options)
 				if refusal != nil {
 					problem := refusal.Message
 					if problem == "" {

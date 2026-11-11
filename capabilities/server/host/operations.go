@@ -514,7 +514,7 @@ func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Tim
 		if err := t.checkEmbeddingSetting(id, p.Value); err != nil {
 			return nil, err
 		}
-		if err := t.checkModelSetting(id, p.Value); err != nil {
+		if err := t.modelResolver().CheckSetting(id, p.Value); err != nil {
 			return nil, err
 		}
 	}

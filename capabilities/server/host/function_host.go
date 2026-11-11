@@ -93,7 +93,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			effect := t.planModelRequest(c, r, q, pending)
 			var ask modelAsk
 			_ = json.Unmarshal([]byte(effect.Body), &ask)
-			binding, provider, problem := t.resolveModel("generation", ask.Model, options)
+			binding, provider, problem := t.modelResolver().Resolve("generation", ask.Model, options)
 			if problem != nil {
 				return agentowner.FunctionDispatch{}, problem
 			}
@@ -101,7 +101,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			if t.simulation {
 				stage = platform.AIStageDesign
 			}
-			binding, problem = t.modelStage(binding, provider, stage)
+			binding, problem = t.modelResolver().Stage(binding, provider, stage)
 			if problem != nil {
 				return agentowner.FunctionDispatch{}, problem
 			}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"platformkernel/kernel"
 	"platformserver/kernel/transport"
+	"platformserver/services/ai/gateway"
 	knowledgeindex "platformserver/services/ai/retrieval"
 	"platformserver/services/data/blobs"
 	"platformserver/services/data/transform"
@@ -95,7 +96,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if services.BindOwner == nil {
 		return nil, fmt.Errorf("tenant composition requires owner bindings")
 	}
-	if err := bindAIInferencePolicy(&services); err != nil {
+	if err := aigateway.BindPolicy(&services); err != nil {
 		return nil, err
 	}
 	if err := services.Check(); err != nil {

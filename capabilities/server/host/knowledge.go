@@ -130,7 +130,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	if problem != nil {
 		return nil, problem
 	}
-	if _, refusal := t.modelStage(binding, pv, platform.AIStageRuntime); refusal != nil {
+	if _, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageRuntime); refusal != nil {
 		return nil, refusal
 	}
 	if pv.Wire == "anthropic" {
@@ -305,7 +305,7 @@ func (t *Tenant) checkEmbeddingSetting(id, value string) *kernel.Error {
 	if value == "" {
 		return nil
 	}
-	_, pv, err := t.resolveModel("embedding", value, platform.ModelOptions{})
+	_, pv, err := t.modelResolver().Resolve("embedding", value, platform.ModelOptions{})
 	if err != nil {
 		return err
 	}
