@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"platformserver/services/actions"
 	"slices"
 	"sort"
 	"strconv"
@@ -133,12 +134,12 @@ func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, sche
 	}
 	s := t.currentSubmissionSchema(a, submission)
 	if refusal := t.delegatedBound(m, s); refusal != nil {
-		return branchChild{refusal: explained(refusal, a, s.GetSchema().GetName(), target(s))}
+		return branchChild{refusal: actions.Explained(refusal, a, s.GetSchema().GetName(), target(s))}
 	}
 	receipt, refusal := platform.Decide(platform.NewCaller(draft, m, build.ID, false, automation), a, s, now)
 	if refusal != nil {
 		issues := t.readableFieldIssues(m, draft.inputIssues[refusal], now)
-		return branchChild{issues: issues, refusal: explained(refusal, a, s.GetSchema().GetName(), target(s))}
+		return branchChild{issues: issues, refusal: actions.Explained(refusal, a, s.GetSchema().GetName(), target(s))}
 	}
 	return branchChild{receipt: receipt}
 }

@@ -46,10 +46,10 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, includeArchived bool) ([]platform.Definition, error) {
 	base = slices.Clone(base)
 	base = slices.DeleteFunc(base, func(definition platform.Definition) bool {
-		return !t.ownerActive(definition.Ref.App) || definition.Ref.Kind == platform.AssetAgent && definition.Source != "code"
+		return !t.OwnerActive(definition.Ref.App) || definition.Ref.Kind == platform.AssetAgent && definition.Source != "code"
 	})
 	datasets := map[platform.AssetRef]platform.ReleaseAsset{}
-	for _, provider := range t.assetOwners(t.ownerActive) {
+	for _, provider := range t.assetOwners(t.OwnerActive) {
 		assets, err := provider.ReleaseAssets()
 		if err != nil {
 			return nil, err
@@ -152,7 +152,7 @@ func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, i
 		slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 		return out, nil
 	}
-	registry, err := platform.NewAssetRegistry(t.assetOwners(t.ownerActive)...)
+	registry, err := platform.NewAssetRegistry(t.assetOwners(t.OwnerActive)...)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	trialowner "platformserver/services/devops/trials"
 	"platformserver/services/resources/authoring"
 	"slices"
@@ -78,7 +79,7 @@ func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb
 	_, refusal := decideAcceptedAs(a, draft, m, s, now, false)
 	out := trialowner.Simulation{Changes: []trialowner.SimulatedChange{}}
 	if refusal != nil {
-		out.Refusal = explained(refusal, a, s.GetSchema().GetName(), target(s)).Message
+		out.Refusal = actions.Explained(refusal, a, s.GetSchema().GetName(), target(s)).Message
 		out.RefusalCode = refusal.Code.String()
 		out.Issues = t.readableFieldIssues(member, draft.inputIssues[refusal], now)
 		out.Unsupported = platform.IsOutsideAcceptedBoundary(refusal)

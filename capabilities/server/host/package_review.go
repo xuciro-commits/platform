@@ -36,7 +36,7 @@ func (t *Tenant) packageRemovalImpacts(removed, replaced map[platform.AssetRef]b
 	}
 	out := []PackageRemovalImpact{}
 	for _, definition := range t.definitions {
-		if removed[definition.Ref] || replaced[definition.Ref] || archived[definition.Ref] || !t.ownerActive(definition.Ref.App) {
+		if removed[definition.Ref] || replaced[definition.Ref] || archived[definition.Ref] || !t.OwnerActive(definition.Ref.App) {
 			continue
 		}
 		for _, dependency := range definition.Requires {

@@ -301,7 +301,7 @@ type stagedEffectPanic struct{}
 func unsupportedStagedEffect() { panic(stagedEffectPanic{}) }
 
 func (d *stagedDecision) Probe(c platform.Caller, protocol, action, id string, payload []byte, at time.Time) *kernel.Error {
-	return d.routingTenant().probe(c, protocol, action, id, payload, at)
+	return d.routingTenant().router().Probe(c, protocol, action, id, payload, at)
 }
 func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platform.Request) {
 	if r.GetSubmission().GetTenantId() != d.tenant.ID || r.GetSubmission().GetAuthority() != c.App {
@@ -322,7 +322,7 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 		record: proto.Clone(r).(*pb.ChangeRecord), n: n})
 }
 func (d *stagedDecision) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
-	return d.routingTenant().query(c, protocol, read, provider...)
+	return d.routingTenant().router().Query(c, protocol, read, provider...)
 }
 func (d *stagedDecision) Setting(c platform.Caller, name string) string {
 	return d.routingTenant().setting(c, name)
@@ -461,7 +461,7 @@ func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name stri
 }
 
 func (d *stagedDecision) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
-	return d.routingTenant().boundProvider(c, protocol)
+	return d.routingTenant().router().BoundProvider(c, protocol)
 }
 
 func (d *stagedDecision) directoryView() platform.Directory {

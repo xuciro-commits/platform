@@ -14,6 +14,7 @@ import (
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"strconv"
@@ -39,7 +40,7 @@ func (t *Tenant) enqueue(now time.Time) {
 		e := t.events[0]
 		t.events = t.events[1:]
 		s := e.Record.GetSubmission()
-		names := append([]string{s.GetSchema().GetName()}, t.protocolEvents(e.Event)...)
+		names := append([]string{s.GetSchema().GetName()}, t.router().Events(e.Event)...)
 		if e.Plan != nil {
 			for _, id := range e.Plan.Stopped {
 				t.delivered(platform.Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: id,
@@ -185,7 +186,7 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 	}
 	var err *kernel.Error
 	if x, ok := t.App(task.App).(platform.Listener); ok {
-		names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(task.Event.Event)...)
+		names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, t.router().Events(task.Event.Event)...)
 		if task.Event.Plan != nil {
 			names = task.Event.Plan.Names
 		}
@@ -579,10 +580,10 @@ func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time)
 	id := s.GetTarget().GetId()
 	var p struct{ Provider string }
 	json.Unmarshal(s.GetPayload(), &p)
-	if !slices.ContainsFunc(t.providers(id), func(b binding) bool { return b.provider.Manifest().ID == p.Provider }) {
+	if !slices.ContainsFunc(t.router().Providers(id), func(b actions.Binding) bool { return b.ID() == p.Provider }) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	return func(*pb.ChangeRecord) { t.rebind(id, p.Provider) }, nil
+	return func(*pb.ChangeRecord) { t.router().Rebind(id, p.Provider) }, nil
 }
 
 func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
@@ -609,5 +610,5 @@ func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.
 }
 
 func (t *Tenant) workLoop() automation.WorkLoop {
-	return automation.WorkLoop{Board: &t.work, Rotation: &t.rotation, Apps: t.apps, Active: t.ownerActive, Lock: t.opsMu.Lock, Unlock: t.opsMu.Unlock, Attempt: t.attempt, Run: t.run}
+	return automation.WorkLoop{Board: &t.work, Rotation: &t.rotation, Apps: t.apps, Active: t.OwnerActive, Lock: t.opsMu.Lock, Unlock: t.opsMu.Unlock, Attempt: t.attempt, Run: t.run}
 }

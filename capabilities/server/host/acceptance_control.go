@@ -42,11 +42,7 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 	if err := save("settings", t.settings.Snapshot()); err != nil {
 		return nil, err
 	}
-	bindings := map[string]string{}
-	for protocol, b := range t.bindings {
-		bindings[protocol] = b.provider.Manifest().ID
-	}
-	if err := save("bindings", bindings); err != nil {
+	if err := save("bindings", t.bindings.All()); err != nil {
 		return nil, err
 	}
 	state := tenantState{Queues: map[string][]string{}}
@@ -79,7 +75,7 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), identity: t.identity, ownerSet: t.ownerSet, definitions: t.definitions, Projection: t.Projection, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
-		bindings: maps.Clone(t.bindings), connectors: newConnectorRoster(), work: automation.NewWorkBoard(), works: t.forkWorkState()}
+		bindings: t.bindings.Clone(), connectors: newConnectorRoster(), work: automation.NewWorkBoard(), works: t.forkWorkState()}
 	for _, j := range t.work.Jobs {
 		copy := *j
 		view.work.AddJob(&copy)
@@ -128,9 +124,9 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		if err := acceptedformat.DecodeControl(raw, &bindings); err != nil {
 			return err
 		}
-		t.bindings = map[string]binding{}
+		t.bindings = actions.NewBindings(nil)
 		for protocol, provider := range bindings {
-			if !t.rebind(protocol, provider) {
+			if !t.router().Rebind(protocol, provider) {
 				return fmt.Errorf("control protocol provider is missing")
 			}
 		}

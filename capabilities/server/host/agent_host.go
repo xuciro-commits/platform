@@ -27,10 +27,10 @@ func (h hostView) ProtocolActions(protocol string) []platform.Action {
 	return h.t.protocolActions(protocol)
 }
 func (h hostView) ProtocolProvider(schema string) (platform.App, string, bool) {
-	return h.t.provider(schema)
+	return h.t.router().Provider(schema)
 }
 func (h hostView) InvokeDecision(c platform.Caller, protocol, action, id string, raw []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
-	return h.t.invoke(c, protocol, action, id, raw, key, correlation, now)
+	return h.t.router().Invoke(c, protocol, action, id, raw, key, correlation, now)
 }
 func (h hostView) AgentContext(reader *platform.Member, typ, id string, now time.Time) (platform.AgentObservation, *kernel.Error) {
 	view, err := h.t.contextRead(aiContextReader(reader), typ, id, now)

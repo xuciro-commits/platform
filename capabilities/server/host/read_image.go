@@ -217,15 +217,11 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 		apps[i] = fork
 	}
 	view.ownerSet = t.with(apps)
-	roles, err := ownerRolesOf(view.apps, view.ownerActive)
+	roles, err := ownerRolesOf(view.apps, view.OwnerActive)
 	if err != nil {
 		return nil, err
 	}
 	view.ownerRoles = roles
-	for protocol, binding := range view.bindings {
-		binding.provider = view.App(binding.provider.Manifest().ID)
-		view.bindings[protocol] = binding
-	}
 	view.Committed = t.Committed.Fork()
 	view.releases.Restore(t.releases.SnapshotState())
 	view.console.Restore(t.console.SnapshotState())

@@ -17,7 +17,7 @@ import (
 )
 
 func (t *Tenant) ProjectDatasets(now time.Time) {
-	if t.businessStopped() || !t.ownerActive(build.ID) {
+	if t.businessStopped() || !t.OwnerActive(build.ID) {
 		return
 	}
 	type projection struct{ object, app, dataset string }

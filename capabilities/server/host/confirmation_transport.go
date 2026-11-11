@@ -71,11 +71,11 @@ func (h hostView) FreezeConfirmation(c platform.Caller, subject string, spec pla
 }
 
 func (h hostView) FreezeConfirmationProtocol(p platform.ConfirmationParty) (*platform.ConfirmationProtocol, error) {
-	b, ok := h.t.resolve(p.Protocol)
-	if !ok || b.provision.Actions[p.Action] == "" || p.CompensateAction != "" && b.provision.Actions[p.CompensateAction] == "" {
+	b, ok := h.t.router().Resolve(p.Protocol)
+	if !ok || b.Provision.Actions[p.Action] == "" || p.CompensateAction != "" && b.Provision.Actions[p.CompensateAction] == "" {
 		return nil, fmt.Errorf("The confirmation protocol has no declared provider mapping")
 	}
-	return &platform.ConfirmationProtocol{Provider: b.provider.Manifest().ID, Version: b.provider.Manifest().Version, Action: b.provision.Actions[p.Action], CompensateAction: b.provision.Actions[p.CompensateAction]}, nil
+	return &platform.ConfirmationProtocol{Provider: b.Provider.Manifest().ID, Version: b.Provider.Manifest().Version, Action: b.Provision.Actions[p.Action], CompensateAction: b.Provision.Actions[p.CompensateAction]}, nil
 }
 
 func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run platform.ConfirmationRun, index int, compensate bool, at time.Time) *kernel.Error {

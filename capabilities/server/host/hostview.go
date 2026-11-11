@@ -2,7 +2,6 @@ package host
 
 import (
 	"fmt"
-	"maps"
 	pageowner "platformserver/services/apps/pages"
 	"reflect"
 	"slices"
@@ -23,8 +22,8 @@ type hostView struct {
 }
 
 func (h hostView) ProtocolContract(id string) (platform.Protocol, bool) {
-	if provider, ok := h.t.resolve(id); ok {
-		return provider.provision.Protocol, true
+	if provider, ok := h.t.router().Resolve(id); ok {
+		return provider.Provision.Protocol, true
 	}
 	return platform.Protocol{}, false
 }
@@ -62,16 +61,15 @@ func (h hostView) installationView(recordView *records.Store) *Tenant {
 }
 
 func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error {
-	h.t.opsMu.Lock()
-	bindings := maps.Clone(h.t.bindings)
-	h.t.opsMu.Unlock()
-	for protocol, selected := range bindings {
-		if selected.provider.Manifest().ID != h.app.Manifest().ID {
+	for protocol, provider := range h.t.bindings.All() {
+		if provider != h.app.Manifest().ID {
 			continue
 		}
 		belongs := false
-		for _, schema := range selected.provision.Actions {
-			belongs = belongs || strings.HasPrefix(schema, e.Type+".")
+		for _, provision := range h.t.App(provider).Manifest().Provides {
+			for _, schema := range provision.Actions {
+				belongs = belongs || provision.Protocol.ID() == protocol && strings.HasPrefix(schema, e.Type+".")
+			}
 		}
 		if belongs && !slices.ContainsFunc(e.Protocols, func(p platform.Provision) bool { return p.Protocol.ID() == protocol }) {
 			return fmt.Errorf("protocol %s is bound to this object; retain its provider declaration", protocol)
@@ -183,7 +181,7 @@ func (h hostView) OwnerOf(dataClass string) (string, bool) {
 }
 
 func (h hostView) ProtocolEvent(name string) (platform.ProtocolEvent, bool) {
-	return h.t.protocolEvent(name)
+	return h.t.router().Event(name)
 }
 
 func (h hostView) As(c platform.Caller, app string) platform.Caller {
@@ -284,7 +282,7 @@ func (h hostView) Seen(c platform.Caller, keys ...string) {
 }
 
 func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *kernel.Error) {
-	ref, _, err := h.t.invoke(c, protocol, action, id, payload, key, correlation, now)
+	ref, _, err := h.t.router().Invoke(c, protocol, action, id, payload, key, correlation, now)
 	return ref, err
 }
 

@@ -387,9 +387,7 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	s.Acted, s.Failed = t.acted, []string{}
-	for protocol, b := range t.bindings {
-		s.Bindings[protocol] = b.provider.Manifest().ID
-	}
+	maps.Copy(s.Bindings, t.bindings.All())
 	var err error
 	if s.Works, err = platform.Protos(t.works.All()); err != nil {
 		return tenantState{}, nil, 0, err
@@ -537,7 +535,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	}
 	t.releases.Restore(releases.State{ReleaseRequests: s.ReleaseRequests, ReleaseCandidates: s.ReleaseCandidates, ReleaseApplied: s.ReleaseApplied, ActiveRelease: s.ActiveRelease, Sealed: s.Sealed, ReleaseOrigins: s.ReleaseOrigins})
 	for protocol, provider := range s.Bindings {
-		if !t.rebind(protocol, provider) {
+		if !t.router().Rebind(protocol, provider) {
 			return fmt.Errorf("tenant %s: %s is not a provider of %s", t.ID, provider, protocol)
 		}
 	}

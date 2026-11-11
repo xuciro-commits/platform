@@ -204,7 +204,7 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 	}
 	count := len(d.events)
 	for _, e := range slices.Clone(d.events) {
-		for _, app := range d.tenant.liveApps() {
+		for _, app := range d.tenant.LiveApps() {
 			_, observer := app.(platform.Observer)
 			if !observer {
 				continue
@@ -215,7 +215,7 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 			}
 			id := app.Manifest().ID
 			c := platform.NewCaller(d, platform.Member{ID: "app:" + id, Tenant: d.tenant.ID}, id, false, true)
-			raw, err := owner.PlanObserved(c, e, d.tenant.protocolEvents(e))
+			raw, err := owner.PlanObserved(c, e, d.tenant.router().Events(e))
 			if err != nil || owner.ValidateObserved(raw) != nil {
 				return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}

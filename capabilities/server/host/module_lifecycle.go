@@ -8,11 +8,11 @@ import (
 	"platformserver/platform"
 )
 
-func (t *Tenant) ownerActive(id string) bool { return !t.disabledOwners[id] }
-func (t *Tenant) liveApps() []platform.App {
+func (t *Tenant) OwnerActive(id string) bool { return !t.disabledOwners[id] }
+func (t *Tenant) LiveApps() []platform.App {
 	apps := make([]platform.App, 0, len(t.apps))
 	for _, app := range t.apps {
-		if t.ownerActive(app.Manifest().ID) {
+		if t.OwnerActive(app.Manifest().ID) {
 			apps = append(apps, app)
 		}
 	}
@@ -75,11 +75,11 @@ func (t *Tenant) deactivateOwners(disabled []string) error {
 		t.disabledOwners[id] = true
 	}
 	for name, owner := range t.owner {
-		if !t.ownerActive(owner.Manifest().ID) {
+		if !t.OwnerActive(owner.Manifest().ID) {
 			delete(t.owner, name)
 		}
 	}
-	roles, err := ownerRolesOf(t.apps, t.ownerActive)
+	roles, err := ownerRolesOf(t.apps, t.OwnerActive)
 	if err != nil {
 		return err
 	}

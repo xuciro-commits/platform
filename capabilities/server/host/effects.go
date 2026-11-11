@@ -367,7 +367,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 		return nil, invalid
 	}
 	for _, event := range ep.Events {
-		if _, declared := t.protocolEvent(event); t.owner["action:"+event] == nil && !declared {
+		if _, declared := t.router().Event(event); t.owner["action:"+event] == nil && !declared {
 			return nil, invalid
 		}
 	}

@@ -500,7 +500,7 @@ func (d *stagedDecision) answerRequest(q request, now time.Time) (refusal *kerne
 	_, err := d.Attempt(func() (*pb.ChangeRecord, *kernel.Error) {
 		var record *pb.ChangeRecord
 		var refusal *kernel.Error
-		ref, record, refusal = d.routingTenant().invoke(q.caller, q.Protocol, q.Action, q.Target,
+		ref, record, refusal = d.routingTenant().router().Invoke(q.caller, q.Protocol, q.Action, q.Target,
 			platform.Raw(q.Payload), providerKey, s.GetIdempotencyKey(), now, q.Provider)
 		return record, refusal
 	})
@@ -522,4 +522,11 @@ func (d *stagedDecision) answerRequest(q request, now time.Time) (refusal *kerne
 		return err
 	}
 	return d.failure
+}
+
+type request struct {
+	platform.Request
+	caller platform.Caller
+	record *pb.ChangeRecord
+	n      int
 }

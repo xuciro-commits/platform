@@ -290,7 +290,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 	} else {
 		t.hops = task.Event.Hops + 1
 		if listener, ok := d.stateApp(t.App(task.App)).(platform.Listener); ok {
-			names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(task.Event.Event)...)
+			names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, t.router().Events(task.Event.Event)...)
 			if task.Event.Plan != nil {
 				names = task.Event.Plan.Names
 			}

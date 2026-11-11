@@ -21,7 +21,7 @@ func (t *Tenant) ModelToolReads(m platform.Member) []string {
 		return values
 	}
 	var out []string
-	for _, app := range t.liveApps() {
+	for _, app := range t.LiveApps() {
 		for _, read := range app.Manifest().Reads {
 			if t.mayCallRead(m, read) {
 				out = append(out, read)

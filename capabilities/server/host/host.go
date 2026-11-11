@@ -66,7 +66,7 @@ type Tenant struct {
 	flowArtifacts flowArtifactGC
 	audit         runtimekernel.AuditLog
 	events        []automation.QueuedEvent
-	bindings      map[string]binding
+	bindings      *actions.Bindings
 	change        changes
 	hops          int
 	acted         int
@@ -106,7 +106,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if err != nil {
 		return nil, fmt.Errorf("tenant %s: %w", id, err)
 	}
-	t := &Tenant{ID: id, ownerSet: owners, bindings: map[string]binding{}, works: kernel.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
+	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), works: kernel.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
 		connectors: newConnectorRoster(), Projection: records.NewStore()}
 	t.bindAuditStore()
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)
@@ -133,8 +133,8 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		if a.AcceptedLedger() == nil {
 			return nil, fmt.Errorf("tenant %s: app %s has no decision ledger", id, m.ID)
 		}
-		if err := t.bind(i, a); err != nil {
-			return nil, err
+		if err := t.bindings.Bind(apps[:i], a); err != nil {
+			return nil, fmt.Errorf("tenant %s: %w", id, err)
 		}
 		(hostView{t: t, app: a}).bindOwner(a)
 		_, subscriber := a.(platform.Subscriber)
@@ -214,7 +214,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.Info().Type, err)
 		}
 	}
-	if _, err := platform.NewAssetRegistry(t.assetOwners(t.ownerActive)...); err != nil {
+	if _, err := platform.NewAssetRegistry(t.assetOwners(t.OwnerActive)...); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
 	for _, app := range apps {

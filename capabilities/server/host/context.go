@@ -192,7 +192,7 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 }
 
 func (t *Tenant) protocolActions(protocol string) []platform.Action {
-	for _, a := range t.liveApps() {
+	for _, a := range t.LiveApps() {
 		for _, p := range a.Manifest().Provides {
 			if p.Protocol.ID() == protocol {
 				return p.Protocol.Actions

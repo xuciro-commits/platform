@@ -41,7 +41,7 @@ func (s authorizationSources) ActionOwner(action string) platform.App {
 	return s.t.owner["action:"+action]
 }
 
-func (s authorizationSources) OwnerActive(id string) bool { return s.t.ownerActive(id) }
+func (s authorizationSources) OwnerActive(id string) bool { return s.t.OwnerActive(id) }
 func (s authorizationSources) AgentSuspended(id string) bool {
 	return s.t.suspended(id)
 }

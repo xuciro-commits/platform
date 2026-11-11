@@ -21,8 +21,8 @@ func (t *Tenant) baseModules() []platform.CapabilityModule {
 		}
 		needs := map[string]bool{}
 		for _, need := range m.Consumes {
-			if binding, found := t.bindings[need.Protocol]; found && !need.Optional {
-				needs[binding.provider.Manifest().ID] = true
+			if provider, found := t.bindings.All()[need.Protocol]; found && !need.Optional {
+				needs[provider] = true
 			}
 		}
 		for _, entity := range m.Entities {
@@ -57,7 +57,7 @@ func (h *Host) routesComposition(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "GET /v1/composition", Summary: "Selected runtime contracts, implementations and immutable dependency order", Answer: platform.CompositionPlan{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		modules := slices.DeleteFunc(t.baseModules(), func(m platform.CapabilityModule) bool {
 			id, owner := strings.CutPrefix(m.ID, "platform.owner.")
-			return owner && !t.ownerActive(id)
+			return owner && !t.OwnerActive(id)
 		})
 		plan, err := platform.ResolveComposition(modules, nil)
 		if err != nil {

@@ -33,7 +33,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		}}
 	out := []platform.Definition{}
 	for _, registered := range registeredDefinitions {
-		if !t.ownerActive(registered.Ref.App) {
+		if !t.OwnerActive(registered.Ref.App) {
 			continue
 		}
 		if build.ProjectDelegated(m) {
@@ -311,7 +311,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	}
 	applications := appsauthoring.ApplicationProjection{Member: m, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
 	for _, registered := range registeredDefinitions {
-		if !t.ownerActive(registered.Ref.App) {
+		if !t.OwnerActive(registered.Ref.App) {
 			continue
 		}
 		if t.applicationEntryWithdrawn(registered.Ref) {

@@ -29,7 +29,7 @@ func (t *Tenant) Declarations() []*pb.AuthorityDeclaration {
 func (t *Tenant) Apps() []AppInfo {
 	out := []AppInfo{}
 	gen := t.definitionsFingerprint()
-	for _, a := range t.liveApps() {
+	for _, a := range t.LiveApps() {
 		m := transport.ManifestOf(a, gen)
 		info := AppInfo{ID: m.ID, Title: m.Title, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
 			Roles: append([]string{}, m.AllRoles()...), Capabilities: append([]platform.CapabilityInfo{}, m.Actions.Capabilities()...), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...), Interfaces: append([]platform.Interface{}, m.Interfaces...)}
@@ -62,7 +62,7 @@ type AppEntry struct {
 func (t *Tenant) AppsOf(m platform.Member) []AppEntry {
 	out := []AppEntry{}
 	gen := t.definitionsFingerprint()
-	for _, a := range t.liveApps() {
+	for _, a := range t.LiveApps() {
 		man := transport.ManifestOf(a, gen)
 		if role := m.Roles[man.ID]; role != "" {
 			out = append(out, AppEntry{ID: man.ID, Title: cmp.Or(man.Title, man.ID), Role: role})
@@ -102,13 +102,13 @@ func (t *Tenant) buildCatalog(m platform.Member) []platform.Action {
 	for _, info := range t.Entities(m) {
 		entities[info.Type] = info
 	}
-	for _, a := range t.liveApps() {
+	for _, a := range t.LiveApps() {
 		for _, action := range a.Manifest().Actions.ForRoles(m.RolesIn(a.Manifest().ID)) {
 			if !m.May(a.Manifest().ID, action.Schema, action.Roles).Allow {
 				continue
 			}
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
-				owner, schema, _ := t.provider(used)
+				owner, schema, _ := t.router().Provider(used)
 				return owner == nil || !owner.Manifest().Actions.PermitsAny(m.RolesIn(owner.Manifest().ID), schema)
 			}) {
 				if version, err := t.actionSchemaVersion(a, action); err == nil {

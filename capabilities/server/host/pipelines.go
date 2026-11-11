@@ -20,7 +20,7 @@ import (
 )
 
 func (t *Tenant) RunPipelines(now time.Time) {
-	if t.businessStopped() || !t.ownerActive(build.ID) {
+	if t.businessStopped() || !t.OwnerActive(build.ID) {
 		return
 	}
 	type plan struct {

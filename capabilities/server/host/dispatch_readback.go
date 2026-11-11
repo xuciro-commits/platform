@@ -18,7 +18,7 @@ import (
 )
 
 func (t *Tenant) ReadDispatches(at time.Time) {
-	if t.businessStopped() || !t.ownerActive(build.ID) || t.App(build.ID) == nil {
+	if t.businessStopped() || !t.OwnerActive(build.ID) || t.App(build.ID) == nil {
 		return
 	}
 	runs, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]platform.DispatchRun, *kernel.Error) {

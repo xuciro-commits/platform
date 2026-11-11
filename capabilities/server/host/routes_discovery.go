@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
 	releaseowner "platformserver/services/devops/releases"
 	controlowner "platformserver/services/security/control"
@@ -56,8 +57,8 @@ func (h *Host) routesDiscovery(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, t.Words(app))
 	})
-	rt.metadata(transport.Route{Pattern: "GET /v1/protocols", Summary: "The protocols apps provide and consume, and the provider bound to each", Answer: []ProtocolInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		protocols := t.Protocols()
+	rt.metadata(transport.Route{Pattern: "GET /v1/protocols", Summary: "The protocols apps provide and consume, and the provider bound to each", Answer: []actions.ProtocolInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		protocols := t.router().Protocols()
 		if !m.Holds(controlowner.BuildApp, "builder") && !m.Holds(controlowner.PlatformApp, controlowner.Admin) {
 			for i := range protocols {
 				protocols[i].Contract = nil

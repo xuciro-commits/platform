@@ -24,7 +24,7 @@ import (
 )
 
 func (t *Tenant) PullSources(now time.Time) {
-	if t.businessStopped() || !t.ownerActive(build.ID) {
+	if t.businessStopped() || !t.OwnerActive(build.ID) {
 		return
 	}
 	sources, refusal := coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Source, *kernel.Error) {

@@ -18,14 +18,14 @@ func (t *Tenant) publish(e platform.Event) {
 }
 
 func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan, *kernel.Error) {
-	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(e)...)
+	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.router().Events(e)...)
 	effects, refusal := t.eventEffects(e, names, true)
 	if refusal != nil {
 		return platform.AcceptedEventPlan{}, refusal
 	}
 	plan := platform.AcceptedEventPlan{App: e.App, Changed: slices.Clone(e.Changed), Names: names,
 		Effects: effects}
-	for _, a := range t.liveApps() {
+	for _, a := range t.LiveApps() {
 		if slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
 			plan.Subscribers = append(plan.Subscribers, a.Manifest().ID)
 		}

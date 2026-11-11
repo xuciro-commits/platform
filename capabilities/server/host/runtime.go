@@ -44,7 +44,7 @@ func (r runtime) Publish(c platform.Caller, record *pb.ChangeRecord) {
 }
 
 func (r runtime) Probe(c platform.Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error {
-	return r.t.probe(c, protocol, action, id, payload, now)
+	return r.t.router().Probe(c, protocol, action, id, payload, now)
 }
 
 func (r runtime) Request(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
@@ -57,7 +57,7 @@ func (r runtime) Request(c platform.Caller, rec *pb.ChangeRecord, q platform.Req
 }
 
 func (r runtime) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
-	return r.t.query(c, protocol, read, provider...)
+	return r.t.router().Query(c, protocol, read, provider...)
 }
 
 func (r runtime) Notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
@@ -120,7 +120,7 @@ func (r runtime) Readable(c platform.Caller, ref string) bool {
 }
 
 func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
-	return r.t.boundProvider(c, protocol)
+	return r.t.router().BoundProvider(c, protocol)
 }
 
 func (r runtime) Seen(c platform.Caller, keys ...string)          { r.t.notices.MarkKeysRead(c.App, keys) }

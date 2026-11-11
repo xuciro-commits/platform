@@ -19,7 +19,7 @@ func (h hostView) TrainingEvidence(event platform.Event) platform.AITrainingEvid
 			images[ref] = image
 		}
 	}
-	for _, app := range h.t.liveApps() {
+	for _, app := range h.t.LiveApps() {
 		if owner, ok := app.(platform.TrainingEvidenceOwner); ok {
 			out.Candidates = append(out.Candidates, owner.TrainingCandidates(h.t.automation(app.Manifest().ID, false), event, images)...)
 		}
@@ -124,7 +124,7 @@ func (h hostView) TrainingReadable(member platform.Member, candidate platform.AI
 			return "The proposed action definition changed"
 		}
 		if _, _, protocol := strings.Cut(candidate.Action, "#"); protocol {
-			provider, provided, ok := h.t.provider(candidate.Action)
+			provider, provided, ok := h.t.router().Provider(candidate.Action)
 			if !ok || provider == nil {
 				return "The proposed action definition changed"
 			}

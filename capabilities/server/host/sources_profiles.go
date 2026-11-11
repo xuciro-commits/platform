@@ -15,7 +15,7 @@ import (
 )
 
 func (t *Tenant) CheckConnections(now time.Time) {
-	if t.businessStopped() || !t.ownerActive(build.ID) {
+	if t.businessStopped() || !t.OwnerActive(build.ID) {
 		return
 	}
 	conns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Connection, *kernel.Error) {

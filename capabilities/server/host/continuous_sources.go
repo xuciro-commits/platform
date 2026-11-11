@@ -291,7 +291,7 @@ func (t *Tenant) PullContinuousSources(now time.Time) {
 }
 
 func (t *Tenant) continuousSources(now time.Time) []func() {
-	if t.businessStopped() || !t.ownerActive(platform.FlowApp) || !t.streamMu.TryLock() {
+	if t.businessStopped() || !t.OwnerActive(platform.FlowApp) || !t.streamMu.TryLock() {
 		return nil
 	}
 	return []func(){func() {

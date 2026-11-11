@@ -15,7 +15,7 @@ import (
 )
 
 func (t *Tenant) EvaluateObservations(at time.Time) {
-	if t.businessStopped() || !t.ownerActive(controlowner.BuildApp) {
+	if t.businessStopped() || !t.OwnerActive(controlowner.BuildApp) {
 		return
 	}
 	type scheduled struct {
