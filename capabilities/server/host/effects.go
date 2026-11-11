@@ -253,7 +253,7 @@ func (t *Tenant) send(ep actions.Endpoint, x platform.Effect, now time.Time) pla
 		return t.transport().Mail(ep, x, now)
 	}
 	if ep.Kind == "a2a" {
-		return t.sendA2A(ep, x, false)
+		return t.transport().A2A(ep, x, false)
 	}
 	if ep.Kind == "connection" {
 		return t.dataClient().Writeback(x)

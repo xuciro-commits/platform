@@ -539,6 +539,6 @@ func (t *Tenant) transport() actions.Transport {
 func (t *Tenant) dataClient() dataowner.Client {
 	return dataowner.Client{Credentials: t, Send: t.sender(), Private: actions.ErrPrivate,
 		A2A: func(id, url, secret string, allowPrivate bool, x platform.Effect) platform.Outcome {
-			return t.sendA2A(actions.Endpoint{ID: id, URL: url, Secret: secret, AllowPrivate: allowPrivate}, x, true)
+			return t.transport().A2A(actions.Endpoint{ID: id, URL: url, Secret: secret, AllowPrivate: allowPrivate}, x, true)
 		}}
 }

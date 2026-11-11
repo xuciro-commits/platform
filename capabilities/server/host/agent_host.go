@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/services/actions"
 	"platformserver/services/ai/gateway"
 	"platformserver/services/data/transform"
 	controlowner "platformserver/services/security/control"
@@ -629,4 +630,4 @@ func (h hostView) AgentModelConfigurationDigest(model platform.AIModel, provider
 	return aigateway.ConfigurationDigest(model, provider, binding)
 }
 
-func (h hostView) AgentAnswerText(outcome platform.Outcome) string { return answerOf(outcome) }
+func (h hostView) AgentAnswerText(outcome platform.Outcome) string { return actions.AnswerOf(outcome) }
