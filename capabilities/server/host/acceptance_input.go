@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"slices"
@@ -17,13 +18,11 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if d.failure != nil || len(d.requests) > 0 {
 		return nil, fmt.Errorf("connector input contains effects not represented by its result")
 	}
-	hash, err := acceptedformat.InputHash(d.tenant.ID, app, name, m.ID, body)
+	result, err := runtimekernel.InputResult(d.tenant.ID, app, name, m.ID, body, at)
 	if err != nil {
 		return nil, err
 	}
-	result := acceptedformat.Input{Version: 2, Kind: "input-result", Tenant: d.tenant.ID, App: app,
-		Name: name, Member: m.ID, Key: "input:" + hash, At: at.UTC(), Body: slices.Clone(body),
-		RequestHash: hash, Notices: d.notices.Saved(), Authorizations: slices.Clone(d.authorizations)}
+	result.Notices, result.Authorizations = d.notices.Saved(), slices.Clone(d.authorizations)
 	if message, ok := answer.(proto.Message); ok {
 		result.Answer, err = protojson.Marshal(message)
 	} else {
@@ -42,18 +41,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 			return nil, err
 		}
 		result.Notices = nil
-		result.Digest, err = acceptedformat.DigestInput(result)
-		if err != nil {
-			return nil, err
-		}
-		raw, err := json.Marshal(result)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := acceptedformat.DecodeInput(raw); err != nil {
-			return nil, err
-		}
-		return raw, nil
+		return runtimekernel.SealInput(result)
 	}
 	if d.control != nil || len(d.intents) > 0 || len(d.observations) > 0 || len(d.allocated) > 0 || len(d.operationCancels) > 0 {
 		return nil, fmt.Errorf("connector input contains effects without a decision")
@@ -72,40 +60,16 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if err != nil {
 		return nil, err
 	}
-	result.Digest, err = acceptedformat.DigestInput(result)
-	if err != nil {
-		return nil, err
-	}
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := acceptedformat.DecodeInput(raw); err != nil {
-		return nil, err
-	}
-	return raw, nil
+	return runtimekernel.SealInput(result)
 }
 
 func encodeAcceptedInputRefusal(tenant, app, name string, m platform.Member, body []byte, at time.Time, refusal *kernel.Error) ([]byte, error) {
-	hash, err := acceptedformat.InputHash(tenant, app, name, m.ID, body)
+	result, err := runtimekernel.InputResult(tenant, app, name, m.ID, body, at)
 	if err != nil {
 		return nil, err
 	}
-	result := acceptedformat.Input{Version: 2, Kind: "input-result", Tenant: tenant, App: app,
-		Name: name, Member: m.ID, Key: "input:" + hash, At: at.UTC(), Body: slices.Clone(body),
-		RequestHash: hash, Refusal: refusal}
-	result.Digest, err = acceptedformat.DigestInput(result)
-	if err != nil {
-		return nil, err
-	}
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := acceptedformat.DecodeInput(raw); err != nil {
-		return nil, err
-	}
-	return raw, nil
+	result.Refusal = refusal
+	return runtimekernel.SealInput(result)
 }
 
 func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, now time.Time) (any, *kernel.Error) {
@@ -218,39 +182,8 @@ func (t *Tenant) answerAcceptedInput(a platform.AcceptedInputApp, raw []byte) (a
 }
 
 func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, error) {
-	result, err := acceptedformat.DecodeInput(raw)
-	if err != nil {
-		return result, false, err
-	}
-	app := t.inputs[result.App]
-	if result.Tenant != t.ID || app == nil || !slices.Contains(app.AcceptedInputs(), result.Name) {
-		return result, false, fmt.Errorf("connector result belongs to another input")
-	}
-	if result.Refusal == nil {
-		if _, err := app.DecodeAcceptedInput(result.Answer); err != nil {
-			return result, false, fmt.Errorf("connector result has an invalid answer: %w", err)
-		}
-	}
-	if prior := t.Committed.Input(result.App + "/" + result.Key); len(prior) > 0 {
-		saved, err := acceptedformat.DecodeInput(prior)
-		if err != nil || saved.Digest != result.Digest {
-			return result, false, fmt.Errorf("connector input key belongs to another result")
-		}
-		return result, false, nil
-	}
-	prepared, err := t.prepareAcceptedChanges(result.ChangePlan())
-	if err != nil {
-		return result, false, err
-	}
-	if err := t.applyAcceptedChanges(prepared); err != nil {
-		return result, false, err
-	}
-	t.publishAcceptedChanges(prepared)
-	if result.Refusal != nil {
-		t.refused(result.Member, result.Name, result.Refusal, result.At)
-	}
-	t.Committed.SaveInput(result.App+"/"+result.Key, raw)
-	return result, true, nil
+	return t.ApplyInputResult(raw, runtimekernel.InputApply{Changes: t.changeApply(), Published: t.publishAcceptedChanges, Refused: t.refused,
+		Input: func(app string) platform.AcceptedInputApp { return t.inputs[app] }})
 }
 
 func (t *Tenant) finishPreparedInput(m platform.Member, name string, candidate preparedAccepted, answer any, refusal *kernel.Error) (any, *kernel.Error) {
