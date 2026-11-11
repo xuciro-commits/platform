@@ -21,12 +21,12 @@ import (
 func (d *stagedDecision) RequestFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest) (platform.FunctionCall, *kernel.Error) {
 	call, effect, refusal := d.tenant.planFunction(c, r, request, d.records, d.intents)
 	if refusal != nil {
-		if d.failure == nil {
-			d.failure = refusal
+		if d.Failure == nil {
+			d.Failure = refusal
 		}
 		return platform.FunctionCall{}, refusal
 	}
-	if !d.probing {
+	if !d.ProbeOnly {
 		d.intents = append(d.intents, effect)
 	}
 	return call, nil

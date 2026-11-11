@@ -90,9 +90,9 @@ func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Ti
 			return nil, unknown()
 		}
 		draft := t.newStagedDecision()
-		draft.probing = true
+		draft.ProbeOnly = true
 		_, refusal := decideAcceptedAs(app, draft, m, s, now, false)
-		return t.readableFieldIssues(m, draft.inputIssues[refusal], now), refusal
+		return t.readableFieldIssues(m, draft.InputIssues[refusal], now), refusal
 	})
 	return refusal, issues
 }

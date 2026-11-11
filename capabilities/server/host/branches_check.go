@@ -89,7 +89,7 @@ func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, sche
 	}
 	receipt, refusal := platform.Decide(platform.NewCaller(draft, m, build.ID, false, automation), a, s, now)
 	if refusal != nil {
-		issues := t.readableFieldIssues(m, draft.inputIssues[refusal], now)
+		issues := t.readableFieldIssues(m, draft.InputIssues[refusal], now)
 		return branchChild{issues: issues, refusal: actions.Explained(refusal, a, s.GetSchema().GetName(), target(s))}
 	}
 	return branchChild{receipt: receipt}

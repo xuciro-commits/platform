@@ -94,8 +94,8 @@ func (t *Tenant) relationMigrationPlan(store *records.Store, c platform.Caller, 
 
 func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.ChangeRecord, binding platform.AssetBinding, at time.Time) *kernel.Error {
 	fail := func(err *kernel.Error) *kernel.Error {
-		if d.failure == nil {
-			d.failure = err
+		if d.Failure == nil {
+			d.Failure = err
 		}
 		return err
 	}

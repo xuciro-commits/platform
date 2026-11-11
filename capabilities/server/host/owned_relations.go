@@ -19,8 +19,8 @@ func (d *stagedDecision) PutOwnedRelation(c platform.Caller, receipt *pb.ChangeR
 func (d *stagedDecision) putOwnedRelation(c platform.Caller, receipt *pb.ChangeRecord, request platform.TxnLink, remove bool, at time.Time, legacy []platform.RelationLink) *kernel.Error {
 	fail := func(message string) *kernel.Error {
 		err := platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, message)
-		if d.failure == nil {
-			d.failure = err
+		if d.Failure == nil {
+			d.Failure = err
 		}
 		return err
 	}

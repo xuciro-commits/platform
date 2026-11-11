@@ -89,8 +89,8 @@ func (d *stagedDecision) constraints() runtimekernel.ConstraintCheck {
 }
 
 func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
-	if d.failure == nil {
-		d.failure = d.constraints().Final()
+	if d.Failure == nil {
+		d.Failure = d.constraints().Final()
 	}
-	return d.failure
+	return d.Failure
 }

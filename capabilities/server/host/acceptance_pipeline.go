@@ -46,7 +46,7 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err 
 	}
 	refusal := agent.ApplyAgentStepCaller(c, b, at)
 	if refusal == nil {
-		refusal = draft.failure
+		refusal = draft.Failure
 	}
 	if refusal == nil {
 		refusal = draft.answerRequests(at)
@@ -270,19 +270,19 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 					to = append(to, platform.Recipient{Member: member})
 				}
 				if failure := caller.Assign(receipt, platform.Assignment{Title: "Review the stopped model call", Body: out.Detail, Ref: "platform.effect/" + before.ID, Key: "ai-handoff:" + before.ID, To: to}); failure != nil {
-					draft.failure = failure
+					draft.Failure = failure
 				}
 			}
 		}
 	}
 	result.Authorizations = append(result.Authorizations, draft.authorizations...)
 	result.After.CallbackError = result.CallbackError
-	if draft.failure != nil {
-		return draft, draft.failure
+	if draft.Failure != nil {
+		return draft, draft.Failure
 	}
 	var err error
 	if len(draft.events) == 0 && (len(draft.observations) > 0 || len(draft.allocated) > 0 ||
-		len(draft.logs) > 0 || len(draft.requests) > 0) {
+		len(draft.Logs) > 0 || len(draft.requests) > 0) {
 		err = fmt.Errorf("effect answer has unrepresented changes")
 	} else {
 		eventRows := map[string]bool{}
@@ -399,8 +399,8 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 	if t.agents != nil {
 		draft.stateApp(t.agents).(platform.AgentRuntime).AgentEffectEnded(t.automated(c, platform.AgentApp), nil, x, out, at)
 	}
-	if draft.failure != nil {
-		return draft.failure
+	if draft.Failure != nil {
+		return draft.Failure
 	}
 	if err := draft.answerRequests(at); err != nil {
 		return err
@@ -422,7 +422,7 @@ func (d *stagedDecision) answerRequests(now time.Time) *kernel.Error {
 			return err
 		}
 	}
-	return d.failure
+	return d.Failure
 }
 
 func (d *stagedDecision) answerRequest(q request, now time.Time) (refusal *kernel.Error) {
@@ -466,7 +466,7 @@ func (d *stagedDecision) answerRequest(q request, now time.Time) (refusal *kerne
 	if _, err := platform.Decide(c, d.tenant.App(c.App), reply, now); err != nil {
 		return err
 	}
-	return d.failure
+	return d.Failure
 }
 
 type request struct {

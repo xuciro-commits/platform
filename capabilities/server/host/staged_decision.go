@@ -22,11 +22,11 @@ import (
 )
 
 type stagedDecision struct {
+	runtimekernel.Decision
 	installations          []platform.ReleaseInstallation
 	sourceProjection       *preparedSourceClaim
 	confirmationCompleting *confirmationCompletion
 	currentSubmission      *pb.Submission
-	businessRefusals       map[*kernel.Error]platform.BusinessRefusalFact
 	businessFacts          []platform.BusinessRefusalFact
 	simulation             bool
 	definitions            map[string]*platform.DecisionDefinition
@@ -40,16 +40,12 @@ type stagedDecision struct {
 	control                *controlDecision
 	tenant                 *Tenant
 	records                *records.Store
-	logs                   map[*platform.Ledger]*kernel.ChangeLog
 	events                 []platform.Event
 	sequences              map[string]int
 	allocated              map[string]int
 	sequenceBases          map[string]int
-	inputIssues            map[*kernel.Error][]platform.FieldIssue
-	failure                *kernel.Error
 	active                 map[string]bool
 	at                     time.Time
-	probing                bool
 	notices                *runtimekernel.NoticeDraft
 	writers                map[string][]string
 	changed                map[string][]string
@@ -61,7 +57,6 @@ type stagedDecision struct {
 	hops                   int
 	requests               []request
 	requestCounts          map[string]int
-	receiving              map[*platform.Ledger]bool
 	privateApps            map[string]platform.App
 	states                 map[string]platform.AcceptedStateApp
 	stateBases             map[string]json.RawMessage
@@ -72,34 +67,9 @@ type stagedDecision struct {
 	observationInput       *platform.ObservationDecisionEvidence
 }
 
-func (d *stagedDecision) HoldChanges(ledger *platform.Ledger) (func(), *kernel.Error) {
-	if d.receiving[ledger] {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held ledger")
-	}
-	if d.receiving == nil {
-		d.receiving = map[*platform.Ledger]bool{}
-	}
-	d.receiving[ledger] = true
-	return func() { delete(d.receiving, ledger) }, nil
-}
-
-func (d *stagedDecision) InputRefused(err *kernel.Error, issues []platform.FieldIssue) {
-	if d.inputIssues == nil {
-		d.inputIssues = map[*kernel.Error][]platform.FieldIssue{}
-	}
-	d.inputIssues[err] = issues
-}
-
 func (d *stagedDecision) StagedDecision() platform.StagedDecision            { return d }
 func (d *stagedDecision) ReadScoped() bool                                   { return true }
 func (d *stagedDecision) DecisionCatalog(*platform.Ledger) *platform.Catalog { return nil }
-func (d *stagedDecision) Probing() bool                                      { return d.probing }
-
-func (d *stagedDecision) FailDecision(err *kernel.Error) {
-	if d.failure == nil {
-		d.failure = err
-	}
-}
 
 func (t *Tenant) newStagedDecision() *stagedDecision {
 	return t.newStagedDecisionOn(t.Projection.ForkRecords())
@@ -108,8 +78,8 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	sequences := t.sequences.Clone()
 	connectors := t.connectors.Clone()
-	return &stagedDecision{simulation: t.simulation, tenant: t, records: base,
-		logs: map[*platform.Ledger]*kernel.ChangeLog{}, sequences: sequences,
+	return &stagedDecision{Decision: runtimekernel.Decision{Logs: map[*platform.Ledger]*kernel.ChangeLog{}}, simulation: t.simulation, tenant: t, records: base,
+		sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
 		notices: t.notices.Draft(),
 		writers: map[string][]string{}, changed: map[string][]string{}, connectors: connectors}
@@ -133,7 +103,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 		unsupportedStagedEffect()
 	}
 	id := app.Manifest().ID
-	if d.receiving[app.AcceptedLedger()] {
+	if d.Receiving[app.AcceptedLedger()] {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held owner")
 	}
 	if d.active[id] || len(d.active) >= acceptedformat.MaxHops {
@@ -153,11 +123,11 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 	d.currentSubmission = proto.Clone(s).(*pb.Submission)
 	defer func() { d.currentSubmission = previous }()
 	r, err := app.Submit(c, proto.Clone(s).(*pb.Submission), at)
-	if err != nil && d.failure == nil {
-		d.failure = err
+	if err != nil && d.Failure == nil {
+		d.Failure = err
 	}
-	if d.failure != nil {
-		return nil, d.failure
+	if d.Failure != nil {
+		return nil, d.Failure
 	}
 	if r != nil && definition != nil {
 		if d.observationInput != nil {
@@ -170,13 +140,6 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 		d.definitions[id+"/"+r.GetChangeId()] = definition
 	}
 	return r, nil
-}
-
-func (d *stagedDecision) DraftChanges(l *platform.Ledger, fork func() *kernel.ChangeLog) *kernel.ChangeLog {
-	if d.logs[l] == nil {
-		d.logs[l] = fork()
-	}
-	return d.logs[l]
 }
 
 func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
@@ -206,8 +169,8 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 		}
 		err = d.constraints().Record(c, info, d.records.Type(info.Type).Rows().Get(strings.TrimPrefix(ref, info.Type+"/")), before)
 	}
-	if err != nil && d.failure == nil {
-		d.failure = err
+	if err != nil && d.Failure == nil {
+		d.Failure = err
 	}
 	if err == nil {
 		var history int
@@ -274,7 +237,7 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 			unsupportedStagedEffect()
 		}
 		if err := d.tenant.installPublicationLinkConstraint(d.records, schema, raw); err != nil {
-			d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, records.LinkCardinalityFailure)
+			d.Failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, records.LinkCardinalityFailure)
 			return
 		}
 		if d.publications == nil {
@@ -328,8 +291,8 @@ func (d *stagedDecision) Setting(c platform.Caller, name string) string {
 func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
 	planned, err := d.routingTenant().planAppEffects(c, kind, key, entity, data, now, d.intents)
 	if err != nil {
-		if d.failure == nil {
-			d.failure = err
+		if d.Failure == nil {
+			d.Failure = err
 		}
 		return 0, err
 	}
@@ -387,8 +350,8 @@ func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key str
 	}
 	owner := d.stateApp(d.tenant.linker.(platform.App))
 	err := owner.(platform.Linker).Link(c, from, to, key, now)
-	if err != nil && d.failure == nil {
-		d.failure = err
+	if err != nil && d.Failure == nil {
+		d.Failure = err
 	}
 	return err
 }
@@ -415,15 +378,15 @@ func (d *stagedDecision) Assign(c platform.Caller, r *pb.ChangeRecord, a platfor
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	err := d.tenant.tasks.Assign(c, r, a)
-	if err != nil && d.failure == nil {
-		d.failure = err
+	if err != nil && d.Failure == nil {
+		d.Failure = err
 	}
 	return err
 }
 func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name string, date time.Time) (number string, err *kernel.Error) {
 	defer func() {
-		if err != nil && d.failure == nil {
-			d.failure = err
+		if err != nil && d.Failure == nil {
+			d.Failure = err
 		}
 	}()
 	if rec.GetChangeId() == "" || rec.GetSubmission().GetAuthority() != c.App ||

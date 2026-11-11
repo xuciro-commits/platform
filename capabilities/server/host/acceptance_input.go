@@ -15,7 +15,7 @@ import (
 )
 
 func (d *stagedDecision) inputResult(app, name string, m platform.Member, body []byte, answer any, at time.Time) ([]byte, error) {
-	if d.failure != nil || len(d.requests) > 0 {
+	if d.Failure != nil || len(d.requests) > 0 {
 		return nil, fmt.Errorf("connector input contains effects not represented by its result")
 	}
 	result, err := runtimekernel.InputResult(d.tenant.ID, app, name, m.ID, body, at)
@@ -46,7 +46,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if d.control != nil || len(d.intents) > 0 || len(d.observations) > 0 || len(d.allocated) > 0 || len(d.operationCancels) > 0 {
 		return nil, fmt.Errorf("connector input contains effects without a decision")
 	}
-	for ledger, staged := range d.logs {
+	for ledger, staged := range d.Logs {
 		if !proto.Equal(ledger.LastAccepted(d.tenant.ID), staged.Last(d.tenant.ID)) {
 			return nil, fmt.Errorf("connector input contains an unpublished decision")
 		}

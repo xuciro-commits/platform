@@ -113,7 +113,7 @@ func (r *flowExecutionRuntime) RequestApproval(c platform.Caller, app string, s 
 	if owner == nil || c.Automation || c.Tenant != r.tenant.ID || s.GetAuthority() != app || s.GetPrincipalId() != c.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
 	}
-	if r.probing {
+	if r.ProbeOnly {
 		return r.Decide(c, owner, s, at)
 	}
 	if refusal := r.ProbeDecision(c, func(probe platform.Caller) *kernel.Error {

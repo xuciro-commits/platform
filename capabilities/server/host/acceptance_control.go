@@ -195,12 +195,12 @@ func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tena
 	view.controlAnswer = func(x platform.Effect, out platform.Outcome, at time.Time) *kernel.Error {
 		if err := d.tenant.stageEffectAnswer(d, x, out, nil, at); err != nil {
 			if refusal, ok := err.(*kernel.Error); ok {
-				d.failure = refusal
+				d.Failure = refusal
 			} else {
 				unsupportedStagedEffect()
 			}
 		}
-		return d.failure
+		return d.Failure
 	}
 	if d.tenant.agents != nil {
 		view.agents = d.stateApp(d.tenant.agents).(platform.AgentRuntime)
@@ -321,7 +321,7 @@ func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at
 				after.State, after.Error, after.Output = "discarded", "Cancelled", nil
 				if err := d.tenant.stageEffectAnswer(d, after, platform.Outcome{Effect: current.ID, Result: "discarded", Detail: "Cancelled"}, nil, at); err != nil {
 					if refusal, ok := err.(*kernel.Error); ok {
-						d.failure = refusal
+						d.Failure = refusal
 					} else {
 						unsupportedStagedEffect()
 					}

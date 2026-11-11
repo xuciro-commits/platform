@@ -13,8 +13,8 @@ import (
 func (d *stagedDecision) CaptureTxnIteration(c platform.Caller, receipt *pb.ChangeRecord, iteration platform.TxnIteration) *kernel.Error {
 	fail := func(message string) *kernel.Error {
 		err := platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, message)
-		if d.failure == nil {
-			d.failure = err
+		if d.Failure == nil {
+			d.Failure = err
 		}
 		return err
 	}

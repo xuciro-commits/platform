@@ -81,7 +81,7 @@ func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb
 	if refusal != nil {
 		out.Refusal = actions.Explained(refusal, a, s.GetSchema().GetName(), target(s)).Message
 		out.RefusalCode = refusal.Code.String()
-		out.Issues = t.readableFieldIssues(member, draft.inputIssues[refusal], now)
+		out.Issues = t.readableFieldIssues(member, draft.InputIssues[refusal], now)
 		out.Unsupported = platform.IsOutsideAcceptedBoundary(refusal)
 		return out, nil
 	}

@@ -40,8 +40,8 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 		platformOwner := c.App == controlowner.PlatformApp && c.ID == prepared.ref.Member
 		flowOwner := c.Automation && c.App == "flow" && c.ID == "app:flow" && q.OnBehalf == prepared.ref.Member
 		if !platformOwner && !flowOwner || hash != prepared.requestHash {
-			d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared input belongs to another operation request")
-			return platform.OperationCall{}, d.failure
+			d.Failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared input belongs to another operation request")
+			return platform.OperationCall{}, d.Failure
 		}
 		input = &prepared.ref
 		if len(pending) == 1 {
@@ -52,12 +52,12 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 	}
 	call, intent, err := d.tenant.planOperation(c, r, q, d.records, d.intents, input)
 	if err != nil {
-		if d.failure == nil {
-			d.failure = err
+		if d.Failure == nil {
+			d.Failure = err
 		}
 		return platform.OperationCall{}, err
 	}
-	if !d.probing {
+	if !d.ProbeOnly {
 		d.intents = append(d.intents, intent)
 	}
 	return call, nil
@@ -247,8 +247,8 @@ func (t *Tenant) operationAuthorization(member platform.Member, owner string, bi
 func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecord, key, target string, q platform.CodeBuildRequest) (platform.OperationCall, *kernel.Error) {
 	refuse := func(message string) (platform.OperationCall, *kernel.Error) {
 		err := platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
-		if d.failure == nil {
-			d.failure = err
+		if d.Failure == nil {
+			d.Failure = err
 		}
 		return platform.OperationCall{}, err
 	}
@@ -269,7 +269,7 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 	call := platform.OperationCall{ID: id, InputHash: hash, Definition: hash}
 	body, _ := json.Marshal(compute.OperationBinding{Build: &q, Call: call, Member: c.ID})
 	at := r.GetRecordedTime().AsTime()
-	if !d.probing {
+	if !d.ProbeOnly {
 		d.intents = append(d.intents, platform.Effect{ID: id, Endpoint: acceptedformat.OperationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)})
 	}
 	return call, nil

@@ -23,7 +23,7 @@ func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Su
 	if !ok || c.Automation || c.Tenant != d.tenant.ID || s.GetAuthority() != app || s.GetPrincipalId() != c.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
 	}
-	if d.probing {
+	if d.ProbeOnly {
 		return d.Decide(c, a, s, now)
 	}
 	return d.requestApproval(a, c.Member, s, now)
@@ -48,7 +48,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if err := d.checkFinalConstraints(); err != nil {
 		return nil, fmt.Errorf("batch constraints: %w", err)
 	}
-	if receipt == nil || len(d.events) == 0 || d.failure != nil {
+	if receipt == nil || len(d.events) == 0 || d.Failure != nil {
 		return nil, fmt.Errorf("batch needs accepted decisions and all written records")
 	}
 	if err := d.records.ValidateChangedLinkConstraints(); err != nil {
@@ -93,11 +93,11 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	seen := map[string]bool{}
 	for _, event := range d.events {
 		owner, ok := d.tenant.App(event.App).(platform.App)
-		if !ok || d.logs[owner.AcceptedLedger()] == nil {
+		if !ok || d.Logs[owner.AcceptedLedger()] == nil {
 			return nil, fmt.Errorf("batch decision has no staged ledger for %s", event.App)
 		}
 		logged := false
-		for _, record := range d.logs[owner.AcceptedLedger()].Records(d.tenant.ID) {
+		for _, record := range d.Logs[owner.AcceptedLedger()].Records(d.tenant.ID) {
 			if proto.Equal(record, event.Record) {
 				logged = true
 				break

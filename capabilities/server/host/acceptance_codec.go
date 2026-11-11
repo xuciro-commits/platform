@@ -37,17 +37,17 @@ func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt 
 }
 
 func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedAt time.Time) ([]byte, error) {
-	if d.control != nil || d.failure != nil || len(d.allocated) > 0 || d.notices.Changed() ||
+	if d.control != nil || d.Failure != nil || len(d.allocated) > 0 || d.notices.Changed() ||
 		len(d.intents) > 0 || len(d.observations) > 0 || len(d.states) > 0 ||
 		len(d.operationCancels) > 0 ||
 		d.observed && len(d.tenant.observers) > 0 {
 		return nil, fmt.Errorf("decision needs a result carrying all state and intents")
 	}
-	if receipt == nil || len(d.events) != 1 || d.records.WriteCount() != 1 || len(d.logs) != 1 {
+	if receipt == nil || len(d.events) != 1 || d.records.WriteCount() != 1 || len(d.Logs) != 1 {
 		return nil, fmt.Errorf("one accepted record and event are required")
 	}
 	accepted := false
-	for _, log := range d.logs {
+	for _, log := range d.Logs {
 		accepted = proto.Equal(log.Last(receipt.GetSubmission().GetTenantId()), receipt)
 	}
 	if !accepted {

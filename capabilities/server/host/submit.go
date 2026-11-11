@@ -220,8 +220,8 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 			record, refusal = decideAcceptedAs(a, draft, m, s, now, opts.automation)
 		}
 	}
-	if draft.failure != nil {
-		refusal = draft.failure
+	if draft.Failure != nil {
+		refusal = draft.Failure
 		record = nil
 	}
 	if refusal == nil && pendingOperationInputs(draft.operationInputs) > 0 {
@@ -231,12 +231,12 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	var raw []byte
 	if refusal != nil {
 		refusal = actions.Explained(refusal, a, s.GetSchema().GetName(), target(s))
-		fact, business := draft.businessRefusals[refusal]
+		fact, business := draft.BusinessRefusals[refusal]
 		var businessFact *platform.BusinessRefusalFact
 		if business {
 			businessFact = &fact
 		}
-		raw, err = acceptedformat.EncodeBusinessRefusal(s, now, refusal, binding, businessFact, draft.inputIssues[refusal]...)
+		raw, err = acceptedformat.EncodeBusinessRefusal(s, now, refusal, binding, businessFact, draft.InputIssues[refusal]...)
 	} else {
 		raw, err = draft.sealResult(a.Manifest().ID, s, record, now)
 		if err == nil && opts.source != nil {
@@ -264,7 +264,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	member, _ := json.Marshal(m)
 	entry := Entry{App: a.Manifest().ID, Kind: "accepted-result", Principal: member, Body: raw, At: now}
 	if t.preparedResult != nil {
-		*t.preparedResult = preparedAccepted{entry: entry, key: s.GetIdempotencyKey(), hash: hash, issues: draft.inputIssues[refusal], uploads: t.preparedResult.uploads}
+		*t.preparedResult = preparedAccepted{entry: entry, key: s.GetIdempotencyKey(), hash: hash, issues: draft.InputIssues[refusal], uploads: t.preparedResult.uploads}
 		return record, refusal
 	}
 	committed, err := t.acceptResult(entry, s.GetIdempotencyKey(), hash)

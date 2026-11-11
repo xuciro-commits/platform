@@ -43,9 +43,9 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	for i := range fork.businessFacts {
 		fork.businessFacts[i] = acceptedformat.CloneBusinessFact(fork.businessFacts[i])
 	}
-	fork.businessRefusals = maps.Clone(d.businessRefusals)
-	for key, fact := range fork.businessRefusals {
-		fork.businessRefusals[key] = acceptedformat.CloneBusinessFact(fact)
+	fork.BusinessRefusals = maps.Clone(d.BusinessRefusals)
+	for key, fact := range fork.BusinessRefusals {
+		fork.BusinessRefusals[key] = acceptedformat.CloneBusinessFact(fact)
 	}
 	fork.callbackWrites = maps.Clone(d.callbackWrites)
 	if d.callbackOrigin != nil {
@@ -67,9 +67,9 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	for hash, pending := range fork.operationInputs {
 		fork.operationInputs[hash] = slices.Clone(pending)
 	}
-	fork.inputIssues = maps.Clone(d.inputIssues)
+	fork.InputIssues = maps.Clone(d.InputIssues)
 	fork.constraintWrites = maps.Clone(d.constraintWrites)
-	for refusal, issues := range fork.inputIssues {
+	for refusal, issues := range fork.InputIssues {
 		issues = slices.Clone(issues)
 		for i := range issues {
 			issues[i].Translations = maps.Clone(issues[i].Translations)
@@ -83,13 +83,13 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 				issues[i].RelatedPaths[j] = slices.Clone(issues[i].RelatedPaths[j])
 			}
 		}
-		fork.inputIssues[refusal] = issues
+		fork.InputIssues[refusal] = issues
 	}
 	fork.records = d.records.ForkRecords()
 	fork.records.InheritDecision(d.records)
-	fork.logs = map[*platform.Ledger]*kernel.ChangeLog{}
-	for ledger, log := range d.logs {
-		suspended := d.receiving[ledger]
+	fork.Logs = map[*platform.Ledger]*kernel.ChangeLog{}
+	for ledger, log := range d.Logs {
+		suspended := d.Receiving[ledger]
 		for id := range d.active {
 			owner := d.tenant.App(id)
 			if owner != nil && owner.AcceptedLedger() == ledger {
@@ -98,9 +98,9 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 			}
 		}
 		if suspended {
-			fork.logs[ledger] = log
+			fork.Logs[ledger] = log
 		} else {
-			fork.logs[ledger] = log.Fork()
+			fork.Logs[ledger] = log.Fork()
 		}
 	}
 	fork.events, fork.notices = slices.Clone(d.events), d.notices.Clone()
@@ -113,7 +113,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	fork.authorizations = slices.Clone(d.authorizations)
 	fork.observations = slices.Clone(d.observations)
 	fork.active = maps.Clone(d.active)
-	fork.receiving = maps.Clone(d.receiving)
+	fork.Receiving = maps.Clone(d.Receiving)
 	fork.requests, fork.requestCounts = slices.Clone(d.requests), maps.Clone(d.requestCounts)
 	fork.connectors = runtimekernel.CloneConnectors(d.connectors)
 	fork.privateApps = map[string]platform.App{}
@@ -122,7 +122,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		fork.stateBases[id] = slices.Clone(base)
 	}
 	for id, owner := range d.states {
-		if d.active[id] || d.receiving[owner.AcceptedLedger()] {
+		if d.active[id] || d.Receiving[owner.AcceptedLedger()] {
 			fork.states[id], fork.privateApps[id] = owner, owner
 			continue
 		}
@@ -134,7 +134,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		fork.states[id], fork.privateApps[id] = copy, app
 	}
 	for id, app := range d.privateApps {
-		if d.active[id] || d.receiving[app.AcceptedLedger()] {
+		if d.active[id] || d.Receiving[app.AcceptedLedger()] {
 			fork.privateApps[id] = app
 			continue
 		}
@@ -148,7 +148,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		fork.privateApps[id] = copy
 	}
 	for id, app := range fork.privateApps {
-		if d.active[id] || d.receiving[app.AcceptedLedger()] {
+		if d.active[id] || d.Receiving[app.AcceptedLedger()] {
 			continue
 		}
 		(hostView{t: d.tenant, app: app, decision: &fork}).bindOwner(app)
@@ -161,9 +161,9 @@ func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.C
 	probe := d.privateFork()
 	err := probe.runProbe(c, decide)
 	if err != nil {
-		if fact, ok := probe.businessRefusals[err]; ok {
+		if fact, ok := probe.BusinessRefusals[err]; ok {
 			d.BusinessRefused(err, fact)
-		} else if issues := probe.inputIssues[err]; len(issues) > 0 {
+		} else if issues := probe.InputIssues[err]; len(issues) > 0 {
 			d.InputRefused(err, issues)
 		}
 	}
@@ -179,10 +179,10 @@ func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller
 			err = platform.RefuseOutsideAcceptedBoundary()
 		}
 	}()
-	d.probing = true
+	d.ProbeOnly = true
 	err = decide(platform.NewCaller(d, c.Member, c.App, c.Replaying, c.Automation))
 	if err == nil {
-		err = d.failure
+		err = d.Failure
 	}
 	if err == nil {
 		err = d.checkFinalConstraints()
@@ -200,7 +200,7 @@ func cloneLists(src map[string][]string) map[string][]string {
 
 func (d *stagedDecision) stageObservers() *kernel.Error {
 	if d.observed {
-		return d.failure
+		return d.Failure
 	}
 	count := len(d.events)
 	for _, e := range slices.Clone(d.events) {
@@ -226,7 +226,7 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	d.observed = true
-	return d.failure
+	return d.Failure
 }
 
 func (t *Tenant) validateAcceptedObservations(saved []acceptedformat.Observation) error {

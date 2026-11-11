@@ -23,8 +23,8 @@ func (d *stagedDecision) TxnTransport() platform.TxnTransport {
 }
 
 func (h hostView) TakeTxnStep() *kernel.Error {
-	if h.decision != nil && h.decision.failure != nil {
-		return h.decision.failure
+	if h.decision != nil && h.decision.Failure != nil {
+		return h.decision.Failure
 	}
 	if h.decision == nil || h.decision.transactionSteps >= platform.TxnMaxExecutionSteps {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction execution exceeds its step budget")

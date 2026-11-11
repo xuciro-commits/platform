@@ -3,31 +3,13 @@ package host
 import (
 	"encoding/json"
 
-	"maps"
 	acceptedformat "platformserver/kernel/acceptedformat"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
-
-func (d *stagedDecision) BusinessRefused(answer *kernel.Error, fact platform.BusinessRefusalFact) {
-	if answer == nil {
-		return
-	}
-	app, _, _ := strings.Cut(fact.Action, ".")
-	if err := acceptedformat.ValidateBusinessFact(app, fact); err != nil {
-		d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal evidence exceeds its declared bounds")
-		return
-	}
-	if d.businessRefusals == nil {
-		d.businessRefusals = map[*kernel.Error]platform.BusinessRefusalFact{}
-	}
-	d.businessRefusals[answer] = acceptedformat.CloneBusinessFact(fact)
-	d.InputRefused(answer, []platform.FieldIssue{{Code: "business_refusal", BusinessCode: fact.Code, Record: fact.Subject, Message: fact.Message, Translations: maps.Clone(fact.Translations), Path: []string{"$business"}}})
-}
 
 func (d *stagedDecision) CaptureBusinessRefusal(c platform.Caller, receipt *pb.ChangeRecord, fact platform.BusinessRefusalFact) *kernel.Error {
 	if !c.Staging() || c.Replaying || receipt.GetSubmission().GetAuthority() != c.App || receipt.GetSubmission().GetPrincipalId() != c.ID || fact.Member != c.ID || !fact.At.Equal(d.at) || fact.Subject != target(receipt.GetSubmission()) || fact.Action != receipt.GetSubmission().GetSchema().GetName() || fact.Level == "block" {

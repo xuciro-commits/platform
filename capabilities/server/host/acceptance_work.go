@@ -179,8 +179,8 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		if err != nil {
 			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 		}
-	} else if draft.records.WriteCount() > 0 || draft.failure != nil ||
-		len(draft.observations) > 0 || len(draft.allocated) > 0 || len(draft.logs) > 0 || len(draft.operationCancels) > 0 || len(draft.requests) > 0 {
+	} else if draft.records.WriteCount() > 0 || draft.Failure != nil ||
+		len(draft.observations) > 0 || len(draft.allocated) > 0 || len(draft.Logs) > 0 || len(draft.operationCancels) > 0 || len(draft.requests) > 0 {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	} else {
 		var plan acceptedformat.ChangePlan
@@ -289,7 +289,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 		}
 	}
 	if refusal == nil {
-		refusal = d.failure
+		refusal = d.Failure
 	}
 	if refusal == nil {
 		refusal = d.answerRequests(now)
