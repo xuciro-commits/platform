@@ -2,7 +2,6 @@ package acceptedformat
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -275,7 +274,6 @@ type Composite struct {
 	App         string                   `json:"app"`
 	Member      string                   `json:"member"`
 	Key         string                   `json:"key"`
-	Context     string                   `json:"context,omitempty"`
 	At          time.Time                `json:"at"`
 	Edits       []platform.CompositeEdit `json:"edits"`
 	Changes     json.RawMessage          `json:"changes,omitempty"`
@@ -284,15 +282,11 @@ type Composite struct {
 	Digest      string                   `json:"digest"`
 }
 
-func CompositeRequestHash(tenant, member, key string, edits []platform.CompositeEdit, context ...string) (string, error) {
-	hash, err := platform.CanonicalDigest(struct {
+func CompositeRequestHash(tenant, member, key string, edits []platform.CompositeEdit) (string, error) {
+	return platform.CanonicalDigest(struct {
 		Tenant, Member, Key string
 		Edits               []platform.CompositeEdit
 	}{tenant, member, key, edits})
-	if err != nil || len(context) == 0 || context[0] == "" {
-		return hash, err
-	}
-	return platform.CanonicalDigest([]string{hash, context[0]})
 }
 
 func EncodeComposite(saved Composite) ([]byte, error) {
@@ -338,16 +332,8 @@ func DecodeComposite(raw []byte) (Composite, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return saved, fmt.Errorf("composite result has trailing data")
 	}
-	hash, err := CompositeRequestHash(saved.Tenant, saved.Member, saved.Key, saved.Edits, saved.Context)
-	if saved.Version == 3 {
-		context, failure := hex.DecodeString(saved.Context)
-		if failure != nil || len(context) != 32 {
-			return saved, fmt.Errorf("composite batch context is invalid")
-		}
-	} else if saved.Context != "" {
-		return saved, fmt.Errorf("legacy composite contains a batch context")
-	}
-	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3) || saved.Kind != "composite-result" || saved.App != "build" ||
+	hash, err := CompositeRequestHash(saved.Tenant, saved.Member, saved.Key, saved.Edits)
+	if err != nil || saved.Version != 2 || saved.Kind != "composite-result" || saved.App != "build" ||
 		saved.Tenant == "" || saved.Member == "" || saved.Key == "" || saved.At.IsZero() ||
 		len(saved.Edits) == 0 || len(saved.Edits) > 64 || saved.RequestHash != hash {
 		return saved, fmt.Errorf("invalid composite result identity")
@@ -361,7 +347,7 @@ func DecodeComposite(raw []byte) (Composite, error) {
 			return saved, fmt.Errorf("composite edit %d has no schema or target", i+1)
 		}
 	}
-	if saved.Version == 1 && (len(saved.Changes) != 0 || saved.Refusal != "") || saved.Version >= 2 && (len(saved.Changes) == 0) == (saved.Refusal == "") {
+	if (len(saved.Changes) == 0) == (saved.Refusal == "") {
 		return saved, fmt.Errorf("composite result has incompatible changes or refusal")
 	}
 	if saved.Version >= 2 && saved.Refusal == "" {

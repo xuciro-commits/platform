@@ -150,30 +150,6 @@ func compositeAnswer(saved acceptedformat.Composite) (platform.CompositeAnswer, 
 	return platform.CompositeAnswer{Key: strings.TrimPrefix(saved.Key, "composite:"), Applied: len(saved.Edits), Digest: saved.Digest}, nil
 }
 
-func (t *Tenant) stageCompositeLocked(m platform.Member, edits []platform.CompositeEdit, key string, now time.Time) (*Tenant, error) {
-	owner, ok := t.App(build.ID).(build.ConstructionDrafts)
-	if !ok {
-		return nil, fmt.Errorf("this tenant runs no builder")
-	}
-	draft := (hostView{t: t, app: owner}).installationDraft()
-	for i, edit := range edits {
-		app := t.owner["action:"+edit.Schema]
-		if app == nil || app.Manifest().ID != build.ID {
-			return nil, fmt.Errorf("edit %d: %s is not a builder action", i+1, edit.Schema)
-		}
-		sub := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID,
-			IdempotencyKey: key + "#" + strconv.Itoa(i), Target: edit.Target,
-			Schema: &pb.SchemaRef{Name: edit.Schema, Version: 1}, Payload: edit.Payload, ExpectedRevision: edit.ExpectedRevision}
-		if err := t.delegatedBound(m, sub); err != nil {
-			return nil, fmt.Errorf("edit %d: %s refused (%s)", i+1, edit.Schema, err.Error())
-		}
-		if _, err := app.Submit(platform.NewCaller(runtime{t: draft}, m, build.ID, true, false), sub, now); err != nil {
-			return nil, fmt.Errorf("edit %d: %s refused (%s)", i+1, edit.Schema, err.Error())
-		}
-	}
-	return draft, nil
-}
-
 func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, error) {
 	saved, err := acceptedformat.DecodeComposite(raw)
 	if err != nil {
@@ -188,36 +164,16 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, e
 		}
 		return saved, nil
 	}
-	if saved.Version >= 2 {
-		if saved.Refusal == "" {
-			batch, _, _ := acceptedformat.DecodeBatch(saved.Changes)
-			if _, err := t.applyAcceptedBatch(t.App(build.ID).AcceptedLedger(), saved.Changes); err != nil {
-				return saved, err
-			}
-			t.publishAcceptedBatch(batch)
-			t.audit.Remember(platform.AuditEntry{At: saved.At, Member: saved.Member, App: build.ID, Action: "composite", Target: saved.Key})
+	if saved.Refusal == "" {
+		batch, _, _ := acceptedformat.DecodeBatch(saved.Changes)
+		if _, err := t.applyAcceptedBatch(t.App(build.ID).AcceptedLedger(), saved.Changes); err != nil {
+			return saved, err
 		}
-		t.Committed.SaveComposite(saved.Key, saved.Digest)
-		t.Committed.SaveCompositeAnswer(saved.Key, raw)
-		t.enqueue(saved.At)
-		return saved, nil
+		t.publishAcceptedBatch(batch)
+		t.audit.Remember(platform.AuditEntry{At: saved.At, Member: saved.Member, App: build.ID, Action: "composite", Target: saved.Key})
 	}
-	draft, err := t.stageCompositeLocked(platform.Member{ID: saved.Member, Tenant: t.ID, Roles: t.rolesOf(saved.Member)}, saved.Edits, saved.Key, saved.At)
-	if err != nil {
-		return saved, fmt.Errorf("committed composite does not apply: %w", err)
-	}
-	if err := t.Projection.PromoteRecords(draft.Projection); err != nil {
-		return saved, err
-	}
-	t.setDefinitions(draft.definitions)
 	t.Committed.SaveComposite(saved.Key, saved.Digest)
-	t.audit.Remember(platform.AuditEntry{At: saved.At, Member: saved.Member, App: build.ID, Action: "composite", Target: saved.Key})
+	t.Committed.SaveCompositeAnswer(saved.Key, raw)
+	t.enqueue(saved.At)
 	return saved, nil
-}
-
-func (t *Tenant) rolesOf(member string) map[string]string {
-	if m, ok := t.Member(member); ok {
-		return m.Roles
-	}
-	return map[string]string{}
 }
