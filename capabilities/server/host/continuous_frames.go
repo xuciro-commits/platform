@@ -218,7 +218,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 				return nil, refusal
 			}
 		}
-		return t.submitAccepted(prepared.Decision(f), member, prepared.Submission(t.ID), now, true, preparedInput)
+		return t.accept(prepared.Decision(f), member, prepared.Submission(t.ID), now, acceptOptions{automation: true, inputs: []*preparedOperationInput{preparedInput}})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		if len(candidate.entry.Body) != 0 {
 			retained, inputRetained = true, true
@@ -243,7 +243,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 	return platform.FlowBatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
 }
 
-func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Submission, now time.Time, contentVersion ...string) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Submission, now time.Time, opts submitOptions) (*pb.ChangeRecord, *kernel.Error, bool) {
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
 	type preflight struct {
@@ -256,8 +256,8 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		value := preflight{sub: sub}
 		if owner, ok := t.procs.(platform.ContinuousFlowOwner); ok {
 			var refusal *kernel.Error
-			if len(contentVersion) > 0 {
-				value.binding, refusal = t.submissionSchemaVersion(owner, sub, contentVersion[0])
+			if opts.versioned {
+				value.binding, refusal = t.submissionSchemaVersion(owner, sub, opts.contentVersion)
 				if refusal != nil && refusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
 					return value, refusal
 				}
@@ -267,7 +267,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			_, refused := t.Committed.Refusal(owner.Manifest().ID + "/" + sub.GetIdempotencyKey())
 			if refusal != nil || refused || owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
 				value.handled = true
-				value.record, refusal = t.submitAcceptedVersion(owner, m, value.sub, now, false, value.binding, refusal, nil, nil)
+				value.record, refusal = t.accept(owner, m, value.sub, now, acceptOptions{binding: value.binding, schemaRefusal: refusal})
 				return value, refusal
 			}
 		}
@@ -368,7 +368,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 				return nil, refusal
 			}
 		}
-		return t.submitAcceptedVersion(prepared.Decision(f), current, sub, now, false, first.binding, nil, nil, nil, preparedInput)
+		return t.accept(prepared.Decision(f), current, sub, now, acceptOptions{binding: first.binding, inputs: []*preparedOperationInput{preparedInput}})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		if len(candidate.entry.Body) > 0 {
 			retained, inputRetained = true, preparedInput != nil
@@ -409,7 +409,7 @@ func (t *Tenant) retireContinuousArtifacts(plan platform.FlowArtifactCleanupPrep
 		if !plan.Matches(latest) {
 			return nil, nil
 		}
-		return t.submitAccepted(plan.Decision(t.app(platform.FlowApp)), member, plan.Submission(t.ID), now, true)
+		return t.accept(plan.Decision(t.app(platform.FlowApp)), member, plan.Submission(t.ID), now, acceptOptions{automation: true})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		return t.finishPreparedSubmission(member, candidate, record, refusal)
 	})
@@ -454,7 +454,7 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.Fl
 		if !prepared.Matches(latest) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its Compute retry was prepared")
 		}
-		return t.submitAccepted(prepared.Decision(f), actor, prepared.Submission(t.ID), now, true, preparedInput)
+		return t.accept(prepared.Decision(f), actor, prepared.Submission(t.ID), now, acceptOptions{automation: true, inputs: []*preparedOperationInput{preparedInput}})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		if len(candidate.entry.Body) != 0 {
 			inputRetained = true

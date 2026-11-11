@@ -206,7 +206,7 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 	_, wake := live.Changes()
 	live.Lane.Lock()
 	submission := live.submission("build.alpha.edit", "build.alpha", "A1", map[string]any{"note": "after"})
-	_, updateRefusal := live.submitAccepted(live.app(build.ID), member, submission, invariantClock, false)
+	_, updateRefusal := live.Tenant.accept(live.app(build.ID), member, submission, invariantClock, acceptOptions{})
 	if updateRefusal != nil {
 		live.Lane.Unlock()
 		t.Fatalf("accept the next state: %v", updateRefusal)

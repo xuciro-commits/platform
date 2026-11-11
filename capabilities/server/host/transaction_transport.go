@@ -48,7 +48,7 @@ func (h hostView) BeginTxnCalls(c platform.Caller, at time.Time) (platform.TxnCa
 
 func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *pb.Submission, now time.Time) *kernel.Error {
 	sub.PrincipalId = caller.ID
-	_, err := t.submitAccepted(app, caller.Member, sub, now, true)
+	_, err := t.accept(app, caller.Member, sub, now, acceptOptions{automation: true})
 	return err
 }
 

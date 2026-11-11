@@ -34,7 +34,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范：[7-system §7.2–7.3](7-system/README.md)、[concurrency](7-system/concurrency.md)。完成标准（整段）：`host` 不超过 1.5 万行且没有 `acceptance_*.go`；`kernel` 不导入任何服务；K1、K2、K3、K13（含 `-race`）不改断言通过。
 
-- [ ] N4 一个提交入口：`submit` 五层合为一个函数加选项结构；幂等只留映像预检与车道内提交两处；`quarantine` 只留应用不一致与位置不一致两处，其余改为拒绝或运行失败。
+- [ ] N4 一个提交入口：`submit` 五层已合为成员入口 `submit` 与范围内决定 `accept`，各收一个选项结构；幂等只留映像预检与车道内提交两处；`quarantine` 只留应用不一致与位置不一致两处，其余改为拒绝或运行失败。
 - [ ] N5 接受路径迁入 `kernel`：`host/acceptance_*.go` 中属于接受语义的部分进 `kernel`，属于某类资源的部分进它的服务；`host` 只剩 HTTP、身份、租户装配与后台调度。各服务持有自己的状态：`host.Tenant` 余下的 57 个字段（副作用队列 `outbound` 散在约 30 个宿主文件，与 `endpoints`、连接器、工作板共用 `opsMu`；各服务的拥有者绑定与运行状态）随所属路径迁出，读取映像不再复制整个 `Tenant`，随之进 `kernel.Sequence`；服务与宿主之间约 233 处可选接口探测随之按注册时类型收敛（拥有者集合与角色已在 `host/owner_roles.go` 一次登记）。
 
 ### 三、领域模型收敛

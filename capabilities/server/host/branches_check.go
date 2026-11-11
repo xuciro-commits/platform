@@ -637,7 +637,7 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request Branch
 		}
 		return nil
 	}
-	if _, refusal := t.submitAcceptedWith(owner, m, s, now, false, nil, nil, nil, nil, before); refusal != nil {
+	if _, refusal := t.accept(owner, m, s, now, acceptOptions{before: before}); refusal != nil {
 		return none, nil, refusal
 	}
 	return mergedCandidate{id: check.Graph.Candidate, actions: actions}, applied, nil

@@ -146,7 +146,7 @@ func (h *Host) join(t *Tenant, _ platform.IdentitySessions, subject string, now 
 		payload, _ := json.Marshal(map[string]string{"subject": subject})
 		caller := t.automation(controlowner.PlatformApp, false)
 		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: controlowner.PlatformApp, IdempotencyKey: "join:" + subject, Target: &pb.EntityRef{Type: controlowner.MemberType, Id: d.JoinID(subject)}, Schema: &pb.SchemaRef{Name: controlowner.SchemaJoin, Version: 1}, Payload: payload}
-		return t.submitAccepted(d, caller.Member, sub, now, true)
+		return t.accept(d, caller.Member, sub, now, acceptOptions{automation: true})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		return t.finishPreparedSubmission(platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, candidate, record, refusal)
 	})

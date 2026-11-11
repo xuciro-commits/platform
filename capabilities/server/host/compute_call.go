@@ -115,7 +115,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			}
 			_, refusedBefore := t.Committed.Refusal(controlowner.PlatformApp + "/" + q.Key)
 			known := refusedBefore || len(t.Committed.Answer(controlowner.PlatformApp+"/"+q.Key)) > 0 || owner.AcceptedLedger().AcceptedFor(t.ID, q.Key) != nil
-			_, refusal := t.submitAccepted(owner, latest, s, now, false, prepared)
+			_, refusal := t.accept(owner, latest, s, now, acceptOptions{inputs: []*preparedOperationInput{prepared}})
 			return !known, refusal
 		}, func(t *Tenant, candidate preparedAccepted, keep bool, refusal *kernel.Error) (bool, *kernel.Error) {
 			_, refusal = t.finishPreparedSubmission(current, candidate, nil, refusal)

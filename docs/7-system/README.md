@@ -71,7 +71,7 @@ POST /v1/submissions
 ```
 
 - 拥有者只返回编辑与意图，不直接写存储；应用发生在提交之后、且只从已提交字节解码。
-- 提交入口只有一个函数，可选项经一个选项结构传入；不按参数组合分出多层入口。
+- 成员提交只有一个入口（准入、映像、路由与诊断），已在范围内的决定只有一个入口；可选项各经一个选项结构传入；不按参数组合分出多层入口。
 - 幂等只判定两处：读取映像上的预检（重复请求不必排队）与车道内的提交（权威）。接受路径的其余步骤信任这两处的结论，不再查询。
 - 应用结果与提交字节不一致时隔离租户，停止写入，等待运维处理。隔离只在 7.5 列出的两种不一致上触发；其他错误是拒绝或运行失败，不隔离租户。
 - 副作用至少一次投递，以请求键幂等。
@@ -141,7 +141,7 @@ POST /v1/submissions
 - 依赖差距：`services/security` → `kernel/records`。
 - 内核位置（7.2）：提交序列的字段已是 `kernel.Sequence`（车道、日志、已提交状态、记录投影、位置、隔离状态），但操作它的方法仍在 `host`。`host` 是一个 4.5 万行的包；`host/host.go` 的 `Tenant` 嵌入 `kernel.Sequence`，另有 57 个字段、约 820 个方法，持有全部服务状态；读取映像（`host/read_image.go`）复制整个 `Tenant`，因此仍在 `host`；接受路径在 `host/acceptance_*.go` 12 个文件中。
 - 三处内核（7.2）：`contract/go/kernel`、`kernel` 与 `platform/ledger.go` 的规则引擎各持一部分接受语义。`contract/go/kernel` 的实现（Receiver、ChangeLog、FactLog、Authorities、Works、Connectors、Identity、SchemaRegistry）由 `platform/ledger.go` 直接以具体类型持有，由各服务在构造时调用 `platform.NewLedger` 创建，宿主另直接构造工作、连接器与来源声明的事实和身份；值类型 `Error`、`Caller`、`Policy`、`Ref`、`IdentityState`、`ConnectorMark`、`ChangeArchive` 被直接导入。`platform` 不能依赖 `kernel`，因此这些实现只能与 Ledger 一起离开 `platform`。
-- 提交入口（7.3）：`host/submit.go` 有 `submit → submitHeld → submitAccepted → submitAcceptedVersion → submitAcceptedWith` 五层，末层 11 个参数；幂等在 `committed.Answer`、`ledger.AcceptedFor`、`committed.Refusal` 上重复判定（后两者各约 20 处调用），身份与权威校验同 `Receiver.Receive` 重复；`t.quarantine(` 约 67 处，远多于两种不一致。
+- 提交入口（7.3）：`host/submit.go` 的成员入口 `submit` 与范围内决定 `accept` 已各收一个选项结构（`submitOptions`、`acceptOptions`）；幂等在 `committed.Answer`、`ledger.AcceptedFor`、`committed.Refusal` 上重复判定（后两者各约 20 处调用），身份与权威校验同 `Receiver.Receive` 重复；`t.quarantine(` 约 67 处，远多于两种不一致。
 - 服务注册（7.2、7.7）：`platform/app.go` 的 `Runtime` 接口有约 44 个方法并嵌入 8 个接口；暂存决定能力（含保留发布执行的决定目录）经 `Runtime.StagedDecision()` 句柄取得；另有 2 个可选 `*App` 接口（`AcceptedStateApp`、`AcceptedInputApp`），经约 233 处类型断言探测（形状棘轮的 `capabilityProbes`）；约 200 个函数用可变参数表达可选项。
 - `platform` 不是叶层 SDK（7.2）：约 2.4 万行，含动作规则引擎（`ledger.go`）、页面模型（`page_*`，约 5 千行）与实体—转换—业务事务模型（`entity.go`、`transaction.go`，见 [6-domain 现存差距](../6-domain/README.md#现存差距)）。
 - `services/resources/authoring`（包名 `build`，约 1.35 万行，被 104 个 `host` 文件导入）编辑所有资源类型；`services/actions` 只有约 1200 行，动作执行实际在 `platform` 与 `host`。

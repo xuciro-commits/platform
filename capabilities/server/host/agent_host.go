@@ -398,7 +398,7 @@ func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEv
 	sub := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: platform.AgentApp,
 		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: platform.EvaluationType, Id: id},
 		Schema: &pb.SchemaRef{Name: platform.SchemaEvalStart, Version: 1}, Payload: platform.Raw(map[string]any{"agent": request.Agent, "model": model, "suite": true, "candidate": request.CandidateID})}
-	if _, refusal := t.submitAccepted(t.agents, m, sub, now, true); refusal != nil {
+	if _, refusal := t.accept(t.agents, m, sub, now, acceptOptions{automation: true}); refusal != nil {
 		return "", fmt.Errorf("agent evaluation was refused: %s", refusal.Message)
 	}
 	return id, nil
