@@ -106,28 +106,11 @@ func (t *Tenant) finishAgentStep(candidate preparedAccepted) {
 }
 
 func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedformat.RuntimeAgent, error) {
-	r, err := acceptedformat.DecodeAgent(raw)
-	if err != nil {
-		return r, err
+	h := runtimekernel.AgentApply{Usage: t.usage(), Batch: t.batchApply(), Published: t.publishAcceptedBatch}
+	if t.agents != nil {
+		h.Ledger = t.agents.AcceptedLedger()
 	}
-	if r.Tenant != t.ID || t.agents == nil {
-		return r, fmt.Errorf("agent result belongs to another tenant")
-	}
-	if r.UsageBefore != "" {
-		before, err := t.usagePredecessor()
-		if err != nil || before != r.UsageBefore {
-			return r, fmt.Errorf("agent usage predecessor differs: %v", err)
-		}
-	}
-	batch, _, _ := acceptedformat.DecodeBatch(r.Changes)
-	if applied, err := t.applyAcceptedBatch(t.agents.AcceptedLedger(), r.Changes); err != nil || !applied {
-		return r, fmt.Errorf("agent result application: %v (applied=%t)", err, applied)
-	}
-	if r.UsageBefore != "" {
-		t.ai.Meter(r.Step.Usage)
-	}
-	t.publishAcceptedBatch(batch)
-	return r, nil
+	return t.ApplyAgentResult(raw, h)
 }
 
 func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, error) {

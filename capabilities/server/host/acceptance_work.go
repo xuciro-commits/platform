@@ -16,16 +16,14 @@ import (
 	"time"
 )
 
-func (t *Tenant) usagePredecessor() (string, error) {
+func (t *Tenant) usage() runtimekernel.UsageApply {
 	if t.ai == nil {
-		return "", fmt.Errorf("usage needs an AI meter")
+		return runtimekernel.UsageApply{}
 	}
-	raw, err := t.ai.Snapshot()
-	if err != nil {
-		return "", err
-	}
-	return platform.CanonicalDigest(raw)
+	return runtimekernel.UsageApply{Usage: t.ai.Snapshot, Meter: t.ai.Meter}
 }
+
+func (t *Tenant) usagePredecessor() (string, error) { return t.usage().Predecessor() }
 
 func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Error {
 	if u.Call != "" {
@@ -97,16 +95,7 @@ func (t *Tenant) finishUsage(candidate preparedAccepted) *kernel.Error {
 }
 
 func (t *Tenant) applyAcceptedUsage(raw []byte) (acceptedformat.Usage, error) {
-	r, err := acceptedformat.DecodeUsage(raw)
-	if err != nil {
-		return r, err
-	}
-	before, err := t.usagePredecessor()
-	if err != nil || r.Tenant != t.ID || before != r.Before {
-		return r, fmt.Errorf("model usage predecessor differs: %v", err)
-	}
-	t.ai.Meter(r.Usage)
-	return r, nil
+	return t.ApplyUsageResult(raw, t.usage())
 }
 
 func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome string) {
