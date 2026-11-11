@@ -4,9 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/protobuf/encoding/protojson"
 	"io"
+	persistence "platformserver/kernel/store"
+	"platformserver/platform"
 	"reflect"
+	"slices"
 	"strings"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
@@ -75,4 +80,69 @@ func InstallAcceptedRecord(draft *records.Store, et *records.Type, result accept
 		draft.MarkDirty(result.Row.Type + "/" + rec.ID)
 	}
 	return nil
+}
+
+type RecordResult struct {
+	Store          *records.Store
+	App, Kind      string
+	Receipt        *pb.ChangeRecord
+	At             time.Time
+	SchemaVersion  *platform.SchemaVersion
+	Definition     *platform.DecisionDefinition
+	Event          platform.AcceptedEventPlan
+	Authorizations []acceptedformat.AuthorizationEvidence
+	Unique         []persistence.StateUnique
+}
+
+func EncodeAcceptedRecord(in RecordResult) ([]byte, error) {
+	typ, id := in.Receipt.GetSubmission().GetTarget().GetType(), in.Receipt.GetSubmission().GetTarget().GetId()
+	image, err := func() (records.Image, error) {
+		in.Store.Lock()
+		defer in.Store.Unlock()
+		et := in.Store.Type(typ)
+		if et == nil || et.Info().App != in.App || et.Rows().Get(id) == nil {
+			return records.Image{}, fmt.Errorf("decision has no declared record image")
+		}
+		if et.Rows().Get(id).Projection != nil {
+			return records.Image{}, fmt.Errorf("versioned migration row requires the complete record batch")
+		}
+		var prior *records.Row
+		if old := in.Store.Parent().Type(typ); old != nil {
+			prior = old.Rows().Get(id)
+		}
+		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
+		if err == nil {
+			image.Predecessor, err = records.Predecessor(typ, id, prior)
+		}
+		return image, err
+	}()
+	if err != nil {
+		return nil, err
+	}
+	raw, err := protojson.Marshal(in.Receipt)
+	if err != nil {
+		return nil, err
+	}
+	hash, err := acceptedformat.SubmissionHash(in.Receipt.GetSubmission(), in.SchemaVersion)
+	if err != nil {
+		return nil, err
+	}
+	result := acceptedformat.Record{Version: acceptedformat.RecordVersion, Tenant: in.Receipt.GetSubmission().GetTenantId(),
+		Definition: in.Definition,
+		Kind:       in.Kind, App: in.App, At: in.At.UTC(), RequestHash: hash, Receipt: raw, SchemaVersion: in.SchemaVersion,
+		Row:   image,
+		Event: in.Event, Authorizations: slices.Clone(in.Authorizations)}
+	result.Unique = in.Unique
+	result.Digest, err = acceptedformat.DigestRecord(result)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+	if _, _, err := acceptedformat.DecodeRecord(encoded); err != nil {
+		return nil, err
+	}
+	return encoded, nil
 }

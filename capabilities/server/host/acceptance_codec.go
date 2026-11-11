@@ -2,10 +2,8 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
@@ -63,38 +61,6 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		len(d.events[0].Changed) != 1 || d.events[0].Changed[0] != ref {
 		return nil, fmt.Errorf("decision has other record or event effects")
 	}
-	image, err := func() (records.Image, error) {
-		d.records.Lock()
-		defer d.records.Unlock()
-		et := d.records.Type(typ)
-		if et == nil || et.Info().App != app || et.Rows().Get(id) == nil {
-			return records.Image{}, fmt.Errorf("decision has no declared record image")
-		}
-		if et.Rows().Get(id).Projection != nil {
-			return records.Image{}, fmt.Errorf("versioned migration row requires the complete record batch")
-		}
-		var prior *records.Row
-		if old := d.records.Parent().Type(typ); old != nil {
-			prior = old.Rows().Get(id)
-		}
-		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
-		if err == nil {
-			image.Predecessor, err = records.Predecessor(typ, id, prior)
-		}
-		return image, err
-	}()
-	if err != nil {
-		return nil, err
-	}
-	raw, err := protojson.Marshal(receipt)
-	if err != nil {
-		return nil, err
-	}
-	hash, err := acceptedformat.SubmissionHash(receipt.GetSubmission(), d.schemaVersion)
-	if err != nil {
-		return nil, err
-	}
-	version := acceptedformat.RecordVersion
 	kind := "record"
 	if publisher, ok := d.tenant.App(app).(platform.AcceptedPublisher); ok &&
 		slices.Contains(publisher.AcceptedPublicationSchemas(), receipt.GetSubmission().GetSchema().GetName()) {
@@ -106,24 +72,9 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	if refusal != nil {
 		return nil, refusal
 	}
-	result := acceptedformat.Record{Version: version, Tenant: receipt.GetSubmission().GetTenantId(),
-		Definition: d.definitions[app+"/"+receipt.GetChangeId()],
-		Kind:       kind, App: app, At: submittedAt.UTC(), RequestHash: hash, Receipt: raw, SchemaVersion: d.schemaVersion,
-		Row:   image,
-		Event: plan, Authorizations: slices.Clone(d.authorizations)}
-	result.Unique = d.savedUniqueChanges()
-	result.Digest, err = acceptedformat.DigestRecord(result)
-	if err != nil {
-		return nil, err
-	}
-	encoded, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-	if _, _, err := acceptedformat.DecodeRecord(encoded); err != nil {
-		return nil, err
-	}
-	return encoded, nil
+	return runtimekernel.EncodeAcceptedRecord(runtimekernel.RecordResult{Store: d.records, App: app, Kind: kind, Receipt: receipt, At: submittedAt,
+		SchemaVersion: d.schemaVersion, Definition: d.definitions[app+"/"+receipt.GetChangeId()], Event: plan,
+		Authorizations: d.authorizations, Unique: d.savedUniqueChanges()})
 }
 
 func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {
