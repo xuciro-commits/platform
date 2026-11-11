@@ -1,13 +1,9 @@
 package host
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"platformserver/services/actions"
@@ -50,44 +46,12 @@ func (t *Tenant) PullSources(now time.Time) {
 	}
 	for _, source := range sources {
 		if source.Due(now) {
-			t.pullSource(source, now)
+			t.integration().PullSource(source, now)
 		}
 	}
 	t.ReconcileConfirmations(now)
 	t.ReadDispatches(now)
 	t.EvaluateObservations(now)
-}
-
-type integrationPreparation struct {
-	Transaction  string                      `json:"transaction,omitempty"`
-	Type         string                      `json:"type"`
-	ID           string                      `json:"id"`
-	Rows         []dataowner.SourceRow       `json:"rows,omitempty"`
-	Data         []map[string]any            `json:"data"`
-	Object       string                      `json:"object,omitempty"`
-	Binding      *platform.DataSourceBinding `json:"binding,omitempty"`
-	Dataset      string                      `json:"dataset,omitempty"`
-	Enterprise   *dataowner.EnterpriseTarget `json:"enterprise,omitempty"`
-	Producer     string                      `json:"producer"`
-	Marking      string                      `json:"marking,omitempty"`
-	Compartments []string                    `json:"compartments,omitempty"`
-	Declassified []string                    `json:"declassified,omitempty"`
-}
-
-func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now time.Time, plan integrationPreparation) (*dataowner.IntegrationExecution, error) {
-	raw, err := json.Marshal(plan)
-	if err != nil {
-		return nil, err
-	}
-	if len(raw) > maxFlowFrameBytes {
-		return nil, fmt.Errorf("the integration preparation exceeds its retained input budget")
-	}
-	digest := fmt.Sprintf("%x", sha256.Sum256(raw))
-	if err := t.files().Put(context.Background(), t.ID+"/artifacts/integration/"+digest+".json", raw, "application/json"); err != nil {
-		return nil, err
-	}
-	identity := sha256.Sum256(platform.Raw([]any{t.ID, plan.Type, plan.ID, revision, now.UTC()}))
-	return &dataowner.IntegrationExecution{ID: fmt.Sprintf("%x", identity), Member: member.ID, Scopes: slices.Clone(member.Scopes), Pending: true, Snapshot: digest}, nil
 }
 
 func (t *Tenant) integrationPending(typ, id string, execution *dataowner.IntegrationExecution) bool {
@@ -115,33 +79,6 @@ func (t *Tenant) integrationPendingRead(typ, id string, execution *dataowner.Int
 	return current != nil && current.Pending && current.ID == execution.ID && current.Snapshot == execution.Snapshot && current.Member == execution.Member && slices.Equal(current.Scopes, execution.Scopes)
 }
 
-func (t *Tenant) integrationPreparation(execution *dataowner.IntegrationExecution) (integrationPreparation, error) {
-	var plan integrationPreparation
-	digest, err := hex.DecodeString(execution.Snapshot)
-	if err != nil || len(digest) != sha256.Size {
-		return plan, fmt.Errorf("the integration snapshot has an invalid digest")
-	}
-	reader, size, err := t.files().Get(context.Background(), t.ID+"/artifacts/integration/"+execution.Snapshot+".json")
-	if err != nil {
-		return plan, err
-	}
-	defer reader.Close()
-	if size <= 0 || size > maxFlowFrameBytes {
-		return plan, fmt.Errorf("the integration snapshot exceeds its retained input budget")
-	}
-	raw, err := io.ReadAll(io.LimitReader(reader, maxFlowFrameBytes+1))
-	if err != nil {
-		return plan, err
-	}
-	if int64(len(raw)) != size || fmt.Sprintf("%x", sha256.Sum256(raw)) != execution.Snapshot {
-		return plan, fmt.Errorf("the integration snapshot differs from its accepted digest")
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	err = decoder.Decode(&plan)
-	return plan, err
-}
-
 func (t *Tenant) sourceResult(member platform.Member, s dataowner.Source, pull dataowner.SourcePull, phase string, revision *uint32, now time.Time) *kernel.Error {
 	payload := platform.Raw(map[string]any{"pull": pull})
 	key := "pulled:" + s.ID + ":" + now.UTC().Format(time.RFC3339Nano)
@@ -162,130 +99,6 @@ func (t *Tenant) sourceResult(member platform.Member, s dataowner.Source, pull d
 			"source/"+s.Name, status, "Source "+s.Title, detail)
 	}
 	return err
-}
-
-func (t *Tenant) pullSource(s dataowner.Source, now time.Time) {
-	pull := dataowner.SourcePull{At: now, DefinitionVersion: s.ExecutionVersion()}
-	member, ok := t.Member(s.Puller)
-	if s.PullerScopes != "" && json.Unmarshal([]byte(s.PullerScopes), &member.Scopes) != nil {
-		log.Printf("source execution scopes are invalid")
-		return
-	}
-	var plan integrationPreparation
-	if s.Last != nil && s.Last.Execution != nil && s.Last.Execution.Pending {
-		pull = *s.Last
-		member, ok = t.Member(pull.Execution.Member)
-		member.Scopes = slices.Clone(pull.Execution.Scopes)
-		var err error
-		plan, err = t.integrationPreparation(pull.Execution)
-		if err != nil {
-			log.Printf("source retained input unavailable: %v", err)
-			return
-		}
-		pull.Object, pull.Marking, pull.Compartments = plan.Object, plan.Marking, slices.Clone(plan.Compartments)
-	} else if !ok {
-		pull.Error = "The execution member is no longer available"
-	} else if raw, err := t.readSource(s); err != nil {
-		pull.Error = err.Error()
-	} else {
-		marking, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.MarkingSet, *kernel.Error) { return t.connectionMarkings(s.Connection), nil })
-		if refusal != nil {
-			log.Printf("source connection state unavailable: %v", refusal)
-			return
-		}
-		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
-		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: marking.Level, Compartments: marking.Compartments}
-		pull.Object, pull.Marking, pull.Compartments = plan.Object, plan.Marking, slices.Clone(plan.Compartments)
-		plan.Type, plan.ID = dataowner.SourceType, s.ID
-		if s.Stream {
-			plan.Transaction = "append"
-		}
-		if s.Dataset != "" {
-			if len(raw) > 0 || s.Cursor == "" {
-				plan.Data = raw
-				if plan.Data == nil {
-					plan.Data = []map[string]any{}
-				}
-			}
-		} else if (platform.MarkingSet{Level: plan.Marking, Compartments: plan.Compartments}).Guarded() {
-			pull.Error = "A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules"
-		} else if rows, binding, err := t.declaredRows(s.Object, "source", s.ID, raw, now); err != nil {
-			pull.Error = err.Error()
-		} else {
-			plan.Binding = binding
-			if binding == nil {
-				rows, err = s.MapRows(raw)
-				if err != nil {
-					pull.Error = err.Error()
-				}
-				binding = &platform.DataSourceBinding{Kind: "source", Source: s.ID, Key: s.Key}
-				for _, mapping := range s.Mapping {
-					binding.Columns = append(binding.Columns, platform.DataSourceColumn{Column: mapping.From, Attribute: mapping.To})
-				}
-				for i := range rows {
-					rows[i].At, rows[i].Origin = &now, rows[i].ID
-				}
-				plan.Binding = binding
-			}
-			if pull.Error == "" {
-				plan.Rows = rows
-				var refusal *kernel.Error
-				pull.Merged, refusal = t.prepareRows(member, s.Object, s.Name, plan.Rows, now)
-				if refusal != nil {
-					log.Printf("source row preparation unavailable: %v", refusal)
-					return
-				}
-				if binding != nil && s.Since == "" {
-					removed, refusal := t.absentSourceRows(s.Object, binding, rows, now)
-					if refusal != nil {
-						log.Printf("source deletion preparation unavailable: %v", refusal)
-						return
-					}
-					plan.Rows = append(plan.Rows, removed...)
-				}
-			}
-		}
-		if pull.Error == "" {
-			execution, err := t.prepareIntegration(member, s.Revision, now, plan)
-			if err != nil {
-				log.Printf("source input retention failed: %v", err)
-				return
-			}
-			pull.Execution = execution
-			if err := t.sourceResult(member, s, pull, "prepared", &s.Revision, now); err != nil {
-				return
-			}
-		}
-	}
-	if member.ID == "" {
-		member = t.automation(build.ID, false).Member
-	}
-	if pull.Execution != nil {
-		if !t.integrationPending(dataowner.SourceType, s.ID, pull.Execution) {
-			return
-		}
-		if !ok {
-			pull.Error = "The execution member is no longer available"
-		} else if plan.Dataset != "" {
-			if plan.Data != nil {
-				key := "source:" + pull.Execution.ID + ":dataset"
-				if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, platform.MarkingSet{Level: plan.Marking, Compartments: plan.Compartments}, plan.Data, key, pull.At, plan.Transaction); err != nil {
-					if !t.integrationRefused(build.ID, key) {
-						return
-					}
-					pull.Error = err.Message
-				} else {
-					pull.Applied = len(plan.Data)
-				}
-			}
-		} else if !t.applyRows(member, plan, pull.Execution, pull.At, &pull) {
-			return
-		}
-		execution := *pull.Execution
-		execution.Pending = false
-		pull.Execution = &execution
-	}
-	_ = t.sourceResult(member, s, pull, "finished", nil, now)
 }
 
 func (t *Tenant) declaredRows(object, kind, source string, input []map[string]any, now time.Time) ([]dataowner.SourceRow, *platform.DataSourceBinding, error) {
@@ -398,7 +211,7 @@ func (t *Tenant) integrationRefusedRead(authority, key string) bool {
 	return ok
 }
 
-func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, execution *dataowner.IntegrationExecution, now time.Time, pull *dataowner.SourcePull) bool {
+func (t *Tenant) applyRows(member platform.Member, plan dataowner.IntegrationPreparation, execution *dataowner.IntegrationExecution, now time.Time, pull *dataowner.SourcePull) bool {
 	t.Projection.Lock()
 	et := t.Projection.Type(plan.Object)
 	t.Projection.Unlock()
@@ -541,4 +354,18 @@ func (t *Tenant) dataClient() dataowner.Client {
 		A2A: func(id, url, secret string, allowPrivate bool, x platform.Effect) platform.Outcome {
 			return t.transport().A2A(actions.Endpoint{ID: id, URL: url, Secret: secret, AllowPrivate: allowPrivate}, x, true)
 		}}
+}
+
+func (t *Tenant) integration() dataowner.Integration {
+	return dataowner.Integration{Tenant: t.ID, Rules: t.services.Rules, Files: t.files, Member: t.Member,
+		Automation: func() platform.Member { return t.automation(build.ID, false).Member },
+		Pending:    t.integrationPending, ReadSource: t.readSource,
+		ConnectionMarkings: func(connection string) (platform.MarkingSet, *kernel.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) (platform.MarkingSet, *kernel.Error) { return t.connectionMarkings(connection), nil })
+		},
+		DeclaredRows: t.declaredRows, PrepareRows: t.prepareRows, AbsentRows: t.absentSourceRows, LoadDataset: t.loadDatasetKey,
+		Refused:   func(key string) bool { return t.integrationRefused(build.ID, key) },
+		ApplyRows: t.applyRows, SourceResult: t.sourceResult, PipelineResult: t.pipelineResult, PipelineInputs: t.pipelineInputs,
+		Unguarded: t.unguarded, DatasetOutput: t.datasetOutput,
+	}
 }
