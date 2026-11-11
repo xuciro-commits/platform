@@ -1,7 +1,6 @@
 package host
 
 import (
-	"encoding/json"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -165,46 +164,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		result.Version = 10
 	}
 	result.Unique = d.savedUniqueChanges()
-	d.records.Lock()
-	defer d.records.Unlock()
-	d.records.Parent().Lock()
-	defer d.records.Parent().Unlock()
-	for _, ref := range slices.Sorted(d.records.Writes()) {
-		if !seen[ref] {
-			continue
-		}
-		typ, id, ok := strings.Cut(ref, "/")
-		et := d.records.Type(typ)
-		if !ok || et == nil || et.Rows().Get(id) == nil {
-			return nil, fmt.Errorf("batch includes an undeclared record")
-		}
-		var prior *records.Row
-		if old := d.records.Parent().Type(typ); old != nil {
-			prior = old.Rows().Get(id)
-		}
-		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
-		if err != nil {
-			return nil, fmt.Errorf("batch image %s/%s: %w", typ, id, err)
-		}
-		row := acceptedformat.BatchRow{Image: image, App: et.Info().App, Authorities: slices.Clone(d.writers[ref]), HistoryBase: image.HistoryRef.Base}
-		row.Before, err = records.Predecessor(typ, id, prior)
-		if err != nil {
-			return nil, fmt.Errorf("batch predecessor %s/%s: %w", typ, id, err)
-		}
-		result.Rows = append(result.Rows, row)
-	}
-	result.Digest, err = acceptedformat.DigestBatch(result)
-	if err != nil {
-		return nil, fmt.Errorf("batch digest: %w", err)
-	}
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-	if _, _, err := acceptedformat.DecodeBatch(raw); err != nil {
-		return nil, err
-	}
-	return raw, nil
+	return runtimekernel.SealBatch(d.records, result, seen, d.writers)
 }
 
 func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error) {

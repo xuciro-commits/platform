@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"slices"
+	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
@@ -145,4 +146,48 @@ func ApplyBatchRows(draft *records.Store, result acceptedformat.Batch, tenant st
 		}
 	}
 	return nil
+}
+
+func SealBatch(store *records.Store, result acceptedformat.Batch, seen map[string]bool, writers map[string][]string) ([]byte, error) {
+	var err error
+	store.Lock()
+	defer store.Unlock()
+	store.Parent().Lock()
+	defer store.Parent().Unlock()
+	for _, ref := range slices.Sorted(store.Writes()) {
+		if !seen[ref] {
+			continue
+		}
+		typ, id, ok := strings.Cut(ref, "/")
+		et := store.Type(typ)
+		if !ok || et == nil || et.Rows().Get(id) == nil {
+			return nil, fmt.Errorf("batch includes an undeclared record")
+		}
+		var prior *records.Row
+		if old := store.Parent().Type(typ); old != nil {
+			prior = old.Rows().Get(id)
+		}
+		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
+		if err != nil {
+			return nil, fmt.Errorf("batch image %s/%s: %w", typ, id, err)
+		}
+		row := acceptedformat.BatchRow{Image: image, App: et.Info().App, Authorities: slices.Clone(writers[ref]), HistoryBase: image.HistoryRef.Base}
+		row.Before, err = records.Predecessor(typ, id, prior)
+		if err != nil {
+			return nil, fmt.Errorf("batch predecessor %s/%s: %w", typ, id, err)
+		}
+		result.Rows = append(result.Rows, row)
+	}
+	result.Digest, err = acceptedformat.DigestBatch(result)
+	if err != nil {
+		return nil, fmt.Errorf("batch digest: %w", err)
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+	if _, _, err := acceptedformat.DecodeBatch(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }
