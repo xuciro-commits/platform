@@ -50,11 +50,6 @@ func (t *Tenant) endLane() {
 	if t.readError() != nil || t.quarantined() {
 		return
 	}
-	for _, owner := range t.apps {
-		if _, ok := owner.(platform.ReadForkApp); !ok {
-			return
-		}
-	}
 	t.change.mu.Lock()
 	operations := t.change.seq + int64(len(t.change.pendingData))
 	t.change.mu.Unlock()
@@ -212,15 +207,11 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.apps = make([]platform.App, len(t.apps))
 	view.owner = make(map[string]platform.App, len(t.owner))
 	for i, app := range t.apps {
-		owner, ok := app.(platform.ReadForkApp)
-		if !ok {
-			return nil, fmt.Errorf("owner %s has no read fork", app.Manifest().ID)
-		}
 		ledger, err := app.AcceptedLedger().ForkRead()
 		if err != nil {
 			return nil, err
 		}
-		fork, err := owner.ForkRead(ledger)
+		fork, err := app.Fork(ledger)
 		if err != nil {
 			return nil, err
 		}

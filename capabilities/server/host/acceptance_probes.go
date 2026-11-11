@@ -132,7 +132,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 			fork.states[id], fork.privateApps[id] = owner, owner
 			continue
 		}
-		app, err := owner.ForkAcceptedState()
+		app, err := owner.Fork(owner.AcceptedLedger())
 		copy, ok := app.(platform.AcceptedStateApp)
 		if err != nil || !ok {
 			unsupportedStagedEffect()
@@ -147,11 +147,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		if fork.privateApps[id] != nil {
 			continue
 		}
-		owner, ok := app.(platform.DecisionForkApp)
-		if !ok {
-			unsupportedStagedEffect()
-		}
-		copy, err := owner.ForkDecision()
+		copy, err := app.Fork(app.AcceptedLedger())
 		if err != nil || copy == nil || copy.Manifest().ID != id || copy.AcceptedLedger() != app.AcceptedLedger() {
 			unsupportedStagedEffect()
 		}
@@ -164,9 +160,6 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		(hostView{t: d.tenant, app: app, decision: &fork}).bindOwner(app)
 	}
 	fork.forkControlDecision(d.control)
-	for ledger := range fork.logs {
-		fork.bindPrivateFacts(ledger)
-	}
 	return &fork
 }
 

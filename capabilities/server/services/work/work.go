@@ -183,15 +183,6 @@ func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Decla
 
 func (w *Work) AcceptedLedger() *platform.Ledger { return w.ledger }
 
-func (w *Work) ForkRead(ledger *platform.Ledger) (platform.App, error) {
-	fork, err := w.ForkDecision()
-	if err != nil {
-		return nil, err
-	}
-	fork.(*Work).ledger = ledger
-	return fork, nil
-}
-
 func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -665,10 +656,8 @@ func (w *Work) delegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRec
 	return func(r *pb.ChangeRecord) { c.Put(r, d) }, nil
 }
 
-func (w *Work) ForkDecision() (platform.App, error) {
-	return &Work{host: w.host, ledger: w.ledger}, nil
+func (w *Work) Fork(ledger *platform.Ledger) (platform.App, error) {
+	return &Work{host: w.host, ledger: ledger}, nil
 }
-
-var _ platform.DecisionForkApp = (*Work)(nil)
 
 func (a *Work) NewSimulationApp(tenant string) platform.App { return New(tenant) }

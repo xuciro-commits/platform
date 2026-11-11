@@ -77,11 +77,6 @@ func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare
 	if refusal := t.recordReadRefusal(); refusal != nil || t.businessStopped() {
 		return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	for _, app := range t.apps {
-		if _, ok := app.(platform.ReadForkApp); !ok {
-			return prepare(t)
-		}
-	}
 	var candidate preparedAccepted
 	value, refusal, err := readImageState(t, t, ctx, func(scope *Tenant) (T, *kernel.Error) { scope.preparedResult = &candidate; return prepare(scope) })
 	if err != nil {

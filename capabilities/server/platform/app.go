@@ -175,24 +175,9 @@ type AcceptedPublisher interface {
 
 type AcceptedStateApp interface {
 	App
-	ForkAcceptedState() (App, error)
 	AcceptedState() (json.RawMessage, error)
 	ValidateAcceptedState(json.RawMessage) error
 	ApplyAcceptedState(json.RawMessage) error
-}
-
-type AcceptedHistoryApp interface {
-	UseAcceptedHistory(load func() (json.RawMessage, error))
-}
-
-type DecisionForkApp interface {
-	App
-	ForkDecision() (App, error)
-}
-
-type ReadForkApp interface {
-	App
-	ForkRead(*Ledger) (App, error)
 }
 
 type AcceptedInputApp interface {
@@ -200,10 +185,6 @@ type AcceptedInputApp interface {
 	InputReceiver
 	AcceptedInputs() []string
 	DecodeAcceptedInput(json.RawMessage) (any, error)
-}
-
-type AcceptedFactApp interface {
-	HasAcceptedFact(tenant, id string) bool
 }
 
 type AuthorizationEngineRuntime interface{ AuthorizationEngine() AuthorizationEngine }
@@ -405,6 +386,7 @@ type App interface {
 	Manifest() Manifest
 	Declarations() []*pb.AuthorityDeclaration
 	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
+	Fork(ledger *Ledger) (App, error)
 }
 
 type Reader interface {

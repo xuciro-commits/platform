@@ -46,7 +46,7 @@ func (b *Build) retainedCodeObject(asset platform.ReleaseAsset) (bool, error) {
 }
 
 func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.App, error) {
-	app, err := b.ForkDecision()
+	app, err := b.Fork(b.ledger)
 	if err != nil {
 		return nil, err
 	}

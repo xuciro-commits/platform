@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	runtimekernel "platformserver/kernel"
@@ -84,12 +83,6 @@ func (t *Tenant) installRuntimeHistory(store runtimekernel.AcceptedStateReader, 
 	}
 	for _, a := range t.apps {
 		a.AcceptedLedger().UseChangeArchive(runtimekernel.NewChangeArchive(ctx, store, t.ID, a.Manifest().ID))
-		if owner, ok := a.(platform.AcceptedHistoryApp); ok {
-			id := a.Manifest().ID
-			owner.UseAcceptedHistory(func() (json.RawMessage, error) {
-				return store.StateValue(ctx, t.ID, "app-state", id, -1)
-			})
-		}
 	}
 	t.Committed.UseStorage(ctx, store, t.ID, position)
 }

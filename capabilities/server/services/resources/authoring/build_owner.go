@@ -197,14 +197,6 @@ func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Er
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 
-func (b *Build) ForkRead(ledger *platform.Ledger) (platform.App, error) {
-	fork, err := b.ForkDecision()
-	if err != nil {
-		return nil, err
-	}
-	fork.(*Build).ledger = ledger
-	return fork, nil
-}
 func (b *Build) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (b *Build) Snapshot() (json.RawMessage, error) { return b.ledger.Snapshot() }
@@ -465,12 +457,13 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-func (b *Build) ForkDecision() (platform.App, error) {
+func (b *Build) Fork(ledger *platform.Ledger) (platform.App, error) {
 	catalog := b.installationCatalog
 	if catalog != nil {
 		catalog = platform.NewCatalog(catalog.All()...)
 	}
 	fork := *b
+	fork.ledger = ledger
 	fork.installationCatalog = catalog
 	fork.installed = maps.Clone(b.installed)
 	fork.jointEntities = maps.Clone(b.jointEntities)
@@ -491,8 +484,6 @@ func (b *Build) ForkDecision() (platform.App, error) {
 	fork.automation = b.automation.Fork(automationEnvironment{&fork})
 	return &fork, nil
 }
-
-var _ platform.DecisionForkApp = (*Build)(nil)
 
 func (b *Build) NewSimulationApp(tenant string) platform.App { return New(tenant) }
 func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action, error) {

@@ -110,19 +110,10 @@ func (r *Relations) Manifest() platform.Manifest {
 func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }
 func (r *Relations) AcceptedLedger() *platform.Ledger         { return r.ledger }
 
-func (r *Relations) ForkRead(ledger *platform.Ledger) (platform.App, error) {
-	fork, err := r.ForkAcceptedState()
-	if err != nil {
-		return nil, err
-	}
-	fork.(*Relations).ledger = ledger
-	return fork, nil
-}
-
-func (r *Relations) ForkAcceptedState() (platform.App, error) {
+func (r *Relations) Fork(ledger *platform.Ledger) (platform.App, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return &Relations{host: r.host, links: slices.Clone(r.links), ledger: r.ledger}, nil
+	return &Relations{host: r.host, links: slices.Clone(r.links), ledger: ledger}, nil
 }
 func (r *Relations) AcceptedState() (json.RawMessage, error) {
 	r.mu.Lock()

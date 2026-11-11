@@ -33,7 +33,7 @@ func newListenerProbe(tenant string) *listenerProbe {
 }
 
 func (p *listenerProbe) AcceptedLedger() *platform.Ledger { return p.ledger }
-func (p *listenerProbe) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+func (p *listenerProbe) Fork(ledger *platform.Ledger) (platform.App, error) {
 	return &listenerProbe{ledger: ledger}, nil
 }
 func (p *listenerProbe) Declarations() []*pb.AuthorityDeclaration { return p.ledger.Declarations() }

@@ -100,15 +100,7 @@ func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchive
 		if _, ok := app.(platform.AssetLifecycleOwner); !ok {
 			continue
 		}
-		var fork platform.App
-		var err error
-		if owner, ok := app.(platform.DecisionForkApp); ok {
-			fork, err = owner.ForkDecision()
-		} else if owner, ok := app.(platform.AcceptedStateApp); ok {
-			fork, err = owner.ForkAcceptedState()
-		} else {
-			return nil, fmt.Errorf("asset owner %s has no private installation fork", app.Manifest().ID)
-		}
+		fork, err := app.Fork(app.AcceptedLedger())
 		if err != nil || fork == nil {
 			return nil, fmt.Errorf("asset owner %s cannot fork: %v", app.Manifest().ID, err)
 		}

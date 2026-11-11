@@ -137,15 +137,6 @@ func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Decl
 
 func (f *Flows) AcceptedLedger() *platform.Ledger { return f.ledger }
 
-func (f *Flows) ForkRead(ledger *platform.Ledger) (platform.App, error) {
-	fork, err := f.ForkDecision()
-	if err != nil {
-		return nil, err
-	}
-	fork.(*Flows).ledger = ledger
-	return fork, nil
-}
-
 func (f *Flows) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (f *Flows) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }
@@ -283,17 +274,15 @@ func (f *Flows) HasDefinition(app, name string, version int) bool {
 	return f.def(app+"."+name, version) != nil
 }
 
-func (f *Flows) ForkDecision() (platform.App, error) {
+func (f *Flows) Fork(ledger *platform.Ledger) (platform.App, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	defs := maps.Clone(f.defs)
 	for id, versions := range defs {
 		defs[id] = slices.Clone(versions)
 	}
-	return &Flows{host: f.host, ledger: f.ledger, defs: defs,
+	return &Flows{host: f.host, ledger: ledger, defs: defs,
 		chosen: maps.Clone(f.chosen), pins: maps.Clone(f.pins)}, nil
 }
-
-var _ platform.DecisionForkApp = (*Flows)(nil)
 
 func (a *Flows) NewSimulationApp(tenant string) platform.App { return New(tenant) }

@@ -17,19 +17,10 @@ import (
 
 func (a *AI) AcceptedLedger() *platform.Ledger { return a.ledger }
 
-func (a *AI) ForkRead(ledger *platform.Ledger) (platform.App, error) {
-	fork, err := a.ForkAcceptedState()
-	if err != nil {
-		return nil, err
-	}
-	fork.(*AI).ledger = ledger
-	return fork, nil
-}
-
-func (a *AI) ForkAcceptedState() (platform.App, error) {
+func (a *AI) Fork(ledger *platform.Ledger) (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	fork := &AI{ledger: a.ledger, trainingHost: a.trainingHost, trainingPolicies: maps.Clone(a.trainingPolicies), trainingCandidates: maps.Clone(a.trainingCandidates),
+	fork := &AI{ledger: ledger, trainingHost: a.trainingHost, trainingPolicies: maps.Clone(a.trainingPolicies), trainingCandidates: maps.Clone(a.trainingCandidates),
 		providers: slices.Clone(a.providers), models: slices.Clone(a.models),
 		limits: maps.Clone(a.limits), usage: slices.Clone(a.usage), daily: maps.Clone(a.daily),
 		recent: cloneCalls(a.recent), reservations: maps.Clone(a.reservations)}

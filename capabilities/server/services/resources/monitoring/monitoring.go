@@ -56,7 +56,7 @@ func (m *Monitoring) Manifest() platform.Manifest {
 
 func (m *Monitoring) AcceptedLedger() *platform.Ledger { return m.ledger }
 
-func (m *Monitoring) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+func (m *Monitoring) Fork(ledger *platform.Ledger) (platform.App, error) {
 	return &Monitoring{ledger: ledger}, nil
 }
 func (m *Monitoring) Declarations() []*pb.AuthorityDeclaration { return m.ledger.Declarations() }

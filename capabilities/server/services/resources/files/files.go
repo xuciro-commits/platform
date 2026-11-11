@@ -66,14 +66,6 @@ func (f *Files) Manifest() platform.Manifest {
 func (f *Files) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
 func (f *Files) AcceptedLedger() *platform.Ledger         { return f.ledger }
 
-func (f *Files) ForkRead(ledger *platform.Ledger) (platform.App, error) {
-	fork, err := f.ForkDecision()
-	if err != nil {
-		return nil, err
-	}
-	fork.(*Files).ledger = ledger
-	return fork, nil
-}
 func (f *Files) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (f *Files) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }
@@ -137,8 +129,6 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	})
 }
 
-func (f *Files) ForkDecision() (platform.App, error) {
-	return &Files{host: f.host, ledger: f.ledger}, nil
+func (f *Files) Fork(ledger *platform.Ledger) (platform.App, error) {
+	return &Files{host: f.host, ledger: ledger}, nil
 }
-
-var _ platform.DecisionForkApp = (*Files)(nil)

@@ -108,15 +108,6 @@ func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Dec
 
 func (a *Agents) AcceptedLedger() *platform.Ledger { return a.ledger }
 
-func (a *Agents) ForkRead(ledger *platform.Ledger) (platform.App, error) {
-	fork, err := a.ForkDecision()
-	if err != nil {
-		return nil, err
-	}
-	fork.(*Agents).ledger = ledger
-	return fork, nil
-}
-
 func (a *Agents) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (a *Agents) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
@@ -276,14 +267,12 @@ func (a *Agents) changedDefinition(run platform.AgentRunRecord, d *platform.Comp
 	return dynamic && run.DefinitionVersion != "" && run.DefinitionVersion != a.definitionVersion(d)
 }
 
-func (a *Agents) ForkDecision() (platform.App, error) {
+func (a *Agents) Fork(ledger *platform.Ledger) (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return &Agents{tenant: a.tenant, host: a.host, ledger: a.ledger, defs: maps.Clone(a.defs),
+	return &Agents{tenant: a.tenant, host: a.host, ledger: ledger, defs: maps.Clone(a.defs),
 		buildStamp: a.buildStamp, busy: map[string]bool{}}, nil
 }
-
-var _ platform.DecisionForkApp = (*Agents)(nil)
 
 func (a *Agents) AllowsAgentRun(run platform.AgentRunRecord) bool {
 	d := a.def(run.Agent)

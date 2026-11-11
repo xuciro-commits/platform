@@ -226,7 +226,7 @@ func (a *manifestInterfaceApp) Manifest() platform.Manifest {
 		Fields: []platform.InterfaceField{{Name: "code", Type: "text", Title: "Code"}, {Name: "name", Type: "text", Title: "Name"}}}}}
 }
 func (a *manifestInterfaceApp) AcceptedLedger() *platform.Ledger { return a.ledger }
-func (a *manifestInterfaceApp) ForkRead(ledger *platform.Ledger) (platform.App, error) {
+func (a *manifestInterfaceApp) Fork(ledger *platform.Ledger) (platform.App, error) {
 	return &manifestInterfaceApp{ledger: ledger}, nil
 }
 func (a *manifestInterfaceApp) Declarations() []*pb.AuthorityDeclaration {

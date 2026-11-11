@@ -286,13 +286,9 @@ func (d *stagedDecision) stateApp(app platform.App) platform.App {
 	owner, ownsState := app.(platform.AcceptedStateApp)
 	if ownsState {
 		before, err = owner.AcceptedState()
-		if err == nil {
-			fork, err = owner.ForkAcceptedState()
-		}
-	} else if execution, ok := app.(platform.DecisionForkApp); ok {
-		fork, err = execution.ForkDecision()
-	} else {
-		return app
+	}
+	if err == nil {
+		fork, err = app.Fork(app.AcceptedLedger())
 	}
 	if err != nil || fork == nil || fork.Manifest().ID != id || fork.AcceptedLedger() != app.AcceptedLedger() {
 		unsupportedStagedEffect()

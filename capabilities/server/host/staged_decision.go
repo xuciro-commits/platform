@@ -186,21 +186,8 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 func (d *stagedDecision) DraftChanges(l *platform.Ledger, fork func() platform.ChangeLog) platform.ChangeLog {
 	if d.logs[l] == nil {
 		d.logs[l] = fork()
-		d.bindPrivateFacts(l)
 	}
 	return d.logs[l]
-}
-
-func (d *stagedDecision) bindPrivateFacts(l *platform.Ledger) {
-	for _, owner := range d.states {
-		ledger, ok := owner.(platform.App)
-		if !ok || ledger.AcceptedLedger() != l {
-			continue
-		}
-		if facts, ok := owner.(platform.AcceptedFactApp); ok {
-			d.logs[l].SetFacts(facts.HasAcceptedFact)
-		}
-	}
 }
 
 func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {

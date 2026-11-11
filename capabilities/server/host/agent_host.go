@@ -313,6 +313,14 @@ type agentEvaluationApp struct {
 	agent string
 }
 
+func (a agentEvaluationApp) Fork(ledger *platform.Ledger) (platform.App, error) {
+	fork, err := a.App.Fork(ledger)
+	if err != nil {
+		return nil, err
+	}
+	return agentEvaluationApp{App: fork, agent: a.agent}, nil
+}
+
 func (a agentEvaluationApp) Manifest() platform.Manifest {
 	m := a.App.Manifest()
 	m.Agents = slices.DeleteFunc(slices.Clone(m.Agents), func(d platform.Agent) bool { return d.Name != a.agent })

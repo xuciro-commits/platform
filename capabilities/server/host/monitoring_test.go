@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ import (
 
 type monitoringFixture struct {
 	ledger      *platform.Ledger
-	undoBlocked bool
+	undoBlocked *atomic.Bool
 }
 
 type monitoringEvent struct {
@@ -39,6 +40,9 @@ type monitoringEvent struct {
 }
 
 func (a *monitoringFixture) AcceptedLedger() *platform.Ledger { return a.ledger }
+func (a *monitoringFixture) Fork(ledger *platform.Ledger) (platform.App, error) {
+	return &monitoringFixture{ledger: ledger, undoBlocked: a.undoBlocked}, nil
+}
 func (a *monitoringFixture) Declarations() []*pb.AuthorityDeclaration {
 	return a.ledger.Declarations()
 }
@@ -49,7 +53,7 @@ func (a *monitoringFixture) Snapshot() (json.RawMessage, error) {
 func (a *monitoringFixture) Restore(raw json.RawMessage) error { return a.ledger.Restore(raw) }
 func (a *monitoringFixture) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		if s.GetSchema().GetName() == "probe.undo" && a.undoBlocked {
+		if s.GetSchema().GetName() == "probe.undo" && a.undoBlocked.Load() {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The probe undo failed")
 		}
 		return func(r *pb.ChangeRecord) {
@@ -118,7 +122,8 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	for _, schema := range []string{"probe.start", "probe.step", "probe.undo"} {
 		actions = append(actions, platform.Action{Schema: schema, Target: "probe.event", Title: schema, Description: "Drive the monitoring owner boundary probe", Roles: []string{"runner"}, Payload: []platform.Field{{Name: "flow", Type: "text"}}})
 	}
-	probe := &monitoringFixture{ledger: platform.NewLedger(id, "probe", platform.NewCatalog(actions...), "probe.event"), undoBlocked: true}
+	probe := &monitoringFixture{ledger: platform.NewLedger(id, "probe", platform.NewCatalog(actions...), "probe.event"), undoBlocked: &atomic.Bool{}}
+	probe.undoBlocked.Store(true)
 	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id), work.New(id), automation.New(id), agents.New(id), probe)
 	if err != nil {
 		tb.Fatal(err)
@@ -201,6 +206,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	if jobOutcome == "ok" || live.quarantined() {
 		t.Fatalf("failed job outcome=%q quarantine=%v", jobOutcome, live.quarantined())
 	}
+	live.Lane.Lock()
 	live.opsMu.Lock()
 	live.outbound = append(live.outbound,
 		&effect{Effect: platform.Effect{ID: "ordinary-delivery", Endpoint: "webhook", Event: "probe/notice", Target: "build.alpha/A1", At: invariantClock, State: "failed", Body: "hidden payload", Error: "hidden failure"}},
@@ -208,6 +214,8 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		&effect{Effect: platform.Effect{ID: "unknown-delivery", Endpoint: "webhook", Event: "probe/unknown", At: invariantClock, State: "unknown"}},
 		&effect{Effect: platform.Effect{ID: "dispatch-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "dispatch", Event: build.ID + "/dispatch", At: invariantClock, State: "failed"}})
 	live.opsMu.Unlock()
+	live.operationsChanged()
+	live.Lane.Unlock()
 	host := NewHost(Tokens(map[string]string{"admin": "admin", "builder": "builder", "other": "other", "scoped": "scoped", "user": "user"}), live.Tenant)
 	host.Now = func() time.Time { return now }
 	handler := host.Handler()
@@ -473,7 +481,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		}
 		for _, member := range []string{"builder", "admin"} {
 			if member == "admin" {
-				live.app("probe").(*monitoringFixture).undoBlocked = false
+				live.app("probe").(*monitoringFixture).undoBlocked.Store(false)
 			}
 			s := &pb.Submission{TenantId: live.ID, PrincipalId: member, Authority: platform.FlowApp, IdempotencyKey: "monitoring-flow-retry:" + member,
 				Target: &pb.EntityRef{Type: run.RetryTarget.Type, Id: run.RetryTarget.ID}, Schema: &pb.SchemaRef{Name: run.RetrySchema, Version: run.RetrySchemaVersion.Family}, Payload: platform.Raw(map[string]any{})}

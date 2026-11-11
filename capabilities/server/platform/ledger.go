@@ -34,7 +34,6 @@ type Authorities interface {
 type ChangeLog interface {
 	ForkLog() ChangeLog
 	ForkLogWithSchemas(SchemaRegistry) ChangeLog
-	SetFacts(func(string, string) bool)
 	Records(string) []*pb.ChangeRecord
 	Last(string) *pb.ChangeRecord
 	Accepted(string, string) *pb.ChangeRecord
@@ -93,7 +92,6 @@ func (n nativeChanges) ForkLog() ChangeLog { return nativeChanges{n.Fork()} }
 func (n nativeChanges) ForkLogWithSchemas(s SchemaRegistry) ChangeLog {
 	return nativeChanges{n.ForkWithSchemas(s)}
 }
-func (n nativeChanges) SetFacts(f func(string, string) bool) { n.Facts = f }
 func (NativeKernel) Schemas(refs []*pb.SchemaRef) SchemaRegistry {
 	return kernel.NewSchemaRegistry(refs)
 }
@@ -262,12 +260,6 @@ func (l *Ledger) LastAccepted(tenant string) *pb.ChangeRecord {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.changes.Last(tenant)
-}
-
-func (l *Ledger) SetFacts(facts func(tenant, factID string) bool) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.changes.SetFacts(facts)
 }
 
 func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {

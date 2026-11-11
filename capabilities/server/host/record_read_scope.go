@@ -119,11 +119,6 @@ func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Ten
 
 func readFromLane[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
 	return lockedRecordRead(t, ctx, func(t *Tenant) (value T, refusal *kernel.Error) {
-		for _, owner := range t.apps {
-			if _, ok := owner.(platform.ReadForkApp); !ok {
-				return read(t)
-			}
-		}
 		view, err := t.forkReadState(ctx)
 		if err != nil {
 			return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read scope could not be prepared: {reason}", err.Error())
