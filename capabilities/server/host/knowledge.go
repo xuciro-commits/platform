@@ -2,15 +2,12 @@ package host
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
 	controlowner "platformserver/services/security/control"
 
 	"encoding/json"
 	"fmt"
 	"io"
 
-	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/kernel/records"
@@ -133,84 +130,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	if _, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageRuntime); refusal != nil {
 		return nil, refusal
 	}
-	if pv.Wire == "anthropic" {
-		return nil, fmt.Errorf("the provider %s does not embed", pv.ID)
-	}
-	if !t.breakers.Allow("ai:"+pv.ID, now, false) {
-		return nil, fmt.Errorf("the provider %s failed repeatedly; embedding waits", pv.ID)
-	}
-	inputTokens := 0
-	for _, text := range input {
-		inputTokens += len(text) + 32
-	}
-	call := "embedding:" + rand.Text()
-	identity, _ := json.Marshal(input)
-	digest := fmt.Sprintf("%x", sha256.Sum256(identity))
-	if why := t.reserveCall(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, model, platform.ChatRequest{Call: call, RequestHash: digest}, inputTokens, 0, now); why != nil {
-		return nil, why
-	}
-	if !t.breakers.Allow("ai:"+pv.ID, now, true) {
-		if refusal := t.releaseCall(call, now); refusal != nil {
-			return nil, refusal
-		}
-		return nil, fmt.Errorf("the provider %s failed repeatedly; embedding waits", pv.ID)
-	}
-	started := time.Now()
-	dispatched := false
-	status, answer, failure := t.modelProvider(pv, func() { dispatched = true }).Embeddings(pv, model.Model, input)
-	t.breakers.Report("ai:"+pv.ID, failure == nil && status < 500 && status != http.StatusTooManyRequests, now)
-	if !dispatched {
-		if why := t.releaseCall(call, now); why != nil {
-			return nil, why
-		}
-		if failure != nil {
-			return nil, failure
-		}
-		return nil, fmt.Errorf("The embedding call was not dispatched")
-	}
-	var out struct {
-		Data []struct {
-			Embedding []float32 `json:"embedding"`
-			Index     int       `json:"index"`
-		} `json:"data"`
-		Usage struct {
-			Prompt *int `json:"prompt_tokens"`
-		} `json:"usage"`
-	}
-	u := platform.AIUsage{Call: call, At: now, Member: "app:" + platform.KnowledgeApp, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
-	switch {
-	case failure != nil:
-		u.Outcome = failure.Detail
-	case status/100 != 2 || json.Unmarshal(answer, &out) != nil || len(out.Data) != len(input):
-		u.Outcome = fmt.Sprintf("HTTP %d: no embeddings", status)
-	}
-	if out.Usage.Prompt != nil {
-		u.Input, u.TokensReported = *out.Usage.Prompt, true
-	} else {
-		for _, text := range input {
-			u.Input += platform.EstimateModelTokens(text)
-		}
-		u.TokensEstimated = u.Input > 0
-	}
-	if err := t.meter(platform.Member{ID: u.Member, Tenant: t.ID}, u); err != nil {
-		return nil, fmt.Errorf("the embedding usage was not accepted: %v", err)
-	}
-	if u.Outcome != "ok" {
-		return nil, fmt.Errorf("%s", u.Outcome)
-	}
-	if u.TokensReported && u.Input > inputTokens {
-		return nil, fmt.Errorf("The provider reported usage above the reserved token bound")
-	}
-	vs := make([][]float32, len(input))
-	for _, d := range out.Data {
-		if d.Index >= 0 && d.Index < len(vs) {
-			vs[d.Index] = d.Embedding
-		}
-	}
-	if err := knowledgeindex.ConsistentVectors(vs, 0); err != nil {
-		return nil, err
-	}
-	return vs, nil
+	return t.gateway(nil).Embed(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, name, model, pv, input, now)
 }
 
 func (t *Tenant) fileSources() []knowledgeindex.Source {

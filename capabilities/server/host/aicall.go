@@ -176,13 +176,12 @@ func (t *Tenant) chatForStage(m platform.Member, req platform.ChatRequest, now t
 	return answer, nil, failure
 }
 
-func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform.Member, req platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
+func (t *Tenant) gateway(mostTokens func() int) aigateway.Calls {
 	policy := platform.AIInferencePolicy{}
 	if t.services.AIInference != nil {
 		policy = *t.services.AIInference
 	}
-	ceiling, _ := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) { return t.modelResolver().MostTokens(), nil })
-	gateway := aigateway.Calls{Inference: policy, MostTokens: func() int { return ceiling }, Reserve: t.reserveCall, Release: t.releaseCall,
+	return aigateway.Calls{Inference: policy, MostTokens: mostTokens, Reserve: t.reserveCall, Release: t.releaseCall, Meter: t.meter,
 		Available: func(provider string, at time.Time, claim bool) bool {
 			return t.breakers.Allow("ai:"+provider, at, claim)
 		},
@@ -194,6 +193,11 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 			t.transcribe(Transcript{At: at, Member: member, Model: model, Run: run, Request: request, Answer: answer, Outcome: outcome})
 		},
 	}
+}
+
+func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform.Member, req platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
+	ceiling, _ := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) { return t.modelResolver().MostTokens(), nil })
+	gateway := t.gateway(func() int { return ceiling })
 	span := outside(trace.SpanContext{}, "chat "+model.Model, attribute.String("gen_ai.operation.name", "chat"), attribute.String("gen_ai.provider.name", pv.ID), attribute.String("gen_ai.request.model", model.Model), attribute.String("platform.tenant", t.ID))
 	answer, failure := gateway.Call(pv, model, m, req, now)
 	span.SetAttributes(attribute.Int("gen_ai.usage.input_tokens", answer.Usage.Input), attribute.Int("gen_ai.usage.output_tokens", answer.Usage.Output))

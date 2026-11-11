@@ -21,6 +21,7 @@ type Calls struct {
 	Report     func(string, bool, time.Time)
 	Provider   func(platform.AIProvider, func()) providers.Client
 	Transcribe func(time.Time, string, string, string, []byte, []byte, string)
+	Meter      func(platform.Member, platform.AIUsage) *kernel.Error
 }
 
 func Unavailable(e *platform.AIError) bool {
