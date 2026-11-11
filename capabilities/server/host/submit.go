@@ -86,8 +86,8 @@ func (t *Tenant) submitHeld(m platform.Member, s *pb.Submission, now time.Time, 
 	}
 	if retired {
 		key := a.Manifest().ID + "/" + s.GetIdempotencyKey()
-		_, refused := t.committed.Refusal(key)
-		if !refused && len(t.committed.Answer(key)) == 0 && a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()) == nil {
+		_, refused := t.Committed.Refusal(key)
+		if !refused && len(t.Committed.Answer(key)) == 0 && a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()) == nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 		}
 	}
@@ -99,7 +99,7 @@ func (t *Tenant) submitHeld(m platform.Member, s *pb.Submission, now time.Time, 
 			}
 			return prior, nil
 		}
-		if prior, ok := t.committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
+		if prior, ok := t.Committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
 			answer := prior.Error
 			return nil, &answer
 		}
@@ -124,7 +124,7 @@ func (t *Tenant) submitHeld(m platform.Member, s *pb.Submission, now time.Time, 
 			return nil, err
 		}
 	}
-	if prior, ok := t.committed.Refusal(s.GetAuthority() + "/" + s.GetIdempotencyKey()); ok {
+	if prior, ok := t.Committed.Refusal(s.GetAuthority() + "/" + s.GetIdempotencyKey()); ok {
 		hash, _ := acceptedformat.SubmissionHash(s, binding)
 		if hash != prior.RequestHash || s.GetPrincipalId() != m.ID {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
@@ -142,7 +142,7 @@ func (t *Tenant) submitHeld(m platform.Member, s *pb.Submission, now time.Time, 
 	if report != nil && err != nil {
 		if t.preparedResult != nil && len(t.preparedResult.entry.Body) > 0 {
 			report(err, t.preparedResult.issues)
-		} else if prior, ok := t.committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
+		} else if prior, ok := t.Committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
 			hash, _ := acceptedformat.SubmissionHash(s, binding)
 			if prior.RequestHash == hash {
 				report(err, prior.Issues)
@@ -174,7 +174,7 @@ func (t *Tenant) submitAcceptedWith(a platform.App, m platform.Member, s *pb.Sub
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")
 	}
 	ledger := a.AcceptedLedger()
-	if saved := t.committed.Answer(a.Manifest().ID + "/" + s.GetIdempotencyKey()); len(saved) > 0 {
+	if saved := t.Committed.Answer(a.Manifest().ID + "/" + s.GetIdempotencyKey()); len(saved) > 0 {
 		result, receipt, err := acceptedformat.DecodeBatch(saved)
 		hash, hashErr := acceptedformat.SubmissionHash(s, binding)
 		if err != nil || hashErr != nil || result.RequestHash != hash {
@@ -186,7 +186,7 @@ func (t *Tenant) submitAcceptedWith(a platform.App, m platform.Member, s *pb.Sub
 		if !proto.Equal(prior.GetSubmission(), s) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
-		saved, bound := t.committed.SchemaVersion(a.Manifest().ID + "/" + s.GetIdempotencyKey())
+		saved, bound := t.Committed.SchemaVersion(a.Manifest().ID + "/" + s.GetIdempotencyKey())
 		if bound != (binding != nil) || binding != nil && saved != *binding {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -196,7 +196,7 @@ func (t *Tenant) submitAcceptedWith(a platform.App, m platform.Member, s *pb.Sub
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission cannot be encoded")
 	}
-	if prior, ok := t.committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
+	if prior, ok := t.Committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
 		if prior.RequestHash != hash {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -314,7 +314,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 			t.quarantine(fmt.Errorf("committed refusal differs from the accepted request: %v", err))
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		t.committed.SaveRefusal(saved.App+"/"+sub.GetIdempotencyKey(), saved)
+		t.Committed.SaveRefusal(saved.App+"/"+sub.GetIdempotencyKey(), saved)
 		t.acceptedResultApplied()
 		t.changedOwner(saved.App)
 		answer := saved.Error

@@ -80,13 +80,13 @@ func TestInvariantOwnedRelationsReadWithoutNestedRecordLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := live.records.Install(info); err != nil {
+	if err := live.Projection.Install(info); err != nil {
 		t.Fatal(err)
 	}
 	caller := platform.NewCaller(runtime{t: live.Tenant}, live.member(t), build.ID, false, false)
 	done := make(chan []platform.RelationLink, 1)
 	go func() {
-		done <- live.ownedRelations(live.records, caller, "", invariantClock)
+		done <- live.ownedRelations(live.Projection, caller, "", invariantClock)
 	}()
 	select {
 	case links := <-done:
@@ -108,9 +108,9 @@ func TestInvariantPageModelUsesObjectSetWindow(t *testing.T) {
 	}
 	live.accept(t, "build.object.create", build.ObjectType, "BULK", object)
 	live.accept(t, "build.object.publish", build.ObjectType, "BULK", map[string]any{})
-	live.records.Lock()
-	entity := live.records.Type("build.bulk")
-	live.records.Unlock()
+	live.Projection.Lock()
+	entity := live.Projection.Type("build.bulk")
+	live.Projection.Unlock()
 	if entity == nil {
 		t.Fatal("bulk object type is unavailable")
 	}
@@ -142,7 +142,7 @@ func TestInvariantPageModelUsesObjectSetWindow(t *testing.T) {
 		}
 		submission := live.submission("build.bulk.create", "build.bulk", id, map[string]any{})
 		receipt := &pb.ChangeRecord{ChangeId: "bulk-" + id, Submission: submission, RecordedTime: timestamppb.New(invariantClock), Revision: 1}
-		if refusal := live.records.Put(caller, receipt, value.Interface()); refusal != nil {
+		if refusal := live.Projection.Put(caller, receipt, value.Interface()); refusal != nil {
 			t.Fatalf("seed bulk record %s: %v", id, refusal)
 		}
 	}

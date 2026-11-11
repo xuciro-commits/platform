@@ -28,9 +28,9 @@ func (t *Tenant) baseModules() []platform.CapabilityModule {
 			}
 		}
 		for _, entity := range m.Entities {
-			if declared := t.records.Type(entity.Type); declared != nil {
+			if declared := t.Projection.Type(entity.Type); declared != nil {
 				for _, field := range declared.Info().Fields {
-					if referenced := t.records.Type(field.Ref); referenced != nil {
+					if referenced := t.Projection.Type(field.Ref); referenced != nil {
 						needs[referenced.Info().App] = true
 					}
 				}

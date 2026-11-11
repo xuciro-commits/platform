@@ -35,7 +35,7 @@ func (t *Tenant) queryWindowRead(m platform.Member, app, name, of, version strin
 	if declared == nil {
 		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	return t.runDeclaredQueryWindowFrom(t.records, m, *declared, of, window, now)
+	return t.runDeclaredQueryWindowFrom(t.Projection, m, *declared, of, window, now)
 }
 
 func (t *Tenant) runDeclaredQueryFrom(store *records.Store, m platform.Member, q platform.NamedQuery, of string, now time.Time) (RecordPage, *kernel.Error) {

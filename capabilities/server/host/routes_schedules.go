@@ -34,7 +34,7 @@ func (h *Host) routesSchedules(rt *routes) {
 }
 
 func (t *Tenant) pipelineSchedules(m platform.Member, now time.Time) ([]PipelineSchedule, *kernel.Error) {
-	page, refusal := t.recordSelectionFrom(t.records, m, platform.ScheduleType, platform.Query{Sort: []string{"id"}}, now)
+	page, refusal := t.recordSelectionFrom(t.Projection, m, platform.ScheduleType, platform.Query{Sort: []string{"id"}}, now)
 	if refusal != nil {
 		return nil, refusal
 	}

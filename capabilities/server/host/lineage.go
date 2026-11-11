@@ -108,7 +108,7 @@ func (t *Tenant) lineageLocked(m platform.Member, request LineageRequest) (Linea
 	var generation uint64
 	var builtAt time.Time
 	if request.Branch != "" {
-		mainGeneration := t.records.Generation()
+		mainGeneration := t.Projection.Generation()
 		branch, branchRefusal := t.readBranchLocked(m, request.Branch, now)
 		if branchRefusal != nil {
 			return Lineage{}, branchRefusal
@@ -133,7 +133,7 @@ func (t *Tenant) lineageLocked(m platform.Member, request LineageRequest) (Linea
 			t.lineageWorlds[cacheKey] = world
 			t.lineageMu.Unlock()
 		}
-		branchStore := world.view.records
+		branchStore := world.view.Projection
 		generation = mainGeneration
 		t.lineageMu.Lock()
 		cachedGraph := t.lineageBranches[cacheKey]
@@ -172,18 +172,18 @@ func (t *Tenant) lineageLocked(m platform.Member, request LineageRequest) (Linea
 			return Lineage{}, refusal
 		}
 	} else {
-		t.records.Lock()
-		focus, refusal = t.lineageFocusLocked(t.records, request)
-		t.records.Unlock()
+		t.Projection.Lock()
+		focus, refusal = t.lineageFocusLocked(t.Projection, request)
+		t.Projection.Unlock()
 		if refusal != nil {
 			return Lineage{}, refusal
 		}
 		snapshot := t.lineageMainSnapshot()
 		raw, base, preview, guard = snapshot.raw, snapshot.base, snapshot.preview.Clone(), snapshot.guard.Clone()
 		generation, builtAt = snapshot.generation, snapshot.builtAt
-		t.records.Lock()
-		meta, visible = t.lineageAccessLocked(t.records, m, base)
-		t.records.Unlock()
+		t.Projection.Lock()
+		meta, visible = t.lineageAccessLocked(t.Projection, m, base)
+		t.Projection.Unlock()
 	}
 	if request.Mode == "" {
 		if focus != "" || request.Ref != "" {
@@ -287,18 +287,18 @@ func (t *Tenant) lineageLocked(m platform.Member, request LineageRequest) (Linea
 }
 
 func (t *Tenant) lineageMainSnapshot() lineageSnapshot {
-	generation := t.records.Generation()
+	generation := t.Projection.Generation()
 	t.lineageMu.Lock()
 	cached := t.lineageCache
 	t.lineageMu.Unlock()
 	if cached != nil && cached.generation == generation {
 		return *cached
 	}
-	t.records.Lock()
-	raw := t.lineageRecordsLocked(t.records)
-	base := t.lineageBaseMetaLocked(t.records, raw)
-	generation = t.records.Generation()
-	t.records.Unlock()
+	t.Projection.Lock()
+	raw := t.lineageRecordsLocked(t.Projection)
+	base := t.lineageBaseMetaLocked(t.Projection, raw)
+	generation = t.Projection.Generation()
+	t.Projection.Unlock()
 	raw.Meta = base
 	snapshot := lineageSnapshot{
 		generation: generation,

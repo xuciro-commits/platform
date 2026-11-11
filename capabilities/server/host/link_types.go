@@ -22,9 +22,9 @@ func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
 		return err
 	}
 	if l.Storage == "edge" {
-		h.t.records.Lock()
-		defer h.t.records.Unlock()
-		violations, err := ownedRelationViolations(h.t.records, l)
+		h.t.Projection.Lock()
+		defer h.t.Projection.Unlock()
+		violations, err := ownedRelationViolations(h.t.Projection, l)
 		if err != nil {
 			return err
 		}
@@ -33,15 +33,15 @@ func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
 		}
 		return nil
 	}
-	h.t.records.Lock()
-	defer h.t.records.Unlock()
+	h.t.Projection.Lock()
+	defer h.t.Projection.Unlock()
 	if l.Cardinality == "one-to-one" {
-		if err := h.t.records.ValidateUniqueLinkLocked(l); err != nil {
+		if err := h.t.Projection.ValidateUniqueLinkLocked(l); err != nil {
 			return err
 		}
 	}
 	if l.DeletePolicy == "restrict-active" {
-		return h.t.records.ValidateArchiveLinkLocked(l)
+		return h.t.Projection.ValidateArchiveLinkLocked(l)
 	}
 	return nil
 }
@@ -73,7 +73,7 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 			return fmt.Errorf("link version bytes cannot change")
 		}
 	}
-	if err := h.t.records.InstallLinkConstraint(l); err != nil {
+	if err := h.t.Projection.InstallLinkConstraint(l); err != nil {
 		return err
 	}
 	def.LinkVersions[def.Version] = l

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	runtimekernel "platformserver/kernel"
 
 	"time"
 
@@ -75,12 +76,12 @@ func init() {
 
 func (t *Tenant) observeLane() {
 	tenant := t.ID
-	t.mu.Observe(func(holder string, waited, held time.Duration) {
+	t.Lane.Observe(func(holder string, waited, held time.Duration) {
 		attrs := metric.WithAttributes(attribute.String("platform.tenant", tenant), attribute.String("platform.lane.holder", holder))
 		meters.laneWait.Record(context.Background(), waited.Seconds(), attrs)
 		meters.laneHold.Record(context.Background(), held.Seconds(), attrs)
 		if held > laneHoldBudget {
-			t.laneLastSlow.Store(&LaneHold{Holder: holder, Seconds: held.Seconds(), At: time.Now().UTC()})
+			t.LastSlowHold.Store(&runtimekernel.LaneHold{Holder: holder, Seconds: held.Seconds(), At: time.Now().UTC()})
 			log.Printf("tenant %s lane held %v by %s (budget %v)", tenant, held.Round(time.Millisecond), holder, laneHoldBudget)
 		}
 	})

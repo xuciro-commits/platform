@@ -18,7 +18,7 @@ func (r runtime) ReadScoped() bool { return r.scoped || r.t != nil && r.t.readOr
 var _ platform.Runtime = runtime{}
 
 func (r runtime) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
-	return r.t.checkEnterpriseUsage(c, r.t.records, id, until, deleting, now)
+	return r.t.checkEnterpriseUsage(c, r.t.Projection, id, until, deleting, now)
 }
 func (r runtime) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
 	return r.t.checkTenantConnection(c, id, now)

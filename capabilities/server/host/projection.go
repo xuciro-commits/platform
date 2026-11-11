@@ -138,14 +138,14 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 	if err := p.refresh(ctx); err != nil {
 		return nil, err
 	}
-	t.records.Lock()
-	t.records.SetTouched(p.touch)
-	t.records.Unlock()
+	t.Projection.Lock()
+	t.Projection.SetTouched(p.touch)
+	t.Projection.Unlock()
 	return p, nil
 }
 
 func (p *Projection) refresh(ctx context.Context) error {
-	s := p.tenant.records
+	s := p.tenant.Projection
 	s.Lock()
 	infos := []platform.EntityInfo{}
 	for _, et := range s.Types() {
@@ -313,7 +313,7 @@ func (p *Projection) readRows(t *Tenant, typ string, ids map[string]bool) (rows 
 		}
 	}
 	p.mu.Unlock()
-	s := t.records
+	s := t.Projection
 	s.Lock()
 	defer s.Unlock()
 	et := s.Type(typ)
@@ -359,7 +359,7 @@ func (p *Projection) recordHistory(ends map[string]int) {
 }
 
 func (p *Projection) Flush(ctx context.Context) (err error) {
-	s := p.tenant.records
+	s := p.tenant.Projection
 	s.Lock()
 	changed := s.TypeCount() != len(p.shapes)
 	for typ, et := range s.Types() {
@@ -399,7 +399,7 @@ func (p *Projection) Flush(ctx context.Context) (err error) {
 	batch := &pgx.Batch{}
 	history := map[string]int{}
 	for typ, ids := range dirty {
-		s := p.tenant.records
+		s := p.tenant.Projection
 		s.Lock()
 		info := s.Type(typ).Info()
 		s.Unlock()

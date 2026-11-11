@@ -30,7 +30,7 @@ func (h hostView) ProtocolContract(id string) (platform.Protocol, bool) {
 }
 
 func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *kernel.Error) {
-	store := h.t.records
+	store := h.t.Projection
 	if h.decision != nil {
 		store = h.decision.records
 	}
@@ -52,12 +52,12 @@ func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platfo
 }
 
 func (h hostView) installationDraft() *Tenant {
-	return h.installationView(h.t.records.ForkRecords())
+	return h.installationView(h.t.Projection.ForkRecords())
 }
 
 func (h hostView) installationView(recordView *records.Store) *Tenant {
 	draft := &Tenant{services: h.t.services, disabledOwners: h.t.disabledOwners, ID: h.t.ID, apps: h.t.apps, appIndex: h.t.appIndex, owner: maps.Clone(h.t.owner),
-		identity: h.t.identity, directory: h.Directory(), records: recordView, definitions: slices.Clone(h.t.definitions), includeArchivedDefinitions: h.t.includeArchivedDefinitions, Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
+		identity: h.t.identity, directory: h.Directory(), Projection: recordView, definitions: slices.Clone(h.t.definitions), includeArchivedDefinitions: h.t.includeArchivedDefinitions, Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
 	return draft
 }
 
@@ -78,7 +78,7 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 		}
 	}
 	draft := h.installationDraft()
-	if current := draft.records.Type(e.Type); current != nil && current.Info().Go != reflect.TypeOf(e.Model) {
+	if current := draft.Projection.Type(e.Type); current != nil && current.Info().Go != reflect.TypeOf(e.Model) {
 		current.SetRows(records.Index[*records.Row]{})
 	}
 	if err := draft.Install(h.app, e, actions, pages...); err != nil {
@@ -88,7 +88,7 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 	if c.Replaying {
 		engine = platform.NativeRules{}
 	}
-	for _, et := range draft.records.SortedTypes() {
+	for _, et := range draft.Projection.SortedTypes() {
 		if err := draft.checkRecordSetDeclarations(et.Info(), engine); err != nil {
 			return err
 		}
@@ -411,7 +411,7 @@ func (h hostView) Stored(tenant, hash string) bool {
 
 func (h hostView) Record(ref string) (any, bool) {
 	if h.decision != nil {
-		return (&Tenant{records: h.decision.records}).held(ref)
+		return (&Tenant{Projection: h.decision.records}).held(ref)
 	}
 	return h.t.held(ref)
 }

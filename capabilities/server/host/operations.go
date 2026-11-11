@@ -142,7 +142,7 @@ func (t *Tenant) step(now time.Time) (more bool) {
 	result, refusal := decideOnImage(t, context.Background(), "work", func(scope *Tenant) (progress, *kernel.Error) {
 		more, took := scope.workLoop().Round(now, 1)
 		if scope.readOrigin == nil && took > 0 {
-			scope.workEpoch.Add(1)
+			scope.WorkEpoch.Add(1)
 		}
 		return progress{more: more, took: took, scope: scope}, nil
 	}, func(t *Tenant, candidate preparedAccepted, value progress, refusal *kernel.Error) (progress, *kernel.Error) {
@@ -167,7 +167,7 @@ func (t *Tenant) step(now time.Time) (more bool) {
 			}
 		}
 		t.opsMu.Unlock()
-		t.workEpoch.Add(1)
+		t.WorkEpoch.Add(1)
 		value.more = t.workLoop().Pending(now)
 		return value, refusal
 	})

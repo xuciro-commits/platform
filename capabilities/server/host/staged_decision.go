@@ -104,7 +104,7 @@ func (d *stagedDecision) FailDecision(err *kernel.Error) {
 }
 
 func (t *Tenant) newStagedDecision() *stagedDecision {
-	return t.newStagedDecisionOn(t.records.ForkRecords())
+	return t.newStagedDecisionOn(t.Projection.ForkRecords())
 }
 
 func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
@@ -373,7 +373,7 @@ func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id s
 
 func (d *stagedDecision) enterpriseUsageTenant() *Tenant {
 	original := d.routingTenant()
-	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, apps: slices.Clone(original.apps), appIndex: original.appIndex, records: d.records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
+	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, apps: slices.Clone(original.apps), appIndex: original.appIndex, Projection: d.records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
 	view.settings.Restore(original.settings.Snapshot())
 	for i, app := range view.apps {
 		view.apps[i] = d.stateApp(app)

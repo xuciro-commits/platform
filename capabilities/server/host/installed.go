@@ -33,7 +33,7 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 			return err
 		}
 	}
-	if err := t.records.Install(info); err != nil {
+	if err := t.Projection.Install(info); err != nil {
 		return err
 	}
 	for _, action := range actions {
@@ -353,9 +353,9 @@ func (t *Tenant) checkAction(page, schema, object string) error {
 }
 
 func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
-	t.records.Lock()
-	defer t.records.Unlock()
-	et := t.records.Type(typ)
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	et := t.Projection.Type(typ)
 	if et == nil {
 		return platform.EntityInfo{}, false
 	}

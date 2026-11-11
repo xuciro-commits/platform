@@ -88,9 +88,9 @@ func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, i
 			}
 			ownerRecord := ""
 			func() {
-				t.records.Lock()
-				defer t.records.Unlock()
-				if recordView := t.records.Type(asset.Ref.App + ".agent"); recordView != nil {
+				t.Projection.Lock()
+				defer t.Projection.Unlock()
+				if recordView := t.Projection.Type(asset.Ref.App + ".agent"); recordView != nil {
 					for id, row := range recordView.Rows().All() {
 						if records.BusinessField(recordView.Info(), row.Value, "name") == asset.Ref.Name && !records.Header(row.Value).Archived {
 							ownerRecord = recordView.Info().Type + "/" + id
@@ -110,9 +110,9 @@ func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, i
 	var images []image
 	var datasetDefinitions []platform.Definition
 	if err := func() error {
-		t.records.Lock()
-		defer t.records.Unlock()
-		for typ, et := range t.records.Types() {
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
+		for typ, et := range t.Projection.Types() {
 			published, hasPublished := et.Info().Go.FieldByName("Published")
 			version, hasVersion := et.Info().Go.FieldByName("DefinitionVersion")
 			if !hasPublished || !hasVersion || published.Type.Kind() != reflect.String || version.Type.Kind() != reflect.Int {

@@ -10,7 +10,7 @@ import (
 )
 
 func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
-	t.runtimePosition = func() int64 { return journal.Position(t.ID) }
+	t.RuntimePosition = func() int64 { return journal.Position(t.ID) }
 	t.Store = journal
 	t.audit.Backfill()
 	id := t.ID

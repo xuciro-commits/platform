@@ -24,7 +24,7 @@ func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, 
 	if key == "" {
 		return nil
 	}
-	prior, ok := t.committed.Refusal(sub.GetAuthority() + "/" + key)
+	prior, ok := t.Committed.Refusal(sub.GetAuthority() + "/" + key)
 	var original pb.Submission
 	if !ok || key == sub.GetIdempotencyKey() || protojson.Unmarshal(prior.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetAuthority() != sub.GetAuthority() || original.GetSchema().GetName() != sub.GetSchema().GetName() || original.GetTarget().GetType() != sub.GetTarget().GetType() || original.GetTarget().GetId() != sub.GetTarget().GetId() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A correction needs the same applicant, action and target as its original refused request")
@@ -61,9 +61,9 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 		readable := t.readable(m, target(sub), at)
 		exists := false
 		func() {
-			t.records.Lock()
-			defer t.records.Unlock()
-			if et := t.records.Type(typ); et != nil {
+			t.Projection.Lock()
+			defer t.Projection.Unlock()
+			if et := t.Projection.Type(typ); et != nil {
 				exists = et.Rows().Get(id) != nil
 			}
 		}()
@@ -75,7 +75,7 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 		if own && (!exists || readable) {
 			e.Inputs = slices.Clone(sub.GetPayload())
 			if e.CorrectionOf != "" {
-				if prior, ok := t.committed.Refusal(e.App + "/" + e.CorrectionOf); ok {
+				if prior, ok := t.Committed.Refusal(e.App + "/" + e.CorrectionOf); ok {
 					var old pb.Submission
 					if protojson.Unmarshal(prior.Submission, &old) == nil {
 						e.Changes = business.ChangedBusinessInputs(old.GetPayload(), sub.GetPayload())
@@ -92,7 +92,7 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 		}
 		out.Records = append(out.Records, e)
 	}
-	for _, r := range t.committed.AllRefusals() {
+	for _, r := range t.Committed.AllRefusals() {
 		var sub pb.Submission
 		if protojson.Unmarshal(r.Submission, &sub) != nil {
 			continue
@@ -105,7 +105,7 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 		}
 		add(&sub, e)
 	}
-	for _, raw := range t.committed.AllAnswers() {
+	for _, raw := range t.Committed.AllAnswers() {
 		var kind struct{ Kind string }
 		if json.Unmarshal(raw, &kind) != nil || kind.Kind != "record-batch" {
 			continue
@@ -171,10 +171,10 @@ func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefu
 	var readable bool
 	var et *records.Type
 	func() {
-		t.records.Lock()
-		defer t.records.Unlock()
-		et = t.records.Type(typ)
-		readable = et != nil && et.Rows().Get(id) != nil && t.readableIn(t.records, m, f.Subject, at)
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
+		et = t.Projection.Type(typ)
+		readable = et != nil && et.Rows().Get(id) != nil && t.readableIn(t.Projection, m, f.Subject, at)
 	}()
 	if !readable {
 		f.Original = nil

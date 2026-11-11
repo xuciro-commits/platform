@@ -59,12 +59,12 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 			return nil, nil, err
 		}
 		for typ, shape := range shapes {
-			if old := view.records.Type(typ); old != nil && old.Info().Go != shape.Go {
+			if old := view.Projection.Type(typ); old != nil && old.Info().Go != shape.Go {
 				old.SetRows(records.Index[*records.Row]{})
 			}
 		}
 	}
-	decision.tenant, decision.records = view, view.records
+	decision.tenant, decision.records = view, view.Projection
 	decision.records.Current().SelectRelease(candidate.ID)
 	for i, app := range view.apps {
 		if _, ok := app.(platform.AssetLifecycleOwner); !ok {
@@ -173,7 +173,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 				copy := *row
 				copy.Value = value
 				et.SetRow(id, &copy)
-				view.records.TrackWrite(et.Info().Type + "/" + id)
+				view.Projection.TrackWrite(et.Info().Type + "/" + id)
 				archived = false
 			}
 			if (context.ManagedBy != "" || !archived) && row.Value.FieldByIndex(nameField.Index).String() == logicalName {
@@ -276,9 +276,9 @@ type releaseInstallationRuntime struct{ t *Tenant }
 func (r releaseInstallationRuntime) HasAgentRuntime() bool { return r.t.agents != nil }
 
 func (r releaseInstallationRuntime) ReleaseProject(candidate platform.ReleaseCandidate) string {
-	r.t.records.Lock()
-	defer r.t.records.Unlock()
-	resources := r.t.records.Type(build.ResourceType)
+	r.t.Projection.Lock()
+	defer r.t.Projection.Unlock()
+	resources := r.t.Projection.Type(build.ResourceType)
 	if resources == nil {
 		return ""
 	}
@@ -361,7 +361,7 @@ func (t *Tenant) anchorReleaseRecords(draft *records.Store) error {
 	if draft == nil {
 		return fmt.Errorf("release has no prepared record view")
 	}
-	return draft.Anchor(t.records)
+	return draft.Anchor(t.Projection)
 }
 
 func (t *Tenant) registerOwnedAssetMetadata() error {

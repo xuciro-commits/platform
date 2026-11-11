@@ -88,7 +88,7 @@ func (rt *routes) recordRead(route transport.Route, f func(http.ResponseWriter, 
 	rt.handle(route, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if t.quarantined() && r.Method == http.MethodGet && r.URL.Path == "/v1/health" {
 			buffered := &laneBuffer{target: w}
-			func() { t.mu.Lock(); defer t.mu.Unlock(); f(buffered, r, m, t) }()
+			func() { t.Lane.Lock(); defer t.Lane.Unlock(); f(buffered, r, m, t) }()
 			buffered.release()
 			return
 		}

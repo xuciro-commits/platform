@@ -64,9 +64,9 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 	if len(out.History) > 20 {
 		out.History = out.History[:20]
 	}
-	t.records.Lock()
-	et := t.records.Type(typ)
-	t.records.Unlock()
+	t.Projection.Lock()
+	et := t.Projection.Type(typ)
+	t.Projection.Unlock()
 	v := reflect.ValueOf(view.Record)
 	for _, f := range et.Info().Fields {
 		if f.Ref == "" {

@@ -12,7 +12,7 @@ import (
 type RecordPage = objects.RecordPage
 
 func (t *Tenant) recordsRead(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	return t.objectOwner(t.records).Records(m, typ, q, now)
+	return t.objectOwner(t.Projection).Records(m, typ, q, now)
 }
 
 func (t *Tenant) recordsFrom(store *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {

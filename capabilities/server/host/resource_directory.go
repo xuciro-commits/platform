@@ -40,7 +40,7 @@ func (t *Tenant) resourceActionActive(name string) bool {
 	if target != "" && target != name {
 		names = append(names, target)
 	}
-	_, retired := findResource(t.records, []persistence.StateFilter{
+	_, retired := findResource(t.Projection, []persistence.StateFilter{
 		{Path: []string{"value", "state"}, Values: []string{"archived"}},
 		{Path: []string{"value", "ref", "name"}, Values: names},
 	}, func(resource build.Resource) bool {
@@ -180,9 +180,9 @@ func (t *Tenant) resourcePermission(store *records.Store, m platform.Member, typ
 
 func (t *Tenant) resourceDirectory(m platform.Member) ResourceDirectory {
 	out := ResourceDirectory{Resources: []ResourceEntry{}, Folders: []build.Folder{}}
-	t.records.Lock()
-	defer t.records.Unlock()
-	if resources := t.records.Type(build.ResourceType); resources != nil {
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	if resources := t.Projection.Type(build.ResourceType); resources != nil {
 		for _, row := range resources.Rows().All() {
 			resource := row.Value.Interface().(build.Resource)
 			role := t.resourceRole(m, resource.Project)
@@ -192,7 +192,7 @@ func (t *Tenant) resourceDirectory(m platform.Member) ResourceDirectory {
 			out.Resources = append(out.Resources, ResourceEntry{Resource: resource, CanOpen: role != platform.ProjectDiscovererRole, CanEdit: resource.ManagedBy == "" && (role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole)})
 		}
 	}
-	if folders := t.records.Type(build.FolderType); folders != nil {
+	if folders := t.Projection.Type(build.FolderType); folders != nil {
 		for _, row := range folders.Rows().All() {
 			folder := row.Value.Interface().(build.Folder)
 			if !folder.Archived && t.resourceRole(m, folder.Project) != "" {
@@ -228,19 +228,19 @@ func (t *Tenant) initializeResources(now time.Time) error {
 	if owner == nil {
 		return nil
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	if refusal := t.recordReadRefusal(); refusal != nil {
 		return refusal
 	}
 	directory := map[string]build.Resource{}
-	t.records.Lock()
-	for _, recordType := range t.records.Types() {
+	t.Projection.Lock()
+	for _, recordType := range t.Projection.Types() {
 		info := recordType.Info()
 		if !build.BranchDraftType(info.Type) {
 			continue
 		}
-		for id, row := range t.records.Type(info.Type).Rows().All() {
+		for id, row := range t.Projection.Type(info.Type).Rows().All() {
 			raw, _ := json.Marshal(row.Value.Interface())
 			var meta struct {
 				platform.Record
@@ -251,12 +251,12 @@ func (t *Tenant) initializeResources(now time.Time) error {
 				Variant   string `json:"variant"`
 			}
 			if err := json.Unmarshal(raw, &meta); err != nil {
-				t.records.Unlock()
+				t.Projection.Unlock()
 				return err
 			}
 			ref, err := build.BranchResource(info.Type, meta.Name)
 			if err != nil {
-				t.records.Unlock()
+				t.Projection.Unlock()
 				return err
 			}
 			if info.Type == build.TestPlanType && meta.Variant == "evaluation-set" {
@@ -278,20 +278,20 @@ func (t *Tenant) initializeResources(now time.Time) error {
 			directory[rid] = build.Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: info.Type, Draft: id, Title: meta.Title, Variant: variant, Project: project, State: state, Version: meta.Revision}
 		}
 	}
-	if existing := t.records.Type(build.ResourceType); existing != nil {
+	if existing := t.Projection.Type(build.ResourceType); existing != nil {
 		for id := range existing.Rows().All() {
 			delete(directory, id)
 		}
 	}
-	t.records.Unlock()
+	t.Projection.Unlock()
 	for _, definition := range t.definitions {
 		rid := platform.ResourceID(t.ID, definition.Ref)
 		if _, exists := directory[rid]; exists {
 			continue
 		}
-		t.records.Lock()
-		existing := t.records.Type(build.ResourceType).Rows().Get(rid) != nil
-		t.records.Unlock()
+		t.Projection.Lock()
+		existing := t.Projection.Type(build.ResourceType).Rows().Get(rid) != nil
+		t.Projection.Unlock()
 		if existing {
 			continue
 		}
@@ -325,8 +325,8 @@ type legacyResourceProject struct {
 func (t *Tenant) migrateLegacyResourceProjects(owner platform.App, now time.Time) error {
 	referenced := map[platform.AssetRef][]string{}
 	projects := map[string]bool{}
-	t.records.Lock()
-	if apps := t.records.Type(build.AppType); apps != nil {
+	t.Projection.Lock()
+	if apps := t.Projection.Type(build.AppType); apps != nil {
 		for _, row := range apps.Rows().All() {
 			app := row.Value.Interface().(build.Application)
 			if app.Archived {
@@ -343,7 +343,7 @@ func (t *Tenant) migrateLegacyResourceProjects(owner platform.App, now time.Time
 		}
 	}
 	assignments := []legacyResourceProject{}
-	if resources := t.records.Type(build.ResourceType); resources != nil {
+	if resources := t.Projection.Type(build.ResourceType); resources != nil {
 		for _, row := range resources.Rows().All() {
 			resource := row.Value.Interface().(build.Resource)
 			if resource.Project != build.WorkspaceProject || resource.ManagedBy != "" || resource.Ref.Kind == platform.AssetApp {
@@ -356,7 +356,7 @@ func (t *Tenant) migrateLegacyResourceProjects(owner platform.App, now time.Time
 			assignments = append(assignments, legacyResourceProject{ID: resource.ID, Project: owners[0]})
 		}
 	}
-	t.records.Unlock()
+	t.Projection.Unlock()
 	if len(assignments) == 0 {
 		return nil
 	}
@@ -404,21 +404,21 @@ func (h *Host) routesResources(rt *routes) {
 		}
 		id := r.PathValue("id")
 		marked := map[platform.AssetRef]bool{}
-		for _, node := range t.markingsIn(t.records, false).graph.Nodes {
+		for _, node := range t.markingsIn(t.Projection, false).graph.Nodes {
 			if slices.Contains(node.EffectiveCompartments, id) || slices.Contains(platform.Markings[1:], id) && platform.MarkingRank(node.Effective) >= platform.MarkingRank(id) {
 				marked[platform.AssetRef{App: build.ID, Kind: platform.AssetKind(node.Kind), Name: node.Name}] = true
 			}
 		}
 		resources := []ResourceEntry{}
-		t.records.Lock()
-		for _, row := range t.records.Type(build.ResourceType).Rows().All() {
+		t.Projection.Lock()
+		for _, row := range t.Projection.Type(build.ResourceType).Rows().All() {
 			resource := row.Value.Interface().(build.Resource)
 			if marked[resource.Ref] && !resource.Archived {
 				role := t.resourceRole(m, resource.Project)
 				resources = append(resources, ResourceEntry{Resource: resource, Path: []string{}, CanOpen: role != "" && role != platform.ProjectDiscovererRole, CanEdit: false})
 			}
 		}
-		t.records.Unlock()
+		t.Projection.Unlock()
 		slices.SortFunc(resources, func(a, b ResourceEntry) int { return strings.Compare(a.ID, b.ID) })
 		WriteJSON(w, http.StatusOK, resources)
 	})
@@ -488,7 +488,7 @@ func (h *Host) routesResources(rt *routes) {
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}/{type}/{draft}", Summary: "Only the current builder's private working state", Answer: WorkingStateView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		id := build.WorkingStateID(m.ID, r.PathValue("branch"), r.PathValue("type"), r.PathValue("draft"))
-		raw, refusal := t.readRecordFrom(t.records, t.branchCaller(m), build.WorkingStateType, id, h.Now())
+		raw, refusal := t.readRecordFrom(t.Projection, t.branchCaller(m), build.WorkingStateType, id, h.Now())
 		view := WorkingStateView{ID: id}
 		if refusal == nil {
 			var state build.WorkingState
@@ -520,7 +520,7 @@ func (h *Host) routesResources(rt *routes) {
 }
 
 func (h hostView) ManagedDefinition(ref platform.AssetRef) bool {
-	store := h.t.records
+	store := h.t.Projection
 	if h.decision != nil {
 		store = h.decision.records
 	}

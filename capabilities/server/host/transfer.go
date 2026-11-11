@@ -25,9 +25,9 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	t.records.Lock()
-	et := t.records.Type(typ)
-	t.records.Unlock()
+	t.Projection.Lock()
+	et := t.Projection.Type(typ)
+	t.Projection.Unlock()
 	if et == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
@@ -180,14 +180,14 @@ func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	t.records.Lock()
-	et := t.records.Type(typ)
-	t.records.Unlock()
+	t.Projection.Lock()
+	et := t.Projection.Type(typ)
+	t.Projection.Unlock()
 	if et == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	c := platform.NewCaller(runtime{t: t, scoped: true}, m, et.Info().App, false, false)
-	if err := authorizationRefusal(t.authorizeFrom(t.records, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "export", Type: typ}, now, false)); err != nil {
+	if err := authorizationRefusal(t.authorizeFrom(t.Projection, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "export", Type: typ}, now, false)); err != nil {
 		return nil, err
 	}
 	view, _ := viewOf(m, et)

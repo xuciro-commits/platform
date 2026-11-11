@@ -24,7 +24,7 @@ func (t *Tenant) currentSubmissionSchema(app platform.App, sub *pb.Submission) *
 	}
 	family := uint32(1)
 	key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
-	if raw := t.committed.Answer(key); len(raw) > 0 {
+	if raw := t.Committed.Answer(key); len(raw) > 0 {
 		result, receipt, err := acceptedformat.DecodeBatch(raw)
 		if err == nil {
 			saved, err := acceptedformat.BatchSubmission(result, receipt)
@@ -34,7 +34,7 @@ func (t *Tenant) currentSubmissionSchema(app platform.App, sub *pb.Submission) *
 		}
 	} else if prior := app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()); prior != nil {
 		family = prior.GetSubmission().GetSchema().GetVersion()
-	} else if prior, exists := t.committed.Refusal(key); exists {
+	} else if prior, exists := t.Committed.Refusal(key); exists {
 		_, saved, err := acceptedformat.DecodeRefusal(platform.Raw(prior))
 		if err == nil {
 			family = saved.GetSchema().GetVersion()
@@ -96,10 +96,10 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 	}
 	if content == "" {
 		key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
-		if _, bound := t.committed.SchemaVersion(key); !bound && app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+		if _, bound := t.Committed.SchemaVersion(key); !bound && app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
 			return nil, nil
 		}
-		if prior, exists := t.committed.Refusal(key); exists && prior.SchemaVersion == nil {
+		if prior, exists := t.Committed.Refusal(key); exists && prior.SchemaVersion == nil {
 			return nil, nil
 		}
 		if action.SchemaVersion == nil && current.Family == 1 && sub.GetSchema().GetVersion() == 1 {
@@ -110,7 +110,7 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 	if binding.Version == current.Version && binding.Family == current.Family {
 		return binding, nil
 	}
-	if et := t.records.Type("build.object"); et != nil {
+	if et := t.Projection.Type("build.object"); et != nil {
 		for _, row := range et.Rows().All() {
 			var metadata struct {
 				Published string `json:"published"`

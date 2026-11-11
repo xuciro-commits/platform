@@ -10,16 +10,16 @@ import (
 )
 
 func (t *Tenant) Changed(e platform.Event) []string {
-	t.records.Lock()
-	defer t.records.Unlock()
-	return t.records.Changed(e.App + "/" + e.Record.GetChangeId())
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	return t.Projection.Changed(e.App + "/" + e.Record.GetChangeId())
 }
 
 func (t *Tenant) held(ref string) (any, bool) {
 	typ, id, _ := strings.Cut(ref, "/")
-	t.records.Lock()
-	defer t.records.Unlock()
-	et := t.records.Type(typ)
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	et := t.Projection.Type(typ)
 	if et == nil {
 		return nil, false
 	}

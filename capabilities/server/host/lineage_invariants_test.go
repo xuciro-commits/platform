@@ -118,11 +118,11 @@ func TestInvariantK12ExportUsesTheDatasetMarking(t *testing.T) {
 	live.accept(t, "build.dataset.create", dataowner.DatasetType, "CLOSED", map[string]any{"name": "closed", "title": "Closed", "marking": "restricted"})
 	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "OPEN", map[string]any{"rows": []map[string]any{{"id": "A1"}}, "marking": "internal"})
 	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "CLOSED", map[string]any{"rows": []map[string]any{{"id": "B1"}}, "marking": "restricted"})
-	row := live.records.Type(dataowner.DatasetVersionType).Rows().Get(dataowner.VersionID("OPEN", 1))
+	row := live.Projection.Type(dataowner.DatasetVersionType).Rows().Get(dataowner.VersionID("OPEN", 1))
 	if row == nil {
 		t.Fatal("open dataset version is missing")
 	}
-	index := live.markingsIn(live.records, false)
+	index := live.markingsIn(live.Projection, false)
 	if got := index.highest(dataowner.DatasetVersionType, row); got == "restricted" {
 		t.Fatal("open dataset inherited another dataset's restriction")
 	}

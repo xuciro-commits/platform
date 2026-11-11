@@ -84,9 +84,9 @@ func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, c
 	}
 	var generation uint64
 	if localRecords {
-		t.records.Lock()
-		generation = t.records.Generation()
-		t.records.Unlock()
+		t.Projection.Lock()
+		generation = t.Projection.Generation()
+		t.Projection.Unlock()
 	}
 	stamp, err := platform.CanonicalDigest([]any{revision, member, publisher, marking, credential, generation})
 	return stamp, err == nil

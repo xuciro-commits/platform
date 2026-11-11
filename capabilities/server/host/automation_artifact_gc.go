@@ -229,7 +229,7 @@ func (t *Tenant) collectUnacceptedFlowArtifacts(ctx context.Context, now time.Ti
 		return nil
 	}
 	keep, err := readWithError(t, ctx, func(t *Tenant) (map[string]bool, error) {
-		return flowArtifactReferences(t.records, flowFrameStore{tenant: t.ID, files: t.files()})
+		return flowArtifactReferences(t.Projection, flowFrameStore{tenant: t.ID, files: t.files()})
 	})
 	if err != nil {
 		return err

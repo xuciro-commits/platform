@@ -42,7 +42,7 @@ func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *platfor
 	if definition.Decision != nil {
 		fields = append(fields, observationDecisionFields(*definition.Decision)...)
 	}
-	permission := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: typ, Record: id, Fields: fields}, now, false)
+	permission := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: typ, Record: id, Fields: fields}, now, false)
 	if !permission.Allow || len(permission.Withheld) > 0 {
 		return nil
 	}
@@ -66,7 +66,7 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 	for _, app := range t.apps {
 		var original *pb.Submission
 		var receipt *pb.ChangeRecord
-		if raw := t.committed.Answer(app.Manifest().ID + "/" + key); len(raw) > 0 {
+		if raw := t.Committed.Answer(app.Manifest().ID + "/" + key); len(raw) > 0 {
 			result, saved, err := acceptedformat.DecodeBatch(raw)
 			if err != nil {
 				return nil, observationUnavailable(err), true
@@ -85,7 +85,7 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 			}
 			return receipt, nil, true
 		}
-		if saved, found := t.committed.Refusal(app.Manifest().ID + "/" + key); found {
+		if saved, found := t.Committed.Refusal(app.Manifest().ID + "/" + key); found {
 			var original pb.Submission
 			if len(saved.Submission) == 0 || protojson.Unmarshal(saved.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetCorrelationId() != identity {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true

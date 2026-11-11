@@ -211,9 +211,9 @@ func checkCompositeGraph(data *PageCompositeResult, acyclic, partial bool) error
 }
 
 func (t *Tenant) pageModelRuleRecord(typ, id string, fallback any) any {
-	t.records.Lock()
-	defer t.records.Unlock()
-	if entity := t.records.Type(typ); entity != nil {
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	if entity := t.Projection.Type(typ); entity != nil {
 		if original := entity.Rows().Get(id); original != nil {
 			return original.Value.Interface()
 		}

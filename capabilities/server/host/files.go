@@ -115,7 +115,7 @@ func (t *Tenant) reserveUploadDeletes(old []string, retained map[string]bool, no
 		}
 	}
 	if len(pending) > 0 {
-		t.stateEpoch.Add(1)
+		t.StateEpoch.Add(1)
 	}
 	return pending
 }

@@ -66,9 +66,9 @@ var projectRefKinds = map[string][]string{
 }
 
 func (t *Tenant) projectEdits(member string, access platform.ProjectAccess, kind string, names []string) bool {
-	t.records.Lock()
+	t.Projection.Lock()
 	covering := []string{}
-	if resources := t.records.Type(build.ResourceType); resources != nil {
+	if resources := t.Projection.Type(build.ResourceType); resources != nil {
 		kinds := append([]string{kind}, projectRefKinds[kind]...)
 		for _, row := range resources.Rows().All() {
 			resource := row.Value.Interface().(build.Resource)
@@ -79,7 +79,7 @@ func (t *Tenant) projectEdits(member string, access platform.ProjectAccess, kind
 			}
 		}
 	}
-	t.records.Unlock()
+	t.Projection.Unlock()
 	for _, project := range covering {
 		if role := access.ProjectRole(member, project); role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
 			return true
@@ -96,9 +96,9 @@ func (t *Tenant) draftName(s *pb.Submission) string {
 		_ = json.Unmarshal(s.GetPayload(), &payload)
 		return payload.Name
 	}
-	t.records.Lock()
-	defer t.records.Unlock()
-	et := t.records.Type(s.GetTarget().GetType())
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	et := t.Projection.Type(s.GetTarget().GetType())
 	if et == nil {
 		return ""
 	}

@@ -27,7 +27,7 @@ func TestInvariantAutomationPauseGatesNewTriggersNotRunning(t *testing.T) {
 		checkInstances := func(now time.Time, want int) {
 			t.Helper()
 			live.Work(now)
-			if got := live.records.Type(platform.FlowInstanceType).Rows().Len(); got != want {
+			if got := live.Projection.Type(platform.FlowInstanceType).Rows().Len(); got != want {
 				t.Fatalf("scheduled instances at %s: got %d; want %d", now, got, want)
 			}
 			key := now.UTC().Truncate(time.Minute).Format(time.RFC3339)
@@ -111,7 +111,7 @@ func TestInvariantAutomationPauseGatesNewTriggersNotRunning(t *testing.T) {
 		}
 		pausedAt := invariantClock.Add(time.Minute)
 		live.Work(pausedAt)
-		if got := live.records.Type(platform.FlowInstanceType).Rows().Len(); got != 1 {
+		if got := live.Projection.Type(platform.FlowInstanceType).Rows().Len(); got != 1 {
 			t.Fatalf("the paused schedule created a new instance: got %d; want 1", got)
 		}
 		key := pausedAt.Format(time.RFC3339)
@@ -140,7 +140,7 @@ func TestInvariantAutomationPauseGatesNewTriggersNotRunning(t *testing.T) {
 		if record, refusal := live.Submit(live.member(t), request, invariantClock); record != nil || refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
 			t.Fatalf("the paused manual start: record=%v refusal=%v; want CONFLICT", record, refusal)
 		}
-		if got := live.records.Type(platform.FlowInstanceType).Rows().Len(); got != 1 {
+		if got := live.Projection.Type(platform.FlowInstanceType).Rows().Len(); got != 1 {
 			t.Fatalf("the refused manual start created an instance: got %d; want 1", got)
 		}
 		live.Work(invariantClock.Add(121 * time.Second))
@@ -155,7 +155,7 @@ func TestInvariantAutomationPauseGatesNewTriggersNotRunning(t *testing.T) {
 		live.accept(t, build.SchemaProcessResume, build.ProcessType, "PROCESS", map[string]any{})
 		live.accept(t, build.SchemaProcessRun, build.ProcessType, "PROCESS", map[string]any{"key": "after"})
 		resumed, ok := platform.Get[platform.FlowInstance](caller, "build.waiting:after")
-		if !ok || resumed.State != "waiting" || live.records.Type(platform.FlowInstanceType).Rows().Len() != 2 {
+		if !ok || resumed.State != "waiting" || live.Projection.Type(platform.FlowInstanceType).Rows().Len() != 2 {
 			t.Fatalf("resuming did not allow a new manual run: %+v found=%v", resumed, ok)
 		}
 	})

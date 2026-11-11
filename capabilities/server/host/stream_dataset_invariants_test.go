@@ -16,9 +16,9 @@ func TestInvariantK1K2StreamingDatasetAcceptedRecovery(t *testing.T) {
 	caller := live.automation(build.ID, false)
 	checked := live.submission(dataowner.SchemaConnectionChecked, dataowner.ConnectionType, "CONN", map[string]any{"revision": connection.Revision, "check": dataowner.ConnectionCheck{At: invariantClock, OK: true}})
 	checked.PrincipalId = caller.ID
-	live.mu.Lock()
+	live.Lane.Lock()
 	_, refusal := live.submitAccepted(live.app(build.ID), caller.Member, checked, invariantClock, true)
-	live.mu.Unlock()
+	live.Lane.Unlock()
 	if refusal != nil {
 		t.Fatal(refusal)
 	}

@@ -229,19 +229,19 @@ func (t *Tenant) legacyRelationWritable(store *records.Store, from, to string) b
 }
 
 func (r runtime) OwnedRelations(c platform.Caller, entity string) []platform.RelationLink {
-	return r.t.ownedRelations(r.t.records, c, entity, time.Now())
+	return r.t.ownedRelations(r.t.Projection, c, entity, time.Now())
 }
 func (d *stagedDecision) OwnedRelations(c platform.Caller, entity string) []platform.RelationLink {
 	return d.tenant.ownedRelations(d.records, c, entity, d.at)
 }
 func (r runtime) LegacyRelationActive(c platform.Caller, link platform.RelationLink) bool {
-	return r.t.legacyRelationActive(r.t.records, link)
+	return r.t.legacyRelationActive(r.t.Projection, link)
 }
 func (d *stagedDecision) LegacyRelationActive(c platform.Caller, link platform.RelationLink) bool {
 	return d.tenant.legacyRelationActive(d.records, link)
 }
 func (r runtime) LegacyRelationWritable(c platform.Caller, from, to string) bool {
-	return r.t.legacyRelationWritable(r.t.records, from, to)
+	return r.t.legacyRelationWritable(r.t.Projection, from, to)
 }
 func (d *stagedDecision) LegacyRelationWritable(c platform.Caller, from, to string) bool {
 	return d.tenant.legacyRelationWritable(d.records, from, to)

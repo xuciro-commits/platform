@@ -113,13 +113,13 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			if !ok {
 				return false, unknown()
 			}
-			_, refusedBefore := t.committed.Refusal(controlowner.PlatformApp + "/" + q.Key)
-			known := refusedBefore || len(t.committed.Answer(controlowner.PlatformApp+"/"+q.Key)) > 0 || owner.AcceptedLedger().AcceptedFor(t.ID, q.Key) != nil
+			_, refusedBefore := t.Committed.Refusal(controlowner.PlatformApp + "/" + q.Key)
+			known := refusedBefore || len(t.Committed.Answer(controlowner.PlatformApp+"/"+q.Key)) > 0 || owner.AcceptedLedger().AcceptedFor(t.ID, q.Key) != nil
 			_, refusal := t.submitAccepted(owner, latest, s, now, false, prepared)
 			return !known, refusal
 		}, func(t *Tenant, candidate preparedAccepted, keep bool, refusal *kernel.Error) (bool, *kernel.Error) {
 			_, refusal = t.finishPreparedSubmission(current, candidate, nil, refusal)
-			if _, rejected := t.committed.Refusal(controlowner.PlatformApp + "/" + q.Key); rejected {
+			if _, rejected := t.Committed.Refusal(controlowner.PlatformApp + "/" + q.Key); rejected {
 				keep = false
 			}
 			return keep, refusal

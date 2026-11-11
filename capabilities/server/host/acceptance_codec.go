@@ -212,7 +212,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	}) {
 		return false, fmt.Errorf("accepted result belongs to another tenant or authority")
 	}
-	s := t.records
+	s := t.Projection
 	draft := s.ForkRecords()
 	draft.Lock()
 	et := draft.Type(result.Row.Type)
@@ -276,8 +276,8 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.Unlock()
 		changed, err := l.ApplyAcceptedChange(receipt)
 		if err == nil {
-			t.committed.SaveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
-			t.committed.SaveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
+			t.Committed.SaveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
+			t.Committed.SaveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
 			err = t.applySourceClaims(result.Row.Type, result.Row.ID, receipt.GetChangeId(), result.At, source)
 		}
 		return changed, err
@@ -337,8 +337,8 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	if result.Row.Type == build.AppType {
 		t.defGen.Add(1)
 	}
-	t.committed.SaveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
-	t.committed.SaveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
+	t.Committed.SaveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
+	t.Committed.SaveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
 	if changed && publisher != nil {
 		if err := publisher.ApplyAcceptedPublication(receipt.GetSubmission().GetSchema().GetName(), decoded); err != nil {
 			return false, err
@@ -357,22 +357,22 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 	entry.Epoch = persistence.FormatEpoch
 	if t.AcceptResult != nil {
 		before := int64(0)
-		if t.runtimePosition != nil {
-			before = t.runtimePosition()
-			t.committed.ReleasePending()
+		if t.RuntimePosition != nil {
+			before = t.RuntimePosition()
+			t.Committed.ReleasePending()
 		}
 		raw, err := t.AcceptResult(entry, key, hash)
 		if err != nil && (errors.Is(err, persistence.ErrCommitUnknown) ||
-			t.runtimePosition != nil && t.runtimePosition() > before) {
+			t.RuntimePosition != nil && t.RuntimePosition() > before) {
 			t.quarantine(fmt.Errorf("accepted result commit could not be resolved: %w", err))
 		}
-		if err == nil && t.runtimePosition != nil && t.runtimePosition() > before {
+		if err == nil && t.RuntimePosition != nil && t.RuntimePosition() > before {
 			delta, decodeErr := StorageDelta(raw)
 			if decodeErr != nil {
 				t.quarantine(fmt.Errorf("committed state delta: %w", decodeErr))
 				return nil, decodeErr
 			}
-			t.committed.HoldPending(delta)
+			t.Committed.HoldPending(delta)
 		}
 		return raw, err
 	}
@@ -385,15 +385,15 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 func (t *Tenant) recordsAcceptedResults() bool { return t.AcceptResult != nil || t.Record != nil }
 
 func (t *Tenant) acceptedResultApplied() {
-	t.stateEpoch.Add(1)
-	t.records.Lock()
-	if t.records.Current().Position() != nil {
-		t.records.Current().MarkApplied(t.records.Current().Position()())
+	t.StateEpoch.Add(1)
+	t.Projection.Lock()
+	if t.Projection.Current().Position() != nil {
+		t.Projection.Current().MarkApplied(t.Projection.Current().Position()())
 	}
 	if t.currentReadScopes {
-		t.records.UseCurrentRows()
+		t.Projection.UseCurrentRows()
 	}
-	t.records.Unlock()
+	t.Projection.Unlock()
 	if t.currentReadScopes {
 		t.closeRecordRead()
 		t.openRecordRead(context.Background())

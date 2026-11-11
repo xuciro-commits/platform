@@ -17,15 +17,15 @@ func (t *Tenant) recordSetBinding(binding platform.AssetBinding) (*platform.Defi
 }
 
 func (t *Tenant) ValidateRecordSet(info platform.EntityInfo, set platform.RecordSet) error {
-	return t.objectOwner(t.records).ValidateRecordSet(info, set)
+	return t.objectOwner(t.Projection).ValidateRecordSet(info, set)
 }
 
 func (t *Tenant) checkRecordSetDeclarations(info platform.EntityInfo, engines ...platform.RuleEngine) error {
-	return t.objectOwner(t.records).CheckRecordSetDeclarations(info, engines...)
+	return t.objectOwner(t.Projection).CheckRecordSetDeclarations(info, engines...)
 }
 
 func (r runtime) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
-	return r.t.readRecordSetFrom(r.t.records, c, object, id, name, at)
+	return r.t.readRecordSetFrom(r.t.Projection, c, object, id, name, at)
 }
 
 func (d *stagedDecision) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {

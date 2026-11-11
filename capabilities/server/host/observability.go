@@ -43,11 +43,11 @@ type LogPolicyView struct {
 
 func (t *Tenant) bindAuditStore() {
 	t.audit.SetSink(func(entry platform.AuditEntry) {
-		if err := t.store().SaveAuditEntries(t.ID, []platform.AuditEntry{entry}); err != nil {
+		if err := t.Log().SaveAuditEntries(t.ID, []platform.AuditEntry{entry}); err != nil {
 			log.Printf("audit %s: %v", t.ID, err)
 		}
 	}, func(read platform.PersonalRead) {
-		if err := t.store().SavePersonalReads(t.ID, []platform.PersonalRead{read}); err != nil {
+		if err := t.Log().SavePersonalReads(t.ID, []platform.PersonalRead{read}); err != nil {
 			log.Printf("personal read audit %s: %v", t.ID, err)
 		}
 	})
@@ -303,7 +303,7 @@ func (t *Tenant) recordObservation(event platform.Observation) {
 	defer t.observationMu.Unlock()
 	day := event.At.Truncate(24 * time.Hour)
 	if !t.observationUsageDay.Equal(day) {
-		usage, err := t.store().ObservationUsage(t.ID, day)
+		usage, err := t.Log().ObservationUsage(t.ID, day)
 		if err != nil {
 			log.Printf("observation usage %s: %v", t.ID, err)
 		}
@@ -372,7 +372,7 @@ func (t *Tenant) FlushObservations() {
 	if len(events) == 0 {
 		return
 	}
-	if err := t.store().SaveObservations(events); err != nil {
+	if err := t.Log().SaveObservations(events); err != nil {
 		log.Printf("observation %s: %v", t.ID, err)
 		t.observationFailed.Add(1)
 		t.observationMu.Lock()
@@ -470,7 +470,7 @@ func (t *Tenant) PurgeObservations(now time.Time) {
 	}
 	t.lastObservationPurge = now
 	t.observationPurgeMu.Unlock()
-	removed, err := t.store().PurgeObservations(t.ID, now.AddDate(0, 0, -days))
+	removed, err := t.Log().PurgeObservations(t.ID, now.AddDate(0, 0, -days))
 	if err != nil {
 		log.Printf("purge observations %s: %v", t.ID, err)
 		return

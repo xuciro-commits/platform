@@ -37,25 +37,25 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 			return nil
 		}
 		if active {
-			t.records.Lock()
-			t.records.Current().Configure(store, t.ID, position, func() int64 { return j.Position(t.ID) })
-			t.records.UseCurrentRows()
-			t.records.Unlock()
+			t.Projection.Lock()
+			t.Projection.Current().Configure(store, t.ID, position, func() int64 { return j.Position(t.ID) })
+			t.Projection.UseCurrentRows()
+			t.Projection.Unlock()
 			if views, ok := store.(persistence.StateReadViews); ok {
 				view, err = views.BeginStateRead(ctx, t.ID, position)
 				if err != nil {
 					return err
 				}
-				t.records.Current().Bind(view)
+				t.Projection.Current().Bind(view)
 				defer func() {
-					t.records.Current().Bind(nil)
+					t.Projection.Current().Bind(nil)
 					_ = view.Close()
 				}()
 			}
 		}
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	d, err := t.runtimeStateDeltaLocked()
 	if err != nil {
 		return err
@@ -79,8 +79,8 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 
 func (t *Tenant) installRuntimeHistory(store runtimekernel.AcceptedStateReader, position func() int64) {
 	ctx := context.Background()
-	if t.records.Current().View() != nil {
-		ctx = t.records.Current().Context()
+	if t.Projection.Current().View() != nil {
+		ctx = t.Projection.Current().Context()
 	}
 	for _, a := range t.apps {
 		a.AcceptedLedger().UseChangeArchive(runtimekernel.NewChangeArchive(ctx, store, t.ID, a.Manifest().ID))
@@ -91,22 +91,22 @@ func (t *Tenant) installRuntimeHistory(store runtimekernel.AcceptedStateReader, 
 			})
 		}
 	}
-	t.committed.UseStorage(ctx, store, t.ID, position)
+	t.Committed.UseStorage(ctx, store, t.ID, position)
 }
 
 func (t *Tenant) installRuntimeRecords(store persistence.RuntimeState, position func() int64) {
-	t.records.Lock()
-	defer t.records.Unlock()
-	t.records.Current().Configure(store, t.ID, position(), position)
-	t.records.UseCurrentRows()
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	t.Projection.Current().Configure(store, t.ID, position(), position)
+	t.Projection.UseCurrentRows()
 }
 
 func (t *Tenant) runtimeStateDeltaLocked() (persistence.StateDelta, error) {
 	d := persistence.StateDelta{}
 	if err := func() error {
-		t.records.Lock()
-		defer t.records.Unlock()
-		for typ, et := range t.records.Types() {
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
+		for typ, et := range t.Projection.Types() {
 			for id, r := range et.Rows().All() {
 				image, err := r.Image()
 				if err != nil {
@@ -122,7 +122,7 @@ func (t *Tenant) runtimeStateDeltaLocked() (persistence.StateDelta, error) {
 					rr.History = append(rr.History, jsonOf(h))
 				}
 				d.Records = append(d.Records, rr)
-				d.Unique = append(d.Unique, persistence.StateUnique{Type: typ, ID: id, Keys: t.records.UniqueKeys(typ, id)})
+				d.Unique = append(d.Unique, persistence.StateUnique{Type: typ, ID: id, Keys: t.Projection.UniqueKeys(typ, id)})
 			}
 		}
 		return nil
@@ -147,7 +147,7 @@ func (t *Tenant) runtimeStateDeltaLocked() (persistence.StateDelta, error) {
 			d.Values = append(d.Values, persistence.StateValue{Owner: "app-state", Key: a.Manifest().ID, Image: raw})
 		}
 	}
-	t.committed.StorageValues(&d)
+	t.Committed.StorageValues(&d)
 	for name, n := range t.sequences.Clone() {
 		d.Values = append(d.Values, persistence.StateValue{Owner: "sequence", Key: name, Image: jsonOf(n)})
 	}

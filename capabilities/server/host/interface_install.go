@@ -12,7 +12,7 @@ func (h hostView) ValidateInstallInterface(i platform.Interface) error {
 	if err := i.Check(h.app.Manifest().ID); err != nil {
 		return err
 	}
-	for _, et := range h.t.records.SortedTypes() {
+	for _, et := range h.t.Projection.SortedTypes() {
 		info := et.Info()
 		if slices.Contains(info.Implements, i.Name) {
 			if err := i.Implements(info); err != nil {

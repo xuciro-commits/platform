@@ -93,9 +93,9 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		t.mu.Lock()
+		t.Lane.Lock()
 		if err := t.checkOwnerRemoval(body.DisabledOwners); err != nil {
-			t.mu.Unlock()
+			t.Lane.Unlock()
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
@@ -108,7 +108,7 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 			image.Lifecycle = "suspend"
 			return platform.SupportGrant{}, nil
 		}, hostRequestAuthorization(r, t.ID)...)
-		t.mu.Unlock()
+		t.Lane.Unlock()
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return

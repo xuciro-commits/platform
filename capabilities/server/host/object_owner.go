@@ -10,7 +10,7 @@ import (
 func (t *Tenant) objectOwner(store *records.Store) *objects.Owner {
 	return &objects.Owner{
 		Store:                  store,
-		BaseStore:              t.records,
+		BaseStore:              t.Projection,
 		TenantID:               t.ID,
 		Admit:                  t.admits,
 		AuthorizationMember:    t.authorizationMember,

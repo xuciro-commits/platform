@@ -24,10 +24,10 @@ func (t *Tenant) countDecision(ctx context.Context, outcome string) {
 }
 
 func (t *Tenant) matchesReadImage(image *tenantReadImage) bool {
-	t.records.Lock()
-	generation := t.records.Generation()
-	t.records.Unlock()
-	return image.epoch == t.stateEpoch.Load() && image.definitions == t.defGen.Load() && image.records == generation && image.position == t.records.Current().Applied()
+	t.Projection.Lock()
+	generation := t.Projection.Generation()
+	t.Projection.Unlock()
+	return image.epoch == t.StateEpoch.Load() && image.definitions == t.defGen.Load() && image.records == generation && image.position == t.Projection.Current().Applied()
 }
 
 func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare func(*Tenant) (T, *kernel.Error), finish func(*Tenant, preparedAccepted, T, *kernel.Error) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
@@ -50,30 +50,30 @@ func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare
 			}
 			break
 		}
-		if err := t.mu.Hold(ctx, holder); err != nil {
+		if err := t.Lane.Hold(ctx, holder); err != nil {
 			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		if refusal := t.recordReadRefusal(); refusal != nil || t.businessStopped() {
-			t.mu.Unlock()
+			t.Lane.Unlock()
 			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		if t.matchesReadImage(image) && !slices.ContainsFunc(candidate.uploads, t.uploads.Unavailable) && (holder != "work" || image.work == t.workEpoch.Load()) {
+		if t.matchesReadImage(image) && !slices.ContainsFunc(candidate.uploads, t.uploads.Unavailable) && (holder != "work" || image.work == t.WorkEpoch.Load()) {
 			func() {
-				defer t.mu.Unlock()
+				defer t.Lane.Unlock()
 				value, refusal = finish(t, candidate, value, refusal)
 			}()
 			return value, refusal
 		}
-		t.mu.Unlock()
+		t.Lane.Unlock()
 		if attempt < 2 {
 			t.countDecision(ctx, "retried")
 		}
 	}
 	t.countDecision(ctx, "fallback")
-	if err := t.mu.Hold(ctx, holder); err != nil {
+	if err := t.Lane.Hold(ctx, holder); err != nil {
 		return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	defer t.mu.Unlock()
+	defer t.Lane.Unlock()
 	if refusal := t.recordReadRefusal(); refusal != nil || t.businessStopped() {
 		return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}

@@ -19,7 +19,7 @@ func (t *Tenant) admits(m platform.Member) *kernel.Error {
 }
 
 func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref string) bool {
-	return t.mayReadIn(t.records, m, now, held)
+	return t.mayReadIn(t.Projection, m, now, held)
 }
 
 func (t *Tenant) mayReadIn(store *records.Store, m platform.Member, now time.Time, held bool) func(ref string) bool {
@@ -68,7 +68,7 @@ func (t *Tenant) mayCallRead(m platform.Member, name string) bool {
 }
 
 func (t *Tenant) narrowable(et *records.Type) []string {
-	return t.objectOwner(t.records).Narrowable(et)
+	return t.objectOwner(t.Projection).Narrowable(et)
 }
 
 func fieldName(typ reflect.Type, path []int) string {
@@ -76,11 +76,11 @@ func fieldName(typ reflect.Type, path []int) string {
 }
 
 func (t *Tenant) narrowedSource(m platform.Member, v any, now time.Time, held bool, source string) any {
-	return t.objectOwner(t.records).NarrowedSource(m, v, now, held, source)
+	return t.objectOwner(t.Projection).NarrowedSource(m, v, now, held, source)
 }
 
 func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *objects.Narrower {
-	return t.objectOwner(t.records).Narrower(m, now, held)
+	return t.objectOwner(t.Projection).Narrower(m, now, held)
 }
 
 func (t *Tenant) narrowerIn(store *records.Store, m platform.Member, now time.Time, held bool) *objects.Narrower {
@@ -88,5 +88,5 @@ func (t *Tenant) narrowerIn(store *records.Store, m platform.Member, now time.Ti
 }
 
 func (t *Tenant) refsIn(v any) []string {
-	return t.objectOwner(t.records).RefsIn(v)
+	return t.objectOwner(t.Projection).RefsIn(v)
 }

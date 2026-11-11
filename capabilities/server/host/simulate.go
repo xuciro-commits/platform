@@ -69,7 +69,7 @@ func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb
 		if refusal != nil {
 			return trialowner.Simulation{}, refusal
 		}
-		draft = t.newStagedDecisionOn(world.view.records.ForkRecords())
+		draft = t.newStagedDecisionOn(world.view.Projection.ForkRecords())
 		if build.BranchDraftType(s.GetTarget().GetType()) {
 			s.ExpectedRevision = nil
 		}
@@ -85,7 +85,7 @@ func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb
 		return out, nil
 	}
 	out.Accepted = true
-	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, records: draft.records, directory: t.directory}
+	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, Projection: draft.records, directory: t.directory}
 	for _, ref := range slices.Sorted(func(yield func(string) bool) {
 		for k := range draft.records.Writes() {
 			if !yield(k) {

@@ -46,7 +46,7 @@ func TestInvariantC10ObjectSetAndRecordSetReadModels(t *testing.T) {
 	member := live.member(t)
 	caller := live.objectCaller(member, "")
 	all := platform.ObjectSet{Object: "build.codedorder"}
-	page, objectType, refusal := live.loadObjectSet(live.records, caller, all, objectWindow{Sort: []string{"-rank"}, Offset: 1, Limit: 1, Bounded: true}, invariantClock)
+	page, objectType, refusal := live.loadObjectSet(live.Projection, caller, all, objectWindow{Sort: []string{"-rank"}, Offset: 1, Limit: 1, Bounded: true}, invariantClock)
 	if refusal != nil || objectType != "build.codedorder" || page.Total != 3 || len(page.Records) != 1 {
 		t.Fatalf("object set window: object=%q total=%d records=%d refusal=%v", objectType, page.Total, len(page.Records), refusal)
 	}
@@ -58,7 +58,7 @@ func TestInvariantC10ObjectSetAndRecordSetReadModels(t *testing.T) {
 		t.Fatalf("object set sort and offset returned %s", raw)
 	}
 	filtered := platform.ObjectSet{Object: "build.codedorder", Domain: platform.Raw([]any{[]any{"rank", ">=", 2}})}
-	count, refusal := live.countObjectSet(live.records, caller, filtered, invariantClock)
+	count, refusal := live.countObjectSet(live.Projection, caller, filtered, invariantClock)
 	if refusal != nil || count.Count != 2 || count.Partial {
 		t.Fatalf("object set count: %+v: %v", count, refusal)
 	}
@@ -66,7 +66,7 @@ func TestInvariantC10ObjectSetAndRecordSetReadModels(t *testing.T) {
 	if refusal != nil || len(aggregate.Rows) != 3 {
 		t.Fatalf("object set aggregate: %+v: %v", aggregate, refusal)
 	}
-	interfacePage, objectType, refusal := live.loadObjectSet(live.records, caller, platform.ObjectSet{Interface: "build.coded"}, objectWindow{Sort: []string{"code"}, Limit: 10, Bounded: true}, invariantClock)
+	interfacePage, objectType, refusal := live.loadObjectSet(live.Projection, caller, platform.ObjectSet{Interface: "build.coded"}, objectWindow{Sort: []string{"code"}, Limit: 10, Bounded: true}, invariantClock)
 	if refusal != nil || objectType != "" || interfacePage.Total != 3 || len(interfacePage.Records) != 3 {
 		t.Fatalf("interface object set: object=%q total=%d records=%d refusal=%v", objectType, interfacePage.Total, len(interfacePage.Records), refusal)
 	}

@@ -47,9 +47,9 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 			publisher := ""
 			var scopes []string
 			func() {
-				t.records.Lock()
-				defer t.records.Unlock()
-				owner := t.records.Type(typ)
+				t.Projection.Lock()
+				defer t.Projection.Unlock()
+				owner := t.Projection.Type(typ)
 				row := owner.Rows().Get(id)
 				if row != nil {
 					publisher = records.BusinessField(owner.Info(), row.Value, "publisher")

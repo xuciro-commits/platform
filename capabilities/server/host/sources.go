@@ -300,8 +300,8 @@ func (t *Tenant) declaredRows(object, kind, source string, input []map[string]an
 }
 
 func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[string]any, now time.Time) ([]dataowner.SourceRow, *platform.DataSourceBinding, error) {
-	t.records.Lock()
-	et := t.records.Type(object)
+	t.Projection.Lock()
+	et := t.Projection.Type(object)
 	var binding *platform.DataSourceBinding
 	if et != nil {
 		for _, candidate := range et.Info().DataSources {
@@ -312,7 +312,7 @@ func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[strin
 			}
 		}
 	}
-	t.records.Unlock()
+	t.Projection.Unlock()
 	if binding == nil {
 		return nil, nil, nil
 	}
@@ -368,9 +368,9 @@ func (t *Tenant) prepareRows(member platform.Member, object, producer string, ro
 			}
 			merged = resolver.Merged
 		}
-		t.records.Lock()
-		defer t.records.Unlock()
-		et := t.records.Type(object)
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
+		et := t.Projection.Type(object)
 		seen := map[string]bool{}
 		for i := range rows {
 			row := &rows[i]
@@ -393,14 +393,14 @@ func (t *Tenant) integrationRefused(authority, key string) bool {
 }
 
 func (t *Tenant) integrationRefusedRead(authority, key string) bool {
-	_, ok := t.committed.Refusal(authority + "/" + key)
+	_, ok := t.Committed.Refusal(authority + "/" + key)
 	return ok
 }
 
 func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, execution *dataowner.IntegrationExecution, now time.Time, pull *dataowner.SourcePull) bool {
-	t.records.Lock()
-	et := t.records.Type(plan.Object)
-	t.records.Unlock()
+	t.Projection.Lock()
+	et := t.Projection.Type(plan.Object)
+	t.Projection.Unlock()
 	for _, row := range plan.Rows {
 		if t.quarantined() || !t.integrationPending(plan.Type, plan.ID, execution) {
 			return false

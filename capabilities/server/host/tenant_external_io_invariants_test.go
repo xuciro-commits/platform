@@ -72,8 +72,8 @@ func TestInvariantK13UploadCleanupKeepsReferencesAndReleasesLane(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	_, refusal := live.RecordOf(ctx, member, "build.alpha", "A1", invariantClock)
 	cancel()
-	if refusal != nil || live.mu.State().Holder != "" {
-		t.Fatalf("object bytes deletion held the tenant lane: %v %+v", refusal, live.mu.State())
+	if refusal != nil || live.Lane.State().Holder != "" {
+		t.Fatalf("object bytes deletion held the tenant lane: %v %+v", refusal, live.Lane.State())
 	}
 	if refusal := attach("RACING", ephemeral); refusal == nil {
 		t.Fatal("a pending deletion accepted a new reference")
@@ -102,7 +102,7 @@ func TestInvariantK13AgentReadDoesNotAcquireTenantLane(t *testing.T) {
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "snapshot"})
-	if err := live.mu.Hold(t.Context(), "background"); err != nil {
+	if err := live.Lane.Hold(t.Context(), "background"); err != nil {
 		t.Fatal(err)
 	}
 	finished := make(chan *kernel.Error, 1)
@@ -122,5 +122,5 @@ func TestInvariantK13AgentReadDoesNotAcquireTenantLane(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("the agent read waited for the tenant lane")
 	}
-	live.mu.Unlock()
+	live.Lane.Unlock()
 }

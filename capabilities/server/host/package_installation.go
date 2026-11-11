@@ -206,7 +206,7 @@ func (t *Tenant) prepareBatchDefinitions(rows *records.Store, installations []pl
 		}
 	}
 	view.installingSet = false
-	if err := view.records.Anchor(t.records); err != nil {
+	if err := view.Projection.Anchor(t.Projection); err != nil {
 		return nil, err
 	}
 	return view, nil

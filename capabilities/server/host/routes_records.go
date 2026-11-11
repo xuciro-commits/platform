@@ -87,7 +87,7 @@ func (h *Host) routesRecords(rt *routes) {
 			return
 		}
 		caller := platform.NewCaller(runtime{t: t}, m, binding.Ref.App, false, false)
-		plan, err := t.relationMigrationPlan(t.records, caller, binding, h.Now())
+		plan, err := t.relationMigrationPlan(t.Projection, caller, binding, h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return
@@ -330,9 +330,9 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.
 	if err != nil {
 		return record, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	t.records.Lock()
-	et := t.records.Type(build.ObjectType)
-	t.records.Unlock()
+	t.Projection.Lock()
+	et := t.Projection.Type(build.ObjectType)
+	t.Projection.Unlock()
 	_, hidden := viewOf(m, et)
 	return records.Mask(et.Info(), reflect.ValueOf(canonical), hidden), nil
 }

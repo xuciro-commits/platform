@@ -23,7 +23,7 @@ func (t *Tenant) ProjectDatasets(now time.Time) {
 	type projection struct{ object, app, dataset string }
 	wanted, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]projection, *kernel.Error) {
 		var wanted []projection
-		for _, et := range t.records.SortedTypes() {
+		for _, et := range t.Projection.SortedTypes() {
 			info := et.Info()
 			for _, binding := range info.DataSources {
 				if binding.Kind == "dataset" {
@@ -166,6 +166,6 @@ func (t *Tenant) integrationAnswered(app, key string) bool {
 }
 
 func (t *Tenant) integrationAnsweredRead(app, key string) bool {
-	_, refused := t.committed.Refusal(app + "/" + key)
-	return refused || len(t.committed.Answer(app+"/"+key)) > 0
+	_, refused := t.Committed.Refusal(app + "/" + key)
+	return refused || len(t.Committed.Answer(app+"/"+key)) > 0
 }

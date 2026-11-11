@@ -46,13 +46,13 @@ func (t *Tenant) beginRecordRead(ctx context.Context) {
 func (t *Tenant) enableCurrentReadScopes() {
 	t.currentReadScopes = true
 	t.invalidateReadImage()
-	t.mu.BindReadScope(t.beginRecordRead, t.endLane)
+	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)
 }
 func (t *Tenant) openRecordRead(ctx context.Context) {
 	if !t.currentReadScopes || t.quarantined() {
 		return
 	}
-	view, err := t.records.Current().Open(ctx)
+	view, err := t.Projection.Current().Open(ctx)
 	if err != nil {
 		t.readScope.err = err
 		var mismatch *persistence.StatePositionError
@@ -69,12 +69,12 @@ func (t *Tenant) closeRecordRead() {
 	if !t.currentReadScopes {
 		return
 	}
-	if t.scopeSource() == nil && t.records.Current().Position() != nil && t.records.Current().Position()() != t.records.Current().Applied() {
-		t.quarantine(fmt.Errorf("SQL commit is at %d before in-memory application at %d", t.records.Current().Position()(), t.records.Current().Applied()))
+	if t.scopeSource() == nil && t.Projection.Current().Position() != nil && t.Projection.Current().Position()() != t.Projection.Current().Applied() {
+		t.quarantine(fmt.Errorf("SQL commit is at %d before in-memory application at %d", t.Projection.Current().Position()(), t.Projection.Current().Applied()))
 	}
-	if view := t.records.Current().Detach(); view != nil {
-		if store, ok := t.records.Current().Backend().(runtimekernel.AcceptedStateReader); ok {
-			t.installRuntimeHistory(store, t.records.Current().Position())
+	if view := t.Projection.Current().Detach(); view != nil {
+		if store, ok := t.Projection.Current().Backend().(runtimekernel.AcceptedStateReader); ok {
+			t.installRuntimeHistory(store, t.Projection.Current().Position())
 		}
 		if err := view.Close(); err != nil && t.readError() == nil {
 			t.readScope.err = err
@@ -144,10 +144,10 @@ func readFromLane[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, 
 }
 
 func lockedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	if err := t.mu.Hold(ctx, laneHolderOf(ctx, "read")); err != nil {
+	if err := t.Lane.Hold(ctx, laneHolderOf(ctx, "read")); err != nil {
 		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read was cancelled while waiting for the tenant")
 	}
-	defer t.mu.Unlock()
+	defer t.Lane.Unlock()
 	defer func() {
 		if failure := recover(); failure != nil {
 			if err, ok := failure.(error); ok {

@@ -47,7 +47,7 @@ func (v readImageSQLView) Position() int64 { return v.position }
 
 func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
 	live := newInvariantTenantWithApps(t, "invariant-lane-wait", []platform.App{automation.New("invariant-lane-wait")})
-	if err := live.mu.Hold(context.Background(), "invariant-holder"); err != nil {
+	if err := live.Lane.Hold(context.Background(), "invariant-holder"); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -57,7 +57,7 @@ func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
 		answered <- refusal
 	}()
 	deadline := time.Now().Add(2 * time.Second)
-	for live.mu.State().Waiters != 1 && time.Now().Before(deadline) {
+	for live.Lane.State().Waiters != 1 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
 	lane := live.laneHealth(time.Now(), true)
@@ -76,10 +76,10 @@ func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("a cancelled read stayed queued behind the lane")
 	}
-	if waiters := live.mu.State().Waiters; waiters != 0 {
+	if waiters := live.Lane.State().Waiters; waiters != 0 {
 		t.Fatalf("cancelled waiter still counted: %d", waiters)
 	}
-	live.mu.Unlock()
+	live.Lane.Unlock()
 	if _, refusal := lockedRecordRead(live.Tenant, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { return struct{}{}, nil }); refusal != nil {
 		t.Fatalf("read after release: %v", refusal)
 	}
@@ -99,13 +99,13 @@ func TestInvariantK13BackgroundRoundReleasesLaneBetweenTasks(t *testing.T) {
 	live.accept(t, build.SchemaProcess, build.ProcessType, "PROCESS", map[string]any{})
 	var mu sync.Mutex
 	holds := map[string]int{}
-	live.mu.Observe(func(holder string, _, _ time.Duration) {
+	live.Lane.Observe(func(holder string, _, _ time.Duration) {
 		mu.Lock()
 		holds[holder]++
 		mu.Unlock()
 	})
 	live.Work(invariantClock)
-	if got := live.records.Type(platform.FlowInstanceType).Rows().Len(); got != 1 {
+	if got := live.Projection.Type(platform.FlowInstanceType).Rows().Len(); got != 1 {
 		t.Fatalf("scheduled instances: got %d; want 1", got)
 	}
 	mu.Lock()
@@ -123,11 +123,11 @@ func TestInvariantK13ReadScopesKeepOneStateAndOwnContext(t *testing.T) {
 	member := live.member(t)
 	leftContext, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	live.mu.Lock()
+	live.Lane.Lock()
 	image := live.readImage.Load()
 	left, leftError := image.state.forkReadState(leftContext)
 	right, rightError := image.state.forkReadState(t.Context())
-	live.mu.Unlock()
+	live.Lane.Unlock()
 	if leftError != nil || rightError != nil {
 		t.Fatalf("prepare independent scopes: %v, %v", leftError, rightError)
 	}
@@ -187,14 +187,14 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 	if image == nil {
 		t.Fatal("an applied result did not publish a read image")
 	}
-	if err := live.mu.Hold(t.Context(), "background"); err != nil {
+	if err := live.Lane.Hold(t.Context(), "background"); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	view, refusal := live.RecordOf(ctx, member, "build.alpha", "A1", invariantClock)
 	cancel()
-	lane := live.mu.State()
-	live.mu.Unlock()
+	lane := live.Lane.State()
+	live.Lane.Unlock()
 	if refusal != nil || lane.Holder != "background" || lane.Waiters != 0 {
 		t.Fatalf("read waited behind background work: %v, %+v", refusal, lane)
 	}
@@ -204,11 +204,11 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 	}
 	version := live.liveVersion("/v1/records/build.alpha/A1")
 	_, wake := live.Changes()
-	live.mu.Lock()
+	live.Lane.Lock()
 	submission := live.submission("build.alpha.edit", "build.alpha", "A1", map[string]any{"note": "after"})
 	_, updateRefusal := live.submitAccepted(live.app(build.ID), member, submission, invariantClock, false)
 	if updateRefusal != nil {
-		live.mu.Unlock()
+		live.Lane.Unlock()
 		t.Fatalf("accept the next state: %v", updateRefusal)
 	}
 	if live.liveVersion("/v1/records/build.alpha/A1") != version {
@@ -219,7 +219,7 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 		t.Error("live readers were notified before image publication")
 	default:
 	}
-	live.mu.Unlock()
+	live.Lane.Unlock()
 	select {
 	case <-wake:
 	case <-time.After(time.Second):
@@ -241,12 +241,12 @@ func TestInvariantK13SQLReadsRetryWithoutMixingPositions(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-image-sql-position")
 	state := &readImageSQLState{mismatches: make(chan int64, 8)}
 	state.position.Store(1)
-	live.mu.Lock()
-	live.records.Current().Configure(state, live.ID, 1, state.position.Load)
+	live.Lane.Lock()
+	live.Projection.Current().Configure(state, live.ID, 1, state.position.Load)
 	live.sequences.Set(map[string]int{"position": 1})
 	live.enableCurrentReadScopes()
-	live.mu.Unlock()
-	live.mu.Lock()
+	live.Lane.Unlock()
+	live.Lane.Lock()
 	state.position.Store(2)
 	type result struct {
 		position int64
@@ -256,7 +256,7 @@ func TestInvariantK13SQLReadsRetryWithoutMixingPositions(t *testing.T) {
 	answered := make(chan result, 1)
 	go func() {
 		value, refusal := coordinatedRecordRead(live.Tenant, t.Context(), func(scope *Tenant) (result, *kernel.Error) {
-			return result{position: scope.records.Current().Applied(), sequence: scope.sequences.Clone()["position"]}, nil
+			return result{position: scope.Projection.Current().Applied(), sequence: scope.sequences.Clone()["position"]}, nil
 		})
 		value.refusal = refusal
 		answered <- value
@@ -267,12 +267,12 @@ func TestInvariantK13SQLReadsRetryWithoutMixingPositions(t *testing.T) {
 			t.Errorf("first read used position %d, want 1", applied)
 		}
 	case <-time.After(time.Second):
-		live.mu.Unlock()
+		live.Lane.Unlock()
 		t.Fatal("the reader waited on the lane instead of checking its image position")
 	}
 	live.sequences.Set(map[string]int{"position": 2})
 	live.acceptedResultApplied()
-	live.mu.Unlock()
+	live.Lane.Unlock()
 	select {
 	case value := <-answered:
 		if value.refusal != nil || value.position != 2 || value.sequence != 2 || live.quarantined() {
@@ -312,7 +312,7 @@ func TestInvariantK13ConcurrentSubmissionsKeepOneSerialHistory(t *testing.T) {
 		refusal *kernel.Error
 	}
 	answered := make(chan answer, len(submissions))
-	live.mu.Lock()
+	live.Lane.Lock()
 	for index, submission := range submissions {
 		go func() {
 			record, refusal := live.Submit(member, submission, invariantClock)
@@ -320,11 +320,11 @@ func TestInvariantK13ConcurrentSubmissionsKeepOneSerialHistory(t *testing.T) {
 		}()
 	}
 	deadline := time.Now().Add(10 * time.Second)
-	for live.mu.State().Waiters != 2 && time.Now().Before(deadline) {
+	for live.Lane.State().Waiters != 2 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	waiters := live.mu.State().Waiters
-	live.mu.Unlock()
+	waiters := live.Lane.State().Waiters
+	live.Lane.Unlock()
 	if waiters != 2 {
 		t.Fatal("both decisions did not reach commit while the lane was held")
 	}

@@ -51,14 +51,14 @@ func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platfor
 	if err != nil {
 		return platform.CompositeAnswer{}, err
 	}
-	if prior := t.committed.CompositeAnswer(saved.Key); len(prior) > 0 {
+	if prior := t.Committed.CompositeAnswer(saved.Key); len(prior) > 0 {
 		answer, err := acceptedformat.DecodeComposite(prior)
 		if err != nil || answer.RequestHash != saved.RequestHash {
 			return platform.CompositeAnswer{}, fmt.Errorf("composite key belongs to another request")
 		}
 		return compositeAnswer(answer)
 	}
-	if digest, exists := t.committed.Composite(saved.Key); exists {
+	if digest, exists := t.Committed.Composite(saved.Key); exists {
 		for i, edit := range edits {
 			r := t.app(build.ID).AcceptedLedger().AcceptedFor(t.ID, key+"#"+strconv.Itoa(i))
 			x := r.GetSubmission()
@@ -182,7 +182,7 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, e
 	if saved.Tenant != t.ID {
 		return saved, fmt.Errorf("composite result belongs to another tenant")
 	}
-	if prior, ok := t.committed.Composite(saved.Key); ok {
+	if prior, ok := t.Committed.Composite(saved.Key); ok {
 		if prior != saved.Digest {
 			return saved, fmt.Errorf("composite idempotency key changed")
 		}
@@ -197,8 +197,8 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, e
 			t.publishAcceptedBatch(batch)
 			t.audit.Remember(platform.AuditEntry{At: saved.At, Member: saved.Member, App: build.ID, Action: "composite", Target: saved.Key})
 		}
-		t.committed.SaveComposite(saved.Key, saved.Digest)
-		t.committed.SaveCompositeAnswer(saved.Key, raw)
+		t.Committed.SaveComposite(saved.Key, saved.Digest)
+		t.Committed.SaveCompositeAnswer(saved.Key, raw)
 		t.enqueue(saved.At)
 		return saved, nil
 	}
@@ -206,11 +206,11 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, e
 	if err != nil {
 		return saved, fmt.Errorf("committed composite does not apply: %w", err)
 	}
-	if err := t.records.PromoteRecords(draft.records); err != nil {
+	if err := t.Projection.PromoteRecords(draft.Projection); err != nil {
 		return saved, err
 	}
 	t.setDefinitions(draft.definitions)
-	t.committed.SaveComposite(saved.Key, saved.Digest)
+	t.Committed.SaveComposite(saved.Key, saved.Digest)
 	t.audit.Remember(platform.AuditEntry{At: saved.At, Member: saved.Member, App: build.ID, Action: "composite", Target: saved.Key})
 	return saved, nil
 }

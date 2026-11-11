@@ -50,7 +50,7 @@ func (h hostView) AgentSearch(reader *platform.Member, q string, now time.Time) 
 }
 func (h hostView) AgentQuery(reader platform.Member, query platform.NamedQuery, of string, now time.Time) (platform.AgentObservation, *kernel.Error) {
 	reader.AIContext = true
-	page, err := h.t.runDeclaredQueryFrom(h.t.records, reader, query, of, now)
+	page, err := h.t.runDeclaredQueryFrom(h.t.Projection, reader, query, of, now)
 	if err != nil {
 		return platform.AgentObservation{}, err
 	}
@@ -129,7 +129,7 @@ func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMe
 			req.Limit = agentObjectRows
 		}
 		caller := platform.NewCaller(runtime{t: h.t}, reader, "", false, false)
-		page, object, err := h.t.loadObjectSet(h.t.records, caller, req.Set, objectWindow{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true}, now)
+		page, object, err := h.t.loadObjectSet(h.t.Projection, caller, req.Set, objectWindow{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true}, now)
 		if err != nil {
 			return out, err
 		}

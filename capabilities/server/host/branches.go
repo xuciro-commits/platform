@@ -211,7 +211,7 @@ func (t *Tenant) readBranch(m platform.Member, id string, now time.Time) (build.
 
 func (t *Tenant) readBranchLocked(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {
 	var branch build.Branch
-	raw, refusal := t.readRecordFrom(t.records, t.branchCaller(m), build.BranchType, id, now)
+	raw, refusal := t.readRecordFrom(t.Projection, t.branchCaller(m), build.BranchType, id, now)
 	if refusal != nil {
 		return branch, refusal
 	}
@@ -234,9 +234,9 @@ type mainDraft struct {
 }
 
 func (t *Tenant) resourceProject(typ, draft string) string {
-	t.records.Lock()
-	defer t.records.Unlock()
-	resources := t.records.Type(build.ResourceType)
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	resources := t.Projection.Type(build.ResourceType)
 	if resources == nil {
 		return ""
 	}
@@ -250,8 +250,8 @@ func (t *Tenant) resourceProject(typ, draft string) string {
 }
 
 func (t *Tenant) canEditProjectResource(m platform.Member, project string) bool {
-	t.records.Lock()
-	apps := t.records.Type(build.AppType)
+	t.Projection.Lock()
+	apps := t.Projection.Type(build.AppType)
 	exists := false
 	if apps != nil {
 		if row := apps.Rows().Get(project); row != nil {
@@ -259,7 +259,7 @@ func (t *Tenant) canEditProjectResource(m platform.Member, project string) bool 
 			exists = !app.Archived
 		}
 	}
-	t.records.Unlock()
+	t.Projection.Unlock()
 	if !exists {
 		return false
 	}
@@ -268,9 +268,9 @@ func (t *Tenant) canEditProjectResource(m platform.Member, project string) bool 
 }
 
 func (t *Tenant) draftFields(typ string) (map[string]bool, *kernel.Error) {
-	t.records.Lock()
-	defer t.records.Unlock()
-	et := t.records.Type(typ)
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	et := t.Projection.Type(typ)
 	if et == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{type} is not an installed resource type", typ)
 	}
@@ -292,7 +292,7 @@ func (t *Tenant) mainDraft(m platform.Member, typ, id string, now time.Time) (ma
 	if refusal != nil {
 		return out, refusal
 	}
-	raw, refusal := t.readRecordFrom(t.records, t.branchCaller(m), typ, id, now)
+	raw, refusal := t.readRecordFrom(t.Projection, t.branchCaller(m), typ, id, now)
 	if refusal != nil {
 		if refusal.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
 			out.RID = t.branchRID(typ, id, nil)
@@ -380,7 +380,7 @@ func (t *Tenant) ListBranches(m platform.Member, now time.Time) ([]BranchDetail,
 }
 
 func (t *Tenant) scopedListBranches(m platform.Member, now time.Time) ([]BranchDetail, *kernel.Error) {
-	page, refusal := t.recordsFrom(t.records, m, build.BranchType, platform.Query{Limit: 500, Sort: []string{"id"}}, now)
+	page, refusal := t.recordsFrom(t.Projection, m, build.BranchType, platform.Query{Limit: 500, Sort: []string{"id"}}, now)
 	var ids []string
 	if refusal == nil {
 		for _, record := range page.Records {

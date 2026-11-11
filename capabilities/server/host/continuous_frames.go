@@ -264,7 +264,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			} else {
 				value.sub = t.currentSubmissionSchema(owner, sub)
 			}
-			_, refused := t.committed.Refusal(owner.Manifest().ID + "/" + sub.GetIdempotencyKey())
+			_, refused := t.Committed.Refusal(owner.Manifest().ID + "/" + sub.GetIdempotencyKey())
 			if refusal != nil || refused || owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
 				value.handled = true
 				value.record, refusal = t.submitAcceptedVersion(owner, m, value.sub, now, false, value.binding, refusal, nil, nil)
@@ -374,7 +374,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			retained, inputRetained = true, preparedInput != nil
 		}
 		record, refusal = t.finishPreparedSubmission(preparedContext.member, candidate, record, refusal)
-		if _, rejected := t.committed.Refusal(platform.FlowApp + "/" + sub.GetIdempotencyKey()); rejected {
+		if _, rejected := t.Committed.Refusal(platform.FlowApp + "/" + sub.GetIdempotencyKey()); rejected {
 			retained, inputRetained = false, false
 		}
 		return record, refusal

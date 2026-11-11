@@ -217,25 +217,25 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 		}
 	}()
 	s, rows, seq, err := t.capture(position, true, func() (func(), error) {
-		if t.records.Current().View() != nil {
-			read = t.records.Current().View()
+		if t.Projection.Current().View() != nil {
+			read = t.Projection.Current().View()
 			if t.currentReadScopes {
 				ownsRead = true
 				return t.detachSnapshotRead, nil
 			}
 			return nil, nil
 		}
-		views, ok := t.records.Current().Backend().(persistence.StateReadViews)
+		views, ok := t.Projection.Current().Backend().(persistence.StateReadViews)
 		if !ok {
 			return nil, nil
 		}
 		var err error
-		read, err = views.BeginStateRead(context.Background(), t.ID, t.records.Current().Applied())
+		read, err = views.BeginStateRead(context.Background(), t.ID, t.Projection.Current().Applied())
 		if err != nil {
 			return nil, err
 		}
 		ownsRead = true
-		t.records.Current().Bind(read)
+		t.Projection.Current().Bind(read)
 		return t.detachSnapshotRead, nil
 	})
 	if err != nil {
@@ -265,15 +265,15 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 }
 
 func (t *Tenant) detachSnapshotRead() {
-	t.records.Current().Bind(nil)
-	if store, ok := t.records.Current().Backend().(runtimekernel.AcceptedStateReader); ok && t.records.Current().Position() != nil {
-		t.installRuntimeHistory(store, t.records.Current().Position())
+	t.Projection.Current().Bind(nil)
+	if store, ok := t.Projection.Current().Backend().(runtimekernel.AcceptedStateReader); ok && t.Projection.Current().Position() != nil {
+		t.installRuntimeHistory(store, t.Projection.Current().Position())
 	}
 }
 
 func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessage, int64, error) {
 	views, ok := j.(persistence.StateReadViews)
-	if !ok || t.records.Current().Backend() == nil {
+	if !ok || t.Projection.Current().Backend() == nil {
 		return t.Snapshot(func() int64 { return j.Position(t.ID) })
 	}
 	compatibility, err := t.snapshotCompatibility()
@@ -285,8 +285,8 @@ func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessa
 	var ownsRead bool
 	s, _, seq, err := t.capture(func() int64 {
 		position := j.Position(t.ID)
-		if t.records.Current().View() != nil {
-			view = t.records.Current().View()
+		if t.Projection.Current().View() != nil {
+			view = t.Projection.Current().View()
 			if view.Position() != position {
 				viewErr = fmt.Errorf("tenant %s: SQL snapshot view position differs", t.ID)
 			}
@@ -327,8 +327,8 @@ func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessa
 }
 
 func (t *Tenant) capture(position func() int64, includeRows bool, prepare func() (func(), error)) (tenantState, map[string][]*records.Row, int64, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	if t.quarantined() {
 		return tenantState{}, nil, 0, fmt.Errorf("tenant %s is quarantined", t.ID)
 	}
@@ -359,9 +359,9 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	rows := map[string][]*records.Row{}
 	if includeRows {
 		func() {
-			t.records.Lock()
-			defer t.records.Unlock()
-			for typ, et := range t.records.Types() {
+			t.Projection.Lock()
+			defer t.Projection.Unlock()
+			for typ, et := range t.Projection.Types() {
 				rows[typ] = make([]*records.Row, 0, et.Rows().Len())
 				for _, value := range et.Rows().All() {
 					rows[typ] = append(rows[typ], value)
@@ -381,7 +381,7 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 		s.Identities = &identities
 	}
 	if includeRows {
-		state := t.committed.SnapshotState()
+		state := t.Committed.SnapshotState()
 		s.DecisionDefinitions, s.SubmissionSchemas, s.CompositeAnswers = state.DecisionDefinitions, state.SubmissionSchemas, state.CompositeAnswers
 		s.Refusals, s.AcceptedAnswers, s.AcceptedInputs, s.Composites = state.Refusals, state.AcceptedAnswers, state.AcceptedInputs, state.Composites
 	}
@@ -424,18 +424,18 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	s.Staged = t.staged.Snapshot()
 	seq := position()
 	if seq == 0 {
-		seq = t.snapshotPosition
+		seq = t.SnapshotPosition
 	}
-	t.snapshotPosition = seq
+	t.SnapshotPosition = seq
 	return s, rows, seq, nil
 }
 
 func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[string][]records.StoredState, error) {
 	held := map[string][]records.StoredState{}
-	t.records.Lock()
-	defer t.records.Unlock()
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
 	for typ, rows := range saved {
-		et := t.records.Type(typ)
+		et := t.Projection.Type(typ)
 		if et == nil {
 			held[typ] = rows
 			continue
@@ -443,7 +443,7 @@ func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[str
 		entries := make([]records.Entry[*records.Row], 0, len(rows))
 		for _, r := range rows {
 			v := reflect.New(et.Info().Go).Elem()
-			decode, err := records.DecodeRowImage(et.Info(), r.Value, r.Projection, t.records.Current().Release(), r.Format)
+			decode, err := records.DecodeRowImage(et.Info(), r.Value, r.Projection, t.Projection.Current().Release(), r.Format)
 			if err != nil {
 				return nil, err
 			}
@@ -471,7 +471,7 @@ func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[str
 			return nil, err
 		}
 		et.SetRows(index)
-		t.records.Restored()
+		t.Projection.Restored()
 	}
 	return held, nil
 }
@@ -481,7 +481,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &s); err != nil {
 		return err
 	}
-	if s.Runtime != nil && (s.Runtime.Format != runtimekernel.SQLCheckpointFormat || len(s.Records) != 0 || t.records.Current().Backend() == nil || t.records.Current().View() == nil || t.records.Current().View().Position() != s.Runtime.Position) {
+	if s.Runtime != nil && (s.Runtime.Format != runtimekernel.SQLCheckpointFormat || len(s.Records) != 0 || t.Projection.Current().Backend() == nil || t.Projection.Current().View() == nil || t.Projection.Current().View().Position() != s.Runtime.Position) {
 		return fmt.Errorf("tenant %s: SQL checkpoint requires its matching runtime store", t.ID)
 	}
 	if s.Checkpoint != nil {
@@ -489,13 +489,13 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			return err
 		}
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	t.invalidateReadImage()
 	if s.Checkpoint != nil {
-		t.snapshotPosition = s.Checkpoint.Position
+		t.SnapshotPosition = s.Checkpoint.Position
 	}
-	t.records.Current().SelectRelease(s.ActiveRelease)
+	t.Projection.Current().SelectRelease(s.ActiveRelease)
 	if len(s.Apps) != len(t.apps) {
 		return fmt.Errorf("tenant %s: the snapshot has %d apps, the tenant %d", t.ID, len(s.Apps), len(t.apps))
 	}
@@ -526,7 +526,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if err := t.restoreDefinitions(&s, held); err != nil {
 		return err
 	}
-	if err := t.records.ValidateLinkConstraints(); err != nil {
+	if err := t.Projection.ValidateLinkConstraints(); err != nil {
 		return err
 	}
 	t.audit.Restore(s.Audit, s.Deliveries)
@@ -674,7 +674,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 			}
 		}
 	}
-	t.committed.Restore(runtimekernel.CommittedState{DecisionDefinitions: s.DecisionDefinitions, SubmissionSchemas: s.SubmissionSchemas, CompositeAnswers: s.CompositeAnswers, Refusals: s.Refusals, AcceptedAnswers: s.AcceptedAnswers, AcceptedInputs: s.AcceptedInputs, Composites: s.Composites})
+	t.Committed.Restore(runtimekernel.CommittedState{DecisionDefinitions: s.DecisionDefinitions, SubmissionSchemas: s.SubmissionSchemas, CompositeAnswers: s.CompositeAnswers, Refusals: s.Refusals, AcceptedAnswers: s.AcceptedAnswers, AcceptedInputs: s.AcceptedInputs, Composites: s.Composites})
 	for key, raw := range s.AcceptedAnswers {
 		if strings.HasPrefix(key, "release:") {
 			result, err := acceptedformat.DecodeRelease(raw)
@@ -693,7 +693,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		if !ok || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", t.ID, key)
 		}
-		if _, refused := t.committed.Refusal(key); refused {
+		if _, refused := t.Committed.Refusal(key); refused {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s reuses a refused key", t.ID, key)
 		}
 		binding, bound := s.SubmissionSchemas[key]

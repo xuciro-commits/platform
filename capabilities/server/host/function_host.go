@@ -125,9 +125,9 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 			return t.authorizeCapability(c, owner, f.Name, f.Roles, true, authorizationDetails{At: at, Sources: sources, Definition: definition}).Allow
 		},
 		Source: func(typ, id string) (platform.EntityInfo, bool) {
-			t.records.Lock()
-			defer t.records.Unlock()
-			et := t.records.Type(typ)
+			t.Projection.Lock()
+			defer t.Projection.Unlock()
+			et := t.Projection.Type(typ)
 			if et == nil {
 				return platform.EntityInfo{}, false
 			}
@@ -143,9 +143,9 @@ func (h hostView) ValidateInstallFunction(f platform.AIFunction) error {
 		return err
 	}
 	manifest := h.app.Manifest()
-	h.t.records.Lock()
-	defer h.t.records.Unlock()
-	et := h.t.records.Type(f.Object)
+	h.t.Projection.Lock()
+	defer h.t.Projection.Unlock()
+	et := h.t.Projection.Type(f.Object)
 	if et == nil || et.Info().App != manifest.ID {
 		return fmt.Errorf("function %s needs its owner's source object", f.Name)
 	}

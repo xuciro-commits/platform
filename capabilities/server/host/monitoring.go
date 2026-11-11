@@ -100,7 +100,7 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter MonitoringRunFilter, n
 		page.Coverage = append(page.Coverage, MonitoringCoverage{Source: "run-index", Basis: "latest", Limitation: "index-unavailable"})
 		return page, nil
 	}
-	indexed, err := t.store().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: m.ID, Offset: 0, Limit: 1000})
+	indexed, err := t.Log().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: m.ID, Offset: 0, Limit: 1000})
 	if err != nil {
 		page, fallback := t.monitoringRunsFromOwners(m, filter, now)
 		if fallback != nil {
@@ -147,7 +147,7 @@ func (t *Tenant) refreshRunIndex(m platform.Member, now time.Time) ([]Monitoring
 	if cached, ok := t.runIndexAt[m.ID]; ok && cached.Generation == generation && now.Sub(cached.At) < 5*time.Second {
 		return slices.Clone(cached.Coverage), nil
 	}
-	previous, _ := t.store().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: m.ID, Offset: 0, Limit: 1000})
+	previous, _ := t.Log().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: m.ID, Offset: 0, Limit: 1000})
 	previousStatus := map[string]string{}
 	for _, entry := range previous.Entries {
 		previousStatus[entry.ID] = entry.Status
@@ -178,7 +178,7 @@ func (t *Tenant) refreshRunIndex(m platform.Member, now time.Time) ([]Monitoring
 		}
 		entries = append(entries, platform.RunIndexEntry{ID: run.ID, Scope: m.ID, Type: run.Type, Source: run.Source, App: runResourceApp(run), Status: run.Status, At: run.When, Payload: raw})
 	}
-	if err := t.store().ReplaceRunIndex(t.ID, m.ID, entries); err != nil {
+	if err := t.Log().ReplaceRunIndex(t.ID, m.ID, entries); err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
 	}
 	t.runIndexAt[m.ID] = runIndexCache{At: now, Generation: generation, Coverage: slices.Clone(coverage)}
@@ -193,7 +193,7 @@ func runResourceApp(run MonitoringRun) string {
 }
 
 func monitoringRecords[T any](t *Tenant, m platform.Member, typ string, coverage *MonitoringCoverage, now time.Time) ([]T, *kernel.Error) {
-	page, refusal := t.recordSelectionFrom(t.records, m, typ, platform.Query{Sort: []string{"id"}, Archived: true}, now)
+	page, refusal := t.recordSelectionFrom(t.Projection, m, typ, platform.Query{Sort: []string{"id"}, Archived: true}, now)
 	if refusal != nil {
 		if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
 			coverage.Limitation = "permission-filtered"
@@ -264,7 +264,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 			return
 		}
 		c := platform.NewCaller(runtime{t: t, scoped: true}, m, "", false, false)
-		decision := t.authorizeFrom(t.records, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: schema, Type: typ, Record: id}, now, false)
+		decision := t.authorizeFrom(t.Projection, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: schema, Type: typ, Record: id}, now, false)
 		if !decision.Allow || t.delegatedBound(m, &pb.Submission{Schema: &pb.SchemaRef{Name: schema}, Target: &pb.EntityRef{Type: typ, Id: id}}) != nil {
 			return
 		}

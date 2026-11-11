@@ -155,7 +155,7 @@ func (f *pageModelFilter) match(value reflect.Value) bool {
 type pageModelRuntime struct{ runtime }
 
 func (r pageModelRuntime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) platform.AuthzDecision {
-	return r.t.authorizeDepth(r.t.records, c, q, at, true, 0, newAuthorizationWalk())
+	return r.t.authorizeDepth(r.t.Projection, c, q, at, true, 0, newAuthorizationWalk())
 }
 
 func (r pageModelRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *kernel.Error) {
@@ -563,7 +563,7 @@ func (t *Tenant) pageModelRows(c platform.Caller, page platform.Page, section pl
 	if filter != nil {
 		window.Match = filter.match
 	}
-	loaded, object, err := t.loadObjectSet(t.records, c, set, window, at, bound...)
+	loaded, object, err := t.loadObjectSet(t.Projection, c, set, window, at, bound...)
 	if err != nil {
 		return result, err
 	}
@@ -610,10 +610,10 @@ func (t *Tenant) pageModelQuery(member platform.Member, collection *platform.Mod
 }
 
 func (t *Tenant) ruleEntitySnapshot() map[string]platform.EntityInfo {
-	t.records.Lock()
-	defer t.records.Unlock()
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
 	out := map[string]platform.EntityInfo{}
-	for _, entity := range t.records.Types() {
+	for _, entity := range t.Projection.Types() {
 		out[entity.Info().Type] = entity.Info()
 	}
 	return out
@@ -629,7 +629,7 @@ func (t *Tenant) readRecordPathHeld(c platform.Caller, typ, id string, path []st
 		if refusal != nil {
 			return nil, nil, refusal
 		}
-		entity := t.records.Type(typ)
+		entity := t.Projection.Type(typ)
 		if entity == nil {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Record path object is unavailable")
 		}
@@ -669,11 +669,11 @@ func (t *Tenant) readRecordPathHeld(c platform.Caller, typ, id string, path []st
 }
 
 func (t *Tenant) heldRecordJSON(c platform.Caller, typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
-	entity := t.records.Type(typ)
+	entity := t.Projection.Type(typ)
 	if entity == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Record path object is unavailable")
 	}
-	visible, refusal := t.visibleForCallerIn(t.records, c, entity, at)
+	visible, refusal := t.visibleForCallerIn(t.Projection, c, entity, at)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -684,7 +684,7 @@ func (t *Tenant) heldRecordJSON(c platform.Caller, typ, id string, at time.Time)
 	_, hidden := viewOf(c.Member, entity)
 	record := records.Mask(entity.Info(), row.Value, hidden)
 	if entity.Info().HasReadSources() || len(entity.Info().VersionPins) > 0 {
-		narrowed, _ := t.narrowerIn(t.records, c.Member, at, true).Derive(entity, reflect.ValueOf(record))
+		narrowed, _ := t.narrowerIn(t.Projection, c.Member, at, true).Derive(entity, reflect.ValueOf(record))
 		record = narrowed.Interface()
 	}
 	raw, err := json.Marshal(record)

@@ -195,8 +195,8 @@ func (t *Tenant) liveVersion(query string) string {
 	if image := t.readImage.Load(); image != nil {
 		return image.state.liveReadVersion(query, global, meta, seq, image.operations, owners, ops)
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	return t.liveReadVersion(query, global, meta, seq, seq, owners, ops)
 }
 
@@ -214,9 +214,9 @@ func (t *Tenant) liveReadVersion(query string, global, meta, seq, published int6
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
 	}
 	if strings.HasPrefix(p, "/v1/queries/") {
-		t.records.Lock()
-		generation := t.records.Generation()
-		t.records.Unlock()
+		t.Projection.Lock()
+		generation := t.Projection.Generation()
+		t.Projection.Unlock()
 		return fmt.Sprintf("%d/%d/%d", global, meta, generation)
 	}
 	if strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) {
@@ -243,9 +243,9 @@ func (t *Tenant) liveReadVersion(query string, global, meta, seq, published int6
 		for _, owner := range relevant {
 			operationVersion += ops[owner]
 		}
-		t.records.Lock()
-		a, b := t.records.LiveVersion("flow.instance"), t.records.LiveVersion("agent.run")
-		t.records.Unlock()
+		t.Projection.Lock()
+		a, b := t.Projection.LiveVersion("flow.instance"), t.Projection.LiveVersion("agent.run")
+		t.Projection.Unlock()
 		return fmt.Sprintf("%d/%d/%d/%d/%d/%d", global, meta, a, b, operationVersion, published)
 	}
 	if liveOperationRead(p) || strings.HasPrefix(p, "/v1/chain/") || p == "/v1/business-refusals" || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
@@ -270,38 +270,38 @@ func (t *Tenant) liveReadVersion(query string, global, meta, seq, published int6
 			}
 			return true
 		}
-		t.records.Lock()
-		defer t.records.Unlock()
-		version := t.records.Generation()
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
+		version := t.Projection.Generation()
 		if json.Unmarshal([]byte(body), &request) == nil && walk(request.Set) && request.Collection == nil {
-			if et := t.records.Type(typ); et != nil && et.Info().Scope.Through == nil && !et.Info().HasReadSources() {
-				version = t.records.LiveVersion(typ)
+			if et := t.Projection.Type(typ); et != nil && et.Info().Scope.Through == nil && !et.Info().HasReadSources() {
+				version = t.Projection.LiveVersion(typ)
 			}
 		}
 		return fmt.Sprintf("%d/%d/%d", global, meta, version)
 	}
 	if p == "/v1/branches" || strings.HasPrefix(p, "/v1/branches/") || p == "/v1/resources" || strings.HasPrefix(p, "/v1/resources/") || strings.HasPrefix(p, "/v1/working-state/") {
-		t.records.Lock()
-		defer t.records.Unlock()
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
 		if strings.HasSuffix(p, "/changes") {
-			return fmt.Sprintf("%d/%d/%d", global, meta, t.records.LiveVersion(build.BranchType))
+			return fmt.Sprintf("%d/%d/%d", global, meta, t.Projection.LiveVersion(build.BranchType))
 		}
-		return fmt.Sprintf("%d/%d/%d", global, meta, t.records.Generation())
+		return fmt.Sprintf("%d/%d/%d", global, meta, t.Projection.Generation())
 	}
 	if rest, ok := strings.CutPrefix(p, "/v1/records/"); ok {
 		typ, tail, _ := strings.Cut(rest, "/")
-		t.records.Lock()
-		defer t.records.Unlock()
-		version := t.records.LiveVersion(typ)
-		if et := t.records.Type(typ); et != nil && (et.Info().Scope.Through != nil || et.Info().HasReadSources() || tail != "") {
-			version = t.records.Generation()
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
+		version := t.Projection.LiveVersion(typ)
+		if et := t.Projection.Type(typ); et != nil && (et.Info().Scope.Through != nil || et.Info().HasReadSources() || tail != "") {
+			version = t.Projection.Generation()
 		}
 		return fmt.Sprintf("%d/%d/%d", global, meta, version)
 	}
 	if p == "/v1/enterprise" || p == "/v1/enterprise-references" || p == "/v1/enterprise-usage" {
-		t.records.Lock()
-		generation := t.records.Generation()
-		t.records.Unlock()
+		t.Projection.Lock()
+		generation := t.Projection.Generation()
+		t.Projection.Unlock()
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["enterprise"], generation)
 	}
 	owner := "platform"

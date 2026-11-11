@@ -37,11 +37,11 @@ type RecordFieldProvenance = objects.RecordFieldProvenance
 type RecordProvenance = objects.RecordProvenance
 
 func (t *Tenant) recordProvenance(m platform.Member, typ, id string, now time.Time) (RecordProvenance, *kernel.Error) {
-	return t.objectOwner(t.records).RecordProvenance(m, typ, id, now)
+	return t.objectOwner(t.Projection).RecordProvenance(m, typ, id, now)
 }
 
 func (t *Tenant) selectedSourceValue(typ, id, attribute string, history []records.RecordChange, incoming *acceptedformat.SourceClaim) RecordFieldProvenance {
-	return t.objectOwner(t.records).SelectedSourceValue(typ, id, attribute, history, incoming)
+	return t.objectOwner(t.Projection).SelectedSourceValue(typ, id, attribute, history, incoming)
 }
 
 func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, source *sourceSubmission, now time.Time) (*pb.Submission, *preparedSourceClaim, *kernel.Error) {
@@ -51,7 +51,7 @@ func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, 
 			return nil, nil, refusal
 		}
 		caller := platform.NewCaller(runtime{t: t, scoped: true}, m, sub.GetAuthority(), false, false)
-		decision := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "write", Type: sub.GetTarget().GetType(), Record: sub.GetTarget().GetId(), Action: projected.GetSchema().GetName()}, now, false)
+		decision := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "write", Type: sub.GetTarget().GetType(), Record: sub.GetTarget().GetId(), Action: projected.GetSchema().GetName()}, now, false)
 		if !decision.Allow {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, decision.Reason)
 		}
@@ -78,12 +78,12 @@ func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, 
 	if strings.HasSuffix(sub.GetSchema().GetName(), ".create") {
 		kind = "create"
 	}
-	decision := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: kind, Type: sub.GetTarget().GetType(), Record: sub.GetTarget().GetId(), Action: sub.GetSchema().GetName(), Fields: attributes}, now, false)
+	decision := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: kind, Type: sub.GetTarget().GetType(), Record: sub.GetTarget().GetId(), Action: sub.GetSchema().GetName(), Fields: attributes}, now, false)
 	if !decision.Allow || len(decision.Withheld) > 0 {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, decision.Reason)
 	}
-	t.records.Lock()
-	et := t.records.Type(sub.GetTarget().GetType())
+	t.Projection.Lock()
+	et := t.Projection.Type(sub.GetTarget().GetType())
 	var history []records.RecordChange
 	archived := false
 	change := ""
@@ -94,8 +94,8 @@ func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, 
 			archived, change = header.Archived, header.Changed.Change
 		}
 	}
-	t.records.Unlock()
-	restore := archived && t.objectOwner(t.records).SourceRestores(sub.GetTarget().GetType(), sub.GetTarget().GetId(), change)
+	t.Projection.Unlock()
+	restore := archived && t.objectOwner(t.Projection).SourceRestores(sub.GetTarget().GetType(), sub.GetTarget().GetId(), change)
 	claims := make([]acceptedformat.SourceClaim, 0, len(attributes))
 	payload := map[string]json.RawMessage{}
 	for _, attribute := range attributes {
@@ -183,16 +183,16 @@ func (t *Tenant) applySourceClaims(typ, id, change string, at time.Time, prepare
 
 func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmission, now time.Time) (*pb.Submission, *preparedSourceClaim, *kernel.Error) {
 	typ, id := sub.GetTarget().GetType(), sub.GetTarget().GetId()
-	t.records.Lock()
-	et := t.records.Type(typ)
+	t.Projection.Lock()
+	et := t.Projection.Type(typ)
 	row := et.Rows().Get(id)
 	history := row.RecordHistory()
 	fields := et.Info().Fields
-	t.records.Unlock()
+	t.Projection.Unlock()
 	connector := source.binding.Kind + ":" + source.binding.Source
 	copy := proto.Clone(sub).(*pb.Submission)
 	verb := "edit"
-	if t.objectOwner(t.records).SourceDeletionRemoves(typ, id, connector) {
+	if t.objectOwner(t.Projection).SourceDeletionRemoves(typ, id, connector) {
 		verb = "archive"
 	}
 	copy.Schema = &pb.SchemaRef{Name: typ + "." + verb, Version: 1}
@@ -227,9 +227,9 @@ func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBin
 		}
 		connector := binding.Kind + ":" + binding.Source
 		var removed []dataowner.SourceRow
-		t.records.Lock()
-		defer t.records.Unlock()
-		et := t.records.Type(object)
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
+		et := t.Projection.Type(object)
 		if et == nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
 		}

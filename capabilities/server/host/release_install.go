@@ -18,9 +18,9 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid installation record %s", record)
 	}
-	t.records.Lock()
-	defer t.records.Unlock()
-	et := t.records.Type(typ)
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	et := t.Projection.Type(typ)
 	if et == nil || et.Rows().Get(id) == nil {
 		return "", fmt.Errorf("release metadata needs its predecessor %s", record)
 	}
@@ -32,7 +32,7 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 }
 
 func (t *Tenant) stageReleaseInstallationLocked(installations []platform.ReleaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
-	draft, err := t.assetInstallationView(t.records)
+	draft, err := t.assetInstallationView(t.Projection)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []platform.Release
 			return nil, err
 		}
 		typ, id, _ := strings.Cut(plan.Record, "/")
-		et := draft.records.Type(typ)
+		et := draft.Projection.Type(typ)
 		value := reflect.New(et.Info().Go).Elem()
 		if err := json.Unmarshal(plan.Image, value.Addr().Interface()); err != nil {
 			return nil, err
@@ -63,7 +63,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []platform.Release
 		installed.Value, installed.Original = value, nil
 		installed.RetainOriginal(plan.Image)
 		et.SetRow(id, &installed)
-		draft.records.TrackWrite(plan.Record)
+		draft.Projection.TrackWrite(plan.Record)
 
 		if err := draft.registerInstalledAsset(plan); err != nil {
 			return nil, err
@@ -86,7 +86,7 @@ func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchive
 	if len(includeArchived) > 0 {
 		draft.includeArchivedDefinitions = includeArchived[0]
 	}
-	draft.records = recordView.ForkRecords()
+	draft.Projection = recordView.ForkRecords()
 	draft.console.Restore(t.console.SnapshotState())
 	draft.Secrets = t.Secrets
 	draft.apps = slices.Clone(t.apps)
@@ -126,8 +126,8 @@ func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchive
 
 func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade, allowContraction bool) error {
 	shapes := []releaseowner.StoredShape{}
-	for typ, old := range t.records.Types() {
-		if next := draft.records.Type(typ); next != nil {
+	for typ, old := range t.Projection.Types() {
+		if next := draft.Projection.Type(typ); next != nil {
 			shapes = append(shapes, releaseowner.StoredShape{Before: old.Info(), After: next.Info(), Records: old.Rows().Len()})
 		}
 	}
@@ -146,7 +146,7 @@ func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 
 func (t *Tenant) releaseStoredShapes() []platform.EntityInfo {
 	entities := []platform.EntityInfo{}
-	for _, et := range t.records.SortedTypes() {
+	for _, et := range t.Projection.SortedTypes() {
 		entities = append(entities, et.Info())
 	}
 	return entities
@@ -174,7 +174,7 @@ func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, m
 	if err != nil {
 		return nil, err
 	}
-	records := t.records
+	records := t.Projection
 	if len(bootstrap) > 0 {
 		prepared, err := t.prepareAcceptedBatch(t.app("build").AcceptedLedger(), bootstrap)
 		if err != nil || prepared == nil {
@@ -191,8 +191,8 @@ func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, m
 		return nil, err
 	}
 	shapes := []releaseowner.StoredShape{}
-	for typ, old := range t.records.Types() {
-		if next := trial.records.Type(typ); next != nil {
+	for typ, old := range t.Projection.Types() {
+		if next := trial.Projection.Type(typ); next != nil {
 			shapes = append(shapes, releaseowner.StoredShape{Before: old.Info(), After: next.Info(), Records: old.Rows().Len()})
 		}
 	}

@@ -24,11 +24,11 @@ func (t *Tenant) transcribe(x Transcript) {
 		return
 	}
 	x.Tenant = t.ID
-	t.store().SaveTranscript(x)
+	t.Log().SaveTranscript(x)
 }
 
 func (t *Tenant) Transcripts(run string, limit int) []Transcript {
-	return t.store().Transcripts(t.ID, run, limit)
+	return t.Log().Transcripts(t.ID, run, limit)
 }
 
 func (t *Tenant) PurgeTranscripts(now time.Time) {
@@ -36,17 +36,10 @@ func (t *Tenant) PurgeTranscripts(now time.Time) {
 		return
 	}
 	if days := t.transcriptDays(); days <= 0 {
-		t.store().PurgeTranscripts(t.ID, purgeAll)
+		t.Log().PurgeTranscripts(t.ID, purgeAll)
 	} else {
-		t.store().PurgeTranscripts(t.ID, now.AddDate(0, 0, -days))
+		t.Log().PurgeTranscripts(t.ID, now.AddDate(0, 0, -days))
 	}
-}
-
-func (t *Tenant) store() Store {
-	if t.Store != nil {
-		return t.Store
-	}
-	return &t.memStore
 }
 
 func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now time.Time) ([]Transcript, *kernel.Error) {

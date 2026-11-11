@@ -27,7 +27,7 @@ func TestInvariantK1K2K4AutomationNotificationsAndOwner(t *testing.T) {
 	live.accept(t, build.SchemaProcess, build.ProcessType, "PROCESS", map[string]any{})
 	live.accept(t, "build.alarmitem.create", "build.alarmitem", "ITEM", map[string]any{"note": "other"})
 	live.Work(invariantClock)
-	if got := live.records.Type(platform.FlowInstanceType).Rows().Len(); got != 0 {
+	if got := live.Projection.Type(platform.FlowInstanceType).Rows().Len(); got != 0 {
 		t.Fatalf("nonmatching record started %d runs", got)
 	}
 	live.accept(t, "build.alarmitem.edit", "build.alarmitem", "ITEM", map[string]any{"note": "match"})

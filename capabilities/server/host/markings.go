@@ -68,7 +68,7 @@ func (t *Tenant) markingsIn(store *records.Store, held bool) markingIndex {
 		defer store.Unlock()
 	}
 	var shared *readMarkingCache
-	if store == t.records && t.readMarkings != nil {
+	if store == t.Projection && t.readMarkings != nil {
 		shared = t.readMarkings
 		shared.mu.Lock()
 		defer shared.mu.Unlock()

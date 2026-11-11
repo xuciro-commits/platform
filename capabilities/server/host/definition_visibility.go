@@ -37,13 +37,13 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		}
 		if projectDelegated(m) {
 			project := ""
-			t.records.Lock()
-			if resources := t.records.Type(build.ResourceType); resources != nil {
+			t.Projection.Lock()
+			if resources := t.Projection.Type(build.ResourceType); resources != nil {
 				if row := resources.Rows().Get(platform.ResourceID(t.ID, registered.Ref)); row != nil {
 					project = row.Value.Interface().(build.Resource).Project
 				}
 			}
-			t.records.Unlock()
+			t.Projection.Unlock()
 			if role := t.resourceRole(m, project); role == "" || role == platform.ProjectDiscovererRole {
 				continue
 			}
@@ -342,9 +342,9 @@ func (t *Tenant) definitionOwner(def platform.Definition) (string, string, strin
 	if def.Application == nil || def.Source == "code" {
 		return "", "", ""
 	}
-	t.records.Lock()
-	defer t.records.Unlock()
-	resources := t.records.Type(build.ResourceType)
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	resources := t.Projection.Type(build.ResourceType)
 	if resources == nil {
 		return "", "", ""
 	}
@@ -354,7 +354,7 @@ func (t *Tenant) definitionOwner(def platform.Definition) (string, string, strin
 	}
 	resource := row.Value.Interface().(build.Resource)
 	title := ""
-	if apps := t.records.Type(build.AppType); apps != nil {
+	if apps := t.Projection.Type(build.AppType); apps != nil {
 		if project := apps.Rows().Get(resource.Project); project != nil {
 			title = project.Value.Interface().(build.Application).Title
 		}
@@ -366,9 +366,9 @@ func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {
 	if ref.App != build.ID || ref.Kind != platform.AssetApp {
 		return false
 	}
-	t.records.Lock()
-	defer t.records.Unlock()
-	entity := t.records.Type(build.AppType)
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	entity := t.Projection.Type(build.AppType)
 	if entity == nil {
 		return false
 	}

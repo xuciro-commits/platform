@@ -205,11 +205,11 @@ func (h *Host) tenantView(t *Tenant) HostTenantView {
 	if image != nil {
 		state = image.state
 	} else {
-		t.mu.Lock()
+		t.Lane.Lock()
 	}
 	view := HostTenantView{ID: t.ID, Lifecycle: t.console.State(), ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}
 	if image == nil {
-		t.mu.Unlock()
+		t.Lane.Unlock()
 	}
 	health := t.Health(now)
 	view.Started, view.FailedWork, view.Connectors = health.Started, health.Failed, health.Connectors
@@ -222,7 +222,7 @@ func (h *Host) tenantView(t *Tenant) HostTenantView {
 		view.Members = d.MemberCount()
 	}
 	view.Audit = len(t.Audit())
-	if fault := t.fault.Load(); fault != nil {
+	if fault := t.Fault.Load(); fault != nil {
 		view.Quarantined, view.Fault = true, fault.Reason
 	}
 	for _, g := range t.supportGrants(now) {
@@ -370,8 +370,8 @@ func (t *Tenant) hostArtifacts() []HostArtifactView {
 	if image := t.readImage.Load(); image != nil {
 		state = image.state
 	} else {
-		t.mu.Lock()
-		defer t.mu.Unlock()
+		t.Lane.Lock()
+		defer t.Lane.Unlock()
 	}
 	ids := state.releases.Ids()
 	out := []HostArtifactView{}
@@ -407,8 +407,8 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time,
 	if now.IsZero() {
 		now = Now()
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	if !slices.Contains([]string{"suspend", "decommission", "resume", "open"}, action) {
 		return errSupport("lifecycle action must be suspend, resume, decommission or open")
 	}
@@ -434,8 +434,8 @@ func (t *Tenant) openSupport(member, reason, subject string, minutes int, now ti
 	if member == "" || reason == "" || subject == "" || now.IsZero() || minutes < 1 || minutes > 24*60 {
 		return platform.SupportGrant{}, errSupport("a support session needs a member, a reason and 1 to 1440 minutes")
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	request := struct {
 		Member, Reason string
 		Minutes        int
@@ -462,7 +462,7 @@ func (t *Tenant) supportGrants(now time.Time) []platform.SupportGrant {
 }
 
 func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) (SupportRead, error) {
-	t.mu.Lock()
+	t.Lane.Lock()
 	_, err := t.acceptHostControl("support.use", "host:"+subject, struct{ ID string }{id}, now,
 		platform.AuditEntry{Action: "host.support.use", Target: id}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
 			i := slices.IndexFunc(image.Support, func(g platform.SupportGrant) bool { return g.ID == id })
@@ -475,7 +475,7 @@ func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...accep
 			image.Support[i].Uses++
 			return image.Support[i], nil
 		}, evidence...)
-	t.mu.Unlock()
+	t.Lane.Unlock()
 	if err != nil {
 		return SupportRead{}, err
 	}

@@ -44,8 +44,8 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 		return fmt.Errorf("tenant %s: SQL checkpoint records differ", t.ID)
 	}
 	t.installRuntimeRecords(store, func() int64 { return seq })
-	t.records.Current().Bind(view)
-	defer t.records.Current().Bind(nil)
+	t.Projection.Current().Bind(view)
+	defer t.Projection.Current().Bind(nil)
 	t.installRuntimeHistory(view, func() int64 { return seq })
 	if err = t.recoverSnapshot(state, seq); err != nil {
 		return err
@@ -98,7 +98,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 			key := replacement.Type + "/" + replacement.ID
 			expected, exists := changed[key]
 			if !exists {
-				current, readErr := t.records.Current().View().StateCurrent(ctx, t.ID, replacement.Type, replacement.ID)
+				current, readErr := t.Projection.Current().View().StateCurrent(ctx, t.ID, replacement.Type, replacement.ID)
 				if readErr != nil {
 					return readErr
 				}
@@ -121,7 +121,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 			}
 			prior, exists := owners[update.Key]
 			if !exists {
-				prior, err = t.records.Current().View().StateValue(ctx, t.ID, update.Owner, update.Key, -1)
+				prior, err = t.Projection.Current().View().StateValue(ctx, t.ID, update.Owner, update.Key, -1)
 				if err != nil {
 					return err
 				}
@@ -133,7 +133,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 		}
 	}
 	for _, expected := range changed {
-		et := t.records.Type(expected.Type)
+		et := t.Projection.Type(expected.Type)
 		if et == nil {
 			return fmt.Errorf("tenant %s: restored record type %s is absent", t.ID, expected.Type)
 		}

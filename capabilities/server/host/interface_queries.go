@@ -25,7 +25,7 @@ func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.En
 	fresh := q.InterfaceShape == nil
 	if fresh {
 		q.InterfaceShape = &shape
-		for _, et := range t.records.SortedTypes() {
+		for _, et := range t.Projection.SortedTypes() {
 			info := et.Info()
 			if next, ok := overlay[info.Type]; ok {
 				info = next

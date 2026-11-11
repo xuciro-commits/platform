@@ -21,7 +21,7 @@ func (t *Tenant) prepareMediaVersionImages(installations []platform.ReleaseInsta
 		for _, snapshot := range platform.RetainedMediaVersions(set) {
 			snapshot.ID = platform.MediaSetVersionID(set.ID, snapshot.Version)
 			snapshot.MediaSet = set.ID
-			if entity := t.records.Type(platform.MediaSetVersionType); entity != nil {
+			if entity := t.Projection.Type(platform.MediaSetVersionType); entity != nil {
 				if existing := entity.Rows().Get(snapshot.ID); existing != nil {
 					prior := existing.Value.Interface().(platform.MediaSetVersion)
 					if !reflect.DeepEqual(prior.Items, snapshot.Items) {
@@ -40,7 +40,7 @@ func (t *Tenant) applyMediaVersionImages(snapshots []platform.MediaSetVersion) e
 	if len(snapshots) == 0 {
 		return nil
 	}
-	versions := t.records.Type(platform.MediaSetVersionType)
+	versions := t.Projection.Type(platform.MediaSetVersionType)
 	for _, snapshot := range snapshots {
 		if existing := versions.Rows().Get(snapshot.ID); existing != nil {
 			prior := existing.Value.Interface().(platform.MediaSetVersion)
@@ -52,7 +52,7 @@ func (t *Tenant) applyMediaVersionImages(snapshots []platform.MediaSetVersion) e
 		row := &records.Row{Value: reflect.ValueOf(&snapshot).Elem()}
 		row.RetainOriginal(platform.Raw(snapshot))
 		versions.SetRow(snapshot.ID, row)
-		t.records.TrackWrite(platform.MediaSetVersionType + "/" + snapshot.ID)
+		t.Projection.TrackWrite(platform.MediaSetVersionType + "/" + snapshot.ID)
 	}
 	return nil
 }

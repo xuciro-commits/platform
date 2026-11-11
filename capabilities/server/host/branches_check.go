@@ -60,13 +60,13 @@ func (c BranchCheck) Failure() string {
 func (t *Tenant) branchBaseLocked() string {
 	sum := sha256.New()
 	sum.Write([]byte(t.releases.Active()))
-	for _, et := range t.records.SortedTypes() {
+	for _, et := range t.Projection.SortedTypes() {
 		info := et.Info()
 		if !build.BranchDraftType(info.Type) {
 			continue
 		}
 		sum.Write([]byte("\x00" + info.Type))
-		t.records.Lock()
+		t.Projection.Lock()
 		var entries []string
 		for id, row := range et.Rows().All() {
 			header := row.Value.FieldByName("Record").Interface().(platform.Record)
@@ -76,7 +76,7 @@ func (t *Tenant) branchBaseLocked() string {
 			}
 			entries = append(entries, entry)
 		}
-		t.records.Unlock()
+		t.Projection.Unlock()
 		sort.Strings(entries)
 		for _, entry := range entries {
 			sum.Write([]byte("\x00" + entry))

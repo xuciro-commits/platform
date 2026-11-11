@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"runtime/debug"
 	"slices"
@@ -28,16 +29,10 @@ type TenantHealth struct {
 }
 
 type LaneHealth struct {
-	Holder      string    `json:"holder,omitempty"`
-	HeldSeconds float64   `json:"heldSeconds"`
-	Waiters     int64     `json:"waiters"`
-	LastSlow    *LaneHold `json:"lastSlow,omitempty"`
-}
-
-type LaneHold struct {
-	Holder  string    `json:"holder"`
-	Seconds float64   `json:"seconds"`
-	At      time.Time `json:"at"`
+	Holder      string                  `json:"holder,omitempty"`
+	HeldSeconds float64                 `json:"heldSeconds"`
+	Waiters     int64                   `json:"waiters"`
+	LastSlow    *runtimekernel.LaneHold `json:"lastSlow,omitempty"`
 }
 
 type ObservationHealth struct {
@@ -89,8 +84,8 @@ func (t *Tenant) laneHealth(now time.Time, outside bool) LaneHealth {
 	if source := t.scopeSource(); source != nil {
 		return source.laneHealth(now, true)
 	}
-	state := t.mu.State()
-	lane := LaneHealth{Waiters: state.Waiters, LastSlow: t.laneLastSlow.Load()}
+	state := t.Lane.State()
+	lane := LaneHealth{Waiters: state.Waiters, LastSlow: t.LastSlowHold.Load()}
 	if outside && !state.Since.IsZero() {
 		lane.Holder, lane.HeldSeconds = state.Holder, now.Sub(state.Since).Seconds()
 	}
@@ -102,7 +97,7 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 	if source := t.scopeSource(); source != nil {
 		operational = source
 	}
-	if fault := operational.fault.Load(); fault != nil {
+	if fault := operational.Fault.Load(); fault != nil {
 		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: Started,
 			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []platform.Breaker{},
 			Observations: ObservationHealth{Dropped: t.observationDropped.Load()},
@@ -155,13 +150,13 @@ func (t *Tenant) finishHealth(h *TenantHealth, now time.Time) {
 	if h.Status == "quarantined" {
 		return
 	}
-	if page, err := t.store().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: now, Limit: 1}); err == nil {
+	if page, err := t.Log().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: now, Limit: 1}); err == nil {
 		h.Observations.Available = true
 		h.Observations.RetainedFrom = page.Coverage.RetainedFrom
 	} else {
 		h.Observations.Available = false
 	}
-	journalReady := t.store() != nil
+	journalReady := t.Log() != nil
 	journalDetail := ""
 	if t.Store == nil {
 		journalDetail = "in-memory test store"

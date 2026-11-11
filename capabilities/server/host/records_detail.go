@@ -22,15 +22,15 @@ const (
 )
 
 func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
-	return t.objectOwner(t.records).RecordOf(m, typ, id, now)
+	return t.objectOwner(t.Projection).RecordOf(m, typ, id, now)
 }
 
 func (t *Tenant) recordSection(m platform.Member, typ, id, section string, now time.Time) (RecordSectionView, *kernel.Error) {
-	return t.objectOwner(t.records).RecordSection(m, typ, id, section, now)
+	return t.objectOwner(t.Projection).RecordSection(m, typ, id, section, now)
 }
 
 func (t *Tenant) recordDetail(m platform.Member, typ, id string, now time.Time, sections ...string) (RecordView, *kernel.Error) {
-	return t.objectOwner(t.records).RecordDetail(m, typ, id, now, sections...)
+	return t.objectOwner(t.Projection).RecordDetail(m, typ, id, now, sections...)
 }
 
 func (t *Tenant) PersonalReads() []platform.PersonalRead { return t.audit.PersonalReads() }

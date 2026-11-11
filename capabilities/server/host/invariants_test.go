@@ -471,7 +471,7 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 			if nodes["object:build.alpha"].Declared != "" || nodes["pipeline:PIPELINE"].Declared != "" {
 				t.Fatal("the object and pipeline must inherit their effective markings without declaring one")
 			}
-			index := live.markingsIn(live.records, false)
+			index := live.markingsIn(live.Projection, false)
 			if got := index.types["build.alpha"]; got != phase.downstream {
 				t.Fatalf("object marking index: %q; want %q", got, phase.downstream)
 			}
@@ -479,7 +479,7 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 				if got := index.datasets[id]; got != want {
 					t.Fatalf("dataset %s marking index: %q; want %q", id, got, want)
 				}
-				row := live.records.Type(dataowner.DatasetVersionType).Rows().Get(dataowner.VersionID(id, 1))
+				row := live.Projection.Type(dataowner.DatasetVersionType).Rows().Get(dataowner.VersionID(id, 1))
 				if row == nil {
 					t.Fatalf("dataset %s has no first version", id)
 				}
@@ -632,7 +632,7 @@ func TestInvariantResourceDirectoryTracksAcceptedSaveOnce(t *testing.T) {
 	rid := platform.ResourceID(live.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"})
 	resource := func() build.Resource {
 		t.Helper()
-		row := live.records.Type(build.ResourceType).Rows().Get(rid)
+		row := live.Projection.Type(build.ResourceType).Rows().Get(rid)
 		if row == nil {
 			t.Fatal("the accepted object is absent from the resource directory")
 		}

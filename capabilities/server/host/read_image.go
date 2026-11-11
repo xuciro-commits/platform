@@ -57,10 +57,10 @@ func (t *Tenant) endLane() {
 	t.change.mu.Lock()
 	operations := t.change.seq + int64(len(t.change.pendingData))
 	t.change.mu.Unlock()
-	epoch, work, definitions, position := t.stateEpoch.Load(), t.workEpoch.Load(), t.defGen.Load(), t.records.Current().Applied()
-	t.records.Lock()
-	generation := t.records.Generation()
-	t.records.Unlock()
+	epoch, work, definitions, position := t.StateEpoch.Load(), t.WorkEpoch.Load(), t.defGen.Load(), t.Projection.Current().Applied()
+	t.Projection.Lock()
+	generation := t.Projection.Generation()
+	t.Projection.Unlock()
 	if previous := t.readImage.Load(); previous != nil && previous.epoch == epoch && previous.work == work && previous.definitions == definitions && previous.records == generation && previous.operations == operations && previous.position == position {
 		return
 	}
@@ -203,8 +203,8 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 		view.readMarkings = &readMarkingCache{}
 	}
 	view.currentReadScopes = t.currentReadScopes
-	view.records = t.records.ForkRecords()
-	view.records.Current().Detach()
+	view.Projection = t.Projection.ForkRecords()
+	view.Projection.Current().Detach()
 	view.definitions = slices.Clone(t.definitions)
 	view.listeners = slices.Clone(t.listeners)
 	view.disabledOwners = maps.Clone(t.disabledOwners)
@@ -259,7 +259,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 		binding.provider = view.app(binding.provider.Manifest().ID)
 		view.bindings[protocol] = binding
 	}
-	view.committed = t.committed.Fork()
+	view.Committed = t.Committed.Fork()
 	view.releases.Restore(t.releases.SnapshotState())
 	view.console.Restore(t.console.SnapshotState())
 	view.sequences.Restore(t.sequences.Clone())
@@ -299,12 +299,12 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.observationPurged.Store(t.observationPurged.Load())
 	view.observationLastWrite.Store(t.observationLastWrite.Load())
 	view.observationLastPurge.Store(t.observationLastPurge.Load())
-	view.laneLastSlow.Store(t.laneLastSlow.Load())
+	view.LastSlowHold.Store(t.LastSlowHold.Load())
 	for _, app := range view.apps {
 		(hostView{t: view, app: app}).bindOwner(app)
 	}
-	if backend, ok := view.records.Current().Backend().(runtimekernel.AcceptedStateReader); ok {
-		view.installRuntimeHistory(backend, func() int64 { return view.records.Current().Applied() })
+	if backend, ok := view.Projection.Current().Backend().(runtimekernel.AcceptedStateReader); ok {
+		view.installRuntimeHistory(backend, func() int64 { return view.Projection.Current().Applied() })
 	}
 	return view, nil
 }

@@ -12,7 +12,7 @@ import (
 type authorizationSources struct{ t *Tenant }
 
 func (s authorizationSources) Tenant() string        { return s.t.ID }
-func (s authorizationSources) Store() *records.Store { return s.t.records }
+func (s authorizationSources) Store() *records.Store { return s.t.Projection }
 func (s authorizationSources) Now() time.Time        { return Now() }
 func (s authorizationSources) Engine() platform.AuthorizationEngine {
 	return s.t.services.Authorization

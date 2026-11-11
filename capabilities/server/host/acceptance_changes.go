@@ -82,7 +82,7 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 		}
 	}
 	if len(plan.Rows) > 0 {
-		base := t.records
+		base := t.Projection
 		if prepared.child != nil {
 			base = prepared.child.records
 		}
@@ -102,7 +102,7 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 			records = prepared.child.records
 		}
 		if records == nil {
-			records = t.records.ForkRecords()
+			records = t.Projection.ForkRecords()
 		}
 		if err := validateUniqueReplacements(records, plan.Unique); err != nil {
 			return nil, err
@@ -119,7 +119,7 @@ func (p *preparedAcceptedChanges) apply(t *Tenant) error {
 
 	}
 	if p.records != nil {
-		if err := t.records.PromoteRecords(p.records); err != nil {
+		if err := t.Projection.PromoteRecords(p.records); err != nil {
 			return err
 		}
 	}
@@ -181,7 +181,7 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 }
 
 func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, member string, at time.Time) (*records.Store, error) {
-	return t.prepareAcceptedDirectRowsOn(t.records, rows, member, at)
+	return t.prepareAcceptedDirectRowsOn(t.Projection, rows, member, at)
 }
 
 func (t *Tenant) prepareAcceptedDirectRowsOn(base *records.Store, rows []acceptedformat.InputRow, member string, at time.Time) (*records.Store, error) {

@@ -117,7 +117,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	key := "input:" + hash
-	if saved := t.committed.Input(a.Manifest().ID + "/" + key); len(saved) != 0 {
+	if saved := t.Committed.Input(a.Manifest().ID + "/" + key); len(saved) != 0 {
 		return t.answerAcceptedInput(a, saved)
 	}
 	draft := t.newStagedDecision()
@@ -231,7 +231,7 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, err
 			return result, false, fmt.Errorf("connector result has an invalid answer: %w", err)
 		}
 	}
-	if prior := t.committed.Input(result.App + "/" + result.Key); len(prior) > 0 {
+	if prior := t.Committed.Input(result.App + "/" + result.Key); len(prior) > 0 {
 		saved, err := acceptedformat.DecodeInput(prior)
 		if err != nil || saved.Digest != result.Digest {
 			return result, false, fmt.Errorf("connector input key belongs to another result")
@@ -249,7 +249,7 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, err
 	if result.Refusal != nil {
 		t.refused(result.Member, result.Name, result.Refusal, result.At)
 	}
-	t.committed.SaveInput(result.App+"/"+result.Key, raw)
+	t.Committed.SaveInput(result.App+"/"+result.Key, raw)
 	return result, true, nil
 }
 

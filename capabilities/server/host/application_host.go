@@ -83,7 +83,7 @@ func (t *Tenant) refreshApplicationRunIndex(m platform.Member, ref platform.Asse
 		}
 		entries = append(entries, platform.RunIndexEntry{ID: run.Kind + "/" + run.ID, Scope: m.ID, Type: "application", App: ref.Name, Status: run.State, At: run.Created, Payload: raw})
 	}
-	if err := t.store().ReplaceRunIndex(t.ID, key, entries); err != nil {
+	if err := t.Log().ReplaceRunIndex(t.ID, key, entries); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
 	}
 	t.runIndexAt[key] = runIndexCache{At: now, Generation: generation}
@@ -92,7 +92,7 @@ func (t *Tenant) refreshApplicationRunIndex(m platform.Member, ref platform.Asse
 
 func (t *Tenant) applicationRunsFromIndex(m platform.Member, ref platform.AssetRef, offset, limit int, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, error) {
 	scope := "application/" + ref.App + "/" + ref.Name + "/" + m.ID
-	indexed, err := t.store().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: scope, Offset: 0, Limit: 1000})
+	indexed, err := t.Log().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: scope, Offset: 0, Limit: 1000})
 	if err != nil {
 		return platform.ApplicationRunPage{}, err
 	}
@@ -219,7 +219,7 @@ func (t *Tenant) scopedApplicationRecordDiagnostic(m platform.Member, ref platfo
 	if refusal != nil {
 		return out, refusal
 	}
-	owner := t.records.Type(typ).Info().App
+	owner := t.Projection.Type(typ).Info().App
 	ledger := t.app(owner).AcceptedLedger()
 	receipts := ledger.RecordsFor(t.ID)
 	visible := map[platform.AssetRef]bool{}
@@ -228,7 +228,7 @@ func (t *Tenant) scopedApplicationRecordDiagnostic(m platform.Member, ref platfo
 	}
 	for _, change := range view.History {
 		trace := platform.ApplicationDecisionTrace{Change: change.Change, Schema: change.Schema, At: change.At, Versions: []platform.ApplicationVersion{}}
-		if definition := t.committed.DecisionDefinition(owner + "/" + change.Change); definition != nil && definition.Definition.Ref.Name == change.Schema {
+		if definition := t.Committed.DecisionDefinition(owner + "/" + change.Change); definition != nil && definition.Definition.Ref.Name == change.Schema {
 			projection := *definition
 			if projection.Observation != nil {
 				projection.Observation = t.visibleObservationEvidence(m, projection.Observation, now)
@@ -246,7 +246,7 @@ func (t *Tenant) scopedApplicationRecordDiagnostic(m platform.Member, ref platfo
 			if receipt.GetChangeId() != change.Change {
 				continue
 			}
-			if binding, exists := t.committed.SchemaVersion(owner + "/" + receipt.GetSubmission().GetIdempotencyKey()); exists && trace.Content == nil {
+			if binding, exists := t.Committed.SchemaVersion(owner + "/" + receipt.GetSubmission().GetIdempotencyKey()); exists && trace.Content == nil {
 				trace.Content = &binding
 			}
 			break
@@ -274,7 +274,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 		Assets: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) }, Candidate: t.releases.Candidate,
 		Candidates: func() map[string]json.RawMessage { return t.releases.Candidates() }, CloseCandidate: t.candidateWithBindings,
 		Rows: func(m platform.Member, typ string, q platform.Query, at time.Time) ([]any, *kernel.Error) {
-			page, err := t.recordSelectionFrom(t.records, m, typ, q, at)
+			page, err := t.recordSelectionFrom(t.Projection, m, typ, q, at)
 			return page.Records, err
 		},
 		Computations: func(m platform.Member) []appowner.Computation {
@@ -327,14 +327,14 @@ func (t *Tenant) applicationContext() appowner.Context {
 		},
 		Refusals: func() []appowner.Refusal {
 			out := []appowner.Refusal{}
-			for _, r := range t.committed.AllRefusals() {
+			for _, r := range t.Committed.AllRefusals() {
 				out = append(out, appowner.Refusal{Submission: r.Submission, Error: r.Error, Business: r.Business, Issues: r.Issues})
 			}
 			return out
 		},
 		BusinessFacts: func() []platform.BusinessRefusalFact {
 			out := []platform.BusinessRefusalFact{}
-			for _, raw := range t.committed.AllAnswers("business") {
+			for _, raw := range t.Committed.AllAnswers("business") {
 				var header struct{ Kind string }
 				if json.Unmarshal(raw, &header) != nil || header.Kind != "record-batch" {
 					continue
@@ -348,7 +348,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 		},
 		ActiveVersions: func() []appowner.ActiveVersion {
 			out := []appowner.ActiveVersion{}
-			for key, raw := range t.committed.AllAnswers("active") {
+			for key, raw := range t.Committed.AllAnswers("active") {
 				if len(key) < 8 || key[:8] != "release:" {
 					continue
 				}

@@ -146,14 +146,14 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	}
 	slices.Sort(fields)
 	fields = slices.Compact(fields)
-	decision = t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: entity.Type, Record: record, Fields: fields}, at, false)
+	decision = t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: entity.Type, Record: record, Fields: fields}, at, false)
 	if refusal := authorizationRefusal(decision); refusal != nil {
 		return plan, refusal
 	}
 	if len(decision.Withheld) > 0 {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Observation fields are outside this member's permissions")
 	}
-	plan.record, _ = t.readRecordFrom(t.records, caller, entity.Type, record, at)
+	plan.record, _ = t.readRecordFrom(t.Projection, caller, entity.Type, record, at)
 	if len(plan.record) == 0 {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Observation record is unavailable to this member")
 	}
@@ -229,9 +229,9 @@ func (t *Tenant) observationSourceActive(record string) bool {
 	if !valid {
 		return false
 	}
-	t.records.Lock()
-	defer t.records.Unlock()
-	owner := t.records.Type(typ)
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	owner := t.Projection.Type(typ)
 	if owner == nil {
 		return false
 	}

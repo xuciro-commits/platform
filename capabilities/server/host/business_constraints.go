@@ -27,12 +27,12 @@ func constraintValues(info platform.EntityInfo, value reflect.Value) map[string]
 
 func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.FieldIssue, at time.Time) []platform.FieldIssue {
 	issues = slices.Clone(issues)
-	t.records.Lock()
-	defer t.records.Unlock()
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
 	for i, issue := range issues {
 		issues[i].Values = maps.Clone(issue.Values)
 		if issue.Code == "business_refusal" {
-			if !t.readableIn(t.records, member, issue.Record, at) {
+			if !t.readableIn(t.Projection, member, issue.Record, at) {
 				issues[i].Values = nil
 				issues[i].Translations = nil
 				issues[i].Message = "The business record is no longer readable"
@@ -43,18 +43,18 @@ func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.F
 			continue
 		}
 		typ, id, _ := strings.Cut(issue.Record, "/")
-		et := t.records.Type(typ)
+		et := t.Projection.Type(typ)
 		if et == nil {
 			issues[i].Values = nil
 			continue
 		}
 		info := platform.ConstraintEntity(et.Info())
-		if et.Rows().Get(id) != nil && !t.readableIn(t.records, member, issue.Record, at) {
+		if et.Rows().Get(id) != nil && !t.readableIn(t.Projection, member, issue.Record, at) {
 			issues[i].Values = nil
 			continue
 		}
 		if current := et.Rows().Get(id); current != nil && et.Info().HasReadSources() {
-			narrowed, _ := t.narrowerIn(t.records, member, at, true).Derive(et, current.Value)
+			narrowed, _ := t.narrowerIn(t.Projection, member, at, true).Derive(et, current.Value)
 			for _, derivation := range et.Info().Derived {
 				paths := derivation.Fields
 				if len(derivation.List) > 0 {

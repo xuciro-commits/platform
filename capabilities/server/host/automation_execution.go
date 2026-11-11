@@ -348,7 +348,7 @@ func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) (refusal *ke
 	if err != nil {
 		return err
 	}
-	return view.records.Check(c, entity, r.at)
+	return view.Projection.Check(c, entity, r.at)
 }
 func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platform.Query) (out []any, total int, refusal *kernel.Error) {
 	defer r.recoverRetainedRead(&refusal)
@@ -357,7 +357,7 @@ func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platf
 		return nil, 0, err
 	}
 	d := *r.stagedDecision
-	d.records = view.records
+	d.records = view.Projection
 	return d.Find(c, typ, q)
 }
 func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
@@ -369,7 +369,7 @@ func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at 
 	if err != nil {
 		return nil, err
 	}
-	raw, refusal := view.readRecordFrom(view.records, c, typ, id, at)
+	raw, refusal := view.readRecordFrom(view.Projection, c, typ, id, at)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -406,7 +406,7 @@ func (r *flowExecutionRuntime) ReadQuery(c platform.Caller, app, name string, in
 	if err != nil {
 		return nil, err
 	}
-	return view.readQueryFrom(view.records, c, app, name, input, at)
+	return view.readQueryFrom(view.Projection, c, app, name, input, at)
 }
 func (r *flowExecutionRuntime) ReadQueryVersion(c platform.Caller, app, name string, version int, input json.RawMessage, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
 	defer r.recoverRetainedRead(&refusal)
@@ -414,7 +414,7 @@ func (r *flowExecutionRuntime) ReadQueryVersion(c platform.Caller, app, name str
 	if err != nil {
 		return nil, err
 	}
-	return view.readQueryVersionFrom(view.records, c, app, name, version, input, at)
+	return view.readQueryVersionFrom(view.Projection, c, app, name, version, input, at)
 }
 func (r *flowExecutionRuntime) ReadRuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
 	defer r.recoverRetainedRead(&refusal)
@@ -422,7 +422,7 @@ func (r *flowExecutionRuntime) ReadRuleQuery(c platform.Caller, set platform.Rul
 	if err != nil {
 		return nil, err
 	}
-	return view.readRuleQueryFrom(view.records, c, set, input, at)
+	return view.readRuleQueryFrom(view.Projection, c, set, input, at)
 }
 func (r *flowExecutionRuntime) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (output platform.RecordSetResult, refusal *kernel.Error) {
 	defer r.recoverRetainedRead(&refusal)
@@ -434,7 +434,7 @@ func (r *flowExecutionRuntime) ReadRecordSet(c platform.Caller, object, id, name
 	if err != nil {
 		return platform.RecordSetResult{}, err
 	}
-	return view.readRecordSetFrom(view.records, c, object, id, name, at)
+	return view.readRecordSetFrom(view.Projection, c, object, id, name, at)
 }
 func (r *flowExecutionRuntime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) (decision platform.AuthzDecision) {
 	defer r.recoverRetainedRead(nil)
@@ -444,7 +444,7 @@ func (r *flowExecutionRuntime) Authorize(c platform.Caller, q platform.AuthzRequ
 		return platform.AuthzDecision{}
 	}
 	c.Member = r.tenant.authorizationMember(c.Member)
-	decision = view.authorizeFrom(view.records, c, q, at, false)
+	decision = view.authorizeFrom(view.Projection, c, q, at, false)
 	r.RecordAuthorization(c, q, decision)
 	return decision
 }
@@ -460,7 +460,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if err != nil {
 		return err
 	}
-	old := view.records.Of(c, reflect.TypeOf(entity))
+	old := view.Projection.Of(c, reflect.TypeOf(entity))
 	if old == nil {
 		return r.stagedDecision.Put(c, receipt, entity)
 	}

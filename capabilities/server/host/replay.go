@@ -11,8 +11,8 @@ import (
 )
 
 func (t *Tenant) Replay(entries []Entry) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	t.invalidateReadImage()
 	if t.procs != nil {
 		defer t.procs.Pin(nil)
@@ -137,10 +137,10 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 			return fmt.Errorf("entry %d: invalid refused result: %v", i+1, decodeErr)
 		}
 		key := e.App + "/" + sub.GetIdempotencyKey()
-		if _, duplicate := t.committed.Refusal(key); duplicate || ra.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+		if _, duplicate := t.Committed.Refusal(key); duplicate || ra.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
 			return fmt.Errorf("entry %d: duplicate refused result key", i+1)
 		}
-		t.committed.SaveRefusal(key, saved)
+		t.Committed.SaveRefusal(key, saved)
 		return nil
 	}
 	if envelope.Kind == "record-batch" {
@@ -156,7 +156,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 			return fmt.Errorf("entry %d: record batch journal identity differs (app=%q/%q tenant=%q/%q principal=%q/%q time=%s/%s)",
 				i+1, saved.App, e.App, saved.Tenant, t.ID, sub.GetPrincipalId(), m.ID, saved.At, e.At)
 		}
-		if _, refused := t.committed.Refusal(e.App + "/" + sub.GetIdempotencyKey()); refused {
+		if _, refused := t.Committed.Refusal(e.App + "/" + sub.GetIdempotencyKey()); refused {
 			return fmt.Errorf("entry %d: record batch reused a refused key", i+1)
 		}
 		applied, applyErr := t.applyAcceptedBatch(ra.AcceptedLedger(), e.Body)
@@ -176,7 +176,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		saved.Version >= 2 && !persistence.SameTime(saved.At, e.At) {
 		return fmt.Errorf("entry %d: accepted result app or input clock differs from journal entry", i+1)
 	}
-	if _, refused := t.committed.Refusal(e.App + "/" + receipt.GetSubmission().GetIdempotencyKey()); refused {
+	if _, refused := t.Committed.Refusal(e.App + "/" + receipt.GetSubmission().GetIdempotencyKey()); refused {
 		return fmt.Errorf("entry %d: accepted result reused a refused key", i+1)
 	}
 	applied, applyErr := t.applyAcceptedResult(ra.AcceptedLedger(), e.Body)

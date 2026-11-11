@@ -66,8 +66,8 @@ func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Tim
 
 func (t *Tenant) Read(ctx context.Context, m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	if name == "health" && t.quarantined() {
-		t.mu.Lock()
-		defer t.mu.Unlock()
+		t.Lane.Lock()
+		defer t.Lane.Unlock()
 		return t.read(m, name, inputs...)
 	}
 	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *kernel.Error) { return t.read(m, name, inputs...) })

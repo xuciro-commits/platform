@@ -194,10 +194,10 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	live.mu.Lock()
+	live.Lane.Lock()
 	job := live.work.Job("job:probe/failed")
 	jobOutcome := live.acceptWork(job, invariantClock.Add(4*time.Second))
-	live.mu.Unlock()
+	live.Lane.Unlock()
 	if jobOutcome == "ok" || live.quarantined() {
 		t.Fatalf("failed job outcome=%q quarantine=%v", jobOutcome, live.quarantined())
 	}
@@ -360,8 +360,8 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		startFlow := func(member, name, key string) string {
 			t.Helper()
 			submit(member, "probe", "probe.start", "probe.event", key, map[string]string{"flow": name})
-			live.mu.Lock()
-			defer live.mu.Unlock()
+			live.Lane.Lock()
+			defer live.Lane.Unlock()
 			for _, task := range slices.Clone(live.work.Queued(platform.FlowApp)) {
 				if outcome := live.acceptWork(task, now); outcome != "ok" {
 					t.Fatalf("Flow delivery: %s", outcome)
@@ -456,9 +456,9 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			}
 		}
 		for attempt := 1; attempt <= 4; attempt++ {
-			live.mu.Lock()
+			live.Lane.Lock()
 			outcome := live.acceptWork(live.work.Job("job:flow/timers"), now.Add(time.Duration(attempt)*time.Minute))
-			live.mu.Unlock()
+			live.Lane.Unlock()
 			if outcome != "ok" {
 				t.Fatalf("Flow undo retry %d: %s", attempt, outcome)
 			}

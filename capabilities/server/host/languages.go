@@ -90,7 +90,7 @@ func (t *Tenant) Texts(app string) []string {
 			parts = append(parts, definition)
 		}
 	}
-	for _, et := range t.records.Types() {
+	for _, et := range t.Projection.Types() {
 		if et.Info().App == app {
 			parts = append(parts, et.Info())
 		}
@@ -151,7 +151,7 @@ func (t *Tenant) Untranslated(app, lang string) []string {
 
 func (t *Tenant) meaning(app string) string {
 	var b strings.Builder
-	for _, et := range t.records.SortedTypes() {
+	for _, et := range t.Projection.SortedTypes() {
 		info := et.Info()
 		if info.App != app {
 			continue
@@ -238,7 +238,7 @@ func (t *Tenant) termsFor(declaration string) []string {
 }
 
 func (t *Tenant) declares(name string) bool {
-	for _, et := range t.records.SortedTypes() {
+	for _, et := range t.Projection.SortedTypes() {
 		if et.Info().Type == name {
 			return true
 		}

@@ -1,10 +1,10 @@
 package host
 
-import "fmt"
+import (
+	"fmt"
 
-type tenantFault struct {
-	Reason string
-}
+	runtimekernel "platformserver/kernel"
+)
 
 func (t *Tenant) quarantine(err error) {
 	if err == nil {
@@ -14,7 +14,7 @@ func (t *Tenant) quarantine(err error) {
 		source.quarantine(err)
 		return
 	}
-	if t.fault.CompareAndSwap(nil, &tenantFault{Reason: fmt.Sprintf("%v", err)}) {
+	if t.Fault.CompareAndSwap(nil, &runtimekernel.Fault{Reason: fmt.Sprintf("%v", err)}) {
 		t.changed()
 	}
 }
@@ -23,7 +23,7 @@ func (t *Tenant) quarantined() bool {
 	if source := t.scopeSource(); source != nil {
 		return source.quarantined()
 	}
-	return t.fault.Load() != nil
+	return t.Fault.Load() != nil
 }
 
 func (t *Tenant) recoverSnapshot(state []byte, seq int64) (err error) {

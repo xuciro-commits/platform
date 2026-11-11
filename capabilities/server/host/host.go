@@ -20,7 +20,6 @@ import (
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 
-	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"sync"
 	"sync/atomic"
@@ -28,6 +27,7 @@ import (
 )
 
 type Tenant struct {
+	runtimekernel.Sequence
 	agentEvaluator        platform.AgentEvaluator
 	agentRun              string
 	services              platform.RuntimeCapabilities
@@ -37,12 +37,8 @@ type Tenant struct {
 	readScope             *recordReadScope
 	readOrigin            *Tenant
 	readImage             atomic.Pointer[tenantReadImage]
-	stateEpoch            atomic.Uint64
-	workEpoch             atomic.Uint64
 	preparedResult        *preparedAccepted
 	startupSnapshot       *snapshotCompatibility
-	runtimePosition       func() int64
-	snapshotPosition      int64
 	simulation            bool
 	simulationTrace       func(platform.DecisionTrace)
 	observationWindows    map[string]observationWindowAttempt
@@ -69,16 +65,11 @@ type Tenant struct {
 	claims                platform.Facts
 	claimSchemas          platform.SchemaRegistry
 	entityIDs             platform.Identity
-	ID                    string
 	Record                func(Entry)
 	AcceptResult          func(Entry, string, string) ([]byte, error)
-	Store                 Store
-	memStore              persistence.Memory
 	knowledge             platform.Glossary
 	index                 *knowledgeindex.Index
 	i18n                  transport.Translator
-	mu                    runtimekernel.Lane
-	laneLastSlow          atomic.Pointer[LaneHold]
 	views                 transport.ViewCache
 	readViews             *transport.ViewCache
 	readMarkings          *readMarkingCache
@@ -90,10 +81,8 @@ type Tenant struct {
 	lineageCache          *lineageSnapshot
 	lineageBranches       map[string]*lineageSnapshot
 	lineageWorlds         map[string]*branchWorld
-	fault                 atomic.Pointer[tenantFault]
 	apps                  []platform.App
 	appIndex              map[string]int
-	committed             runtimekernel.Committed
 	releases              releases.Store
 	console               controlowner.HostState
 	staged                computeowner.Channel
@@ -126,7 +115,6 @@ type Tenant struct {
 	Outbound              func(req *http.Request, allowPrivate bool) (*http.Response, error)
 	AIClient              func(req *http.Request) (*http.Response, error)
 	ai                    models
-	records               *records.Store
 	tasks                 platform.Tasks
 	procs                 platform.Processes
 	listeners             []string
@@ -154,9 +142,9 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		return nil, err
 	}
 	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: services.Kernel.Works(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
-		connectors: newConnectorRoster(services.Kernel), records: records.NewStore()}
+		connectors: newConnectorRoster(services.Kernel), Projection: records.NewStore()}
 	t.bindAuditStore()
-	t.mu.BindReadScope(t.beginRecordRead, t.endLane)
+	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)
 	t.observeLane()
 	for i, app := range apps {
 		id := app.Manifest().ID
@@ -179,7 +167,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			}
 		}
 	}
-	t.records.SetRules(services.Rules)
+	t.Projection.SetRules(services.Rules)
 	t.staged = computeowner.NewChannel(id, t.files)
 	t.i18n = transport.NewTranslator(func() []platform.App { return t.apps },
 		func(a platform.App) platform.Manifest { return transport.ManifestOf(a, t.definitionsFingerprint()) },
@@ -262,7 +250,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		if err := build.CheckManifest(a.Manifest(), runsJobs); err != nil {
 			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
 		}
-		if err := t.records.Declare(a); err != nil {
+		if err := t.Projection.Declare(a); err != nil {
 			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
 		}
 		for _, j := range m.Jobs {
@@ -311,14 +299,14 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	}
 	{
 		infos := map[string]platform.EntityInfo{}
-		for _, et := range t.records.SortedTypes() {
+		for _, et := range t.Projection.SortedTypes() {
 			infos[et.Info().Type] = et.Info()
 		}
 		if err := platform.CheckInterfaceRegistry((hostView{t: t}).Interfaces(), infos); err != nil {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
-	for _, et := range t.records.SortedTypes() {
+	for _, et := range t.Projection.SortedTypes() {
 		if err := t.checkRecordSetDeclarations(et.Info()); err != nil {
 			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.Info().Type, err)
 		}

@@ -23,7 +23,7 @@ func (h *Host) routesObservability(rt *routes) {
 }
 
 func (t *Tenant) storageReady(ctx context.Context) error {
-	if t.store() == nil {
+	if t.Log() == nil {
 		return errors.New("operational store is unavailable")
 	}
 	if t.Store == nil {
@@ -36,10 +36,10 @@ func (t *Tenant) storageReady(ctx context.Context) error {
 	if _, err := journal.Entries(ctx, t.ID, journal.Position(t.ID)); err != nil {
 		return err
 	}
-	if _, err := t.store().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
+	if _, err := t.Log().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
 		return err
 	}
-	if _, err := t.store().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
+	if _, err := t.Log().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
 		return err
 	}
 	return nil

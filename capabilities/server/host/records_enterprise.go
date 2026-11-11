@@ -43,7 +43,7 @@ func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, off
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	s := t.records
+	s := t.Projection
 	s.Lock()
 	types := make([]*records.Type, 0, s.TypeCount())
 	for _, et := range s.Types() {

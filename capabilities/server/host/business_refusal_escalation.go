@@ -20,12 +20,12 @@ func (d *stagedDecision) PendingRefusalEscalations(c platform.Caller, at time.Ti
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal escalation requires the private Work owner")
 	}
 	var events []business.RefusalEvent
-	for key, r := range d.tenant.committed.AllRefusals("business") {
+	for key, r := range d.tenant.Committed.AllRefusals("business") {
 		if r.Business != nil {
 			events = append(events, business.RefusalEvent{Key: key, Fact: *r.Business})
 		}
 	}
-	for key, raw := range d.tenant.committed.AllAnswers("business") {
+	for key, raw := range d.tenant.Committed.AllAnswers("business") {
 		var envelope struct{ Kind string }
 		if json.Unmarshal(raw, &envelope) != nil || envelope.Kind != "record-batch" {
 			continue

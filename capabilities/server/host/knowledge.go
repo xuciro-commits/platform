@@ -33,15 +33,15 @@ func (t *Tenant) sources() []knowledgeindex.Source {
 		out = append(out, knowledgeindex.DocumentSource(d))
 	}
 	out = append(out, t.fileSources()...)
-	t.records.Lock()
+	t.Projection.Lock()
 	types := slices.Collect(func(yield func(*records.Type) bool) {
-		for _, et := range t.records.Types() {
+		for _, et := range t.Projection.Types() {
 			if slices.ContainsFunc(et.Info().Fields, func(f platform.FieldInfo) bool { return f.Knowledge }) && !yield(et) {
 				return
 			}
 		}
 	})
-	t.records.Unlock()
+	t.Projection.Unlock()
 	for _, et := range types {
 		for offset := 0; ; offset += 500 {
 			page, err := t.recordsRead(t.host(), et.Info().Type, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
@@ -85,9 +85,9 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []knowledgeindex.Source {
 			var et *records.Type
 			var v reflect.Value
 			func() {
-				t.records.Lock()
-				defer t.records.Unlock()
-				et = t.records.Type(typ)
+				t.Projection.Lock()
+				defer t.Projection.Unlock()
+				et = t.Projection.Type(typ)
 				if et != nil && et.Rows().Get(id) != nil {
 					v = et.Rows().Get(id).Value
 				}
@@ -242,9 +242,9 @@ func (t *Tenant) fileSource(f platform.File) (knowledgeindex.Source, bool) {
 			}
 			apps = d.Apps
 		default:
-			t.records.Lock()
-			et := t.records.Type(typ)
-			t.records.Unlock()
+			t.Projection.Lock()
+			et := t.Projection.Type(typ)
+			t.Projection.Unlock()
 			if et == nil || !et.Info().KnowledgeFiles {
 				return knowledgeindex.Source{}, false
 			}
@@ -324,11 +324,11 @@ func (t *Tenant) checkEmbeddingSetting(id, value string) *kernel.Error {
 func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []string, reader *platform.Member, app string, now time.Time) bool {
 	if scope == "" {
 		id, isDocument := strings.CutPrefix(document, platform.KnowledgeDocumentType+"/")
-		t.records.Lock()
-		defer t.records.Unlock()
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
 		if !isDocument {
 			fileID, fileSource := strings.CutPrefix(document, platform.FileType+"/")
-			files := t.records.Type(platform.FileType)
+			files := t.Projection.Type(platform.FileType)
 			if !fileSource || files == nil {
 				return false
 			}
@@ -345,7 +345,7 @@ func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []s
 				return false
 			}
 		}
-		et := t.records.Type(platform.KnowledgeDocumentType)
+		et := t.Projection.Type(platform.KnowledgeDocumentType)
 		if et == nil {
 			return false
 		}
@@ -374,7 +374,7 @@ func (t *Tenant) knowledgeContext() knowledgeindex.Context {
 		})
 		return value
 	}
-	return knowledgeindex.Context{Tenant: t.ID, Store: t.store(), Sync: source.syncRecords,
+	return knowledgeindex.Context{Tenant: t.ID, Store: t.Log(), Sync: source.syncRecords,
 		Read: func(read func(knowledgeindex.Context)) {
 			_, _ = recordRead(source, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { read(t.knowledgeContext()); return struct{}{}, nil })
 		},
@@ -406,14 +406,14 @@ func (t *Tenant) syncRecords() {
 		source = t.readOrigin
 	}
 	source.index.Sync(func(walked bool) ([]knowledgeindex.Source, map[string]bool, bool) {
-		source.records.Lock()
+		source.Projection.Lock()
 		image := source.readImage.Load()
-		if image == nil || image.records != source.records.Generation() {
-			source.records.Unlock()
+		if image == nil || image.records != source.Projection.Generation() {
+			source.Projection.Unlock()
 			return nil, nil, false
 		}
-		dirty := source.records.TakeDirty()
-		source.records.Unlock()
+		dirty := source.Projection.TakeDirty()
+		source.Projection.Unlock()
 		changed := map[string]bool{}
 		for ref, marked := range dirty.All() {
 			changed[ref] = marked
@@ -425,11 +425,11 @@ func (t *Tenant) syncRecords() {
 			return t.sources(), nil
 		})
 		if refusal != nil {
-			source.records.Lock()
+			source.Projection.Lock()
 			for ref := range changed {
-				source.records.MarkDirty(ref)
+				source.Projection.MarkDirty(ref)
 			}
-			source.records.Unlock()
+			source.Projection.Unlock()
 			return nil, nil, false
 		}
 		return values, changed, true

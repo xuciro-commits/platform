@@ -312,9 +312,9 @@ func (t *Tenant) unguardedRead(object, marking string) []string {
 	if !dataowner.Guarded(marking) {
 		return nil
 	}
-	t.records.Lock()
-	et := t.records.Type(object)
-	t.records.Unlock()
+	t.Projection.Lock()
+	et := t.Projection.Type(object)
+	t.Projection.Unlock()
 	if et == nil {
 		return nil
 	}

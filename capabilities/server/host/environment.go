@@ -45,12 +45,12 @@ func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifac
 	if err := t.files().Put(context.Background(), artifact.Key, raw, "application/json"); err != nil {
 		return platform.SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	if err := t.releases.Seal(candidate.ID, artifact); err != nil {
 		return platform.SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", candidate.ID)
 	}
-	t.stateEpoch.Add(1)
+	t.StateEpoch.Add(1)
 	t.changedOwner(build.ID)
 	return artifact, nil
 }
@@ -65,8 +65,8 @@ func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {
 		if image := t.readImage.Load(); image != nil {
 			state = image.state
 		} else {
-			t.mu.Lock()
-			defer t.mu.Unlock()
+			t.Lane.Lock()
+			defer t.Lane.Unlock()
 		}
 	}
 	for _, artifact := range state.releases.Sealed() {
@@ -216,15 +216,15 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 
 func (t *Tenant) hostedTypes() map[string]bool {
 	out := map[string]bool{}
-	for _, et := range t.records.SortedTypes() {
+	for _, et := range t.Projection.SortedTypes() {
 		out[et.Info().Type] = true
 	}
 	return out
 }
 
 func (t *Tenant) rememberMigration(result platform.MigrationResult, member string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.Lane.Lock()
+	defer t.Lane.Unlock()
 	_, err := t.acceptHostControl("migration", member, result, now,
 		platform.AuditEntry{Action: "host.migration", Target: result.Key}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
 			image.Migrations = append(image.Migrations, platform.MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})

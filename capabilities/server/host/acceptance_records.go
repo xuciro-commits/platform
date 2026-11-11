@@ -244,7 +244,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		}
 	}
 	key := result.App + "/" + sub.GetIdempotencyKey()
-	if saved := t.committed.Answer(key); len(saved) > 0 {
+	if saved := t.Committed.Answer(key); len(saved) > 0 {
 		prior, answer, err := acceptedformat.DecodeBatch(saved)
 		if err != nil || prior.RequestHash != result.RequestHash || !proto.Equal(answer, receipt) {
 			return nil, fmt.Errorf("record batch key belongs to another answer")
@@ -278,12 +278,12 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		if err := protojson.Unmarshal(decision.Receipt, r); err != nil {
 			return nil, err
 		}
-		if _, refused := t.committed.Refusal(decision.Event.App + "/" + r.GetSubmission().GetIdempotencyKey()); refused {
+		if _, refused := t.Committed.Refusal(decision.Event.App + "/" + r.GetSubmission().GetIdempotencyKey()); refused {
 			return nil, fmt.Errorf("record batch reused a refused child key")
 		}
 		changes[decision.Event.App+"/"+r.GetChangeId()] = r
 	}
-	draft := t.records.ForkRecords()
+	draft := t.Projection.ForkRecords()
 	if err := t.validateAcceptedControl(result.Control); err != nil {
 		return nil, err
 	}
@@ -346,7 +346,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		if err != nil {
 			return nil, err
 		}
-		draft = installation.records
+		draft = installation.Projection
 	}
 	for _, decision := range result.Decisions {
 		if p := decision.Publication; p != nil {
@@ -388,7 +388,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 			return false, fmt.Errorf("record batch ledger application: %v (new=%t)", err, changed)
 		}
 	}
-	if err := t.records.PromoteRecords(draft); err != nil {
+	if err := t.Projection.PromoteRecords(draft); err != nil {
 		return false, err
 	}
 	if installed := prepared.installation; installed != nil {
@@ -450,17 +450,17 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	}
 	t.sequences.Set(result.Sequences)
 	for _, child := range result.Decisions {
-		t.committed.SaveDecisionDefinition(child.Event.App, acceptedformat.ReceiptID(child.Receipt), child.Definition)
+		t.Committed.SaveDecisionDefinition(child.Event.App, acceptedformat.ReceiptID(child.Receipt), child.Definition)
 	}
 	if result.SchemaVersion != nil {
 		_, request, _ := strings.Cut(key, "/")
-		t.committed.SaveSchemaVersion(result.App, request, result.SchemaVersion)
+		t.Committed.SaveSchemaVersion(result.App, request, result.SchemaVersion)
 	}
 	answer := new(pb.ChangeRecord)
 	_ = protojson.Unmarshal(result.Receipt, answer)
 	input, _ := acceptedformat.BatchSubmission(result, answer)
 	if result.HasSavedAnswer(input) {
-		t.committed.SaveAnswer(key, raw)
+		t.Committed.SaveAnswer(key, raw)
 	}
 	return true, nil
 }

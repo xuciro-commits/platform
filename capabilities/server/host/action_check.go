@@ -31,7 +31,7 @@ func (t *Tenant) actionCheck(m platform.Member, schema string, request ActionChe
 	}
 	transition, lifecycle, hasTransition := t.modelTransition(platform.AssetRef{App: appID, Kind: platform.AssetAction, Name: schema})
 	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, appID, false, false)
-	decision := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "action", Action: schema, Type: request.Target.Object, Record: request.Target.ID}, at, false)
+	decision := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "action", Action: schema, Type: request.Target.Object, Record: request.Target.ID}, at, false)
 	result := ActionCheckResult{Allowed: decision.Allow, Conditions: []ActionConditionCheck{}, Authorization: &decision}
 	say := func(message string) string { return t.i18n.SayInApp(appID, lang, message) }
 	if !decision.Allow {
@@ -40,7 +40,7 @@ func (t *Tenant) actionCheck(m platform.Member, schema string, request ActionChe
 	}
 	var record map[string]any
 	if !action.New {
-		raw, refusal := t.readRecordFrom(t.records, caller, request.Target.Object, request.Target.ID, at)
+		raw, refusal := t.readRecordFrom(t.Projection, caller, request.Target.Object, request.Target.ID, at)
 		if refusal != nil {
 			return ActionCheckResult{}, refusal
 		}

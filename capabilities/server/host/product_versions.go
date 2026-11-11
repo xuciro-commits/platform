@@ -84,7 +84,7 @@ func (t *Tenant) productDescriptor(candidate platform.ReleaseCandidate, request 
 }
 
 func (t *Tenant) ProductVersions() []platform.ProductVersionView {
-	records := t.records.Type(build.ProductVersionType)
+	records := t.Projection.Type(build.ProductVersionType)
 	if records == nil {
 		return []platform.ProductVersionView{}
 	}

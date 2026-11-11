@@ -150,7 +150,7 @@ func (h hostView) CheckDispatchRead(run platform.DispatchRun, at time.Time) *ker
 	if refusal := authorizationRefusal(h.t.authorizeNative(caller, definition.Name, "read", definition.Roles, true, authorizationDetails{At: at})); refusal != nil {
 		return refusal
 	}
-	permission := h.t.authorizeFrom(h.t.records, caller, platform.AuthzRequest{Principal: member.ID, Tenant: h.t.ID, Kind: "read", Type: typ, Record: id, Fields: []string{definition.DeviceField}}, at, false)
+	permission := h.t.authorizeFrom(h.t.Projection, caller, platform.AuthzRequest{Principal: member.ID, Tenant: h.t.ID, Kind: "read", Type: typ, Record: id, Fields: []string{definition.DeviceField}}, at, false)
 	if refusal := authorizationRefusal(permission); refusal != nil {
 		return refusal
 	}

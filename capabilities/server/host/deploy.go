@@ -170,7 +170,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 				return fmt.Errorf("read SQL state position %s: %w", t.ID, err)
 			}
 		}
-		auditPage, auditErr := t.store().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, Limit: 1})
+		auditPage, auditErr := t.Log().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, Limit: 1})
 		if auditErr == nil && len(auditPage.Entries) == 0 {
 			if all, err := j.Entries(ctx, t.ID, 0); err == nil {
 				t.backfillAudit(all)
@@ -195,7 +195,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			if err != nil {
 				if errors.Is(err, errTenantSnapshot) {
 					t.quarantine(err)
-					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+					log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 					continue
 				}
 				return fmt.Errorf("snapshot %s: %w", t.ID, err)
@@ -203,7 +203,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			if ok && (!stateActive || seq <= statePosition) {
 				if err := t.checkSnapshotCheckpoint(state, seq); err != nil {
 					t.quarantine(err)
-					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+					log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 					continue
 				}
 				runtime, runtimeErr := runtimekernel.ReadCheckpoint(state)
@@ -217,19 +217,19 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 							return fmt.Errorf("read journal %s: %w", t.ID, err)
 						}
 						t.quarantine(err)
-						log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+						log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 						continue
 					}
 					if j.Position(t.ID) == statePosition {
 						if err := t.restoreRuntimeSnapshot(ctx, j, state, seq, statePosition, recoveryStarted); err != nil {
 							t.quarantine(fmt.Errorf("SQL checkpoint recovery: %w", err))
-							log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+							log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 							continue
 						}
 						latest, err := t.checkpointRuntime(ctx, j, code)
 						if err != nil {
 							t.quarantine(fmt.Errorf("SQL checkpoint save: %w", err))
-							log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+							log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 							continue
 						}
 						restored[t.ID], fresh[t.ID] = latest, false
@@ -238,7 +238,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 					}
 				} else {
 					if err := t.recoverSnapshot(state, seq); err != nil {
-						log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+						log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 						continue
 					}
 					after = seq
@@ -250,7 +250,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 		if err != nil {
 			if errors.Is(err, errTenantJournal) {
 				t.quarantine(err)
-				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 				continue
 			}
 			return fmt.Errorf("read journal %s: %w", t.ID, err)
@@ -259,24 +259,24 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 		if stateActive && statePosition >= after && statePosition < j.Position(t.ID) {
 			split := int(statePosition - after)
 			if err := t.recoverEntries(entries[:split]); err != nil {
-				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 				continue
 			}
-			t.mu.Lock()
+			t.Lane.Lock()
 			delta, err := t.runtimeStateDeltaLocked()
-			t.mu.Unlock()
+			t.Lane.Unlock()
 			if err != nil {
 				t.quarantine(fmt.Errorf("runtime state prefix: %w", err))
-				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 				continue
 			}
 			prefix = &persistence.StateCheckpoint{Position: statePosition, Delta: delta}
 			if err := t.recoverEntries(entries[split:]); err != nil {
-				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 				continue
 			}
 		} else if err := t.recoverEntries(entries); err != nil {
-			log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+			log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 			continue
 		}
 		if console, ok := t.app(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
@@ -286,7 +286,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 		if t.procs != nil {
 			if err := t.procs.Check(); err != nil {
 				t.quarantine(fmt.Errorf("process recovery: %w", err))
-				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 				continue
 			}
 		}
@@ -298,7 +298,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 		}
 		if err := t.migrateRuntimeStateFrom(ctx, j, prefix); err != nil {
 			t.quarantine(fmt.Errorf("runtime state: %w", err))
-			log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+			log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 			continue
 		}
 		t.attachJournal(ctx, j)
@@ -306,7 +306,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			seq, err := t.checkpointRuntime(ctx, j, code)
 			if err != nil {
 				t.quarantine(fmt.Errorf("SQL checkpoint save: %w", err))
-				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 				continue
 			}
 			restored[t.ID] = seq

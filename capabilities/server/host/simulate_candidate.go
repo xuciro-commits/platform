@@ -485,7 +485,7 @@ func (r *candidateRun) Pending() (compute, functions bool) {
 }
 
 func (r *candidateRun) Fault() string {
-	if fault := r.sandbox.fault.Load(); fault != nil {
+	if fault := r.sandbox.Fault.Load(); fault != nil {
 		return fault.Reason
 	}
 	return ""

@@ -26,12 +26,12 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 }
 
 func (t *Tenant) entityView(m platform.Member) []platform.EntityInfo {
-	t.records.Lock()
-	defer t.records.Unlock()
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
 	out := []platform.EntityInfo{}
-	for _, et := range t.records.Types() {
+	for _, et := range t.Projection.Types() {
 		if projectDelegated(m) && et.Info().App == build.ID && !build.BranchDraftType(et.Info().Type) && et.Info().Type != build.ResourceType && et.Info().Type != build.FolderType && et.Info().Type != build.WorkingStateType && et.Info().Type != build.BranchType {
-			if resources := t.records.Type(build.ResourceType); resources != nil {
+			if resources := t.Projection.Type(build.ResourceType); resources != nil {
 				if row := resources.Rows().Get(platform.ResourceID(t.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: et.Info().Type})); row != nil {
 					if role := t.resourceRole(m, row.Value.Interface().(build.Resource).Project); role == "" || role == platform.ProjectDiscovererRole {
 						continue
@@ -53,7 +53,7 @@ func (t *Tenant) entityView(m platform.Member) []platform.EntityInfo {
 }
 
 func (t *Tenant) readableLocked(m platform.Member, ref string, now time.Time) bool {
-	return t.readableIn(t.records, m, ref, now)
+	return t.readableIn(t.Projection, m, ref, now)
 }
 
 func (t *Tenant) readableIn(store *records.Store, m platform.Member, ref string, now time.Time) bool {
@@ -75,7 +75,7 @@ func (t *Tenant) readableIn(store *records.Store, m platform.Member, ref string,
 }
 
 func (t *Tenant) readable(m platform.Member, ref string, now time.Time) bool {
-	t.records.Lock()
-	defer t.records.Unlock()
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
 	return t.readableLocked(m, ref, now)
 }

@@ -13,15 +13,15 @@ func (r runtime) Put(c platform.Caller, rec *pb.ChangeRecord, entity any) *kerne
 	if !c.Replaying {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A new record write requires a private runtime")
 	}
-	return r.t.records.Put(c, rec, entity)
+	return r.t.Projection.Put(c, rec, entity)
 }
 
 func (r runtime) Get(c platform.Caller, t reflect.Type, id string) (any, bool) {
-	return r.t.records.Get(c, t, id)
+	return r.t.Projection.Get(c, t, id)
 }
 
 func (r runtime) Find(c platform.Caller, t reflect.Type, q platform.Query) ([]any, int, *kernel.Error) {
-	s := r.t.records
+	s := r.t.Projection
 	s.Lock()
 	defer s.Unlock()
 	et := s.Of(c, t)
@@ -41,5 +41,5 @@ func (r runtime) Find(c platform.Caller, t reflect.Type, q platform.Query) ([]an
 }
 
 func (r runtime) Check(c platform.Caller, entity any) *kernel.Error {
-	return r.t.records.Check(c, entity, time.Now())
+	return r.t.Projection.Check(c, entity, time.Now())
 }

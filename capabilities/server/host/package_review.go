@@ -30,7 +30,7 @@ type PackageRemovalImpact struct {
 
 func (t *Tenant) packageRemovalImpacts(removed, replaced map[platform.AssetRef]bool) []PackageRemovalImpact {
 	archived := map[platform.AssetRef]bool{}
-	for _, row := range t.records.Type(build.ResourceType).Rows().All() {
+	for _, row := range t.Projection.Type(build.ResourceType).Rows().All() {
 		resource := row.Value.Interface().(build.Resource)
 		archived[resource.Ref] = resource.Archived
 	}

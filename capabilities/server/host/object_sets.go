@@ -27,7 +27,7 @@ func (t *Tenant) countObjectSet(store *records.Store, c platform.Caller, set pla
 }
 
 func (t *Tenant) aggregateObjectSet(m platform.Member, req ObjectSetRequest, now time.Time) (records.Aggregate, *kernel.Error) {
-	return t.objectOwner(t.records).AggregateObjectSet(m, req, now)
+	return t.objectOwner(t.Projection).AggregateObjectSet(m, req, now)
 }
 
 func (h *Host) objectSetRoutes(rt *routes) {
@@ -52,7 +52,7 @@ func (h *Host) objectSetRoutes(rt *routes) {
 		if !ok {
 			return
 		}
-		page, object, err := t.loadObjectSet(t.records, t.objectCaller(m, ""), req.Set, objectWindow{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true, Format: req.Format}, h.Now())
+		page, object, err := t.loadObjectSet(t.Projection, t.objectCaller(m, ""), req.Set, objectWindow{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true, Format: req.Format}, h.Now())
 		if err == nil && object == build.ObjectType {
 			page, err = t.objectDraftPage(m, page)
 		}
@@ -79,7 +79,7 @@ func (h *Host) objectSetRoutes(rt *routes) {
 		if !ok {
 			return
 		}
-		out, err := t.countObjectSet(t.records, t.objectCaller(m, ""), req.Set, h.Now())
+		out, err := t.countObjectSet(t.Projection, t.objectCaller(m, ""), req.Set, h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return

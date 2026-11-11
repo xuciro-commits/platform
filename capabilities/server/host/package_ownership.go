@@ -35,7 +35,7 @@ type PackageOwnershipEntry struct {
 func (t *Tenant) packageOwnership(descriptor platform.PackageDescriptor) (PackageOwnership, error) {
 	hash := sha256.Sum256([]byte(descriptor.ID))
 	plan := PackageOwnership{ID: descriptor.ID, Version: descriptor.Version, Project: "package:" + descriptor.ID, Name: fmt.Sprintf("pkg%x", hash[:12]), Title: descriptor.Title, Entries: []PackageOwnershipEntry{}, Problems: []string{}}
-	project := t.records.Type(build.AppType).Rows().Get(plan.Project)
+	project := t.Projection.Type(build.AppType).Rows().Get(plan.Project)
 	plan.CreateProject = project == nil
 	if project != nil && project.Value.Interface().(build.Application).Archived {
 		plan.Problems = append(plan.Problems, "The destination project is archived")
@@ -51,7 +51,7 @@ func (t *Tenant) packageOwnership(descriptor platform.PackageDescriptor) (Packag
 	for _, asset := range assets {
 		refs[asset.Ref] = true
 	}
-	for _, row := range t.records.Type(build.ResourceType).Rows().All() {
+	for _, row := range t.Projection.Type(build.ResourceType).Rows().All() {
 		resource := row.Value.Interface().(build.Resource)
 		if !refs[resource.Ref] || resource.ManagedBy == descriptor.ID {
 			continue

@@ -21,7 +21,7 @@ func (t *Tenant) packageLifecycleImpact(m platform.Member, id string, after []pl
 	for _, asset := range after {
 		replaced[asset.Ref] = true
 	}
-	for _, row := range t.records.Type(build.ResourceType).Rows().All() {
+	for _, row := range t.Projection.Type(build.ResourceType).Rows().All() {
 		resource := row.Value.Interface().(build.Resource)
 		if resource.ManagedBy != id || resource.Archived || resource.Draft == "package:"+id {
 			continue
@@ -32,13 +32,13 @@ func (t *Tenant) packageLifecycleImpact(m platform.Member, id string, after []pl
 		}
 		switch resource.Ref.Kind {
 		case platform.AssetObject:
-			if objects := t.records.Type(resource.Ref.Name); objects != nil {
+			if objects := t.Projection.Type(resource.Ref.Name); objects != nil {
 				out.Outputs = append(out.Outputs, platform.PackageImpactOutput{Resource: resource.Ref, Records: objects.Rows().Len(), Retained: true})
 			}
 		case platform.AssetDataset, platform.AssetMediaSet:
 			out.Outputs = append(out.Outputs, platform.PackageImpactOutput{Resource: resource.Ref, Retained: true})
 		case platform.AssetConnection:
-			if record := t.records.Type(dataowner.ConnectionType).Rows().Get(resource.Draft); record != nil {
+			if record := t.Projection.Type(dataowner.ConnectionType).Rows().Get(resource.Draft); record != nil {
 				connection := record.Value.Interface().(dataowner.Connection)
 				var definition dataowner.ConnectionDefinition
 				if connection.Published != "" {

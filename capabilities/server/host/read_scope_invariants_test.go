@@ -88,9 +88,9 @@ func (sqlShapedView) StateUnique(context.Context, string, string, string, string
 
 func withSQLShapedReads(tb testing.TB, live *invariantTenant, reads *sqlShapedReads) {
 	tb.Helper()
-	live.records.Current().Configure(sqlShapedState{reads: reads}, live.ID, 0, func() int64 { return 0 })
+	live.Projection.Current().Configure(sqlShapedState{reads: reads}, live.ID, 0, func() int64 { return 0 })
 	live.enableCurrentReadScopes()
-	live.records.UseCurrentRows()
+	live.Projection.UseCurrentRows()
 }
 
 func TestInvariantBuilderWorkingDraftsAuthorizeInsideTheReadScope(t *testing.T) {
@@ -139,7 +139,7 @@ func TestInvariantRecordAuthorizationOutsideTheReadScopeReadsTheRecord(t *testin
 	withSQLShapedReads(t, live, reads)
 	member := live.member(t)
 	c := platform.NewCaller(runtime{t: live.Tenant}, member, build.ID, false, false)
-	live.authorizeFrom(live.records, c, platform.AuthzRequest{Principal: member.ID, Tenant: live.ID, Kind: "action", Action: "build.app.create", Type: build.AppType, Record: "workspace"}, invariantClock, false)
+	live.authorizeFrom(live.Projection, c, platform.AuthzRequest{Principal: member.ID, Tenant: live.ID, Kind: "action", Action: "build.app.create", Type: build.AppType, Record: "workspace"}, invariantClock, false)
 	if reads.opened == 0 {
 		t.Fatal("the record authorization did not open the read scope")
 	}

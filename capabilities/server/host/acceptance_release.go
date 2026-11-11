@@ -33,7 +33,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 		return saved, nil
 	}
 	if len(saved.Installations) > 0 {
-		records := t.records
+		records := t.Projection
 		var bootstrap *preparedAcceptedBatch
 		if len(saved.Bootstrap) > 0 {
 			bootstrap, err = t.prepareAcceptedBatch(t.app(saved.App).AcceptedLedger(), saved.Bootstrap)
@@ -46,7 +46,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 		if err != nil {
 			return saved, err
 		}
-		view.records.Current().SelectRelease(saved.CandidateID)
+		view.Projection.Current().SelectRelease(saved.CandidateID)
 		draft, err := view.stageReleaseInstallationLocked(saved.Installations, false)
 		if err != nil {
 			return saved, err
@@ -64,15 +64,15 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 				return saved, fmt.Errorf("accepted installation differs from its frozen candidate: %v", err)
 			}
 		}
-		if err := t.anchorReleaseRecords(draft.records); err != nil {
+		if err := t.anchorReleaseRecords(draft.Projection); err != nil {
 			return saved, err
 		}
 		if bootstrap != nil {
-			bootstrap.records = draft.records
+			bootstrap.records = draft.Projection
 			if _, err := t.promoteAcceptedBatch(bootstrap); err != nil {
 				return saved, err
 			}
-		} else if err := t.records.PromoteRecords(draft.records); err != nil {
+		} else if err := t.Projection.PromoteRecords(draft.Projection); err != nil {
 			return saved, err
 		}
 		t.setDefinitions(draft.definitions)
@@ -102,11 +102,11 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 		return saved, err
 	}
 	if saved.Active {
-		t.records.Current().SelectRelease(saved.CandidateID)
+		t.Projection.Current().SelectRelease(saved.CandidateID)
 	}
 	t.releases.RememberRequest(saved.Key, saved.RequestHash)
 	if saved.Version >= 3 {
-		t.committed.SaveAnswer("release:"+saved.Key, raw)
+		t.Committed.SaveAnswer("release:"+saved.Key, raw)
 	}
 	if saved.From != "" {
 		t.releases.RememberOrigin(saved.CandidateID, platform.ReleaseOrigin{From: saved.From, Member: saved.Member, At: saved.At})
@@ -193,7 +193,7 @@ func (t *Tenant) prepareActivateReleaseWithUpgrade(m platform.Member, candidateI
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}
-	if prior := t.committed.Answer("release:activate:" + key); prior != nil {
+	if prior := t.Committed.Answer("release:activate:" + key); prior != nil {
 		saved, err := acceptedformat.DecodeRelease(prior)
 		hash, hashErr := acceptedformat.ReleaseRequestHash(t.ID, m.ID, "activate:"+key, candidateID, true, upgradeID)
 		if err != nil || hashErr != nil || hash != saved.RequestHash {

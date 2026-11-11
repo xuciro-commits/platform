@@ -20,12 +20,12 @@ func (h *Host) promotionsOf(source, candidate string) []releaseowner.PromotionTa
 		if image != nil {
 			state = image.state
 		} else {
-			other.mu.Lock()
+			other.Lane.Lock()
 		}
 		origin, ok := state.releases.Origin(candidate)
 		active := state.releases.Active() == candidate
 		if image == nil {
-			other.mu.Unlock()
+			other.Lane.Unlock()
 		}
 		if ok && origin.From == source {
 			out = append(out, releaseowner.PromotionTarget{Tenant: other.ID, Member: origin.Member, At: origin.At, Active: active})

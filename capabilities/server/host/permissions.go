@@ -81,7 +81,7 @@ func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (
 		app = info.App
 	}
 	c := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
-	return t.authorizeFrom(t.records, c, request, at, false), nil
+	return t.authorizeFrom(t.Projection, c, request, at, false), nil
 }
 
 func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error) {

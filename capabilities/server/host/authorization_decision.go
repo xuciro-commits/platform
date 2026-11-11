@@ -39,7 +39,7 @@ func (r runtime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.T
 	if at.IsZero() {
 		at = Now()
 	}
-	decision := r.t.authorizeFrom(r.t.records, c, q, at, false)
+	decision := r.t.authorizeFrom(r.t.Projection, c, q, at, false)
 	return decision
 }
 func (d *stagedDecision) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) platform.AuthzDecision {
@@ -114,7 +114,7 @@ func (t *Tenant) authorizeFrom(store *records.Store, c platform.Caller, q platfo
 	}
 	decision, _ = recordRead(t, context.Background(), func(t *Tenant) (platform.AuthzDecision, *kernel.Error) {
 		c := platform.NewCaller(runtime{t: t}, c.Member, c.App, c.Replaying, c.Automation)
-		return t.authorizeDepth(t.records, c, q, at, false, 0, newAuthorizationWalk()), nil
+		return t.authorizeDepth(t.Projection, c, q, at, false, 0, newAuthorizationWalk()), nil
 	})
 	return decision
 }

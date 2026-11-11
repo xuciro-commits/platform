@@ -37,7 +37,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 			Reply(w, nil, refusal)
 			return
 		}
-		page, err := t.store().QueryAuditEntries(query)
+		page, err := t.Log().QueryAuditEntries(query)
 		if err != nil {
 			if query.Cursor != "" && strings.Contains(err.Error(), "invalid audit cursor") {
 				Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
@@ -66,7 +66,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 			Reply(w, nil, refusal)
 			return
 		}
-		page, err := t.store().QueryPersonalReads(query)
+		page, err := t.Log().QueryPersonalReads(query)
 		if err != nil {
 			if query.Cursor != "" && strings.Contains(err.Error(), "invalid audit cursor") {
 				Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
@@ -153,7 +153,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 			Target: observationFilterSummary(query),
 		})
 		t.FlushObservations()
-		page, err := t.store().QueryObservations(query)
+		page, err := t.Log().QueryObservations(query)
 		if err != nil {
 			if query.Cursor != "" && strings.Contains(err.Error(), "invalid observation cursor") {
 				Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
@@ -189,7 +189,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 			query.Member = m.ID
 		}
 		t.audit.Remember(platform.AuditEntry{At: now, Member: m.ID, App: controlowner.PlatformApp, Action: "platform.trace.read", Target: observationFilterSummary(query)})
-		page, err := t.store().QueryObservations(query)
+		page, err := t.Log().QueryObservations(query)
 		if err != nil {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: "Traces are unavailable"})
 			return
@@ -212,7 +212,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 		if !m.Holds(controlowner.PlatformApp, controlowner.Admin) && !m.Holds(controlowner.PlatformApp, platform.Auditor) {
 			query.Member = m.ID
 		}
-		summary, err := t.store().SummarizeObservations(t.ID, query.Member, query.From, query.To)
+		summary, err := t.Log().SummarizeObservations(t.ID, query.Member, query.From, query.To)
 		if err != nil {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: "Metrics are unavailable"})
 			return

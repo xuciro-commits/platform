@@ -28,7 +28,7 @@ func (t *Tenant) registerDefinitions() error {
 	}
 	objects := map[string]platform.AssetRef{}
 	objectInfo := map[string]platform.EntityInfo{}
-	for _, et := range t.records.SortedTypes() {
+	for _, et := range t.Projection.SortedTypes() {
 		info := et.Info()
 		objects[info.Type] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: info.Type}
 		objectInfo[info.Type] = info
@@ -57,7 +57,7 @@ func (t *Tenant) registerDefinitions() error {
 		t.setDefinitions(append(t.definitions, def))
 		return nil
 	}
-	for _, et := range t.records.SortedTypes() {
+	for _, et := range t.Projection.SortedTypes() {
 		info := et.Info()
 		if err := add(platform.Definition{Ref: objects[info.Type], Source: "code", Version: versions[info.App], ContractVersion: 1,
 			Entity: &info}); err != nil {
@@ -116,7 +116,7 @@ func (t *Tenant) registerDefinitions() error {
 			}
 		}
 		for _, l := range manifest.LinkTypes {
-			if err := t.records.InstallLinkConstraint(l); err != nil {
+			if err := t.Projection.InstallLinkConstraint(l); err != nil {
 				return err
 			}
 			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetLinkType, Name: l.Name}, Source: "code", Version: manifest.Version, ContractVersion: l.Contract(), LinkType: &l}); err != nil {
@@ -226,7 +226,7 @@ func (t *Tenant) registerDefinitions() error {
 			return err
 		}
 	}
-	for _, et := range t.records.SortedTypes() {
+	for _, et := range t.Projection.SortedTypes() {
 		if err := t.checkObjectProperties(et.Info()); err != nil {
 			return err
 		}

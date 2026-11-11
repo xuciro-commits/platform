@@ -76,7 +76,7 @@ func addObservation(tb testing.TB, live *invariantTenant, event platform.Observa
 	if event.ID == "" {
 		event.ID = fmt.Sprintf("observation-%d", invariantKeys.Add(1))
 	}
-	if err := live.store().SaveObservations([]platform.Observation{event}); err != nil {
+	if err := live.Log().SaveObservations([]platform.Observation{event}); err != nil {
 		tb.Fatal(err)
 	}
 }
@@ -85,7 +85,7 @@ func storedObservations(tb testing.TB, live *invariantTenant, query platform.Obs
 	tb.Helper()
 	live.FlushObservations()
 	query.Tenant = live.ID
-	page, err := live.store().QueryObservations(query)
+	page, err := live.Log().QueryObservations(query)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -202,18 +202,18 @@ func TestInvariantAuditDoesNotDependOnMemoryRing(t *testing.T) {
 	if got := len(live.Audit()); got != 1000 {
 		t.Fatalf("hot audit ring kept %d entries, want its bounded 1000", got)
 	}
-	page, err := live.store().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200})
+	page, err := live.Log().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !page.HasMore || len(page.Entries) != 200 || page.Entries[0].ID != "audit-1004" {
 		t.Fatalf("durable audit page: %+v", page)
 	}
-	first, err := live.store().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: ""})
+	first, err := live.Log().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, err := live.store().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: first.NextCursor})
+	next, err := live.Log().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: first.NextCursor})
 	if err != nil {
 		t.Fatal(err)
 	}
