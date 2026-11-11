@@ -77,13 +77,6 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 	return out, nil
 }
 
-func decodeControl(raw []byte, v any) error {
-	if len(raw) == 0 || len(raw) > platform.AcceptedResultMaxBytes {
-		return fmt.Errorf("control image is empty or too large")
-	}
-	return platform.DecodeJSON(raw, v, "control image")
-}
-
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), identity: t.identity, ownerSet: t.ownerSet, definitions: t.definitions, Projection: t.Projection, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
 		bindings: maps.Clone(t.bindings), connectors: newConnectorRoster(), work: automation.NewWorkBoard(), works: t.forkWorkState()}
@@ -126,13 +119,13 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		}
 	case "settings":
 		var values map[string]string
-		if err := decodeControl(raw, &values); err != nil {
+		if err := acceptedformat.DecodeControl(raw, &values); err != nil {
 			return err
 		}
 		t.settings.Restore(values)
 	case "bindings":
 		var bindings map[string]string
-		if err := decodeControl(raw, &bindings); err != nil {
+		if err := acceptedformat.DecodeControl(raw, &bindings); err != nil {
 			return err
 		}
 		t.bindings = map[string]binding{}
@@ -145,7 +138,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		t.opsMu.Lock()
 		defer t.opsMu.Unlock()
 		var w controlWork
-		if err := decodeControl(raw, &w); err != nil {
+		if err := acceptedformat.DecodeControl(raw, &w); err != nil {
 			return err
 		}
 		state := tenantState{Queues: w.Queues, Failed: w.Failed, Tasks: w.Tasks, Jobs: w.Jobs}
@@ -209,7 +202,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		t.opsMu.Lock()
 		defer t.opsMu.Unlock()
 		var endpoints []*actions.Endpoint
-		if err := decodeControl(raw, &endpoints); err != nil {
+		if err := acceptedformat.DecodeControl(raw, &endpoints); err != nil {
 			return err
 		}
 		ids := map[string]bool{}
@@ -224,7 +217,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		t.opsMu.Lock()
 		defer t.opsMu.Unlock()
 		var states []acceptedformat.EffectState
-		if err := decodeControl(raw, &states); err != nil {
+		if err := acceptedformat.DecodeControl(raw, &states); err != nil {
 			return err
 		}
 		ids := map[string]bool{}
@@ -239,7 +232,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		t.outbound.Restore(effects)
 	case "words":
 		var words map[string]map[string]string
-		if err := decodeControl(raw, &words); err != nil {
+		if err := acceptedformat.DecodeControl(raw, &words); err != nil {
 			return err
 		}
 		t.words.Restore(words)
@@ -304,10 +297,10 @@ func (d *stagedDecision) savedControl() (*acceptedformat.Control, error) {
 		image := current[kind]
 		if kind == "effects" {
 			var prior, after []acceptedformat.EffectState
-			if err := decodeControl(base, &prior); err != nil {
+			if err := acceptedformat.DecodeControl(base, &prior); err != nil {
 				return nil, err
 			}
-			if err := decodeControl(image, &after); err != nil {
+			if err := acceptedformat.DecodeControl(image, &after); err != nil {
 				return nil, err
 			}
 			lookup := map[string]acceptedformat.EffectState{}
@@ -364,10 +357,10 @@ func (t *Tenant) validateAcceptedControl(saved *acceptedformat.Control) error {
 		prior := current[change.Kind]
 		if change.Kind == "effects" {
 			var after, all []acceptedformat.EffectState
-			if err := decodeControl(change.Image, &after); err != nil {
+			if err := acceptedformat.DecodeControl(change.Image, &after); err != nil {
 				return err
 			}
-			if err := decodeControl(prior, &all); err != nil {
+			if err := acceptedformat.DecodeControl(prior, &all); err != nil {
 				return err
 			}
 			selected := []acceptedformat.EffectState{}
@@ -414,7 +407,7 @@ func (t *Tenant) applyAcceptedControl(saved *acceptedformat.Control) error {
 		image := change.Image
 		if change.Kind == "effects" {
 			var patches []acceptedformat.EffectState
-			if err := decodeControl(image, &patches); err != nil {
+			if err := acceptedformat.DecodeControl(image, &patches); err != nil {
 				return err
 			}
 			for _, patch := range patches {

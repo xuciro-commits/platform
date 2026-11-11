@@ -6,21 +6,14 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/services/devops/packages"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"strings"
-	"time"
 
 	"platformserver/platform"
 )
-
-type CompositionRequest struct {
-	Selection      map[string]string `json:"selection"`
-	Reason         string            `json:"reason"`
-	At             time.Time         `json:"at"`
-	DisabledOwners []string          `json:"disabledOwners,omitempty"`
-}
 
 type HostComposition struct {
 	Current               map[string]string           `json:"current"`
@@ -79,8 +72,8 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/composition", Summary: "Current and saved foundational provider selection and supported maintenance mode", Answer: HostComposition{}}, func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.compositionView(providers))
 	})
-	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/composition", Summary: "Save a checked provider selection and stop business access until supported restart and recovery", Body: CompositionRequest{}, Answer: HostComposition{}}, func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
-		var body CompositionRequest
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/composition", Summary: "Save a checked provider selection and stop business access until supported restart and recovery", Body: acceptedformat.CompositionRequest{}, Answer: HostComposition{}}, func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
+		var body acceptedformat.CompositionRequest
 		if err := decodeBody(r, &body); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return

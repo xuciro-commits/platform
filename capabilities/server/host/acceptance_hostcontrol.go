@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
@@ -13,53 +14,16 @@ import (
 )
 
 func (t *Tenant) acceptHostControl(action, member string, request any, now time.Time, audit platform.AuditEntry, decide func(*platform.HostControlImage) (platform.SupportGrant, error), evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
-	r := acceptedformat.HostControl{Version: 1, Kind: "host-result", Tenant: t.ID, App: controlowner.PlatformApp, Member: member, Action: action, At: now.UTC(), Request: platform.Raw(request)}
-	r.Authorizations = slices.Clone(evidence)
-	var err error
-	r.RequestHash, err = acceptedformat.HostRequestHash(r)
-	if err != nil {
-		return platform.SupportGrant{}, err
-	}
-	r.Key = "host:" + action + ":" + r.RequestHash
 	image, err := t.console.Image()
 	if err != nil {
 		return platform.SupportGrant{}, err
 	}
-	if prior, ok := image.Requests[r.Key]; ok {
-		if prior.RequestHash != r.RequestHash {
-			return platform.SupportGrant{}, fmt.Errorf("host request key changed")
-		}
-		return prior.Answer, nil
-	}
-	r.Before, err = platform.CanonicalDigest(image)
+	r, raw, prior, err := runtimekernel.PrepareHostControl(runtimekernel.HostRequest{Tenant: t.ID, Action: action, Member: member, Request: request, At: now, Audit: audit, Evidence: evidence}, image, t.audit.All(), decide)
 	if err != nil {
 		return platform.SupportGrant{}, err
 	}
-	r.AuditBefore, err = platform.CanonicalDigest(t.audit.All())
-	if err != nil {
-		return platform.SupportGrant{}, err
-	}
-	r.Answer, err = decide(&image)
-	if err != nil {
-		return platform.SupportGrant{}, err
-	}
-	if image.Requests == nil {
-		image.Requests = map[string]platform.HostControlReceipt{}
-	}
-	image.Requests[r.Key] = platform.HostControlReceipt{RequestHash: r.RequestHash, Answer: r.Answer}
-	r.Image = image
-	audit.At, audit.Member, audit.App = r.At, member, controlowner.PlatformApp
-	r.Audit = audit
-	r.Digest, err = acceptedformat.HostResultDigest(r)
-	if err != nil {
-		return platform.SupportGrant{}, err
-	}
-	raw, err := json.Marshal(r)
-	if err != nil {
-		return platform.SupportGrant{}, err
-	}
-	if _, err = acceptedformat.DecodeHostControl(raw); err != nil {
-		return platform.SupportGrant{}, err
+	if prior != nil {
+		return *prior, nil
 	}
 	principal, _ := json.Marshal(platform.Member{ID: member, Tenant: t.ID})
 	committed, err := t.acceptResult(Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: r.At}, r.Key, r.RequestHash)
@@ -81,29 +45,12 @@ func (t *Tenant) acceptHostControl(action, member string, request any, now time.
 }
 
 func (t *Tenant) applyAcceptedHostControl(raw []byte) (acceptedformat.HostControl, error) {
-	r, err := acceptedformat.DecodeHostControl(raw)
-	if err != nil {
-		return r, err
-	}
-	if r.Tenant != t.ID {
-		return r, fmt.Errorf("host result belongs to another tenant")
-	}
 	current, err := t.console.Image()
 	if err != nil {
-		return r, err
+		return acceptedformat.HostControl{}, err
 	}
-	if prior, ok := current.Requests[r.Key]; ok {
-		if prior.RequestHash != r.RequestHash || prior.Answer != r.Answer {
-			return r, fmt.Errorf("host result receipt differs")
-		}
-		return r, nil
-	}
-	before, err := platform.CanonicalDigest(current)
-	auditBefore, auditErr := platform.CanonicalDigest(t.audit.All())
-	if err != nil || auditErr != nil || before != r.Before || auditBefore != r.AuditBefore {
-		return r, fmt.Errorf("host result predecessor differs")
-	}
-	if err := validateHostTransition(current, r); err != nil {
+	r, fresh, err := runtimekernel.CheckHostControl(raw, t.ID, current, t.audit.All())
+	if err != nil || !fresh {
 		return r, err
 	}
 	t.console.Restore(r.Image)
@@ -124,8 +71,8 @@ func validateHostTransition(current platform.HostControlImage, r acceptedformat.
 	audit := platform.AuditEntry{At: r.At, Member: r.Member, App: controlowner.PlatformApp}
 	switch r.Action {
 	case "composition":
-		var body CompositionRequest
-		if err := decodeControl(r.Request, &body); err != nil {
+		var body acceptedformat.CompositionRequest
+		if err := acceptedformat.DecodeControl(r.Request, &body); err != nil {
 			return err
 		}
 		if body.Reason == "" || body.At.IsZero() || !body.At.Equal(r.At) || !strings.HasPrefix(r.Member, "host:") {
@@ -137,7 +84,7 @@ func validateHostTransition(current platform.HostControlImage, r acceptedformat.
 		audit.Action, audit.Target = "host.composition", r.Tenant+":"+body.Reason
 	case "lifecycle":
 		var body struct{ Action, Reason string }
-		if err := decodeControl(r.Request, &body); err != nil {
+		if err := acceptedformat.DecodeControl(r.Request, &body); err != nil {
 			return err
 		}
 		if !slices.Contains([]string{"suspend", "decommission", "resume", "open"}, body.Action) || !strings.HasPrefix(r.Member, "host:") {
@@ -153,7 +100,7 @@ func validateHostTransition(current platform.HostControlImage, r acceptedformat.
 			Member, Reason string
 			Minutes        int
 		}
-		if err := decodeControl(r.Request, &body); err != nil {
+		if err := acceptedformat.DecodeControl(r.Request, &body); err != nil {
 			return err
 		}
 		if body.Member == "" || body.Reason == "" || body.Minutes < 1 || body.Minutes > 1440 || !strings.HasPrefix(r.Member, "host:") {
@@ -167,7 +114,7 @@ func validateHostTransition(current platform.HostControlImage, r acceptedformat.
 		audit.Action, audit.Target = "host.support.open", body.Member+":"+body.Reason
 	case "support.use":
 		var body struct{ ID string }
-		if err := decodeControl(r.Request, &body); err != nil {
+		if err := acceptedformat.DecodeControl(r.Request, &body); err != nil {
 			return err
 		}
 		i := slices.IndexFunc(expected.Support, func(g platform.SupportGrant) bool { return g.ID == body.ID })
@@ -179,7 +126,7 @@ func validateHostTransition(current platform.HostControlImage, r acceptedformat.
 		audit.Action, audit.Target = "host.support.use", body.ID
 	case "migration":
 		var body platform.MigrationResult
-		if err := decodeControl(r.Request, &body); err != nil {
+		if err := acceptedformat.DecodeControl(r.Request, &body); err != nil {
 			return err
 		}
 		expected.Migrations = append(expected.Migrations, platform.MigrationManifest{At: r.At, From: body.From, To: body.To, Key: body.Key, Member: r.Member, Types: body.Types})
