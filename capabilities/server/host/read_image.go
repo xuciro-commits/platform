@@ -285,7 +285,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.entityIDs = t.services.Kernel.Identity(nil)
 	view.entityIDs.Restore(t.entityIDs.State())
 	view.defGen.Store(t.defGen.Load())
-	view.runIndexGen.Store(t.runIndexGen.Load())
+	view.runIndex.CopyGeneration(&t.runIndex)
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions
 	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps },
 		func(app platform.App) platform.Manifest {

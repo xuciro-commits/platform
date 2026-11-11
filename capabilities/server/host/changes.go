@@ -19,7 +19,7 @@ type changes struct {
 }
 
 func (t *Tenant) changed() {
-	t.runIndexGen.Add(1)
+	t.runIndex.Changed()
 	t.markChanged(true, "")
 }
 
@@ -32,7 +32,7 @@ func (t *Tenant) operationsChanged(owner ...string) {
 }
 
 func (t *Tenant) changedOwner(owner string) {
-	t.runIndexGen.Add(1)
+	t.runIndex.Changed()
 	t.markChanged(true, owner)
 }
 

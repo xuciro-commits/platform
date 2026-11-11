@@ -83,12 +83,6 @@ func (f MonitoringRunFilter) valid() bool {
 		(f.Status == "" || slices.Contains([]string{"ok", "failed", "pending", "running", "warning", "paused", "cancelled", "unknown"}, f.Status))
 }
 
-type runIndexCache struct {
-	At         time.Time
-	Generation int64
-	Coverage   []MonitoringCoverage
-}
-
 func (t *Tenant) monitoringRuns(m platform.Member, filter MonitoringRunFilter, now time.Time) (MonitoringRunPage, *kernel.Error) {
 	m = t.authorizationMember(m)
 	coverage, refusal := t.refreshRunIndex(m, now)
@@ -138,15 +132,16 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter MonitoringRunFilter, n
 }
 
 func (t *Tenant) refreshRunIndex(m platform.Member, now time.Time) ([]MonitoringCoverage, *kernel.Error) {
-	t.runIndexMu.Lock()
-	defer t.runIndexMu.Unlock()
-	if t.runIndexAt == nil {
-		t.runIndexAt = map[string]runIndexCache{}
-	}
-	generation := t.runIndexGen.Load()
-	if cached, ok := t.runIndexAt[m.ID]; ok && cached.Generation == generation && now.Sub(cached.At) < 5*time.Second {
-		return slices.Clone(cached.Coverage), nil
-	}
+	var refusal *kernel.Error
+	coverage := t.runIndex.Refresh(m.ID, now, func() ([]MonitoringCoverage, bool) {
+		coverage, failed := t.rebuildRunIndex(m, now)
+		refusal = failed
+		return coverage, failed == nil
+	})
+	return slices.Clone(coverage), refusal
+}
+
+func (t *Tenant) rebuildRunIndex(m platform.Member, now time.Time) ([]MonitoringCoverage, *kernel.Error) {
 	previous, _ := t.Log().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: m.ID, Offset: 0, Limit: 1000})
 	previousStatus := map[string]string{}
 	for _, entry := range previous.Entries {
@@ -181,7 +176,6 @@ func (t *Tenant) refreshRunIndex(m platform.Member, now time.Time) ([]Monitoring
 	if err := t.Log().ReplaceRunIndex(t.ID, m.ID, entries); err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
 	}
-	t.runIndexAt[m.ID] = runIndexCache{At: now, Generation: generation, Coverage: slices.Clone(coverage)}
 	return coverage, nil
 }
 

@@ -45,9 +45,7 @@ type Tenant struct {
 	simulationTrace   func(platform.DecisionTrace)
 	schedules         dataowner.ReadSchedules
 	observations      runtimekernel.ObservationBuffer
-	runIndexMu        sync.Mutex
-	runIndexAt        map[string]runIndexCache
-	runIndexGen       atomic.Int64
+	runIndex          runtimekernel.RunIndexCache[[]MonitoringCoverage]
 	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity          platform.IdentityDirectory
 	claims            platform.Facts

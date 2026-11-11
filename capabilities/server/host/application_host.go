@@ -53,15 +53,15 @@ func (t *Tenant) scopedApplicationRuns(m platform.Member, ref platform.AssetRef,
 
 func (t *Tenant) refreshApplicationRunIndex(m platform.Member, ref platform.AssetRef, now time.Time) *kernel.Error {
 	key := "application/" + ref.App + "/" + ref.Name + "/" + m.ID
-	t.runIndexMu.Lock()
-	defer t.runIndexMu.Unlock()
-	if t.runIndexAt == nil {
-		t.runIndexAt = map[string]runIndexCache{}
-	}
-	generation := t.runIndexGen.Load()
-	if cached, ok := t.runIndexAt[key]; ok && cached.Generation == generation && now.Sub(cached.At) < 5*time.Second {
-		return nil
-	}
+	var refusal *kernel.Error
+	t.runIndex.Refresh(key, now, func() ([]MonitoringCoverage, bool) {
+		refusal = t.rebuildApplicationRunIndex(m, ref, key, now)
+		return nil, refusal == nil
+	})
+	return refusal
+}
+
+func (t *Tenant) rebuildApplicationRunIndex(m platform.Member, ref platform.AssetRef, key string, now time.Time) *kernel.Error {
 	ctx := t.applicationContext()
 	runs := []platform.ApplicationRun{}
 	for skip := 0; ; {
@@ -86,7 +86,6 @@ func (t *Tenant) refreshApplicationRunIndex(m platform.Member, ref platform.Asse
 	if err := t.Log().ReplaceRunIndex(t.ID, key, entries); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
 	}
-	t.runIndexAt[key] = runIndexCache{At: now, Generation: generation}
 	return nil
 }
 
