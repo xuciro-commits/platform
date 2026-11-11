@@ -325,7 +325,7 @@ func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[strin
 		at := now.UTC()
 		row := dataowner.SourceRow{ID: id, Origin: id, At: &at}
 		if id != "" {
-			if resolved, failure := t.entityIDs.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
+			if resolved, failure := t.claims.Identity.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
 				row.ID = resolved[0].ID
 			}
 		}

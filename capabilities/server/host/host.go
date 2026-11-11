@@ -7,7 +7,6 @@ import automation "platformserver/services/automate/runtime"
 import (
 	"fmt"
 	"net/http"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/kernel/transport"
 	knowledgeindex "platformserver/services/ai/retrieval"
@@ -48,9 +47,7 @@ type Tenant struct {
 	runIndex          runtimekernel.RunIndexCache[[]MonitoringCoverage]
 	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity          platform.IdentityDirectory
-	claims            platform.Facts
-	claimSchemas      platform.SchemaRegistry
-	entityIDs         platform.Identity
+	claims            dataowner.SourceClaims
 	Record            func(Entry)
 	AcceptResult      func(Entry, string, string) ([]byte, error)
 	knowledge         platform.Glossary
@@ -135,9 +132,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		t.appIndex[id] = i
 	}
 	t.services = services
-	t.claimSchemas = services.Kernel.Schemas([]*pb.SchemaRef{{Name: "integration.claim", Version: 1}})
-	t.claims = services.Kernel.Facts(t.claimSchemas)
-	t.entityIDs = services.Kernel.Identity(nil)
+	t.claims = dataowner.NewSourceClaims(services.Kernel)
 	if services.NewAgentEvaluator != nil {
 		t.agentEvaluator = services.NewAgentEvaluator()
 	}

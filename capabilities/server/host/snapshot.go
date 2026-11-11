@@ -370,14 +370,14 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 		}()
 	}
 	s.Audit, s.Deliveries = t.audit.SnapshotState()
-	if facts := t.claims.Records(t.ID); len(facts) > 0 {
+	if facts := t.claims.Facts.Records(t.ID); len(facts) > 0 {
 		var err error
 		s.Facts, err = platform.Protos(facts)
 		if err != nil {
 			return tenantState{}, nil, 0, err
 		}
 	}
-	if identities := t.entityIDs.State(); len(identities.Entities) > 0 || len(identities.Redirects) > 0 {
+	if identities := t.claims.Identity.State(); len(identities.Entities) > 0 || len(identities.Redirects) > 0 {
 		s.Identities = &identities
 	}
 	if includeRows {
@@ -518,10 +518,10 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		t.claims.Restore(t.ID, facts)
+		t.claims.Facts.Restore(t.ID, facts)
 	}
 	if s.Identities != nil {
-		t.entityIDs.Restore(*s.Identities)
+		t.claims.Identity.Restore(*s.Identities)
 	}
 	if err := t.restoreDefinitions(&s, held); err != nil {
 		return err

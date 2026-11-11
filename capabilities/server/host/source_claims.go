@@ -130,13 +130,13 @@ func (t *Tenant) sourceFacts(typ, id, change string, prepared *preparedSourceCla
 			Schema:         &pb.SchemaRef{Name: "integration.claim", Version: 1},
 			Provenance:     &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: claim.Connector}, SourceTime: timestamppb.New(claim.SourceTime), Confidence: 1},
 			IdempotencyKey: typ + "/" + id + "/" + change + "/" + claim.Attribute, Payload: claim.Payload}
-		if old := t.claims.Accepted(t.ID, fact.IdempotencyKey); old != nil && !proto.Equal(old.GetFact(), fact) {
+		if old := t.claims.Facts.Accepted(t.ID, fact.IdempotencyKey); old != nil && !proto.Equal(old.GetFact(), fact) {
 			return nil, fmt.Errorf("source claim idempotency conflict")
 		}
 		facts = append(facts, fact)
 	}
 	if prepared.origin != "" {
-		resolved, failure := t.entityIDs.Resolve(&pb.EntityRef{Type: typ, Id: prepared.origin})
+		resolved, failure := t.claims.Identity.Resolve(&pb.EntityRef{Type: typ, Id: prepared.origin})
 		if failure == nil && (len(resolved) != 1 || resolved[0] != (kernel.Ref{Type: typ, ID: id}) && resolved[0] != (kernel.Ref{Type: typ, ID: prepared.origin})) {
 			return nil, fmt.Errorf("source identity already resolves elsewhere")
 		}
@@ -153,27 +153,27 @@ func (t *Tenant) applySourceClaims(typ, id, change string, at time.Time, prepare
 		return err
 	}
 	for _, fact := range facts {
-		if _, failure := t.claims.Record(fact, at); failure != nil {
+		if _, failure := t.claims.Facts.Record(fact, at); failure != nil {
 			return fmt.Errorf("accepted source claim: %v", failure)
 		}
 	}
 	target := &pb.EntityRef{Type: typ, Id: id}
-	if _, failure := t.entityIDs.Resolve(target); failure != nil {
-		if failure := t.entityIDs.Create(target); failure != nil {
+	if _, failure := t.claims.Identity.Resolve(target); failure != nil {
+		if failure := t.claims.Identity.Create(target); failure != nil {
 			return fmt.Errorf("accepted source identity: %v", failure)
 		}
 	}
 	if prepared.origin != "" {
 		origin := &pb.EntityRef{Type: typ, Id: prepared.origin}
-		resolved, failure := t.entityIDs.Resolve(origin)
+		resolved, failure := t.claims.Identity.Resolve(origin)
 		if failure != nil {
-			if failure := t.entityIDs.Create(origin); failure != nil {
+			if failure := t.claims.Identity.Create(origin); failure != nil {
 				return fmt.Errorf("accepted source origin: %v", failure)
 			}
 			resolved = []kernel.Ref{{Type: typ, ID: prepared.origin}}
 		}
 		if len(resolved) == 1 && resolved[0] == (kernel.Ref{Type: typ, ID: prepared.origin}) {
-			if failure := t.entityIDs.AddRedirect(&pb.Redirect{From: origin, To: []*pb.EntityRef{target}, Kind: pb.RedirectKind_REDIRECT_KIND_MERGE}); failure != nil {
+			if failure := t.claims.Identity.AddRedirect(&pb.Redirect{From: origin, To: []*pb.EntityRef{target}, Kind: pb.RedirectKind_REDIRECT_KIND_MERGE}); failure != nil {
 				return fmt.Errorf("accepted source redirect: %v", failure)
 			}
 		}
@@ -239,14 +239,14 @@ func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBin
 			}
 			ref := &pb.EntityRef{Type: object, Id: id}
 			live, known := false, false
-			for _, claim := range t.claims.CurrentClaims(t.ID, ref, "$record") {
+			for _, claim := range t.claims.Facts.CurrentClaims(t.ID, ref, "$record") {
 				if claim.GetFact().GetProvenance().GetConnectorId() == connector {
 					live, known = string(claim.GetFact().GetPayload()) == "true", true
 				}
 			}
 			if !known {
 				for _, field := range et.Info().Fields {
-					live = live || slices.ContainsFunc(t.claims.CurrentClaims(t.ID, ref, field.Name), func(claim *pb.FactRecord) bool {
+					live = live || slices.ContainsFunc(t.claims.Facts.CurrentClaims(t.ID, ref, field.Name), func(claim *pb.FactRecord) bool {
 						return claim.GetFact().GetProvenance().GetConnectorId() == connector
 					})
 				}

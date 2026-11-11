@@ -279,11 +279,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	t.opsMu.Unlock()
 	view.staged = computeowner.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())
-	view.claimSchemas = t.claimSchemas
-	view.claims = t.services.Kernel.Facts(t.claimSchemas)
-	view.claims.Restore(t.ID, t.claims.Records(t.ID))
-	view.entityIDs = t.services.Kernel.Identity(nil)
-	view.entityIDs.Restore(t.entityIDs.State())
+	view.claims = t.claims.Fork(t.services.Kernel, t.ID)
 	view.defGen.Store(t.defGen.Load())
 	view.runIndex.CopyGeneration(&t.runIndex)
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions
