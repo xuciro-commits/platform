@@ -216,57 +216,7 @@ func (d *stagedDecision) savedControl() (*acceptedformat.Control, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &acceptedformat.Control{}
-	for _, kind := range slices.Sorted(maps.Keys(current)) {
-		base := d.control.base[kind]
-		image := current[kind]
-		if kind == "effects" {
-			var prior, after []acceptedformat.EffectState
-			if err := acceptedformat.DecodeControl(base, &prior); err != nil {
-				return nil, err
-			}
-			if err := acceptedformat.DecodeControl(image, &after); err != nil {
-				return nil, err
-			}
-			lookup := map[string]acceptedformat.EffectState{}
-			for _, x := range prior {
-				lookup[x.ID] = x
-			}
-			var beforeChanges, afterChanges []acceptedformat.EffectState
-			for _, x := range after {
-				old, known := lookup[x.ID]
-				if !known {
-					return nil, fmt.Errorf("control may not create effect intents")
-				}
-				oldHash, _ := platform.CanonicalDigest(old)
-				newHash, _ := platform.CanonicalDigest(x)
-				if oldHash != newHash && !d.operationCancels[x.ID] {
-					beforeChanges = append(beforeChanges, old)
-					afterChanges = append(afterChanges, x)
-				}
-			}
-			if len(afterChanges) == 0 {
-				continue
-			}
-			base, _ = json.Marshal(beforeChanges)
-			image, _ = json.Marshal(afterChanges)
-		}
-		before, err := platform.CanonicalDigest(base)
-		if err != nil {
-			return nil, err
-		}
-		after, err := platform.CanonicalDigest(image)
-		if err != nil {
-			return nil, err
-		}
-		if before != after {
-			result.Changes = append(result.Changes, acceptedformat.ControlChange{Kind: kind, Before: before, Image: image})
-		}
-	}
-	if len(result.Changes) == 0 {
-		return nil, nil
-	}
-	return result, nil
+	return runtimekernel.ControlDiff(d.control.base, current, d.operationCancels)
 }
 
 func (t *Tenant) validateAcceptedControl(saved *acceptedformat.Control) error {
@@ -277,48 +227,9 @@ func (t *Tenant) validateAcceptedControl(saved *acceptedformat.Control) error {
 	if err != nil {
 		return err
 	}
-	seen := map[string]bool{}
-	for _, change := range saved.Changes {
-		prior := current[change.Kind]
-		if change.Kind == "effects" {
-			var after, all []acceptedformat.EffectState
-			if err := acceptedformat.DecodeControl(change.Image, &after); err != nil {
-				return err
-			}
-			if err := acceptedformat.DecodeControl(prior, &all); err != nil {
-				return err
-			}
-			selected := []acceptedformat.EffectState{}
-			seenIDs := map[string]bool{}
-			for _, next := range after {
-				i := slices.IndexFunc(all, func(x acceptedformat.EffectState) bool { return x.ID == next.ID })
-				if i < 0 || seenIDs[next.ID] {
-					return fmt.Errorf("control effect is missing or duplicated")
-				}
-				seenIDs[next.ID] = true
-				old := all[i]
-				fixed := next
-				fixed.State, fixed.Due, fixed.Since = old.State, old.Due, old.Since
-				fixed.Last, fixed.Error, fixed.CallbackError = old.Last, old.Error, old.CallbackError
-				oldHash, _ := platform.CanonicalDigest(old)
-				fixedHash, _ := platform.CanonicalDigest(fixed)
-				if oldHash != fixedHash {
-					return fmt.Errorf("control effect rewrites immutable intent")
-				}
-				selected = append(selected, old)
-				all[i] = next
-			}
-			prior, _ = json.Marshal(selected)
-			current[change.Kind], _ = json.Marshal(all)
-		}
-		before, err := platform.CanonicalDigest(prior)
-		if err != nil || seen[change.Kind] || current[change.Kind] == nil || change.Before != before {
-			return fmt.Errorf("control %s predecessor differs", change.Kind)
-		}
-		seen[change.Kind] = true
-		if change.Kind != "effects" {
-			current[change.Kind] = change.Image
-		}
+	current, err = runtimekernel.ControlNext(current, saved)
+	if err != nil {
+		return err
 	}
 	_, err = t.forkControl(current)
 	return err
