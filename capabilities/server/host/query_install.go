@@ -13,10 +13,6 @@ func checkNamedQuery(q platform.NamedQuery, info platform.EntityInfo, engine pla
 	return objects.CheckNamedQuery(q, info, engine)
 }
 
-func checkQueryFields(q platform.NamedQuery, info platform.EntityInfo, engine platform.RuleEngine) error {
-	return objects.CheckQueryFields(q, info, engine)
-}
-
 func (h hostView) ValidateInstallQuery(q platform.NamedQuery) error {
 	if q.Interface != "" {
 		_, err := h.t.bindInterfaceQuery(q)

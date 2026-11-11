@@ -25,7 +25,7 @@ import (
 )
 
 type models interface {
-	platform.App
+	platform.AcceptedInputApp
 	Snapshot() (json.RawMessage, error)
 	Callable(m platform.Member, name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
 	Model(name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
@@ -82,11 +82,7 @@ func (t *Tenant) prepareReserveCall(m platform.Member, model platform.AIModel, r
 	}
 	r := platform.AIReservation{RequestHash: req.RequestHash, Call: req.Call, At: now, Member: m.ID, Agent: m.Agent, Model: model.Name(), Run: req.Run, Input: input, Output: output, State: "pending"}
 	body, _ := json.Marshal(platform.AIReserveInput{Reservation: r, Defaults: t.limits(), RunTokens: req.RunTokens})
-	owner, ok := t.ai.(platform.AcceptedInputApp)
-	if !ok {
-		return &platform.AIError{Status: 503, Detail: "The AI meter cannot accept a reservation"}
-	}
-	_, refusal := t.inputAccepted(owner, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
+	_, refusal := t.inputAccepted(t.ai, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
 	if refusal != nil {
 		return modelReservationFailure(refusal)
 	}
@@ -101,7 +97,7 @@ func (t *Tenant) releaseCall(call string, now time.Time) *kernel.Error {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model reservation is unavailable")
 		}
 		body, _ := json.Marshal(platform.AIReserveInput{Reservation: r, Cancel: true})
-		return t.inputAccepted(t.ai.(platform.AcceptedInputApp), member, platform.AIReserveCall, body, now)
+		return t.inputAccepted(t.ai, member, platform.AIReserveCall, body, now)
 	}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *kernel.Error) (any, *kernel.Error) {
 		return t.finishPreparedInput(member, platform.AIReserveCall, candidate, answer, refusal)
 	})

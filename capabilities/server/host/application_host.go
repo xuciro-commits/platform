@@ -179,9 +179,6 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 func (t *Tenant) bindApplications(resource platform.AssetRef, release, dependencies string, jobOwner ...string) ([]platform.AssetBinding, error) {
 	return t.applicationContext().Bind(resource, release, dependencies, jobOwner...)
 }
-func (t *Tenant) applicationRunGraphsLocked(ref platform.AssetRef) (map[platform.AssetRef]platform.ReleaseAsset, map[string]map[platform.AssetRef]bool, error) {
-	return t.applicationContext().Graphs(ref)
-}
 func checkRunApplicationBindings(record any) error {
 	var bindings []platform.AssetBinding
 	switch run := record.(type) {

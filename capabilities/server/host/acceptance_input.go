@@ -222,8 +222,8 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, err
 	if err != nil {
 		return result, false, err
 	}
-	app, ok := t.app(result.App).(platform.AcceptedInputApp)
-	if result.Tenant != t.ID || !ok || !slices.Contains(app.AcceptedInputs(), result.Name) {
+	app := t.inputs[result.App]
+	if result.Tenant != t.ID || app == nil || !slices.Contains(app.AcceptedInputs(), result.Name) {
 		return result, false, fmt.Errorf("connector result belongs to another input")
 	}
 	if result.Refusal == nil {

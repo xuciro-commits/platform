@@ -393,10 +393,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	}
 	if installed := prepared.installation; installed != nil {
 		t.setDefinitions(installed.definitions)
-		for key, app := range installed.owner {
-			installed.owner[key] = t.app(app.Manifest().ID)
-		}
-		t.owner = installed.owner
+		t.owner = t.rehome(installed.owner)
 		registry, err := t.assetRegistryLocked()
 		if err != nil {
 			return false, err

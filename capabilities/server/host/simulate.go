@@ -75,7 +75,7 @@ func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb
 		}
 	}
 	draft.simulation = true
-	_, refusal := decideAccepted(a, draft, m, s, now)
+	_, refusal := decideAcceptedAs(a, draft, m, s, now, false)
 	out := trialowner.Simulation{Changes: []trialowner.SimulatedChange{}}
 	if refusal != nil {
 		out.Refusal = explained(refusal, a, s.GetSchema().GetName(), target(s)).Message
@@ -85,7 +85,7 @@ func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb
 		return out, nil
 	}
 	out.Accepted = true
-	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, Projection: draft.records, directory: t.directory}
+	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, ownerSet: t.ownerSet, Projection: draft.records, directory: t.directory}
 	for _, ref := range slices.Sorted(func(yield func(string) bool) {
 		for k := range draft.records.Writes() {
 			if !yield(k) {

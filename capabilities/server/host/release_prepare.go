@@ -54,7 +54,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 	view.installingSet = true
 	defer func() { view.installingSet = false }()
 	if definitionOnly {
-		shapes, err := t.releaseAssetShapes(candidate.Assets)
+		shapes, err := releaseowner.AssetShapes(t.apps, candidate.Assets)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -66,17 +66,15 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 	}
 	decision.tenant, decision.records = view, view.Projection
 	decision.records.Current().SelectRelease(candidate.ID)
-	for i, app := range view.apps {
-		if _, ok := app.(platform.AssetLifecycleOwner); !ok {
+	apps := slices.Clone(view.apps)
+	for i, app := range apps {
+		if view.assets[app.Manifest().ID] == nil {
 			continue
 		}
-		private := decision.stateApp(app)
-		view.apps[i] = private
-		(hostView{t: view, app: private}).bindOwner(private)
+		apps[i] = decision.stateApp(app)
+		(hostView{t: view, app: apps[i]}).bindOwner(apps[i])
 	}
-	for key, app := range view.owner {
-		view.owner[key] = view.app(app.Manifest().ID)
-	}
+	view.ownerSet = view.with(apps)
 	registry, err = view.assetRegistryLocked()
 	if err != nil {
 		return nil, nil, err
@@ -226,11 +224,9 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 			receipt = answer
 		}
 		private := decision.stateApp(app)
-		for i, registered := range view.apps {
-			if registered.Manifest().ID == et.Info().App {
-				view.apps[i] = private
-			}
-		}
+		apps := slices.Clone(view.apps)
+		apps[view.appIndex[et.Info().App]] = private
+		view.ownerSet = view.with(apps)
 		(hostView{t: view, app: private}).bindOwner(private)
 		registry, err = view.assetRegistryLocked()
 		if err != nil {

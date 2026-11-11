@@ -47,13 +47,11 @@ func (t *Tenant) installAcceptedIntents(intents []platform.Effect) {
 }
 
 func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
-	view := &Tenant{apps: slices.Clone(d.tenant.apps), appIndex: d.tenant.appIndex, directory: d.directoryView()}
-	for i, app := range view.apps {
-		if app.Manifest().ID == controlowner.PlatformApp {
-			view.apps[i] = d.stateApp(app)
-			break
-		}
+	apps := slices.Clone(d.tenant.apps)
+	if i, ok := d.tenant.appIndex[controlowner.PlatformApp]; ok {
+		apps[i] = d.stateApp(apps[i])
 	}
+	view := &Tenant{ownerSet: d.tenant.with(apps), directory: d.directoryView()}
 	return view.recipients(c, now, to)
 }
 

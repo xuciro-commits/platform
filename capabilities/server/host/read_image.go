@@ -203,8 +203,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.Projection.Current().Detach()
 	view.definitions = slices.Clone(t.definitions)
 	view.disabledOwners = maps.Clone(t.disabledOwners)
-	view.apps = make([]platform.App, len(t.apps))
-	view.owner = make(map[string]platform.App, len(t.owner))
+	apps := make([]platform.App, len(t.apps))
 	for i, app := range t.apps {
 		ledger, err := app.AcceptedLedger().ForkRead()
 		if err != nil {
@@ -214,16 +213,14 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 		if err != nil {
 			return nil, err
 		}
-		view.apps[i] = fork
+		apps[i] = fork
 	}
+	view.ownerSet = t.with(apps)
 	roles, err := ownerRolesOf(view.apps, view.ownerActive)
 	if err != nil {
 		return nil, err
 	}
 	view.ownerRoles = roles
-	for key, owner := range t.owner {
-		view.owner[key] = view.app(owner.Manifest().ID)
-	}
 	for protocol, binding := range view.bindings {
 		binding.provider = view.app(binding.provider.Manifest().ID)
 		view.bindings[protocol] = binding

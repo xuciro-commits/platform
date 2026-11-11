@@ -361,11 +361,12 @@ func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id s
 
 func (d *stagedDecision) enterpriseUsageTenant() *Tenant {
 	original := d.routingTenant()
-	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, apps: slices.Clone(original.apps), appIndex: original.appIndex, Projection: d.records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
-	view.settings.Restore(original.settings.Snapshot())
-	for i, app := range view.apps {
-		view.apps[i] = d.stateApp(app)
+	apps := make([]platform.App, len(original.apps))
+	for i, app := range original.apps {
+		apps[i] = d.stateApp(app)
 	}
+	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, ownerSet: original.with(apps), Projection: d.records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
+	view.settings.Restore(original.settings.Snapshot())
 	return view
 }
 

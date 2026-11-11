@@ -76,10 +76,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 			return saved, err
 		}
 		t.setDefinitions(draft.definitions)
-		for key, app := range draft.owner {
-			draft.owner[key] = t.app(app.Manifest().ID)
-		}
-		t.owner = draft.owner
+		t.owner = t.rehome(draft.owner)
 		registry, err := t.assetRegistryLocked()
 		if err != nil {
 			return saved, err

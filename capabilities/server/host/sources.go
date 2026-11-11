@@ -435,7 +435,7 @@ func (t *Tenant) submitIntegrationRow(member platform.Member, app, object string
 	sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: app, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: object, Id: row.ID}, Schema: &pb.SchemaRef{Name: object + row.Verb, Version: 1}, Payload: row.Payload}
 	if binding != nil {
-		_, err := t.submitSource(member, sub, now, &sourceSubmission{binding: binding, row: row, deleted: row.Deleted})
+		_, err := t.submit(member, sub, now, nil, &sourceSubmission{binding: binding, row: row, deleted: row.Deleted})
 		return err
 	}
 	_, err := t.Submit(member, sub, now)

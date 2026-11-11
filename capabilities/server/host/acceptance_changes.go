@@ -354,8 +354,8 @@ func (d *stagedDecision) savedStates() ([]acceptedformat.State, error) {
 func (t *Tenant) validateAcceptedStates(states []acceptedformat.State) error {
 	seen := map[string]bool{}
 	for _, state := range states {
-		owner, ok := t.app(state.App).(platform.AcceptedStateApp)
-		if !ok || seen[state.App] || state.Before == "" || len(state.Image) == 0 {
+		owner := t.states[state.App]
+		if owner == nil || seen[state.App] || state.Before == "" || len(state.Image) == 0 {
 			return fmt.Errorf("accepted result has a duplicate or unknown state owner %s", state.App)
 		}
 		seen[state.App] = true
@@ -376,7 +376,7 @@ func (t *Tenant) validateAcceptedStates(states []acceptedformat.State) error {
 
 func (t *Tenant) applyAcceptedStates(states []acceptedformat.State) error {
 	for _, state := range states {
-		if err := t.app(state.App).(platform.AcceptedStateApp).ApplyAcceptedState(state.Image); err != nil {
+		if err := t.states[state.App].ApplyAcceptedState(state.Image); err != nil {
 			return err
 		}
 	}

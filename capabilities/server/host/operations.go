@@ -409,10 +409,6 @@ func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Tim
 	return out
 }
 
-func (t *Tenant) notificationsFor(member string) []platform.Notification {
-	return t.notices.ForMember(member)
-}
-
 func (t *Tenant) setting(c platform.Caller, name string) string {
 	app := c.App
 	if tenantWide, ok := strings.CutPrefix(name, controlowner.PlatformApp+"/"); ok {

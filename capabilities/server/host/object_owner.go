@@ -4,7 +4,6 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/objects"
-	"time"
 )
 
 func (t *Tenant) objectOwner(store *records.Store) *objects.Owner {
@@ -30,7 +29,7 @@ func (t *Tenant) objectOwner(store *records.Store) *objects.Owner {
 		OwnedRelationTargets:   t.ownedRelationTargets,
 		HasProcesses:           func() bool { return t.procs != nil },
 		Follows:                t.objectFollows,
-		Deliveries:             t.objectDeliveries,
+		Deliveries:             t.recordDeliveries,
 		AuditPersonal:          t.objectPersonalRead,
 		RecordSetBinding:       t.recordSetBinding,
 		Claims:                 t.claims.Facts,
@@ -44,10 +43,6 @@ func (t *Tenant) objectCaller(m platform.Member, app string) platform.Caller {
 func (t *Tenant) objectFollows(m platform.Member, target string) bool {
 	follow, ok := platform.Get[platform.RecordFollow](t.automation(platform.RelationsApp, false), platform.FollowID(m.ID, target))
 	return ok && !follow.Archived
-}
-
-func (t *Tenant) objectDeliveries(target string, now time.Time) []objects.RecordDelivery {
-	return t.recordDeliveries(target, now)
 }
 
 func (t *Tenant) objectPersonalRead(read platform.PersonalRead) {

@@ -41,7 +41,7 @@ func (h hostView) TenantSuspended() bool { return h.t.console.Suspended() }
 func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case "notifications":
-		return h.t.notificationsFor(c.ID), nil
+		return h.t.notices.ForMember(c.ID), nil
 	case "audit":
 		return h.t.Audit(), nil
 	case "deliveries":

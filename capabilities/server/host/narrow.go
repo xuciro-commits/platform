@@ -18,10 +18,6 @@ func (t *Tenant) admits(m platform.Member) *kernel.Error {
 	return nil
 }
 
-func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref string) bool {
-	return t.mayReadIn(t.Projection, m, now, held)
-}
-
 func (t *Tenant) mayReadIn(store *records.Store, m platform.Member, now time.Time, held bool) func(ref string) bool {
 	seen := map[string]bool{}
 	walk := newAuthorizationWalk()

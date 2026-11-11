@@ -2636,7 +2636,6 @@
   "The model request exceeds the remaining run token budget": "模型请求超出本次运行剩余的 Token 预算",
   "Model dispatch is stopped until the tenant recovers": "租户恢复前模型派发已暂停",
   "The model call already has an unsettled or saved result; reconcile it before retrying": "该模型调用已有未结算或保存的结果，请先核对后再重试",
-  "The AI meter cannot accept a reservation": "AI 计量归属方无法接受用量预占",
   "The model reservation is unavailable": "模型用量预占不可用",
   "Set a positive generation token limit before calling this model": "调用该模型前，请设置大于零的生成 Token 上限",
   "The model usage differs from its accepted reading": "模型用量与已接受的计量结果不一致",

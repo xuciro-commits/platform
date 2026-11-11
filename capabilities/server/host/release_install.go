@@ -89,29 +89,27 @@ func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchive
 	draft.Projection = recordView.ForkRecords()
 	draft.console.Restore(t.console.SnapshotState())
 	draft.Secrets = t.Secrets
-	draft.apps = slices.Clone(t.apps)
+	apps := slices.Clone(t.apps)
 	if t.procs != nil {
 		draft.procs = t.procs.InstallationDraft()
 		if app, ok := draft.procs.(platform.App); ok {
 			(hostView{t: draft, app: app}).bindOwner(app)
 		}
 	}
-	for i, app := range draft.apps {
-		if _, ok := app.(platform.AssetLifecycleOwner); !ok {
+	for i, app := range apps {
+		if t.assets[app.Manifest().ID] == nil {
 			continue
 		}
 		fork, err := app.Fork(app.AcceptedLedger())
 		if err != nil || fork == nil {
 			return nil, fmt.Errorf("asset owner %s cannot fork: %v", app.Manifest().ID, err)
 		}
-		draft.apps[i] = fork
+		apps[i] = fork
 		(hostView{t: draft, app: fork}).bindOwner(fork)
 	}
+	draft.ownerSet = draft.with(apps)
 	if err := draft.registerOwnedAssetMetadata(); err != nil {
 		return nil, err
-	}
-	for key, app := range draft.owner {
-		draft.owner[key] = draft.app(app.Manifest().ID)
 	}
 	return draft, nil
 }
@@ -152,9 +150,6 @@ func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]
 		return nil, err
 	}
 	return releaseowner.ExtensionReview(candidate, t.releaseStoredShapes(), shapes, t.entity, (hostView{t: t}).EntitySource)
-}
-func (t *Tenant) releaseAssetShapes(available []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
-	return releaseowner.AssetShapes(t.apps, available)
 }
 
 func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, members ...platform.Member) (*releaseowner.ReleaseUpgradePlan, error) {

@@ -47,23 +47,21 @@ type Tenant struct {
 	runIndex          runtimekernel.RunIndexCache[[]MonitoringCoverage]
 	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	ownerRoles
-	claims        dataowner.SourceClaims
-	Record        func(Entry)
-	AcceptResult  func(Entry, string, string) ([]byte, error)
-	index         *knowledgeindex.Index
-	i18n          transport.Translator
-	views         transport.ViewCache
-	readViews     *transport.ViewCache
-	streamMu      sync.Mutex
-	lineageCache  lineage.Cache[*branchWorld]
-	markings      lineage.MarkingCache[*records.Store]
-	apps          []platform.App
-	appIndex      map[string]int
+	claims       dataowner.SourceClaims
+	Record       func(Entry)
+	AcceptResult func(Entry, string, string) ([]byte, error)
+	index        *knowledgeindex.Index
+	i18n         transport.Translator
+	views        transport.ViewCache
+	readViews    *transport.ViewCache
+	streamMu     sync.Mutex
+	lineageCache lineage.Cache[*branchWorld]
+	markings     lineage.MarkingCache[*records.Store]
+	ownerSet
 	releases      releases.Store
 	console       controlowner.HostState
 	staged        computeowner.Channel
 	definitions   []platform.Definition
-	owner         map[string]platform.App
 	flowArtifacts flowArtifactGC
 	audit         runtimekernel.AuditLog
 	events        []automation.QueuedEvent
@@ -109,18 +107,15 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if err := services.Check(); err != nil {
 		return nil, err
 	}
-	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
+	owners, err := newOwnerSet(apps)
+	if err != nil {
+		return nil, fmt.Errorf("tenant %s: %w", id, err)
+	}
+	t := &Tenant{ID: id, ownerSet: owners, bindings: map[string]binding{}, works: kernel.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
 		connectors: newConnectorRoster(), Projection: records.NewStore()}
 	t.bindAuditStore()
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)
 	t.observeLane()
-	for i, app := range apps {
-		id := app.Manifest().ID
-		if _, exists := t.appIndex[id]; exists || id == "" {
-			return nil, fmt.Errorf("tenant %s: owner identity %q is empty or repeated", t.ID, id)
-		}
-		t.appIndex[id] = i
-	}
 	t.services = services
 	t.claims = dataowner.NewSourceClaims()
 	if services.NewAgentEvaluator != nil {
@@ -224,13 +219,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.Info().Type, err)
 		}
 	}
-	var assetOwners []platform.AssetLifecycleOwner
-	for _, app := range apps {
-		if owner, ok := app.(platform.AssetLifecycleOwner); ok {
-			assetOwners = append(assetOwners, owner)
-		}
-	}
-	if _, err := platform.NewAssetRegistry(assetOwners...); err != nil {
+	if _, err := platform.NewAssetRegistry(t.assetOwners(t.ownerActive)...); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
 	for _, app := range apps {
@@ -247,14 +236,6 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	}
 	t.startupSnapshot = &compatibility
 	return t, nil
-}
-
-func (t *Tenant) app(id string) platform.App {
-	i, found := t.appIndex[id]
-	if !found {
-		return nil
-	}
-	return t.apps[i]
 }
 
 func (t *Tenant) caller(m platform.Member, app platform.App, replaying bool) platform.Caller {

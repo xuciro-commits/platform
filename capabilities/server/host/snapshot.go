@@ -697,8 +697,8 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 	}
 	for key, raw := range s.AcceptedInputs {
 		result, err := acceptedformat.DecodeInput(raw)
-		owner, ok := t.app(result.App).(platform.AcceptedInputApp)
-		if err != nil || !ok || result.Tenant != t.ID ||
+		owner := t.inputs[result.App]
+		if err != nil || owner == nil || result.Tenant != t.ID ||
 			key != result.App+"/"+result.Key || !slices.Contains(owner.AcceptedInputs(), result.Name) {
 			return fmt.Errorf("tenant %s: accepted input snapshot %s is incompatible: %v", t.ID, key, err)
 		}

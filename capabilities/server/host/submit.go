@@ -22,10 +22,6 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb
 	return t.submit(m, s, now, nil, nil)
 }
 
-func (t *Tenant) submitSource(m platform.Member, s *pb.Submission, now time.Time, source *sourceSubmission) (*pb.ChangeRecord, *kernel.Error) {
-	return t.submit(m, s, now, nil, source)
-}
-
 func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
 	record, err := t.submit(m, s, now, func(_ *kernel.Error, found []platform.FieldIssue) {
@@ -370,10 +366,6 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 	}
 	t.enqueue(saved.At)
 	return receipt, nil
-}
-
-func decideAccepted(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
-	return decideAcceptedAs(a, draft, m, s, now, false)
 }
 
 func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *kernel.Error) {

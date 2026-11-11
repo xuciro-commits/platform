@@ -52,10 +52,6 @@ func (t *Tenant) entityView(m platform.Member) []platform.EntityInfo {
 	return out
 }
 
-func (t *Tenant) readableLocked(m platform.Member, ref string, now time.Time) bool {
-	return t.readableIn(t.Projection, m, ref, now)
-}
-
 func (t *Tenant) readableIn(store *records.Store, m platform.Member, ref string, now time.Time) bool {
 	typ, id, _ := strings.Cut(ref, "/")
 	if typ == "enterprise.element" && t.directory != nil {
@@ -77,5 +73,5 @@ func (t *Tenant) readableIn(store *records.Store, m platform.Member, ref string,
 func (t *Tenant) readable(m platform.Member, ref string, now time.Time) bool {
 	t.Projection.Lock()
 	defer t.Projection.Unlock()
-	return t.readableLocked(m, ref, now)
+	return t.readableIn(t.Projection, m, ref, now)
 }

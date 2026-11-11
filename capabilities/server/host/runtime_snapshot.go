@@ -175,8 +175,8 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 		}
 	}
 	for app, expected := range owners {
-		owner, ok := t.app(app).(platform.AcceptedStateApp)
-		if !ok {
+		owner := t.states[app]
+		if owner == nil {
 			return fmt.Errorf("tenant %s: restored owner %s is absent", t.ID, app)
 		}
 		actual, err := owner.AcceptedState()

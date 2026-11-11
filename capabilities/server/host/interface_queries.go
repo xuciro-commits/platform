@@ -70,7 +70,7 @@ func checkInterfaceQueryFields(q platform.NamedQuery, engine platform.RuleEngine
 	for _, field := range q.InterfaceShape.Fields {
 		info.Fields = append(info.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type})
 	}
-	return checkQueryFields(q, info, engine)
+	return objects.CheckQueryFields(q, info, engine)
 }
 
 func (t *Tenant) checkInterfaceQueryFields(q platform.NamedQuery) error {

@@ -84,7 +84,9 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			}
 			return agentowner.FunctionSource{Revision: sourceRevision, Values: sourceValues, Raw: raw, HistorySources: historySources}, nil
 		},
-		Readable: func(m platform.Member, ref string, at time.Time) bool { return t.mayRead(m, at, false)(ref) }, Closure: t.functionClosure, BindApplications: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
+		Readable: func(m platform.Member, ref string, at time.Time) bool {
+			return t.mayReadIn(t.Projection, m, at, false)(ref)
+		}, Closure: t.functionClosure, BindApplications: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 			return t.bindApplications(ref, release, dependencies)
 		},
 		Model: func(c platform.Caller, r *pb.ChangeRecord, q platform.Request, pending []platform.Effect, options platform.ModelOptions) (agentowner.FunctionDispatch, *kernel.Error) {

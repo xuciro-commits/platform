@@ -60,9 +60,9 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 		return nil, fmt.Errorf("retained flow execution requires its private decision")
 	}
 	view := h.installationDraft()
-	view.apps = slices.Clone(h.t.apps)
+	apps := slices.Clone(h.t.apps)
 	rt := &flowExecutionRuntime{stagedDecision: h.decision, view: view, release: release, shapes: map[string]platform.EntityInfo{}, assets: slices.Clone(assets)}
-	for i, owner := range view.apps {
+	for i, owner := range apps {
 		selected := []platform.ReleaseAsset{}
 		for _, asset := range assets {
 			if asset.Ref.App == owner.Manifest().ID {
@@ -105,7 +105,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 		if err != nil || bound == nil || bound.AcceptedLedger() != owner.AcceptedLedger() {
 			return nil, fmt.Errorf("retained owner %s cannot select its original execution: %v", owner.Manifest().ID, err)
 		}
-		view.apps[i] = bound
+		apps[i] = bound
 		for _, action := range bound.Manifest().Actions.All() {
 			view.owner["action:"+action.Schema] = bound
 		}
@@ -124,6 +124,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 		}
 		(hostView{t: view, app: bound, decision: h.decision}).bindOwner(bound)
 	}
+	view.ownerSet = view.with(apps)
 	view.definitions = slices.Clone(view.definitions)
 	for i, definition := range view.definitions {
 		for _, asset := range assets {

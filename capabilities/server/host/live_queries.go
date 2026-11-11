@@ -225,7 +225,7 @@ func (t *Tenant) liveReadVersion(query string, global, meta, seq, published int6
 			return fmt.Sprintf("%d/%d", seq, published)
 		}
 		ref := platform.AssetRef{App: parts[3], Kind: platform.AssetApp, Name: parts[4]}
-		_, graphs, err := t.applicationRunGraphsLocked(ref)
+		_, graphs, err := t.applicationContext().Graphs(ref)
 		if err != nil {
 			return fmt.Sprint(global, meta, seq)
 		}

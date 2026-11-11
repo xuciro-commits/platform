@@ -49,11 +49,7 @@ func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, i
 		return !t.ownerActive(definition.Ref.App) || definition.Ref.Kind == platform.AssetAgent && definition.Source != "code"
 	})
 	datasets := map[platform.AssetRef]platform.ReleaseAsset{}
-	for _, owner := range t.liveApps() {
-		provider, ok := owner.(platform.AssetLifecycleOwner)
-		if !ok {
-			continue
-		}
+	for _, provider := range t.assetOwners(t.ownerActive) {
 		assets, err := provider.ReleaseAssets()
 		if err != nil {
 			return nil, err
@@ -78,7 +74,7 @@ func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, i
 				}
 				continue
 			}
-			reader, ok := owner.(platform.AssetDefinitionReader)
+			reader, ok := provider.(platform.AssetDefinitionReader)
 			if !ok {
 				return nil, fmt.Errorf("agent owner has no definition descriptor")
 			}
@@ -118,7 +114,7 @@ func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, i
 			if !hasPublished || !hasVersion || published.Type.Kind() != reflect.String || version.Type.Kind() != reflect.Int {
 				continue
 			}
-			if _, ok := t.app(et.Info().App).(platform.AssetLifecycleOwner); !ok {
+			if t.assets[et.Info().App] == nil {
 				continue
 			}
 			for id, row := range et.Rows().All() {
@@ -156,13 +152,7 @@ func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, i
 		slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 		return out, nil
 	}
-	var owners []platform.AssetLifecycleOwner
-	for _, app := range t.liveApps() {
-		if owner, ok := app.(platform.AssetLifecycleOwner); ok {
-			owners = append(owners, owner)
-		}
-	}
-	registry, err := platform.NewAssetRegistry(owners...)
+	registry, err := platform.NewAssetRegistry(t.assetOwners(t.ownerActive)...)
 	if err != nil {
 		return nil, err
 	}

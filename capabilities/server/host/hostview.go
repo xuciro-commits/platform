@@ -56,7 +56,7 @@ func (h hostView) installationDraft() *Tenant {
 }
 
 func (h hostView) installationView(recordView *records.Store) *Tenant {
-	draft := &Tenant{services: h.t.services, disabledOwners: h.t.disabledOwners, ID: h.t.ID, apps: h.t.apps, appIndex: h.t.appIndex, owner: maps.Clone(h.t.owner),
+	draft := &Tenant{services: h.t.services, disabledOwners: h.t.disabledOwners, ID: h.t.ID, ownerSet: h.t.with(h.t.apps),
 		identity: h.t.identity, directory: h.Directory(), Projection: recordView, definitions: slices.Clone(h.t.definitions), includeArchivedDefinitions: h.t.includeArchivedDefinitions, Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
 	return draft
 }

@@ -11,7 +11,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	persistence "platformserver/kernel/store"
-	"platformserver/platform"
 )
 
 func (t *Tenant) migrateRuntimeState(ctx context.Context, j Journals) error {
@@ -132,7 +131,7 @@ func (t *Tenant) runtimeStateDeltaLocked() (persistence.StateDelta, error) {
 		}
 	}
 	for _, a := range t.apps {
-		if owner, ok := a.(platform.AcceptedStateApp); ok {
+		if owner := t.states[a.Manifest().ID]; owner != nil {
 			raw, err := owner.AcceptedState()
 			if err != nil {
 				return persistence.StateDelta{}, err

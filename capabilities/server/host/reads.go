@@ -50,8 +50,8 @@ func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Tim
 	end := t.begin("input "+name, trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
 	if a.Manifest().Inputs[name] {
-		accepted, ok := a.(platform.AcceptedInputApp)
-		if !ok || !slices.Contains(accepted.AcceptedInputs(), name) {
+		accepted := t.inputs[a.Manifest().ID]
+		if accepted == nil || !slices.Contains(accepted.AcceptedInputs(), name) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT,
 				"This connector input has no accepted-result boundary")
 		}
