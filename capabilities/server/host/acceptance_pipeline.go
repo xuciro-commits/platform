@@ -16,10 +16,10 @@ import (
 	"time"
 )
 
-func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
+func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
-			t.quarantine(fmt.Errorf("agent answer cannot stage: %v", p))
+			err = fmt.Errorf("agent answer cannot stage: %v", p)
 		}
 	}()
 	draft := t.newStagedDecision()
@@ -35,12 +35,9 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 	}
 	c := platform.NewCaller(draft, member, platform.AgentApp, false, true)
 	r := acceptedformat.RuntimeAgent{Version: 1, Kind: "agent-result", Tenant: t.ID, App: platform.AgentApp, Member: member.ID, At: at.UTC(), Step: b}
-	var err error
 	if b.Evaluation == nil && b.Usage.Model != "" {
-		r.UsageBefore, err = t.usagePredecessor()
-		if err != nil {
-			t.quarantine(err)
-			return
+		if r.UsageBefore, err = t.usagePredecessor(); err != nil {
+			return err
 		}
 	}
 	refusal := agent.ApplyAgentStepCaller(c, b, at)
@@ -54,14 +51,11 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 		refusal = draft.stageObservers()
 	}
 	if refusal != nil || len(draft.events) == 0 {
-		t.quarantine(fmt.Errorf("agent answer has no complete decision: %v", refusal))
-		return
+		return fmt.Errorf("agent answer has no complete decision: %v", refusal)
 	}
 	last := draft.events[len(draft.events)-1]
-	r.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
-	if err != nil {
-		t.quarantine(err)
-		return
+	if r.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at); err != nil {
+		return err
 	}
 	r.Key = "agent:" + last.Record.GetSubmission().GetIdempotencyKey()
 	r.RequestHash, err = acceptedformat.AgentRequestHash(r)
@@ -76,16 +70,16 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 		_, err = acceptedformat.DecodeAgent(raw)
 	}
 	if err != nil {
-		t.quarantine(err)
-		return
+		return err
 	}
 	principal, _ := json.Marshal(member)
 	candidate := preparedAccepted{entry: Entry{App: platform.AgentApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, key: r.Key, hash: r.RequestHash, uploads: draft.tenant.preparedUploads()}
 	if t.preparedResult != nil {
 		*t.preparedResult = candidate
-		return
+		return nil
 	}
 	t.finishAgentStep(candidate)
+	return nil
 }
 
 func (t *Tenant) finishAgentStep(candidate preparedAccepted) {
@@ -217,7 +211,6 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	}
 	t.opsMu.Unlock()
 	if pending == nil || out.Effect != id {
-		t.quarantine(fmt.Errorf("external answer for an unknown or different effect %s", id))
 		return
 	}
 	if platform.EffectSettled(before.State) && before.State != "discarded" {
@@ -275,6 +268,40 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		t.quarantine(err)
 		return
 	}
+	draft, err := t.stageEffectResult(&result, before, after, out, usage, at)
+	if err != nil {
+		if t.quarantined() {
+			return
+		}
+		result.CallbackError, result.After.CallbackError = err.Error(), err.Error()
+		result.Rows, result.Member, result.Changes, result.Unique = nil, "", nil, nil
+		result.Notices, result.Intents, result.States, result.Control = nil, nil, nil, nil
+		draft = t.newStagedDecision()
+		draft.at = at
+	}
+	result.Digest, err = acceptedformat.DigestEffect(result)
+	if err != nil {
+		t.quarantine(err)
+		return
+	}
+	raw, err := json.Marshal(result)
+	if err == nil {
+		_, err = acceptedformat.DecodeEffect(raw)
+	}
+	if err != nil {
+		t.quarantine(fmt.Errorf("encode effect %s: %w", id, err))
+		return
+	}
+	principal, _ := json.Marshal(t.automation(controlowner.PlatformApp, false).Member)
+	candidate := preparedAccepted{entry: Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, key: result.Key, hash: result.RequestHash, uploads: draft.tenant.preparedUploads()}
+	if t.preparedResult != nil {
+		*t.preparedResult = candidate
+		return
+	}
+	t.finishEffect(id, candidate)
+}
+
+func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before acceptedformat.EffectState, after *effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (*stagedDecision, error) {
 	draft := t.newStagedDecision()
 	draft.at = at
 	if after.State == "failed" && t.app(controlowner.PlatformApp) != nil {
@@ -286,7 +313,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	if (platform.EffectSettled(after.State) || after.State == "unknown") && before.State != "discarded" {
 		if err := t.stageEffectAnswer(draft, after.Effect, out, usage, at); err != nil {
 			if t.quarantined() {
-				return
+				return draft, err
 			}
 			result.CallbackError = err.Error()
 			result.Authorizations = slices.Clone(draft.authorizations)
@@ -320,9 +347,9 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	result.Authorizations = append(result.Authorizations, draft.authorizations...)
 	result.After.CallbackError = result.CallbackError
 	if draft.failure != nil {
-		t.quarantine(fmt.Errorf("stage effect %s: %v", id, draft.failure))
-		return
+		return draft, draft.failure
 	}
+	var err error
 	if len(draft.events) == 0 && (len(draft.deliveries) > 0 || len(draft.observations) > 0 || len(draft.allocated) > 0 ||
 		len(draft.logs) > 0 || len(draft.requests) > 0) {
 		err = fmt.Errorf("effect answer has unrepresented changes")
@@ -351,34 +378,11 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		}
 	}
 	if err != nil {
-		t.quarantine(fmt.Errorf("stage effect %s: %w", id, err))
-		return
+		return draft, err
 	}
 	result.Unique = draft.savedUniqueChanges()
-	if _, err := t.prepareAcceptedChanges(result.ChangePlan()); err != nil {
-		t.quarantine(fmt.Errorf("stage effect %s changes: %w", id, err))
-		return
-	}
-	result.Digest, err = acceptedformat.DigestEffect(result)
-	if err != nil {
-		t.quarantine(err)
-		return
-	}
-	raw, err := json.Marshal(result)
-	if err == nil {
-		_, err = acceptedformat.DecodeEffect(raw)
-	}
-	if err != nil {
-		t.quarantine(fmt.Errorf("encode effect %s: %w", id, err))
-		return
-	}
-	principal, _ := json.Marshal(t.automation(controlowner.PlatformApp, false).Member)
-	candidate := preparedAccepted{entry: Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, key: result.Key, hash: result.RequestHash, uploads: draft.tenant.preparedUploads()}
-	if t.preparedResult != nil {
-		*t.preparedResult = candidate
-		return
-	}
-	t.finishEffect(id, candidate)
+	_, err = t.prepareAcceptedChanges(result.ChangePlan())
+	return draft, err
 }
 
 func (t *Tenant) finishEffect(id string, candidate preparedAccepted) {
@@ -415,8 +419,7 @@ func (t *Tenant) finishEffect(id string, candidate preparedAccepted) {
 func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
-			t.quarantine(fmt.Errorf("effect callback cannot stage: %v", p))
-			err = fmt.Errorf("unsupported effect callback")
+			err = fmt.Errorf("unsupported effect callback: %v", p)
 		}
 	}()
 	if x.App != "" {

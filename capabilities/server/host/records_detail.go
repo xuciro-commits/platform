@@ -25,10 +25,6 @@ func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	return t.objectOwner(t.Projection).RecordOf(m, typ, id, now)
 }
 
-func (t *Tenant) recordSection(m platform.Member, typ, id, section string, now time.Time) (RecordSectionView, *kernel.Error) {
-	return t.objectOwner(t.Projection).RecordSection(m, typ, id, section, now)
-}
-
 func (t *Tenant) recordDetail(m platform.Member, typ, id string, now time.Time, sections ...string) (RecordView, *kernel.Error) {
 	return t.objectOwner(t.Projection).RecordDetail(m, typ, id, now, sections...)
 }

@@ -71,10 +71,6 @@ func fieldName(typ reflect.Type, path []int) string {
 	return platform.FieldName(typ, path)
 }
 
-func (t *Tenant) narrowedSource(m platform.Member, v any, now time.Time, held bool, source string) any {
-	return t.objectOwner(t.Projection).NarrowedSource(m, v, now, held, source)
-}
-
 func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *objects.Narrower {
 	return t.objectOwner(t.Projection).Narrower(m, now, held)
 }

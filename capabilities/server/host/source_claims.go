@@ -36,10 +36,6 @@ type RecordFieldProvenance = objects.RecordFieldProvenance
 
 type RecordProvenance = objects.RecordProvenance
 
-func (t *Tenant) recordProvenance(m platform.Member, typ, id string, now time.Time) (RecordProvenance, *kernel.Error) {
-	return t.objectOwner(t.Projection).RecordProvenance(m, typ, id, now)
-}
-
 func (t *Tenant) selectedSourceValue(typ, id, attribute string, history []records.RecordChange, incoming *acceptedformat.SourceClaim) RecordFieldProvenance {
 	return t.objectOwner(t.Projection).SelectedSourceValue(typ, id, attribute, history, incoming)
 }

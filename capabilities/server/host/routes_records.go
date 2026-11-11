@@ -278,7 +278,7 @@ func (h *Host) routesRecords(rt *routes) {
 	})
 	h.objectSetRoutes(rt)
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}/provenance", Summary: "Visible field sources for an accepted record", Answer: RecordProvenance{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		provenance, err := t.recordProvenance(m, r.PathValue("type"), r.PathValue("id"), h.Now())
+		provenance, err := t.objectOwner(t.Projection).RecordProvenance(m, r.PathValue("type"), r.PathValue("id"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return
@@ -286,7 +286,7 @@ func (h *Host) routesRecords(rt *routes) {
 		WriteJSON(w, http.StatusOK, provenance)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}/sections/{section}", Summary: "One independently authorized object view section: links, activity, files, work, history or comments", Answer: RecordSectionView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		view, err := t.recordSection(m, r.PathValue("type"), r.PathValue("id"), r.PathValue("section"), h.Now())
+		view, err := t.objectOwner(t.Projection).RecordSection(m, r.PathValue("type"), r.PathValue("id"), r.PathValue("section"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return

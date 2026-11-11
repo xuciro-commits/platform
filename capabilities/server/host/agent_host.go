@@ -565,8 +565,14 @@ func (t *Tenant) prepareAgentStep(b platform.AgentResultStep, now time.Time) boo
 			b.Tool, b.Arguments, b.Observation, b.Calls, b.CallID = "", nil, nil, nil, ""
 		}
 	}
-	t.acceptAgentStep(b, now)
-	return !t.quarantined()
+	err := t.acceptAgentStep(b, now)
+	if err != nil && b.Stop == "" && !t.quarantined() {
+		err = t.acceptAgentStep(platform.AgentResultStep{Run: b.Run, Evaluation: b.Evaluation, Usage: b.Usage, Stop: "The agent step could not be accepted: " + err.Error()}, now)
+	}
+	if err != nil {
+		t.observeOwnerRun(now, "agent", b.Run, platform.AgentApp, "", "failed", "Agent step", err.Error())
+	}
+	return err == nil && !t.quarantined()
 }
 
 func (t *Tenant) Evaluate(now time.Time) {

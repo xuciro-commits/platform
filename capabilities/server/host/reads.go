@@ -110,7 +110,7 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs
 	if err != nil {
 		return nil, err
 	}
-	return t.narrowedSource(m, out, Now(), false, a.Manifest().ReadSources[name]), nil
+	return t.objectOwner(t.Projection).NarrowedSource(m, out, Now(), false, a.Manifest().ReadSources[name]), nil
 }
 
 func inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *kernel.Error) {
