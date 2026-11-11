@@ -1,4 +1,5 @@
 {
+  "The owner failed while handling this work: {reason}": "处理此工作时拥有者失败：{reason}",
   "Application translations": "应用翻译",
   "application translations exceed 32 languages": "应用翻译超过 32 种语言",
   "application translations need a language tag": "应用翻译需要语言标签",

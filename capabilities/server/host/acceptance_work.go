@@ -265,10 +265,10 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 	defer func() {
 		t.hops = 0
 		if p := recover(); p != nil {
-			if _, unsupported := p.(stagedEffectPanic); !unsupported {
-				panic(p)
-			}
 			refusal = platform.RefuseOutsideAcceptedBoundary()
+			if _, unsupported := p.(stagedEffectPanic); !unsupported {
+				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The owner failed while handling this work: {reason}", fmt.Sprint(p))
+			}
 		}
 	}()
 	owner := t.app(task.App)

@@ -22,10 +22,6 @@ func (t *Tenant) loadObjectSet(store *records.Store, c platform.Caller, set plat
 	return t.objectOwner(store).LoadObjectSet(store, c, set, w, now, bound...)
 }
 
-func (t *Tenant) countObjectSet(store *records.Store, c platform.Caller, set platform.ObjectSet, now time.Time) (ObjectSetCount, *kernel.Error) {
-	return t.objectOwner(store).CountObjectSet(store, c, set, now)
-}
-
 func (t *Tenant) aggregateObjectSet(m platform.Member, req ObjectSetRequest, now time.Time) (records.Aggregate, *kernel.Error) {
 	return t.objectOwner(t.Projection).AggregateObjectSet(m, req, now)
 }
@@ -79,7 +75,7 @@ func (h *Host) objectSetRoutes(rt *routes) {
 		if !ok {
 			return
 		}
-		out, err := t.countObjectSet(t.Projection, t.objectCaller(m, ""), req.Set, h.Now())
+		out, err := t.objectOwner(t.Projection).CountObjectSet(t.Projection, t.objectCaller(m, ""), req.Set, h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return

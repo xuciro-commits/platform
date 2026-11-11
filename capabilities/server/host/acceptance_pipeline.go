@@ -244,28 +244,30 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	result := acceptedformat.Effect{Version: 5, Kind: "effect-result", Tenant: t.ID, App: controlowner.PlatformApp,
 		Key: acceptedformat.EffectResultKey(before), At: at.UTC(), Before: before,
 		After: acceptedformat.EffectState{Effect: after.Effect, Since: after.since}, Outcome: out, Usage: usage}
+	failed := func(err error) {
+		t.observeOwnerRun(at, "effect", id, before.App, before.Endpoint, "failed", "Effect answer", err.Error())
+	}
 	var err error
 	_, result.WorkBefore, result.Work, err = t.prepareOperationFinish(before.Effect, out)
 	if err != nil {
 		return
 	}
+	if usage != nil && t.ai == nil {
+		failed(fmt.Errorf("model usage is not metered: the AI module is disabled"))
+		usage, result.Usage = nil, nil
+	}
 	if usage != nil {
-		if t.ai == nil {
-			t.quarantine(fmt.Errorf("effect %s has usage without an AI meter", id))
-			return
-		}
 		state, snapshotErr := t.ai.Snapshot()
 		if snapshotErr == nil {
 			result.UsageBefore, snapshotErr = platform.CanonicalDigest(state)
 		}
 		if snapshotErr != nil {
-			t.quarantine(fmt.Errorf("effect %s usage checkpoint: %w", id, snapshotErr))
+			failed(snapshotErr)
 			return
 		}
 	}
-	result.RequestHash, err = acceptedformat.EffectResultHash(before, out, result.At)
-	if err != nil {
-		t.quarantine(err)
+	if result.RequestHash, err = acceptedformat.EffectResultHash(before, out, result.At); err != nil {
+		failed(err)
 		return
 	}
 	draft, err := t.stageEffectResult(&result, before, after, out, usage, at)
@@ -280,16 +282,15 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		draft.at = at
 	}
 	result.Digest, err = acceptedformat.DigestEffect(result)
-	if err != nil {
-		t.quarantine(err)
-		return
+	var raw []byte
+	if err == nil {
+		raw, err = json.Marshal(result)
 	}
-	raw, err := json.Marshal(result)
 	if err == nil {
 		_, err = acceptedformat.DecodeEffect(raw)
 	}
 	if err != nil {
-		t.quarantine(fmt.Errorf("encode effect %s: %w", id, err))
+		failed(err)
 		return
 	}
 	principal, _ := json.Marshal(t.automation(controlowner.PlatformApp, false).Member)

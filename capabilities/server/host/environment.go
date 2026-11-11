@@ -40,7 +40,7 @@ func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifac
 		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s: %w", id, err)
 	}
 	sum := sha256.Sum256(raw)
-	artifact := platform.SealedArtifact{Tenant: t.ID, Candidate: candidate.ID, Key: sealedKey(t.ID, candidate.ID),
+	artifact := platform.SealedArtifact{Tenant: t.ID, Candidate: candidate.ID, Key: "releases/" + t.ID + "/" + strings.ReplaceAll(strings.TrimPrefix(candidate.ID, "sha256-v1:"), ":", "-") + ".json",
 		Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: len(raw), Assets: len(candidate.Assets), SealedAt: now.UTC()}
 	if err := t.files().Put(context.Background(), artifact.Key, raw, "application/json"); err != nil {
 		return platform.SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
@@ -53,10 +53,6 @@ func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifac
 	t.StateEpoch.Add(1)
 	t.changedOwner(build.ID)
 	return artifact, nil
-}
-
-func sealedKey(tenant, candidate string) string {
-	return "releases/" + tenant + "/" + strings.ReplaceAll(strings.TrimPrefix(candidate, "sha256-v1:"), ":", "-") + ".json"
 }
 
 func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {

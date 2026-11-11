@@ -3,7 +3,7 @@ package host
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log"
 	"maps"
 	"slices"
 	"time"
@@ -62,7 +62,8 @@ func (t *Tenant) endLane() {
 	}
 	state, err := t.forkReadState(context.Background())
 	if err != nil {
-		t.quarantine(fmt.Errorf("publish read image: %w", err))
+		t.countReadImage(context.Background(), "unpublished")
+		log.Printf("tenant %s: publish read image: %v", t.ID, err)
 		return
 	}
 	if previous := t.readImage.Load(); previous != nil && previous.records == generation && previous.definitions == definitions {
