@@ -20,7 +20,7 @@ import (
 )
 
 func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, binding *platform.SchemaVersion) *kernel.Error {
-	key := business.CorrectionOf(sub)
+	key := actions.CorrectionOf(sub)
 	if key == "" {
 		return nil
 	}
@@ -30,7 +30,7 @@ func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, 
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A correction needs the same applicant, action and target as its original refused request")
 	}
 	sameSchema := original.GetSchema().GetVersion() == sub.GetSchema().GetVersion() && reflect.DeepEqual(prior.SchemaVersion, binding)
-	if sameSchema && len(business.ChangedBusinessInputs(original.GetPayload(), sub.GetPayload())) == 0 {
+	if sameSchema && len(actions.ChangedBusinessInputs(original.GetPayload(), sub.GetPayload())) == 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Unchanged inputs must repeat the original request key")
 	}
 	return nil
@@ -71,14 +71,14 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 			return
 		}
 		e.Key, e.App, e.Type, e.ID, e.Action, e.Member = sub.GetIdempotencyKey(), sub.GetAuthority(), typ, id, sub.GetSchema().GetName(), sub.GetPrincipalId()
-		e.CorrectionOf = business.CorrectionOf(sub)
+		e.CorrectionOf = actions.CorrectionOf(sub)
 		if own && (!exists || readable) {
 			e.Inputs = slices.Clone(sub.GetPayload())
 			if e.CorrectionOf != "" {
 				if prior, ok := t.Committed.Refusal(e.App + "/" + e.CorrectionOf); ok {
 					var old pb.Submission
 					if protojson.Unmarshal(prior.Submission, &old) == nil {
-						e.Changes = business.ChangedBusinessInputs(old.GetPayload(), sub.GetPayload())
+						e.Changes = actions.ChangedBusinessInputs(old.GetPayload(), sub.GetPayload())
 					}
 				}
 			}
@@ -97,7 +97,7 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 		if protojson.Unmarshal(r.Submission, &sub) != nil {
 			continue
 		}
-		category, code := business.RefusalCategory(r.Error, r.Business, r.Issues)
+		category, code := actions.RefusalCategory(r.Error, r.Business, r.Issues)
 		e := platform.BusinessRefusalEntry{At: r.At, Category: category, Code: code, Message: r.Error.Message, State: "refused", Issues: r.Issues}
 		if r.Business != nil {
 			e.Facts = []platform.BusinessRefusalFact{acceptedformat.CloneBusinessFact(*r.Business)}
@@ -118,7 +118,7 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 		if err != nil {
 			continue
 		}
-		if len(r.Business) == 0 && business.CorrectionOf(sub) == "" {
+		if len(r.Business) == 0 && actions.CorrectionOf(sub) == "" {
 			continue
 		}
 		if len(r.Business) == 0 {

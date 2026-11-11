@@ -12,6 +12,7 @@ import (
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	appowner "platformserver/services/apps"
 	"platformserver/services/resources/authoring"
 	"slices"
@@ -274,14 +275,10 @@ func (t *Tenant) applicationContext() appowner.Context {
 			return page.Records, err
 		},
 		Computations: func(m platform.Member) []appowner.Computation {
-			t.opsMu.Lock()
 			effects := []platform.Effect{}
-			for _, x := range t.outbound {
-				if x.Endpoint == acceptedformat.OperationEndpoint {
-					effects = append(effects, x.Effect)
-				}
+			for _, x := range t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint }) {
+				effects = append(effects, x.Effect)
 			}
-			t.opsMu.Unlock()
 			out := []appowner.Computation{}
 			for _, effect := range effects {
 				var binding operationBinding

@@ -3,6 +3,7 @@ package host
 import (
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/objects"
 	"time"
 )
@@ -32,14 +33,11 @@ func (t *Tenant) recordDetail(m platform.Member, typ, id string, now time.Time, 
 func (t *Tenant) PersonalReads() []platform.PersonalRead { return t.audit.PersonalReads() }
 
 func (t *Tenant) recordDeliveries(target string, now time.Time) []RecordDelivery {
-	t.opsMu.Lock()
+	matched := t.outbound.Select(func(x actions.Queued) bool { return x.Target == target })
 	var effects []platform.Effect
-	for i := len(t.outbound) - 1; i >= 0; i-- {
-		if t.outbound[i].Target == target {
-			effects = append(effects, t.outbound[i].Effect)
-		}
+	for i := len(matched) - 1; i >= 0; i-- {
+		effects = append(effects, matched[i].Effect)
 	}
-	t.opsMu.Unlock()
 	out := make([]RecordDelivery, 0, len(effects))
 	for _, effect := range effects {
 		out = append(out, RecordDelivery{ID: effect.ID, Event: effect.Event, State: effect.State, At: effect.At, Message: effect.PublicMessage})

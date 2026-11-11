@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/resources/authoring"
 )
 
@@ -25,13 +26,11 @@ func (t *Tenant) beginDispatchAttempt(x platform.Effect, at time.Time) bool {
 	}
 	const reason = "Dispatch attempt started; awaiting delivery evidence"
 	t.settleWithUsage(x.ID, platform.Outcome{Effect: x.ID, Result: "unknown", Detail: reason}, nil, at)
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	for _, current := range t.outbound {
-		if current.ID == x.ID && current.State == "unknown" && current.Attempts == x.Attempts+1 && current.Error == reason && current.CallbackError == "" {
-			current.sending = true
-			return true
+	claimed := false
+	t.outbound.Update(x.ID, func(current *actions.Queued) {
+		if current.State == "unknown" && current.Attempts == x.Attempts+1 && current.Error == reason && current.CallbackError == "" {
+			current.Sending, claimed = true, true
 		}
-	}
-	return false
+	})
+	return claimed
 }

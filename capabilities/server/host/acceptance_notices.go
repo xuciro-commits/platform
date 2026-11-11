@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"strings"
@@ -11,8 +12,6 @@ import (
 )
 
 func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
 	ids := map[string]bool{}
 	for _, x := range intents {
 		if err := platform.CheckApplicationBindings(x.Applications); err != nil {
@@ -27,7 +26,7 @@ func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
 			x.ID != id ||
 			ids[x.ID] || x.State != "pending" && x.State != "held" || x.At.IsZero() || !x.Due.Equal(x.At) ||
 			x.Attempts != 0 || !x.Last.IsZero() || x.Error != "" || x.Digest != "" ||
-			x.State == "held" && x.Agent == "" || slices.ContainsFunc(t.outbound, func(e *effect) bool { return e.ID == x.ID }) {
+			x.State == "held" && x.Agent == "" || t.outbound.Any(func(e actions.Queued) bool { return e.ID == x.ID }) {
 			return fmt.Errorf("accepted result has an invalid or duplicate outbound intent")
 		}
 		ids[x.ID] = true
@@ -36,12 +35,7 @@ func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
 }
 
 func (t *Tenant) installAcceptedIntents(intents []platform.Effect) {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	for _, planned := range intents {
-		t.outbound = append(t.outbound, &effect{Effect: planned, span: t.current()})
-	}
-	t.trimEffects()
+	t.outbound.Add(t.current(), intents...)
 }
 
 func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
@@ -88,10 +82,7 @@ func (t *Tenant) applyAcceptedNotices(n *acceptedformat.Notices) {
 	}
 	t.notices.Restore(slices.Clone(n.Notices), n.Seq)
 	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
 	t.acted += n.Seq - n.Base
-	for _, planned := range n.Effects {
-		t.outbound = append(t.outbound, &effect{Effect: planned, span: t.current()})
-	}
-	t.trimEffects()
+	t.opsMu.Unlock()
+	t.outbound.Add(t.current(), n.Effects...)
 }

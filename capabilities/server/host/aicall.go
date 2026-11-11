@@ -19,6 +19,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/ai/gateway"
 	"platformserver/services/ai/gateway/providers"
 	"platformserver/services/resources/authoring"
@@ -259,11 +260,7 @@ type modelAsk struct {
 }
 
 func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
-	planned := t.planModelRequest(c, rec, q, nil)
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	t.outbound = append(t.outbound, &effect{span: t.current(), Effect: planned})
-	t.trimEffects()
+	t.outbound.Add(t.current(), t.planModelRequest(c, rec, q, nil))
 }
 
 func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q platform.Request, pending []platform.Effect) platform.Effect {
@@ -296,16 +293,12 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 		}
 	}
 	body, _ := json.Marshal(modelAsk{Model: model, Binding: binding, ConfigurationError: failure, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target, Evaluation: q.Evaluation, EvaluationConfig: q.EvaluationConfig, EvaluationFunction: q.EvaluationFunction})
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	n := 0
-	for _, x := range t.outbound {
-		if x.Endpoint == acceptedformat.ModelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
-			n++
-		}
+	ours := func(x platform.Effect) bool {
+		return x.Endpoint == acceptedformat.ModelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#")
 	}
+	n := len(t.outbound.Select(func(x actions.Queued) bool { return ours(x.Effect) }))
 	for _, x := range pending {
-		if x.Endpoint == acceptedformat.ModelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
+		if ours(x) {
 			n++
 		}
 	}

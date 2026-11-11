@@ -13,7 +13,7 @@ import (
 
 func pendingComputeEffects(t *Tenant) []platform.Effect {
 	var out []platform.Effect
-	for _, effect := range t.outbound {
+	for _, effect := range t.outbound.Select(nil) {
 		if effect.Endpoint == acceptedformat.OperationEndpoint && !platform.EffectSettled(effect.State) {
 			out = append(out, effect.Effect)
 		}

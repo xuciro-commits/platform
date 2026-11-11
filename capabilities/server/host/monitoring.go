@@ -13,6 +13,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/automate/runtime"
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
@@ -248,12 +249,12 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 			out.Runs = append(out.Runs, run)
 		}
 	}
-	actions := map[string]platform.Action{}
+	catalog := map[string]platform.Action{}
 	for _, action := range t.Catalog(m) {
-		actions[action.Schema] = action
+		catalog[action.Schema] = action
 	}
 	retry := func(run *MonitoringRun, schema, typ, id, kind string) {
-		action, found := actions[schema]
+		action, found := catalog[schema]
 		if !found || action.Target != typ || action.SchemaVersion == nil || run.Status != "failed" {
 			return
 		}
@@ -325,14 +326,10 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter MonitoringRu
 		appendRun(run)
 	}
 	out.Coverage = append(out.Coverage, coverage)
-	t.opsMu.Lock()
 	operations := []platform.Effect{}
-	for _, effect := range t.outbound {
-		if effect.Endpoint == acceptedformat.OperationEndpoint {
-			operations = append(operations, effect.Effect)
-		}
+	for _, effect := range t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint }) {
+		operations = append(operations, effect.Effect)
 	}
-	t.opsMu.Unlock()
 	compilations := map[string]time.Time{}
 	coverage = MonitoringCoverage{Source: "compute", Basis: "retained", Readable: true, Limitation: "caller-only"}
 	for _, effect := range operations {

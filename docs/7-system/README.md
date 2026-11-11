@@ -144,9 +144,9 @@ POST /v1/submissions
 - 提交入口（7.3）：身份与权威校验在 `accept` 与 `Receiver.Receive` 各做一次；重放与快照校验（`host/replay.go`、`host/snapshot.go`）不经 `kernel.Committed.Prior` 而各自查询先前结果；工作循环外层（`host/operations.go` 的 `step`）的恢复不区分提交前后，宿主自身恐慌仍隔离租户。
 - 服务注册（7.2、7.7）：`platform/app.go` 的 `Runtime` 接口有约 44 个方法并嵌入 8 个接口；暂存决定能力（含保留发布执行的决定目录）经 `Runtime.StagedDecision()` 句柄取得；另有 2 个可选 `*App` 接口（`AcceptedStateApp`、`AcceptedInputApp`），经约 233 处类型断言探测（形状棘轮的 `capabilityProbes`）；约 200 个函数用可变参数表达可选项。
 - `platform` 不是叶层 SDK（7.2）：约 2.4 万行，含动作规则引擎（`ledger.go`）、页面模型（`page_*`，约 5 千行）与实体—转换—业务事务模型（`entity.go`、`transaction.go`，见 [6-domain 现存差距](../6-domain/README.md#现存差距)）。
-- `services/resources/authoring`（包名 `build`，约 1.35 万行，被 104 个 `host` 文件导入）编辑所有资源类型；`services/actions` 只有约 1200 行，动作执行实际在 `platform` 与 `host`。
+- `services/resources/authoring`（包名 `build`，约 1.35 万行，被 104 个 `host` 文件导入）编辑所有资源类型；`services/actions` 只有约 1300 行（业务拒绝与副作用队列 `Outbox`），动作执行实际在 `platform` 与 `host`。
 - 发布路径（7.5.1）：record 族（object、action-type）与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）的发布步骤仍手写在 `services/resources/authoring`；definition 族在 `build_kinds.go`；apps、function、integration、automation 已在各自服务，但经 Build 的“兼容公共类型”转接。
-- 包名与目录名不一致 15 处（7.7）：`services/actions`→business、`services/apps`→applications、`services/automate/runtime`→automation、`services/ai/runtime` 与 `ai/evaluation`→agents、`ai/retrieval` 与 `ai/sources`→knowledge、`ai/gateway`→aigateway、`ai/state`→aistate、`services/data/blobs`→resources、`data/transform`→integrations、`services/functions/runtime`→compute、`services/resources/authoring`→build、`resources/merge`→branches、`services/work/activity`→relations。
+- 包名与目录名不一致 14 处（7.7）：`services/apps`→applications、`services/automate/runtime`→automation、`services/ai/runtime` 与 `ai/evaluation`→agents、`ai/retrieval` 与 `ai/sources`→knowledge、`ai/gateway`→aigateway、`ai/state`→aistate、`services/data/blobs`→resources、`data/transform`→integrations、`services/functions/runtime`→compute、`services/resources/authoring`→build、`resources/merge`→branches、`services/work/activity`→relations。
 - 内核用词（7.7）：代码以 App、Ledger、Entity、Authority 指代服务与接受语义；candidate 一词在 Go 中约 1200 处，多数指决定而非发布候选。
 
 ## 相关

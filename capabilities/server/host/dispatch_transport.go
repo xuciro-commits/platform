@@ -14,6 +14,7 @@ import (
 	"platformserver/services/resources/authoring"
 
 	"platformserver/platform"
+	"platformserver/services/actions"
 )
 
 func (d *stagedDecision) DispatchTransport() platform.DispatchTransport {
@@ -92,25 +93,23 @@ func (h hostView) ResolveDispatchDelivery(c platform.Caller, run platform.Dispat
 		var request dataowner.WritebackRequest
 		return x.App == build.ID && x.Event == build.ID+"/dispatch" && json.Unmarshal([]byte(x.Body), &request) == nil && request.Dispatch == run.ID
 	}
-	h.t.opsMu.Lock()
-	inFlight := slices.ContainsFunc(h.t.outbound, func(x *effect) bool {
+	inFlight := h.t.outbound.Any(func(x actions.Queued) bool {
 		answering := h.decision.callbackOrigin != nil && h.decision.callbackOrigin.ID == x.ID
-		return owned(x.Effect) && x.sending && !answering
+		return owned(x.Effect) && x.Sending && !answering
 	})
-	h.t.opsMu.Unlock()
 	if inFlight {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The dispatch delivery is still in flight")
 	}
 	view := h.decision.controlHost()
-	for _, x := range view.outbound {
+	view.outbound.UpdateAll(func(x *actions.Queued) {
 		if !owned(x.Effect) || platform.EffectSettled(x.State) {
-			continue
+			return
 		}
 		x.State, x.Error, x.Last = "discarded", run.Reason, at
 		if slices.Contains([]string{"accepted", "running", "stuck", "failed", "completed", "compensated"}, run.State) {
 			x.State = "delivered"
 		}
-	}
+	})
 	return nil
 }
 

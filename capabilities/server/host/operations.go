@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -52,12 +53,7 @@ func (t *Tenant) enqueue(now time.Time) {
 			}
 		}
 		if e.Plan != nil {
-			t.opsMu.Lock()
-			for _, planned := range e.Plan.Effects {
-				t.outbound = append(t.outbound, &effect{Effect: planned, span: t.current()})
-			}
-			t.trimEffects()
-			t.opsMu.Unlock()
+			t.outbound.Add(t.current(), e.Plan.Effects...)
 			for _, id := range e.Plan.Subscribers {
 				if t.app(id) == nil {
 					panic(fmt.Errorf("accepted result requires missing subscriber %s", id))
@@ -391,10 +387,9 @@ func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Tim
 		if !posted {
 			continue
 		}
-		t.mailNotice(x, to)
+		t.outbound.Add(trace.SpanContext{}, t.planMailNotice(x, to)...)
 		out = append(out, m)
 	}
-	t.trimEffects()
 	t.acted += len(out)
 	return out
 }

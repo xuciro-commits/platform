@@ -646,15 +646,8 @@ func (t *Tenant) prepareCallbackRows(target *records.Store, rows []acceptedforma
 		if _, ok := t.app(row.App).(platform.Answerer); !ok {
 			return fmt.Errorf("callback row has no effect answer owner")
 		}
-		t.opsMu.Lock()
-		var current platform.Effect
-		for _, effect := range t.outbound {
-			if effect.ID == source.ID {
-				current = effect.Effect
-				break
-			}
-		}
-		t.opsMu.Unlock()
+		queued, _ := t.outbound.Get(source.ID)
+		current := queued.Effect
 		actual, err := platform.CanonicalDigest(current)
 		expected, expectedErr := platform.CanonicalDigest(source)
 		if current.ID == "" || err != nil || expectedErr != nil || actual != expected {

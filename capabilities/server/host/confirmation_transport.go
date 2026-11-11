@@ -13,6 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/resources/authoring"
 )
 
@@ -191,30 +192,27 @@ func (h hostView) ResolveConfirmationDelivery(c platform.Caller, run platform.Co
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Confirmation resolution requires its original owner")
 	}
 	p := run.Parties[index]
-	h.t.opsMu.Lock()
-	inFlight := slices.ContainsFunc(h.t.outbound, func(e *effect) bool {
+	inFlight := h.t.outbound.Any(func(e actions.Queued) bool {
 		answering := h.decision.callbackOrigin != nil && h.decision.callbackOrigin.ID == e.ID
-		return (e.ID == p.Intent || e.ID == p.Compensation) && e.sending && !answering
+		return (e.ID == p.Intent || e.ID == p.Compensation) && e.Sending && !answering
 	})
-	h.t.opsMu.Unlock()
 	if inFlight {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The confirmation delivery is still in flight")
 	}
 	view := h.decision.controlHost()
 	resolve := func(id, state, reason string) *kernel.Error {
-		for _, effect := range view.outbound {
-			if effect.ID != id || platform.EffectSettled(effect.State) {
-				continue
-			}
-			var request dataowner.WritebackRequest
-			if effect.App != build.ID || json.Unmarshal([]byte(effect.Body), &request) != nil || request.Confirmation != run.ID || request.Party != p.Name {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The confirmation does not own this delivery")
-			}
-			if effect.sending {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The confirmation delivery is still in flight")
-			}
-			effect.State, effect.Error, effect.Last = state, reason, at
+		effect, ok := view.outbound.Get(id)
+		if !ok || platform.EffectSettled(effect.State) {
+			return nil
 		}
+		var request dataowner.WritebackRequest
+		if effect.App != build.ID || json.Unmarshal([]byte(effect.Body), &request) != nil || request.Confirmation != run.ID || request.Party != p.Name {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The confirmation does not own this delivery")
+		}
+		if effect.Sending {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The confirmation delivery is still in flight")
+		}
+		view.outbound.Update(id, func(x *actions.Queued) { x.State, x.Error, x.Last = state, reason, at })
 		return nil
 	}
 	if compensated {

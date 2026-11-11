@@ -37,17 +37,12 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			op, version, declared = operationDefinition(app, q.Name, q.Version)
 		}
 		callID := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, q.App, q.Key, acceptedformat.OperationEndpoint)
-		t.opsMu.Lock()
-		for _, x := range t.outbound {
-			if x.ID == callID {
-				var previous operationBinding
-				if json.Unmarshal([]byte(x.Body), &previous) == nil && previous.SealedInput != nil {
-					op, version, declared = previous.Definition, previous.Call.Version, true
-				}
-				break
+		if x, ok := t.outbound.Get(callID); ok {
+			var previous operationBinding
+			if json.Unmarshal([]byte(x.Body), &previous) == nil && previous.SealedInput != nil {
+				op, version, declared = previous.Definition, previous.Call.Version, true
 			}
 		}
-		t.opsMu.Unlock()
 		seal := declared && op.Limits.DataInputBytes > 0
 		if seal {
 			if !seated || member.Tenant != t.ID || t.quarantined() {
@@ -128,17 +123,13 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			return platform.OperationCall{}, refusal
 		}
 	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	for _, x := range t.outbound {
-		if x.ID == id {
-			var binding operationBinding
-			if json.Unmarshal([]byte(x.Body), &binding) == nil {
-				if prepared != nil {
-					retained = binding.SealedInput != nil && binding.SealedInput.Ticket == prepared.ref.Ticket
-				}
-				return binding.Call, nil
+	if x, ok := t.outbound.Get(id); ok {
+		var binding operationBinding
+		if json.Unmarshal([]byte(x.Body), &binding) == nil {
+			if prepared != nil {
+				retained = binding.SealedInput != nil && binding.SealedInput.Ticket == prepared.ref.Ticket
 			}
+			return binding.Call, nil
 		}
 	}
 	return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted operation intent is unavailable")

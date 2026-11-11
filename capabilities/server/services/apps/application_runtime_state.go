@@ -138,7 +138,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 			continue
 		}
 		out.Monitoring.Refused++
-		category, code := business.RefusalCategory(refusal.Error, refusal.Business, refusal.Issues)
+		category, code := actions.RefusalCategory(refusal.Error, refusal.Business, refusal.Issues)
 		if category == "business" {
 			out.Monitoring.BusinessRefusals++
 		}

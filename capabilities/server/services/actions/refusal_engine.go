@@ -1,4 +1,4 @@
-package business
+package actions
 
 import (
 	"cmp"

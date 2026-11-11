@@ -6,6 +6,7 @@ import (
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"strings"
 	"time"
 )
@@ -23,13 +24,10 @@ func (h hostView) TrainingEvidence(event platform.Event) platform.AITrainingEvid
 			out.Candidates = append(out.Candidates, owner.TrainingCandidates(h.t.automation(app.Manifest().ID, false), event, images)...)
 		}
 	}
-	h.t.opsMu.Lock()
+	models := h.t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.ModelEndpoint })
 	for i := range out.Candidates {
 		candidate := &out.Candidates[i]
-		for _, effect := range h.t.outbound {
-			if effect.Endpoint != acceptedformat.ModelEndpoint {
-				continue
-			}
+		for _, effect := range models {
 			var ask modelAsk
 			if json.Unmarshal([]byte(effect.Body), &ask) == nil && ask.Record == candidate.Run && ask.Binding != nil {
 				candidate.ModelConfig, _ = platform.CanonicalDigest(ask.Binding)
@@ -38,7 +36,6 @@ func (h hostView) TrainingEvidence(event platform.Event) platform.AITrainingEvid
 			}
 		}
 	}
-	h.t.opsMu.Unlock()
 	sub := event.Record.GetSubmission()
 	if sub.GetTarget().GetType() != platform.RunType {
 		return out

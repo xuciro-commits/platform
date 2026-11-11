@@ -8,6 +8,7 @@ import (
 
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
+	"platformserver/services/actions"
 )
 
 func (t *Tenant) Replay(entries []Entry) error {
@@ -109,13 +110,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		if err != nil || saved.App != e.App || m.ID != "app:"+controlowner.PlatformApp || !persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: operation claim: %v", i+1, err)
 		}
-		t.opsMu.Lock()
-		for _, x := range t.outbound {
-			if x.ID == saved.Before.ID {
-				x.sending = false
-			}
-		}
-		t.opsMu.Unlock()
+		t.outbound.Update(saved.Before.ID, func(x *actions.Queued) { x.Sending = false })
 		return nil
 	}
 	ra := a

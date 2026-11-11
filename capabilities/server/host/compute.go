@@ -21,6 +21,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/actions"
 )
 
 type operationBinding struct {
@@ -141,20 +142,13 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 			return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation request key is already planned")
 		}
 	}
-	t.opsMu.Lock()
-	exists := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id })
-	queued := 0
-	for _, x := range t.outbound {
-		if x.Endpoint == acceptedformat.OperationEndpoint && !platform.EffectSettled(x.State) {
-			queued++
-		}
-	}
+	_, exists := t.outbound.Get(id)
+	queued := t.queuedOperations()
 	for _, x := range pending {
 		if x.Endpoint == acceptedformat.OperationEndpoint {
 			queued++
 		}
 	}
-	t.opsMu.Unlock()
 	if exists {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation request key is already accepted")
 	}
@@ -223,19 +217,8 @@ func operationDefinition(app platform.App, name string, version int) (platform.O
 	return platform.Operation{}, 0, false
 }
 func (t *Tenant) operationResult(c platform.Caller, id string) (platform.OperationResult, *kernel.Error) {
-	t.opsMu.Lock()
-	var found *platform.Effect
-	for _, x := range t.outbound {
-		if x.ID != id || x.Endpoint != acceptedformat.OperationEndpoint {
-			continue
-		}
-		copy := x.Effect
-		found = &copy
-		break
-	}
-	t.opsMu.Unlock()
-	if found != nil {
-		x := *found
+	if found, ok := t.outbound.Get(id); ok && found.Endpoint == acceptedformat.OperationEndpoint {
+		x := found.Effect
 		var b operationBinding
 		if json.Unmarshal([]byte(x.Body), &b) != nil {
 			return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation input is unavailable")
@@ -322,14 +305,7 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 	if c.App != "build" || c.Automation || r.GetSubmission().GetAuthority() != c.App || key == "" || len(q.Source) == 0 || len(q.Source) > 256<<10 || q.Language != "go" && q.Language != "tinygo" || q.Input.Check() != nil || q.Output.Check() != nil {
 		return refuse("Compilation needs a bounded Go/TinyGo code asset")
 	}
-	d.tenant.opsMu.Lock()
-	queued := 0
-	for _, x := range d.tenant.outbound {
-		if x.Endpoint == acceptedformat.OperationEndpoint && !platform.EffectSettled(x.State) {
-			queued++
-		}
-	}
-	d.tenant.opsMu.Unlock()
+	queued := d.tenant.queuedOperations()
 	for _, x := range d.intents {
 		if x.Endpoint == acceptedformat.OperationEndpoint {
 			queued++
@@ -540,4 +516,10 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	digest := sha256.Sum256(output)
 	out.Digest = hex.EncodeToString(digest[:])
 	return out
+}
+
+func (t *Tenant) queuedOperations() int {
+	return len(t.outbound.Select(func(x actions.Queued) bool {
+		return x.Endpoint == acceptedformat.OperationEndpoint && !platform.EffectSettled(x.State)
+	}))
 }

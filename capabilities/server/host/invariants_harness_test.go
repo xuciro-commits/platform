@@ -90,7 +90,7 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seat
 	services := platform.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = invariantBindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
-	services.NewTransactionExecutor = business.NewRuntime
+	services.NewTransactionExecutor = actions.NewRuntime
 	seat := platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}
 	console := controlowner.NewConsole(id, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)

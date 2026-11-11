@@ -55,9 +55,7 @@ func (t *Tenant) checkOwnerRemoval(disabled []string) error {
 			return fmt.Errorf("Finish or resolve work %s before removing %s", task.ID, task.App)
 		}
 	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	for _, effect := range t.outbound {
+	for _, effect := range t.outbound.Select(nil) {
 		if removed[effect.App] && !platform.EffectSettled(effect.State) {
 			return fmt.Errorf("Resolve external attempt %s before removing %s", effect.ID, effect.App)
 		}

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -108,7 +109,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	services := platform.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = invariantBindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
-	services.NewTransactionExecutor = business.NewRuntime
+	services.NewTransactionExecutor = actions.NewRuntime
 	console := controlowner.NewConsole(id, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
@@ -207,13 +208,11 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		t.Fatalf("failed job outcome=%q quarantine=%v", jobOutcome, live.quarantined())
 	}
 	live.Lane.Lock()
-	live.opsMu.Lock()
-	live.outbound = append(live.outbound,
-		&effect{Effect: platform.Effect{ID: "ordinary-delivery", Endpoint: "webhook", Event: "probe/notice", Target: "build.alpha/A1", At: invariantClock, State: "failed", Body: "hidden payload", Error: "hidden failure"}},
-		&effect{Effect: platform.Effect{ID: "writeback-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "sample", Event: "writeback/sample", Target: "build.alpha/A1", At: invariantClock, Last: invariantClock, State: "rejected", Body: "hidden payload", Error: "hidden failure"}},
-		&effect{Effect: platform.Effect{ID: "unknown-delivery", Endpoint: "webhook", Event: "probe/unknown", At: invariantClock, State: "unknown"}},
-		&effect{Effect: platform.Effect{ID: "dispatch-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "dispatch", Event: build.ID + "/dispatch", At: invariantClock, State: "failed"}})
-	live.opsMu.Unlock()
+	live.outbound.Add(trace.SpanContext{},
+		platform.Effect{ID: "ordinary-delivery", Endpoint: "webhook", Event: "probe/notice", Target: "build.alpha/A1", At: invariantClock, State: "failed", Body: "hidden payload", Error: "hidden failure"},
+		platform.Effect{ID: "writeback-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "sample", Event: "writeback/sample", Target: "build.alpha/A1", At: invariantClock, Last: invariantClock, State: "rejected", Body: "hidden payload", Error: "hidden failure"},
+		platform.Effect{ID: "unknown-delivery", Endpoint: "webhook", Event: "probe/unknown", At: invariantClock, State: "unknown"},
+		platform.Effect{ID: "dispatch-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "dispatch", Event: build.ID + "/dispatch", At: invariantClock, State: "failed"})
 	live.operationsChanged()
 	live.Lane.Unlock()
 	host := NewHost(Tokens(map[string]string{"admin": "admin", "builder": "builder", "other": "other", "scoped": "scoped", "user": "user"}), live.Tenant)

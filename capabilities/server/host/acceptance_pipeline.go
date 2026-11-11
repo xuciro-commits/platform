@@ -10,6 +10,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"strings"
@@ -134,22 +135,14 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, e
 	if result.Tenant != t.ID {
 		return result, false, fmt.Errorf("effect result belongs to another tenant")
 	}
-	t.opsMu.Lock()
-	var current *effect
-	for _, x := range t.outbound {
-		if x.ID == result.Before.ID {
-			current = x
-			break
-		}
-	}
+	current, found := t.outbound.Get(result.Before.ID)
 	var before acceptedformat.EffectState
-	if current != nil {
-		before = acceptedformat.EffectState{Effect: current.Effect, Since: current.since}
+	if found {
+		before = acceptedformat.EffectState{Effect: current.Effect, Since: current.Since}
 	}
-	t.opsMu.Unlock()
 	beforeHash, err := platform.CanonicalDigest(before)
 	savedHash, savedErr := platform.CanonicalDigest(result.Before)
-	if current == nil || err != nil || savedErr != nil || beforeHash != savedHash {
+	if !found || err != nil || savedErr != nil || beforeHash != savedHash {
 		return result, false, fmt.Errorf("effect result predecessor differs")
 	}
 	works, priorWork, savedWork, err := t.prepareOperationFinish(result.Before.Effect, result.Outcome)
@@ -182,9 +175,9 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, e
 	if err := prepared.apply(t); err != nil {
 		return result, false, err
 	}
-	t.opsMu.Lock()
-	current.Effect, current.since, current.sending = result.After.Effect, result.After.Since, false
-	t.opsMu.Unlock()
+	t.outbound.Update(result.Before.ID, func(x *actions.Queued) {
+		x.Effect, x.Since, x.Sending = result.After.Effect, result.After.Since, false
+	})
 	if works != nil {
 		finished, _ := works.Get(result.Before.ID)
 		t.installAcceptedWork(finished)
@@ -197,20 +190,12 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, e
 }
 
 func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform.AIUsage, at time.Time) {
-	t.opsMu.Lock()
-	var pending *effect
-	for _, x := range t.outbound {
-		if x.ID == id {
-			pending = x
-			break
-		}
-	}
+	pending, found := t.outbound.Get(id)
 	var before acceptedformat.EffectState
-	if pending != nil {
-		before = acceptedformat.EffectState{Effect: pending.Effect, Since: pending.since}
+	if found {
+		before = acceptedformat.EffectState{Effect: pending.Effect, Since: pending.Since}
 	}
-	t.opsMu.Unlock()
-	if pending == nil || out.Effect != id {
+	if !found || out.Effect != id {
 		return
 	}
 	if platform.EffectSettled(before.State) && before.State != "discarded" {
@@ -239,11 +224,11 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	if out.Detail != "" && out.PublicMessage == "" {
 		out.PublicMessage = "The last delivery attempt failed"
 	}
-	after := &effect{Effect: before.Effect, since: before.Since}
-	markEffect(after, out, at)
+	after := before.Effect
+	acceptedformat.MarkEffect(&after, before.Since, out, at)
 	result := acceptedformat.Effect{Version: 5, Kind: "effect-result", Tenant: t.ID, App: controlowner.PlatformApp,
 		Key: acceptedformat.EffectResultKey(before), At: at.UTC(), Before: before,
-		After: acceptedformat.EffectState{Effect: after.Effect, Since: after.since}, Outcome: out, Usage: usage}
+		After: acceptedformat.EffectState{Effect: after, Since: before.Since}, Outcome: out, Usage: usage}
 	failed := func(err error) {
 		t.observeOwnerRun(at, "effect", id, before.App, before.Endpoint, "failed", "Effect answer", err.Error())
 	}
@@ -302,7 +287,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	t.finishEffect(id, candidate)
 }
 
-func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before acceptedformat.EffectState, after *effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (*stagedDecision, error) {
+func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before acceptedformat.EffectState, after platform.Effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (*stagedDecision, error) {
 	draft := t.newStagedDecision()
 	draft.at = at
 	if after.State == "failed" && t.app(controlowner.PlatformApp) != nil {
@@ -312,7 +297,7 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 			Key:  "failed:" + after.ID}, at, platform.Recipient{AppRole: controlowner.Admin})
 	}
 	if (platform.EffectSettled(after.State) || after.State == "unknown") && before.State != "discarded" {
-		if err := t.stageEffectAnswer(draft, after.Effect, out, usage, at); err != nil {
+		if err := t.stageEffectAnswer(draft, after, out, usage, at); err != nil {
 			if t.quarantined() {
 				return draft, err
 			}
@@ -393,14 +378,7 @@ func (t *Tenant) finishEffect(id string, candidate preparedAccepted) {
 			t.quarantine(fmt.Errorf("effect %s conflicts with a previously committed outcome", id))
 			return
 		}
-		t.opsMu.Lock()
-		for _, pending := range t.outbound {
-			if pending.ID == id {
-				pending.sending = false
-				break
-			}
-		}
-		t.opsMu.Unlock()
+		t.outbound.Update(id, func(x *actions.Queued) { x.Sending = false })
 		return
 	}
 	saved, applied, err := t.applyAcceptedEffect(committed)
@@ -459,21 +437,13 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 	}
 	c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
 	if app, ok := draft.stateApp(t.app(x.App)).(platform.Answerer); ok {
-		var source platform.Effect
-		t.opsMu.Lock()
-		for _, effect := range t.outbound {
-			if effect.ID == x.ID {
-				source = effect.Effect
-				break
-			}
-		}
-		t.opsMu.Unlock()
+		source, _ := t.outbound.Get(x.ID)
 		if source.ID == "" || source.App != x.App {
 			return fmt.Errorf("effect callback has no accepted source")
 		}
 		previous := draft.callbackOrigin
 		refusal := func() *kernel.Error {
-			draft.callbackOrigin = &source
+			draft.callbackOrigin = &source.Effect
 			defer func() { draft.callbackOrigin = previous }()
 			return app.Answer(c, x, out, at)
 		}()

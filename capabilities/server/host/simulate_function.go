@@ -51,7 +51,7 @@ func configureFunctionFixtureModel(t *Tenant, model string, at time.Time) error 
 
 func pendingFunctionEffects(t *Tenant) []platform.Effect {
 	var pending []platform.Effect
-	for _, effect := range t.outbound {
+	for _, effect := range t.outbound.Select(nil) {
 		var ask modelAsk
 		if effect.Endpoint == acceptedformat.ModelEndpoint && !platform.EffectSettled(effect.State) && json.Unmarshal([]byte(effect.Body), &ask) == nil && ask.Function != nil {
 			pending = append(pending, effect.Effect)

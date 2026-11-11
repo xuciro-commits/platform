@@ -9,6 +9,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	automation "platformserver/services/automate/runtime"
 	controlowner "platformserver/services/security/control"
 	"slices"
@@ -63,9 +64,9 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 	if err := save("endpoints", t.endpoints); err != nil {
 		return nil, err
 	}
-	effects := make([]acceptedformat.EffectState, 0, len(t.outbound))
-	for _, e := range t.outbound {
-		effects = append(effects, acceptedformat.EffectState{Effect: e.Effect, Since: e.since})
+	effects := []acceptedformat.EffectState{}
+	for _, e := range t.outbound.Select(nil) {
+		effects = append(effects, acceptedformat.EffectState{Effect: e.Effect, Since: e.Since})
 	}
 	if err := save("effects", effects); err != nil {
 		return nil, err
@@ -226,25 +227,16 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		if err := decodeControl(raw, &states); err != nil {
 			return err
 		}
-		existing := map[string]*effect{}
-		for _, e := range t.outbound {
-			existing[e.ID] = e
-		}
 		ids := map[string]bool{}
-		effects := make([]*effect, 0, len(states))
+		effects := make([]actions.Queued, 0, len(states))
 		for _, state := range states {
 			if state.ID == "" || ids[state.ID] || !slices.Contains([]string{"held", "pending", "retrying", "unknown", "compensated", "delivered", "failed", "rejected", "discarded"}, state.State) {
 				return fmt.Errorf("control effect identity or state differs")
 			}
 			ids[state.ID] = true
-			e := existing[state.ID]
-			if e == nil {
-				e = &effect{}
-			}
-			e.Effect, e.since = state.Effect, state.Since
-			effects = append(effects, e)
+			effects = append(effects, actions.Queued{Effect: state.Effect, Since: state.Since})
 		}
-		t.outbound = effects
+		t.outbound.Restore(effects)
 	case "words":
 		var words map[string]map[string]string
 		if err := decodeControl(raw, &words); err != nil {
@@ -425,16 +417,11 @@ func (t *Tenant) applyAcceptedControl(saved *acceptedformat.Control) error {
 			if err := decodeControl(image, &patches); err != nil {
 				return err
 			}
-			t.opsMu.Lock()
 			for _, patch := range patches {
-				i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == patch.ID })
-				if i < 0 {
-					t.opsMu.Unlock()
+				if !t.outbound.Update(patch.ID, func(x *actions.Queued) { x.Effect, x.Since = patch.Effect, patch.Since }) {
 					return fmt.Errorf("control effect disappeared")
 				}
-				t.outbound[i].Effect, t.outbound[i].since = patch.Effect, patch.Since
 			}
-			t.opsMu.Unlock()
 			continue
 		}
 		if err := t.installControl(change.Kind, image); err != nil {
@@ -490,15 +477,8 @@ func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at
 		return func(*pb.ChangeRecord) { d.notices.MarkRead(id) }, nil
 	}
 	if s.GetTarget().GetType() == controlowner.EffectType && s.GetSchema().GetName() == controlowner.SchemaEffectDiscard {
-		d.tenant.opsMu.Lock()
-		var current platform.Effect
-		for _, effect := range d.tenant.outbound {
-			if effect.ID == s.GetTarget().GetId() {
-				current = effect.Effect
-				break
-			}
-		}
-		d.tenant.opsMu.Unlock()
+		queued, _ := d.tenant.outbound.Get(s.GetTarget().GetId())
+		current := queued.Effect
 		if current.Endpoint == acceptedformat.OperationEndpoint {
 			if platform.EffectSettled(current.State) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "")

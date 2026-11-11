@@ -150,7 +150,7 @@ func (t *Tenant) checkWritebackCredential(request dataowner.WritebackRequest) *k
 
 func (t *Tenant) connectionEndpoints() []*Endpoint {
 	var out []*Endpoint
-	for _, x := range t.outbound {
+	for _, x := range t.outbound.Select(nil) {
 		if !strings.HasPrefix(x.Endpoint, dataowner.WritebackEndpoint) || platform.EffectSettled(x.State) {
 			continue
 		}

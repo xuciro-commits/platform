@@ -19,6 +19,7 @@ import (
 	controlowner "platformserver/services/security/control"
 
 	"platformserver/platform"
+	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
 	"sync"
@@ -79,7 +80,7 @@ type Tenant struct {
 	words         controlowner.Words
 	sequences     runtimekernel.Sequences
 	endpoints     []*Endpoint
-	outbound      []*effect
+	outbound      actions.Outbox
 	tenantPorts
 	cancels  computeowner.Cancels
 	memFiles resources.MemoryFiles

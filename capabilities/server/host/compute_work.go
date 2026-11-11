@@ -8,13 +8,13 @@ import (
 	acceptedformat "platformserver/kernel/acceptedformat"
 	controlowner "platformserver/services/security/control"
 
-	"slices"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/actions"
 )
 
 func (t *Tenant) applyOperationClaim(raw []byte) (acceptedformat.OperationClaim, error) {
@@ -25,16 +25,12 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedformat.OperationClaim,
 	if saved.Tenant != t.ID {
 		return saved, fmt.Errorf("invalid operation ownership tenant")
 	}
-	t.opsMu.Lock()
-	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == saved.Before.ID })
-	if i < 0 {
-		t.opsMu.Unlock()
+	current, ok := t.outbound.Get(saved.Before.ID)
+	if !ok {
 		return saved, fmt.Errorf("operation claim has no accepted intent")
 	}
-	current := t.outbound[i]
 	same, _ := platform.CanonicalDigest(current.Effect)
 	expected, _ := platform.CanonicalDigest(saved.Before)
-	t.opsMu.Unlock()
 	if same != expected {
 		return saved, fmt.Errorf("operation claim predecessor differs")
 	}
@@ -70,10 +66,7 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedformat.OperationClaim,
 		return saved, fmt.Errorf("invalid operation claim work")
 	}
 	t.works = works
-	t.opsMu.Lock()
-	current.Effect = saved.After
-	current.sending = true
-	t.opsMu.Unlock()
+	t.outbound.Update(saved.Before.ID, func(x *actions.Queued) { x.Effect, x.Sending = saved.After, true })
 	return saved, nil
 }
 func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool) {
@@ -86,9 +79,7 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 		return claim{effect, claimed}, nil
 	}, func(t *Tenant, candidate preparedAccepted, value claim, refusal *kernel.Error) (claim, *kernel.Error) {
 		if len(candidate.entry.Body) > 0 {
-			t.opsMu.Lock()
-			busy := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id && x.sending })
-			t.opsMu.Unlock()
+			busy := t.outbound.Any(func(x actions.Queued) bool { return x.ID == id && x.Sending })
 			if busy {
 				return claim{}, nil
 			}
@@ -103,14 +94,11 @@ func (t *Tenant) prepareOperationClaim(id string, now time.Time) (platform.Effec
 	if t.businessStopped() {
 		return platform.Effect{}, false
 	}
-	t.opsMu.Lock()
-	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == id })
-	if i < 0 || t.outbound[i].sending || platform.EffectSettled(t.outbound[i].State) || t.outbound[i].Due.After(now) {
-		t.opsMu.Unlock()
+	queued, ok := t.outbound.Get(id)
+	if !ok || queued.Sending || platform.EffectSettled(queued.State) || queued.Due.After(now) {
 		return platform.Effect{}, false
 	}
-	before := t.outbound[i].Effect
-	t.opsMu.Unlock()
+	before := queued.Effect
 	works := t.forkWorkState()
 	var prior json.RawMessage
 	if work, err := works.Get(id); err == nil {
@@ -159,27 +147,24 @@ func (t *Tenant) operationCurrent(id string, generation uint32) bool {
 	if err != nil || work.GetGeneration() != generation || work.GetState() != pb.WorkState_WORK_STATE_RUNNING {
 		return false
 	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	return slices.ContainsFunc(t.outbound, func(x *effect) bool {
+	return t.outbound.Any(func(x actions.Queued) bool {
 		return x.ID == id && x.Generation == generation && !platform.EffectSettled(x.State)
 	})
 }
 func (t *Tenant) operationDispatches(now time.Time) []func() {
-	t.opsMu.Lock()
+	operations := t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint })
 	ids := []string{}
 	active := 0
-	for _, x := range t.outbound {
-		if x.Endpoint == acceptedformat.OperationEndpoint && x.sending {
+	for _, x := range operations {
+		if x.Sending {
 			active++
 		}
 	}
-	for _, x := range t.outbound {
-		if x.Endpoint == acceptedformat.OperationEndpoint && !x.sending && !platform.EffectSettled(x.State) && !x.Due.After(now) && len(ids)+active < 4 {
+	for _, x := range operations {
+		if !x.Sending && !platform.EffectSettled(x.State) && !x.Due.After(now) && len(ids)+active < 4 {
 			ids = append(ids, x.ID)
 		}
 	}
-	t.opsMu.Unlock()
 	var runs []func()
 	for _, id := range ids {
 		if x, ok := t.claimOperation(id, now); ok {

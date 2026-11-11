@@ -21,6 +21,7 @@ import (
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/data/transform"
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
@@ -44,27 +45,14 @@ type Endpoint struct {
 	Irreversible  bool     `json:"irreversible,omitempty"`
 }
 
-type effect struct {
-	platform.Effect
-	since   int
-	sending bool
-	span    trace.SpanContext
-}
-
 const (
-	effectsKept   = 1000
 	bodyKept      = 30 * 24 * time.Hour
 	effectTimeout = 10 * time.Second
 )
 
 func (t *Tenant) emit(e platform.Event, names []string) {
 	planned, _ := t.eventEffects(e, names, false)
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	for _, x := range planned {
-		t.outbound = append(t.outbound, &effect{span: t.current(), Effect: x})
-	}
-	t.trimEffects()
+	t.outbound.Add(t.current(), planned...)
 }
 
 func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) ([]platform.Effect, *kernel.Error) {
@@ -92,16 +80,6 @@ func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) 
 			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)})
 	}
 	return planned, nil
-}
-
-func (t *Tenant) trimEffects() {
-	for len(t.outbound) > effectsKept {
-		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return platform.EffectSettled(x.State) })
-		if i < 0 {
-			return
-		}
-		t.outbound = slices.Delete(t.outbound, i, i+1)
-	}
 }
 
 func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
@@ -146,7 +124,7 @@ func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, dat
 	var planned []platform.Effect
 	for _, ep := range t.endpoints {
 		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, c.App, kind, key, ep.ID)
-		if !slices.Contains(ep.Effects, name) || slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id }) ||
+		if !slices.Contains(ep.Effects, name) || t.outbound.Any(func(x actions.Queued) bool { return x.ID == id }) ||
 			slices.ContainsFunc(staged, func(x platform.Effect) bool { return x.ID == id }) {
 			continue
 		}
@@ -175,11 +153,10 @@ func (t *Tenant) askHeldEffects(c platform.Caller, kind, entity string, planned 
 }
 
 func (t *Tenant) Effects(now time.Time) []platform.Effect {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
+	all := t.outbound.Select(nil)
 	out := []platform.Effect{}
-	for i := len(t.outbound) - 1; i >= 0; i-- {
-		x := t.outbound[i].Effect
+	for i := len(all) - 1; i >= 0; i-- {
+		x := all[i].Effect
 		if now.Sub(x.At) > bodyKept && x.State != "unknown" {
 			x.Body = ""
 		}
@@ -197,12 +174,13 @@ type EndpointView struct {
 }
 
 func (t *Tenant) Endpoints() []EndpointView {
+	all := t.outbound.Select(nil)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	out := []EndpointView{}
 	for _, ep := range t.endpoints {
 		v := EndpointView{Endpoint: *ep, Health: "ok"}
-		for _, x := range t.outbound {
+		for _, x := range all {
 			switch {
 			case x.Endpoint != ep.ID:
 			case x.State == "delivered":
@@ -252,18 +230,9 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		if ep.Kind != acceptedformat.ModelEndpoint && !t.breakers.Allow("endpoint:"+ep.ID, now, true) {
 			continue
 		}
-		i := slices.IndexFunc(t.outbound, func(x *effect) bool {
-			return x.Endpoint == ep.ID && !platform.EffectSettled(x.State) && x.State != "held"
-		})
-		if i >= 0 && t.outbound[i].State == "unknown" {
-			blocked := t.outbound[i].ID
-			i = slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && x.Compensates == blocked && x.State == "pending" })
+		if x, ok := t.outbound.Claim(ep.ID, now); ok {
+			jobs = append(jobs, job{x.Effect, *ep, x.Span})
 		}
-		if i < 0 || t.outbound[i].State == "unknown" || t.outbound[i].sending || t.outbound[i].Due.After(now) {
-			continue
-		}
-		t.outbound[i].sending = true
-		jobs = append(jobs, job{t.outbound[i].Effect, *ep, t.outbound[i].span})
 	}
 	t.opsMu.Unlock()
 	var sends []func()
@@ -408,16 +377,8 @@ func (t *Tenant) prepareEffectSettlement(effect string, o platform.Outcome, usag
 		return
 	}
 	if o.Generation != 0 && o.Result == "delivered" {
-		t.opsMu.Lock()
-		var current platform.Effect
-		for _, x := range t.outbound {
-			if x.ID == effect {
-				current = x.Effect
-				break
-			}
-		}
-		t.opsMu.Unlock()
-		if !t.operationAllowed(current, now) {
+		current, _ := t.outbound.Get(effect)
+		if !t.operationAllowed(current.Effect, now) {
 			o.Result, o.Detail, o.Answer, o.Digest = "rejected", "Operation permission or source access was revoked", nil, ""
 		}
 	}
@@ -437,11 +398,6 @@ func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, repl
 	}
 }
 
-func markEffect(x *effect, o platform.Outcome, at time.Time) {
-	x.sending = false
-	acceptedformat.MarkEffect(&x.Effect, x.since, o, at)
-}
-
 func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -452,23 +408,21 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 		if !known {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		t.opsMu.Lock()
-		unknown := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.Endpoint == id && x.State == "unknown" })
-		t.opsMu.Unlock()
+		unknown := t.outbound.Any(func(x actions.Queued) bool { return x.Endpoint == id && x.State == "unknown" })
 		if unknown {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Resolve unknown deliveries before removing their endpoint")
 		}
 		return func(*pb.ChangeRecord) {
 			t.opsMu.Lock()
 			t.endpoints = slices.DeleteFunc(t.endpoints, func(e *Endpoint) bool { return e.ID == id })
+			t.opsMu.Unlock()
 			var dropped []platform.Effect
-			for _, x := range t.outbound {
+			t.outbound.UpdateAll(func(x *actions.Queued) {
 				if x.Endpoint == id && !platform.EffectSettled(x.State) {
 					x.State = "discarded"
 					dropped = append(dropped, x.Effect)
 				}
-			}
-			t.opsMu.Unlock()
+			})
 			for _, x := range dropped {
 				t.told(x, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "its endpoint was removed by " + c.ID}, now, c.Replaying)
 			}
@@ -525,43 +479,38 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	t.opsMu.Lock()
-	var x *effect
-	if i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == id }); i >= 0 {
-		x = t.outbound[i]
-	}
-	t.opsMu.Unlock()
-	if x != nil && x.App == build.ID && x.Event == build.ID+"/dispatch" {
+	x, found := t.outbound.Get(id)
+	if found && x.App == build.ID && x.Event == build.ID+"/dispatch" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Manage this command through its dispatch review and declared reviewer role")
 	}
 	if s.GetSchema().GetName() == controlowner.SchemaEffectApprove {
-		if x == nil || x.State != "held" {
+		if !found || x.State != "held" {
 			return nil, notFound
 		}
 		if c.Agent {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return func(r *pb.ChangeRecord) {
-			t.opsMu.Lock()
-			x.State, x.Due = "pending", now
-			t.opsMu.Unlock()
+			t.outbound.Update(id, func(q *actions.Queued) { q.State, q.Due = "pending", now })
 			if x.Run != "" && t.agents != nil {
 				t.agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
 			}
 		}, nil
 	}
 	if s.GetSchema().GetName() == controlowner.SchemaEffectDiscard {
-		if x != nil && x.State == "unknown" {
+		if found && x.State == "unknown" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An unknown delivery needs reconciliation or a recorded human decision")
 		}
-		if x == nil || platform.EffectSettled(x.State) {
+		if !found || platform.EffectSettled(x.State) {
 			return nil, notFound
 		}
 		return func(r *pb.ChangeRecord) {
-			t.opsMu.Lock()
-			held := x.State == "held"
-			x.State = "discarded"
-			t.opsMu.Unlock()
+			held := false
+			t.outbound.Update(id, func(q *actions.Queued) {
+				held = q.State == "held"
+				q.State = "discarded"
+				x = *q
+			})
 			if held && x.Run != "" && t.agents != nil {
 				t.agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
 			}
@@ -576,23 +525,24 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			Outcome, Reason string
 			Answer          json.RawMessage
 		}
-		if x == nil || x.State != "unknown" || x.sending || c.Agent || json.Unmarshal(s.GetPayload(), &input) != nil || !slices.Contains([]string{"delivered", "rejected"}, input.Outcome) || strings.TrimSpace(input.Reason) == "" || len(input.Reason) > 4096 || len(input.Answer) > 64<<10 {
+		if !found || x.State != "unknown" || x.Sending || c.Agent || json.Unmarshal(s.GetPayload(), &input) != nil || !slices.Contains([]string{"delivered", "rejected"}, input.Outcome) || strings.TrimSpace(input.Reason) == "" || len(input.Reason) > 4096 || len(input.Answer) > 64<<10 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An unknown delivery needs a human result and bounded evidence")
 		}
 		return func(*pb.ChangeRecord) {
-			t.opsMu.Lock()
-			x.State, x.Error, x.Last = input.Outcome, "Resolved by "+c.ID+": "+input.Reason, now
-			t.opsMu.Unlock()
+			t.outbound.Update(id, func(q *actions.Queued) {
+				q.State, q.Error, q.Last = input.Outcome, "Resolved by "+c.ID+": "+input.Reason, now
+				x = *q
+			})
 			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: input.Outcome, Detail: x.Error, Answer: input.Answer}, now, c.Replaying)
 		}, nil
 	}
-	if x == nil || (x.State != "failed" && x.State != "rejected") {
+	if !found || (x.State != "failed" && x.State != "rejected") {
 		return nil, notFound
 	}
 	return func(*pb.ChangeRecord) {
-		t.opsMu.Lock()
-		x.State, x.Due, x.since = "pending", now, x.Attempts
-		x.CallbackError = ""
-		t.opsMu.Unlock()
+		t.outbound.Update(id, func(q *actions.Queued) {
+			q.State, q.Due, q.Since = "pending", now, q.Attempts
+			q.CallbackError = ""
+		})
 	}, nil
 }

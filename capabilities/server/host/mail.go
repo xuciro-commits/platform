@@ -25,12 +25,6 @@ type letter struct {
 	Text    string `json:"text"`
 }
 
-func (t *Tenant) mailNotice(n platform.Notification, to platform.Reach) {
-	for _, planned := range t.planMailNotice(n, to) {
-		t.outbound = append(t.outbound, &effect{Effect: planned})
-	}
-}
-
 func (t *Tenant) planMailNotice(n platform.Notification, to platform.Reach) []platform.Effect {
 	var effects []platform.Effect
 	address, lang := to.Address, to.Language

@@ -12,20 +12,18 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/actions"
 )
 
 func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, id string) *kernel.Error {
 	if r == nil || c.Tenant != d.tenant.ID || r.GetSubmission().GetAuthority() != c.App {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Cancellation needs its accepted owner decision")
 	}
-	d.tenant.opsMu.Lock()
-	i := slices.IndexFunc(d.tenant.outbound, func(x *effect) bool { return x.ID == id && x.Endpoint == acceptedformat.OperationEndpoint })
-	if i < 0 {
-		d.tenant.opsMu.Unlock()
+	queued, ok := d.tenant.outbound.Get(id)
+	if !ok || queued.Endpoint != acceptedformat.OperationEndpoint {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation call was not found")
 	}
-	x := d.tenant.outbound[i].Effect
-	d.tenant.opsMu.Unlock()
+	x := queued.Effect
 	if platform.EffectSettled(x.State) {
 		return nil
 	}
@@ -46,14 +44,11 @@ func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, 
 	return nil
 }
 func (t *Tenant) operationCancellation(id string) (acceptedformat.OperationCancellation, error) {
-	t.opsMu.Lock()
-	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == id && x.Endpoint == acceptedformat.OperationEndpoint })
-	if i < 0 {
-		t.opsMu.Unlock()
+	queued, ok := t.outbound.Get(id)
+	if !ok || queued.Endpoint != acceptedformat.OperationEndpoint {
 		return acceptedformat.OperationCancellation{}, fmt.Errorf("operation cancellation has no intent")
 	}
-	x := t.outbound[i].Effect
-	t.opsMu.Unlock()
+	x := queued.Effect
 	after := x
 	after.State, after.Error = "discarded", "Cancelled"
 	after.Output = nil
@@ -124,13 +119,7 @@ func (t *Tenant) applyOperationCancellations(saved []acceptedformat.OperationCan
 			}
 			t.works.Restore(all)
 		}
-		t.opsMu.Lock()
-		for _, x := range t.outbound {
-			if x.ID == r.Before.ID {
-				x.Effect, x.sending = r.After, false
-			}
-		}
-		t.opsMu.Unlock()
+		t.outbound.Update(r.Before.ID, func(x *actions.Queued) { x.Effect, x.Sending = r.After, false })
 		t.cancels.Cancel(r.Before.ID)
 	}
 	return nil
