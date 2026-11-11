@@ -63,7 +63,7 @@ type Tenant struct {
 	console       controlowner.HostState
 	staged        compute.Channel
 	definitions   []platform.Definition
-	flowArtifacts flowArtifactGC
+	flowArtifacts automation.FrameCollector
 	audit         runtimekernel.AuditLog
 	events        []automation.QueuedEvent
 	bindings      *actions.Bindings

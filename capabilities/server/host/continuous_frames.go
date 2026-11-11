@@ -2,12 +2,9 @@ package host
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -17,76 +14,6 @@ import (
 	"slices"
 	"time"
 )
-
-const maxFlowFrameBytes = 64 << 20
-
-type flowFrameStore struct {
-	tenant string
-	files  platform.FileStore
-}
-
-func (s flowFrameStore) key(ref platform.FlowStateArtifact) (string, error) {
-	ticket, te := hex.DecodeString(ref.Ticket)
-	digest, de := hex.DecodeString(ref.Digest)
-	if ref.Tenant != s.tenant || ref.Instance == "" || ref.Version < 1 || te != nil || len(ticket) != 16 || de != nil || len(digest) != sha256.Size || ref.Size < 1 || ref.Size > maxFlowFrameBytes {
-		return "", fmt.Errorf("the Flow state handle has an invalid owner or bound")
-	}
-	owner := sha256.Sum256(platform.Raw([]any{s.tenant, ref.Instance, ref.Version}))
-	return fmt.Sprintf("%s/artifacts/flow/%x/%s/%s.json", s.tenant, owner, ref.Ticket, ref.Digest), nil
-}
-
-func (s flowFrameStore) Seal(instance string, version int, raw []byte, budget int) (platform.FlowStateArtifact, error) {
-	if budget <= 0 || budget > maxFlowFrameBytes {
-		budget = maxFlowFrameBytes
-	}
-	if len(raw) == 0 || len(raw) > budget || !json.Valid(raw) {
-		return platform.FlowStateArtifact{}, fmt.Errorf("the Flow frame exceeds its sealed JSON budget")
-	}
-	var ticket [16]byte
-	if _, err := rand.Read(ticket[:]); err != nil {
-		return platform.FlowStateArtifact{}, err
-	}
-	ref := platform.FlowStateArtifact{Tenant: s.tenant, Instance: instance, Version: version, Ticket: hex.EncodeToString(ticket[:]), Digest: fmt.Sprintf("%x", sha256.Sum256(raw)), Size: len(raw)}
-	key, err := s.key(ref)
-	if err != nil {
-		return ref, err
-	}
-	if err := s.files.Put(context.Background(), key, raw, "application/json"); err != nil {
-		return ref, fmt.Errorf("seal Flow frame: %w", err)
-	}
-	return ref, nil
-}
-
-func (s flowFrameStore) Read(ref platform.FlowStateArtifact) ([]byte, error) {
-	key, err := s.key(ref)
-	if err != nil {
-		return nil, err
-	}
-	reader, size, err := s.files.Get(context.Background(), key)
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-	if size != int64(ref.Size) {
-		return nil, fmt.Errorf("the Flow artifact differs from its accepted size")
-	}
-	raw, err := io.ReadAll(io.LimitReader(reader, int64(ref.Size)+1))
-	if err != nil || len(raw) != ref.Size || fmt.Sprintf("%x", sha256.Sum256(raw)) != ref.Digest || !json.Valid(raw) {
-		return nil, fmt.Errorf("the Flow artifact differs from its accepted digest")
-	}
-	return raw, nil
-}
-
-func (s flowFrameStore) Discard(ref platform.FlowStateArtifact) error {
-	key, err := s.key(ref)
-	if err != nil {
-		return err
-	}
-	if err := s.files.Delete(context.Background(), key); err != nil {
-		return fmt.Errorf("discard Flow artifact: %w", err)
-	}
-	return nil
-}
 
 func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *kernel.Error) {
 	type snapshot struct {
@@ -165,7 +92,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 		}
 	}
 	current := m
-	store := flowFrameStore{tenant: t.ID, files: t.files()}
+	store := t.frames()
 	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedBatch, *kernel.Error) {
 		f, latest, _, refusal := t.continuousSnapshotLocked(m, id, now)
 		if refusal != nil {
@@ -312,7 +239,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			return nil, err, true
 		}
 	}
-	store := flowFrameStore{tenant: t.ID, files: t.files()}
+	store := t.frames()
 	var preparedContext replayContext
 	prepared, err := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedBatch, *kernel.Error) {
 		var refusal *kernel.Error
@@ -390,7 +317,7 @@ func (t *Tenant) retireContinuousArtifacts(plan platform.FlowArtifactCleanupPrep
 	if len(refs) == 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow artifact cleanup intent is empty")
 	}
-	store := flowFrameStore{tenant: t.ID, files: t.files()}
+	store := t.frames()
 	for _, ref := range refs {
 		if ref.Tenant != t.ID {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A retired Flow artifact belongs to another tenant")
@@ -426,7 +353,7 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.Fl
 		if refusal != nil {
 			return nil, refusal
 		}
-		return fresh.Prepare(now, flowFrameStore{tenant: t.ID, files: t.files()})
+		return fresh.Prepare(now, t.frames())
 	})
 	if refusal != nil {
 		log.Printf("continuous Compute retry %s refused: %s", plan.Instance(), refusal.Code)
@@ -529,7 +456,7 @@ func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*pl
 	if refusal != nil {
 		return nil, refusal
 	}
-	frame, err := owner.ExpandFrame(before, flowFrameStore{tenant: t.ID, files: t.files()})
+	frame, err := owner.ExpandFrame(before, t.frames())
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}

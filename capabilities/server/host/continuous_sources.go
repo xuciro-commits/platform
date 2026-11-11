@@ -124,7 +124,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	}
 	if len(rows) == 0 {
 		if !latestBootstrap {
-			if tick, due, tickErr := plan.WindowTick(now, flowFrameStore{tenant: t.ID, files: t.files()}); tickErr != nil {
+			if tick, due, tickErr := plan.WindowTick(now, t.frames()); tickErr != nil {
 				return platform.FlowBatchOutcome{}, tickErr
 			} else if due {
 				return t.ConsumeFlowBatch(current, id, tick, now)
