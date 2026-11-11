@@ -139,7 +139,7 @@ func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 
 type StagedDecision interface {
 	HoldChanges(*Ledger) (release func(), refusal *kernel.Error)
-	DraftChanges(*Ledger, func() ChangeLog) ChangeLog
+	DraftChanges(*Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog
 	FailDecision(*kernel.Error)
 	RecordAuthorization(Caller, AuthzRequest, AuthzDecision)
 	BusinessRefused(*kernel.Error, BusinessRefusalFact)
@@ -346,7 +346,6 @@ type Runtime interface {
 	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error)
 	Authorize(Caller, AuthzRequest, time.Time) AuthzDecision
 	AuthorizationEngine() AuthorizationEngine
-	Kernel() KernelFactory
 	Rules() RuleEngine
 	ReadRuleQuery(Caller, RuleCollection, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
 	ReadRecordSet(Caller, string, string, string, time.Time) (RecordSetResult, *kernel.Error)

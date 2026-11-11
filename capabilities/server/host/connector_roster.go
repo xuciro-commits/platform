@@ -2,20 +2,20 @@ package host
 
 import (
 	"maps"
-	"platformserver/platform"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 )
 
 type connectorRoster struct {
-	kernel    platform.Connectors
+	kernel    *kernel.Connectors
 	byID      map[string]*pb.ConnectorDescriptor
 	lastError map[string]ConnectorError
 }
 
-func newConnectorRoster(provider platform.KernelFactory) connectorRoster {
-	return connectorRoster{kernel: provider.Connectors(), byID: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}}
+func newConnectorRoster() connectorRoster {
+	return connectorRoster{kernel: kernel.NewConnectors(), byID: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}}
 }
 
 func (r *connectorRoster) register(d *pb.ConnectorDescriptor) error {

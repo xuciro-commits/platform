@@ -87,7 +87,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	}
 	fork.records = d.records.ForkRecords()
 	fork.records.InheritDecision(d.records)
-	fork.logs = map[*platform.Ledger]platform.ChangeLog{}
+	fork.logs = map[*platform.Ledger]*kernel.ChangeLog{}
 	for ledger, log := range d.logs {
 		suspended := d.receiving[ledger]
 		for id := range d.active {
@@ -100,7 +100,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		if suspended {
 			fork.logs[ledger] = log
 		} else {
-			fork.logs[ledger] = log.ForkLog()
+			fork.logs[ledger] = log.Fork()
 		}
 	}
 	fork.events, fork.notices = slices.Clone(d.events), slices.Clone(d.notices)
@@ -119,7 +119,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	for i, descriptor := range descriptors {
 		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
 	}
-	fork.connectors = d.tenant.services.Kernel.Connectors()
+	fork.connectors = kernel.NewConnectors()
 	fork.connectors.Restore(descriptors, marks)
 	fork.deliveries = slices.Clone(d.deliveries)
 	fork.privateApps = map[string]platform.App{}

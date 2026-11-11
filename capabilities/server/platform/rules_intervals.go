@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"slices"
 	"time"
 )
@@ -245,7 +246,7 @@ func intervalOverlap(a, b ObservationInterval) bool {
 	return a.Since.Before(b.Until) && b.Since.Before(a.Until) || a.OpenEnd && b.OpenStart && a.Until.Equal(b.Since) || b.OpenEnd && a.OpenStart && b.Until.Equal(a.Since)
 }
 
-func ReconcileObservationIntervals(object string, previous []IntervalIdentity, result ObservationIntervalResult, newID func(int) string, engines ...KernelFactory) (IntervalReconciliation, error) {
+func ReconcileObservationIntervals(object string, previous []IntervalIdentity, result ObservationIntervalResult, newID func(int) string) (IntervalReconciliation, error) {
 	out := IntervalReconciliation{Events: []IntervalChange{}, Retired: []string{}, Redirects: []*pb.Redirect{}}
 	if err := result.Check(); err != nil {
 		return out, err
@@ -269,11 +270,7 @@ func ReconcileObservationIntervals(object string, previous []IntervalIdentity, r
 		seen[old.ID] = true
 		entities = append(entities, &pb.EntityRef{Type: object, Id: old.ID})
 	}
-	var engine KernelFactory = NativeKernel{}
-	if len(engines) != 0 {
-		engine = engines[0]
-	}
-	identity := engine.Identity(entities)
+	identity := kernel.NewIdentity(entities)
 	type candidate struct {
 		interval ObservationInterval
 		review   bool

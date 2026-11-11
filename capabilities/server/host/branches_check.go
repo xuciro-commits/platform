@@ -237,7 +237,7 @@ func (t *Tenant) stageViewLocked(stage branchStage, now time.Time) (*Tenant, err
 	for i, descriptor := range descriptors {
 		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
 	}
-	view.connectors = newConnectorRoster(t.services.Kernel)
+	view.connectors = newConnectorRoster()
 	view.connectors.kernel.Restore(descriptors, marks)
 	return view, nil
 }

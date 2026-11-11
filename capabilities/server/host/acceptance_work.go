@@ -381,12 +381,12 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	return true, nil
 }
 
-func (t *Tenant) forkWorkState() platform.Works {
+func (t *Tenant) forkWorkState() *kernel.Works {
 	items := t.works.All()
 	for i, item := range items {
 		items[i] = proto.Clone(item).(*pb.Work)
 	}
-	draft := t.services.Kernel.Works()
+	draft := kernel.NewWorks()
 	draft.Restore(items)
 	return draft
 }

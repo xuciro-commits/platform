@@ -247,7 +247,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	t.opsMu.Unlock()
 	view.staged = computeowner.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())
-	view.claims = t.claims.Fork(t.services.Kernel, t.ID)
+	view.claims = t.claims.Fork(t.ID)
 	view.DefinitionEpoch.Store(t.DefinitionEpoch.Load())
 	view.runIndex.CopyGeneration(&t.runIndex)
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions

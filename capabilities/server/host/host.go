@@ -71,7 +71,7 @@ type Tenant struct {
 	change        changes
 	hops          int
 	acted         int
-	works         platform.Works
+	works         *kernel.Works
 	opsMu         sync.Mutex
 	work          automation.WorkBoard
 	Quota         int
@@ -109,8 +109,8 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if err := services.Check(); err != nil {
 		return nil, err
 	}
-	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: services.Kernel.Works(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
-		connectors: newConnectorRoster(services.Kernel), Projection: records.NewStore()}
+	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
+		connectors: newConnectorRoster(), Projection: records.NewStore()}
 	t.bindAuditStore()
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)
 	t.observeLane()
@@ -122,16 +122,9 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		t.appIndex[id] = i
 	}
 	t.services = services
-	t.claims = dataowner.NewSourceClaims(services.Kernel)
+	t.claims = dataowner.NewSourceClaims()
 	if services.NewAgentEvaluator != nil {
 		t.agentEvaluator = services.NewAgentEvaluator()
-	}
-	for _, app := range apps {
-		if owner, ok := app.(interface{ AcceptedLedger() *platform.Ledger }); ok {
-			if err := owner.AcceptedLedger().BindKernel(services.Kernel); err != nil {
-				return nil, fmt.Errorf("bind kernel for %s: %w", app.Manifest().ID, err)
-			}
-		}
 	}
 	t.Projection.SetRules(services.Rules)
 	t.staged = computeowner.NewChannel(id, t.files)

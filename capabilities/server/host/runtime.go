@@ -154,9 +154,7 @@ func (d *stagedDecision) AuthorizationEngine() platform.AuthorizationEngine {
 	return d.tenant.services.Authorization
 }
 
-func (r runtime) Rules() platform.RuleEngine             { return r.t.services.Rules }
-func (d *stagedDecision) Rules() platform.RuleEngine     { return d.tenant.services.Rules }
-func (r runtime) Kernel() platform.KernelFactory         { return r.t.services.Kernel }
-func (d *stagedDecision) Kernel() platform.KernelFactory { return d.tenant.services.Kernel }
+func (r runtime) Rules() platform.RuleEngine         { return r.t.services.Rules }
+func (d *stagedDecision) Rules() platform.RuleEngine { return d.tenant.services.Rules }
 
 func (t *Tenant) RuntimeCapabilities() platform.RuntimeCapabilities { return t.services }

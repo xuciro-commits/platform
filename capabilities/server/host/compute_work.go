@@ -193,7 +193,7 @@ func (t *Tenant) operationDispatches(now time.Time) []func() {
 	}
 	return runs
 }
-func (t *Tenant) prepareOperationFinish(before platform.Effect, out platform.Outcome) (platform.Works, json.RawMessage, json.RawMessage, error) {
+func (t *Tenant) prepareOperationFinish(before platform.Effect, out platform.Outcome) (*kernel.Works, json.RawMessage, json.RawMessage, error) {
 	if before.Endpoint != acceptedformat.OperationEndpoint {
 		return nil, nil, nil, nil
 	}

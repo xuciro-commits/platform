@@ -366,7 +366,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err := t.sequences.Check(result.SequenceBases, result.Sequences); err != nil {
 		return nil, err
 	}
-	checks := map[string]platform.ChangeLog{}
+	checks := map[string]*kernel.ChangeLog{}
 	for app, ledger := range ledgers {
 		checks[app] = ledger.ForkAcceptedChanges()
 	}
@@ -704,7 +704,7 @@ func (t *Tenant) validateAcceptedDeliveries(deliveries []acceptedformat.Connecto
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	descriptors, marks := t.connectors.kernel.State()
-	private := t.services.Kernel.Connectors()
+	private := kernel.NewConnectors()
 	private.Restore(descriptors, marks)
 	for _, delivery := range deliveries {
 		if delivery.Connector == "" || delivery.DataClass == "" || delivery.At.IsZero() || delivery.Before == "" {

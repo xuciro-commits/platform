@@ -88,7 +88,7 @@ func decodeControl(raw []byte, v any) error {
 
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, definitions: t.definitions, Projection: t.Projection, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
-		bindings: maps.Clone(t.bindings), connectors: newConnectorRoster(t.services.Kernel), work: automation.NewWorkBoard(), works: t.forkWorkState()}
+		bindings: maps.Clone(t.bindings), connectors: newConnectorRoster(), work: automation.NewWorkBoard(), works: t.forkWorkState()}
 	for _, j := range t.work.Jobs {
 		copy := *j
 		view.work.AddJob(&copy)
@@ -117,7 +117,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 			return err
 		}
 		_, marks := t.connectors.kernel.State()
-		t.connectors.kernel = t.services.Kernel.Connectors()
+		t.connectors.kernel = kernel.NewConnectors()
 		t.connectors.kernel.Restore(descriptors, marks)
 		t.connectors.byID = map[string]*pb.ConnectorDescriptor{}
 		for _, desc := range descriptors {

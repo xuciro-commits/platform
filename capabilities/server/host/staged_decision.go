@@ -39,7 +39,7 @@ type stagedDecision struct {
 	control                *controlDecision
 	tenant                 *Tenant
 	records                *records.Store
-	logs                   map[*platform.Ledger]platform.ChangeLog
+	logs                   map[*platform.Ledger]*kernel.ChangeLog
 	events                 []platform.Event
 	sequences              map[string]int
 	allocated              map[string]int
@@ -69,7 +69,7 @@ type stagedDecision struct {
 	privateApps            map[string]platform.App
 	states                 map[string]platform.AcceptedStateApp
 	stateBases             map[string]json.RawMessage
-	connectors             platform.Connectors
+	connectors             *kernel.Connectors
 	deliveries             []acceptedformat.ConnectorDelivery
 	operationAnswers       map[string]platform.OperationResult
 	operationCancels       map[string]bool
@@ -118,11 +118,11 @@ func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	for i, descriptor := range descriptors {
 		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
 	}
-	connectors := t.services.Kernel.Connectors()
+	connectors := kernel.NewConnectors()
 	connectors.Restore(descriptors, marks)
 	before, _ := platform.CanonicalDigest(notices)
 	return &stagedDecision{simulation: t.simulation, tenant: t, records: base,
-		logs: map[*platform.Ledger]platform.ChangeLog{}, sequences: sequences,
+		logs: map[*platform.Ledger]*kernel.ChangeLog{}, sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
 		notices: notices, noticeBase: noticeSeq, noticeSeq: noticeSeq, noticeBefore: before,
 		writers: map[string][]string{}, changed: map[string][]string{}, connectors: connectors}
@@ -185,7 +185,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 	return r, nil
 }
 
-func (d *stagedDecision) DraftChanges(l *platform.Ledger, fork func() platform.ChangeLog) platform.ChangeLog {
+func (d *stagedDecision) DraftChanges(l *platform.Ledger, fork func() *kernel.ChangeLog) *kernel.ChangeLog {
 	if d.logs[l] == nil {
 		d.logs[l] = fork()
 	}

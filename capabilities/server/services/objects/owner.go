@@ -34,7 +34,7 @@ type Owner struct {
 	Deliveries             func(string, time.Time) []RecordDelivery
 	AuditPersonal          func(platform.PersonalRead)
 	RecordSetBinding       func(platform.AssetBinding) (*platform.Definition, bool)
-	Claims                 platform.Facts
+	Claims                 *kernel.FactLog
 }
 
 func (o *Owner) authorizationMember(m platform.Member) platform.Member {

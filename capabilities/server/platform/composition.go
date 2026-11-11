@@ -183,7 +183,6 @@ type RuntimeCapabilities struct {
 	AIInference            *AIInferencePolicy
 	Rules                  RuleEngine
 	Authorization          AuthorizationEngine
-	Kernel                 KernelFactory
 	RuleModule             CapabilityModule
 	AuthModule             CapabilityModule
 	KernelModule           CapabilityModule
@@ -192,7 +191,7 @@ type RuntimeCapabilities struct {
 
 func DefaultRuntimeCapabilities(authorization AuthorizationEngine) RuntimeCapabilities {
 	return RuntimeCapabilities{
-		Rules: NativeRules{}, Authorization: authorization, Kernel: NativeKernel{}, StorageModule: MemoryStorageModule(),
+		Rules: NativeRules{}, Authorization: authorization, StorageModule: MemoryStorageModule(),
 		KernelModule: CapabilityModule{ID: "platform.kernel.native", Version: "1", Title: "Kernel", Scope: "tenant", Replacement: "restart", StateFormat: "platform.kernel.v1", Provides: []CapabilityContract{{ID: "platform.kernel", Version: "1", Semantics: "1"}}},
 		RuleModule:   CapabilityModule{ID: "platform.rules.native", Version: "1", Title: "Business rules", Scope: "tenant", Replacement: "restart", Provides: []CapabilityContract{{ID: "platform.rules", Version: "1", Semantics: fmt.Sprint(ExprVersion)}}},
 		AuthModule:   CapabilityModule{ID: "platform.authorization.standard", Version: "1", Title: "Authorization", Scope: "tenant", Replacement: "restart", Provides: []CapabilityContract{{ID: "platform.authorization", Version: "1", Semantics: "1"}}},
@@ -200,7 +199,7 @@ func DefaultRuntimeCapabilities(authorization AuthorizationEngine) RuntimeCapabi
 }
 
 func (c RuntimeCapabilities) Check() error {
-	if c.Rules == nil || c.Authorization == nil || c.Kernel == nil {
+	if c.Rules == nil || c.Authorization == nil {
 		return fmt.Errorf("runtime needs explicit rule and authorization providers")
 	}
 	plan, err := ResolveComposition([]CapabilityModule{c.RuleModule, c.AuthModule, c.KernelModule}, nil)
@@ -227,20 +226,16 @@ type AuthorizationProvider struct {
 	Module CapabilityModule
 	Engine AuthorizationEngine
 }
-type KernelProvider struct {
-	Module CapabilityModule
-	Engine KernelFactory
-}
 
 type RuntimeProviders struct {
 	Rules         []RuleProvider
 	Authorization []AuthorizationProvider
-	Kernel        []KernelProvider
+	Kernel        []CapabilityModule
 }
 
 func DefaultRuntimeProviders(authorization AuthorizationEngine) RuntimeProviders {
 	c := DefaultRuntimeCapabilities(authorization)
-	return RuntimeProviders{Rules: []RuleProvider{{c.RuleModule, c.Rules}}, Authorization: []AuthorizationProvider{{c.AuthModule, c.Authorization}}, Kernel: []KernelProvider{{c.KernelModule, c.Kernel}}}
+	return RuntimeProviders{Rules: []RuleProvider{{c.RuleModule, c.Rules}}, Authorization: []AuthorizationProvider{{c.AuthModule, c.Authorization}}, Kernel: []CapabilityModule{c.KernelModule}}
 }
 
 func (c RuntimeCapabilities) Selection() map[string]string {
@@ -255,10 +250,7 @@ func (p RuntimeProviders) Modules() []CapabilityModule {
 	for _, provider := range p.Authorization {
 		modules = append(modules, provider.Module)
 	}
-	for _, provider := range p.Kernel {
-		modules = append(modules, provider.Module)
-	}
-	return modules
+	return append(modules, p.Kernel...)
 }
 
 func (p RuntimeProviders) Resolve(selection map[string]string) (RuntimeCapabilities, error) {
@@ -277,9 +269,9 @@ func (p RuntimeProviders) Resolve(selection map[string]string) (RuntimeCapabilit
 			runtime.AuthModule, runtime.Authorization = provider.Module, provider.Engine
 		}
 	}
-	for _, provider := range p.Kernel {
-		if slices.Contains(plan.Order, provider.Module.ID) {
-			runtime.KernelModule, runtime.Kernel = provider.Module, provider.Engine
+	for _, module := range p.Kernel {
+		if slices.Contains(plan.Order, module.ID) {
+			runtime.KernelModule = module
 		}
 	}
 	return runtime, runtime.Check()

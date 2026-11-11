@@ -12,151 +12,35 @@ import (
 	"time"
 )
 
-type KernelFactory interface {
-	Changes(SchemaRegistry) ChangeLog
-	Schemas([]*pb.SchemaRef) SchemaRegistry
-	Authorities() Authorities
-	Works() Works
-	Connectors() Connectors
-	Identity([]*pb.EntityRef) Identity
-	Facts(SchemaRegistry) Facts
-	Receive(ChangeLog, Authorities, kernel.Policy, kernel.Caller, *pb.Submission, time.Time, func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error)
-}
-
-type SchemaRegistry interface {
-	Accepts(*pb.SchemaRef) bool
-	Learn(...*pb.SchemaRef) *kernel.Error
-}
-type Authorities interface {
-	Declare(*pb.AuthorityDeclaration) *kernel.Error
-	Authorize(*pb.Submission) *kernel.Error
-}
-type ChangeLog interface {
-	ForkLog() ChangeLog
-	ForkLogWithSchemas(SchemaRegistry) ChangeLog
-	Records(string) []*pb.ChangeRecord
-	Last(string) *pb.ChangeRecord
-	Accepted(string, string) *pb.ChangeRecord
-	Compact(kernel.ChangeArchive)
-	ApplyAccepted(*pb.ChangeRecord) (bool, error)
-	SubmitChecked(*pb.Submission, time.Time, func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error)
-	Restore(string, []*pb.ChangeRecord)
-}
-type Works interface {
-	Start(string, string) (uint32, string, *kernel.Error)
-	Finish(string, uint32, bool) *kernel.Error
-	Cancel(string) *kernel.Error
-	Get(string) (*pb.Work, *kernel.Error)
-	All() []*pb.Work
-	Restore([]*pb.Work)
-}
-type Connectors interface {
-	Register(*pb.ConnectorDescriptor) *kernel.Error
-	Deliver(string, string, string, string, string, time.Time) *kernel.Error
-	Heartbeat(string, string, time.Time) *kernel.Error
-	Status(string, string, time.Time) (*pb.ConnectorStatus, *kernel.Error)
-	Descriptors(string) []*pb.ConnectorDescriptor
-	State() ([]*pb.ConnectorDescriptor, []kernel.ConnectorMark)
-	Restore([]*pb.ConnectorDescriptor, []kernel.ConnectorMark)
-}
-
-type Identity interface {
-	Create(*pb.EntityRef) *kernel.Error
-	AddRedirect(*pb.Redirect) *kernel.Error
-	Resolve(*pb.EntityRef) ([]kernel.Ref, *kernel.Error)
-	State() kernel.IdentityState
-	Restore(kernel.IdentityState)
-}
-
-type Facts interface {
-	Record(*pb.Fact, time.Time) (*pb.FactRecord, *kernel.Error)
-	CurrentClaims(string, *pb.EntityRef, string) []*pb.FactRecord
-	Accepted(string, string) *pb.FactRecord
-	Records(string) []*pb.FactRecord
-	Restore(string, []*pb.FactRecord)
-}
-
-func (c Caller) Kernel() KernelFactory {
-	if c.rt != nil {
-		return c.rt.Kernel()
-	}
-	return NativeKernel{}
-}
-
-type NativeKernel struct{}
-type nativeChanges struct{ *kernel.ChangeLog }
-
-func (n nativeChanges) ForkLog() ChangeLog { return nativeChanges{n.Fork()} }
-func (n nativeChanges) ForkLogWithSchemas(s SchemaRegistry) ChangeLog {
-	return nativeChanges{n.ForkWithSchemas(s)}
-}
-func (NativeKernel) Schemas(refs []*pb.SchemaRef) SchemaRegistry {
-	return kernel.NewSchemaRegistry(refs)
-}
-func (NativeKernel) Changes(s SchemaRegistry) ChangeLog         { return nativeChanges{kernel.NewChangeLog(s)} }
-func (NativeKernel) Authorities() Authorities                   { return kernel.NewAuthorities() }
-func (NativeKernel) Works() Works                               { return kernel.NewWorks() }
-func (NativeKernel) Connectors() Connectors                     { return kernel.NewConnectors() }
-func (NativeKernel) Identity(entities []*pb.EntityRef) Identity { return kernel.NewIdentity(entities) }
-func (NativeKernel) Facts(schema SchemaRegistry) Facts {
-	return kernel.NewFactLog(schema)
-}
-func (NativeKernel) Receive(log ChangeLog, authorities Authorities, policy kernel.Policy, caller kernel.Caller, s *pb.Submission, at time.Time, domain func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
-	r := kernel.Receiver{Changes: log, Authorities: authorities, Policy: policy}
-	return r.Receive(caller, s, at, domain)
-}
-
 type Ledger struct {
 	mu           sync.Mutex
 	tenant       string
 	authority    string
 	declarations []*pb.AuthorityDeclaration
 	archive      kernel.ChangeArchive
-	changes      ChangeLog
-	authorities  Authorities
-	kernel       KernelFactory
+	changes      *kernel.ChangeLog
+	authorities  *kernel.Authorities
 	schemaRefs   []*pb.SchemaRef
-	schemas      SchemaRegistry
+	schemas      *kernel.SchemaRegistry
 	Catalog      *Catalog
 }
 
 func NewLedger(tenant, authority string, catalog *Catalog, classes ...string) *Ledger {
-	return NewLedgerWithKernel(NativeKernel{}, tenant, authority, catalog, classes...)
-}
-
-func NewLedgerWithKernel(engine KernelFactory, tenant, authority string, catalog *Catalog, classes ...string) *Ledger {
 	var schemas []*pb.SchemaRef
 	for _, a := range catalog.actions {
 		for family := uint32(1); family <= schemaFamily(a); family++ {
 			schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: family})
 		}
 	}
-	registry := engine.Schemas(schemas)
-	l := &Ledger{tenant: tenant, authority: authority, changes: engine.Changes(registry), schemas: registry,
-		kernel: engine, schemaRefs: slices.Clone(schemas), authorities: engine.Authorities(), Catalog: catalog}
+	registry := kernel.NewSchemaRegistry(schemas)
+	l := &Ledger{tenant: tenant, authority: authority, changes: kernel.NewChangeLog(registry), schemas: registry,
+		schemaRefs: slices.Clone(schemas), authorities: kernel.NewAuthorities(), Catalog: catalog}
 	for _, class := range classes {
 		d := &pb.AuthorityDeclaration{TenantId: tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: authority, Epoch: 1}
 		l.authorities.Declare(d)
 		l.declarations = append(l.declarations, d)
 	}
 	return l
-}
-
-func (l *Ledger) BindKernel(engine KernelFactory) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.changes.Last(l.tenant) != nil {
-		return fmt.Errorf("kernel binding requires an unstarted ledger")
-	}
-	registry := engine.Schemas(l.schemaRefs)
-	changes, authorities := engine.Changes(registry), engine.Authorities()
-	for _, declaration := range l.declarations {
-		if err := authorities.Declare(declaration); err != nil {
-			return err
-		}
-	}
-	l.kernel, l.schemas, l.changes, l.authorities = engine, registry, changes, authorities
-	return nil
 }
 
 func (l *Ledger) Extend(classes []string, actions []Action) error {
@@ -226,20 +110,20 @@ func (l *Ledger) UseChangeArchive(archive kernel.ChangeArchive) {
 	l.changes.Compact(archive)
 }
 
-func (l *Ledger) ForkAcceptedChanges() ChangeLog {
+func (l *Ledger) ForkAcceptedChanges() *kernel.ChangeLog {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.changes.ForkLog()
+	return l.changes.Fork()
 }
 
 func (l *Ledger) ForkRead() (*Ledger, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	registry := l.kernel.Schemas(l.schemaRefs)
+	registry := kernel.NewSchemaRegistry(l.schemaRefs)
 	fork := &Ledger{tenant: l.tenant, authority: l.authority, declarations: slices.Clone(l.declarations),
-		kernel: l.kernel, schemaRefs: slices.Clone(l.schemaRefs), schemas: registry,
-		changes: l.changes.ForkLogWithSchemas(registry), archive: l.archive,
-		authorities: l.kernel.Authorities(), Catalog: NewCatalog(l.Catalog.All()...)}
+		schemaRefs: slices.Clone(l.schemaRefs), schemas: registry,
+		changes: l.changes.ForkWithSchemas(registry), archive: l.archive,
+		authorities: kernel.NewAuthorities(), Catalog: NewCatalog(l.Catalog.All()...)}
 	for _, declaration := range fork.declarations {
 		if err := fork.authorities.Declare(declaration); err != nil {
 			return nil, err
@@ -290,13 +174,13 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	var decision AuthzDecision
 	changes := l.changes
 	if draft := c.StagedDecision(); draft != nil {
-		changes = draft.DraftChanges(l, l.changes.ForkLog)
+		changes = draft.DraftChanges(l, l.changes.Fork)
 		if changes == nil || changes == l.changes {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}
 	if probing {
-		changes = changes.ForkLog()
+		changes = changes.Fork()
 	}
 	policy := func(kernel.Caller, *pb.Submission) bool {
 		if !c.Replaying || probing {
@@ -309,7 +193,8 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	}
 	var apply func(*pb.ChangeRecord)
 	decided := false
-	record, err := l.kernel.Receive(changes, l.authorities, policy, kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
+	receiver := kernel.Receiver{Changes: changes, Authorities: l.authorities, Policy: policy}
+	record, err := receiver.Receive(kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
 		decided = true
 		if rules == nil {
 			return nil
