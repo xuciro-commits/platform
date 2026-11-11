@@ -10,6 +10,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -359,7 +360,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		return nil, err
 	}
 	if result.Version >= 8 {
-		if err := validateUniqueReplacements(draft, result.Unique); err != nil {
+		if err := runtimekernel.ValidateUniqueReplacements(draft, result.Unique); err != nil {
 			return nil, err
 		}
 	}

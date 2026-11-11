@@ -10,91 +10,17 @@ import (
 	"google.golang.org/protobuf/proto"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
-	controlowner "platformserver/services/security/control"
 	"reflect"
 	"slices"
 	"strings"
 	"time"
 )
-
-func acceptedIdentity(raw []byte) (resultIdentity, error) {
-	var identity resultIdentity
-	var envelope struct{ Kind string }
-	if err := json.Unmarshal(raw, &envelope); err != nil {
-		return identity, err
-	}
-	identity.Scope = "submission"
-	if envelope.Kind == "host-result" {
-		r, e := acceptedformat.DecodeHostControl(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "host"
-		return identity, e
-	}
-	if envelope.Kind == "composite-result" {
-		r, e := acceptedformat.DecodeComposite(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "composite"
-		return identity, e
-	}
-	if envelope.Kind == "usage-result" {
-		r, e := acceptedformat.DecodeUsage(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "usage"
-		return identity, e
-	}
-	if envelope.Kind == "agent-result" {
-		r, e := acceptedformat.DecodeAgent(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "agent"
-		return identity, e
-	}
-	if envelope.Kind == "operation-claim" {
-		result, err := acceptedformat.DecodeOperationClaim(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
-		return identity, err
-	}
-	if envelope.Kind == "refusal" {
-		result, sub, err := acceptedformat.DecodeRefusal(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, sub.GetIdempotencyKey(), result.RequestHash
-		return identity, err
-	}
-	if envelope.Kind == "record-batch" {
-		result, receipt, err := acceptedformat.DecodeBatch(raw)
-		if err != nil {
-			return identity, err
-		}
-		sub, err := acceptedformat.BatchSubmission(result, receipt)
-		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, sub.GetIdempotencyKey(), result.RequestHash
-		return identity, err
-	}
-	if envelope.Kind == "work-result" {
-		result, err := acceptedformat.DecodeWork(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
-		identity.Scope = "work"
-		return identity, err
-	}
-	if envelope.Kind == "input-result" {
-		result, err := acceptedformat.DecodeInput(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
-		identity.Scope = "input"
-		return identity, err
-	}
-	if envelope.Kind == "effect-result" {
-		result, err := acceptedformat.DecodeEffect(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, controlowner.PlatformApp, result.Key, result.RequestHash
-		identity.Scope = "effect"
-		return identity, err
-	}
-	if envelope.Kind == "release-result" {
-		result, err := acceptedformat.DecodeRelease(raw)
-		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
-		return identity, err
-	}
-	result, receipt, err := acceptedformat.DecodeRecord(raw)
-	identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, receipt.GetSubmission().GetIdempotencyKey(), result.RequestHash
-	return identity, err
-}
 
 func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
 	if err := d.checkFinalConstraints(); err != nil {
@@ -320,7 +246,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	}
 	draft.Unlock()
 	if result.Version >= 5 {
-		if err := validateUniqueReplacements(draft, result.Unique); err != nil {
+		if err := runtimekernel.ValidateUniqueReplacements(draft, result.Unique); err != nil {
 			return false, err
 		}
 	}
@@ -367,7 +293,7 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 			t.quarantine(fmt.Errorf("accepted result commit could not be resolved: %w", err))
 		}
 		if err == nil && t.RuntimePosition != nil && t.RuntimePosition() > before {
-			delta, decodeErr := StorageDelta(raw)
+			delta, decodeErr := storageDelta(raw)
 			if decodeErr != nil {
 				t.quarantine(fmt.Errorf("committed state delta: %w", decodeErr))
 				return nil, decodeErr

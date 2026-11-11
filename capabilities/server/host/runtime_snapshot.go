@@ -86,7 +86,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 	changed := map[string]persistence.StateRecord{}
 	owners := map[string]json.RawMessage{}
 	for _, entry := range entries {
-		delta, err := StorageDelta(entry.Body)
+		delta, err := storageDelta(entry.Body)
 		if err != nil {
 			return err
 		}

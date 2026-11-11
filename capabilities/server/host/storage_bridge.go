@@ -3,7 +3,9 @@ package host
 import (
 	"context"
 
+	runtimekernel "platformserver/kernel"
 	persistence "platformserver/kernel/store"
+	aistate "platformserver/services/ai/state"
 )
 
 type (
@@ -16,15 +18,19 @@ type (
 type resultIdentity = persistence.Identity
 
 func OpenJournal(ctx context.Context, url string) (*persistence.Postgres, error) {
-	j, err := persistence.OpenPostgres(ctx, url, acceptedIdentity)
+	j, err := persistence.OpenPostgres(ctx, url, runtimekernel.AcceptedIdentity)
 	if err == nil {
-		j.Delta = StorageDelta
+		j.Delta = storageDelta
 	}
 	return j, err
 }
 
+func storageDelta(raw []byte) (persistence.StateDelta, error) {
+	return runtimekernel.StorageDelta(raw, aistate.ApplyUsageState)
+}
+
 func OpenFileJournal(dir string) (*persistence.File, error) {
-	return persistence.OpenFile(dir, acceptedIdentity)
+	return persistence.OpenFile(dir, runtimekernel.AcceptedIdentity)
 }
 
 var journalPool = persistence.Pool

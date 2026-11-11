@@ -18,6 +18,8 @@ import (
 	"time"
 )
 
+const EffectApp = controlowner.PlatformApp
+
 type RuntimeAgent struct {
 	Version     int                      `json:"version"`
 	Kind        string                   `json:"kind"`

@@ -1,4 +1,4 @@
-package host
+package kernel
 
 import (
 	"encoding/json"
@@ -11,13 +11,14 @@ import (
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
-	"platformserver/services/ai/state"
 	"slices"
 	"strings"
 )
 
-func StorageDelta(raw []byte) (persistence.StateDelta, error) {
-	b := storageDeltaBuilder{records: map[string]persistence.StateRecord{}, changes: map[string]persistence.StateChange{}, values: map[string]persistence.StateValue{}, unique: map[string]persistence.StateUnique{}}
+type UsageApplier func(json.RawMessage, platform.AIUsage) (json.RawMessage, error)
+
+func StorageDelta(raw []byte, applyUsage UsageApplier) (persistence.StateDelta, error) {
+	b := storageDeltaBuilder{applyUsage: applyUsage, records: map[string]persistence.StateRecord{}, changes: map[string]persistence.StateChange{}, values: map[string]persistence.StateValue{}, unique: map[string]persistence.StateUnique{}}
 	if err := b.accepted(raw); err != nil {
 		return persistence.StateDelta{}, err
 	}
@@ -29,6 +30,7 @@ func StorageDelta(raw []byte) (persistence.StateDelta, error) {
 }
 
 type storageDeltaBuilder struct {
+	applyUsage   UsageApplier
 	records      map[string]persistence.StateRecord
 	replacements []persistence.StateReplacement
 	changes      map[string]persistence.StateChange
@@ -49,7 +51,7 @@ func (b *storageDeltaBuilder) value(owner, key string, image any) {
 }
 
 func (b *storageDeltaBuilder) meter(usage platform.AIUsage) {
-	b.valueUpdates = append(b.valueUpdates, persistence.StateValueUpdate{Owner: "app-state", Key: platform.AIApp, Apply: func(raw json.RawMessage) (json.RawMessage, error) { return aistate.ApplyUsageState(raw, usage) }})
+	b.valueUpdates = append(b.valueUpdates, persistence.StateValueUpdate{Owner: "app-state", Key: platform.AIApp, Apply: func(raw json.RawMessage) (json.RawMessage, error) { return b.applyUsage(raw, usage) }})
 }
 
 func (b *storageDeltaBuilder) record(r records.Image, base int) error {
