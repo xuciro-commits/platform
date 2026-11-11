@@ -4,9 +4,11 @@ import records "platformserver/kernel/records"
 
 import (
 	"maps"
+	"platformserver/services/actions"
 	pageowner "platformserver/services/apps/pages"
 	dataowner "platformserver/services/data"
 	"platformserver/services/functions/authoring"
+	ontology "platformserver/services/ontology"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,12 +25,12 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	for _, info := range t.Entities(m) {
 		entities[info.Type] = info
 	}
-	actions := map[string]platform.Action{}
+	actionsByName := map[string]platform.Action{}
 	for _, action := range t.Catalog(m) {
-		actions[action.Schema] = action
+		actionsByName[action.Schema] = action
 	}
 	sources := retainedPageDefinitionSources{tenant: t}
-	pages := pageowner.DefinitionProjection{Member: m, Entities: entities, Actions: actions, Definitions: registeredDefinitions, Criteria: t.modelCriteria, Function: sources.function, Operation: sources.operation,
+	pages := pageowner.DefinitionProjection{Member: m, Entities: entities, Actions: actionsByName, Definitions: registeredDefinitions, Criteria: t.modelCriteria, Function: sources.function, Operation: sources.operation,
 		CheckQuery: func(q platform.NamedQuery, info platform.EntityInfo) error {
 			return checkNamedQuery(q, info, t.services.Rules)
 		}}
@@ -59,7 +61,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 			def.Entity = &info
 		case platform.AssetAction:
-			action, ok := actions[def.Ref.Name]
+			action, ok := actionsByName[def.Ref.Name]
 			if !ok {
 				continue
 			}
@@ -68,62 +70,9 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.ObjectTypeGroup == nil || !m.Active() || t.Admits(m) != nil {
 				continue
 			}
-		case platform.AssetPropertyType:
-			if def.PropertyType == nil {
+		case platform.AssetPropertyType, platform.AssetValueType, platform.AssetLinkType:
+			if !ontology.ProjectDefinition(&def, entities, m.Holds(def.Ref.App, "builder")) {
 				continue
-			}
-			visible := func(version string) bool {
-				if m.Holds(def.Ref.App, "builder") {
-					return true
-				}
-				return definitionVersionVisible(entities, def.Ref, version, func(f platform.FieldInfo) *platform.AssetBinding { return f.Property })
-			}
-			versions, currentVisible := retainVisibleDefinitionVersions(def.PropertyVersions, def.Version, visible)
-			def.PropertyVersions = versions
-			if !currentVisible {
-				def.PropertyType = nil
-				if len(versions) == 0 {
-					continue
-				}
-			}
-		case platform.AssetValueType:
-			if def.ValueType == nil {
-				continue
-			}
-			visible := func(version string) bool {
-				if m.Holds(def.Ref.App, "builder") {
-					return true
-				}
-				return definitionVersionVisible(entities, def.Ref, version, func(f platform.FieldInfo) *platform.AssetBinding { return f.ValueType })
-			}
-			versions, currentVisible := retainVisibleDefinitionVersions(def.ValueVersions, def.Version, visible)
-			def.ValueVersions = versions
-			if !currentVisible {
-				def.ValueType = nil
-				if len(versions) == 0 {
-					continue
-				}
-			}
-		case platform.AssetLinkType:
-			if def.LinkType == nil {
-				continue
-			}
-			def.LinkVersions = maps.Clone(def.LinkVersions)
-			visible := func(l platform.LinkType) bool {
-				parent, pok := entities[l.Parent.Name]
-				child, cok := entities[l.Child.Name]
-				return pok && cok && l.CheckSchema(parent, child) == nil
-			}
-			for version, l := range def.LinkVersions {
-				if !visible(l) {
-					delete(def.LinkVersions, version)
-				}
-			}
-			if !visible(*def.LinkType) {
-				def.LinkType = nil
-				if len(def.LinkVersions) == 0 {
-					continue
-				}
 			}
 		case platform.AssetQuery:
 			if def.Query == nil {
@@ -210,61 +159,31 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if !t.authorizeNative(caller, def.Ref.Name, "read", declaration.Roles, true).Allow {
 				continue
 			}
-			info, found := entities[declaration.Object.Name]
-			if !found {
+			visible, ok := dataowner.ProjectObservation(declaration, entities, actionsByName)
+			if !ok {
 				continue
 			}
-			if _, found := info.Field(declaration.DeviceField); !found {
-				continue
-			}
-			visible := *declaration
-			if visible.Decision != nil {
-				readable := true
-				for _, name := range dataowner.ObservationDecisionFields(*visible.Decision) {
-					if _, found := info.Field(name); !found {
-						readable = false
-					}
-				}
-				if _, found := actions[visible.Decision.Action.Name]; !found || !readable {
-					visible.Decision = nil
-				}
-			}
-			def.Observation = &visible
+			def.Observation = visible
 		case platform.AssetInterface:
-			if def.Interface == nil {
-				continue
-			}
-			if !m.Holds("build", "builder") && !slices.ContainsFunc(slices.Collect(maps.Values(entities)), func(info platform.EntityInfo) bool { return slices.Contains(info.Implements, def.Ref.Name) }) {
+			if !ontology.ProjectDefinition(&def, entities, m.Holds("build", "builder")) {
 				continue
 			}
 		case platform.AssetProtocol:
 			if def.Protocol == nil || !m.Active() {
 				continue
 			}
-			projected := *def.Protocol
-			projected.ActionBindings = maps.Clone(projected.ActionBindings)
-			projected.ActionRoles = maps.Clone(projected.ActionRoles)
-			projected.Actions = slices.DeleteFunc(slices.Clone(projected.Actions), func(action platform.Action) bool {
-				binding := projected.ActionBindings[action.Schema]
-				_, ok := actions[binding.Name]
-				if !ok {
-					delete(projected.ActionBindings, action.Schema)
-					delete(projected.ActionRoles, action.Schema)
-				}
-				return !ok
-			})
-			projected.Reads = slices.DeleteFunc(slices.Clone(projected.Reads), func(name string) bool {
+			projected, ok := actions.ProjectProtocol(*def.Protocol, actionsByName, func(name string) bool {
 				for _, provision := range t.App(def.Ref.App).Manifest().Provides {
-					if provision.Protocol.Name == projected.Name {
-						return !t.authorizeEntry(m, def.Ref.App, provision.Reads[name], "read", Now()).Allow
+					if provision.Protocol.Name == def.Protocol.Name {
+						return t.authorizeEntry(m, def.Ref.App, provision.Reads[name], "read", Now()).Allow
 					}
 				}
-				return true
+				return false
 			})
-			if len(projected.Actions) == 0 && len(projected.Reads) == 0 {
+			if !ok {
 				continue
 			}
-			def.Protocol = &projected
+			def.Protocol = projected
 		default:
 			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
 			info, ok := entities[typ]
@@ -380,27 +299,6 @@ func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {
 		}
 	}
 	return false
-}
-
-func definitionVersionVisible(entities map[string]platform.EntityInfo, ref platform.AssetRef, version string, pick func(platform.FieldInfo) *platform.AssetBinding) bool {
-	for _, entity := range entities {
-		for _, field := range entity.Fields {
-			if binding := pick(field); binding != nil && binding.Ref == ref && binding.SourceVersion == version {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func retainVisibleDefinitionVersions[V any](versions map[string]V, current string, visible func(string) bool) (map[string]V, bool) {
-	retained := maps.Clone(versions)
-	for version := range retained {
-		if !visible(version) {
-			delete(retained, version)
-		}
-	}
-	return retained, visible(current)
 }
 
 type retainedPageDefinitionSources struct{ tenant *Tenant }
