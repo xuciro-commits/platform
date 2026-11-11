@@ -29,7 +29,7 @@ func (d *stagedDecision) savedChangePlan() (acceptedformat.ChangePlan, error) {
 type preparedAcceptedChanges struct {
 	plan    acceptedformat.ChangePlan
 	records *records.Store
-	child   *preparedAcceptedBatch
+	child   *runtimekernel.PreparedBatch
 }
 
 func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*preparedAcceptedChanges, error) {
@@ -70,7 +70,7 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 	if len(plan.Rows) > 0 {
 		base := t.Projection
 		if prepared.child != nil {
-			base = prepared.child.records
+			base = prepared.child.Records
 		}
 		prepared.records, err = runtimekernel.ApplyDirectRows(base, plan.Rows, plan.Member, plan.At, checkRunApplicationBindings)
 		if err != nil {
@@ -78,14 +78,14 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 		}
 		if prepared.child != nil {
 			prepared.records.ExtendDecision(base)
-			prepared.child.records = prepared.records
+			prepared.child.Records = prepared.records
 			prepared.records = nil
 		}
 	}
 	if plan.CheckUnique {
 		records := prepared.records
 		if prepared.child != nil {
-			records = prepared.child.records
+			records = prepared.child.Records
 		}
 		if records == nil {
 			records = t.Projection.ForkRecords()
@@ -123,7 +123,7 @@ func (p *preparedAcceptedChanges) apply(t *Tenant) error {
 
 func (p *preparedAcceptedChanges) publish(t *Tenant) {
 	if p.child != nil {
-		t.publishAcceptedBatch(p.child.result)
+		t.publishAcceptedBatch(p.child.Result)
 	}
 }
 

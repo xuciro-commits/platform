@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
@@ -34,13 +35,13 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 	}
 	if len(saved.Installations) > 0 {
 		records := t.Projection
-		var bootstrap *preparedAcceptedBatch
+		var bootstrap *runtimekernel.PreparedBatch
 		if len(saved.Bootstrap) > 0 {
 			bootstrap, err = t.prepareAcceptedBatch(t.App(saved.App).AcceptedLedger(), saved.Bootstrap)
 			if err != nil || bootstrap == nil {
 				return saved, fmt.Errorf("release bootstrap cannot prepare: %v", err)
 			}
-			records = bootstrap.records
+			records = bootstrap.Records
 		}
 		view, err := t.assetInstallationView(records)
 		if err != nil {
@@ -68,7 +69,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 			return saved, err
 		}
 		if bootstrap != nil {
-			bootstrap.records = draft.Projection
+			bootstrap.Records = draft.Projection
 			if _, err := t.promoteAcceptedBatch(bootstrap); err != nil {
 				return saved, err
 			}
@@ -91,7 +92,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 			}
 		}
 		if bootstrap != nil {
-			t.publishAcceptedBatch(bootstrap.result)
+			t.publishAcceptedBatch(bootstrap.Result)
 			t.enqueue(saved.At)
 		}
 	}

@@ -207,16 +207,6 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	return raw, nil
 }
 
-type preparedAcceptedBatch struct {
-	installation *Tenant
-	result       acceptedformat.Batch
-	records      *records.Store
-	ledgers      map[string]*platform.Ledger
-	changes      map[string]*pb.ChangeRecord
-	key          string
-	raw          []byte
-}
-
 func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error) {
 	prepared, err := t.prepareAcceptedBatch(l, raw)
 	if err != nil || prepared == nil {
@@ -225,232 +215,115 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	return t.promoteAcceptedBatch(prepared)
 }
 
-func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*preparedAcceptedBatch, error) {
-	result, receipt, err := acceptedformat.DecodeBatch(raw)
-	if err != nil {
-		return nil, err
-	}
-	owner, ok := t.App(result.App).(platform.App)
-	if result.Tenant != t.ID || !ok || owner.AcceptedLedger() != l {
-		return nil, fmt.Errorf("record batch belongs to another tenant or ledger")
-	}
-	sub, _ := acceptedformat.BatchSubmission(result, receipt)
-	if len(result.Claims) > 0 {
-		if _, err := t.sourceFacts(sub.GetTarget().GetType(), sub.GetTarget().GetId(), receipt.GetChangeId(), &preparedSourceClaim{origin: result.Origin, claims: result.Claims}); err != nil {
-			return nil, err
-		}
-	}
-	key := result.App + "/" + sub.GetIdempotencyKey()
-	if saved := t.Committed.Answer(key); len(saved) > 0 {
-		prior, answer, err := acceptedformat.DecodeBatch(saved)
-		if err != nil || prior.RequestHash != result.RequestHash || !proto.Equal(answer, receipt) {
-			return nil, fmt.Errorf("record batch key belongs to another answer")
-		}
-		return nil, nil
-	}
-	answerOwner, ok := t.App(receipt.GetSubmission().GetAuthority()).(platform.App)
-	if !ok {
-		return nil, fmt.Errorf("record batch answer has no authority")
-	}
-	if prior := answerOwner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()); prior != nil {
-		if !proto.Equal(prior, receipt) {
-			return nil, fmt.Errorf("record batch key belongs to another result")
-		}
-		return nil, nil
-	}
-	ledgers := map[string]*platform.Ledger{}
-	changes := map[string]*pb.ChangeRecord{}
-	for _, decision := range result.Decisions {
-		ra, ok := t.App(decision.Event.App).(platform.App)
-		if !ok {
-			return nil, fmt.Errorf("record batch needs missing authority %s", decision.Event.App)
-		}
-		ledgers[decision.Event.App] = ra.AcceptedLedger()
-		for _, subscriber := range decision.Event.Subscribers {
-			if t.App(subscriber) == nil {
-				return nil, fmt.Errorf("record batch needs missing subscriber %s", subscriber)
-			}
-		}
-		r := new(pb.ChangeRecord)
-		if err := protojson.Unmarshal(decision.Receipt, r); err != nil {
-			return nil, err
-		}
-		if _, refused := t.Committed.Refusal(decision.Event.App + "/" + r.GetSubmission().GetIdempotencyKey()); refused {
-			return nil, fmt.Errorf("record batch reused a refused child key")
-		}
-		changes[decision.Event.App+"/"+r.GetChangeId()] = r
-	}
-	draft := t.Projection.ForkRecords()
-	if err := t.validateAcceptedControl(result.Control); err != nil {
-		return nil, err
-	}
-	if err := t.notices.Check(result.Notices); err != nil {
-		return nil, err
-	}
-	if err := t.validateAcceptedIntents(result.Intents); err != nil {
-		return nil, err
-	}
-	if err := t.validateAcceptedObservations(result.Observations); err != nil {
-		return nil, err
-	}
-	if err := runtimekernel.CheckStates(t.states, result.States); err != nil {
-		return nil, err
-	}
-	if err := t.validateOperationCancellations(result.Operations); err != nil {
-		return nil, err
-	}
-	for i, decision := range result.Decisions {
-		if decision.Publication == nil {
-			continue
-		}
-		publisher, ok := t.App(decision.Event.App).(platform.AcceptedPublisher)
-		if !ok || !slices.Contains(publisher.AcceptedPublicationSchemas(), decision.Publication.Schema) ||
-			decision.Publication.Schema != decision.Event.Names[0] {
-			return nil, fmt.Errorf("record batch has an invalid publication")
-		}
-		r := changes[decision.Event.App+"/"+acceptedformat.ReceiptID(decision.Receipt)]
-		if r == nil {
-			return nil, fmt.Errorf("publication has no receipt")
-		}
-		et := draft.Type(r.GetSubmission().GetTarget().GetType())
-		if et == nil {
-			return nil, fmt.Errorf("publication record type is unavailable")
-		}
-		decoded, err := records.DecodeFormattedImage(et.Info(), decision.Publication.Image, nil, draft.Current().Release(), decision.Publication.Format)
-		if err != nil {
-			return nil, err
-		}
-		copy := *decision.Publication
-		copy.Image = decoded
-		copy.Format = et.Info().RecordFormat
-		result.Decisions[i].Publication = &copy
-		if err := publisher.ValidateAcceptedPublication(copy.Schema, copy.Image); err != nil {
-			return nil, err
-		}
-	}
-	if err := t.prepareCallbackRows(draft, result.DirectRows, result.At); err != nil {
-		return nil, err
-	}
-	if err := runtimekernel.ApplyBatchRows(draft, result, t.ID, t.ownerLedger, ledgers, changes, checkRunApplicationBindings); err != nil {
-		return nil, err
-	}
-	var installation *Tenant
-	if len(result.Definitions) > 0 {
-		installation, err = t.prepareBatchDefinitions(draft, result.Definitions)
-		if err != nil {
-			return nil, err
-		}
-		draft = installation.Projection
-	}
-	for _, decision := range result.Decisions {
-		if p := decision.Publication; p != nil {
-			if err := t.installPublicationLinkConstraint(draft, p.Schema, p.Image); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if err := draft.ValidateChangedLinkConstraints(); err != nil {
-		return nil, err
-	}
-	if result.Version >= 8 {
-		if err := runtimekernel.ValidateUniqueReplacements(draft, result.Unique); err != nil {
-			return nil, err
-		}
-	}
-	if err := t.sequences.Check(result.SequenceBases, result.Sequences); err != nil {
-		return nil, err
-	}
-	checks := map[string]*kernel.ChangeLog{}
-	for app, ledger := range ledgers {
-		checks[app] = ledger.ForkAcceptedChanges()
-	}
-	for _, decision := range result.Decisions {
-		r := changes[decision.Event.App+"/"+acceptedformat.ReceiptID(decision.Receipt)]
-		if changed, err := checks[decision.Event.App].ApplyAccepted(r); err != nil || !changed {
-			return nil, fmt.Errorf("record batch ledger validation: %v (new=%t)", err, changed)
-		}
-	}
-	return &preparedAcceptedBatch{result: result, records: draft, ledgers: ledgers, changes: changes, key: key, raw: raw, installation: installation}, nil
+func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*runtimekernel.PreparedBatch, error) {
+	return t.PrepareBatch(l, raw, t.batchApply())
 }
 
-func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, error) {
-	result, draft := prepared.result, prepared.records
-	ledgers, changes, key, raw := prepared.ledgers, prepared.changes, prepared.key, prepared.raw
-	for _, decision := range result.Decisions {
-		r := changes[decision.Event.App+"/"+acceptedformat.ReceiptID(decision.Receipt)]
-		if changed, err := ledgers[decision.Event.App].ApplyAcceptedChange(r); err != nil || !changed {
-			return false, fmt.Errorf("record batch ledger application: %v (new=%t)", err, changed)
-		}
+func (t *Tenant) promoteAcceptedBatch(prepared *runtimekernel.PreparedBatch) (bool, error) {
+	return t.PromoteBatch(prepared, t.batchApply())
+}
+
+func (t *Tenant) batchApply() runtimekernel.BatchApply {
+	return runtimekernel.BatchApply{App: t.App, OwnerLedger: t.ownerLedger, CheckBindings: checkRunApplicationBindings, DefinitionType: build.AppType,
+		Claims: func(result acceptedformat.Batch, receipt *pb.ChangeRecord) error {
+			if len(result.Claims) == 0 {
+				return nil
+			}
+			sub, _ := acceptedformat.BatchSubmission(result, receipt)
+			_, err := t.sourceFacts(sub.GetTarget().GetType(), sub.GetTarget().GetId(), receipt.GetChangeId(), &preparedSourceClaim{origin: result.Origin, claims: result.Claims})
+			return err
+		},
+		Check: func(result acceptedformat.Batch) error {
+			if err := t.validateAcceptedControl(result.Control); err != nil {
+				return err
+			}
+			if err := t.notices.Check(result.Notices); err != nil {
+				return err
+			}
+			if err := t.validateAcceptedIntents(result.Intents); err != nil {
+				return err
+			}
+			if err := t.validateAcceptedObservations(result.Observations); err != nil {
+				return err
+			}
+			if err := runtimekernel.CheckStates(t.states, result.States); err != nil {
+				return err
+			}
+			return t.validateOperationCancellations(result.Operations)
+		},
+		Rows: func(draft *records.Store, result acceptedformat.Batch) error {
+			return t.prepareCallbackRows(draft, result.DirectRows, result.At)
+		},
+		Install: func(draft *records.Store, result acceptedformat.Batch) (*records.Store, func() error, error) {
+			var install func() error
+			if len(result.Definitions) > 0 {
+				installation, err := t.prepareBatchDefinitions(draft, result.Definitions)
+				if err != nil {
+					return nil, nil, err
+				}
+				draft = installation.Projection
+				install = func() error { return t.installBatchDefinitions(installation, result.Definitions) }
+			}
+			for _, decision := range result.Decisions {
+				if p := decision.Publication; p != nil {
+					if err := t.installPublicationLinkConstraint(draft, p.Schema, p.Image); err != nil {
+						return nil, nil, err
+					}
+				}
+			}
+			return draft, install, nil
+		},
+		Sequences: func(result acceptedformat.Batch) error {
+			return t.sequences.Check(result.SequenceBases, result.Sequences)
+		},
+		Installed: func(result acceptedformat.Batch) error {
+			if len(result.Claims) == 0 {
+				return nil
+			}
+			answer := new(pb.ChangeRecord)
+			if err := protojson.Unmarshal(result.Receipt, answer); err != nil {
+				return err
+			}
+			sub := answer.GetSubmission()
+			return t.applySourceClaims(sub.GetTarget().GetType(), sub.GetTarget().GetId(), answer.GetChangeId(), result.At, &preparedSourceClaim{origin: result.Origin, claims: result.Claims})
+		},
+		Apply: func(result acceptedformat.Batch) error {
+			if err := t.applyAcceptedControl(result.Control); err != nil {
+				return err
+			}
+			if err := runtimekernel.ApplyStates(t.states, result.States); err != nil {
+				return err
+			}
+			return t.applyOperationCancellations(result.Operations)
+		},
+		Settle: func(result acceptedformat.Batch) error {
+			t.applyAcceptedNotices(result.Notices)
+			t.installAcceptedIntents(result.Intents)
+			if err := t.applyAcceptedObservations(result.Observations); err != nil {
+				return err
+			}
+			t.sequences.Set(result.Sequences)
+			return nil
+		}}
+}
+
+func (t *Tenant) installBatchDefinitions(installed *Tenant, definitions []platform.ReleaseInstallation) error {
+	t.setDefinitions(installed.definitions)
+	t.owner = t.rehome(installed.owner)
+	registry, err := t.assetRegistryLocked()
+	if err != nil {
+		return err
 	}
-	if err := t.Projection.PromoteRecords(draft); err != nil {
-		return false, err
-	}
-	if installed := prepared.installation; installed != nil {
-		t.setDefinitions(installed.definitions)
-		t.owner = t.rehome(installed.owner)
-		registry, err := t.assetRegistryLocked()
+	for _, installation := range definitions {
+		plan, err := releaseowner.InstallationPlan(registry, installation)
 		if err != nil {
-			return false, err
+			return err
 		}
-		for _, installation := range result.Definitions {
-			plan, err := releaseowner.InstallationPlan(registry, installation)
-			if err != nil {
-				return false, err
-			}
-			if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{}); err != nil {
-				return false, err
-			}
+		if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{}); err != nil {
+			return err
 		}
 	}
-	if len(result.Claims) > 0 {
-		answer := new(pb.ChangeRecord)
-		if err := protojson.Unmarshal(result.Receipt, answer); err != nil {
-			return false, err
-		}
-		sub := answer.GetSubmission()
-		if err := t.applySourceClaims(sub.GetTarget().GetType(), sub.GetTarget().GetId(), answer.GetChangeId(), result.At, &preparedSourceClaim{origin: result.Origin, claims: result.Claims}); err != nil {
-			return false, err
-		}
-	}
-	if slices.ContainsFunc(result.Rows, func(row acceptedformat.BatchRow) bool { return row.Type == build.AppType }) {
-		t.DefinitionEpoch.Add(1)
-	}
-	if err := t.applyAcceptedControl(result.Control); err != nil {
-		return false, err
-	}
-	if err := runtimekernel.ApplyStates(t.states, result.States); err != nil {
-		return false, err
-	}
-	if err := t.applyOperationCancellations(result.Operations); err != nil {
-		return false, err
-	}
-	for _, decision := range result.Decisions {
-		if p := decision.Publication; p != nil {
-			if err := t.App(decision.Event.App).(platform.AcceptedPublisher).ApplyAcceptedPublication(p.Schema, p.Image); err != nil {
-				return false, err
-			}
-		}
-	}
-	t.applyAcceptedNotices(result.Notices)
-	t.installAcceptedIntents(result.Intents)
-	if err := t.applyAcceptedObservations(result.Observations); err != nil {
-		return false, err
-	}
-	t.sequences.Set(result.Sequences)
-	for _, child := range result.Decisions {
-		t.Committed.SaveDecisionDefinition(child.Event.App, acceptedformat.ReceiptID(child.Receipt), child.Definition)
-	}
-	if result.SchemaVersion != nil {
-		_, request, _ := strings.Cut(key, "/")
-		t.Committed.SaveSchemaVersion(result.App, request, result.SchemaVersion)
-	}
-	answer := new(pb.ChangeRecord)
-	_ = protojson.Unmarshal(result.Receipt, answer)
-	input, _ := acceptedformat.BatchSubmission(result, answer)
-	if result.HasSavedAnswer(input) {
-		t.Committed.SaveAnswer(key, raw)
-	}
-	return true, nil
+	return nil
 }
 
 func (t *Tenant) publishAcceptedBatch(result acceptedformat.Batch) {

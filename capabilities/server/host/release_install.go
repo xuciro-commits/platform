@@ -167,7 +167,7 @@ func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, m
 		if err != nil || prepared == nil {
 			return nil, fmt.Errorf("upgrade bootstrap cannot prepare: %v", err)
 		}
-		records = prepared.records
+		records = prepared.Records
 	}
 	view, err := t.assetInstallationView(records)
 	if err != nil {
