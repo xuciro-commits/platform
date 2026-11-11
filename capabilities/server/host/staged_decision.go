@@ -34,7 +34,7 @@ type stagedDecision struct {
 	schemaVersion          *platform.SchemaVersion
 	authorizations         []acceptedformat.AuthorizationEvidence
 	iterations             []platform.TxnIteration
-	constraintWrites       map[string]constraintWrite
+	constraintWrites       map[string]runtimekernel.ConstraintWrite
 	callbackOrigin         *platform.Effect
 	callbackWrites         map[string]callbackWrite
 	control                *controlDecision
@@ -201,12 +201,12 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 	}
 	if err == nil {
 		if d.constraintWrites == nil {
-			d.constraintWrites = map[string]constraintWrite{}
+			d.constraintWrites = map[string]runtimekernel.ConstraintWrite{}
 		}
 		if _, exists := d.constraintWrites[ref]; !exists {
-			d.constraintWrites[ref] = constraintWrite{caller: c, before: before}
+			d.constraintWrites[ref] = runtimekernel.ConstraintWrite{Caller: c, Before: before}
 		}
-		err = d.checkRecordConstraints(c, info, d.records.Type(info.Type).Rows().Get(strings.TrimPrefix(ref, info.Type+"/")), before)
+		err = d.constraints().Record(c, info, d.records.Type(info.Type).Rows().Get(strings.TrimPrefix(ref, info.Type+"/")), before)
 	}
 	if err != nil && d.failure == nil {
 		d.failure = err

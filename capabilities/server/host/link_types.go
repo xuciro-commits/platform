@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
 	releaseowner "platformserver/services/devops/releases"
@@ -24,12 +25,12 @@ func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
 	if l.Storage == "edge" {
 		h.t.Projection.Lock()
 		defer h.t.Projection.Unlock()
-		violations, err := ownedRelationViolations(h.t.Projection, l)
+		violations, err := records.RelationViolations(h.t.Projection, l)
 		if err != nil {
 			return err
 		}
 		if len(violations) > 0 {
-			return fmt.Errorf("owned relationship %s violates %s", l.Name, violations[0].reason)
+			return fmt.Errorf("owned relationship %s violates %s", l.Name, violations[0].Reason)
 		}
 		return nil
 	}

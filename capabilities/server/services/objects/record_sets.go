@@ -265,7 +265,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 	for _, row := range rows {
 		value := reflect.New(reflect.TypeOf(row)).Elem()
 		value.Set(reflect.ValueOf(row))
-		rowValues := constraintValues(et.Info(), value)
+		rowValues := records.ConstraintValues(et.Info(), value)
 		keep := true
 		for _, where := range predicates {
 			value, err := evaluate(where, rowValues)

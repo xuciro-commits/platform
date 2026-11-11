@@ -1,7 +1,6 @@
 package host
 
 import (
-	"encoding/json"
 	"platformserver/kernel/records"
 	"reflect"
 	"slices"
@@ -12,13 +11,6 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
-
-type ownedRelationImage struct {
-	platform.Record
-	Binding, Version, Parent, Child string
-	Migration                       bool
-	Legacy                          []platform.RelationLink
-}
 
 func appendOwnedRelationNeighbors(out []string, links []platform.RelationLink, entity string) []string {
 	for _, link := range links {
@@ -31,16 +23,8 @@ func appendOwnedRelationNeighbors(out []string, links []platform.RelationLink, e
 	return out
 }
 
-func relationImage(row *records.Row) ownedRelationImage {
-	var image ownedRelationImage
-	if row != nil {
-		_ = json.Unmarshal(platform.Raw(row.Value.Interface()), &image)
-	}
-	return image
-}
-
 func relationMigrationID(binding platform.AssetRef) string {
-	return ownedRelationID(binding.String(), "migration", "migration")
+	return records.RelationID(binding.String(), "migration", "migration")
 }
 
 func (t *Tenant) relationMigrationPlan(store *records.Store, c platform.Caller, binding platform.AssetBinding, at time.Time) (platform.RelationMigrationPlan, *kernel.Error) {
@@ -59,7 +43,7 @@ func (t *Tenant) relationMigrationPlan(store *records.Store, c platform.Caller, 
 		defer store.Unlock()
 		et = store.Type(platform.OwnedRelationType(c.App))
 		if et != nil {
-			plan.Migrated = relationImage(et.Rows().Get(relationMigrationID(binding.Ref))).Migration
+			plan.Migrated = records.ReadRelation(et.Rows().Get(relationMigrationID(binding.Ref))).Migration
 		}
 	}()
 	if et == nil {
@@ -140,7 +124,7 @@ func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.Ch
 		parentType, parentID, _ := strings.Cut(parent, "/")
 		childType, childID, _ := strings.Cut(child, "/")
 		request := platform.TxnLink{Binding: binding, Parent: platform.TxnRef{Type: parentType, ID: parentID}, Child: platform.TxnRef{Type: childType, ID: childID}}
-		id := ownedRelationID(binding.Ref.String(), parent, child)
+		id := records.RelationID(binding.Ref.String(), parent, child)
 		prior := d.records.Type(entity.Type).Rows().Get(id)
 		if prior != nil && !records.Header(prior.Value).Archived {
 			return fail(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration overlaps an existing owned relationship"))
@@ -160,7 +144,7 @@ func (t *Tenant) ownedRelations(store *records.Store, c platform.Caller, entity 
 	store.Lock()
 	types := []*records.Type{}
 	for _, et := range store.Types() {
-		if !ownedRelationSchema(et.Info()) {
+		if !records.IsRelationSchema(et.Info()) {
 			continue
 		}
 		types = append(types, et)
@@ -177,7 +161,7 @@ func (t *Tenant) ownedRelations(store *records.Store, c platform.Caller, entity 
 		}
 		set := platform.ObjectSet{Object: et.Info().Type, Filter: &filter}
 		if err := t.objectOwner(store).VisitRawSet(store, c, set, at, func(value reflect.Value) {
-			image := relationImage(&records.Row{Value: value})
+			image := records.ReadRelation(&records.Row{Value: value})
 			if !t.readableIn(store, c.Member, image.Parent, at) || !t.readableIn(store, c.Member, image.Child, at) {
 				return
 			}
@@ -203,11 +187,11 @@ func (t *Tenant) legacyRelationActive(store *records.Store, link platform.Relati
 	store.Lock()
 	defer store.Unlock()
 	for _, et := range store.Types() {
-		if !ownedRelationSchema(et.Info()) {
+		if !records.IsRelationSchema(et.Info()) {
 			continue
 		}
 		for _, row := range et.Rows().All() {
-			image := relationImage(row)
+			image := records.ReadRelation(row)
 			if !image.Migration || image.Archived {
 				continue
 			}
