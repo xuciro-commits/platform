@@ -21,6 +21,7 @@ import (
 	controlowner "platformserver/services/security/control"
 
 	"platformserver/platform"
+	"platformserver/services/data/lineage"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -75,12 +76,9 @@ type Tenant struct {
 	readMarkings          *readMarkingCache
 	defGen                atomic.Uint64
 	streamMu              sync.Mutex
+	lineageCache          lineage.Cache[*branchWorld]
 	markingMu             sync.Mutex
 	markings              markingIndex
-	lineageMu             sync.Mutex
-	lineageCache          *lineageSnapshot
-	lineageBranches       map[string]*lineageSnapshot
-	lineageWorlds         map[string]*branchWorld
 	apps                  []platform.App
 	appIndex              map[string]int
 	releases              releases.Store

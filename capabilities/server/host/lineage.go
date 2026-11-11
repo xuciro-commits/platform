@@ -75,15 +75,6 @@ type LineageRequest struct {
 	Field     string
 }
 
-type lineageSnapshot struct {
-	generation uint64
-	raw        lineage.Input
-	base       map[string]lineage.Meta
-	preview    lineage.Graph
-	guard      lineage.Graph
-	builtAt    time.Time
-}
-
 func (t *Tenant) lineage(ctx context.Context, m platform.Member, request LineageRequest) (Lineage, *kernel.Error) {
 	return recordRead(t, ctx, func(t *Tenant) (Lineage, *kernel.Error) {
 		return t.lineageLocked(m, request)
@@ -98,15 +89,11 @@ func (t *Tenant) lineageLocked(m platform.Member, request LineageRequest) (Linea
 		return Lineage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	now := time.Now()
-	var raw lineage.Input
-	var base map[string]lineage.Meta
+	var snapshot lineage.Snapshot
 	var meta map[string]lineage.Meta
 	var visible map[string]bool
 	var focus string
 	var refusal *kernel.Error
-	var preview, guard lineage.Graph
-	var generation uint64
-	var builtAt time.Time
 	if request.Branch != "" {
 		mainGeneration := t.Projection.Generation()
 		branch, branchRefusal := t.readBranchLocked(m, request.Branch, now)
@@ -114,62 +101,33 @@ func (t *Tenant) lineageLocked(m platform.Member, request LineageRequest) (Linea
 			return Lineage{}, branchRefusal
 		}
 		cacheKey := request.Branch + ":" + strconv.FormatUint(mainGeneration, 10) + ":" + strconv.FormatUint(uint64(branch.Revision), 10)
-		t.lineageMu.Lock()
-		world, cachedWorld := t.lineageWorlds[cacheKey]
-		t.lineageMu.Unlock()
+		world, cachedWorld := t.lineageCache.World(cacheKey)
 		if !cachedWorld {
 			built, refusal := t.branchWorldLocked(m, request.Branch, now)
 			if refusal != nil {
 				return Lineage{}, refusal
 			}
 			world = &built
-			t.lineageMu.Lock()
-			if t.lineageWorlds == nil {
-				t.lineageWorlds = map[string]*branchWorld{}
-			}
-			if len(t.lineageWorlds) >= 8 {
-				clear(t.lineageWorlds)
-			}
-			t.lineageWorlds[cacheKey] = world
-			t.lineageMu.Unlock()
+			t.lineageCache.KeepWorld(cacheKey, world)
 		}
 		branchStore := world.view.Projection
-		generation = mainGeneration
-		t.lineageMu.Lock()
-		cachedGraph := t.lineageBranches[cacheKey]
-		t.lineageMu.Unlock()
-		if cachedGraph != nil {
-			raw, base, preview, guard = cachedGraph.raw, cachedGraph.base, cachedGraph.preview.Clone(), cachedGraph.guard.Clone()
-			builtAt = cachedGraph.builtAt
-			branchStore.Lock()
-			meta, visible = world.view.lineageAccessLocked(branchStore, m, base)
-			focus, refusal = world.view.lineageFocusLocked(branchStore, request)
-			branchStore.Unlock()
+		branchStore.Lock()
+		if cached := t.lineageCache.Branch(cacheKey); cached != nil {
+			snapshot = *cached
 		} else {
-			branchStore.Lock()
-			raw = world.view.lineageRecordsLocked(branchStore)
-			base = world.view.lineageBaseMetaLocked(branchStore, raw)
-			meta, visible = world.view.lineageAccessLocked(branchStore, m, base)
-			focus, refusal = world.view.lineageFocusLocked(branchStore, request)
-			branchStore.Unlock()
-			if refusal == nil {
-				raw.Meta = base
-				preview = lineage.Build(raw, lineage.Preview)
-				guard = t.lineageMainSnapshot().guard.Clone()
-				builtAt = now
-				t.lineageMu.Lock()
-				if t.lineageBranches == nil {
-					t.lineageBranches = map[string]*lineageSnapshot{}
-				}
-				if len(t.lineageBranches) >= 8 {
-					clear(t.lineageBranches)
-				}
-				t.lineageBranches[cacheKey] = &lineageSnapshot{generation: mainGeneration, raw: raw, base: base, preview: preview.Clone(), guard: guard.Clone(), builtAt: builtAt}
-				t.lineageMu.Unlock()
-			}
+			snapshot.Raw = world.view.lineageRecordsLocked(branchStore)
+			snapshot.Base = world.view.lineageBaseMetaLocked(branchStore, snapshot.Raw)
 		}
+		meta, visible = world.view.lineageAccessLocked(branchStore, m, snapshot.Base)
+		focus, refusal = world.view.lineageFocusLocked(branchStore, request)
+		branchStore.Unlock()
 		if refusal != nil {
 			return Lineage{}, refusal
+		}
+		if snapshot.BuiltAt.IsZero() {
+			snapshot.Raw.Meta = snapshot.Base
+			snapshot = lineage.Snapshot{Generation: mainGeneration, Raw: snapshot.Raw, Base: snapshot.Base, Preview: lineage.Build(snapshot.Raw, lineage.Preview), Guard: t.lineageMainSnapshot().Guard, BuiltAt: now}
+			t.lineageCache.KeepBranch(cacheKey, snapshot)
 		}
 	} else {
 		t.Projection.Lock()
@@ -178,141 +136,57 @@ func (t *Tenant) lineageLocked(m platform.Member, request LineageRequest) (Linea
 		if refusal != nil {
 			return Lineage{}, refusal
 		}
-		snapshot := t.lineageMainSnapshot()
-		raw, base, preview, guard = snapshot.raw, snapshot.base, snapshot.preview.Clone(), snapshot.guard.Clone()
-		generation, builtAt = snapshot.generation, snapshot.builtAt
+		snapshot = t.lineageMainSnapshot()
 		t.Projection.Lock()
-		meta, visible = t.lineageAccessLocked(t.Projection, m, base)
+		meta, visible = t.lineageAccessLocked(t.Projection, m, snapshot.Base)
 		t.Projection.Unlock()
 	}
-	if request.Mode == "" {
-		if focus != "" || request.Ref != "" {
-			request.Mode = "focus"
-		} else {
-			request.Mode = "overview"
-		}
+	raw := snapshot.Raw
+	raw.Meta = snapshot.Base
+	shaped, refusal := lineage.Shape(lineage.Request{
+		Params: lineage.Params{Mode: request.Mode, Project: request.Project, Focus: focus, Direction: request.Direction, Depth: request.Depth, NodeLimit: request.NodeLimit, EdgeLimit: request.EdgeLimit},
+		Ref:    request.Ref, Branch: request.Branch, Fields: request.Fields, Field: request.Field,
+	}, raw, snapshot.Preview.Clone(), snapshot.Guard.Clone(), meta, visible)
+	if refusal != nil {
+		return Lineage{}, refusal
 	}
-	if request.Mode != "overview" && request.Mode != "focus" {
-		return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "mode is overview or focus")
-	}
-	if request.Direction == "" {
-		request.Direction = "both"
-	}
-	if request.Direction != "upstream" && request.Direction != "downstream" && request.Direction != "both" {
-		return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "direction is upstream, downstream or both")
-	}
-	if request.Depth == 0 {
-		request.Depth = 1
-	}
-	if request.Depth < 1 || request.Depth > 3 {
-		return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "depth is 1 to 3")
-	}
-	raw.Meta = base
-	preview = lineage.ApplyAccess(preview, meta)
-	guardNodes := map[string]lineage.Node{}
-	for _, node := range guard.Nodes {
-		guardNodes[node.ID] = node
-	}
-	for i := range preview.Nodes {
-		value, ok := guardNodes[preview.Nodes[i].ID]
-		if !ok {
-			preview.Nodes[i].Guard = preview.Nodes[i].Effective
-			preview.Nodes[i].GuardCompartments = slices.Clone(preview.Nodes[i].EffectiveCompartments)
-			preview.Nodes[i].MarkingStatus = "unknown"
-			if request.Branch != "" {
-				preview.Nodes[i].MarkingStatus = "preview-only"
-			}
-			continue
-		}
-		preview.Nodes[i].Guard = value.Guard
-		preview.Nodes[i].GuardCompartments = slices.Clone(value.GuardCompartments)
-		preview.Nodes[i].MarkingStatus = "consistent"
-		if preview.Nodes[i].Guard != preview.Nodes[i].Effective || !slices.Equal(preview.Nodes[i].GuardCompartments, preview.Nodes[i].EffectiveCompartments) {
-			preview.Nodes[i].MarkingStatus = "preview-only"
-		}
-	}
-	preview = lineage.Project(preview, func(node lineage.Node) bool {
-		value, ok := visible[node.ID]
-		return !ok || value
-	}, "other-project")
-	var fieldNodes []lineage.FieldNode
-	var fieldEdges []lineage.FieldEdge
-	if request.Fields || request.Field != "" {
-		fieldNodes, fieldEdges = lineage.Fields(preview, raw)
-	}
+	graph := shaped.Graph
 	var impact *LineageImpact
-	if request.Mode == "focus" && focus != "" {
-		if value := lineage.ComputeImpact(preview, focus); value != nil {
-			converted := LineageImpact(*value)
-			impact = &converted
-		}
-	}
-	preview = lineage.Scope(preview, lineage.Params{
-		Mode: request.Mode, Project: request.Project, Focus: focus, Direction: request.Direction, Depth: request.Depth,
-		NodeLimit: request.NodeLimit, EdgeLimit: request.EdgeLimit,
-	})
-	if request.Field != "" {
-		fieldNodes, fieldEdges = lineage.FieldTrace(fieldNodes, fieldEdges, request.Field)
-	} else if request.Fields {
-		fieldNodes, fieldEdges = lineage.ScopeFields(preview, fieldNodes, fieldEdges)
-	}
-	if request.Fields || request.Field != "" {
-		preview.Coverage.FieldsComplete = true
-	}
-	if request.Mode == "focus" && focus == "" {
-		return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "focus is required")
-	}
-	if request.Mode == "focus" {
-		if _, ok := previewNodeByID(preview, focus); !ok {
-			return Lineage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This resource does not exist or you cannot open it")
-		}
+	if shaped.Impact != nil {
+		converted := LineageImpact(*shaped.Impact)
+		impact = &converted
 	}
 	return Lineage{
-		Nodes:       responseNodes(preview.Nodes),
-		Edges:       responseEdges(preview.Edges),
-		Groups:      responseGroups(preview.Groups),
-		Scope:       LineageScope{Mode: request.Mode, Project: request.Project, Focus: focus, Direction: request.Direction, Depth: request.Depth, Branch: request.Branch},
-		Basis:       LineageBasis{Generation: generation, Preview: lineagePreviewBasis(request.Branch), Guard: "main · accepted definitions", BuiltAt: builtAt.UTC().Format(time.RFC3339)},
-		Total:       LineageTotal(preview.Total),
-		Returned:    LineageTotal(preview.Returned),
-		Truncated:   preview.Truncated,
-		Truncation:  preview.Reasons,
-		Unreadable:  responseUnreadable(preview.Unreadable),
-		Coverage:    LineageCoverage(preview.Coverage),
+		Nodes:       responseNodes(graph.Nodes),
+		Edges:       responseEdges(graph.Edges),
+		Groups:      responseGroups(graph.Groups),
+		Scope:       LineageScope{Mode: shaped.Params.Mode, Project: request.Project, Focus: focus, Direction: shaped.Params.Direction, Depth: shaped.Params.Depth, Branch: request.Branch},
+		Basis:       LineageBasis{Generation: snapshot.Generation, Preview: lineagePreviewBasis(request.Branch), Guard: "main · accepted definitions", BuiltAt: snapshot.BuiltAt.UTC().Format(time.RFC3339)},
+		Total:       LineageTotal(graph.Total),
+		Returned:    LineageTotal(graph.Returned),
+		Truncated:   graph.Truncated,
+		Truncation:  graph.Reasons,
+		Unreadable:  responseUnreadable(graph.Unreadable),
+		Coverage:    LineageCoverage(graph.Coverage),
 		Impact:      impact,
-		FieldNodes:  responseFieldNodes(fieldNodes),
-		FieldEdges:  responseFieldEdges(fieldEdges),
+		FieldNodes:  responseFieldNodes(shaped.FieldNodes),
+		FieldEdges:  responseFieldEdges(shaped.FieldEdges),
 		GeneratedAt: time.Now().UTC(),
 	}, nil
 }
 
-func (t *Tenant) lineageMainSnapshot() lineageSnapshot {
-	generation := t.Projection.Generation()
-	t.lineageMu.Lock()
-	cached := t.lineageCache
-	t.lineageMu.Unlock()
-	if cached != nil && cached.generation == generation {
-		return *cached
+func (t *Tenant) lineageMainSnapshot() lineage.Snapshot {
+	if cached, ok := t.lineageCache.Main(t.Projection.Generation()); ok {
+		return cached
 	}
 	t.Projection.Lock()
 	raw := t.lineageRecordsLocked(t.Projection)
 	base := t.lineageBaseMetaLocked(t.Projection, raw)
-	generation = t.Projection.Generation()
+	generation := t.Projection.Generation()
 	t.Projection.Unlock()
 	raw.Meta = base
-	snapshot := lineageSnapshot{
-		generation: generation,
-		raw:        raw,
-		base:       base,
-		preview:    lineage.Build(raw, lineage.Preview),
-		guard:      lineage.Build(t.lineageGuard(raw), lineage.Guard),
-		builtAt:    time.Now().UTC(),
-	}
-	t.lineageMu.Lock()
-	if t.lineageCache == nil || t.lineageCache.generation <= generation {
-		t.lineageCache = &snapshot
-	}
-	t.lineageMu.Unlock()
+	snapshot := lineage.Snapshot{Generation: generation, Raw: raw, Base: base, Preview: lineage.Build(raw, lineage.Preview), Guard: lineage.Build(t.lineageGuard(raw), lineage.Guard), BuiltAt: time.Now().UTC()}
+	t.lineageCache.KeepMain(snapshot)
 	return snapshot
 }
 
@@ -576,15 +450,6 @@ func lineageObjectType(name string) string {
 		return name
 	}
 	return build.ID + "." + name
-}
-
-func previewNodeByID(graph lineage.Graph, id string) (lineage.Node, bool) {
-	for _, node := range graph.Nodes {
-		if node.ID == id {
-			return node, true
-		}
-	}
-	return lineage.Node{}, false
 }
 
 func responseNodes(nodes []lineage.Node) []LineageNode {
