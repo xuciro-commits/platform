@@ -113,7 +113,7 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 			Schedule(tenants, Now(), roundSize, 900*time.Millisecond)
 			var outside []func()
 			for _, t := range tenants {
-				outside = append(append(outside, t.dispatches(Now())...), t.turns(Now())...)
+				outside = append(append(outside, t.dispatches(Now())...), t.agentTurns().Due(Now())...)
 				outside = append(outside, t.continuousSources(Now())...)
 			}
 			outsideRuns.Add(1)
