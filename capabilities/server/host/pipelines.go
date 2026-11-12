@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	"fmt"
-	"log"
 	dataowner "platformserver/services/data"
 
 	"time"
@@ -19,44 +18,15 @@ func (t *Tenant) RunPipelines(now time.Time) {
 	if t.businessStopped() || !t.OwnerActive(build.ID) {
 		return
 	}
-	type plan struct {
-		fixed    []dataowner.Pipeline
-		versions map[string]int
-		changed  map[string]bool
-	}
-	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (plan, *kernel.Error) {
-		c := t.automation(build.ID, false)
+	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (dataowner.PipelinePlan, *kernel.Error) {
 		query := publishedPipelineQuery()
 		query.Limit = 200
-		pipelines, _, _ := platform.Find[dataowner.Pipeline](c, query)
-		versions := map[string]int{}
-		changed := map[string]bool{}
-		owner := t.DataOwner()
-		var fixed []dataowner.Pipeline
-		for _, p := range pipelines {
-			p, err := owner.ExecutionPipeline(p)
-			if err != nil {
-				log.Printf("pipeline definition refused: %v", err)
-				continue
-			}
-			fixed = append(fixed, p)
-			if ds, ok := platform.Get[dataowner.Dataset](c, p.Input); ok {
-				versions[p.ID] = ds.Version
-			}
-			if p.Last != nil && p.Last.Execution != nil {
-				for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
-					if ds, ok := platform.Get[dataowner.Dataset](c, id); ok && ds.Version != p.Last.Execution.Inputs[id] {
-						changed[p.ID] = true
-					}
-				}
-			}
-		}
-		return plan{fixed: fixed, versions: versions, changed: changed}, nil
+		return t.DataOwner().PlanPipelines(t.automation(build.ID, false), query), nil
 	})
 	if refusal != nil {
 		return
 	}
-	fixed, versions, changed := prepared.fixed, prepared.versions, prepared.changed
+	fixed, versions, changed := prepared.Fixed, prepared.Versions, prepared.Changed
 	t.runSchedules(fixed, now)
 	for i, p := range fixed {
 		if current, refusal := coordinatedRecordRead(t, context.Background(), func(t *Tenant) (dataowner.Pipeline, *kernel.Error) {

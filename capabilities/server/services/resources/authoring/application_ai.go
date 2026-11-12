@@ -181,3 +181,45 @@ func FunctionAssetDefinition(asset platform.ReleaseAsset) (platform.AIFunction, 
 	}
 	return definition, version, definition.Check()
 }
+
+func CheckProposalFunctions(candidate platform.ReleaseCandidate) error {
+	functions := map[string]platform.ReleaseAsset{}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetFunction {
+			functions[asset.Ref.Name] = asset
+		}
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		var object Object
+		if json.Unmarshal(asset.Body, &object) != nil {
+			return fmt.Errorf("Proposal object declaration is invalid")
+		}
+		for _, action := range object.Actions {
+			if action.Adoption == nil {
+				continue
+			}
+			functionAsset, ok := functions[action.Adoption.Function.Name]
+			if !ok {
+				return fmt.Errorf("Application adoption needs its declared function in the candidate")
+			}
+			definition, version, err := FunctionAssetDefinition(functionAsset)
+			if err != nil {
+				return err
+			}
+			if action.Adoption.Function.Version != 0 && action.Adoption.Function.Version != version {
+				return fmt.Errorf("Application adoption function version differs from the candidate")
+			}
+			inputs := []platform.Field{}
+			for _, input := range action.Inputs {
+				inputs = append(inputs, input.Field())
+			}
+			if err := action.Adoption.CheckMapping(definition, inputs); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
