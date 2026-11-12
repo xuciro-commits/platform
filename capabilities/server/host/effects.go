@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -32,27 +31,11 @@ func (t *Tenant) emit(e platform.Event, names []string) {
 }
 
 func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) ([]platform.Effect, *kernel.Error) {
-	s := e.Record.GetSubmission()
 	planned, refusal := t.writebackEffects(e, preparing)
 	if refusal != nil {
 		return nil, refusal
 	}
-	for _, ep := range t.endpoints.All() {
-		i := slices.IndexFunc(names, func(n string) bool { return slices.Contains(ep.Events, n) })
-		if i < 0 {
-			continue
-		}
-		var payload any = string(s.GetPayload())
-		if json.Valid(s.GetPayload()) {
-			payload = json.RawMessage(s.GetPayload())
-		}
-		at := e.Record.GetRecordedTime().AsTime()
-		body, _ := json.Marshal(map[string]any{"type": names[i], "timestamp": at, "data": map[string]any{
-			"app": e.App, "action": s.GetSchema().GetName(), "schemaVersion": s.GetSchema().GetVersion(), "entity": runtimekernel.Target(s), "changeId": e.Record.GetChangeId(),
-			"principal": s.GetPrincipalId(), "revision": e.Record.GetRevision(), "payload": payload}})
-		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
-			Endpoint: ep.ID, Event: names[i], Target: runtimekernel.Target(s), At: at, State: "pending", Due: at, Body: string(body)})
-	}
+	planned = append(planned, actions.EventEffects(t.ID, t.endpoints.All(), e, names)...)
 	return planned, nil
 }
 
@@ -88,25 +71,15 @@ func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, dat
 	if c.Agent {
 		agent, run = c.ID, t.agentRun
 	}
-	name := c.App + "/" + kind
-	body, err := json.Marshal(map[string]any{"type": name, "timestamp": now, "data": data})
+	body, err := json.Marshal(map[string]any{"type": c.App + "/" + kind, "timestamp": now, "data": data})
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	var planned []platform.Effect
-	for _, ep := range t.endpoints.All() {
-		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, c.App, kind, key, ep.ID)
-		if !slices.Contains(ep.Effects, name) || t.outbound.Any(func(x actions.Queued) bool { return x.ID == id }) ||
-			slices.ContainsFunc(staged, func(x platform.Effect) bool { return x.ID == id }) {
-			continue
-		}
-		state := "pending"
-		if c.Agent && (a.Manifest().Emits[i].Irreversible || ep.Irreversible) {
-			state = "held"
-		}
-		planned = append(planned, platform.Effect{Applications: applications, ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
-			State: state, Agent: agent, Run: run, Due: now, Body: string(body)})
+	exists := func(id string) bool {
+		return t.outbound.Any(func(x actions.Queued) bool { return x.ID == id }) || slices.ContainsFunc(staged, func(x platform.Effect) bool { return x.ID == id })
 	}
+	planned := actions.AppEffects(t.endpoints.All(), platform.Effect{Applications: applications, App: c.App, Key: key, Target: entity, At: now, Agent: agent, Run: run, Due: now, Body: string(body)},
+		t.ID, kind, c.Agent && a.Manifest().Emits[i].Irreversible, c.Agent, exists)
 	return planned, nil
 }
 
@@ -137,37 +110,11 @@ func (t *Tenant) Effects(now time.Time) []platform.Effect {
 	return out
 }
 
-type EndpointView struct {
-	actions.Endpoint
-	Pending  int    `json:"pending"`
-	Failing  int    `json:"failing"`
-	Health   string `json:"health"`
-	Delivers int    `json:"delivered"`
-}
-
-func (t *Tenant) Endpoints() []EndpointView {
-	all := t.outbound.Select(nil)
-	out := []EndpointView{}
-	for _, ep := range t.endpoints.All() {
-		v := EndpointView{Endpoint: ep, Health: "ok"}
-		for _, x := range all {
-			switch {
-			case x.Endpoint != ep.ID:
-			case x.State == "delivered":
-				v.Delivers++
-			case !platform.EffectSettled(x.State):
-				v.Pending++
-				if x.State == "retrying" && v.Failing == 0 {
-					v.Failing, v.Health = x.Attempts, "failing"
-				}
-			}
-		}
-		if _, ok := t.CredentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL); !ok && ep.Secret != "" {
-			v.Health = "secret missing"
-		}
-		out = append(out, v)
-	}
-	return out
+func (t *Tenant) Endpoints() []actions.EndpointView {
+	return actions.EndpointHealth(t.endpoints.All(), t.outbound.Select(nil), func(ep actions.Endpoint) bool {
+		_, ok := t.CredentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL)
+		return !ok && ep.Secret != ""
+	})
 }
 
 func (t *Tenant) secret(name string) ([]byte, bool) {
