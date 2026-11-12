@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"platformserver/kernel/records"
+	automation "platformserver/services/automate/runtime"
 
 	"time"
 
@@ -173,8 +174,8 @@ func (t *Tenant) RecordOf(ctx context.Context, m platform.Member, typ, id string
 	return recordRead(t, ctx, func(t *Tenant) (RecordView, *kernel.Error) { return t.recordOf(m, typ, id, now) })
 }
 
-func (t *Tenant) ChainOf(ctx context.Context, m platform.Member, ref string, now time.Time) (Chain, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (Chain, *kernel.Error) { return t.chainRead(m, ref, now) })
+func (t *Tenant) ChainOf(ctx context.Context, m platform.Member, ref string, now time.Time) (automation.Chain, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (automation.Chain, *kernel.Error) { return t.chainRead(m, ref, now) })
 }
 
 func (t *Tenant) Context(ctx context.Context, reader *platform.Member, typ, id string, now time.Time) (ContextView, *kernel.Error) {

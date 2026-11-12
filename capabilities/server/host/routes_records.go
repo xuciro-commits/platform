@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"platformserver/kernel/records"
 	pageowner "platformserver/services/apps/pages"
+	automation "platformserver/services/automate/runtime"
 	"reflect"
 	"strconv"
 	"strings"
@@ -116,7 +117,7 @@ func (h *Host) routesRecords(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/media-sets/{id}/items/{hash}", Summary: "Download an item from a readable media set or retained version", Query: []transport.Param{{Name: "version", Description: "A retained version; latest when omitted"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		t.downloadMediaItem(w, r, m, h.Now())
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/chain/{type}/{id}", Summary: "The chain an agent run or a flow instance belongs to: its record, flows, runs and the effects they caused", Answer: Chain{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/chain/{type}/{id}", Summary: "The chain an agent run or a flow instance belongs to: its record, flows, runs and the effects they caused", Answer: automation.Chain{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		chain, err := t.chainRead(m, r.PathValue("type")+"/"+r.PathValue("id"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)
