@@ -1,8 +1,7 @@
-package host
-
-import records "platformserver/kernel/records"
+package kernel
 
 import (
+	"platformserver/kernel/records"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,7 +13,7 @@ import (
 
 var migratedSequenceNumber = regexp.MustCompile(`\{n(?::[1-9])?\}`)
 
-func (d *stagedDecision) SequenceWaterline(app string, sequence platform.Sequence, year int) (int, *kernel.Error) {
+func (d *Decision) SequenceWaterline(app string, sequence platform.Sequence, year int) (int, *kernel.Error) {
 	d.Records.Lock()
 	defer d.Records.Unlock()
 	owner := d.Records.Type(sequence.SeedRecord)

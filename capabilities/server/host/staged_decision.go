@@ -365,22 +365,3 @@ func (d *stagedDecision) directoryView() platform.Directory {
 	}
 	return d.tenant.directory
 }
-
-func (d *stagedDecision) Find(c platform.Caller, typ reflect.Type, q platform.Query) ([]any, int, *kernel.Error) {
-	d.Records.Lock()
-	defer d.Records.Unlock()
-	et := d.Records.Of(c, typ)
-	if et == nil {
-		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	if len(q.Sort) == 0 {
-		q.Sort = []string{"id"}
-	}
-	q = businessQuery(et.Info(), q, c.Member, d.At)
-	page, total, err := d.Records.Find(et, q, nil)
-	out := make([]any, len(page))
-	for i, v := range page {
-		out[i] = records.Copy(typ, v.Interface()).Interface()
-	}
-	return out, total, err
-}
