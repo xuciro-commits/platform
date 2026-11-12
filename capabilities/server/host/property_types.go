@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
-	"slices"
 	"strconv"
 )
 
@@ -39,19 +38,13 @@ func (h hostView) InstallPropertyType(c platform.Caller, p platform.PropertyType
 	if err != nil {
 		return err
 	}
-	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
-	if i >= 0 {
-		old := h.t.definitions[i]
-		if old.Source != "tenant" {
-			return fmt.Errorf("property type is owned by code")
-		}
-		var ok bool
-		d.PropertyVersions, ok = releaseowner.RetainedDefinitionVersions(old.PropertyVersions, old.Version, old.PropertyType, d.Version, p)
-		if !ok {
-			return fmt.Errorf("property version bytes cannot change")
-		}
+	i, versions, err := releaseowner.RetainVersion(h.t.definitions, ref, "property type is owned by code", "property version bytes cannot change", d.Version, p, func(old platform.Definition) (map[string]platform.PropertyType, *platform.PropertyType) {
+		return old.PropertyVersions, old.PropertyType
+	})
+	if err != nil {
+		return err
 	}
-	d.PropertyVersions[d.Version] = p
+	d.PropertyVersions = versions
 	h.t.storeDefinition(i, d)
 	return nil
 }

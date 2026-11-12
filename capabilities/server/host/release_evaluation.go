@@ -207,7 +207,7 @@ func checkApplicationProposalFunctions(candidate platform.ReleaseCandidate) erro
 			if !ok {
 				return fmt.Errorf("Application adoption needs its declared function in the candidate")
 			}
-			definition, version, err := functionAssetDefinition(functionAsset)
+			definition, version, err := build.FunctionAssetDefinition(functionAsset)
 			if err != nil {
 				return err
 			}

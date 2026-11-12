@@ -5,7 +5,6 @@ import (
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/objects"
-	"slices"
 	"strconv"
 )
 
@@ -48,22 +47,13 @@ func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version
 	if err != nil {
 		return err
 	}
-	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
-	if i >= 0 {
-		old := h.t.definitions[i]
-		if old.Source != "tenant" {
-			return fmt.Errorf("query %s is owned by code", ref)
-		}
-		previous := *old.Query
-		var ok bool
-		def.QueryVersions, ok = releaseowner.RetainedDefinitionVersions(old.QueryVersions, old.Version, &previous, def.Version, q)
-		if !ok {
-			return fmt.Errorf("query version bytes cannot change")
-		}
-	} else {
-		def.QueryVersions = map[string]platform.NamedQuery{}
+	i, versions, err := releaseowner.RetainVersion(h.t.definitions, ref, fmt.Sprintf("query %s is owned by code", ref), "query version bytes cannot change", def.Version, q, func(old platform.Definition) (map[string]platform.NamedQuery, *platform.NamedQuery) {
+		return old.QueryVersions, old.Query
+	})
+	if err != nil {
+		return err
 	}
-	def.QueryVersions[def.Version] = q
+	def.QueryVersions = versions
 	h.t.storeDefinition(i, def)
 	return nil
 }

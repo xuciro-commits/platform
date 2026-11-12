@@ -5,7 +5,6 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
-	"slices"
 	"strconv"
 )
 
@@ -55,19 +54,13 @@ func (h hostView) InstallValueType(c platform.Caller, v platform.ValueType, vers
 	if err != nil {
 		return err
 	}
-	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
-	if i >= 0 {
-		old := h.t.definitions[i]
-		if old.Source != "tenant" {
-			return fmt.Errorf("value type is owned by code")
-		}
-		var ok bool
-		d.ValueVersions, ok = releaseowner.RetainedDefinitionVersions(old.ValueVersions, old.Version, old.ValueType, d.Version, v)
-		if !ok {
-			return fmt.Errorf("value type version bytes cannot change")
-		}
+	i, versions, err := releaseowner.RetainVersion(h.t.definitions, ref, "value type is owned by code", "value type version bytes cannot change", d.Version, v, func(old platform.Definition) (map[string]platform.ValueType, *platform.ValueType) {
+		return old.ValueVersions, old.ValueType
+	})
+	if err != nil {
+		return err
 	}
-	d.ValueVersions[d.Version] = v
+	d.ValueVersions = versions
 	h.t.storeDefinition(i, d)
 	return nil
 }

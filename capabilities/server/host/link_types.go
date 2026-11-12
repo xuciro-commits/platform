@@ -6,7 +6,6 @@ import (
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/objects"
-	"slices"
 	"strconv"
 )
 
@@ -62,22 +61,16 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 	if err != nil {
 		return err
 	}
-	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
-	if i >= 0 {
-		old := h.t.definitions[i]
-		if old.Source != "tenant" {
-			return fmt.Errorf("link type is owned by code")
-		}
-		var ok bool
-		def.LinkVersions, ok = releaseowner.RetainedDefinitionVersions(old.LinkVersions, old.Version, old.LinkType, def.Version, l)
-		if !ok {
-			return fmt.Errorf("link version bytes cannot change")
-		}
+	i, versions, err := releaseowner.RetainVersion(h.t.definitions, ref, "link type is owned by code", "link version bytes cannot change", def.Version, l, func(old platform.Definition) (map[string]platform.LinkType, *platform.LinkType) {
+		return old.LinkVersions, old.LinkType
+	})
+	if err != nil {
+		return err
 	}
 	if err := h.t.Projection.InstallLinkConstraint(l); err != nil {
 		return err
 	}
-	def.LinkVersions[def.Version] = l
+	def.LinkVersions = versions
 	h.t.storeDefinition(i, def)
 	return nil
 }

@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"platformserver/services/apps/pages"
 	"strings"
 	"time"
 
@@ -136,7 +137,7 @@ func (t *Tenant) prepareCapability(m platform.Member, q platform.CapabilityInvoc
 	}
 	if out.descriptor.Kind == "compute" || out.descriptor.Kind == "action" && (len(q.Bindings) > 0 || q.Record != "") {
 		var refusal *kernel.Error
-		out.inputs, out.sources, refusal = t.bindCapabilityInputs(m, q, now)
+		out.inputs, out.sources, refusal = pages.BindCapabilityInputs(platform.NewCaller(runtime{t: t, scoped: true}, m, q.Ref.App, false, false), q, now)
 		return out, refusal
 	}
 	return out, nil

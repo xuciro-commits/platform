@@ -1,4 +1,4 @@
-package host
+package pages
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-func (t *Tenant) bindCapabilityInputs(m platform.Member, q platform.CapabilityInvocation, now time.Time) (json.RawMessage, []string, *kernel.Error) {
+func BindCapabilityInputs(caller platform.Caller, q platform.CapabilityInvocation, now time.Time) (json.RawMessage, []string, *kernel.Error) {
 	refuse := func(message string) (json.RawMessage, []string, *kernel.Error) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
 	}
@@ -25,7 +25,6 @@ func (t *Tenant) bindCapabilityInputs(m platform.Member, q platform.CapabilityIn
 		}
 		return q.Inputs, sources, nil
 	}
-	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, q.Ref.App, false, false)
 	var subject json.RawMessage
 	usedRecord := false
 	values := map[string]json.RawMessage{}

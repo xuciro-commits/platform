@@ -2,6 +2,7 @@ package releases
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 
@@ -99,6 +100,24 @@ func RetainedDefinitionVersions[T any](history map[string]T, previousVersion str
 		return nil, false
 	}
 	return versions, true
+}
+
+func RetainVersion[T any](definitions []platform.Definition, ref platform.AssetRef, owned, changed, version string, current T, history func(platform.Definition) (map[string]T, *T)) (int, map[string]T, error) {
+	i := slices.IndexFunc(definitions, func(d platform.Definition) bool { return d.Ref == ref })
+	versions := map[string]T{}
+	if i >= 0 {
+		old := definitions[i]
+		if old.Source != "tenant" {
+			return i, nil, errors.New(owned)
+		}
+		past, previous := history(old)
+		var ok bool
+		if versions, ok = RetainedDefinitionVersions(past, old.Version, previous, version, current); !ok {
+			return i, nil, errors.New(changed)
+		}
+	}
+	versions[version] = current
+	return i, versions, nil
 }
 
 func CheckApplicationExtension(ref platform.AssetRef, a platform.Application, definitions []platform.Definition) error {

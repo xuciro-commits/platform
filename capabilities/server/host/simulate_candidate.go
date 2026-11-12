@@ -44,95 +44,21 @@ func (t *Tenant) simulateStagedCandidateRead(builder platform.Member, request tr
 	if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}, true)); err != nil {
 		return empty, err
 	}
+	var stagedCandidate *platform.ReleaseCandidate
 	if staged != nil {
-		request.ObjectID, request.ProcessID, request.ApplicationID, request.Roots, request.CandidateID = "", "", "", nil, ""
-		if request.FunctionID == "" {
-			request.CandidateID = staged.candidate.ID
-		}
+		stagedCandidate = &staged.candidate
 	}
-	roots := 0
-	for _, root := range []string{request.ObjectID, request.ProcessID, request.FunctionID, request.ApplicationID, request.CandidateID} {
-		if root != "" {
-			roots++
-		}
-	}
-	if len(request.Roots) > 0 {
-		roots++
-		seen := map[platform.AssetRef]bool{}
-		for _, root := range request.Roots {
-			if root.Check() != nil || root.App != build.ID || root.Kind != platform.AssetObject && root.Kind != platform.AssetFlow || seen[root] {
-				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test roots must be distinct objects or workflows")
-			}
-			seen[root] = true
-		}
-		if len(request.Roots) > 16 {
-			return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-		}
-	}
-	if roots != 1 || len(request.Model) > 256 || request.At.IsZero() || len(request.Steps) == 0 || len(request.Steps) > 20 || len(request.Actors) > 3 || len(request.Sample) > 64 || len(request.Actors) > 0 && request.As != "" {
-		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one saved application, object, process, function or candidate, a fixed time and 1–20 test steps")
+	if refusal := request.Check(stagedCandidate); refusal != nil {
+		return empty, refusal
 	}
 	if t.quarantined() {
 		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	m := builder
-	if len(request.Actors) > 0 {
-		request.As = request.Actors[0]
+	m, members, refusal := request.Members(builder, t.member)
+	if refusal != nil {
+		return empty, refusal
 	}
-	if request.As != "" {
-		var ok bool
-		m, ok = t.member(request.As)
-		if !ok {
-			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", request.As)
-		}
-	}
-	members := []platform.Member{m}
-	seenActors := map[string]bool{}
-	for _, id := range request.Actors {
-		if seenActors[id] {
-			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose distinct known members for role comparison")
-		}
-		seenActors[id] = true
-		if id == "" {
-			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose known members for role comparison")
-		}
-		if slices.ContainsFunc(members, func(m platform.Member) bool { return m.ID == id }) {
-			continue
-		}
-		actor, ok := t.member(id)
-		if !ok {
-			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", id)
-		}
-		members = append(members, actor)
-	}
-	for _, step := range request.Steps {
-		if len(request.Actors) > 0 && step.As != "" {
-			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Role comparisons use the same member for every scenario step")
-		}
-		if step.Compute != nil && !step.Compute.Check() {
-			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded compute fixture with a completed or failed outcome")
-		}
-		if step.Function != nil && !step.Function.Check() {
-			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded function fixture with a ready or rejected outcome")
-		}
-		if step.AdvanceSeconds < 0 || step.AdvanceSeconds > 86400 {
-			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Advance each test step by 0–86400 fixed seconds")
-		}
-		if step.As != "" && !slices.ContainsFunc(members, func(m platform.Member) bool { return m.ID == step.As }) {
-			actor, ok := t.member(step.As)
-			if !ok {
-				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", step.As)
-			}
-			members = append(members, actor)
-		}
-	}
-	kind, id := platform.AssetObject, request.ObjectID
-	if request.ProcessID != "" {
-		kind, id = platform.AssetFlow, request.ProcessID
-	}
-	if request.FunctionID != "" {
-		kind, id = platform.AssetFunction, request.FunctionID
-	}
+	kind, id := request.Root()
 	drafts := []build.JointDraftRef{{Kind: kind, ID: id}}
 	var candidate platform.ReleaseCandidate
 	var err error
@@ -175,26 +101,7 @@ func (t *Tenant) simulateStagedCandidateRead(builder platform.Member, request tr
 		}
 	}
 	if request.Sample != "" && err == nil {
-		found := false
-		for _, asset := range candidate.Assets {
-			if asset.Ref.Kind == platform.AssetSampleSet && asset.Ref.Name == request.Sample {
-				var sample platform.SampleSet
-				if json.Unmarshal(asset.Body, &sample) != nil || sample.Check() != nil {
-					err = fmt.Errorf("Invalid application sample asset")
-					break
-				}
-				found = true
-				if request.Samples == nil {
-					for _, group := range sample.Samples {
-						request.Samples = append(request.Samples, trialowner.SimulationSample{Type: group.Type, Records: group.Records})
-					}
-				}
-				break
-			}
-		}
-		if !found && err == nil {
-			err = fmt.Errorf("Choose a sample asset in this application's draft closure")
-		}
+		err = request.SelectSample(candidate)
 	}
 	functionName := ""
 	if request.FunctionID != "" {
@@ -215,38 +122,16 @@ func (t *Tenant) simulateStagedCandidateRead(builder platform.Member, request tr
 	if err != nil {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
-	modules := environment.Modules
-	for _, asset := range candidate.Assets {
-		if asset.Ref.Kind == platform.AssetCompute {
-			var operation platform.Operation
-			if json.Unmarshal(asset.Body, &operation) != nil {
-				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Candidate compute descriptor is invalid")
-			}
-			if operation.Binding.Kind == "wasm" {
-				raw, err := t.readArtifact(context.Background(), operation.Binding.Module)
-				if err != nil {
-					return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Candidate module bytes are unavailable")
-				}
-				modules[operation.Binding.Module] = raw
-			}
-		}
+	if refusal := trialowner.CandidateModules(candidate, environment.Modules, func(module string) ([]byte, error) { return t.readArtifact(context.Background(), module) }); refusal != nil {
+		return empty, refusal
 	}
 	out, problem := runCandidateSimulation(request, candidate, environment, m, members, functionName)
 	if problem != nil {
 		return empty, problem
 	}
-	if len(request.Actors) > 0 {
-		out.Actors = []trialowner.SimulationActor{{Member: m.ID, Steps: out.Steps, TestID: out.TestID, Recovered: out.Recovered, Passed: out.Passed}}
-		for _, id := range request.Actors[1:] {
-			actor := members[slices.IndexFunc(members, func(m platform.Member) bool { return m.ID == id })]
-			other, err := runCandidateSimulation(request, candidate, environment, actor, members, functionName)
-			if err != nil {
-				return empty, err
-			}
-			out.Actors = append(out.Actors, trialowner.SimulationActor{Member: actor.ID, Steps: other.Steps, TestID: other.TestID, Recovered: other.Recovered, Passed: other.Passed})
-		}
-	}
-	return out, nil
+	return trialowner.RunActors(request, out, m, members, func(actor platform.Member) (trialowner.CandidateSimulation, *kernel.Error) {
+		return runCandidateSimulation(request, candidate, environment, actor, members, functionName)
+	})
 }
 
 func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candidate platform.ReleaseCandidate, environment simulationEnvironment, m platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *kernel.Error) {
