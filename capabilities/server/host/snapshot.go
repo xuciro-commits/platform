@@ -15,7 +15,6 @@ import (
 
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -342,49 +341,7 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 }
 
 func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[string][]records.StoredState, error) {
-	held := map[string][]records.StoredState{}
-	t.Projection.Lock()
-	defer t.Projection.Unlock()
-	for typ, rows := range saved {
-		et := t.Projection.Type(typ)
-		if et == nil {
-			held[typ] = rows
-			continue
-		}
-		entries := make([]records.Entry[*records.Row], 0, len(rows))
-		for _, r := range rows {
-			v := reflect.New(et.Info().Go).Elem()
-			decode, err := records.DecodeRowImage(et.Info(), r.Value, r.Projection, t.Projection.Current().Release(), r.Format)
-			if err != nil {
-				return nil, err
-			}
-			if err := json.Unmarshal(decode, v.Addr().Interface()); err != nil {
-				return nil, err
-			}
-			if err := checkRunApplicationBindings(v.Interface()); err != nil {
-				return nil, err
-			}
-			records.EmptyLists(v)
-			recovered := &records.Row{Value: v, Format: r.Format, History: r.History, Projection: records.CloneProjection(r.Projection), Extraction: r.Extraction}
-			head, err := recovered.HistoryDigest()
-			if err != nil {
-				return nil, err
-			}
-			if r.HistoryHead != "" && r.HistoryHead != head {
-				return nil, fmt.Errorf("snapshot history chain differs")
-			}
-			recovered.HistoryHead = head
-			recovered.RetainOriginal(r.Value)
-			entries = append(entries, records.Entry[*records.Row]{Key: records.Header(v).ID, Value: recovered})
-		}
-		index, err := records.From(entries)
-		if err != nil {
-			return nil, err
-		}
-		et.SetRows(index)
-		t.Projection.Restored()
-	}
-	return held, nil
+	return t.RestoreRecords(saved, checkRunApplicationBindings)
 }
 
 func (t *Tenant) Restore(raw json.RawMessage) error {

@@ -1,12 +1,9 @@
 package host
 
-import records "platformserver/kernel/records"
-
 import runtimekernel "platformserver/kernel"
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
@@ -58,7 +55,7 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	if err = t.recoverEntries(entries); err != nil {
 		return err
 	}
-	if err = t.verifyRuntimeSnapshotTail(ctx, j, seq, current, entries); err != nil {
+	if err = t.VerifyRuntimeTail(ctx, j, seq, current, entries, storageDelta, func(app string) platform.AcceptedStateApp { return t.states[app] }); err != nil {
 		return err
 	}
 	if console, ok := t.App(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
@@ -75,119 +72,6 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	t.attachJournal(ctx, j)
 	t.enableCurrentReadScopes()
 	return nil
-}
-
-func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snapshot, current int64, entries []Entry) error {
-	verifier, ok := j.(persistence.StateSnapshotVerifier)
-	if !ok {
-		return fmt.Errorf("tenant %s: SQL checkpoint comparison unavailable", t.ID)
-	}
-	deltas := make([]persistence.StateDelta, 0, len(entries))
-	changed := map[string]persistence.StateRecord{}
-	owners := map[string]json.RawMessage{}
-	for _, entry := range entries {
-		delta, err := storageDelta(entry.Body)
-		if err != nil {
-			return err
-		}
-		deltas = append(deltas, delta)
-		for _, record := range delta.Records {
-			changed[record.Type+"/"+record.ID] = record
-		}
-		for _, replacement := range delta.Replacements {
-			key := replacement.Type + "/" + replacement.ID
-			expected, exists := changed[key]
-			if !exists {
-				current, readErr := t.Projection.Current().View().StateCurrent(ctx, t.ID, replacement.Type, replacement.ID)
-				if readErr != nil {
-					return readErr
-				}
-				expected = persistence.StateRecord{Type: replacement.Type, ID: replacement.ID, Image: current.Image, HistoryBase: current.HistoryCount, HistoryHead: current.HistoryHead}
-			}
-			expected.Image, err = persistence.ReplaceStateRecordValue(expected.Image, replacement)
-			if err != nil {
-				return err
-			}
-			changed[key] = expected
-		}
-		for _, value := range delta.Values {
-			if value.Owner == "app-state" {
-				owners[value.Key] = value.Image
-			}
-		}
-		for _, update := range delta.ValueUpdates {
-			if update.Owner != "app-state" {
-				continue
-			}
-			prior, exists := owners[update.Key]
-			if !exists {
-				prior, err = t.Projection.Current().View().StateValue(ctx, t.ID, update.Owner, update.Key, -1)
-				if err != nil {
-					return err
-				}
-			}
-			owners[update.Key], err = update.Apply(prior)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	for _, expected := range changed {
-		et := t.Projection.Type(expected.Type)
-		if et == nil {
-			return fmt.Errorf("tenant %s: restored record type %s is absent", t.ID, expected.Type)
-		}
-		actual := et.Rows().Get(expected.ID)
-		if actual == nil {
-			return fmt.Errorf("tenant %s: restored record %s/%s is absent", t.ID, expected.Type, expected.ID)
-		}
-		image, err := actual.Image()
-		if err != nil {
-			return err
-		}
-		var saved records.StoredState
-		if err = json.Unmarshal(expected.Image, &saved); err != nil {
-			return err
-		}
-		if !runtimekernel.StoredJSONEqual(image, saved.Value) || actual.Format != saved.Format || !runtimekernel.StoredJSONEqual(jsonOf(actual.Projection), jsonOf(saved.Projection)) || !runtimekernel.StoredJSONEqual(jsonOf(actual.Extraction), jsonOf(saved.Extraction)) {
-			return fmt.Errorf("tenant %s: restored record differs: %s/%s", t.ID, expected.Type, expected.ID)
-		}
-		count := len(expected.History)
-		if expected.HistoryBase >= 0 {
-			count += expected.HistoryBase
-		}
-		head := expected.HistoryHead
-		if head == "" && expected.HistoryBase < 0 {
-			head = platform.EmptyRecordHistory
-			for i, raw := range expected.History {
-				head, err = platform.AppendRecordHistory(head, i, raw)
-				if err != nil {
-					return err
-				}
-			}
-		}
-		actualHead, err := actual.HistoryDigest()
-		if err != nil {
-			return err
-		}
-		if count != actual.HistoryLength() || head != "" && head != actualHead {
-			return fmt.Errorf("tenant %s: restored record history differs: %s/%s", t.ID, expected.Type, expected.ID)
-		}
-	}
-	for app, expected := range owners {
-		owner := t.states[app]
-		if owner == nil {
-			return fmt.Errorf("tenant %s: restored owner %s is absent", t.ID, app)
-		}
-		actual, err := owner.AcceptedState()
-		if err != nil {
-			return err
-		}
-		if !runtimekernel.StoredJSONEqual(actual, expected) {
-			return fmt.Errorf("tenant %s: restored owner differs: %s", t.ID, app)
-		}
-	}
-	return verifier.VerifyStateSnapshot(ctx, t.ID, snapshot, current, deltas)
 }
 
 func (t *Tenant) checkpointRuntime(ctx context.Context, j Journals, code string) (int64, error) {
