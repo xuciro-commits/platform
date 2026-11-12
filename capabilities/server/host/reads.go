@@ -19,7 +19,7 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	accepted, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
-		owner := t.owner["input:"+name]
+		owner := t.App(t.owner["input:"+name])
 		if owner == nil {
 			return false, unknown()
 		}
@@ -39,7 +39,7 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 }
 
 func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
-	a := t.owner["input:"+name]
+	a := t.App(t.owner["input:"+name])
 	if a == nil {
 		return nil, unknown()
 	}
@@ -73,7 +73,7 @@ func (t *Tenant) Read(ctx context.Context, m platform.Member, name string, input
 	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *kernel.Error) { return t.read(m, name, inputs...) })
 }
 func (t *Tenant) read(m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
-	return t.readFrom(m, t.owner["read:"+name], name, inputs...)
+	return t.readFrom(m, t.App(t.owner["read:"+name]), name, inputs...)
 }
 
 func (t *Tenant) ReadFrom(ctx context.Context, m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {

@@ -251,7 +251,7 @@ func (t *Tenant) effectControl() actions.EffectControl {
 		Valid: func(ep actions.Endpoint) bool {
 			return ep.Valid(t.App, func(event string) bool {
 				_, declared := t.router().Event(event)
-				return t.owner["action:"+event] != nil || declared
+				return t.App(t.owner["action:"+event]) != nil || declared
 			})
 		},
 		Reviewed: func(x actions.Queued) bool { return x.App == build.ID && x.Event == build.ID+"/dispatch" }}

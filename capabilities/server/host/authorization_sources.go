@@ -38,7 +38,7 @@ func (s authorizationSources) ActionOwner(action string) platform.App {
 	if !s.t.resourceActionActive(action) {
 		return nil
 	}
-	return s.t.owner["action:"+action]
+	return s.t.App(s.t.owner["action:"+action])
 }
 
 func (s authorizationSources) OwnerActive(id string) bool { return s.t.OwnerActive(id) }

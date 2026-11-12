@@ -45,15 +45,17 @@ type Console struct {
 	newOwners func(string) Owners
 	mu        sync.Mutex
 	*Credentials
-	tenant   string
-	members  map[string]*platform.Member
-	subjects map[string]string
-	then     func()
-	profiles map[string]*platform.Profile
-	tokens   map[string]*Token
-	minted   map[string]bool
-	lastSeen map[string]time.Time
-	sessions sessionTable
+	tenant          string
+	members         map[string]*platform.Member
+	subjects        map[string]string
+	directoryShared bool
+	then            func()
+	profiles        map[string]*platform.Profile
+	tokens          map[string]*Token
+	minted          map[string]bool
+	lastSeen        map[string]time.Time
+	lastSeenShared  bool
+	sessions        sessionTable
 	platform.ConsolePolicies
 	platform.ConsolePackages
 	ledger *platform.Ledger
@@ -244,14 +246,7 @@ func (d *Console) Fork(ledger *platform.Ledger) (platform.App, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	raw, err := json.Marshal(d.state())
-	if err != nil {
-		return nil, err
-	}
-	var state consoleState
-	if err := json.Unmarshal(raw, &state); err != nil {
-		return nil, err
-	}
+	state := d.state()
 	fork := NewConsole(d.tenant, d.newOwners)
 	fork.ledger, fork.host = ledger, d.host
 	fork.ConsolePackages.Attach(d.host)
@@ -269,7 +264,9 @@ func (d *Console) Fork(ledger *platform.Ledger) (platform.App, error) {
 	if state.Tokens != nil {
 		fork.tokens = state.Tokens
 	}
-	fork.minted, fork.lastSeen = maps.Clone(d.minted), maps.Clone(d.lastSeen)
+	fork.minted, fork.lastSeen = maps.Clone(d.minted), d.lastSeen
+	d.directoryShared, fork.directoryShared = true, true
+	d.lastSeenShared, fork.lastSeenShared = true, true
 	return fork, nil
 }
 
@@ -342,6 +339,30 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 		}
 		if declared.Target == MemberType || declared.Target == ProfileType || declared.Target == platform.MarkingType || declared.Target == platform.RoleType || declared.Target == platform.PolicyType || declared.Target == platform.TeamType || declared.Target == TokenType {
 			d.mu.Lock()
+			if d.directoryShared && (declared.Target == MemberType || declared.Target == ProfileType || declared.Target == TokenType) {
+				d.members, d.subjects = maps.Clone(d.members), maps.Clone(d.subjects)
+				d.profiles, d.tokens = maps.Clone(d.profiles), maps.Clone(d.tokens)
+				d.directoryShared = false
+			}
+			id := s.GetTarget().GetId()
+			if declared.Target == MemberType {
+				ids := []string{id}
+				if s.GetSchema().GetName() == SchemaOffboard {
+					ids = slices.Collect(maps.Keys(d.members))
+				}
+				for _, memberID := range ids {
+					if member := d.members[memberID]; member != nil {
+						copy := clone(member)
+						d.members[memberID] = &copy
+					}
+				}
+			}
+			if declared.Target == ProfileType {
+				if profile := d.profiles[id]; profile != nil {
+					copy := *profile
+					d.profiles[id] = &copy
+				}
+			}
 			var apply func(*pb.ChangeRecord)
 			var err *kernel.Error
 			switch {

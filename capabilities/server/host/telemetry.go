@@ -29,7 +29,12 @@ func (t *Tenant) begin(name string, parent trace.SpanContext, attrs ...attribute
 	}
 	ctx, span := tracer.Start(ctx, name, trace.WithAttributes(append(attrs, attribute.String("platform.tenant", t.ID))...))
 	previous := t.readScope
-	t.readScope = &recordReadScope{ctx: ctx, err: t.readError()}
+	scope := &recordReadScope{ctx: ctx}
+	if previous != nil {
+		*scope = *previous
+		scope.ctx = ctx
+	}
+	t.readScope = scope
 	return func(outcome string) {
 		end(span, outcome)
 		t.readScope = previous

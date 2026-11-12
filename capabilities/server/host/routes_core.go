@@ -34,9 +34,9 @@ func (h *Host) routesCore(rt *routes) {
 		WriteJSON(w, http.StatusOK, page)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: changed for data changes, operations for queue-only progress (F-32)", Answer: LiveQueryFrame{}},
-		func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
+		func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 			if r.URL.Query().Has("watch") {
-				followLiveQueries(w, r, t, mux)
+				followLiveQueries(w, r, t, m, mux)
 				return
 			}
 			followChanges(w, r, t)
@@ -128,7 +128,7 @@ func (h *Host) routesCore(rt *routes) {
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/{read}", Summary: "A named read of an app, such as inbox, requests, notifications, views, settings, members or audit; the app decides who may read it"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		name := r.PathValue("read")
-		inputs, err := namedReadInputs(t.owner["read:"+name], name, r.URL.Query())
+		inputs, err := namedReadInputs(t.App(t.owner["read:"+name]), name, r.URL.Query())
 		if err != nil {
 			Reply(w, nil, err)
 			return

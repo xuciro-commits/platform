@@ -444,8 +444,10 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 			if archive != nil {
 				archive(r)
 			}
-			held.State = state
-			held.ChangedAt = time.Now().UTC()
+			copy := *held
+			copy.State = state
+			copy.ChangedAt = time.Now().UTC()
+			d.packages[p.ID] = &copy
 		}, nil
 	}
 	index, indexErr := d.packageIndex()

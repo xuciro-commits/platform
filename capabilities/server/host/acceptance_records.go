@@ -3,6 +3,7 @@ package host
 import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
+	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
@@ -147,7 +148,7 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 
 func (t *Tenant) installReleaseDefinitions(installed *Tenant, definitions []platform.ReleaseInstallation) error {
 	t.setDefinitions(installed.definitions)
-	t.owner = t.rehome(installed.owner)
+	t.owner = maps.Clone(installed.owner)
 	registry, err := t.assetRegistryLocked()
 	if err != nil {
 		return err

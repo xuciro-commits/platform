@@ -146,6 +146,7 @@ export class PageSessionStore {
   }
 
   adoptModelWindow(key:string,signature:string,window?:{object:string;query:RecordQuery;records:EntityRecord[];total:number;partial?:boolean},error?:string) {
+    if(signature&&this.querySignatures.get(key)===signature&&!window&&!error)return;
     this.reconcileExternalWindow(key,signature,window?.records.map(r=>r.id));
     if(window){this.queryObjects.set(key,window.object);this.queryData.set(key,{records:window.records,total:window.total});}
     else {this.queryObjects.delete(key);this.queryData.delete(key);}

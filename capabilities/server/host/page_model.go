@@ -15,7 +15,7 @@ func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.Transition, st
 	if ref.Kind != platform.AssetAction {
 		return platform.Transition{}, "", false
 	}
-	owner := t.owner["action:"+ref.Name]
+	owner := t.App(t.owner["action:"+ref.Name])
 	if owner == nil || owner.Manifest().ID != ref.App {
 		return platform.Transition{}, "", false
 	}

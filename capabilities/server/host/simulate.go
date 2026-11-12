@@ -50,7 +50,7 @@ func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb
 		}
 		m = other
 	}
-	a := t.owner["action:"+s.GetSchema().GetName()]
+	a := t.App(t.owner["action:"+s.GetSchema().GetName()])
 	if a == nil {
 		return trialowner.Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "{action} cannot be tried", s.GetSchema().GetName())
 	}

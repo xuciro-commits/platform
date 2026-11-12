@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"platformserver/kernel/transport"
 	"slices"
+	"strconv"
 	"strings"
 
 	"platformserver/platform"
@@ -236,16 +237,6 @@ func (t *Tenant) registerDefinitions() error {
 }
 
 func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
-	gen, key := t.definitionsFingerprint(), transport.Rights(m)
-	if out, ok := t.viewCache().Definitions(gen, key); ok {
-		return out
-	}
-	out := t.buildDefinitions(m)
-	t.viewCache().StoreDefinitions(gen, key, out)
-	return out
-}
-
-func (t *Tenant) buildDefinitions(m platform.Member) []platform.Definition {
 	definitions, err := t.DefinitionsFor(m)
 	if err != nil {
 		return []platform.Definition{}
@@ -254,11 +245,18 @@ func (t *Tenant) buildDefinitions(m platform.Member) []platform.Definition {
 }
 
 func (t *Tenant) DefinitionsFor(m platform.Member) ([]platform.Definition, error) {
+	m = t.authorizationMember(m)
+	gen, key := t.definitionsFingerprint(), transport.Rights(m)+"/"+strconv.FormatUint(t.Projection.Generation(), 10)
+	if out, ok := t.viewCache().Definitions(gen, key); ok {
+		return out, nil
+	}
 	registered, err := t.ownedAssetDefinitions(t.definitions)
 	if err != nil {
 		return nil, err
 	}
-	return t.definitionsFrom(m, registered), nil
+	out := t.definitionsFrom(m, registered)
+	t.viewCache().StoreDefinitions(gen, key, out)
+	return out, nil
 }
 
 func (r runtime) VisibleApplications(c platform.Caller) []platform.AssetRef {

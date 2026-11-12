@@ -75,11 +75,11 @@ func (t *Tenant) deactivateOwners(disabled []string) error {
 		t.disabledOwners[id] = true
 	}
 	for name, owner := range t.owner {
-		if !t.OwnerActive(owner.Manifest().ID) {
+		if !t.OwnerActive(owner) {
 			delete(t.owner, name)
 		}
 	}
-	roles, err := ownerRolesOf(t.apps, t.OwnerActive)
+	roles, err := ownerRolesOf(t.ownerSet, t.OwnerActive)
 	if err != nil {
 		return err
 	}

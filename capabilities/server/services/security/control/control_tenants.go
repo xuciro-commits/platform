@@ -166,6 +166,7 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 						other.Grants[i].By = successor.ID
 					}
 				}
+				d.deriveRoles(other, other.Today(r.GetRecordedTime().AsTime()))
 			}
 			d.then = func() { d.handOver(c, id, p.Successor, p.Reason, r.GetRecordedTime().AsTime()) }
 		}, nil
@@ -271,7 +272,7 @@ func (d *Console) MemberByToken(secret string, now time.Time) (platform.Member, 
 			return platform.Member{}, false
 		}
 		if now.Sub(d.lastSeen["token:"+t.ID]) >= time.Minute {
-			d.lastSeen["token:"+t.ID] = now
+			d.rememberSeen("token:"+t.ID, now)
 		}
 		out := d.currentMember(m)
 		out.Scopes = t.Scopes

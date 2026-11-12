@@ -168,7 +168,7 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 			return refusal
 		},
 		Owner: func(schema string) string {
-			if owner := t.owner["action:"+schema]; owner != nil {
+			if owner := t.App(t.owner["action:"+schema]); owner != nil {
 				return owner.Manifest().ID
 			}
 			return ""

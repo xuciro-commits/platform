@@ -23,7 +23,6 @@ type stagedDecision struct {
 	runtimekernel.Decision
 	sourceProjection       *runtimekernel.ClaimSet
 	confirmationCompleting *confirmationCompletion
-	definitionPlans        map[definitionPlanKey]platform.DecisionDefinition
 	control                *controlDecision
 	tenant                 *Tenant
 	requests               []request
@@ -82,7 +81,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 		d.At = at
 	}
 	c.Roles = maps.Clone(c.Roles)
-	definition, definitionErr := d.decisionDefinition(view, app, s, release, retained...)
+	definition, definitionErr := view.decisionDefinition(id, s, release, retained...)
 	if definitionErr != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The execution definition and dependencies are unavailable")
 	}

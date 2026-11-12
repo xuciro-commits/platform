@@ -23,7 +23,12 @@ import (
 const gzipMinBytes = 512
 
 var gzipPool = sync.Pool{New: func() any {
-	w, _ := gzip.NewWriterLevel(io.Discard, 5)
+	w, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+	return w
+}}
+
+var liveGzipPool = sync.Pool{New: func() any {
+	w, _ := gzip.NewWriterLevel(io.Discard, gzip.HuffmanOnly)
 	return w
 }}
 
@@ -49,6 +54,7 @@ type edgeWriter struct {
 	buffer     []byte
 	buffering  bool
 	noCompress bool
+	live       bool
 }
 
 func (w *edgeWriter) WriteHeader(status int) {
@@ -106,11 +112,16 @@ func (w *edgeWriter) start(size int) error {
 	header := w.Header()
 	if !w.noCompress && w.acceptGzip && size >= gzipMinBytes && compressible(header.Get("Content-Type")) && header.Get("Content-Encoding") == "" &&
 		w.statusCode() >= 200 && w.statusCode() != http.StatusNoContent && w.statusCode() != http.StatusNotModified {
+		w.live = strings.HasPrefix(header.Get("Content-Type"), "text/event-stream")
 		header.Set("Content-Encoding", "gzip")
 		header.Del("Content-Length")
 		header.Add("Vary", "Accept-Encoding")
 		w.ResponseWriter.WriteHeader(w.statusCode())
-		w.gz = gzipPool.Get().(*gzip.Writer)
+		if w.live {
+			w.gz = liveGzipPool.Get().(*gzip.Writer)
+		} else {
+			w.gz = gzipPool.Get().(*gzip.Writer)
+		}
 		w.gz.Reset(w.ResponseWriter)
 		return nil
 	}
@@ -150,7 +161,11 @@ func (w *edgeWriter) Close() {
 	if w.gz != nil {
 		_ = w.gz.Close()
 		w.gz.Reset(io.Discard)
-		gzipPool.Put(w.gz)
+		if w.live {
+			liveGzipPool.Put(w.gz)
+		} else {
+			gzipPool.Put(w.gz)
+		}
 		w.gz = nil
 	}
 }

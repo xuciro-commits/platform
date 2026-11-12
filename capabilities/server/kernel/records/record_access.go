@@ -299,11 +299,26 @@ func (r *currentRows) view() persistence.StateReadView {
 }
 
 func (r *currentRows) Get(id string) *Row {
-	view := r.view()
-	current, err := view.StateCurrent(r.store.Context(), r.store.tenant, r.typ, id)
+	current, err := r.view().StateCurrent(r.store.Context(), r.store.tenant, r.typ, id)
 	if err != nil {
 		panic(fmt.Errorf("record %s/%s: %w", r.typ, id, err))
 	}
+	return r.decode(id, current)
+}
+
+func (r *currentRows) GetBatch(ids []string) map[string]*Row {
+	current, err := r.view().StateCurrents(r.store.Context(), r.store.tenant, r.typ, ids)
+	if err != nil {
+		panic(fmt.Errorf("records %s: %w", r.typ, err))
+	}
+	out := make(map[string]*Row, len(current))
+	for id, value := range current {
+		out[id] = r.decode(id, value)
+	}
+	return out
+}
+
+func (r *currentRows) decode(id string, current persistence.StateCurrent) *Row {
 	if len(current.Image) == 0 {
 		return nil
 	}
@@ -331,7 +346,7 @@ func (r *currentRows) Get(id string) *Row {
 	row.RetainOriginal(image.Value)
 	count := current.HistoryCount
 	row.LoadHistory = func(after int) []RecordChange {
-		list, err := view.StateHistory(r.store.Context(), r.store.tenant, r.typ, id, after, count)
+		list, err := r.view().StateHistory(r.store.Context(), r.store.tenant, r.typ, id, after, count)
 		if err != nil {
 			panic(fmt.Errorf("record history %s/%s: %w", r.typ, id, err))
 		}
@@ -401,8 +416,9 @@ func VisitPlan(image IndexImage, lookup ImageLookup, plan Plan, visible func(ref
 		accept(v)
 	}
 	if ids, indexed := plan.candidates(image, lookup); indexed {
+		rows := image.Rows.GetBatch(ids)
 		for _, id := range ids {
-			visit(image.Rows.Get(id))
+			visit(rows[id])
 		}
 	} else if current.Backend() != nil {
 		var filters []persistence.StateFilter
@@ -430,17 +446,19 @@ func VisitPlan(image IndexImage, lookup ImageLookup, plan Plan, visible func(ref
 			if readErr != nil {
 				panic(fmt.Errorf("record candidates: %w", readErr))
 			}
+			rows := image.Rows.GetBatch(ids)
 			for _, id := range ids {
 				delete(pending, id)
-				visit(image.Rows.Get(id))
+				visit(rows[id])
 			}
 			if len(ids) < 256 {
 				break
 			}
 			after = ids[len(ids)-1]
 		}
-		for id := range pending {
-			visit(image.Rows.Get(id))
+		ids := slices.Collect(maps.Keys(pending))
+		for _, row := range image.Rows.GetBatch(ids) {
+			visit(row)
 		}
 	} else {
 		for _, r := range image.Rows.All() {

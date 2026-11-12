@@ -203,12 +203,10 @@ function DefinitionView({ ref, application }: { ref: AssetRef; application?: str
 }
 
 function PageDefinitionView({ ref, preview, params }: { ref: AssetRef; preview: boolean; params: Record<string,string> }) {
-  const { data, isPending, error } = useDefinitions();
-  if (error) return <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>;
-  if (isPending) return <p className="text-sm text-muted">{t("Loading…")}</p>;
-  const definition = findDefinition(data ?? [], ref);
+  const { definitions } = useHost();
+  const definition = findDefinition(definitions, ref);
   if (!isPageDefinition(definition)) return <ClosedPage />;
-  return <ApplicationPage pageRef={definition.ref} route={{ view: preview ? "page-preview" : "page", params }} preview={preview}>{preview ? <PagePreview definition={definition} definitions={data ?? []} /> : <PageWorkspace definition={definition} />}</ApplicationPage>;
+  return <ApplicationPage pageRef={definition.ref} route={{ view: preview ? "page-preview" : "page", params }} preview={preview}>{preview ? <PagePreview definition={definition} definitions={definitions} /> : <PageWorkspace definition={definition} />}</ApplicationPage>;
 }
 
 function ApplicationOverview({ owner, name }: { owner: string; name: string }) {

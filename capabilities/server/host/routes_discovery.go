@@ -41,7 +41,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 		WriteJSON(w, http.StatusOK, out)
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language", Answer: []platform.Action{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Catalog(m), t.Language(m, r)))
+		t.WriteView("catalog", m, t.Language(m, r), w, r)
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []AppInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Apps(), t.Language(m, r)))
@@ -67,7 +67,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(protocols, t.Language(m, r)))
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Entities(m), t.Language(m, r)))
+		t.WriteView("entities", m, t.Language(m, r), w, r)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []DispatchTarget{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, refusal := t.DispatchTargets(m, r.PathValue("id"), h.Now())
@@ -114,12 +114,12 @@ func (h *Host) routesDiscovery(rt *routes) {
 		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		definitions, err := t.DefinitionsFor(m)
+		_, err := t.DefinitionsFor(m)
 		if err != nil {
 			http.Error(w, "Asset discovery is unavailable because accepted owner metadata could not be read", http.StatusInternalServerError)
 			return
 		}
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(definitions, t.Language(m, r)))
+		t.WriteView("definitions", m, t.Language(m, r), w, r)
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/dependencies", Summary: "Authorized declarations with forward dependencies and reverse impact from the same frozen description", Query: []transport.Param{{Name: "app", Description: "Asset owner; used alone to select an application"}, {Name: "kind", Description: "Focused asset kind"}, {Name: "name", Description: "Focused asset name"}}, Answer: releaseowner.DependencyView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		query := r.URL.Query()
@@ -209,7 +209,8 @@ func (t *Tenant) scopedDispatchTargets(member platform.Member, id string, at tim
 }
 
 func (t *Tenant) WriteView(kind string, m platform.Member, lang string, w http.ResponseWriter, r *http.Request) {
-	t.viewCache().WriteView(t.definitionsFingerprint(), transport.Rights(m), kind, lang, w, r, func() any {
+	m = t.authorizationMember(m)
+	t.viewCache().WriteView(t.definitionsFingerprint(), transport.Rights(m)+"/"+strconv.FormatUint(t.Projection.Generation(), 10), kind, lang, w, r, func() any {
 		switch kind {
 		case "entities":
 			return t.Entities(m)

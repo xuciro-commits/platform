@@ -18,8 +18,9 @@ import (
 )
 
 type recordReadScope struct {
-	ctx context.Context
-	err error
+	ctx         context.Context
+	err         error
+	definitions *definitionPlanCache
 }
 
 func (t *Tenant) readContext() context.Context {

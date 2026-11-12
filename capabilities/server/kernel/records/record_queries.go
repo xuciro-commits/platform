@@ -7,6 +7,7 @@ import (
 	"math/big"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
 	"regexp"
@@ -17,16 +18,51 @@ import (
 )
 
 func (s *Store) Find(et *Type, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, int, *kernel.Error) {
+	if err := q.CheckSet(); err != nil {
+		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
 	order, err := CompileOrder(et.info, q.Sort)
 	if err != nil {
 		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	collector := order.Page(q.Offset, q.Limit)
-	if refusal := s.VisitMatching(et, q, visible, collector.Add); refusal != nil {
+	plan, err := CompileSet(et.info, platform.RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set}, s.rules)
+	if err != nil {
+		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	effective, refusal := s.EffectivePredicate(et, q)
+	if refusal != nil {
 		return nil, 0, refusal
 	}
-	page, total := collector.Result()
+	page, total, _ := s.FindPlan(et, plan.Scoped(q.Archived, effective), visible, order, q.Offset, q.Limit)
 	return page, total, nil
+}
+
+func (s *Store) FindPlan(et *Type, plan Plan, visible func(reflect.Value) bool, order SortOrder, offset, limit int) ([]reflect.Value, int, int) {
+	window := plan.AllRows && visible == nil && et.rows.Sourced() && !et.fullImage && !et.retainedProjection && len(et.info.RecordImages) == 0 && s.current.View() != nil && limit > 0 && (len(order.keys) == 0 || len(order.keys) == 1 && order.keys[0].stamp == "id")
+	for draft := s; window && draft != nil; draft = draft.parent {
+		for ref := range draft.writes {
+			if strings.HasPrefix(ref, et.info.Type+"/") {
+				window = false
+				break
+			}
+		}
+	}
+	if window {
+		result, err := s.current.View().StateWindow(s.current.Context(), s.current.Tenant(), et.info.Type, persistence.StateWindow{Archived: plan.Archived, Descending: len(order.keys) == 1 && order.keys[0].desc, Offset: max(offset, 0), Limit: limit})
+		if err != nil {
+			panic(fmt.Errorf("record window: %w", err))
+		}
+		rows := et.rows.GetBatch(result.IDs)
+		out := make([]reflect.Value, 0, len(result.IDs))
+		for _, id := range result.IDs {
+			out = append(out, rows[id].Value)
+		}
+		return out, result.Total, result.Total
+	}
+	collector := order.Page(offset, limit)
+	matched := s.VisitPlan(et, plan, visible, collector.Add)
+	page, total := collector.Result()
+	return page, total, matched
 }
 
 func (s *Store) MatchingQuery(et *Type, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, *kernel.Error) {

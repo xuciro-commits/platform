@@ -2,6 +2,7 @@ package host
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -33,6 +34,9 @@ func liveReadAllowed(p string) bool {
 		return true
 	}
 	if strings.HasPrefix(p, "/v1/queries/") || strings.HasPrefix(p, "/v1/object-sets/") {
+		return true
+	}
+	if p == "/v1/page-model/read" {
 		return true
 	}
 	if strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) {
@@ -80,7 +84,7 @@ func (c *liveCapture) Write(p []byte) (int, error) {
 	return c.body.Write(p)
 }
 
-func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *http.ServeMux) {
+func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, m platform.Member, mux *http.ServeMux) {
 	encoded := r.URL.Query().Get("watch")
 	var queries []string
 	if len(encoded) > 64<<10 || json.Unmarshal([]byte(encoded), &queries) != nil || len(queries) > 32 || len(queries) == 0 {
@@ -91,7 +95,7 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *h
 	for _, query := range queries {
 		target, body, post := strings.Cut(query, "\n")
 		u, err := url.Parse(target)
-		if err != nil || len(query) > 8<<10 || u.Host != "" || u.Scheme != "" || u.Fragment != "" || path.Clean(u.Path) != u.Path || !liveReadAllowed(u.Path) || (post && (!strings.HasPrefix(u.Path, "/v1/object-sets/") || !json.Valid([]byte(body)))) {
+		if err != nil || len(query) > 8<<10 || u.Host != "" || u.Scheme != "" || u.Fragment != "" || path.Clean(u.Path) != u.Path || !liveReadAllowed(u.Path) || (post && ((!strings.HasPrefix(u.Path, "/v1/object-sets/") && u.Path != "/v1/page-model/read") || !json.Valid([]byte(body)))) {
 			http.Error(w, "unsupported live query", http.StatusBadRequest)
 			return
 		}
@@ -99,6 +103,8 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *h
 		request.Method = http.MethodGet
 		request.URL = u
 		request.RequestURI = query
+		request.Header.Del("Accept-Encoding")
+		request.Header.Del("If-None-Match")
 		request.Body = nil
 		if post {
 			request.Method = http.MethodPost
@@ -107,7 +113,7 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *h
 			request.Header.Set("Content-Type", "application/json")
 		}
 		_, pattern := mux.Handler(request)
-		if !strings.HasPrefix(pattern, request.Method+" ") || post && !strings.HasPrefix(pattern, "POST /v1/object-sets/") {
+		if !strings.HasPrefix(pattern, request.Method+" ") || post && !strings.HasPrefix(pattern, "POST /v1/object-sets/") && pattern != "POST /v1/page-model/read" {
 			http.Error(w, "unsupported live query route", http.StatusBadRequest)
 			return
 		}
@@ -136,20 +142,32 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *h
 				continue
 			}
 			versions[query] = version
-			capture := &liveCapture{header: make(http.Header)}
-			read := request.Clone(r.Context())
-			if _, body, post := strings.Cut(query, "\n"); post {
-				read.Body = io.NopCloser(strings.NewReader(body))
+			captureRead := func(ctx context.Context) (int, []byte) {
+				capture := &liveCapture{header: make(http.Header)}
+				read := request.Clone(ctx)
+				if _, body, post := strings.Cut(query, "\n"); post {
+					read.Body = io.NopCloser(strings.NewReader(body))
+				}
+				mux.ServeHTTP(capture, read)
+				status := capture.status
+				if status == 0 {
+					status = http.StatusOK
+				}
+				body := capture.body.Bytes()
+				if capture.oversized {
+					status = http.StatusRequestEntityTooLarge
+					body = []byte(`{"error":"Live query exceeds the result budget."}`)
+				}
+				return status, body
 			}
-			mux.ServeHTTP(capture, read)
-			status := capture.status
-			if status == 0 {
-				status = http.StatusOK
-			}
-			body := capture.body.Bytes()
-			if capture.oversized {
-				status = http.StatusRequestEntityTooLarge
-				body = []byte(`{"error":"Live query exceeds the result budget."}`)
+			var status int
+			var body []byte
+			if key, shared := build.PublicLiveKey(m, query, version, r.Header.Get("Accept-Language"), t.Entity); shared {
+				status, body = t.viewCache().LiveSnapshot(key, func() (int, []byte) {
+					return captureRead(context.WithoutCancel(r.Context()))
+				})
+			} else {
+				status, body = captureRead(r.Context())
 			}
 			if !json.Valid(body) {
 				body, _ = json.Marshal(map[string]string{"error": strings.TrimSpace(string(body))})
@@ -204,6 +222,9 @@ func (t *Tenant) liveReadVersion(query string, global, meta, seq, published int6
 	target, body, _ := strings.Cut(query, "\n")
 	u, _ := url.Parse(target)
 	p := u.Path
+	if p == "/v1/page-model/read" {
+		return fmt.Sprintf("%d/%d/%d", global, meta, t.Projection.Generation())
+	}
 	if strings.HasPrefix(p, "/v1/releases/candidates/") {
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
 	}
@@ -306,7 +327,7 @@ func (t *Tenant) liveReadVersion(query string, global, meta, seq, published int6
 	}
 	owner := "platform"
 	if name, ok := strings.CutPrefix(p, "/v1/"); ok && !strings.Contains(name, "/") {
-		if app := t.owner["read:"+name]; app != nil {
+		if app := t.App(t.owner["read:"+name]); app != nil {
 			owner = app.Manifest().ID
 		}
 	}

@@ -118,11 +118,11 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	t.i18n = transport.NewTranslator(func() []platform.App { return t.apps },
 		func(a platform.App) platform.Manifest { return transport.ManifestOf(a, t.definitionsFingerprint()) },
 		t.words.Clone, PlatformLanguages)
-	claim := func(name string, a platform.App) error {
-		if other := t.owner[name]; other != nil {
-			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)
+	claim := func(name, owner string) error {
+		if other := t.owner[name]; other != "" {
+			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other, owner)
 		}
-		t.owner[name] = a
+		t.owner[name] = owner
 		return nil
 	}
 	for i, a := range apps {
@@ -159,12 +159,12 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			names = append(names, "input:"+input)
 		}
 		for _, n := range names {
-			if err := claim(n, a); err != nil {
+			if err := claim(n, m.ID); err != nil {
 				return nil, err
 			}
 		}
 	}
-	roles, err := ownerRolesOf(apps, func(string) bool { return true })
+	roles, err := ownerRolesOf(t.ownerSet, func(string) bool { return true })
 	if err != nil {
 		return nil, fmt.Errorf("tenant %s has %w", id, err)
 	}

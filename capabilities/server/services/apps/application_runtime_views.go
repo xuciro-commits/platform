@@ -5,6 +5,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"time"
@@ -212,7 +213,7 @@ func (ctx Context) Bind(resource platform.AssetRef, release, dependencies string
 		if root.Ref.Kind != platform.AssetApp {
 			continue
 		}
-		graph := RunGraph(root.Ref, lookup)
+		graph := publication.RunGraph(root.Ref, lookup)
 		uses := graph[resource]
 		if len(jobOwner) > 0 {
 			for ref := range graph {

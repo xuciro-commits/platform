@@ -17,8 +17,12 @@ import (
 	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/actions"
+	automation "platformserver/services/automate/runtime"
 	"platformserver/services/data/lineage"
+	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/functions/runtime"
+	"platformserver/services/resources/authoring"
 )
 
 type tenantReadImage struct {
@@ -27,6 +31,7 @@ type tenantReadImage struct {
 	work        uint64
 	definitions uint64
 	records     uint64
+	resources   uint64
 	operations  int64
 	position    int64
 	next        chan struct{}
@@ -56,6 +61,7 @@ func (t *Tenant) endLane() {
 	epoch, work, definitions, position := t.StateEpoch.Load(), t.WorkEpoch.Load(), t.DefinitionEpoch.Load(), t.Projection.Current().Applied()
 	t.Projection.Lock()
 	generation := t.Projection.Generation()
+	resources := t.Projection.LiveVersion(build.ResourceType)
 	t.Projection.Unlock()
 	if previous := t.readImage.Load(); previous != nil && previous.epoch == epoch && previous.work == work && previous.definitions == definitions && previous.records == generation && previous.operations == operations && previous.position == position {
 		return
@@ -69,7 +75,11 @@ func (t *Tenant) endLane() {
 	if previous := t.readImage.Load(); previous != nil && previous.records == generation && previous.definitions == definitions {
 		state.markings.Image = previous.state.markings.Image
 	}
-	image := &tenantReadImage{state: state, epoch: epoch, work: work, definitions: definitions, records: generation, operations: operations, position: position, next: make(chan struct{})}
+	state.readScope.definitions = releaseowner.NewDefinitionPlanCache(definitions, resources)
+	if previous := t.readImage.Load(); previous != nil && previous.definitions == definitions && previous.resources == resources && maps.Equal(previous.state.disabledOwners, state.disabledOwners) {
+		state.readScope.definitions = previous.state.readScope.definitions
+	}
+	image := &tenantReadImage{state: state, epoch: epoch, work: work, definitions: definitions, records: generation, resources: resources, operations: operations, position: position, next: make(chan struct{})}
 	if previous := t.readImage.Swap(image); previous != nil {
 		close(previous.next)
 	}
@@ -176,24 +186,34 @@ func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T,
 }
 
 func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
-	control, err := t.captureControl()
-	if err != nil {
-		return nil, err
+	view := t.newControlFork()
+	view.connectors = t.connectors.Fork()
+	view.settings.Restore(t.settings.Snapshot())
+	view.words.Restore(t.words.Clone())
+	view.endpoints.Restore(t.endpoints.Saved())
+	var effects []actions.Queued
+	for _, effect := range t.outbound.Select(nil) {
+		effects = append(effects, actions.Queued{Effect: effect.Effect, Since: effect.Since})
 	}
-	view, err := t.forkControl(control)
-	if err != nil {
-		return nil, err
-	}
+	view.outbound.Restore(effects)
 	t.work.Lock()
+	work, err := t.work.Snapshot()
 	for _, job := range t.work.Jobs {
 		if current := view.work.Job(job.ID); current != nil {
 			current.NextRun = job.NextRun
 		}
 	}
 	t.work.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	if err := view.work.Install(t.ID, automation.WorkState{Queues: work.Queues, Failed: work.Failed, Tasks: work.Tasks, Jobs: work.Jobs}, func(app string) bool { return view.App(app) != nil }); err != nil {
+		return nil, err
+	}
 	view.readScope = &recordReadScope{ctx: ctx}
 	view.readOrigin = t
 	if t.readOrigin != nil {
+		view.readScope.definitions = t.readScope.definitions
 		view.readOrigin = t.readOrigin
 		view.readViews = t.viewCache()
 		view.markings.Image = t.markings.Image
@@ -219,7 +239,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 		apps[i] = fork
 	}
 	view.ownerSet = t.with(apps)
-	roles, err := ownerRolesOf(view.apps, view.OwnerActive)
+	roles, err := ownerRolesOf(view.ownerSet, view.OwnerActive)
 	if err != nil {
 		return nil, err
 	}

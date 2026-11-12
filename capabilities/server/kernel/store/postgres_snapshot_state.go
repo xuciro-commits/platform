@@ -150,6 +150,16 @@ func (v *postgresSnapshotRead) StateRecord(ctx context.Context, tenant, typ, id 
 	r, err := v.StateCurrent(ctx, tenant, typ, id)
 	return r.Image, err
 }
+func (v *postgresSnapshotRead) StateCurrents(ctx context.Context, tenant, typ string, ids []string) (map[string]StateCurrent, error) {
+	return readState(v.postgresStateRead, ctx, tenant, func(db stateQueries) (map[string]StateCurrent, error) {
+		return stateCurrents(ctx, db, tenant, typ, ids, &v.snapshot)
+	})
+}
+func (v *postgresSnapshotRead) StateWindow(ctx context.Context, tenant, typ string, window StateWindow) (StateWindowResult, error) {
+	return readState(v.postgresStateRead, ctx, tenant, func(db stateQueries) (StateWindowResult, error) {
+		return stateWindow(ctx, db, tenant, typ, window, &v.snapshot)
+	})
+}
 func (v *postgresSnapshotRead) StateCandidates(ctx context.Context, tenant, typ string, _ []StateFilter, after string, limit int, applied int64) ([]string, error) {
 	return readState(v.postgresStateRead, ctx, tenant, func(db stateQueries) ([]string, error) {
 		if applied != v.snapshot {

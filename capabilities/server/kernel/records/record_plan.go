@@ -11,9 +11,10 @@ import (
 )
 
 type Plan struct {
-	Match      func(reflect.Value) bool
-	Pushdown   []persistence.StateFilter
-	Candidates func(IndexImage, ImageLookup) ([]string, bool)
+	AllRows, Archived bool
+	Match             func(reflect.Value) bool
+	Pushdown          []persistence.StateFilter
+	Candidates        func(IndexImage, ImageLookup) ([]string, bool)
 }
 
 func CompilePlan(info platform.EntityInfo, filter ruleexpr.Expr, search string, engines ...platform.RuleEngine) (Plan, error) {
@@ -39,12 +40,14 @@ func CompilePlan(info platform.EntityInfo, filter ruleexpr.Expr, search string, 
 			}))
 		}
 	}
-	return Plan{Match: match, Pushdown: row.Pushdown(), Candidates: func(image IndexImage, lookup ImageLookup) ([]string, bool) {
+	return Plan{AllRows: row.program == nil && text == "", Archived: true, Match: match, Pushdown: row.Pushdown(), Candidates: func(image IndexImage, lookup ImageLookup) ([]string, bool) {
 		return exprCandidates(image, lookup, filter)
 	}}, nil
 }
 
 func (p Plan) Scoped(archived bool, effective func(reflect.Value) bool) Plan {
+	p.Archived = p.Archived && archived
+	p.AllRows = p.AllRows && effective == nil
 	if archived && effective == nil {
 		return p
 	}

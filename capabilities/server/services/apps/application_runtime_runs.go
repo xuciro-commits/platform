@@ -6,6 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"time"
@@ -61,7 +62,7 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 	shares := func(resource platform.AssetRef) []string {
 		names := []string{}
 		for _, d := range visible {
-			if d.Ref != ref && d.Application != nil && RunGraph(d.Ref, current)[resource] {
+			if d.Ref != ref && d.Application != nil && publication.RunGraph(d.Ref, current)[resource] {
 				names = append(names, d.Application.Title)
 			}
 		}
@@ -371,34 +372,6 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 	return out, nil
 }
 
-func RunGraph(root platform.AssetRef, assets map[platform.AssetRef]platform.ReleaseAsset) map[platform.AssetRef]bool {
-	graph := map[platform.AssetRef]bool{}
-	var visit func(platform.AssetRef)
-	visit = func(ref platform.AssetRef) {
-		if graph[ref] {
-			return
-		}
-		graph[ref] = true
-		asset, ok := assets[ref]
-		if !ok {
-			return
-		}
-		for _, dependency := range asset.Requires {
-			visit(dependency)
-		}
-		if ref.Kind == platform.AssetApp {
-			var app platform.Application
-			if json.Unmarshal(asset.Body, &app) == nil {
-				for _, dependency := range app.Dependencies(ref.App) {
-					visit(dependency)
-				}
-			}
-		}
-	}
-	visit(root)
-	return graph
-}
-
 func (ctx Context) Graphs(root platform.AssetRef) (map[platform.AssetRef]platform.ReleaseAsset, map[string]map[platform.AssetRef]bool, error) {
 	available, err := ctx.Assets()
 	if err != nil {
@@ -408,7 +381,7 @@ func (ctx Context) Graphs(root platform.AssetRef) (map[platform.AssetRef]platfor
 	for _, a := range available {
 		current[a.Ref] = a
 	}
-	graphs := map[string]map[platform.AssetRef]bool{"": RunGraph(root, current)}
+	graphs := map[string]map[platform.AssetRef]bool{"": publication.RunGraph(root, current)}
 	for id, raw := range ctx.Candidates() {
 		candidate, err := platform.ReadCandidate(id, raw)
 		if err != nil {
@@ -419,7 +392,7 @@ func (ctx Context) Graphs(root platform.AssetRef) (map[platform.AssetRef]platfor
 			assets[a.Ref] = a
 		}
 		if _, ok := assets[root]; ok {
-			graphs[id] = RunGraph(root, assets)
+			graphs[id] = publication.RunGraph(root, assets)
 		}
 	}
 	return current, graphs, nil

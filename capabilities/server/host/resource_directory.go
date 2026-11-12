@@ -32,7 +32,7 @@ type ResourceDirectory struct {
 
 func (t *Tenant) resourceActionActive(name string) bool {
 	target := ""
-	if owner := t.owner["action:"+name]; owner != nil {
+	if owner := t.App(t.owner["action:"+name]); owner != nil {
 		action, _ := owner.Manifest().Actions.Action(name)
 		target = action.Target
 	}

@@ -10,7 +10,7 @@ import {inputSlot} from './PageNavigation';
 import {recordResourceSlot,selectionSlot} from './resources';
 import type {VariableResult} from './variables';
 
-type State={identity:string;data?:Api.PageModelResult;error?:string};
+type State={identity:string;signature:string;data?:Api.PageModelResult;error?:string};
 export function usePageModel(bound:WidgetBindingContext,source:RecordSource|undefined){
  const {client,definitions}=useHost(),model=bound.section.model,session=bound.session;
  const [view,setView]=useState<{base:string;query:RecordQuery}>({base:'',query:{}}),[round,refresh]=useState(0),[state,setState]=useState<State>();
@@ -29,6 +29,8 @@ export function usePageModel(bound:WidgetBindingContext,source:RecordSource|unde
  const signature=JSON.stringify([base,query]);
  const identity=JSON.stringify([signature,source?.revision,round]),current=useRef(identity);current.current=identity;
  const key=modelWindowKey(bound.section);
+ const request:Api.PageModelRead|undefined=active&&ready&&model?{page:definition?.ref??{app:'build',kind:'page',name:bound.page.name},...bound.modelDraft||!definition?{draft:encodePage(canonicalPage,definitions)}:{contentVersion:definition.contentVersion},section:bound.section.id??'',records,values,offset:query.offset,limit:query.limit,search:query.search,sort:query.sort,query:bound.window?.query??{domain:Object.entries(bound.narrowed[model.type]??{}).filter(([,v])=>v!==undefined&&v!=='').map(([name,value])=>[name,'=',value])}}:undefined;
+ const readKey=request?`/v1/page-model/read\n${JSON.stringify(request)}`:undefined,live=!!readKey&&new TextEncoder().encode(readKey).length<=8192;
  const [searched,setSearched]=useState(query.search);
  useEffect(()=>{if(searched===query.search)return;const wait=setTimeout(()=>setSearched(query.search),150);return()=>clearTimeout(wait);},[query.search,searched]);
  useEffect(()=>{
@@ -36,21 +38,20 @@ export function usePageModel(bound:WidgetBindingContext,source:RecordSource|unde
   let mounted=true;const valid=()=>mounted&&current.current===identity&&source?.scope===session?.snapshotScope();
   if(producer)session?.adoptModelWindow(key,signature);
   if(searched!==query.search)return;
-  const request:Api.PageModelRead={page:definition?.ref??{app:'build',kind:'page',name:bound.page.name},...bound.modelDraft||!definition?{draft:encodePage(canonicalPage,definitions)}:{contentVersion:definition.contentVersion},section:bound.section.id??'',records,values,offset:query.offset,limit:query.limit,search:query.search,sort:query.sort,query:bound.window?.query??{domain:Object.entries(bound.narrowed[model.type]??{}).filter(([,v])=>v!==undefined&&v!=='').map(([name,value])=>[name,'=',value])}};
-  void client.get<Api.PageModelResult>(`/v1/page-model/read\n${JSON.stringify(request)}`,true).then(async data=>{
+  void client.get<Api.PageModelResult>(readKey!,!live).then(async data=>{
    if(!valid())return;
    const paths=(model.fields??[]).filter(f=>(f.path?.length??0)>1&&data.fields.some(visible=>visible.name===modelFieldKey(f)));
    if(paths.length&&!data.hidden){
     const reads=new Map<string,ReturnType<RecordSource['get']>>(),related={entity:source!.entity,get:(type:string,id:string)=>{const key=JSON.stringify([type,id]);let read=reads.get(key);if(!read){read=source!.get(type,id);reads.set(key,read);}return read;}};
     data={...data,records:await Promise.all(data.records.map(async raw=>{const record={...raw} as EntityRecord,values=await Promise.all(paths.map(field=>readModelPath(related,model.type,record,field.path!,valid)));for(const [i,field]of paths.entries())record[modelFieldKey(field)]=values[i];return record;}))};
    }
-   if(!valid())return;if(producer)session?.adoptModelWindow(key,signature,{object:model.type,query,records:data.records as EntityRecord[],total:data.total,partial:data.partial});setState({identity,data});
-  }).catch(()=>{if(valid()){if(producer)session?.adoptModelWindow(key,'',undefined,'Model binding could not be read. Check its declared source and permissions.');setState({identity,error:'Model binding could not be read. Check its declared source and permissions.'});}});
+   if(!valid())return;if(producer)session?.adoptModelWindow(key,signature,{object:model.type,query,records:data.records as EntityRecord[],total:data.total,partial:data.partial});setState({identity,signature,data});
+  }).catch(()=>{if(valid()){if(producer)session?.adoptModelWindow(key,'',undefined,'Model binding could not be read. Check its declared source and permissions.');setState({identity,signature,error:'Model binding could not be read. Check its declared source and permissions.'});}});
   return()=>{mounted=false;};
  },[active,ready,identity,client,session,searched]);
- useEffect(()=>active&&model?source?.watchList?.(model.type,{},()=>refresh(n=>n+1)):undefined,[active,model?.type,source?.scope]);
+ useEffect(()=>active&&ready&&readKey?live?client.subscribeRead(readKey,()=>refresh(n=>n+1)):source?.watchList?.(model!.type,{},()=>refresh(n=>n+1)):undefined,[active,ready,readKey,live,client,source?.scope]);
  useEffect(()=>()=>{if(producer)session?.adoptModelWindow(key,'')},[session,key,producer]);
- const matching=state?.identity===identity?state:undefined,data=matching?.data;
+ const matching=state?.identity===identity?state:undefined,data=state?.signature===signature?state.data:undefined;
  const payload=data?{kind:'object-set' as const,window:{object:model!.type,query,records:data.records.map(r=>({object:model!.type,id:String(r.id)})),total:data.total,complete:!data.partial&&data.records.length===data.total}}:undefined;
  const status:VariableResult=!ready?{status:'empty'}:matching?.error?{status:'error',code:matching.error}:!data?{status:'pending'}:data.records.length?{status:'value',value:payload!}:{status:'empty',value:payload};
  const window:QueryWindow={query:{...query,...data?.sort?.length?{sort:data.sort}:{}},sortLocked:data?.sortLocked,page:data?{records:data.records as EntityRecord[],total:data.total,partial:data.partial}:undefined,error:matching?.error,maxOffset:10000,onChange:patch=>setView({base,query:{...query,...patch}})};

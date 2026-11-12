@@ -71,7 +71,7 @@ func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platfor
 	draft := t.newStagedDecision()
 	var receipt *pb.ChangeRecord
 	for i, edit := range edits {
-		app := t.owner["action:"+edit.Schema]
+		app := t.App(t.owner["action:"+edit.Schema])
 		if app == nil || app.Manifest().ID != build.ID {
 			saved.Refusal = fmt.Sprintf("edit %d: %s is not a builder action", i+1, edit.Schema)
 			break

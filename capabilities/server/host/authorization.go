@@ -15,7 +15,7 @@ import (
 )
 
 func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Error {
-	owner := t.owner["action:"+s.GetSchema().GetName()]
+	owner := t.App(t.owner["action:"+s.GetSchema().GetName()])
 	if owner == nil || owner.Manifest().ID != build.ID {
 		return nil
 	}

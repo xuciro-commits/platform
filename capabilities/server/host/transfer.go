@@ -52,7 +52,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 
 func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*kernel.Error, []platform.FieldIssue) {
 	issues, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]platform.FieldIssue, *kernel.Error) {
-		app := t.owner["action:"+s.GetSchema().GetName()]
+		app := t.App(t.owner["action:"+s.GetSchema().GetName()])
 		if app == nil {
 			return nil, unknown()
 		}

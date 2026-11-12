@@ -80,7 +80,7 @@ func (t *Tenant) decideBranchChild(draft *stagedDecision, m platform.Member, ite
 }
 
 func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, schema string, submission *pb.Submission, automation bool, now time.Time) branchChild {
-	a := t.owner["action:"+schema]
+	a := t.App(t.owner["action:"+schema])
 	if a == nil {
 		return branchChild{refusal: platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The resource type has no {action} action", schema)}
 	}
@@ -535,7 +535,7 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request Branch
 	s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, ExpectedRevision: &revision,
 		Target: &pb.EntityRef{Type: build.BranchType, Id: id}, Schema: &pb.SchemaRef{Name: build.BranchType + ".merge", Version: 1}, Payload: payload}
 	s.IdempotencyKey = branches.Key("branch:"+id+":merge", m.ID, s.Schema.Name, payload, &revision)
-	owner := t.owner["action:"+s.Schema.Name]
+	owner := t.App(t.owner["action:"+s.Schema.Name])
 	if owner == nil {
 		return none, nil, unknown()
 	}

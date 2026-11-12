@@ -3,6 +3,7 @@ package host
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 
 	"platformserver/platform"
@@ -21,10 +22,10 @@ type ownerRoles struct {
 	listeners []string
 }
 
-func ownerRolesOf(apps []platform.App, active func(string) bool) (ownerRoles, error) {
+func ownerRolesOf(owners ownerSet, active func(string) bool) (ownerRoles, error) {
 	var r ownerRoles
-	for _, a := range apps {
-		id := a.Manifest().ID
+	for i, a := range owners.apps {
+		id := owners.ids[i]
 		if !active(id) {
 			continue
 		}
@@ -52,21 +53,23 @@ type tenantPorts struct {
 
 type ownerSet struct {
 	apps     []platform.App
+	ids      []string
 	appIndex map[string]int
-	owner    map[string]platform.App
+	owner    map[string]string
 	states   map[string]platform.AcceptedStateApp
 	inputs   map[string]platform.AcceptedInputApp
 	assets   map[string]platform.AssetLifecycleOwner
 }
 
 func newOwnerSet(apps []platform.App) (ownerSet, error) {
-	s := ownerSet{appIndex: map[string]int{}, owner: map[string]platform.App{}}
+	s := ownerSet{ids: make([]string, len(apps)), appIndex: map[string]int{}, owner: map[string]string{}}
 	for i, app := range apps {
 		id := app.Manifest().ID
 		if _, exists := s.appIndex[id]; exists || id == "" {
 			return ownerSet{}, fmt.Errorf("owner identity %q is empty or repeated", id)
 		}
 		s.appIndex[id] = i
+		s.ids[i] = id
 	}
 	s.place(apps)
 	return s, nil
@@ -75,8 +78,8 @@ func newOwnerSet(apps []platform.App) (ownerSet, error) {
 func (s *ownerSet) place(apps []platform.App) {
 	s.apps = apps
 	s.states, s.inputs, s.assets = map[string]platform.AcceptedStateApp{}, map[string]platform.AcceptedInputApp{}, map[string]platform.AssetLifecycleOwner{}
-	for _, a := range apps {
-		id := a.Manifest().ID
+	for i, a := range apps {
+		id := s.ids[i]
 		register(s.states, id, a)
 		register(s.inputs, id, a)
 		register(s.assets, id, a)
@@ -84,17 +87,8 @@ func (s *ownerSet) place(apps []platform.App) {
 }
 
 func (s ownerSet) with(apps []platform.App) ownerSet {
-	out := ownerSet{appIndex: s.appIndex}
+	out := ownerSet{ids: s.ids, appIndex: s.appIndex, owner: maps.Clone(s.owner)}
 	out.place(apps)
-	out.owner = out.rehome(s.owner)
-	return out
-}
-
-func (s ownerSet) rehome(routes map[string]platform.App) map[string]platform.App {
-	out := make(map[string]platform.App, len(routes))
-	for key, a := range routes {
-		out[key] = s.App(a.Manifest().ID)
-	}
 	return out
 }
 
@@ -108,8 +102,8 @@ func (s ownerSet) App(id string) platform.App {
 
 func (s ownerSet) assetOwners(active func(string) bool) []platform.AssetLifecycleOwner {
 	var out []platform.AssetLifecycleOwner
-	for _, a := range s.apps {
-		if owner := s.assets[a.Manifest().ID]; owner != nil && active(a.Manifest().ID) {
+	for _, id := range s.ids {
+		if owner := s.assets[id]; owner != nil && active(id) {
 			out = append(out, owner)
 		}
 	}

@@ -133,7 +133,8 @@ func (r *ConnectorRoster) Clone() *contract.Connectors {
 
 func (r *ConnectorRoster) Fork() *ConnectorRoster {
 	out := NewConnectorRoster(r.tenant)
-	out.kernel = r.Clone()
+	out.Use(r.Clone())
+	out.lastError = r.LastErrors()
 	return out
 }
 

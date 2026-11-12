@@ -534,14 +534,13 @@ func (r *setRead) loadObjects(node *setNode, w Window) (RecordPage, *kernel.Erro
 	if err != nil {
 		return RecordPage{}, err
 	}
-	collector := order.Page(w.Offset, w.Limit)
 	plan := cs.plans[0]
 	if w.Match != nil {
 		base := plan.Match
+		plan.AllRows = false
 		plan.Match = func(value reflect.Value) bool { return base(value) && w.Match(value) }
 	}
-	matched := store.VisitPlan(read.view, plan, read.visible, collector.Add)
-	page, total := collector.Result()
+	page, total, matched := store.FindPlan(read.view, plan, read.visible, order, w.Offset, w.Limit)
 	out := RecordPage{Records: make([]any, len(page)), Total: total, Partial: matched > total}
 	ids := make([]string, 0, len(page))
 	narrower := t.narrowerIn(store, m, r.now, true)

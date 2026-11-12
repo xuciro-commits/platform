@@ -6,6 +6,7 @@ import (
 	"fmt"
 	pgx "github.com/jackc/pgx/v5"
 	"log"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -340,8 +341,8 @@ func (p *SQLProjection) readRows(s *Store, typ string, ids map[string]bool) (row
 			take(id, row)
 		}
 	} else {
-		for id := range ids {
-			take(id, et.Rows().Get(id))
+		for id, row := range et.Rows().GetBatch(slices.Collect(maps.Keys(ids))) {
+			take(id, row)
 		}
 	}
 	return rows, changes, ends

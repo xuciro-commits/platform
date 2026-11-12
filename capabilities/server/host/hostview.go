@@ -222,7 +222,7 @@ func (h hostView) Holding(app, role string) []string {
 }
 
 func (h hostView) Action(schema string) (string, platform.Action, bool) {
-	a := h.t.owner["action:"+schema]
+	a := h.t.App(h.t.owner["action:"+schema])
 	if a == nil {
 		return "", platform.Action{}, false
 	}
@@ -238,7 +238,7 @@ func (h hostView) Action(schema string) (string, platform.Action, bool) {
 }
 
 func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	a := h.t.owner["action:"+s.GetSchema().GetName()]
+	a := h.t.App(h.t.owner["action:"+s.GetSchema().GetName()])
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
@@ -250,7 +250,7 @@ func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 
 func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	decide := func() (*pb.ChangeRecord, *kernel.Error) {
-		a := h.t.owner["action:"+s.GetSchema().GetName()]
+		a := h.t.App(h.t.owner["action:"+s.GetSchema().GetName()])
 		if a == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
@@ -500,7 +500,7 @@ func (h hostView) CheckResourceSchema(schema string, version *platform.SchemaVer
 	if version == nil {
 		return nil
 	}
-	owner := h.t.owner["action:"+schema]
+	owner := h.t.App(h.t.owner["action:"+schema])
 	if owner == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 	}

@@ -75,6 +75,8 @@ type StateReadView interface {
 	Position() int64
 	Close() error
 	StateCurrent(context.Context, string, string, string) (StateCurrent, error)
+	StateCurrents(context.Context, string, string, []string) (map[string]StateCurrent, error)
+	StateWindow(context.Context, string, string, StateWindow) (StateWindowResult, error)
 	StateRecord(context.Context, string, string, string) (json.RawMessage, error)
 	StateCandidates(context.Context, string, string, []StateFilter, string, int, int64) ([]string, error)
 	StateHistory(context.Context, string, string, string, int, int) ([]json.RawMessage, error)
@@ -82,6 +84,16 @@ type StateReadView interface {
 	StateValue(context.Context, string, string, string, int64) (json.RawMessage, error)
 	StateValues(context.Context, string, string, int64) (map[string]json.RawMessage, error)
 	StateUnique(context.Context, string, string, string, string, int64) ([]string, error)
+}
+
+type StateWindow struct {
+	Archived, Descending bool
+	Offset, Limit        int
+}
+
+type StateWindowResult struct {
+	IDs   []string
+	Total int
 }
 
 type StateFilter struct {

@@ -75,7 +75,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 		if refusal := t.recordReadRefusal(); refusal != nil {
 			return out, refusal
 		}
-		a := t.owner["action:"+s.GetSchema().GetName()]
+		a := t.App(t.owner["action:"+s.GetSchema().GetName()])
 		if a == nil {
 			a = t.App(s.GetAuthority())
 			if a == nil {
@@ -366,7 +366,7 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 		}
 	}()
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil &&
-		draft.tenant.owner["action:"+platform.WorkApprovalRequestSchema] != nil {
+		draft.tenant.App(draft.tenant.owner["action:"+platform.WorkApprovalRequestSchema]) != nil {
 		record, refusal = draft.requestApproval(a, m, s, now)
 	} else {
 		caller := platform.NewCaller(draft, m, a.Manifest().ID, false, automation)

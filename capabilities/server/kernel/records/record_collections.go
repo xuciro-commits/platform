@@ -251,6 +251,7 @@ func CompareValues(a, b any) int {
 
 type RowSource interface {
 	Get(string) *Row
+	GetBatch([]string) map[string]*Row
 	IDs(after string, limit int) []string
 }
 
@@ -277,6 +278,24 @@ func (r Rows) Get(id string) *Row {
 		return r.source.Get(id)
 	}
 	return nil
+}
+
+func (r Rows) GetBatch(ids []string) map[string]*Row {
+	out := make(map[string]*Row, len(ids))
+	var missing []string
+	for _, id := range ids {
+		if row := r.index.Get(id); row != nil || r.index.Has(id) {
+			out[id] = row
+		} else if r.source != nil {
+			missing = append(missing, id)
+		}
+	}
+	for batch := range slices.Chunk(missing, 256) {
+		for id, row := range r.source.GetBatch(batch) {
+			out[id] = row
+		}
+	}
+	return out
 }
 
 func (r *Rows) Set(id string, row *Row) { r.index.Set(id, row) }
@@ -309,6 +328,7 @@ func (r Rows) All() iter.Seq2[string, *Row] {
 		after := ""
 		for {
 			ids := r.source.IDs(after, 256)
+			rows := r.GetBatch(ids)
 			for _, id := range ids {
 				for hasOverlay && overlayID < id {
 					if !emitOverlay() {
@@ -321,7 +341,7 @@ func (r Rows) All() iter.Seq2[string, *Row] {
 					}
 					continue
 				}
-				if row := r.source.Get(id); row != nil && !yield(id, row) {
+				if row := rows[id]; row != nil && !yield(id, row) {
 					return
 				}
 			}

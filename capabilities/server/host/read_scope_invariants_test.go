@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"testing"
 
@@ -18,6 +19,11 @@ type sqlShapedReads struct {
 	filters    [][]persistence.StateFilter
 	current    int
 	allIDs     []string
+	rows       map[string]map[string]persistence.StateCurrent
+	singles    int
+	batches    [][]string
+	windows    []persistence.StateWindow
+	window     persistence.StateWindowResult
 }
 
 type sqlShapedState struct{ reads *sqlShapedReads }
@@ -55,16 +61,44 @@ func (sqlShapedView) Checkpoint(context.Context, string) (persistence.StateDiges
 }
 func (sqlShapedView) Position() int64 { return 0 }
 func (sqlShapedView) Close() error    { return nil }
-func (v sqlShapedView) StateCurrent(context.Context, string, string, string) (persistence.StateCurrent, error) {
+func (v sqlShapedView) StateCurrent(_ context.Context, _, typ, id string) (persistence.StateCurrent, error) {
 	v.reads.current++
-	return persistence.StateCurrent{}, nil
+	v.reads.singles++
+	return v.reads.rows[typ][id], nil
+}
+func (v sqlShapedView) StateCurrents(_ context.Context, _, typ string, ids []string) (map[string]persistence.StateCurrent, error) {
+	v.reads.current += len(ids)
+	v.reads.batches = append(v.reads.batches, slices.Clone(ids))
+	out := map[string]persistence.StateCurrent{}
+	for _, id := range ids {
+		if row, found := v.reads.rows[typ][id]; found {
+			out[id] = row
+		}
+	}
+	return out, nil
+}
+func (v sqlShapedView) StateWindow(_ context.Context, _, _ string, window persistence.StateWindow) (persistence.StateWindowResult, error) {
+	v.reads.windows = append(v.reads.windows, window)
+	return v.reads.window, nil
 }
 func (sqlShapedView) StateRecord(context.Context, string, string, string) (json.RawMessage, error) {
 	return nil, nil
 }
-func (v sqlShapedView) StateCandidates(_ context.Context, _, typ string, filters []persistence.StateFilter, _ string, _ int, _ int64) ([]string, error) {
+func (v sqlShapedView) StateCandidates(_ context.Context, _, typ string, filters []persistence.StateFilter, after string, limit int, _ int64) ([]string, error) {
 	v.reads.candidates = append(v.reads.candidates, typ)
 	v.reads.filters = append(v.reads.filters, filters)
+	if rows, configured := v.reads.rows[typ]; configured {
+		var ids []string
+		for _, id := range slices.Sorted(maps.Keys(rows)) {
+			if id > after {
+				ids = append(ids, id)
+				if len(ids) == limit {
+					break
+				}
+			}
+		}
+		return ids, nil
+	}
 	if len(filters) == 0 {
 		return v.reads.allIDs, nil
 	}

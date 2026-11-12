@@ -18,6 +18,7 @@ type ViewCache struct {
 	mu    sync.Mutex
 	gen   uint64
 	entry map[string]*viewEntry
+	live  map[string]*liveView
 }
 
 const maxViewEntries = 8
@@ -160,6 +161,39 @@ type viewBody struct {
 	etag  string
 	once  sync.Once
 	gz    []byte
+}
+
+type liveView struct {
+	ready  chan struct{}
+	status int
+	body   []byte
+}
+
+func (c *ViewCache) LiveSnapshot(key string, build func() (int, []byte)) (int, []byte) {
+	c.mu.Lock()
+	if saved := c.live[key]; saved != nil {
+		c.mu.Unlock()
+		<-saved.ready
+		return saved.status, saved.body
+	}
+	if len(c.live) >= 32 {
+		c.live = map[string]*liveView{}
+	}
+	saved := &liveView{ready: make(chan struct{})}
+	if c.live == nil {
+		c.live = map[string]*liveView{}
+	}
+	c.live[key] = saved
+	c.mu.Unlock()
+
+	saved.status, saved.body = build()
+	if len(saved.body) > 2<<20 {
+		c.mu.Lock()
+		delete(c.live, key)
+		c.mu.Unlock()
+	}
+	close(saved.ready)
+	return saved.status, saved.body
 }
 
 func (b *viewBody) compressed() []byte {

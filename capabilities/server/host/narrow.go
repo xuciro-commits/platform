@@ -59,7 +59,7 @@ func (t *Tenant) mayReadIn(store *records.Store, m platform.Member, now time.Tim
 }
 
 func (t *Tenant) mayCallRead(m platform.Member, name string) bool {
-	a := t.owner["read:"+name]
+	a := t.App(t.owner["read:"+name])
 	return a != nil && t.authorizeEntry(m, a.Manifest().ID, name, "read", Now()).Allow
 }
 

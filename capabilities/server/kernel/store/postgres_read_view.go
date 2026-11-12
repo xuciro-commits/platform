@@ -89,6 +89,16 @@ func readState[T any](v *postgresStateRead, ctx context.Context, tenant string, 
 func (v *postgresStateRead) StateCurrent(ctx context.Context, tenant, typ, id string) (StateCurrent, error) {
 	return readState(v, ctx, tenant, func(db stateQueries) (StateCurrent, error) { return stateCurrent(ctx, db, tenant, typ, id) })
 }
+func (v *postgresStateRead) StateCurrents(ctx context.Context, tenant, typ string, ids []string) (map[string]StateCurrent, error) {
+	return readState(v, ctx, tenant, func(db stateQueries) (map[string]StateCurrent, error) {
+		return stateCurrents(ctx, db, tenant, typ, ids, nil)
+	})
+}
+func (v *postgresStateRead) StateWindow(ctx context.Context, tenant, typ string, window StateWindow) (StateWindowResult, error) {
+	return readState(v, ctx, tenant, func(db stateQueries) (StateWindowResult, error) {
+		return stateWindow(ctx, db, tenant, typ, window, nil)
+	})
+}
 func (v *postgresStateRead) StateRecord(ctx context.Context, tenant, typ, id string) (json.RawMessage, error) {
 	return readState(v, ctx, tenant, func(db stateQueries) (json.RawMessage, error) { return stateRecord(ctx, db, tenant, typ, id) })
 }

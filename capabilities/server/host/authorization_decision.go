@@ -13,6 +13,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/objects"
+	"platformserver/services/resources/authoring"
 	"platformserver/services/security"
 )
 
@@ -30,7 +31,7 @@ func (d *stagedDecision) Authorize(c platform.Caller, q platform.AuthzRequest, a
 	}
 	decision := d.tenant.authorizeFrom(d.Records, c, q, at, false)
 	app := c.App
-	if owner := d.tenant.owner["action:"+q.Action]; owner != nil {
+	if owner := d.tenant.App(d.tenant.owner["action:"+q.Action]); owner != nil {
 		app = owner.Manifest().ID
 	} else if et := d.Records.Type(q.Type); et != nil {
 		app = et.Info().App
@@ -123,7 +124,7 @@ func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et 
 	}
 	c.Member = t.authorizationMember(c.Member)
 	if c.Automation && c.App == et.Info().App {
-		return func(reflect.Value) bool { return true }, nil
+		return nil, nil
 	}
 	policy, err := t.authorizer().ScopePolicy(store, c, et.Info(), at, 0, newAuthorizationWalk())
 	if err != nil {
@@ -132,6 +133,9 @@ func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et 
 	if et.Info().Type == dataowner.DatasetVersionType {
 		index := t.markingsIn(store, true)
 		return func(value reflect.Value) bool { return index.Visible(c.Member, value) && policy.Match(value) }, nil
+	}
+	if policy == nil && !build.ProjectDelegated(c.Member) {
+		return nil, nil
 	}
 	return func(value reflect.Value) bool {
 		id := records.Header(value).ID

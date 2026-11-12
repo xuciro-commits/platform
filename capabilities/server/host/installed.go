@@ -14,7 +14,7 @@ import (
 
 func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
 	id := app.Manifest().ID
-	if other := t.owner["action:"+actions[0].Schema]; other != nil && (other.Manifest().ID != id || other.AcceptedLedger() != app.AcceptedLedger()) {
+	if other := t.App(t.owner["action:"+actions[0].Schema]); other != nil && (other.Manifest().ID != id || other.AcceptedLedger() != app.AcceptedLedger()) {
 		return fmt.Errorf("%s: another app owns %s", e.Type, actions[0].Schema)
 	}
 	info, err := platform.Describe(id, e, func(reflect.Type) string { return "" })
@@ -39,20 +39,16 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 		if action.Target != e.Type {
 			return fmt.Errorf("%s: action %s targets %s", e.Type, action.Schema, action.Target)
 		}
-		owner := t.App(id)
-		if owner == nil {
-			owner = app
-		}
-		t.owner["action:"+action.Schema] = owner
+		t.owner["action:"+action.Schema] = id
 	}
 	for name, owner := range t.owner {
-		if owner.Manifest().ID == id && strings.HasPrefix(name, "read:protocol:"+e.Type+":") {
+		if owner == id && strings.HasPrefix(name, "read:protocol:"+e.Type+":") {
 			delete(t.owner, name)
 		}
 	}
 	for _, protocol := range e.Protocols {
 		for _, name := range protocol.Reads {
-			t.owner["read:"+name] = t.App(id)
+			t.owner["read:"+name] = id
 		}
 	}
 	kept := slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
@@ -147,7 +143,7 @@ func (t *Tenant) pageBindings() pageowner.Bindings {
 	return pageowner.Bindings{Entity: t.Entity, Criteria: t.modelCriteria, Rules: t.services.Rules,
 		Operation: t.pageOperation, Definitions: t.definitions, Interface: t.bindInterfaceQuery,
 		Action: func(name string) (string, platform.Action, bool) {
-			owner := t.owner["action:"+name]
+			owner := t.App(t.owner["action:"+name])
 			if owner == nil {
 				return "", platform.Action{}, false
 			}

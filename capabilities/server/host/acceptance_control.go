@@ -76,7 +76,7 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 	return out, nil
 }
 
-func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
+func (t *Tenant) newControlFork() *Tenant {
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), identity: t.identity, ownerSet: t.ownerSet, definitions: t.definitions, Projection: t.Projection, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
 		bindings: t.bindings.Clone(), connectors: runtimekernel.NewConnectorRoster(t.ID), work: automation.NewWorkBoard(), works: t.forkWorkState()}
 	t.work.Lock()
@@ -85,6 +85,11 @@ func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error)
 		view.work.AddJob(&copy)
 	}
 	t.work.Unlock()
+	return view
+}
+
+func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
+	view := t.newControlFork()
 	_, marks := t.connectors.State()
 	view.connectors.RestoreMarks(marks)
 	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps }, nil, view.words.Clone, PlatformLanguages)

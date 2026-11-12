@@ -428,6 +428,63 @@ func stateCurrent(ctx context.Context, db stateQueries, tenant, typ, id string) 
 	}
 	return current, err
 }
+
+func stateCurrents(ctx context.Context, db stateQueries, tenant, typ string, ids []string, snapshot *int64) (map[string]StateCurrent, error) {
+	table, where := "runtime_records", "tenant=$1 and type=$2 and id=any($3::text[])"
+	args := []any{tenant, typ, ids}
+	if snapshot != nil {
+		table = "runtime_snapshot_records"
+		where += " and snapshot_seq=$4"
+		args = append(args, *snapshot)
+	}
+	rows, err := db.Query(ctx, `select id,image,history_count,history_head,seq from `+table+` where `+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]StateCurrent, len(ids))
+	for rows.Next() {
+		var id string
+		var current StateCurrent
+		if err := rows.Scan(&id, &current.Image, &current.HistoryCount, &current.HistoryHead, &current.Position); err != nil {
+			return nil, err
+		}
+		out[id] = current
+	}
+	return out, rows.Err()
+}
+
+func stateWindow(ctx context.Context, db stateQueries, tenant, typ string, window StateWindow, snapshot *int64) (StateWindowResult, error) {
+	table, where := "runtime_records", "tenant=$1 and type=$2 and ($3::boolean or not query @> '{\"value\":{\"archived\":true}}'::jsonb)"
+	args := []any{tenant, typ, window.Archived}
+	if snapshot != nil {
+		table = "runtime_snapshot_records"
+		where += " and snapshot_seq=$4"
+		args = append(args, *snapshot)
+	}
+	var out StateWindowResult
+	if err := db.QueryRow(ctx, `select count(*) from `+table+` where `+where, args...).Scan(&out.Total); err != nil {
+		return out, err
+	}
+	order := "asc"
+	if window.Descending {
+		order = "desc"
+	}
+	query := fmt.Sprintf(`select id from %s where %s order by id %s offset $%d limit $%d`, table, where, order, len(args)+1, len(args)+2)
+	rows, err := db.Query(ctx, query, append(args, window.Offset, window.Limit)...)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return out, err
+		}
+		out.IDs = append(out.IDs, id)
+	}
+	return out, rows.Err()
+}
 func (j *Postgres) StateHistory(ctx context.Context, tenant, typ, id string, after, through int) ([]json.RawMessage, error) {
 	return stateHistory(ctx, j.pool, tenant, typ, id, after, through)
 }

@@ -107,7 +107,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 		}
 		apps[i] = bound
 		for _, action := range bound.Manifest().Actions.All() {
-			view.owner["action:"+action.Schema] = bound
+			view.owner["action:"+action.Schema] = view.ids[i]
 		}
 		for _, entity := range bound.Manifest().Entities {
 			if !slices.ContainsFunc(selected, func(a platform.ReleaseAsset) bool {
@@ -120,7 +120,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 				return nil, err
 			}
 			rt.shapes[info.Type] = info
-			view.owner[info.Type] = bound
+			view.owner[info.Type] = view.ids[i]
 		}
 		(hostView{t: view, app: bound, decision: h.decision}).bindOwner(bound)
 	}
@@ -163,7 +163,7 @@ func (h flowExecution) ActiveRelease() string { return h.rt.release }
 
 func (h flowExecution) Attempt(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
-		owner := h.rt.view.owner["action:"+s.GetSchema().GetName()]
+		owner := h.rt.view.App(h.rt.view.owner["action:"+s.GetSchema().GetName()])
 		if owner == nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The held action has no retained owner")
 		}
@@ -171,7 +171,7 @@ func (h flowExecution) Attempt(c platform.Caller, s *pb.Submission, at time.Time
 	})
 }
 func (h flowExecution) Action(schema string) (string, platform.Action, bool) {
-	owner := h.rt.view.owner["action:"+schema]
+	owner := h.rt.view.App(h.rt.view.owner["action:"+schema])
 	if owner == nil {
 		return "", platform.Action{}, false
 	}
@@ -179,7 +179,7 @@ func (h flowExecution) Action(schema string) (string, platform.Action, bool) {
 	return owner.Manifest().ID, a, ok
 }
 func (h flowExecution) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	owner := h.rt.view.owner["action:"+s.GetSchema().GetName()]
+	owner := h.rt.view.App(h.rt.view.owner["action:"+s.GetSchema().GetName()])
 	if owner == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
@@ -265,6 +265,21 @@ func (s *retainedRows) Get(id string) *records.Row {
 		panic(retainedReadRefusal{refusal})
 	}
 	return value
+}
+
+func (s *retainedRows) GetBatch(ids []string) map[string]*records.Row {
+	rows := s.rows.GetBatch(ids)
+	for id, row := range rows {
+		if row == nil {
+			continue
+		}
+		value, refusal := s.runtime.retainedRow(s.current, s.info, row)
+		if refusal != nil {
+			panic(retainedReadRefusal{refusal})
+		}
+		rows[id] = value
+	}
+	return rows
 }
 
 type retainedReadRefusal struct{ refusal *kernel.Error }

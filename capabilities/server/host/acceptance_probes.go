@@ -40,7 +40,6 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		unsupportedStagedEffect()
 	}
 	fork.Decision = forked
-	fork.definitionPlans = nil
 	fork.operationInputs = maps.Clone(d.operationInputs)
 	for hash, pending := range fork.operationInputs {
 		fork.operationInputs[hash] = slices.Clone(pending)

@@ -46,7 +46,7 @@ export class EdgeClient {
   }
   private live = new LiveReads((paths, signal) => fetch(this.connection.server + "/v1/changes?" + new URLSearchParams({ watch: JSON.stringify(paths) }), { headers: this.headers(), signal }));
   enableLiveReads() { return this.live.enable(); }
-  subscribeRead(path: string, changed: () => void) { return this.live.subscribe(path, changed); }
+  subscribeRead(path: string, changed: () => void) { return this.live.subscribe(path, () => { this.readRevision++; changed(); }); }
   refreshLiveReads() { this.readRevision++; this.live.refresh(); }
   subscribeInventory(type: string, limit: number, changed: () => void) {
     const path = (offset: number) => `/v1/records/${encodeURIComponent(type)}?limit=500&offset=${offset}`;
@@ -190,8 +190,7 @@ export class EdgeClient {
       if(generation!==this.generation)throw Error("The workspace identity changed.");
       return fresh ? value : this.live.read<T>(key)?.value ?? value;
     };
-    if(fresh||!readPath(key))return read();
-    const scope=JSON.stringify([key,this.connection.tenant,this.connection.principal,headers,this.readRevision]);
+    const scope=JSON.stringify([key,this.connection.tenant,this.connection.principal,headers,this.readRevision,fresh]);
     const pending=this.inFlightReads.get(scope);if(pending)return pending as Promise<T>;
     const request=read();this.inFlightReads.set(scope,request);
     try{return await request;}finally{if(this.inFlightReads.get(scope)===request)this.inFlightReads.delete(scope);}

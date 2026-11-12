@@ -11,10 +11,11 @@ LITE_HOST ?= 127.0.0.1
 GOPROXY ?= https://goproxy.cn,direct
 export GOPROXY
 
-.PHONY: help bootstrap setup local docker infra infra-down build-compute dev dev-light web host lite build contract local-update check e2e verify verify-sql
+.PHONY: help bootstrap setup local docker infra infra-down build-compute dev dev-light web host lite build contract local-update check e2e verify verify-sql load-sql
 
 help:
 	@printf '%s\n' 'make setup        安装 Web 依赖和 Air' 'make local        启动热更新环境，入口 8495' 'make docker       切到容器运行' 'make lite         无 Docker 持久化运行' 'make host         编译运行宿主，ARGS 传入部署参数' 'make build        构建工作区与宿主' 'make contract     重新生成宿主类型、页面安全、应用登记与资源契约' 'make check        一分钟内的快速检查：构建、边界、内核不变量、契约、类型、空白' 'make e2e          黄金路径验收，SPEC=F17 只跑指定用例' 'make verify       check 加全部黄金路径验收' 'make verify-sql   在隔离临时 PostgreSQL 库验证接受写入与重启恢复' 'make infra-down   停止容器并保留数据' 'make local-update 更新已提交版本并核对运行状态'
+	@printf '%s\n' 'make load-sql       隔离 PostgreSQL 容量剖面；PLATFORM_LOAD_USERS、ROWS、DURATION 可调'
 
 bootstrap:
 	python3 deploy/local/bootstrap.py
@@ -104,6 +105,11 @@ verify-sql:
 	mkdir -p .build/host
 	cd capabilities/server && $(GO) build -o ../../.build/host/platform-server ./cmd/platform-server
 	deploy/dev/sql-smoke.sh
+
+load-sql:
+	mkdir -p .build/host
+	cd capabilities/server && $(GO) build -o ../../.build/host/platform-server ./cmd/platform-server
+	deploy/dev/sql-load.sh
 
 local-update: bootstrap
 	deploy/local/update.sh

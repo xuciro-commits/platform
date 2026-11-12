@@ -451,8 +451,16 @@ func (d *Console) SeenMember(member string, now time.Time) {
 		return
 	}
 	if now.Sub(d.lastSeen[member]) >= time.Minute {
-		d.lastSeen[member] = now
+		d.rememberSeen(member, now)
 	}
+}
+
+func (d *Console) rememberSeen(key string, now time.Time) {
+	if d.lastSeenShared {
+		d.lastSeen = maps.Clone(d.lastSeen)
+		d.lastSeenShared = false
+	}
+	d.lastSeen[key] = now
 }
 
 func (d *Console) Reach(member string) platform.Reach {
