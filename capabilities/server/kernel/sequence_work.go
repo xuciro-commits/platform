@@ -3,6 +3,7 @@ package kernel
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -93,4 +94,43 @@ func (s *Sequence) ApplyWorkResult(raw []byte, h WorkApply) (bool, error) {
 	settle(finished)
 	h.Published(prepared)
 	return true, nil
+}
+
+func (d *Decision) WorkDecision(src ResultSources, result *acceptedformat.Work, at time.Time) error {
+	if len(d.Events) > 0 {
+		last := d.Events[len(d.Events)-1]
+		changes, err := d.BatchResult(src, last.App, last.Record.GetSubmission(), last.Record, at)
+		if err != nil {
+			return err
+		}
+		result.Changes = changes
+	} else if d.Records.WriteCount() > 0 || d.Failure != nil || src.Pending ||
+		len(d.Observations) > 0 || len(d.Allocated) > 0 || len(d.Logs) > 0 || len(d.OperationCancels) > 0 {
+		return fmt.Errorf("work has effects without a decision")
+	} else {
+		plan, err := d.ChangePlan(src.Control)
+		if err != nil {
+			return err
+		}
+		result.Notices, result.Intents = plan.Notices, plan.Intents
+		result.States, result.Control = plan.States, plan.Control
+	}
+	result.Unique = d.SavedUniqueChanges()
+	return nil
+}
+
+func SealWork(result acceptedformat.Work) ([]byte, error) {
+	var err error
+	result.Digest, err = acceptedformat.DigestWork(result)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := acceptedformat.DecodeWork(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }

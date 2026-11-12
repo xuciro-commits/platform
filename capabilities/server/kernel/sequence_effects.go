@@ -3,6 +3,7 @@ package kernel
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -74,4 +75,40 @@ func (s *Sequence) ApplyEffectResult(raw []byte, h EffectApply) (acceptedformat.
 	}
 	h.Published(prepared)
 	return result, true, nil
+}
+
+func (d *Decision) EffectDecision(src ResultSources, result *acceptedformat.Effect, app string, at time.Time) error {
+	var err error
+	if len(d.Events) == 0 && (len(d.Observations) > 0 || len(d.Allocated) > 0 ||
+		len(d.Logs) > 0 || src.Pending) {
+		err = fmt.Errorf("effect answer has unrepresented changes")
+	} else {
+		eventRows := map[string]bool{}
+		for _, event := range d.Events {
+			for _, ref := range event.Changed {
+				eventRows[ref] = true
+			}
+		}
+		result.Rows, err = d.CaptureDirectRows(app, nil, eventRows, "effect answer")
+		if len(result.Rows) > 0 {
+			result.Member = "app:" + app
+		}
+		if err == nil && len(d.Events) > 0 {
+			writes := d.Records.WriteSnapshot()
+			d.Records.UseWrites(eventRows)
+			last := d.Events[len(d.Events)-1]
+			result.Changes, err = d.BatchResult(src, last.App, last.Record.GetSubmission(), last.Record, at)
+			d.Records.UseWrites(writes)
+		} else if err == nil {
+			var plan acceptedformat.ChangePlan
+			plan, err = d.ChangePlan(src.Control)
+			result.Notices, result.Intents = plan.Notices, plan.Intents
+			result.States, result.Control = plan.States, plan.Control
+		}
+	}
+	if err != nil {
+		return err
+	}
+	result.Unique = d.SavedUniqueChanges()
+	return nil
 }

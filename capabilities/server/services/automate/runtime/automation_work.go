@@ -352,3 +352,25 @@ func (task *Task) RestoreOutcome(saved Task) {
 	*task = saved
 	task.Event, task.Job, task.Since = event, job, since
 }
+
+func (t *Task) Settle(attempts int, outcome string, retry platform.Retry, now time.Time) platform.ScheduledTask {
+	after := t.ScheduledTask
+	after.Attempts, after.Last, after.Error = attempts, now, ""
+	if t.Kind == "job" {
+		after.Due = now.Add(t.Job.Every)
+		if outcome != "ok" {
+			after.Error = outcome
+		}
+		return after
+	}
+	switch {
+	case outcome == "ok":
+		after.State = "done"
+	case attempts-t.Since >= retry.Attempts:
+		after.State, after.Error = "failed", outcome
+	default:
+		after.State, after.Error = "retrying", outcome
+		after.Due = now.Add(retry.After(attempts - t.Since))
+	}
+	return after
+}

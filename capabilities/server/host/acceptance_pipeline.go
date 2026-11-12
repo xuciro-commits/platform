@@ -280,39 +280,10 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 	if draft.Failure != nil {
 		return draft, draft.Failure
 	}
-	var err error
-	if len(draft.Events) == 0 && (len(draft.Observations) > 0 || len(draft.Allocated) > 0 ||
-		len(draft.Logs) > 0 || len(draft.requests) > 0) {
-		err = fmt.Errorf("effect answer has unrepresented changes")
-	} else {
-		eventRows := map[string]bool{}
-		for _, event := range draft.Events {
-			for _, ref := range event.Changed {
-				eventRows[ref] = true
-			}
-		}
-		result.Rows, err = draft.CaptureDirectRows(before.App, nil, eventRows, "effect answer")
-		if len(result.Rows) > 0 {
-			result.Member = "app:" + before.App
-		}
-		if err == nil && len(draft.Events) > 0 {
-			writes := draft.Records.WriteSnapshot()
-			draft.Records.UseWrites(eventRows)
-			last := draft.Events[len(draft.Events)-1]
-			result.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
-			draft.Records.UseWrites(writes)
-		} else if err == nil {
-			var plan acceptedformat.ChangePlan
-			plan, err = draft.ChangePlan(draft.savedControl)
-			result.Notices, result.Intents = plan.Notices, plan.Intents
-			result.States, result.Control = plan.States, plan.Control
-		}
-	}
-	if err != nil {
+	if err := draft.EffectDecision(draft.sources(), result, before.App, at); err != nil {
 		return draft, err
 	}
-	result.Unique = draft.SavedUniqueChanges()
-	_, err = t.prepareAcceptedChanges(result.ChangePlan())
+	_, err := t.prepareAcceptedChanges(result.ChangePlan())
 	return draft, err
 }
 

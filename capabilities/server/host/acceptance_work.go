@@ -148,50 +148,16 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	}
 	finished, _ := works.Get(task.ID)
 	result.Work, _ = protojson.Marshal(finished)
-	result.After = task.ScheduledTask
-	result.After.Attempts, result.After.Last, result.After.Error = int(generation), now, ""
-	if task.Kind == "job" {
-		result.After.Due = now.Add(task.Job.Every)
-		if result.Outcome != "ok" {
-			result.After.Error = result.Outcome
-		}
-	} else {
-		retry := t.retryOf(task.App)
-		switch {
-		case result.Outcome == "ok":
-			result.After.State = "done"
-		case int(generation)-task.Since >= retry.Attempts:
-			result.After.State, result.After.Error = "failed", result.Outcome
-		default:
-			result.After.State, result.After.Error = "retrying", result.Outcome
-			result.After.Due = now.Add(retry.After(int(generation) - task.Since))
-		}
-	}
+	result.After = task.Settle(int(generation), result.Outcome, t.retryOf(task.App), now)
 	if result.After.State == "failed" && t.App(controlowner.PlatformApp) != nil {
 		admin := platform.NewCaller(draft, platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, controlowner.PlatformApp, false, true)
 		admin.Notify(platform.Notification{Title: "Delivery to " + task.App + " failed: " + task.Title,
 			Body: result.Outcome + ". Retry it in Settings → Automation once the cause is fixed.", Key: "failed:" + task.ID},
 			now, platform.Recipient{AppRole: controlowner.Admin})
 	}
-	if len(draft.Events) > 0 {
-		last := draft.Events[len(draft.Events)-1]
-		result.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, now)
-		if err != nil {
-			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-		}
-	} else if draft.Records.WriteCount() > 0 || draft.Failure != nil ||
-		len(draft.Observations) > 0 || len(draft.Allocated) > 0 || len(draft.Logs) > 0 || len(draft.OperationCancels) > 0 || len(draft.requests) > 0 {
+	if err := draft.WorkDecision(draft.sources(), &result, now); err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	} else {
-		var plan acceptedformat.ChangePlan
-		plan, err = draft.ChangePlan(draft.savedControl)
-		result.Notices, result.Intents = plan.Notices, plan.Intents
-		result.States, result.Control = plan.States, plan.Control
-		if err != nil {
-			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-		}
 	}
-	result.Unique = draft.SavedUniqueChanges()
 	if task.Kind == "job" && result.Outcome == "ok" && len(result.Changes) == 0 &&
 		result.Notices == nil && len(result.Intents) == 0 && len(result.States) == 0 && result.Control == nil && len(result.Unique) == 0 {
 		return result.Outcome
@@ -203,15 +169,8 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		}
 		result.After.Applications = bindings
 	}
-	result.Digest, err = acceptedformat.DigestWork(result)
+	raw, err := runtimekernel.SealWork(result)
 	if err != nil {
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	if _, err := acceptedformat.DecodeWork(raw); err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	if _, err := t.prepareAcceptedChanges(result.ChangePlan()); err != nil {

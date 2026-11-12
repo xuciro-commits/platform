@@ -203,18 +203,8 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 	t.delivered(platform.Delivery{At: now, App: task.Event.App, Action: s.GetSchema().GetName(), Target: runtimekernel.Target(s), Subscriber: task.App,
 		Outcome: outcome, Attempt: int(generation)})
 	t.work.Lock()
-	task.Attempts, task.Last = int(generation), now
-	retry := t.retryOf(task.App)
-	done := outcome == "ok" || task.Attempts-task.Since >= retry.Attempts
-	switch {
-	case outcome == "ok":
-		task.State, task.Error = "done", ""
-	case done:
-		task.State, task.Error = "failed", outcome
-	default:
-		task.State, task.Error, task.Due = "retrying", outcome, now.Add(retry.After(task.Attempts-task.Since))
-	}
-	if done {
+	task.ScheduledTask = task.Settle(int(generation), outcome, t.retryOf(task.App), now)
+	if task.State == "done" || task.State == "failed" {
 		t.work.Settled(task)
 	}
 	t.work.Unlock()
@@ -247,7 +237,7 @@ func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) strin
 	}
 	t.works.Finish(task.ID, generation, outcome != "ok")
 	t.work.Lock()
-	task.Attempts, task.Last, task.Due, task.Error = int(generation), now, now.Add(task.Job.Every), map[bool]string{true: "", false: outcome}[outcome == "ok"]
+	task.ScheduledTask = task.Settle(int(generation), outcome, platform.Retry{}, now)
 	t.work.Unlock()
 	runStatus := "ok"
 	if outcome != "ok" {
