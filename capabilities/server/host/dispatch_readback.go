@@ -50,7 +50,7 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 			valid := exists && !slices.Contains([]string{"completed", "cancelled", "compensated"}, run.State)
 			var stamp string
 			if valid {
-				valid = (hostView{t: t}).CheckDispatchRead(run, at) == nil
+				valid = t.readTransport().CheckDispatchRead(run, at) == nil
 				if valid {
 					stamp, valid = t.statusReadStamp(run.Revision, run.Member, run.Source, run.Connection, run.Definition.Readback.Record != "")
 				}
@@ -72,7 +72,7 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		_, _ = decideOnImage(t, context.Background(), "dispatch:answer", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
 			current, found := platform.Get[platform.DispatchRun](t.automation(build.ID, false), run.ID)
 			currentStamp, valid := t.statusReadStamp(current.Revision, current.Member, current.Source, current.Connection, current.Definition.Readback.Record != "")
-			if !found || current.Revision != run.Revision || !valid || currentStamp != stamp || (hostView{t: t}).CheckDispatchRead(current, at) != nil {
+			if !found || current.Revision != run.Revision || !valid || currentStamp != stamp || t.readTransport().CheckDispatchRead(current, at) != nil {
 				return nil, nil
 			}
 			if n := len(current.Readback); n > 0 {

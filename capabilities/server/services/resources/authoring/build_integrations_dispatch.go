@@ -18,7 +18,7 @@ func (b *Build) dispatchEntity() platform.Entity {
 		Description: "Declared commands, durable delivery attempts, status reads and authorized human intervention. Control loops and safety interlocks remain local to the equipment.",
 		Scope: dataowner.ScopeWithParticipants(func(value any) []string {
 			run := value.(platform.DispatchRun)
-			return append([]string{run.Member}, b.host.(platform.ConfirmationHost).Holding(ID, run.Definition.ReviewerRole)...)
+			return append([]string{run.Member}, b.host.Holding(ID, run.Definition.ReviewerRole)...)
 		}), Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"reason", "input", "request", "source", "connection", "observation", "device", "attempts", "readback", "definition", "assets", "compensationCommand", "compensationRequest"}}}}
 }
 

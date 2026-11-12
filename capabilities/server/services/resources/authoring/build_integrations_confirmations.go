@@ -26,7 +26,7 @@ func (b *Build) confirmationEntity() platform.Entity {
 		Description: "Independent party receipts, unknown outcomes, source reconciliation and declared compensation.",
 		Scope: dataowner.ScopeWithParticipants(func(value any) []string {
 			r := value.(platform.ConfirmationRun)
-			return append([]string{r.Member}, b.host.(platform.ConfirmationHost).Holding(ID, r.Definition.ReviewerRole)...)
+			return append([]string{r.Member}, b.host.Holding(ID, r.Definition.ReviewerRole)...)
 		}),
 		Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"input", "parties", "definition", "assets"}}},
 	}
@@ -157,7 +157,7 @@ func (b *Build) bindConfirmation(spec *platform.Confirmation, subject string) (c
 			binding.Source = &platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: s.Name}
 		}
 		if party.Protocol != "" {
-			p, err := b.host.(platform.ConfirmationHost).FreezeConfirmationProtocol(party)
+			p, err := b.host.FreezeConfirmationProtocol(party)
 			if err != nil {
 				return out, err
 			}
@@ -275,7 +275,7 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 	}
 	id := "confirmation:" + r.GetChangeId()
 	run := platform.ConfirmationRun{Record: platform.Record{ID: id}, Subject: txn.Subject + "/" + r.GetSubmission().GetTarget().GetId(), Action: r.GetSubmission().GetSchema().GetName(), Member: c.ID, State: "pending", Deadline: at.Add(time.Duration(spec.DeadlineSeconds) * time.Second), Definition: spec, Release: release, Assets: assets, Input: slices.Clone(r.GetSubmission().GetPayload()), Parties: []platform.ConfirmationProgress{}, Reviewers: []string{}}
-	for _, member := range b.host.(platform.ConfirmationHost).Holding(ID, spec.ReviewerRole) {
+	for _, member := range b.host.Holding(ID, spec.ReviewerRole) {
 		run.Reviewers = append(run.Reviewers, member)
 	}
 	for _, party := range spec.Parties {

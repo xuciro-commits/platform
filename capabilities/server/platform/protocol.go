@@ -602,16 +602,6 @@ func (c Caller) BoundProvider(protocol string) (string, *kernel.Error) {
 	return c.rt.BoundProvider(c, protocol)
 }
 
-type ConfirmationHost interface {
-	ConfirmationTransport
-	Holding(string, string) []string
-}
-
-type DispatchHost interface {
-	DispatchTransport
-	Holding(string, string) []string
-}
-
 type RelationsHost interface {
 	OwnerOf(dataClass string) (app string, ok bool)
 	ProtocolEvent(name string) (ProtocolEvent, bool)

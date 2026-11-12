@@ -38,6 +38,8 @@ type BuildHost interface {
 	InstallQuery(c Caller, q NamedQuery, version int) error
 	Interfaces() []Interface
 	Member(id string) (Member, bool)
+	Holding(app, role string) []string
+	FreezeConfirmationProtocol(ConfirmationParty) (*ConfirmationProtocol, error)
 	Operation(app, name string, version int) (Operation, int, bool)
 	RuleQuery(app, name string, version int) (NamedQuery, int, bool)
 	BuildProcesses() ProcessDefinitions

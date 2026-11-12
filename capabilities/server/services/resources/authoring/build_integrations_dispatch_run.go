@@ -76,7 +76,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 	}
 	payload["key"] = key
 	run := platform.DispatchRun{Record: platform.Record{ID: id}, Subject: txn.Subject + "/" + receipt.GetSubmission().GetTarget().GetId(), Action: receipt.GetSubmission().GetSchema().GetName(), Member: c.ID, Command: command, Definition: spec, Target: spec.Target, Key: key, State: "pending", StartedAt: at, StateAt: at, Deadline: at.Add(time.Duration(spec.DeadlineSeconds) * time.Second), ReadDue: at, Release: release, Assets: assets, Input: platform.Raw(payload), Readback: []platform.DispatchReading{}, Attempts: []platform.DispatchAttempt{}, Reviewers: []string{}}
-	run.Reviewers = append(run.Reviewers, b.host.(platform.ConfirmationHost).Holding(ID, spec.ReviewerRole)...)
+	run.Reviewers = append(run.Reviewers, b.host.Holding(ID, spec.ReviewerRole)...)
 	connection := func(id string) (dataowner.Connection, error) {
 		conn, found := platform.Get[dataowner.Connection](c, id)
 		if !found {

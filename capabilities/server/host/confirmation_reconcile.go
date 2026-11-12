@@ -72,7 +72,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 				run, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), saved.ID)
 				valid := exists && i < len(run.Parties) && i < len(run.Definition.Parties) && run.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, run.State)
 				if valid {
-					valid = (hostView{t: t}).CheckConfirmationRead(run, i, at) == nil
+					valid = t.readTransport().CheckConfirmationRead(run, i, at) == nil
 				}
 				var stamp string
 				var source dataowner.Source
@@ -160,7 +160,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 				current, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), run.ID)
 				valid := exists && current.Revision == run.Revision && i < len(current.Parties) && current.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, current.State)
 				if valid {
-					valid = (current.Parties[i].State == "pending" || current.Parties[i].State == "unknown") && (hostView{t: t}).CheckConfirmationRead(current, i, at) == nil
+					valid = (current.Parties[i].State == "pending" || current.Parties[i].State == "unknown") && t.readTransport().CheckConfirmationRead(current, i, at) == nil
 					if valid {
 						currentStamp, stable := t.statusReadStamp(current.Revision, current.Member, current.Parties[i].Source, current.Parties[i].Connection, false)
 						valid = stable && currentStamp == stamp
@@ -190,5 +190,3 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 		}
 	}
 }
-
-var _ platform.ConfirmationHost = hostView{}
