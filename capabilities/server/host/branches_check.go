@@ -178,26 +178,26 @@ func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) 
 		return world, refusal
 	}
 	if branch.State != build.BranchOpen && branch.State != build.BranchProposed {
-		return world, branchRefuse("The branch is {state}; only an open or proposed branch has a staged world", branch.State)
+		return world, branches.Refuse("The branch is {state}; only an open or proposed branch has a staged world", branch.State)
 	}
-	plans, refusal := t.planBranchLocked(m, branch, nil, now)
+	plans, refusal := t.branchWorkspace().Plan(m, branch, nil, now)
 	if refusal != nil {
 		return world, refusal
 	}
 	if conflicts := branches.ConflictsOf(plans); len(conflicts) > 0 {
-		return world, branchRefuse("The branch conflicts with main in {count} resources; rebase it first", len(conflicts))
+		return world, branches.Refuse("The branch conflicts with main in {count} resources; rebase it first", len(conflicts))
 	}
-	actions, refusal := t.branchActions(plans)
+	actions, refusal := t.branchWorkspace().Actions(plans)
 	if refusal != nil {
 		return world, refusal
 	}
 	stage := t.stageBranchLocked(m, branch.ID, actions, now)
 	if i := slices.IndexFunc(stage.resources, func(c branches.BranchResourceCheck) bool { return !c.Accepted }); i >= 0 {
-		return world, branchRefuse("{resource} would be refused in the merged world: {message}", stage.resources[i].Type+"/"+stage.resources[i].ID, stage.resources[i].Message)
+		return world, branches.Refuse("{resource} would be refused in the merged world: {message}", stage.resources[i].Type+"/"+stage.resources[i].ID, stage.resources[i].Message)
 	}
 	view, err := t.stageViewLocked(stage, now)
 	if err != nil {
-		return world, branchRefuse("{reason}", err.Error())
+		return world, branches.Refuse("{reason}", err.Error())
 	}
 	return branchWorld{stage: stage, actions: actions, view: view, branch: branch}, nil
 }
@@ -271,7 +271,7 @@ func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resoluti
 
 func (t *Tenant) evaluateBranchRead(m platform.Member, branch build.Branch, resolutions []branches.BranchResolution, sim *trialowner.CandidateSimulationRequest, now time.Time) (branchEvaluation, *kernel.Error) {
 	var out branchEvaluation
-	plans, refusal := t.planBranchLocked(m, branch, resolutions, now)
+	plans, refusal := t.branchWorkspace().Plan(m, branch, resolutions, now)
 	if refusal != nil {
 		return out, refusal
 	}
@@ -282,7 +282,7 @@ func (t *Tenant) evaluateBranchRead(m platform.Member, branch build.Branch, reso
 	if len(out.conflicts) > 0 {
 		check.Graph.Messages = append(check.Graph.Messages, fmt.Sprintf("Not evaluated: the branch conflicts with main in %d resources; rebase it first", len(out.conflicts)))
 	} else {
-		actions, refusal := t.branchActions(plans)
+		actions, refusal := t.branchWorkspace().Actions(plans)
 		if refusal != nil {
 			return out, refusal
 		}
@@ -346,7 +346,7 @@ func (t *Tenant) RecheckBranch(m platform.Member, id string, request BranchCheck
 		return branches.BranchDetail{}, refusal
 	}
 	if branch.State != build.BranchOpen && branch.State != build.BranchProposed || len(branch.Changes) == 0 {
-		return branches.BranchDetail{}, branchRefuse("Only an open or proposed branch with changes can be re-checked")
+		return branches.BranchDetail{}, branches.Refuse("Only an open or proposed branch with changes can be re-checked")
 	}
 	evaluation, refusal := t.evaluateBranch(m, branch, request.Resolutions, request.Simulation, now)
 	if refusal != nil {
@@ -364,7 +364,7 @@ func (t *Tenant) RebaseBranch(m platform.Member, id string, request branches.Bra
 		return branches.BranchDetail{}, nil, refusal
 	}
 	if branch.State != build.BranchOpen {
-		return branches.BranchDetail{}, nil, branchRefuse("The branch is {state}; only an open branch rebases", branch.State)
+		return branches.BranchDetail{}, nil, branches.Refuse("The branch is {state}; only an open branch rebases", branch.State)
 	}
 	plans, refusal := t.planBranch(m, branch, request.Resolutions, now)
 	if refusal != nil {
@@ -411,7 +411,7 @@ func (t *Tenant) ProposeBranch(m platform.Member, id string, request BranchPropo
 		return branches.BranchDetail{}, refusal
 	}
 	if branch.State != build.BranchOpen || len(branch.Changes) == 0 {
-		return branches.BranchDetail{}, branchRefuse("Only an open branch with changes can be proposed")
+		return branches.BranchDetail{}, branches.Refuse("Only an open branch with changes can be proposed")
 	}
 	for _, reviewer := range request.Reviewers {
 		member, ok := t.Member(reviewer)
@@ -424,10 +424,10 @@ func (t *Tenant) ProposeBranch(m platform.Member, id string, request BranchPropo
 		return branches.BranchDetail{}, refusal
 	}
 	if len(evaluation.conflicts) > 0 {
-		return branches.BranchDetail{}, branchRefuse("The branch conflicts with main in {count} resources; rebase it first", len(evaluation.conflicts))
+		return branches.BranchDetail{}, branches.Refuse("The branch conflicts with main in {count} resources; rebase it first", len(evaluation.conflicts))
 	}
 	if !evaluation.check.Passed {
-		return branches.BranchDetail{}, branchRefuse("The staged check of the merged definition graph failed: {message}", evaluation.check.Failure())
+		return branches.BranchDetail{}, branches.Refuse("The staged check of the merged definition graph failed: {message}", evaluation.check.Failure())
 	}
 	reviewers := request.Reviewers
 	if reviewers == nil {
@@ -494,35 +494,35 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request Branch
 		return none, nil, refusal
 	}
 	if branch.State != build.BranchProposed {
-		return none, nil, branchRefuse("The branch is {state}; only a proposed branch merges", branch.State)
+		return none, nil, branches.Refuse("The branch is {state}; only a proposed branch merges", branch.State)
 	}
 	if err := branch.Approved(); err != nil {
-		return none, nil, branchRefuse("{reason}", err.Error())
+		return none, nil, branches.Refuse("{reason}", err.Error())
 	}
-	plans, refusal := t.planBranchLocked(m, branch, request.Resolutions, now)
+	plans, refusal := t.branchWorkspace().Plan(m, branch, request.Resolutions, now)
 	if refusal != nil {
 		return none, nil, refusal
 	}
 	if conflicts := branches.ConflictsOf(plans); len(conflicts) > 0 {
-		return none, nil, branchRefuse("The branch conflicts with main in {count} resources; rebase it first", len(conflicts))
+		return none, nil, branches.Refuse("The branch conflicts with main in {count} resources; rebase it first", len(conflicts))
 	}
 	check := branches.DecodeCheck(branch)
 	if check == nil {
-		return none, nil, branchRefuse("The proposal has no staged check; re-check the branch before merging")
+		return none, nil, branches.Refuse("The proposal has no staged check; re-check the branch before merging")
 	}
 	if !check.Passed {
-		return none, nil, branchRefuse("The last staged check failed: {message}; fix the branch and re-check it before merging", check.Failure())
+		return none, nil, branches.Refuse("The last staged check failed: {message}; fix the branch and re-check it before merging", check.Failure())
 	}
 	if check.Base != t.branchBaseLocked() {
-		return none, nil, branchRefuse("Main changed since the proposal was last checked; rebase or re-check the branch before merging")
+		return none, nil, branches.Refuse("Main changed since the proposal was last checked; rebase or re-check the branch before merging")
 	}
 	if check.Content != branches.Content(plans) {
-		return none, nil, branchRefuse("The merged content differs from the checked content; re-check the branch before merging")
+		return none, nil, branches.Refuse("The merged content differs from the checked content; re-check the branch before merging")
 	}
 	if request.Simulation != nil && check.Simulation == nil {
-		return none, nil, branchRefuse("The last staged check did not run a simulation; re-check the branch with a simulation before merging")
+		return none, nil, branches.Refuse("The last staged check did not run a simulation; re-check the branch with a simulation before merging")
 	}
-	actions, refusal := t.branchActions(plans)
+	actions, refusal := t.branchWorkspace().Actions(plans)
 	if refusal != nil {
 		return none, nil, refusal
 	}

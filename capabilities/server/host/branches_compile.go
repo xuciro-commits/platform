@@ -21,7 +21,7 @@ func (t *Tenant) BranchCompile(m platform.Member, id, typ, draft string, now tim
 		return branches.BranchDetail{}, refusal
 	}
 	if branch.State != build.BranchOpen {
-		return branches.BranchDetail{}, branchRefuse("The branch is {state}; only an open branch takes a compile", branch.State)
+		return branches.BranchDetail{}, branches.Refuse("The branch is {state}; only an open branch takes a compile", branch.State)
 	}
 	request, expected, spec, refusal := t.branchCodeSource(m, branch, draft, now)
 	if refusal != nil {
@@ -42,14 +42,14 @@ func (t *Tenant) BranchCompile(m platform.Member, id, typ, draft string, now tim
 		return branches.BranchDetail{}, refusal
 	}
 	if branch.State != build.BranchOpen {
-		return branches.BranchDetail{}, branchRefuse("The branch is {state}; only an open branch takes a compile", branch.State)
+		return branches.BranchDetail{}, branches.Refuse("The branch is {state}; only an open branch takes a compile", branch.State)
 	}
 	_, latest, spec, refusal := t.branchCodeSource(m, branch, draft, now)
 	if refusal != nil {
 		return branches.BranchDetail{}, refusal
 	}
 	if latest.SourceHash != expected.SourceHash || latest.BuildHash != expected.BuildHash {
-		return branches.BranchDetail{}, branchRefuse("The code changed while it was compiling; compile it again")
+		return branches.BranchDetail{}, branches.Refuse("The code changed while it was compiling; compile it again")
 	}
 	var saved map[string]json.RawMessage
 	_ = json.Unmarshal(spec, &saved)
@@ -71,7 +71,7 @@ func (t *Tenant) BranchCompile(m platform.Member, id, typ, draft string, now tim
 	if latestChange, found := branch.Latest(typ, draft); found && latestChange.Project != "" {
 		project = latestChange.Project
 	}
-	return t.appendBranchSave(m, branch, current, typ, draft, "update", project, raw, now)
+	return t.appendBranchSave(m, branches.SavePlan{Branch: branch, Current: current, Op: "update", Project: project, Spec: raw}, typ, draft, now)
 }
 
 func (t *Tenant) branchCodeSource(m platform.Member, branch build.Branch, draft string, now time.Time) (platform.CodeBuildRequest, build.CodeArtifact, json.RawMessage, *kernel.Error) {
@@ -87,7 +87,7 @@ func (t *Tenant) branchCodeSource(m platform.Member, branch build.Branch, draft 
 		spec = current.Spec
 	}
 	if spec == nil {
-		return none, build.CodeArtifact{}, nil, branchRefuse("{resource} does not exist", build.CodeType+"/"+draft)
+		return none, build.CodeArtifact{}, nil, branches.Refuse("{resource} does not exist", build.CodeType+"/"+draft)
 	}
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(spec, &fields) != nil {
