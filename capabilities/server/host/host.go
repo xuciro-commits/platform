@@ -40,7 +40,7 @@ type Tenant struct {
 	readOrigin        *Tenant
 	readImage         atomic.Pointer[tenantReadImage]
 	preparedResult    *preparedAccepted
-	startupSnapshot   *snapshotCompatibility
+	startupSnapshot   *runtimekernel.SnapshotCompatibility
 	simulation        bool
 	simulationTrace   func(platform.DecisionTrace)
 	schedules         dataowner.ReadSchedules

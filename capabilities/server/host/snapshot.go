@@ -33,7 +33,7 @@ import (
 
 type tenantState struct {
 	Runtime             *runtimekernel.SQLCheckpoint            `json:"runtime,omitempty"`
-	Checkpoint          *snapshotCheckpoint                     `json:"checkpoint,omitempty"`
+	Checkpoint          *runtimekernel.SnapshotCheckpoint       `json:"checkpoint,omitempty"`
 	DecisionDefinitions map[string]*platform.DecisionDefinition `json:"decisionDefinitions,omitempty"`
 	SubmissionSchemas   map[string]platform.SchemaVersion       `json:"submissionSchemas,omitempty"`
 	Apps                map[string]json.RawMessage              `json:"apps"`
@@ -79,71 +79,21 @@ type tenantState struct {
 	Sequences           map[string]int                          `json:"sequences,omitempty"`
 }
 
-const tenantSnapshotFormat = "platform.tenant.v1"
-const tenantSQLSnapshotFormat = "platform.tenant.sql.v1"
-
 var snapshotBuild = sync.OnceValue(func() string { return CodeOf() })
 
-type snapshotCompatibility struct {
-	Epoch       int               `json:"epoch"`
-	Host        string            `json:"host"`
-	Owners      map[string]string `json:"owners"`
-	Composition string            `json:"composition"`
-}
-
-type snapshotCheckpoint struct {
-	snapshotCompatibility
-	Tenant   string `json:"tenant"`
-	Position int64  `json:"position"`
-	Build    string `json:"build"`
-}
-
-func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
+func (t *Tenant) snapshotCompatibility() (runtimekernel.SnapshotCompatibility, error) {
 	if t.startupSnapshot != nil {
 		return *t.startupSnapshot, nil
 	}
-	compatibility := snapshotCompatibility{Epoch: persistence.FormatEpoch, Host: tenantSnapshotFormat, Owners: map[string]string{}}
-	type compositionApp struct {
-		ID, Version string
-		Entities    []platform.EntityInfo
-		Provides    []platform.Provision
-		Consumes    []platform.Consumption
-	}
-	composition := make([]compositionApp, 0, len(t.apps))
-	for _, app := range t.apps {
-		manifest := app.Manifest()
-		if format := strings.TrimSpace(app.SnapshotFormat()); format == "" {
-			compatibility.Host = ""
-		} else {
-			compatibility.Owners[manifest.ID] = format
-		}
-		item := compositionApp{ID: manifest.ID, Version: manifest.Version, Provides: manifest.Provides, Consumes: manifest.Consumes}
-		own := map[reflect.Type]string{}
-		for _, entity := range manifest.Entities {
-			own[reflect.TypeOf(entity.Model)] = entity.Type
-		}
-		for _, entity := range manifest.Entities {
-			info, err := platform.Describe(manifest.ID, entity, func(goType reflect.Type) string { return own[goType] })
-			if err != nil {
-				return snapshotCompatibility{}, err
-			}
-			item.Entities = append(item.Entities, info)
-		}
-		slices.SortFunc(item.Entities, func(a, b platform.EntityInfo) int { return strings.Compare(a.Type, b.Type) })
-		composition = append(composition, item)
-	}
-	slices.SortFunc(composition, func(a, b compositionApp) int { return strings.Compare(a.ID, b.ID) })
-	digest, err := platform.CanonicalDigest(composition)
-	compatibility.Composition = digest
-	return compatibility, err
+	return runtimekernel.Compatibility(t.apps)
 }
 
 func (t *Tenant) snapshotKey(code string) (string, error) {
 	compatibility, err := t.snapshotCompatibility()
-	if err != nil || compatibility.Host == "" {
-		return code, err
+	if err != nil {
+		return "", err
 	}
-	return platform.CanonicalDigest(compatibility)
+	return compatibility.Key(code)
 }
 
 func (t *Tenant) runtimeSnapshotKey(code string) (string, error) {
@@ -151,15 +101,7 @@ func (t *Tenant) runtimeSnapshotKey(code string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	exact := compatibility.Host == ""
-	compatibility.Host = tenantSQLSnapshotFormat
-	if exact {
-		return platform.CanonicalDigest(struct {
-			Compatibility snapshotCompatibility
-			Build         string
-		}{compatibility, code})
-	}
-	return platform.CanonicalDigest(compatibility)
+	return compatibility.RuntimeKey(code)
 }
 
 func (t *Tenant) snapshotStorageKey(code string, raw []byte) (string, error) {
@@ -174,34 +116,11 @@ func (t *Tenant) snapshotStorageKey(code string, raw []byte) (string, error) {
 }
 
 func (t *Tenant) checkSnapshotCheckpoint(raw []byte, position int64) error {
-	var header struct {
-		Checkpoint *snapshotCheckpoint          `json:"checkpoint"`
-		Runtime    *runtimekernel.SQLCheckpoint `json:"runtime"`
-	}
-	if err := json.Unmarshal(raw, &header); err != nil {
-		return err
-	}
-	if header.Checkpoint == nil && header.Runtime == nil {
-		return nil
-	}
 	compatibility, err := t.snapshotCompatibility()
 	if err != nil {
 		return err
 	}
-	saved := header.Checkpoint
-	if header.Runtime != nil {
-		if saved == nil || header.Runtime.Format != runtimekernel.SQLCheckpointFormat || header.Runtime.Position != position {
-			return fmt.Errorf("tenant %s: SQL checkpoint format or position differs", t.ID)
-		}
-		if compatibility.Host == "" && saved.Build != snapshotBuild() {
-			return fmt.Errorf("tenant %s: undeclared owner requires its original checkpoint build", t.ID)
-		}
-		compatibility.Host = tenantSQLSnapshotFormat
-	}
-	if saved == nil || saved.Tenant != t.ID || saved.Position != position || compatibility.Host == "" || !reflect.DeepEqual(saved.snapshotCompatibility, compatibility) {
-		return fmt.Errorf("tenant %s: checkpoint format, composition or position differs", t.ID)
-	}
-	return nil
+	return compatibility.Check(t.ID, raw, position, snapshotBuild())
 }
 
 func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error) {
@@ -242,7 +161,7 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 		return nil, 0, err
 	}
 	if compatibility.Host != "" {
-		s.Checkpoint = &snapshotCheckpoint{snapshotCompatibility: compatibility, Tenant: t.ID, Position: seq, Build: snapshotBuild()}
+		s.Checkpoint = &runtimekernel.SnapshotCheckpoint{SnapshotCompatibility: compatibility, Tenant: t.ID, Position: seq, Build: snapshotBuild()}
 	}
 	for typ, list := range rows {
 		saved := make([]records.StoredState, len(list))
@@ -320,8 +239,8 @@ func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessa
 		return nil, 0, err
 	}
 	s.Runtime = &runtimekernel.SQLCheckpoint{Format: runtimekernel.SQLCheckpointFormat, Position: seq, Records: digest}
-	compatibility.Host = tenantSQLSnapshotFormat
-	s.Checkpoint = &snapshotCheckpoint{snapshotCompatibility: compatibility, Tenant: t.ID, Position: seq, Build: snapshotBuild()}
+	compatibility.Host = runtimekernel.TenantSQLSnapshotFormat
+	s.Checkpoint = &runtimekernel.SnapshotCheckpoint{SnapshotCompatibility: compatibility, Tenant: t.ID, Position: seq, Build: snapshotBuild()}
 	raw, err := json.Marshal(s)
 	return raw, seq, err
 }
