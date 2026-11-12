@@ -297,7 +297,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 		} else {
 			log.Printf("replayed %d entries for %s", len(entries), t.ID)
 		}
-		if err := t.migrateRuntimeStateFrom(ctx, j, prefix); err != nil {
+		if err := t.MigrateRuntimeState(ctx, j, prefix, t.runtimeOwners()); err != nil {
 			t.quarantine(fmt.Errorf("runtime state: %w", err))
 			log.Printf("quarantined %s: %s", t.ID, t.Fault.Load().Reason)
 			continue

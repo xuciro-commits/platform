@@ -40,7 +40,7 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	if digest != saved.Records {
 		return fmt.Errorf("tenant %s: SQL checkpoint records differ", t.ID)
 	}
-	t.installRuntimeRecords(store, func() int64 { return seq })
+	t.InstallRuntimeRecords(store, func() int64 { return seq })
 	t.Projection.Current().Bind(view)
 	defer t.Projection.Current().Bind(nil)
 	t.installRuntimeHistory(view, func() int64 { return seq })
@@ -67,7 +67,7 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 		}
 	}
 	t.flowArtifactRecoveryComplete(started)
-	t.installRuntimeRecords(store, func() int64 { return j.Position(t.ID) })
+	t.InstallRuntimeRecords(store, func() int64 { return j.Position(t.ID) })
 	t.installRuntimeHistory(store, func() int64 { return j.Position(t.ID) })
 	t.attachJournal(ctx, j)
 	t.enableCurrentReadScopes()

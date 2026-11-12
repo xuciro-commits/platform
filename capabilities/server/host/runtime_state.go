@@ -2,146 +2,25 @@ package host
 
 import (
 	"context"
-	"fmt"
 
 	runtimekernel "platformserver/kernel"
-
-	"platformserver/kernel/records"
-
-	"google.golang.org/protobuf/proto"
-
 	persistence "platformserver/kernel/store"
+	"platformserver/platform"
 )
 
-func (t *Tenant) migrateRuntimeState(ctx context.Context, j Journals) error {
-	return t.migrateRuntimeStateFrom(ctx, j, nil)
+func (t *Tenant) runtimeOwners() runtimekernel.RuntimeOwners {
+	return runtimekernel.RuntimeOwners{Apps: t.apps, Sequences: t.sequences.Clone, Ready: t.enableCurrentReadScopes,
+		States: func(app string) platform.AcceptedStateApp { return t.states[app] }}
 }
 
-func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix *persistence.StateCheckpoint) error {
-	store, ok := j.(persistence.RuntimeState)
-	if !ok {
-		return nil
-	}
-	var view persistence.StateReadView
-	if recovery, ok := j.(persistence.RuntimeStateRecovery); ok {
-		position, active, err := recovery.StatePosition(ctx, t.ID)
-		if err != nil {
-			return err
-		}
-		if active && prefix == nil && position == j.Position(t.ID) {
-			t.installRuntimeRecords(store, func() int64 { return j.Position(t.ID) })
-			t.installRuntimeHistory(store, func() int64 { return j.Position(t.ID) })
-			t.enableCurrentReadScopes()
-			return nil
-		}
-		if active {
-			t.Projection.Lock()
-			t.Projection.Current().Configure(store, t.ID, position, func() int64 { return j.Position(t.ID) })
-			t.Projection.UseCurrentRows()
-			t.Projection.Unlock()
-			if views, ok := store.(persistence.StateReadViews); ok {
-				view, err = views.BeginStateRead(ctx, t.ID, position)
-				if err != nil {
-					return err
-				}
-				t.Projection.Current().Bind(view)
-				defer func() {
-					t.Projection.Current().Bind(nil)
-					_ = view.Close()
-				}()
-			}
-		}
-	}
-	t.Lane.Lock()
-	defer t.Lane.Unlock()
-	d, err := t.runtimeStateDeltaLocked()
-	if err != nil {
-		return err
-	}
-	if prefix != nil {
-		recovery, ok := j.(persistence.RuntimeStateRecovery)
-		if !ok {
-			return fmt.Errorf("tenant %s state store cannot recover a retained suffix", t.ID)
-		}
-		if err := recovery.RestoreState(ctx, t.ID, j.Position(t.ID), *prefix, d); err != nil {
-			return err
-		}
-	} else if err := store.InitializeState(ctx, t.ID, j.Position(t.ID), d); err != nil {
-		return err
-	}
-	t.installRuntimeRecords(store, func() int64 { return j.Position(t.ID) })
-	t.installRuntimeHistory(store, func() int64 { return j.Position(t.ID) })
-	t.enableCurrentReadScopes()
-	return nil
+func (t *Tenant) migrateRuntimeState(ctx context.Context, j Journals) error {
+	return t.MigrateRuntimeState(ctx, j, nil, t.runtimeOwners())
 }
 
 func (t *Tenant) installRuntimeHistory(store runtimekernel.AcceptedStateReader, position func() int64) {
-	ctx := context.Background()
-	if t.Projection.Current().View() != nil {
-		ctx = t.Projection.Current().Context()
-	}
-	for _, a := range t.apps {
-		a.AcceptedLedger().UseChangeArchive(runtimekernel.NewChangeArchive(ctx, store, t.ID, a.Manifest().ID))
-	}
-	t.Committed.UseStorage(ctx, store, t.ID, position)
-}
-
-func (t *Tenant) installRuntimeRecords(store persistence.RuntimeState, position func() int64) {
-	t.Projection.Lock()
-	defer t.Projection.Unlock()
-	t.Projection.Current().Configure(store, t.ID, position(), position)
-	t.Projection.UseCurrentRows()
+	t.InstallRuntimeHistory(store, position, t.apps)
 }
 
 func (t *Tenant) runtimeStateDeltaLocked() (persistence.StateDelta, error) {
-	d := persistence.StateDelta{}
-	if err := func() error {
-		t.Projection.Lock()
-		defer t.Projection.Unlock()
-		for typ, et := range t.Projection.Types() {
-			for id, r := range et.Rows().All() {
-				image, err := r.Image()
-				if err != nil {
-					return err
-				}
-				state := records.StoredState{Value: image, Format: r.Format, Projection: r.Projection, Extraction: r.Extraction}
-				head, err := r.HistoryDigest()
-				if err != nil {
-					return err
-				}
-				rr := persistence.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1, HistoryHead: head}
-				for _, h := range r.RecordHistory() {
-					rr.History = append(rr.History, jsonOf(h))
-				}
-				d.Records = append(d.Records, rr)
-				d.Unique = append(d.Unique, persistence.StateUnique{Type: typ, ID: id, Keys: t.Projection.UniqueKeys(typ, id)})
-			}
-		}
-		return nil
-	}(); err != nil {
-		return persistence.StateDelta{}, err
-	}
-	for _, a := range t.apps {
-		for index, r := range a.AcceptedLedger().RecordsFor(t.ID) {
-			image, err := proto.MarshalOptions{Deterministic: true}.Marshal(r)
-			if err != nil {
-				return persistence.StateDelta{}, err
-			}
-			d.Changes = append(d.Changes, persistence.StateChange{App: a.Manifest().ID, ID: r.GetChangeId(), Key: r.GetSubmission().GetIdempotencyKey(), Index: index + 1, Image: image})
-		}
-	}
-	for _, a := range t.apps {
-		if owner := t.states[a.Manifest().ID]; owner != nil {
-			raw, err := owner.AcceptedState()
-			if err != nil {
-				return persistence.StateDelta{}, err
-			}
-			d.Values = append(d.Values, persistence.StateValue{Owner: "app-state", Key: a.Manifest().ID, Image: raw})
-		}
-	}
-	t.Committed.StorageValues(&d)
-	for name, n := range t.sequences.Clone() {
-		d.Values = append(d.Values, persistence.StateValue{Owner: "sequence", Key: name, Image: jsonOf(n)})
-	}
-	return d, nil
+	return t.RuntimeStateDelta(t.runtimeOwners())
 }
