@@ -124,3 +124,30 @@ func (c Corpus) file(f platform.File) (Source, bool) {
 	return Source{Key: platform.FileType + "/" + f.ID, Title: f.Name, Text: text,
 		Revision: f.Hash + "/" + f.Target + "/" + strings.Join(apps, ","), Scope: scope, Apps: apps}, true
 }
+
+func DocumentReadable(row func(typ, id string) (platform.EntityInfo, reflect.Value, bool), document string, reader *platform.Member, app string) bool {
+	id, isDocument := strings.CutPrefix(document, platform.KnowledgeDocumentType+"/")
+	if !isDocument {
+		fileID, fileSource := strings.CutPrefix(document, platform.FileType+"/")
+		if !fileSource {
+			return false
+		}
+		_, v, ok := row(platform.FileType, fileID)
+		if !ok {
+			return false
+		}
+		file := v.Interface().(platform.File)
+		if file.Archived {
+			return false
+		}
+		if id, isDocument = strings.CutPrefix(file.Target, platform.KnowledgeDocumentType+"/"); !isDocument {
+			return false
+		}
+	}
+	_, v, ok := row(platform.KnowledgeDocumentType, id)
+	if !ok {
+		return false
+	}
+	d := v.Interface().(platform.KnowledgeDocument)
+	return !d.Archived && AppsReadable(d.Apps, reader, app)
+}

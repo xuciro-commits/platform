@@ -14,7 +14,6 @@ import (
 
 	"platformserver/platform"
 	"reflect"
-	"strings"
 
 	"time"
 )
@@ -36,15 +35,8 @@ func (t *Tenant) corpus() knowledgeindex.Corpus {
 			page, err := t.recordsRead(t.host(), typ, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
 			return page.Records, page.Total, err
 		},
-		Row: func(typ, id string) (platform.EntityInfo, reflect.Value, bool) {
-			t.Projection.Lock()
-			defer t.Projection.Unlock()
-			et := t.Projection.Type(typ)
-			if et == nil || et.Rows().Get(id) == nil {
-				return platform.EntityInfo{}, reflect.Value{}, false
-			}
-			return et.Info(), et.Rows().Get(id).Value, true
-		},
+		Row: t.knowledgeRow,
+
 		Blob: func(hash string) (string, bool) {
 			body, _, err := t.files().Get(context.Background(), t.ID+"/"+hash)
 			if err != nil {
@@ -146,40 +138,19 @@ func (t *Tenant) checkEmbeddingSetting(id, value string) *kernel.Error {
 	return nil
 }
 
+func (t *Tenant) knowledgeRow(typ, id string) (platform.EntityInfo, reflect.Value, bool) {
+	t.Projection.Lock()
+	defer t.Projection.Unlock()
+	et := t.Projection.Type(typ)
+	if et == nil || et.Rows().Get(id) == nil {
+		return platform.EntityInfo{}, reflect.Value{}, false
+	}
+	return et.Info(), et.Rows().Get(id).Value, true
+}
+
 func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []string, reader *platform.Member, app string, now time.Time) bool {
 	if scope == "" {
-		id, isDocument := strings.CutPrefix(document, platform.KnowledgeDocumentType+"/")
-		t.Projection.Lock()
-		defer t.Projection.Unlock()
-		if !isDocument {
-			fileID, fileSource := strings.CutPrefix(document, platform.FileType+"/")
-			files := t.Projection.Type(platform.FileType)
-			if !fileSource || files == nil {
-				return false
-			}
-			r := files.Rows().Get(fileID)
-			if r == nil {
-				return false
-			}
-			file := r.Value.Interface().(platform.File)
-			if file.Archived {
-				return false
-			}
-			id, isDocument = strings.CutPrefix(file.Target, platform.KnowledgeDocumentType+"/")
-			if !isDocument {
-				return false
-			}
-		}
-		et := t.Projection.Type(platform.KnowledgeDocumentType)
-		if et == nil {
-			return false
-		}
-		r := et.Rows().Get(id)
-		if r == nil {
-			return false
-		}
-		d := r.Value.Interface().(platform.KnowledgeDocument)
-		return !d.Archived && knowledgeindex.AppsReadable(d.Apps, reader, app)
+		return knowledgeindex.DocumentReadable(t.knowledgeRow, document, reader, app)
 	}
 	m := t.host()
 	if reader != nil {
