@@ -68,7 +68,7 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 				return nil
 			}
 			sub, _ := acceptedformat.BatchSubmission(result, receipt)
-			_, err := t.sourceFacts(sub.GetTarget().GetType(), sub.GetTarget().GetId(), receipt.GetChangeId(), &preparedSourceClaim{origin: result.Origin, claims: result.Claims})
+			_, err := t.claims.Prepare(t.ID, sub.GetTarget().GetType(), sub.GetTarget().GetId(), receipt.GetChangeId(), &runtimekernel.ClaimSet{Origin: result.Origin, Claims: result.Claims})
 			return err
 		},
 		Check: func(result acceptedformat.Batch) error {
@@ -123,7 +123,7 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 				return err
 			}
 			sub := answer.GetSubmission()
-			return t.applySourceClaims(sub.GetTarget().GetType(), sub.GetTarget().GetId(), answer.GetChangeId(), result.At, &preparedSourceClaim{origin: result.Origin, claims: result.Claims})
+			return t.claims.Apply(t.ID, sub.GetTarget().GetType(), sub.GetTarget().GetId(), answer.GetChangeId(), result.At, &runtimekernel.ClaimSet{Origin: result.Origin, Claims: result.Claims})
 		},
 		Apply: func(result acceptedformat.Batch) error {
 			if err := t.applyAcceptedControl(result.Control); err != nil {

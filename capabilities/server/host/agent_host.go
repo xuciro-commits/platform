@@ -442,7 +442,7 @@ func (t *Tenant) prepareAgentStep(b platform.AgentResultStep, now time.Time) boo
 	if t.quarantined() {
 		return false
 	}
-	if t.recordsAcceptedResults() {
+	if t.Recording() {
 		now = now.Truncate(time.Microsecond)
 	}
 	run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), b.Run)

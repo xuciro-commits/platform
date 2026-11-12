@@ -36,7 +36,7 @@ type acceptOptions struct {
 	binding       *platform.SchemaVersion
 	schemaRefusal *kernel.Error
 	observation   *platform.ObservationDecisionEvidence
-	source        *preparedSourceClaim
+	source        *runtimekernel.ClaimSet
 	before        func(*stagedDecision) *kernel.Error
 	inputs        []*preparedOperationInput
 }
@@ -240,9 +240,9 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	} else {
 		raw, err = draft.SealResult(draft.sources(), a.Manifest().ID, s, record, now)
 		if err == nil && opts.source != nil {
-			raw, err = acceptedformat.AttachSourceClaims(raw, opts.source.origin, opts.source.claims)
+			raw, err = acceptedformat.AttachSourceClaims(raw, opts.source.Origin, opts.source.Claims)
 			if err == nil {
-				_, err = t.sourceFacts(s.GetTarget().GetType(), s.GetTarget().GetId(), record.GetChangeId(), opts.source)
+				_, err = t.claims.Prepare(t.ID, s.GetTarget().GetType(), s.GetTarget().GetId(), record.GetChangeId(), opts.source)
 			}
 		}
 		if err != nil {
@@ -371,7 +371,7 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 	} else {
 		caller := platform.NewCaller(draft, m, a.Manifest().ID, false, automation)
 		if source := draft.sourceProjection; source != nil {
-			caller = caller.WithSourceProjection(source.restore)
+			caller = caller.WithSourceProjection(source.Restore)
 		}
 		record, refusal = platform.Decide(caller, a, s, now)
 	}

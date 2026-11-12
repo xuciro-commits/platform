@@ -21,7 +21,7 @@ import (
 
 type stagedDecision struct {
 	runtimekernel.Decision
-	sourceProjection       *preparedSourceClaim
+	sourceProjection       *runtimekernel.ClaimSet
 	confirmationCompleting *confirmationCompletion
 	definitionPlans        map[definitionPlanKey]platform.DecisionDefinition
 	control                *controlDecision

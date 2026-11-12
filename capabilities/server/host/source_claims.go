@@ -3,13 +3,12 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	runtimekernel "platformserver/kernel"
 	"slices"
 	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -26,12 +25,6 @@ type sourceSubmission struct {
 	deleted bool
 }
 
-type preparedSourceClaim struct {
-	restore bool
-	origin  string
-	claims  []acceptedformat.SourceClaim
-}
-
 type RecordFieldProvenance = objects.RecordFieldProvenance
 
 type RecordProvenance = objects.RecordProvenance
@@ -40,7 +33,7 @@ func (t *Tenant) selectedSourceValue(typ, id, attribute string, history []record
 	return t.objectOwner(t.Projection).SelectedSourceValue(typ, id, attribute, history, incoming)
 }
 
-func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, source *sourceSubmission, now time.Time) (*pb.Submission, *preparedSourceClaim, *kernel.Error) {
+func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, source *sourceSubmission, now time.Time) (*pb.Submission, *runtimekernel.ClaimSet, *kernel.Error) {
 	if source.deleted {
 		projected, claims, refusal := t.prepareSourceDeletion(sub, source, now)
 		if refusal != nil {
@@ -113,71 +106,10 @@ func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, 
 	if origin == sub.GetTarget().GetId() {
 		origin = ""
 	}
-	return copy, &preparedSourceClaim{origin: origin, claims: claims, restore: restore}, nil
+	return copy, &runtimekernel.ClaimSet{Origin: origin, Claims: claims, Restore: restore}, nil
 }
 
-func (t *Tenant) sourceFacts(typ, id, change string, prepared *preparedSourceClaim) ([]*pb.Fact, error) {
-	if prepared == nil {
-		return nil, nil
-	}
-	facts := make([]*pb.Fact, 0, len(prepared.claims))
-	for _, claim := range prepared.claims {
-		fact := &pb.Fact{TenantId: t.ID, Kind: pb.FactKind_FACT_KIND_CLAIM, Subject: &pb.EntityRef{Type: typ, Id: id}, Attribute: claim.Attribute,
-			Schema:         &pb.SchemaRef{Name: "integration.claim", Version: 1},
-			Provenance:     &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: claim.Connector}, SourceTime: timestamppb.New(claim.SourceTime), Confidence: 1},
-			IdempotencyKey: typ + "/" + id + "/" + change + "/" + claim.Attribute, Payload: claim.Payload}
-		if old := t.claims.Facts.Accepted(t.ID, fact.IdempotencyKey); old != nil && !proto.Equal(old.GetFact(), fact) {
-			return nil, fmt.Errorf("source claim idempotency conflict")
-		}
-		facts = append(facts, fact)
-	}
-	if prepared.origin != "" {
-		resolved, failure := t.claims.Identity.Resolve(&pb.EntityRef{Type: typ, Id: prepared.origin})
-		if failure == nil && (len(resolved) != 1 || resolved[0] != (kernel.Ref{Type: typ, ID: id}) && resolved[0] != (kernel.Ref{Type: typ, ID: prepared.origin})) {
-			return nil, fmt.Errorf("source identity already resolves elsewhere")
-		}
-	}
-	return facts, nil
-}
-
-func (t *Tenant) applySourceClaims(typ, id, change string, at time.Time, prepared *preparedSourceClaim) error {
-	if prepared == nil {
-		return nil
-	}
-	facts, err := t.sourceFacts(typ, id, change, prepared)
-	if err != nil {
-		return err
-	}
-	for _, fact := range facts {
-		if _, failure := t.claims.Facts.Record(fact, at); failure != nil {
-			return fmt.Errorf("accepted source claim: %v", failure)
-		}
-	}
-	target := &pb.EntityRef{Type: typ, Id: id}
-	if _, failure := t.claims.Identity.Resolve(target); failure != nil {
-		if failure := t.claims.Identity.Create(target); failure != nil {
-			return fmt.Errorf("accepted source identity: %v", failure)
-		}
-	}
-	if prepared.origin != "" {
-		origin := &pb.EntityRef{Type: typ, Id: prepared.origin}
-		resolved, failure := t.claims.Identity.Resolve(origin)
-		if failure != nil {
-			if failure := t.claims.Identity.Create(origin); failure != nil {
-				return fmt.Errorf("accepted source origin: %v", failure)
-			}
-			resolved = []kernel.Ref{{Type: typ, ID: prepared.origin}}
-		}
-		if len(resolved) == 1 && resolved[0] == (kernel.Ref{Type: typ, ID: prepared.origin}) {
-			if failure := t.claims.Identity.AddRedirect(&pb.Redirect{From: origin, To: []*pb.EntityRef{target}, Kind: pb.RedirectKind_REDIRECT_KIND_MERGE}); failure != nil {
-				return fmt.Errorf("accepted source redirect: %v", failure)
-			}
-		}
-	}
-	return nil
-}
-
-func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmission, now time.Time) (*pb.Submission, *preparedSourceClaim, *kernel.Error) {
+func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmission, now time.Time) (*pb.Submission, *runtimekernel.ClaimSet, *kernel.Error) {
 	typ, id := sub.GetTarget().GetType(), sub.GetTarget().GetId()
 	t.Projection.Lock()
 	et := t.Projection.Type(typ)
@@ -209,7 +141,7 @@ func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmiss
 		}
 		copy.Payload = platform.Raw(payload)
 	}
-	return copy, &preparedSourceClaim{claims: claims}, nil
+	return copy, &runtimekernel.ClaimSet{Claims: claims}, nil
 }
 
 func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBinding, current []dataowner.SourceRow, now time.Time) ([]dataowner.SourceRow, *kernel.Error) {

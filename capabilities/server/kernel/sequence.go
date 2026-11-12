@@ -22,6 +22,8 @@ type Sequence struct {
 	DefinitionEpoch  atomic.Uint64
 	SnapshotPosition int64
 	RuntimePosition  func() int64
+	Record           func(persistence.Entry)
+	AcceptResult     func(persistence.Entry, string, string) ([]byte, error)
 }
 
 type LaneHold struct {

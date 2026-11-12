@@ -48,9 +48,7 @@ type Tenant struct {
 	runIndex          runtimekernel.RunIndexCache[[]MonitoringCoverage]
 	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	ownerRoles
-	claims       dataowner.SourceClaims
-	Record       func(Entry)
-	AcceptResult func(Entry, string, string) ([]byte, error)
+	claims       runtimekernel.SourceClaims
 	index        *knowledgeindex.Index
 	i18n         transport.Translator
 	views        transport.ViewCache
@@ -111,7 +109,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)
 	t.observeLane()
 	t.services = services
-	t.claims = dataowner.NewSourceClaims()
+	t.claims = runtimekernel.NewSourceClaims()
 	if services.NewAgentEvaluator != nil {
 		t.agentEvaluator = services.NewAgentEvaluator()
 	}
