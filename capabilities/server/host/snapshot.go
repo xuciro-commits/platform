@@ -3,11 +3,9 @@ package host
 import automation "platformserver/services/automate/runtime"
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/protobuf/encoding/protojson"
 	"maps"
 
 	runtimekernel "platformserver/kernel"
@@ -21,8 +19,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-
-	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -451,7 +447,9 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if s.Staged != nil {
 		t.staged.Restore(s.Staged)
 	}
-	if err := t.verifyCommitted(&s); err != nil {
+	if err := t.RestoreCommitted(runtimekernel.CommittedState{DecisionDefinitions: s.DecisionDefinitions, SubmissionSchemas: s.SubmissionSchemas, CompositeAnswers: s.CompositeAnswers, Refusals: s.Refusals, AcceptedAnswers: s.AcceptedAnswers, AcceptedInputs: s.AcceptedInputs, Composites: s.Composites},
+		runtimekernel.ReleaseSnapshot{Requests: s.ReleaseRequests, Applied: s.ReleaseApplied, Candidates: s.ReleaseCandidates, Active: s.ActiveRelease},
+		t.apps, t.App, func(app string) platform.AcceptedInputApp { return t.inputs[app] }); err != nil {
 		return err
 	}
 	t.releases.Restore(releases.State{ReleaseRequests: s.ReleaseRequests, ReleaseCandidates: s.ReleaseCandidates, ReleaseApplied: s.ReleaseApplied, ActiveRelease: s.ActiveRelease, Sealed: s.Sealed, ReleaseOrigins: s.ReleaseOrigins})
@@ -514,123 +512,6 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]records.St
 		}
 	}
 
-	return nil
-}
-
-func (t *Tenant) verifyCommitted(s *tenantState) error {
-	for key, binding := range s.SubmissionSchemas {
-		app, request, _ := strings.Cut(key, "/")
-		owner := t.App(app)
-		if owner == nil || request == "" || binding.Check() != nil {
-			return fmt.Errorf("tenant %s: schema snapshot %s is incompatible", t.ID, key)
-		}
-		receipt := owner.AcceptedLedger().AcceptedFor(t.ID, request)
-		sub := receipt.GetSubmission()
-		if raw := s.AcceptedAnswers[key]; len(raw) > 0 {
-			result, answer, err := acceptedformat.DecodeBatch(raw)
-			if err != nil {
-				return fmt.Errorf("tenant %s: schema snapshot %s has an invalid answer", t.ID, key)
-			}
-			sub, err = acceptedformat.BatchSubmission(result, answer)
-			if err != nil || sub.GetIdempotencyKey() != request || result.App != app {
-				return fmt.Errorf("tenant %s: schema snapshot %s has no matching request", t.ID, key)
-			}
-		}
-		if sub == nil || acceptedformat.ValidateSubmissionSchemaVersion(sub, &binding) != nil {
-			return fmt.Errorf("tenant %s: schema snapshot %s has no matching receipt", t.ID, key)
-		}
-	}
-	for key, result := range s.Refusals {
-		raw, err := json.Marshal(result)
-		if err != nil {
-			return fmt.Errorf("tenant %s: refusal snapshot %s: %w", t.ID, key, err)
-		}
-		decoded, sub, err := acceptedformat.DecodeRefusal(raw)
-		if err != nil || decoded.Tenant != t.ID || key != decoded.App+"/"+sub.GetIdempotencyKey() {
-			return fmt.Errorf("tenant %s: refusal snapshot %s is incompatible: %v", t.ID, key, err)
-		}
-	}
-	for key, hash := range s.ReleaseRequests {
-		if len(hash) != 64 || s.ReleaseApplied[key] == "" {
-			return fmt.Errorf("release request snapshot %s is incompatible", key)
-		}
-	}
-	for key, raw := range s.CompositeAnswers {
-		r, err := acceptedformat.DecodeComposite(raw)
-		if err != nil || r.Version < 2 || r.Tenant != t.ID || r.Key != key || s.Composites[key] != r.Digest {
-			return fmt.Errorf("tenant %s: composite answer snapshot %s is incompatible", t.ID, key)
-		}
-		if r.Refusal == "" {
-			batch, _, _ := acceptedformat.DecodeBatch(r.Changes)
-			for _, decision := range batch.Decisions {
-				receipt := new(pb.ChangeRecord)
-				if protojson.Unmarshal(decision.Receipt, receipt) != nil {
-					return fmt.Errorf("invalid composite snapshot receipt")
-				}
-				owner := t.App(decision.Event.App)
-				if owner == nil || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
-					return fmt.Errorf("composite snapshot has no accepted receipt")
-				}
-			}
-		}
-	}
-	if len(s.DecisionDefinitions) > 0 {
-		receipts := map[string]*pb.ChangeRecord{}
-		for _, app := range t.apps {
-			for _, receipt := range app.AcceptedLedger().RecordsFor(t.ID) {
-				receipts[app.Manifest().ID+"/"+receipt.GetChangeId()] = receipt
-			}
-		}
-		for key, definition := range s.DecisionDefinitions {
-			receipt := receipts[key]
-			if definition == nil || receipt == nil || definition.Check(receipt.GetSubmission().GetAuthority(), receipt.GetSubmission().GetSchema().GetName()) != nil || definition.Contract.Family != receipt.GetSubmission().GetSchema().GetVersion() {
-				return fmt.Errorf("tenant %s: decision definition snapshot %s has no matching receipt", t.ID, key)
-			}
-		}
-	}
-	t.Committed.Restore(runtimekernel.CommittedState{DecisionDefinitions: s.DecisionDefinitions, SubmissionSchemas: s.SubmissionSchemas, CompositeAnswers: s.CompositeAnswers, Refusals: s.Refusals, AcceptedAnswers: s.AcceptedAnswers, AcceptedInputs: s.AcceptedInputs, Composites: s.Composites})
-	for key, raw := range s.AcceptedAnswers {
-		if strings.HasPrefix(key, "release:") {
-			result, err := acceptedformat.DecodeRelease(raw)
-			if err != nil || (result.Version != 3 && result.Version != 4) || result.Tenant != t.ID || key != "release:"+result.Key || s.ReleaseApplied[result.Key] != result.Digest || !bytes.Equal(s.ReleaseCandidates[result.CandidateID], result.Bytes) {
-				return fmt.Errorf("tenant %s: release answer snapshot %s is incompatible", t.ID, key)
-			}
-			continue
-		}
-		result, receipt, err := acceptedformat.DecodeBatch(raw)
-		sub, subErr := acceptedformat.BatchSubmission(result, receipt)
-		if err != nil || subErr != nil || result.Tenant != t.ID ||
-			!result.HasSavedAnswer(sub) || key != result.App+"/"+sub.GetIdempotencyKey() {
-			return fmt.Errorf("tenant %s: accepted answer snapshot %s is incompatible", t.ID, key)
-		}
-		owner, ok := t.App(receipt.GetSubmission().GetAuthority()).(platform.App)
-		if !ok || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
-			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", t.ID, key)
-		}
-		if _, refused := t.Committed.Refusal(key); refused {
-			return fmt.Errorf("tenant %s: accepted answer snapshot %s reuses a refused key", t.ID, key)
-		}
-		binding, bound := s.SubmissionSchemas[key]
-		if bound != (result.SchemaVersion != nil) || result.SchemaVersion != nil && binding != *result.SchemaVersion {
-			return fmt.Errorf("tenant %s: accepted answer snapshot %s has a different schema binding", t.ID, key)
-		}
-	}
-	for key, raw := range s.AcceptedInputs {
-		result, err := acceptedformat.DecodeInput(raw)
-		owner := t.inputs[result.App]
-		if err != nil || owner == nil || result.Tenant != t.ID ||
-			key != result.App+"/"+result.Key || !slices.Contains(owner.AcceptedInputs(), result.Name) {
-			return fmt.Errorf("tenant %s: accepted input snapshot %s is incompatible: %v", t.ID, key, err)
-		}
-	}
-	for id, raw := range s.ReleaseCandidates {
-		if _, err := platform.ReadCandidate(id, raw); err != nil {
-			return fmt.Errorf("tenant %s: release snapshot %s is incompatible: %w", t.ID, id, err)
-		}
-	}
-	if s.ActiveRelease != "" && s.ReleaseCandidates[s.ActiveRelease] == nil {
-		return fmt.Errorf("tenant %s: active release snapshot has no saved candidate", t.ID)
-	}
 	return nil
 }
 
