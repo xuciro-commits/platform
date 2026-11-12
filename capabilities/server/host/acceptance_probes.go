@@ -1,12 +1,10 @@
 package host
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"slices"
@@ -38,120 +36,21 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 
 func (d *stagedDecision) privateFork() *stagedDecision {
 	fork := *d
+	forked, ok := d.Decision.Fork(d.tenant.App)
+	if !ok {
+		unsupportedStagedEffect()
+	}
+	fork.Decision = forked
 	fork.definitionPlans = nil
-	fork.BusinessFacts = slices.Clone(d.BusinessFacts)
-	for i := range fork.BusinessFacts {
-		fork.BusinessFacts[i] = acceptedformat.CloneBusinessFact(fork.BusinessFacts[i])
-	}
-	fork.BusinessRefusals = maps.Clone(d.BusinessRefusals)
-	for key, fact := range fork.BusinessRefusals {
-		fork.BusinessRefusals[key] = acceptedformat.CloneBusinessFact(fact)
-	}
-	fork.CallbackWrites = maps.Clone(d.CallbackWrites)
-	if d.CallbackOrigin != nil {
-		origin := *d.CallbackOrigin
-		origin.Output = slices.Clone(origin.Output)
-		fork.CallbackOrigin = &origin
-	}
-	fork.OperationCancels = maps.Clone(d.OperationCancels)
-	fork.OperationAnswers = maps.Clone(d.OperationAnswers)
-	for id, answer := range fork.OperationAnswers {
-		answer.Output = slices.Clone(answer.Output)
-		if answer.Ref != nil {
-			ref := *answer.Ref
-			answer.Ref = &ref
-		}
-		fork.OperationAnswers[id] = answer
-	}
 	fork.operationInputs = maps.Clone(d.operationInputs)
 	for hash, pending := range fork.operationInputs {
 		fork.operationInputs[hash] = slices.Clone(pending)
 	}
-	fork.InputIssues = maps.Clone(d.InputIssues)
-	fork.ConstraintWrites = maps.Clone(d.ConstraintWrites)
-	for refusal, issues := range fork.InputIssues {
-		issues = slices.Clone(issues)
-		for i := range issues {
-			issues[i].Translations = maps.Clone(issues[i].Translations)
-			issues[i].Values = maps.Clone(issues[i].Values)
-			for name, raw := range issues[i].Values {
-				issues[i].Values[name] = slices.Clone(raw)
-			}
-			issues[i].Path = slices.Clone(issues[i].Path)
-			issues[i].RelatedPaths = slices.Clone(issues[i].RelatedPaths)
-			for j := range issues[i].RelatedPaths {
-				issues[i].RelatedPaths[j] = slices.Clone(issues[i].RelatedPaths[j])
-			}
-		}
-		fork.InputIssues[refusal] = issues
-	}
-	fork.Records = d.Records.ForkRecords()
-	fork.Records.InheritDecision(d.Records)
-	fork.Logs = map[*platform.Ledger]*kernel.ChangeLog{}
-	for ledger, log := range d.Logs {
-		suspended := d.Receiving[ledger]
-		for id := range d.Active {
-			owner := d.tenant.App(id)
-			if owner != nil && owner.AcceptedLedger() == ledger {
-				suspended = true
-				break
-			}
-		}
-		if suspended {
-			fork.Logs[ledger] = log
-		} else {
-			fork.Logs[ledger] = log.Fork()
-		}
-	}
-	fork.Events, fork.Notices = slices.Clone(d.Events), d.Notices.Clone()
-	fork.Definitions = maps.Clone(d.Definitions)
-	fork.Sequences, fork.Allocated, fork.SequenceBases = maps.Clone(d.Sequences), maps.Clone(d.Allocated), maps.Clone(d.SequenceBases)
-	fork.Writers, fork.Changed = cloneLists(d.Writers), cloneLists(d.Changed)
-	fork.Publications = maps.Clone(d.Publications)
-	fork.Intents = slices.Clone(d.Intents)
-	fork.Iterations = slices.Clone(d.Iterations)
-	fork.Authorizations = slices.Clone(d.Authorizations)
-	fork.Observations = slices.Clone(d.Observations)
-	fork.Active = maps.Clone(d.Active)
-	fork.Receiving = maps.Clone(d.Receiving)
-	fork.requests, fork.RequestCounts = slices.Clone(d.requests), maps.Clone(d.RequestCounts)
-	fork.Connectors = runtimekernel.CloneConnectors(d.Connectors)
-	fork.PrivateApps = map[string]platform.App{}
-	fork.States, fork.StateBases = map[string]platform.AcceptedStateApp{}, map[string]json.RawMessage{}
-	for id, base := range d.StateBases {
-		fork.StateBases[id] = slices.Clone(base)
-	}
-	for id, owner := range d.States {
-		if d.Active[id] || d.Receiving[owner.AcceptedLedger()] {
-			fork.States[id], fork.PrivateApps[id] = owner, owner
-			continue
-		}
-		app, err := owner.Fork(owner.AcceptedLedger())
-		copy, ok := app.(platform.AcceptedStateApp)
-		if err != nil || !ok {
-			unsupportedStagedEffect()
-		}
-		fork.States[id], fork.PrivateApps[id] = copy, app
-	}
-	for id, app := range d.PrivateApps {
-		if d.Active[id] || d.Receiving[app.AcceptedLedger()] {
-			fork.PrivateApps[id] = app
-			continue
-		}
-		if fork.PrivateApps[id] != nil {
-			continue
-		}
-		copy, err := app.Fork(app.AcceptedLedger())
-		if err != nil || copy == nil || copy.Manifest().ID != id || copy.AcceptedLedger() != app.AcceptedLedger() {
-			unsupportedStagedEffect()
-		}
-		fork.PrivateApps[id] = copy
-	}
+	fork.requests = slices.Clone(d.requests)
 	for id, app := range fork.PrivateApps {
-		if d.Active[id] || d.Receiving[app.AcceptedLedger()] {
-			continue
+		if !d.Shared(id, app) {
+			(hostView{t: d.tenant, app: app, decision: &fork}).bindOwner(app)
 		}
-		(hostView{t: d.tenant, app: app, decision: &fork}).bindOwner(app)
 	}
 	fork.forkControlDecision(d.control)
 	return &fork
@@ -188,14 +87,6 @@ func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller
 		err = d.CheckFinalConstraints()
 	}
 	return err
-}
-
-func cloneLists(src map[string][]string) map[string][]string {
-	dst := make(map[string][]string, len(src))
-	for key, list := range src {
-		dst[key] = slices.Clone(list)
-	}
-	return dst
 }
 
 func (d *stagedDecision) stageObservers() *kernel.Error {
