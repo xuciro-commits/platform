@@ -85,7 +85,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		if err != nil || saved.App != e.App || saved.Member != m.ID || saved.Tenant != t.ID || !persistence.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: invalid host result: %v", i+1, err)
 		}
-		if _, err := t.applyAcceptedHostControl(e.Body); err != nil {
+		if _, err := t.ApplyHostControl(e.Body, t.hostControl()); err != nil {
 			return fmt.Errorf("entry %d: host result: %w", i+1, err)
 		}
 		return nil

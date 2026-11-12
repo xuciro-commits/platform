@@ -10,6 +10,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	controlowner "platformserver/services/security/control"
 
@@ -488,4 +489,18 @@ func tailAudit(entries []platform.AuditEntry, n int) []platform.AuditEntry {
 		entries = entries[len(entries)-n:]
 	}
 	return slices.Clone(entries)
+}
+
+func (t *Tenant) hostControl() runtimekernel.HostControlOwner {
+	return runtimekernel.HostControlOwner{Image: t.console.Image, Restore: t.console.Restore, Audit: &t.audit}
+}
+
+func (t *Tenant) acceptHostControl(action, member string, request any, now time.Time, audit platform.AuditEntry, decide func(*platform.HostControlImage) (platform.SupportGrant, error), evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
+	answer, applied, err := t.AcceptHostControl(runtimekernel.HostRequest{Tenant: t.ID, Action: action, Member: member, Request: request, At: now, Audit: audit, Evidence: evidence},
+		t.hostControl(), decide, t.acceptResult, t.quarantine)
+	if applied {
+		t.acceptedResultApplied()
+		t.changed()
+	}
+	return answer, err
 }

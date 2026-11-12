@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"platformserver/kernel/acceptedformat"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
 
@@ -173,4 +174,54 @@ func hostTransition(current platform.HostControlImage, r acceptedformat.HostCont
 		return fmt.Errorf("host result changes unrelated state or audit")
 	}
 	return nil
+}
+
+type HostControlOwner struct {
+	Image   func() (platform.HostControlImage, error)
+	Restore func(platform.HostControlImage)
+	Audit   *AuditLog
+}
+
+func (s *Sequence) ApplyHostControl(raw []byte, o HostControlOwner) (acceptedformat.HostControl, error) {
+	current, err := o.Image()
+	if err != nil {
+		return acceptedformat.HostControl{}, err
+	}
+	r, fresh, err := CheckHostControl(raw, s.ID, current, o.Audit.All())
+	if err != nil || !fresh {
+		return r, err
+	}
+	o.Restore(r.Image)
+	o.Audit.Remember(r.Audit)
+	return r, nil
+}
+
+func (s *Sequence) AcceptHostControl(q HostRequest, o HostControlOwner, decide func(*platform.HostControlImage) (platform.SupportGrant, error), commit func(persistence.Entry, string, string) ([]byte, error), quarantine func(error)) (platform.SupportGrant, bool, error) {
+	image, err := o.Image()
+	if err != nil {
+		return platform.SupportGrant{}, false, err
+	}
+	r, raw, prior, err := PrepareHostControl(q, image, o.Audit.All(), decide)
+	if err != nil {
+		return platform.SupportGrant{}, false, err
+	}
+	if prior != nil {
+		return *prior, false, nil
+	}
+	principal, _ := json.Marshal(platform.Member{ID: q.Member, Tenant: s.ID})
+	committed, err := commit(persistence.Entry{App: acceptedformat.EffectApp, Kind: "accepted-result", Principal: principal, Body: raw, At: r.At}, r.Key, r.RequestHash)
+	if err != nil {
+		return platform.SupportGrant{}, false, err
+	}
+	saved, err := acceptedformat.DecodeHostControl(committed)
+	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
+		err = fmt.Errorf("committed host result differs: %v", err)
+		quarantine(err)
+		return platform.SupportGrant{}, false, err
+	}
+	if _, err = s.ApplyHostControl(committed, o); err != nil {
+		quarantine(err)
+		return platform.SupportGrant{}, false, err
+	}
+	return saved.Answer, true, nil
 }
