@@ -1,9 +1,6 @@
 package host
 
 import (
-	"encoding/json"
-	"fmt"
-	runtimekernel "platformserver/kernel"
 	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
 
@@ -56,84 +53,10 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 }
 
 func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.Effect, *kernel.Error) {
-	if t.App(build.ID) == nil {
+	if t.App(build.ID) == nil || e.App != build.ID {
 		return nil, nil
 	}
-	s := e.Record.GetSubmission()
-	schema := s.GetSchema().GetName()
-	if e.App != build.ID {
-		return nil, nil
-	}
-	c := t.automation(build.ID, false)
-	writebacks, _, refusal := platform.Find[dataowner.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
-	if preparing && refusal != nil {
-		return nil, refusal
-	}
-	var planned []platform.Effect
-	owner := t.DataOwner()
-	for _, w := range writebacks {
-		eventSchema, on := w.Schema(), w.On
-		if w.Published != "" {
-			var asset platform.ReleaseAsset
-			var definition dataowner.WritebackDefinition
-			if dataowner.DecodeDescriptor([]byte(w.Published), &asset) != nil || dataowner.DecodeDescriptor(asset.Body, &definition) != nil {
-				if preparing {
-					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The writeback publication is unavailable")
-				}
-				continue
-			}
-			eventSchema, on = definition.Object+"."+definition.On, definition.On
-		}
-		if on == "confirmation" || on == "dispatch" || on == "transaction" || eventSchema != schema {
-			continue
-		}
-		w, err := owner.ExecutionWriteback(w)
-		if err != nil {
-			if preparing {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
-			}
-			continue
-		}
-		if w.On == "confirmation" || w.On == "dispatch" || w.On == "transaction" || w.Schema() != schema {
-			continue
-		}
-		conn, ok := platform.Get[dataowner.Connection](c, w.Connection)
-		if !ok {
-			if preparing {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The writeback connection is not configured")
-			}
-			continue
-		}
-		if preparing {
-			conn, err = owner.ExecutionConnection(conn)
-		} else {
-			conn, err = owner.ConnectionConfiguration(conn)
-		}
-		if err != nil {
-			if preparing {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
-			}
-			continue
-		}
-		req, err := w.Request(conn, s.GetTarget().GetId(), s.GetPayload())
-		if err != nil {
-			if preparing {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
-			}
-			continue
-		}
-		if preparing {
-			if refusal := t.checkWritebackCredential(req); refusal != nil {
-				return nil, refusal
-			}
-		}
-		body, _ := json.Marshal(req)
-		at := e.Record.GetRecordedTime().AsTime()
-		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, build.ID, e.Record.GetChangeId(), w.ID),
-			Endpoint: dataowner.WritebackEndpoint + conn.ID, Event: "writeback/" + w.Name, App: build.ID, Key: e.Record.GetChangeId(), Target: runtimekernel.Target(s), At: at,
-			State: "pending", Due: at, Body: string(body)})
-	}
-	return planned, nil
+	return t.DataOwner().WritebackEffects(t.ID, t.automation(build.ID, false), e, preparing, t.checkWritebackCredential)
 }
 
 func (t *Tenant) checkWritebackCredential(request dataowner.WritebackRequest) *kernel.Error {
