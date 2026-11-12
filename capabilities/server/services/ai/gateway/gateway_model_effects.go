@@ -3,6 +3,7 @@ package aigateway
 import (
 	"encoding/json"
 	"fmt"
+	"platformkernel/kernel"
 	"strconv"
 	"strings"
 
@@ -82,4 +83,24 @@ func (ask ModelAsk) Submission(tenant string, x platform.Effect, o platform.Outc
 	payload, _ := json.Marshal(answer)
 	return &pb.Submission{TenantId: tenant, PrincipalId: "app:" + x.App, Authority: authority(typ), Target: &pb.EntityRef{Type: typ, Id: id},
 		Schema: &pb.SchemaRef{Name: ask.Reply, Version: 1}, IdempotencyKey: "answer:" + x.ID, Payload: payload}
+}
+
+func (ask ModelAsk) EvaluationDrift(model platform.AIModel, provider platform.AIProvider, rebind func(platform.ModelOptions) (platform.AIModelBinding, *kernel.Error)) string {
+	f := ask.EvaluationFunction
+	if f == nil || f.Check() != nil || ask.Prompt.System != f.SystemPrompt() || ask.Prompt.MaxTokens != f.MaxTokens || len(ask.Prompt.User) > f.MaxInputBytes {
+		return "the evaluation function binding changed"
+	}
+	var evaluated *platform.AIModelBinding
+	if ask.Binding != nil {
+		current, refusal := rebind(f.ModelOptions.Override(platform.ModelOptions{MaxTokens: f.MaxTokens}))
+		if refusal != nil {
+			return refusal.Message
+		}
+		evaluated = &current
+	}
+	config, err := ConfigurationDigest(model, provider, evaluated)
+	if err != nil || ask.EvaluationConfig == "" || ask.EvaluationConfig != config {
+		return "the evaluation model configuration changed"
+	}
+	return ""
 }

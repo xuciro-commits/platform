@@ -331,28 +331,14 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 			return false, nil
 		}
 		if ask.Evaluation {
-			if ask.EvaluationFunction == nil || ask.EvaluationFunction.Check() != nil || ask.Prompt.System != ask.EvaluationFunction.SystemPrompt() ||
-				ask.Prompt.MaxTokens != ask.EvaluationFunction.MaxTokens || len(ask.Prompt.User) > ask.EvaluationFunction.MaxInputBytes {
-				out.Result, out.Detail = "rejected", "the evaluation function binding changed"
-				return false, nil
-			}
-			var evaluatedBinding *platform.AIModelBinding
-			if ask.Binding != nil {
-				current, _, refusal := t.modelResolver().Resolve("generation", model, ask.EvaluationFunction.ModelOptions.Override(platform.ModelOptions{MaxTokens: ask.EvaluationFunction.MaxTokens}))
+			if detail := ask.EvaluationDrift(enabled, pv, func(options platform.ModelOptions) (platform.AIModelBinding, *kernel.Error) {
+				current, _, refusal := t.modelResolver().Resolve("generation", model, options)
 				if refusal != nil {
-					out.Result, out.Detail = "rejected", refusal.Message
-					return false, nil
+					return current, refusal
 				}
-				current, refusal = t.modelResolver().Stage(current, pv, platform.AIStageDesign)
-				if refusal != nil {
-					out.Result, out.Detail = "rejected", refusal.Message
-					return false, nil
-				}
-				evaluatedBinding = &current
-			}
-			config, digestErr := aigateway.ConfigurationDigest(enabled, pv, evaluatedBinding)
-			if digestErr != nil || ask.EvaluationConfig == "" || ask.EvaluationConfig != config {
-				out.Result, out.Detail = "rejected", "the evaluation model configuration changed"
+				return t.modelResolver().Stage(current, pv, platform.AIStageDesign)
+			}); detail != "" {
+				out.Result, out.Detail = "rejected", detail
 				return false, nil
 			}
 		}
