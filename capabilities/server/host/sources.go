@@ -130,47 +130,13 @@ func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[strin
 	if binding == nil {
 		return nil, nil, nil
 	}
-	if len(input) > dataowner.ValueSourceRows {
-		return nil, binding, fmt.Errorf("the answer holds %d rows; a pull takes at most %d", len(input), dataowner.ValueSourceRows)
-	}
-	rows := make([]dataowner.SourceRow, 0, len(input))
-	for _, values := range input {
-		id := platform.IntegrationScalar(values[binding.Key])
-		at := now.UTC()
-		row := dataowner.SourceRow{ID: id, Origin: id, At: &at}
-		if id != "" {
-			if resolved, failure := t.claims.Identity.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
-				row.ID = resolved[0].ID
-			}
+	rows, err := dataowner.DeclaredRows(*binding, input, now, func(id string) string {
+		if resolved, failure := t.claims.Identity.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
+			return resolved[0].ID
 		}
-		if id == "" {
-			row.Error = "row has no id"
-		}
-		if raw := platform.IntegrationScalar(values[binding.SourceTime]); binding.SourceTime != "" && raw != "" {
-			at, err := time.Parse(time.RFC3339Nano, raw)
-			if err != nil {
-				at, err = time.Parse(time.DateOnly, raw)
-			}
-			if err != nil {
-				row.Error = "row has an invalid source time"
-			} else {
-				parsed := at.UTC()
-				row.At = &parsed
-			}
-		}
-		payload := map[string]any{}
-		for _, column := range binding.Columns {
-			if value, exists := values[column.Column]; exists {
-				payload[column.Attribute] = value
-			}
-		}
-		if len(payload) == 0 {
-			row.Error = "row has no mapped attributes"
-		}
-		row.Payload, _ = json.Marshal(payload)
-		rows = append(rows, row)
-	}
-	return rows, binding, nil
+		return id
+	})
+	return rows, binding, err
 }
 
 func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []dataowner.SourceRow, now time.Time) (int, *kernel.Error) {
@@ -185,18 +151,7 @@ func (t *Tenant) prepareRows(member platform.Member, object, producer string, ro
 		t.Projection.Lock()
 		defer t.Projection.Unlock()
 		et := t.Projection.Type(object)
-		seen := map[string]bool{}
-		for i := range rows {
-			row := &rows[i]
-			row.Key = fmt.Sprintf("row:%d", i)
-			row.Verb = ".create"
-			if seen[row.ID] || et != nil && et.Rows().Get(row.ID) != nil {
-				row.Verb = ".edit"
-			}
-			if row.Error == "" {
-				seen[row.ID] = true
-			}
-		}
+		dataowner.AssignVerbs(rows, func(id string) bool { return et != nil && et.Rows().Get(id) != nil })
 		return merged, nil
 	})
 }
