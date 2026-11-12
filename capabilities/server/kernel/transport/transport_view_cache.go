@@ -214,33 +214,39 @@ type viewEntry struct {
 	bodies      map[string]*viewBody
 }
 
-func (c *ViewCache) cachedView(gen uint64, key, kind, lang string, source func() any, translate func(any, string) any) *viewBody {
+func (c *ViewCache) cachedView(gen uint64, key, kind, lang string, source func() (any, error), translate func(any, string) any) (*viewBody, error) {
 	bodyKey := kind + ":" + lang
 	if body, ok := c.body(gen, key, bodyKey); ok {
-		return body
+		return body, nil
 	}
-	value := source()
+	value, err := source()
+	if err != nil {
+		return nil, err
+	}
 	if lang != "" {
 		value = translate(value, lang)
 	}
 	plain, err := json.Marshal(value)
 	if err != nil {
-		plain = []byte("null")
+		return nil, err
 	}
 	sum := sha256.Sum256(plain)
 	body := &viewBody{plain: plain, etag: `"` + hex.EncodeToString(sum[:16]) + `"`}
 	c.putBody(gen, key, bodyKey, body)
-	return body
+	return body, nil
 }
 
-func (c *ViewCache) WriteView(gen uint64, key, kind, lang string, w http.ResponseWriter, r *http.Request, source func() any, translate func(any, string) any) {
-	body := c.cachedView(gen, key, kind, lang, source, translate)
+func (c *ViewCache) WriteView(gen uint64, key, kind, lang string, w http.ResponseWriter, r *http.Request, source func() (any, error), translate func(any, string) any) error {
+	body, err := c.cachedView(gen, key, kind, lang, source, translate)
+	if err != nil {
+		return err
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "private, max-age=0, must-revalidate")
 	w.Header().Set("ETag", body.etag)
 	if match := r.Header.Get("If-None-Match"); match != "" && contentTypeMatches(match, body.etag) {
 		w.WriteHeader(http.StatusNotModified)
-		return
+		return nil
 	}
 	if noCompression, ok := w.(interface{ NoCompression() }); ok {
 		noCompression.NoCompression()
@@ -250,10 +256,11 @@ func (c *ViewCache) WriteView(gen uint64, key, kind, lang string, w http.Respons
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Content-Length", itoa(len(compressed)))
 		_, _ = w.Write(compressed)
-		return
+		return nil
 	}
 	w.Header().Set("Content-Length", itoa(len(body.plain)))
 	_, _ = w.Write(body.plain)
+	return nil
 }
 
 func contentTypeMatches(header, etag string) bool {

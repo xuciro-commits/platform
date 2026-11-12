@@ -1,6 +1,7 @@
 package control
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -55,6 +56,9 @@ type Console struct {
 	minted          map[string]bool
 	lastSeen        map[string]time.Time
 	lastSeenShared  bool
+	acceptedState   json.RawMessage
+	acceptedDigest  string
+	acceptedValid   bool
 	sessions        sessionTable
 	platform.ConsolePolicies
 	platform.ConsolePackages
@@ -165,6 +169,9 @@ func (d *Console) Restore(raw json.RawMessage) error {
 		return err
 	}
 	d.members, d.subjects, d.profiles = s.Members, s.Subjects, s.Profiles
+	d.acceptedState = nil
+	d.acceptedDigest = ""
+	d.acceptedValid = false
 	if d.profiles == nil {
 		d.profiles = map[string]*platform.Profile{}
 	}
@@ -273,14 +280,59 @@ func (d *Console) Fork(ledger *platform.Ledger) (platform.App, error) {
 func (d *Console) AcceptedState() (json.RawMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return json.Marshal(d.state())
+	if d.acceptedState == nil {
+		raw, err := json.Marshal(d.state())
+		if err != nil {
+			return nil, err
+		}
+		d.acceptedState = raw
+	}
+	return d.acceptedState, nil
+}
+
+func (d *Console) AcceptedStateDigest(raw json.RawMessage) (string, error) {
+	d.mu.Lock()
+	current := bytes.Equal(raw, d.acceptedState)
+	digest := d.acceptedDigest
+	d.mu.Unlock()
+	if current && digest != "" {
+		return digest, nil
+	}
+	digest, err := platform.CanonicalDigest(raw)
+	if err != nil || !current {
+		return digest, err
+	}
+	d.mu.Lock()
+	if bytes.Equal(raw, d.acceptedState) {
+		d.acceptedDigest = digest
+	}
+	d.mu.Unlock()
+	return digest, nil
 }
 
 func (d *Console) ValidateAcceptedState(raw json.RawMessage) error {
+	d.mu.Lock()
+	valid := bytes.Equal(raw, d.acceptedState) && d.acceptedValid
+	d.mu.Unlock()
+	if valid {
+		return nil
+	}
 	var state consoleState
 	if err := json.Unmarshal(raw, &state); err != nil {
 		return err
 	}
+	if err := d.validateAcceptedState(state); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	if bytes.Equal(raw, d.acceptedState) {
+		d.acceptedValid = true
+	}
+	d.mu.Unlock()
+	return nil
+}
+
+func (d *Console) validateAcceptedState(state consoleState) error {
 	if state.Members == nil || state.Subjects == nil {
 		return fmt.Errorf("accepted directory is incomplete")
 	}
@@ -303,11 +355,11 @@ func (d *Console) ValidateAcceptedState(raw json.RawMessage) error {
 }
 
 func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
-	if err := d.ValidateAcceptedState(raw); err != nil {
-		return err
-	}
 	var state consoleState
 	if err := json.Unmarshal(raw, &state); err != nil {
+		return err
+	}
+	if err := d.validateAcceptedState(state); err != nil {
 		return err
 	}
 	d.mu.Lock()
@@ -324,6 +376,9 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 		}
 	}
 	d.members, d.subjects, d.profiles = state.Members, state.Subjects, state.Profiles
+	d.acceptedState = slices.Clone(raw)
+	d.acceptedDigest = ""
+	d.acceptedValid = true
 	if d.profiles == nil {
 		d.profiles = map[string]*platform.Profile{}
 	}
@@ -340,6 +395,9 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 		if declared.Target == MemberType || declared.Target == ProfileType || declared.Target == platform.MarkingType || declared.Target == platform.RoleType || declared.Target == platform.PolicyType || declared.Target == platform.TeamType || declared.Target == TokenType {
 			d.mu.Lock()
 			if d.directoryShared && (declared.Target == MemberType || declared.Target == ProfileType || declared.Target == TokenType) {
+				d.acceptedState = nil
+				d.acceptedDigest = ""
+				d.acceptedValid = false
 				d.members, d.subjects = maps.Clone(d.members), maps.Clone(d.subjects)
 				d.profiles, d.tokens = maps.Clone(d.profiles), maps.Clone(d.tokens)
 				d.directoryShared = false
@@ -385,6 +443,9 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 			}
 			return func(r *pb.ChangeRecord) {
 				d.mu.Lock()
+				d.acceptedState = nil
+				d.acceptedDigest = ""
+				d.acceptedValid = false
 				apply(r)
 				then := d.then
 				d.then = nil
@@ -399,7 +460,12 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 			if apply == nil {
 				return nil, err
 			}
-			return func(r *pb.ChangeRecord) { d.mu.Lock(); defer d.mu.Unlock(); apply(r) }, err
+			return func(r *pb.ChangeRecord) {
+				d.mu.Lock()
+				defer d.mu.Unlock()
+				d.acceptedState, d.acceptedDigest, d.acceptedValid = nil, "", false
+				apply(r)
+			}, err
 		}
 		if declared.Target == platform.PackageType {
 			apply, err := d.ConsolePackages.Prepare(c, s)
@@ -409,6 +475,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 			return func(r *pb.ChangeRecord) {
 				d.mu.Lock()
 				defer d.mu.Unlock()
+				d.acceptedState, d.acceptedDigest, d.acceptedValid = nil, "", false
 				apply(r)
 			}, err
 		}
@@ -423,6 +490,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 			return func(r *pb.ChangeRecord) {
 				d.mu.Lock()
 				defer d.mu.Unlock()
+				d.acceptedState, d.acceptedDigest, d.acceptedValid = nil, "", false
 				apply(r)
 			}, err
 		}

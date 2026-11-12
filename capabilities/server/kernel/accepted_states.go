@@ -10,6 +10,15 @@ import (
 	"platformserver/platform"
 )
 
+func acceptedStateDigest(owner platform.AcceptedStateApp, image json.RawMessage) (string, error) {
+	if digest, ok := owner.(interface {
+		AcceptedStateDigest(json.RawMessage) (string, error)
+	}); ok {
+		return digest.AcceptedStateDigest(image)
+	}
+	return platform.CanonicalDigest(image)
+}
+
 func SavedStates(owners map[string]platform.AcceptedStateApp, bases map[string]json.RawMessage) ([]acceptedformat.State, error) {
 	var out []acceptedformat.State
 	for _, id := range slices.Sorted(maps.Keys(owners)) {
@@ -21,11 +30,11 @@ func SavedStates(owners map[string]platform.AcceptedStateApp, bases map[string]j
 		if err := owner.ValidateAcceptedState(image); err != nil {
 			return nil, err
 		}
-		before, err := platform.CanonicalDigest(bases[id])
+		before, err := acceptedStateDigest(owner, bases[id])
 		if err != nil {
 			return nil, err
 		}
-		after, err := platform.CanonicalDigest(image)
+		after, err := acceptedStateDigest(owner, image)
 		if err != nil {
 			return nil, err
 		}
@@ -51,7 +60,7 @@ func CheckStates(owners map[string]platform.AcceptedStateApp, states []acceptedf
 		if err != nil {
 			return err
 		}
-		if hash, err := platform.CanonicalDigest(prior); err != nil || hash != state.Before {
+		if hash, err := acceptedStateDigest(owner, prior); err != nil || hash != state.Before {
 			return fmt.Errorf("accepted state predecessor differs for %s", state.App)
 		}
 	}
