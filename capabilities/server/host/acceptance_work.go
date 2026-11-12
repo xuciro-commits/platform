@@ -184,7 +184,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	} else {
 		var plan acceptedformat.ChangePlan
-		plan, err = draft.savedChangePlan()
+		plan, err = draft.ChangePlan(draft.savedControl)
 		result.Notices, result.Intents = plan.Notices, plan.Intents
 		result.States, result.Control = plan.States, plan.Control
 		if err != nil {

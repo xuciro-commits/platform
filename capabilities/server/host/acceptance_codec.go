@@ -4,75 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
-	"slices"
-	"strings"
-	"time"
 )
 
-func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
-	if err := d.CheckFinalConstraints(); err != nil {
-		return nil, err
-	}
-	owner := d.tenant.App(app)
-	if owner == nil || request.GetAuthority() != app {
-		return nil, fmt.Errorf("decision has no matching submission owner")
-	}
-	action, declared := owner.Manifest().Actions.Action(request.GetSchema().GetName())
-	if !declared || action.Target != request.GetTarget().GetType() {
-		return nil, fmt.Errorf("submission target differs from its declared action")
-	}
-	if len(d.BusinessFacts) == 0 && !strings.HasPrefix(request.GetCorrelationId(), "correction:") && proto.Equal(request, receipt.GetSubmission()) {
-		if raw, err := d.result(app, receipt, at); err == nil {
-			return raw, nil
-		}
-	}
-	return d.batchResult(app, request, receipt, at)
-}
-
-func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedAt time.Time) ([]byte, error) {
-	if d.control != nil || d.Failure != nil || len(d.Allocated) > 0 || d.Notices.Changed() ||
-		len(d.Intents) > 0 || len(d.Observations) > 0 || len(d.States) > 0 ||
-		len(d.OperationCancels) > 0 ||
-		d.Observed && len(d.tenant.observers) > 0 {
-		return nil, fmt.Errorf("decision needs a result carrying all state and intents")
-	}
-	if receipt == nil || len(d.Events) != 1 || d.Records.WriteCount() != 1 || len(d.Logs) != 1 {
-		return nil, fmt.Errorf("one accepted record and event are required")
-	}
-	accepted := false
-	for _, log := range d.Logs {
-		accepted = proto.Equal(log.Last(receipt.GetSubmission().GetTenantId()), receipt)
-	}
-	if !accepted {
-		return nil, fmt.Errorf("decision has no staged kernel receipt")
-	}
-	typ, id := receipt.GetSubmission().GetTarget().GetType(), receipt.GetSubmission().GetTarget().GetId()
-	ref := typ + "/" + id
-	if !d.Records.Written(ref) || d.Events[0].App != app || !proto.Equal(d.Events[0].Record, receipt) ||
-		len(d.Events[0].Changed) != 1 || d.Events[0].Changed[0] != ref {
-		return nil, fmt.Errorf("decision has other record or event effects")
-	}
-	kind := "record"
-	if publisher, ok := d.tenant.App(app).(platform.AcceptedPublisher); ok &&
-		slices.Contains(publisher.AcceptedPublicationSchemas(), receipt.GetSubmission().GetSchema().GetName()) {
-		kind = "publication"
-	} else if build.CallbackFreeTransition(d.tenant.App(app).Manifest(), receipt.GetSubmission().GetSchema().GetName()) {
-		kind = "pure-transition"
-	}
-	plan, refusal := d.tenant.planAcceptedEvent(d.Events[0])
-	if refusal != nil {
-		return nil, refusal
-	}
-	return runtimekernel.EncodeAcceptedRecord(runtimekernel.RecordResult{Store: d.Records, App: app, Kind: kind, Receipt: receipt, At: submittedAt,
-		SchemaVersion: d.SchemaVersion, Definition: d.Definitions[app+"/"+receipt.GetChangeId()], Event: plan,
-		Authorizations: d.Authorizations, Unique: d.SavedUniqueChanges()})
+func (d *stagedDecision) sources() runtimekernel.ResultSources {
+	return runtimekernel.ResultSources{Tenant: d.tenant.ID, App: d.tenant.App, Control: d.savedControl, Controlled: d.control != nil, Pending: len(d.requests) > 0,
+		Observers: len(d.tenant.observers) > 0, Operations: d.savedOperationCancellations, Plan: d.routingTenant().planAcceptedEvent,
+		Pure: build.CallbackFreeTransition}
 }
 
 func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {

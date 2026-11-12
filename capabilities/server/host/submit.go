@@ -238,7 +238,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 		}
 		raw, err = acceptedformat.EncodeBusinessRefusal(s, now, refusal, binding, businessFact, draft.InputIssues[refusal]...)
 	} else {
-		raw, err = draft.sealResult(a.Manifest().ID, s, record, now)
+		raw, err = draft.SealResult(draft.sources(), a.Manifest().ID, s, record, now)
 		if err == nil && opts.source != nil {
 			raw, err = acceptedformat.AttachSourceClaims(raw, opts.source.origin, opts.source.claims)
 			if err == nil {

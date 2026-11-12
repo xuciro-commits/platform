@@ -3,8 +3,6 @@ package host
 import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
@@ -13,7 +11,6 @@ import (
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
-	"slices"
 	"strings"
 	"time"
 )
@@ -45,119 +42,7 @@ func (d *stagedDecision) requestApproval(a platform.App, m platform.Member, s *p
 }
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
-	if err := d.CheckFinalConstraints(); err != nil {
-		return nil, fmt.Errorf("batch constraints: %w", err)
-	}
-	if receipt == nil || len(d.Events) == 0 || d.Failure != nil {
-		return nil, fmt.Errorf("batch needs accepted decisions and all written records")
-	}
-	if err := d.Records.ValidateChangedLinkConstraints(); err != nil {
-		return nil, fmt.Errorf("batch links: %w", err)
-	}
-	result := acceptedformat.Batch{Version: 8, Kind: "record-batch", Tenant: d.tenant.ID,
-		Definitions: slices.Clone(d.Installations),
-		App:         app, At: at.UTC(), Sequences: maps.Clone(d.Allocated), SequenceBases: maps.Clone(d.SequenceBases),
-		Notices: d.Notices.Saved(), Intents: slices.Clone(d.Intents), Observations: slices.Clone(d.Observations)}
-	var err error
-	result.Authorizations, err = d.SavedAuthorizations()
-	if err != nil {
-		return nil, fmt.Errorf("batch authorizations: %w", err)
-	}
-	result.Control, err = d.savedControl()
-	if err != nil {
-		return nil, fmt.Errorf("batch control: %w", err)
-	}
-	result.Operations, err = d.savedOperationCancellations()
-	if err != nil {
-		return nil, fmt.Errorf("batch operations: %w", err)
-	}
-	result.States, err = runtimekernel.SavedStates(d.States, d.StateBases)
-	if err != nil {
-		return nil, fmt.Errorf("batch states: %w", err)
-	}
-	result.Receipt, err = protojson.Marshal(receipt)
-	if err != nil {
-		return nil, fmt.Errorf("batch receipt: %w", err)
-	}
-	if !proto.Equal(request, receipt.GetSubmission()) {
-		result.Submission, err = protojson.Marshal(request)
-		if err != nil {
-			return nil, fmt.Errorf("batch submission: %w", err)
-		}
-	}
-	result.SchemaVersion = d.SchemaVersion
-	result.RequestHash, err = acceptedformat.SubmissionHash(request, result.SchemaVersion)
-	if err != nil {
-		return nil, fmt.Errorf("batch request hash: %w", err)
-	}
-	seen := map[string]bool{}
-	for _, event := range d.Events {
-		owner, ok := d.tenant.App(event.App).(platform.App)
-		if !ok || d.Logs[owner.AcceptedLedger()] == nil {
-			return nil, fmt.Errorf("batch decision has no staged ledger for %s", event.App)
-		}
-		logged := false
-		for _, record := range d.Logs[owner.AcceptedLedger()].Records(d.tenant.ID) {
-			if proto.Equal(record, event.Record) {
-				logged = true
-				break
-			}
-		}
-		if !logged {
-			return nil, fmt.Errorf("batch decision is not in the staged ledger")
-		}
-		raw, err := protojson.Marshal(event.Record)
-		if err != nil {
-			return nil, fmt.Errorf("batch event %s: %w", event.App, err)
-		}
-		plan, refusal := d.routingTenant().planAcceptedEvent(event)
-		if refusal != nil {
-			return nil, fmt.Errorf("batch event plan %s: %w", event.App, refusal)
-		}
-		plan.Observed = d.Observed
-		plan.Hops = d.Hops
-		if plan.Hops > acceptedformat.MaxHops {
-			plan.Stopped, plan.Subscribers = plan.Subscribers, nil
-		}
-		result.Decisions = append(result.Decisions, acceptedformat.Decision{Receipt: raw, Event: plan, Definition: d.Definitions[event.App+"/"+event.Record.GetChangeId()],
-			Publication: d.Publications[event.App+"/"+event.Record.GetChangeId()]})
-		if publication := result.Decisions[len(result.Decisions)-1].Publication; publication != nil {
-			copied := *publication
-			if et := d.Records.Type(event.Record.GetSubmission().GetTarget().GetType()); et != nil {
-				copied.Format = et.Info().RecordFormat
-			}
-			result.Decisions[len(result.Decisions)-1].Publication = &copied
-		}
-		for _, ref := range event.Changed {
-			if !d.Records.Written(ref) {
-				return nil, fmt.Errorf("batch event names an unwritten record")
-			}
-			seen[ref] = true
-		}
-	}
-	if len(seen) != d.Records.WriteCount() {
-		result.DirectRows, err = d.SavedCallbackRows(seen)
-		if err != nil {
-			return nil, fmt.Errorf("batch direct rows: %w", err)
-		}
-		if len(seen)+len(result.DirectRows) != d.Records.WriteCount() {
-			return nil, fmt.Errorf("batch event omits a written record")
-		}
-	}
-	if len(d.Iterations) > 0 {
-		result.Iterations = slices.Clone(d.Iterations)
-	}
-	if len(d.BusinessFacts) > 0 {
-		result.Business = slices.Clone(d.BusinessFacts)
-	}
-	if len(result.Iterations) > 0 {
-		result.Version = 9
-	}
-	if d.ObservationInput != nil && d.ObservationInput.Intervals != nil {
-		result.Version = 10
-	}
-	result.Unique = d.SavedUniqueChanges()
-	return runtimekernel.SealBatch(d.Records, result, seen, d.Writers)
+	return d.BatchResult(d.sources(), app, request, receipt, at)
 }
 
 func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error) {
@@ -196,7 +81,7 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 			if err := t.validateAcceptedIntents(result.Intents); err != nil {
 				return err
 			}
-			if err := t.validateAcceptedObservations(result.Observations); err != nil {
+			if err := runtimekernel.CheckObservations(t.App, result.Observations); err != nil {
 				return err
 			}
 			if err := runtimekernel.CheckStates(t.states, result.States); err != nil {
@@ -252,7 +137,7 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 		Settle: func(result acceptedformat.Batch) error {
 			t.applyAcceptedNotices(result.Notices)
 			t.installAcceptedIntents(result.Intents)
-			if err := t.applyAcceptedObservations(result.Observations); err != nil {
+			if err := runtimekernel.ApplyObservations(t.App, result.Observations); err != nil {
 				return err
 			}
 			t.sequences.Set(result.Sequences)

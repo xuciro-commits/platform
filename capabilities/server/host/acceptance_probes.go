@@ -1,7 +1,6 @@
 package host
 
 import (
-	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -118,26 +117,4 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 	}
 	d.Observed = true
 	return d.Failure
-}
-
-func (t *Tenant) validateAcceptedObservations(saved []acceptedformat.Observation) error {
-	for _, item := range saved {
-		owner, ok := t.App(item.App).(platform.AcceptedObserver)
-		if !ok || len(item.Body) == 0 {
-			return fmt.Errorf("accepted observation needs missing projection %s", item.App)
-		}
-		if err := owner.ValidateObserved(item.Body); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (t *Tenant) applyAcceptedObservations(saved []acceptedformat.Observation) error {
-	for _, item := range saved {
-		if err := t.App(item.App).(platform.AcceptedObserver).ApplyObserved(item.Body); err != nil {
-			return err
-		}
-	}
-	return nil
 }

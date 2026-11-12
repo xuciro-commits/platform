@@ -3,8 +3,6 @@ package host
 import (
 	"encoding/json"
 	"fmt"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
@@ -13,55 +11,6 @@ import (
 	"slices"
 	"time"
 )
-
-func (d *stagedDecision) inputResult(app, name string, m platform.Member, body []byte, answer any, at time.Time) ([]byte, error) {
-	if d.Failure != nil || len(d.requests) > 0 {
-		return nil, fmt.Errorf("connector input contains effects not represented by its result")
-	}
-	result, err := runtimekernel.InputResult(d.tenant.ID, app, name, m.ID, body, at)
-	if err != nil {
-		return nil, err
-	}
-	result.Notices, result.Authorizations = d.Notices.Saved(), slices.Clone(d.Authorizations)
-	if message, ok := answer.(proto.Message); ok {
-		result.Answer, err = protojson.Marshal(message)
-	} else {
-		result.Answer, err = json.Marshal(answer)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if len(d.Events) > 0 {
-		receipt, ok := answer.(*pb.ChangeRecord)
-		if !ok || receipt.GetSubmission().GetAuthority() != app {
-			return nil, fmt.Errorf("connector input has decisions without a matching answer")
-		}
-		result.Changes, err = d.batchResult(app, receipt.GetSubmission(), receipt, at)
-		if err != nil {
-			return nil, err
-		}
-		result.Notices = nil
-		return runtimekernel.SealInput(result)
-	}
-	if d.control != nil || len(d.Intents) > 0 || len(d.Observations) > 0 || len(d.Allocated) > 0 || len(d.OperationCancels) > 0 {
-		return nil, fmt.Errorf("connector input contains effects without a decision")
-	}
-	for ledger, staged := range d.Logs {
-		if !proto.Equal(ledger.LastAccepted(d.tenant.ID), staged.Last(d.tenant.ID)) {
-			return nil, fmt.Errorf("connector input contains an unpublished decision")
-		}
-	}
-	plan, err := d.savedChangePlan()
-	if err != nil {
-		return nil, err
-	}
-	result.States, result.Notices, result.Unique = plan.States, plan.Notices, plan.Unique
-	result.Rows, err = d.CaptureDirectRows(app, nil, nil, "connector input")
-	if err != nil {
-		return nil, err
-	}
-	return runtimekernel.SealInput(result)
-}
 
 func encodeAcceptedInputRefusal(tenant, app, name string, m platform.Member, body []byte, at time.Time, refusal *kernel.Error) ([]byte, error) {
 	result, err := runtimekernel.InputResult(tenant, app, name, m.ID, body, at)
@@ -96,7 +45,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 	if refusal != nil {
 		raw, err = encodeAcceptedInputRefusal(t.ID, a.Manifest().ID, name, m, body, now, refusal)
 	} else {
-		raw, err = draft.inputResult(a.Manifest().ID, name, m, body, answer, now)
+		raw, err = draft.InputDecision(draft.sources(), a.Manifest().ID, name, m, body, answer, now)
 	}
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This input cannot produce a bounded accepted result")

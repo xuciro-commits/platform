@@ -2,7 +2,6 @@ package host
 
 import (
 	"encoding/json"
-	"maps"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
@@ -10,18 +9,6 @@ import (
 	"slices"
 	"time"
 )
-
-func (d *stagedDecision) savedChangePlan() (acceptedformat.ChangePlan, error) {
-	plan := acceptedformat.ChangePlan{Notices: d.Notices.Saved(), Intents: slices.Clone(d.Intents),
-		Sequences:     maps.Clone(d.Allocated),
-		SequenceBases: maps.Clone(d.SequenceBases), Unique: d.SavedUniqueChanges()}
-	var err error
-	plan.States, err = runtimekernel.SavedStates(d.States, d.StateBases)
-	if err == nil {
-		plan.Control, err = d.savedControl()
-	}
-	return plan, err
-}
 
 func (t *Tenant) changeApply() runtimekernel.ChangeApply {
 	return runtimekernel.ChangeApply{Batch: t.batchApply(),

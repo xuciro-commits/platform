@@ -303,7 +303,7 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 			draft.Records.UseWrites(writes)
 		} else if err == nil {
 			var plan acceptedformat.ChangePlan
-			plan, err = draft.savedChangePlan()
+			plan, err = draft.ChangePlan(draft.savedControl)
 			result.Notices, result.Intents = plan.Notices, plan.Intents
 			result.States, result.Control = plan.States, plan.Control
 		}
