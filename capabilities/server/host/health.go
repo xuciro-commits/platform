@@ -127,8 +127,8 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 	}
 	counts := operational.observations.Counts()
 	h.Observations = ObservationHealth{
-		Enabled: t.logRetentionDays() > 0, Pending: counts.Pending, Dropped: counts.Dropped, Written: counts.Written,
-		WriteFailures: counts.WriteFailures, Purged: counts.Purged, QuotaBytes: t.logQuotaBytes(),
+		Enabled: t.logging().RetentionDays() > 0, Pending: counts.Pending, Dropped: counts.Dropped, Written: counts.Written,
+		WriteFailures: counts.WriteFailures, Purged: counts.Purged, QuotaBytes: t.logging().QuotaBytes(),
 		LastWrite: counts.LastWrite, LastPurge: counts.LastPurge,
 	}
 	return h

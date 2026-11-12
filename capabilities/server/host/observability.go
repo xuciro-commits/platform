@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log"
 	mathrand "math/rand/v2"
@@ -31,14 +30,6 @@ type requestCorrelation struct {
 type requestCorrelationKey struct{}
 
 var fallbackCorrelationID atomic.Uint64
-
-type LogPolicyView struct {
-	App           string `json:"app"`
-	Level         string `json:"level"`
-	RetentionDays int    `json:"retentionDays"`
-	DebugUntil    string `json:"debugUntil,omitempty"`
-	Reason        string `json:"reason,omitempty"`
-}
 
 func (t *Tenant) bindAuditStore() {
 	t.audit.SetSink(func(entry platform.AuditEntry) {
@@ -149,131 +140,25 @@ func (w *statusWriter) statusCode() int {
 	return w.status
 }
 
-func (t *Tenant) platformSetting(name string) string {
-	if value, ok := t.settings.Get(controlowner.PlatformApp + "/" + name); ok {
-		return value
+func (t *Tenant) logging() controlowner.Logging {
+	l := controlowner.Logging{Settings: &t.settings, Rank: runtimekernel.ObservationLevelRank}
+	if app := t.App(controlowner.PlatformApp); app != nil {
+		l.Defaults = app.Manifest().Settings
 	}
-	app := t.App(controlowner.PlatformApp)
-	if app == nil {
-		return ""
-	}
-	for _, setting := range app.Manifest().Settings {
-		if setting.Name == name {
-			return setting.Default
-		}
-	}
-	return ""
+	return l
 }
 
-func (t *Tenant) logLevel() string {
-	level := t.platformSetting(controlowner.SettingLogLevel)
-	if runtimekernel.ObservationLevelRank(level) < 0 || level == "debug" {
-		return "info"
-	}
-	return level
-}
-
-func (t *Tenant) logLevelFor(app string) string {
-	level := t.logLevel()
-	policy := t.logPolicy(app)
-	if runtimekernel.ObservationLevelRank(policy.Level) >= 0 && policy.Level != "debug" {
-		level = policy.Level
-	}
-	if debugUntil := t.logDebugUntil(app); !debugUntil.IsZero() {
-		return "debug"
-	}
-	return level
-}
-
-func (t *Tenant) logLevelAllows(level, app string) bool {
-	rank := runtimekernel.ObservationLevelRank(level)
-	if rank < 0 {
-		rank = runtimekernel.ObservationLevelRank("info")
-	}
-	return rank >= runtimekernel.ObservationLevelRank(t.logLevelFor(app))
-}
-
-func (t *Tenant) logRequestPercent() int {
-	value, err := strconv.Atoi(t.platformSetting(controlowner.SettingLogRequests))
-	if err != nil {
-		return 10
-	}
-	return max(0, min(value, 100))
-}
-
-func (t *Tenant) logRetentionDays() int {
-	value, err := strconv.Atoi(t.platformSetting(controlowner.SettingLogRetention))
-	if err != nil {
-		return 30
-	}
-	return max(0, min(value, 3650))
-}
-
-func (t *Tenant) logPolicy(app string) logPolicyValue {
-	raw := t.platformSetting("logPolicy/" + app)
-	if raw == "" {
-		return logPolicyValue{}
-	}
-	var policy logPolicyValue
-	if json.Unmarshal([]byte(raw), &policy) != nil {
-		return logPolicyValue{}
-	}
-	return policy
-}
-
-func (t *Tenant) logDebugUntil(app string) time.Time {
-	candidates := []string{t.platformSetting(controlowner.SettingLogDebugUntil), t.logPolicy(app).DebugUntil}
-	now := Now()
-	var latest time.Time
-	for _, raw := range candidates {
-		if raw == "" {
-			continue
-		}
-		until, err := time.Parse(time.RFC3339, raw)
-		if err == nil && until.After(now) && until.After(latest) {
-			latest = until
-		}
-	}
-	return latest
-}
-
-func (t *Tenant) logQuotaBytes() int64 {
-	value, err := strconv.Atoi(t.platformSetting(controlowner.SettingLogQuota))
-	if err != nil || value < 1 {
-		value = 5120
-	}
-	return int64(value) << 20
-}
-
-func (t *Tenant) LogPolicies() []LogPolicyView {
-	values := t.settings.Snapshot()
-	out := []LogPolicyView{}
+func (t *Tenant) LogPolicies() []controlowner.LogPolicyView {
+	apps := make([]string, 0, len(t.apps))
 	for _, app := range t.apps {
-		policy := t.logPolicy(app.Manifest().ID)
-		view := LogPolicyView{
-			App: app.Manifest().ID, Level: policy.Level,
-			RetentionDays: t.logRetentionDays(),
-			DebugUntil:    policy.DebugUntil, Reason: policy.Reason,
-		}
-		if view.Level == "" {
-			view.Level = t.logLevel()
-		}
-		if policy.RetentionDays != nil {
-			view.RetentionDays = *policy.RetentionDays
-		}
-		if view.DebugUntil == "" {
-			if global := values[controlowner.PlatformApp+"/"+controlowner.SettingLogDebugUntil]; global != "" {
-				view.DebugUntil = global
-				view.Reason = values[controlowner.PlatformApp+"/"+controlowner.SettingLogDebugReason]
-			}
-		}
-		out = append(out, view)
+		apps = append(apps, app.Manifest().ID)
 	}
-	return out
+	return t.logging().Policies(apps)
 }
 
 func (t *Tenant) recordObservation(event platform.Observation) {
-	if t.logRetentionDays() == 0 || !t.logLevelAllows(event.Level, event.App) {
+	logging := t.logging()
+	if logging.RetentionDays() == 0 || !logging.Allows(event.Level, event.App, Now()) {
 		return
 	}
 	if event.ID == "" {
@@ -284,7 +169,7 @@ func (t *Tenant) recordObservation(event platform.Observation) {
 	}
 	event.At = event.At.UTC()
 	event.Tenant = t.ID
-	if err := t.observations.Record(t.Log(), event, t.logQuotaBytes()); err != nil {
+	if err := t.observations.Record(t.Log(), event, logging.QuotaBytes()); err != nil {
 		log.Printf("observation usage %s: %v", t.ID, err)
 	}
 }
@@ -327,7 +212,7 @@ func (h *Host) observeRequest(t *Tenant, m platform.Member, correlation requestC
 	case status >= http.StatusBadRequest:
 		level, outcome = "warn", "refused"
 	}
-	if status < http.StatusBadRequest && duration < time.Second && mathrand.IntN(100) >= t.logRequestPercent() {
+	if status < http.StatusBadRequest && duration < time.Second && mathrand.IntN(100) >= t.logging().RequestPercent() {
 		return
 	}
 	t.recordObservation(platform.Observation{
@@ -385,7 +270,7 @@ func (t *Tenant) observeSubmission(r *http.Request, m platform.Member, sub *pb.S
 }
 
 func (t *Tenant) PurgeObservations(now time.Time) {
-	days := t.logRetentionDays()
+	days := t.logging().RetentionDays()
 	if days == 0 {
 		return
 	}

@@ -90,7 +90,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.authorized(transport.Route{Pattern: "GET /v1/monitoring/log-policies", Summary: "Effective tenant and application log policies", Answer: []LogPolicyView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/monitoring/log-policies", Summary: "Effective tenant and application log policies", Answer: []controlowner.LogPolicyView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.LogPolicies())
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/runs", Summary: "Current and retained runs visible through their original owners, with unfiltered overview counts and recovery actions", Answer: MonitoringRunPage{}, Query: []transport.Param{
@@ -167,7 +167,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 			page.Coverage.Filtered = true
 		}
 		page.Coverage.Dropped = t.observations.Dropped()
-		if (query.Source == "" || query.Source == "request") && t.logRequestPercent() < 100 {
+		if (query.Source == "" || query.Source == "request") && t.logging().RequestPercent() < 100 {
 			page.Coverage.Sampled = true
 		}
 		WriteJSON(w, http.StatusOK, page)
@@ -196,7 +196,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 			return
 		}
 		page.Coverage.Dropped = t.observations.Dropped()
-		if t.logRequestPercent() < 100 {
+		if t.logging().RequestPercent() < 100 {
 			page.Coverage.Sampled = true
 		}
 		WriteJSON(w, http.StatusOK, page)
