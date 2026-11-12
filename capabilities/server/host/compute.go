@@ -14,8 +14,6 @@ import (
 	acceptedformat "platformserver/kernel/acceptedformat"
 	controlowner "platformserver/services/security/control"
 
-	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -63,134 +61,24 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 	return call, nil
 }
 func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *records.Store, pending []platform.Effect, sealed ...*platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *kernel.Error) {
-	refuse := func(code pb.ErrorCode, msg string) (platform.OperationCall, platform.Effect, *kernel.Error) {
-		return platform.OperationCall{}, platform.Effect{}, platform.Refuse(code, msg)
-	}
-	owner := q.App
-	if owner == "" {
-		owner = c.App
-	}
-	if c.Tenant != t.ID || r == nil || r.GetSubmission().GetTenantId() != t.ID || r.GetSubmission().GetAuthority() != c.App || q.Key == "" || len(q.Key) > 256 || q.Version < 0 || owner != c.App && c.App != controlowner.PlatformApp && (!c.Automation || c.App != "flow") || !c.Automation && (q.OnBehalf != "" && q.OnBehalf != c.ID || q.Release != nil) {
-		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation needs an accepted owner or delegated Flow decision")
-	}
-	member := c.Member
-	if c.Automation {
-		var ok bool
-		member, ok = t.Member(q.OnBehalf)
-		if !ok || member.Agent {
-			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation needs an explicit authorised member")
-		}
-	}
-	app := t.App(owner)
-	if app == nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation owner is not installed")
-	}
-	op, version, ok := compute.OperationDefinition(app, q.Name, q.Version)
-	if !ok {
-		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation is not declared")
-	}
-	definition, err := platform.CanonicalDigest([]any{owner, op, version})
-	if err != nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation definition cannot be bound")
-	}
-	applicant := platform.ActingCaller(c, member, owner, false)
-	decision := t.authorizeCapability(applicant, owner, op.Name, op.Roles, op.Check() == nil, authorizationDetails{Store: store, At: r.GetRecordedTime().AsTime(), Sources: q.Sources, Definition: definition})
-	if refusal := authorizationRefusal(decision); refusal != nil {
-		return platform.OperationCall{}, platform.Effect{}, refusal
-	}
 	var input *platform.OperationInputArtifact
 	if len(sealed) == 1 {
 		input = sealed[0]
 	}
-	if input == nil {
-		if err := op.Input.Validate(q.Inputs, op.Limits.MaxInputBytes); err != nil {
-			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-	}
-	closure, release, err := t.operationClosure(owner, op, version, q.Release)
-	if err != nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation dependencies cannot be bound")
-	}
-	hash, _ := platform.CanonicalDigest(q.Inputs)
-	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, owner, q.Key, acceptedformat.OperationEndpoint)
-	if input != nil {
-		if input.Tenant != t.ID || input.Member != member.ID || input.Call != id || input.Definition != definition || op.Binding.ABI != platform.WasmDataABI || input.Size > op.Limits.DataInputBytes {
-			return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The operation changed while its input was prepared")
-		}
-		if _, err := t.staged.InputKey(*input); err != nil {
-			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		hash = input.InputHash
-	}
-	call := platform.OperationCall{ID: id, Definition: definition, InputHash: hash, Version: version, Module: op.Binding.Module, Sources: slices.Clone(q.Sources), Dependencies: closure.ID, Release: release}
-	if !c.Replaying && (!t.Recording() || c.Staging()) {
-		call.OwnerVersion = app.Manifest().Version
-	}
-	for _, intent := range pending {
-		if intent.ID == id {
-			return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation request key is already planned")
-		}
-	}
-	_, exists := t.outbound.Get(id)
-	queued := t.queuedOperations()
-	for _, x := range pending {
-		if x.Endpoint == acceptedformat.OperationEndpoint {
-			queued++
-		}
-	}
-	if exists {
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation request key is already accepted")
-	}
-	if queued >= 256 {
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation queue is at capacity")
-	}
-	if op.Binding.Kind == "wasm" && !t.files().Exists(context.Background(), artifactKey(t.ID, op.Binding.Module)) {
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation module is not retained")
-	}
-	target := q.Target
-	if target == "" {
-		target = r.GetSubmission().GetTarget().GetType() + "/" + r.GetSubmission().GetTarget().GetId()
-	}
-	applications, err := t.bindApplications(platform.AssetRef{App: owner, Kind: platform.AssetCompute, Name: op.Name}, call.Release, call.Dependencies)
-	if err != nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The operation dependencies cannot be bound")
-	}
-	call.Applications = applications
-	binding := compute.OperationBinding{Definition: op, Call: call, Member: member.ID, Inputs: slices.Clone(q.Inputs), SealedInput: input}
-	if op.Rules != nil {
-		if input != nil {
-			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule tables use captured scalar inputs")
-		}
-		ruleCaller := platform.ActingCaller(c, member, owner, false)
-		var values map[string]any
-		decoder := json.NewDecoder(strings.NewReader(string(q.Inputs)))
-		decoder.UseNumber()
-		if decoder.Decode(&values) != nil {
-			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule table inputs are invalid")
-		}
-		aggregate := platform.Expr{}
-		for _, row := range op.Rules.Rows {
-			schema, err := platform.RuleSchema(row.Condition, op.Rules.Reads, t.Entity, t.services.Rules)
-			if err != nil {
-				return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-			}
-			binding.RuleSchemas = append(binding.RuleSchemas, schema)
-			aggregate.Args = append(aggregate.Args, row.Condition)
-		}
-		facts, err := ruleCaller.RuleContext(aggregate, op.Rules.Reads, t.Entity, nil, values, r.GetRecordedTime().AsTime())
-		if err != nil {
-			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
-		}
-		binding.RuleFacts = &facts
-		call.Sources = append(call.Sources, facts.Sources...)
-		binding.Call = call
-	}
-	if input != nil {
-		binding.Inputs = nil
-	}
-	body, _ := json.Marshal(binding)
-	at := r.GetRecordedTime().AsTime()
-	return call, platform.Effect{Applications: applications, ID: id, Endpoint: acceptedformat.OperationEndpoint, Event: owner + "/operation", App: owner, Key: q.Key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
+	return compute.OperationPlan{Tenant: t.ID, Member: t.Member, App: t.App, Recording: t.Recording(), Queued: t.queuedOperations(), Entity: t.Entity, Rules: t.services.Rules,
+		Authorize: func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *kernel.Error {
+			return authorizationRefusal(t.authorizeCapability(applicant, owner, op.Name, op.Roles, op.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition}))
+		},
+		Closure: func(owner string, op platform.Operation, version int, release *string) (string, string, error) {
+			closure, bound, err := t.operationClosure(owner, op, version, release)
+			return closure.ID, bound, err
+		},
+		InputKey: func(input platform.OperationInputArtifact) error { _, err := t.staged.InputKey(input); return err },
+		Exists:   func(id string) bool { _, ok := t.outbound.Get(id); return ok },
+		Retained: func(module string) bool { return t.files().Exists(context.Background(), artifactKey(t.ID, module)) },
+		Bind: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
+			return t.bindApplications(ref, release, dependencies)
+		}}.Plan(c, r, q, pending, input)
 }
 func (t *Tenant) operationResult(c platform.Caller, id string) (platform.OperationResult, *kernel.Error) {
 	if found, ok := t.outbound.Get(id); ok && found.Endpoint == acceptedformat.OperationEndpoint {
