@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"encoding/json"
+	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/kernel/records"
@@ -228,4 +229,138 @@ func (d *Decision) Find(c platform.Caller, typ reflect.Type, q platform.Query) (
 		out[i] = records.Copy(typ, v.Interface()).Interface()
 	}
 	return out, total, err
+}
+
+func (d *Decision) SavedCallbackRows(published map[string]bool) ([]acceptedformat.CallbackRow, error) {
+	var rows []acceptedformat.CallbackRow
+	for _, ref := range slices.Sorted(d.Records.Writes()) {
+		if published[ref] {
+			continue
+		}
+		callback, ok := d.CallbackWrites[ref]
+		if !ok {
+			return nil, fmt.Errorf("batch event omits a written record outside an effect callback")
+		}
+		direct, err := d.CaptureDirectRows(callback.Source.App, []string{ref}, nil, "effect answer")
+		if err != nil || len(direct) != 1 {
+			return nil, fmt.Errorf("callback row cannot be captured: %v", err)
+		}
+		historyCount := len(direct[0].History)
+		if direct[0].HistoryRef != nil {
+			historyCount += direct[0].HistoryRef.Base
+		}
+		if historyCount != callback.History {
+			return nil, fmt.Errorf("callback row has a write outside its source callback")
+		}
+		if err := d.DirectRows(direct, "app:"+callback.Source.App, d.At); err != nil {
+			return nil, err
+		}
+		rows = append(rows, acceptedformat.CallbackRow{Row: direct[0], Source: callback.Source})
+	}
+	return rows, nil
+}
+
+func (d *Decision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
+	var before *records.Row
+	var info platform.EntityInfo
+	var ref string
+	func() {
+		d.Records.Lock()
+		defer d.Records.Unlock()
+		et := d.Records.Of(c, reflect.TypeOf(entity))
+		if et != nil {
+			info = et.Info()
+			id := records.Header(records.Copy(et.Info().Go, entity)).ID
+			before, ref = et.Rows().Get(id), et.Info().Type+"/"+id
+		}
+	}()
+	prepared, err := d.PrepareBusinessRecord(c, entity, d.At)
+	if err == nil {
+		err = d.Records.Put(c, r, prepared)
+	}
+	if err == nil {
+		if d.ConstraintWrites == nil {
+			d.ConstraintWrites = map[string]ConstraintWrite{}
+		}
+		if _, exists := d.ConstraintWrites[ref]; !exists {
+			d.ConstraintWrites[ref] = ConstraintWrite{Caller: c, Before: before}
+		}
+		err = d.ConstraintCheck().Record(c, info, d.Records.Type(info.Type).Rows().Get(strings.TrimPrefix(ref, info.Type+"/")), before)
+	}
+	if err != nil && d.Failure == nil {
+		d.Failure = err
+	}
+	if err == nil {
+		var history int
+		func() {
+			d.Records.Lock()
+			defer d.Records.Unlock()
+			et := d.Records.Of(c, reflect.TypeOf(entity))
+			id := records.Header(records.Copy(et.Info().Go, entity)).ID
+			history = et.Rows().Get(id).HistoryLength()
+		}()
+		if origin := d.CallbackOrigin; origin != nil && origin.App == c.App && c.ID == "app:"+origin.App &&
+			r.GetChangeId() == "" && r.GetSubmission().GetAuthority() == "" && r.GetSubmission().GetPrincipalId() == c.ID &&
+			r.GetSubmission().GetSchema().GetName() != "" && r.GetRecordedTime().AsTime().Equal(d.At) {
+			if d.CallbackWrites == nil {
+				d.CallbackWrites = map[string]CallbackWrite{}
+			}
+			d.CallbackWrites[ref] = CallbackWrite{Source: *origin, History: history}
+		}
+		app := r.GetSubmission().GetAuthority()
+		d.Writers[ref] = append(d.Writers[ref], app)
+		key := app + "/" + r.GetChangeId()
+		if !slices.Contains(d.Changed[key], ref) {
+			d.Changed[key] = append(d.Changed[key], ref)
+		}
+	}
+	return err
+}
+
+func (d *Decision) CaptureDirectRows(owner string, refs []string, exclude map[string]bool, source string) ([]acceptedformat.InputRow, error) {
+	d.Records.Lock()
+	defer d.Records.Unlock()
+	d.Records.Parent().Lock()
+	defer d.Records.Parent().Unlock()
+	if refs == nil {
+		refs = slices.Sorted(d.Records.Writes())
+	}
+	var rows []acceptedformat.InputRow
+	for _, ref := range refs {
+		if exclude[ref] {
+			continue
+		}
+		typ, id, ok := strings.Cut(ref, "/")
+		et := d.Records.Type(typ)
+		if !ok || et == nil || et.Info().App != owner || et.Rows().Get(id) == nil {
+			return nil, fmt.Errorf("%s writes a foreign or undeclared record", source)
+		}
+		var prior *records.Row
+		if old := d.Records.Parent().Type(typ); old != nil {
+			prior = old.Rows().Get(id)
+		}
+		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
+		if err != nil {
+			return nil, err
+		}
+		row := acceptedformat.InputRow{Image: image, App: owner}
+		row.Before, err = records.Predecessor(typ, id, prior)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
+
+func (d *Decision) CheckFinalConstraints() *kernel.Error {
+	if d.Failure == nil {
+		d.Failure = d.ConstraintCheck().Final()
+	}
+	return d.Failure
+}
+
+func (d *Decision) ConstraintCheck() ConstraintCheck {
+	return ConstraintCheck{Records: d.Records, At: d.At, Writes: d.ConstraintWrites, Definitions: d.Rules.Definitions(),
+		RuleQuery: d.Rules.RuleQuery, Binding: d.Rules.Binding, Trace: d.Rules.Trace()}
 }

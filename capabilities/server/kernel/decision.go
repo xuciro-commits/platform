@@ -54,6 +54,9 @@ type Decision struct {
 	OperationAnswers  map[string]platform.OperationResult
 	OperationCancels  map[string]bool
 	ObservationInput  *platform.ObservationDecisionEvidence
+	CallbackWrites    map[string]CallbackWrite
+	Rules             ConstraintRules
+	DirectRows        func([]acceptedformat.InputRow, string, time.Time) error
 	BusinessQuery     func(platform.EntityInfo, platform.Query, platform.Member, time.Time) platform.Query
 }
 
@@ -107,3 +110,15 @@ func (d *Decision) BusinessRefused(answer *kernel.Error, fact platform.BusinessR
 }
 
 func Target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }
+
+type CallbackWrite struct {
+	Source  platform.Effect
+	History int
+}
+
+type ConstraintRules struct {
+	Definitions func() []platform.Definition
+	RuleQuery   func(app, name string, version int) (platform.NamedQuery, int, bool)
+	Binding     func(platform.AssetBinding) (*platform.Definition, bool)
+	Trace       func() func(platform.DecisionTrace)
+}

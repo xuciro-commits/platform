@@ -2,14 +2,12 @@ package host
 
 import (
 	"encoding/json"
-	"fmt"
 	"maps"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -68,42 +66,6 @@ func (t *Tenant) publishAcceptedChanges(p *runtimekernel.PreparedChanges) {
 	if p.Child != nil {
 		t.publishAcceptedBatch(p.Child.Result)
 	}
-}
-
-func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude map[string]bool, source string) ([]acceptedformat.InputRow, error) {
-	d.Records.Lock()
-	defer d.Records.Unlock()
-	d.Records.Parent().Lock()
-	defer d.Records.Parent().Unlock()
-	if refs == nil {
-		refs = slices.Sorted(d.Records.Writes())
-	}
-	var rows []acceptedformat.InputRow
-	for _, ref := range refs {
-		if exclude[ref] {
-			continue
-		}
-		typ, id, ok := strings.Cut(ref, "/")
-		et := d.Records.Type(typ)
-		if !ok || et == nil || et.Info().App != owner || et.Rows().Get(id) == nil {
-			return nil, fmt.Errorf("%s writes a foreign or undeclared record", source)
-		}
-		var prior *records.Row
-		if old := d.Records.Parent().Type(typ); old != nil {
-			prior = old.Rows().Get(id)
-		}
-		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
-		if err != nil {
-			return nil, err
-		}
-		row := acceptedformat.InputRow{Image: image, App: owner}
-		row.Before, err = records.Predecessor(typ, id, prior)
-		if err != nil {
-			return nil, err
-		}
-		rows = append(rows, row)
-	}
-	return rows, nil
 }
 
 func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, member string, at time.Time) (*records.Store, error) {

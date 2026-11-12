@@ -47,7 +47,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	for key, fact := range fork.BusinessRefusals {
 		fork.BusinessRefusals[key] = acceptedformat.CloneBusinessFact(fact)
 	}
-	fork.callbackWrites = maps.Clone(d.callbackWrites)
+	fork.CallbackWrites = maps.Clone(d.CallbackWrites)
 	if d.CallbackOrigin != nil {
 		origin := *d.CallbackOrigin
 		origin.Output = slices.Clone(origin.Output)

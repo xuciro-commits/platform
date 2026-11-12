@@ -136,7 +136,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		}
 	}
 	if len(seen) != d.Records.WriteCount() {
-		result.DirectRows, err = d.savedCallbackRows(seen)
+		result.DirectRows, err = d.SavedCallbackRows(seen)
 		if err != nil {
 			return nil, fmt.Errorf("batch direct rows: %w", err)
 		}
@@ -285,40 +285,6 @@ func (t *Tenant) publishAcceptedBatch(result acceptedformat.Batch) {
 		_ = protojson.Unmarshal(decision.Receipt, r)
 		t.publishAccepted(platform.Event{App: decision.Event.App, Record: r, Changed: decision.Event.Changed}, decision.Event)
 	}
-}
-
-type callbackWrite struct {
-	Source  platform.Effect
-	History int
-}
-
-func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]acceptedformat.CallbackRow, error) {
-	var rows []acceptedformat.CallbackRow
-	for _, ref := range slices.Sorted(d.Records.Writes()) {
-		if published[ref] {
-			continue
-		}
-		callback, ok := d.callbackWrites[ref]
-		if !ok {
-			return nil, fmt.Errorf("batch event omits a written record outside an effect callback")
-		}
-		direct, err := captureDirectRows(d, callback.Source.App, []string{ref}, nil, "effect answer")
-		if err != nil || len(direct) != 1 {
-			return nil, fmt.Errorf("callback row cannot be captured: %v", err)
-		}
-		historyCount := len(direct[0].History)
-		if direct[0].HistoryRef != nil {
-			historyCount += direct[0].HistoryRef.Base
-		}
-		if historyCount != callback.History {
-			return nil, fmt.Errorf("callback row has a write outside its source callback")
-		}
-		if _, err := d.tenant.prepareAcceptedDirectRows(direct, "app:"+callback.Source.App, d.At); err != nil {
-			return nil, err
-		}
-		rows = append(rows, acceptedformat.CallbackRow{Row: direct[0], Source: callback.Source})
-	}
-	return rows, nil
 }
 
 func (t *Tenant) prepareCallbackRows(target *records.Store, rows []acceptedformat.CallbackRow, at time.Time) error {

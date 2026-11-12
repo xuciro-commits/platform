@@ -56,7 +56,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 		return nil, err
 	}
 	result.States, result.Notices, result.Unique = plan.States, plan.Notices, plan.Unique
-	result.Rows, err = captureDirectRows(d, app, nil, nil, "connector input")
+	result.Rows, err = d.CaptureDirectRows(app, nil, nil, "connector input")
 	if err != nil {
 		return nil, err
 	}

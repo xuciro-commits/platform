@@ -1,8 +1,6 @@
 package host
 
 import (
-	runtimekernel "platformserver/kernel"
-
 	"maps"
 	"reflect"
 	"slices"
@@ -77,20 +75,4 @@ func (t *Tenant) localizedFieldIssues(member platform.Member, issues []platform.
 		}
 	}
 	return issues
-}
-
-func (d *stagedDecision) ConstraintCheck() runtimekernel.ConstraintCheck {
-	k := runtimekernel.ConstraintCheck{Records: d.Records, At: d.At, Writes: d.ConstraintWrites, Definitions: d.tenant.definitions,
-		RuleQuery: hostView{t: d.tenant}.RuleQuery, Binding: d.tenant.recordSetBinding}
-	if d.TraceEnabled() {
-		k.Trace = d.RecordDecisionTrace
-	}
-	return k
-}
-
-func (d *stagedDecision) CheckFinalConstraints() *kernel.Error {
-	if d.Failure == nil {
-		d.Failure = d.ConstraintCheck().Final()
-	}
-	return d.Failure
 }

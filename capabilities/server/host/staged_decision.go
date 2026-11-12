@@ -8,9 +8,7 @@ import (
 	acceptedformat "platformserver/kernel/acceptedformat"
 
 	"platformserver/kernel/records"
-	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -26,7 +24,6 @@ type stagedDecision struct {
 	sourceProjection       *preparedSourceClaim
 	confirmationCompleting *confirmationCompletion
 	definitionPlans        map[definitionPlanKey]platform.DecisionDefinition
-	callbackWrites         map[string]callbackWrite
 	control                *controlDecision
 	tenant                 *Tenant
 	requests               []request
@@ -46,7 +43,13 @@ func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	connectors := t.connectors.Clone()
 	return &stagedDecision{tenant: t, Decision: runtimekernel.Decision{Logs: map[*platform.Ledger]*kernel.ChangeLog{}, Simulation: t.simulation, Records: base,
 		Sequences: sequences, Allocated: map[string]int{}, SequenceBases: map[string]int{}, Active: map[string]bool{},
-		Notices: t.notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: connectors, BusinessQuery: businessQuery}}
+		Notices: t.notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: connectors, BusinessQuery: businessQuery,
+		Rules: runtimekernel.ConstraintRules{Definitions: func() []platform.Definition { return t.definitions }, RuleQuery: hostView{t: t}.RuleQuery, Binding: t.recordSetBinding,
+			Trace: func() func(platform.DecisionTrace) { return t.simulationTrace }},
+		DirectRows: func(rows []acceptedformat.InputRow, member string, at time.Time) error {
+			_, err := t.prepareAcceptedDirectRows(rows, member, at)
+			return err
+		}}}
 }
 
 func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -104,63 +107,6 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 		d.Definitions[id+"/"+r.GetChangeId()] = definition
 	}
 	return r, nil
-}
-
-func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
-	var before *records.Row
-	var info platform.EntityInfo
-	var ref string
-	func() {
-		d.Records.Lock()
-		defer d.Records.Unlock()
-		et := d.Records.Of(c, reflect.TypeOf(entity))
-		if et != nil {
-			info = et.Info()
-			id := records.Header(records.Copy(et.Info().Go, entity)).ID
-			before, ref = et.Rows().Get(id), et.Info().Type+"/"+id
-		}
-	}()
-	prepared, err := d.PrepareBusinessRecord(c, entity, d.At)
-	if err == nil {
-		err = d.Records.Put(c, r, prepared)
-	}
-	if err == nil {
-		if d.ConstraintWrites == nil {
-			d.ConstraintWrites = map[string]runtimekernel.ConstraintWrite{}
-		}
-		if _, exists := d.ConstraintWrites[ref]; !exists {
-			d.ConstraintWrites[ref] = runtimekernel.ConstraintWrite{Caller: c, Before: before}
-		}
-		err = d.ConstraintCheck().Record(c, info, d.Records.Type(info.Type).Rows().Get(strings.TrimPrefix(ref, info.Type+"/")), before)
-	}
-	if err != nil && d.Failure == nil {
-		d.Failure = err
-	}
-	if err == nil {
-		var history int
-		func() {
-			d.Records.Lock()
-			defer d.Records.Unlock()
-			et := d.Records.Of(c, reflect.TypeOf(entity))
-			id := records.Header(records.Copy(et.Info().Go, entity)).ID
-			history = et.Rows().Get(id).HistoryLength()
-		}()
-		if origin := d.CallbackOrigin; origin != nil && origin.App == c.App && c.ID == "app:"+origin.App &&
-			r.GetChangeId() == "" && r.GetSubmission().GetAuthority() == "" && r.GetSubmission().GetPrincipalId() == c.ID &&
-			r.GetSubmission().GetSchema().GetName() != "" && r.GetRecordedTime().AsTime().Equal(d.At) {
-			if d.callbackWrites == nil {
-				d.callbackWrites = map[string]callbackWrite{}
-			}
-			d.callbackWrites[ref] = callbackWrite{Source: *origin, History: history}
-		}
-		app := r.GetSubmission().GetAuthority()
-		d.Writers[ref] = append(d.Writers[ref], app)
-		key := app + "/" + r.GetChangeId()
-		if !slices.Contains(d.Changed[key], ref) {
-			d.Changed[key] = append(d.Changed[key], ref)
-		}
-	}
-	return err
 }
 
 func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {

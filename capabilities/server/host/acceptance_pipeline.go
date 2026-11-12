@@ -291,7 +291,7 @@ func (t *Tenant) stageEffectResult(result *acceptedformat.Effect, before accepte
 				eventRows[ref] = true
 			}
 		}
-		result.Rows, err = captureDirectRows(draft, before.App, nil, eventRows, "effect answer")
+		result.Rows, err = draft.CaptureDirectRows(before.App, nil, eventRows, "effect answer")
 		if len(result.Rows) > 0 {
 			result.Member = "app:" + before.App
 		}
