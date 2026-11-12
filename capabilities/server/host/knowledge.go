@@ -4,7 +4,6 @@ import (
 	"context"
 	controlowner "platformserver/services/security/control"
 
-	"encoding/json"
 	"fmt"
 	"io"
 
@@ -15,7 +14,6 @@ import (
 
 	"platformserver/platform"
 	"reflect"
-	"slices"
 	"strings"
 
 	"time"
@@ -23,79 +21,44 @@ import (
 
 const embeddingActiveSpace = "knowledge/embedding-active-space"
 
-func (t *Tenant) sources() []knowledgeindex.Source {
-	var out []knowledgeindex.Source
-	docs, _, _ := platform.Find[platform.KnowledgeDocument](t.automation(platform.KnowledgeApp, false), platform.Query{Limit: 100000})
-	for _, d := range docs {
-		out = append(out, knowledgeindex.DocumentSource(d))
-	}
-	out = append(out, t.fileSources()...)
-	t.Projection.Lock()
-	types := slices.Collect(func(yield func(*records.Type) bool) {
-		for _, et := range t.Projection.Types() {
-			if slices.ContainsFunc(et.Info().Fields, func(f platform.FieldInfo) bool { return f.Knowledge }) && !yield(et) {
-				return
+func (t *Tenant) corpus() knowledgeindex.Corpus {
+	c := knowledgeindex.Corpus{Documents: t.automation(platform.KnowledgeApp, false), Index: t.index,
+		Types: func() []platform.EntityInfo {
+			t.Projection.Lock()
+			defer t.Projection.Unlock()
+			var out []platform.EntityInfo
+			for _, et := range t.Projection.Types() {
+				out = append(out, et.Info())
 			}
-		}
-	})
-	t.Projection.Unlock()
-	for _, et := range types {
-		for offset := 0; ; offset += 500 {
-			page, err := t.recordsRead(t.host(), et.Info().Type, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
+			return out
+		},
+		Page: func(typ string, offset int) ([]any, int, *kernel.Error) {
+			page, err := t.recordsRead(t.host(), typ, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
+			return page.Records, page.Total, err
+		},
+		Row: func(typ, id string) (platform.EntityInfo, reflect.Value, bool) {
+			t.Projection.Lock()
+			defer t.Projection.Unlock()
+			et := t.Projection.Type(typ)
+			if et == nil || et.Rows().Get(id) == nil {
+				return platform.EntityInfo{}, reflect.Value{}, false
+			}
+			return et.Info(), et.Rows().Get(id).Value, true
+		},
+		Blob: func(hash string) (string, bool) {
+			body, _, err := t.files().Get(context.Background(), t.ID+"/"+hash)
 			if err != nil {
-				break
+				return "", false
 			}
-			for _, r := range page.Records {
-				out = append(out, knowledgeindex.RecordSources(et.Info(), reflect.ValueOf(r))...)
-			}
-			if offset+len(page.Records) >= page.Total || len(page.Records) == 0 {
-				break
-			}
-		}
+			raw, _ := io.ReadAll(io.LimitReader(body, 1<<20))
+			body.Close()
+			return string(raw), true
+		}}
+	if t.App(platform.FileApp) != nil {
+		files := t.automation(platform.FileApp, false)
+		c.Files = &files
 	}
-	return out
-}
-
-func (t *Tenant) sourcesOf(changed map[string]bool) []knowledgeindex.Source {
-	var out []knowledgeindex.Source
-	for ref := range changed {
-		typ, id, _ := strings.Cut(ref, "/")
-		switch typ {
-		case platform.KnowledgeDocumentType:
-			if d, known := platform.Get[platform.KnowledgeDocument](t.automation(platform.KnowledgeApp, false), id); known && !d.Archived {
-				out = append(out, knowledgeindex.DocumentSource(d))
-			}
-			about, _ := json.Marshal([]any{[]any{"target", "=", ref}})
-			attached, _, _ := platform.Find[platform.File](t.automation(platform.FileApp, false), platform.Query{Domain: about, Limit: 200})
-			for _, f := range attached {
-				if s, ok := t.fileSource(f); ok {
-					out = append(out, s)
-				}
-			}
-		case platform.FileType:
-			if f, known := platform.Get[platform.File](t.automation(platform.FileApp, false), id); known && !f.Archived {
-				if s, ok := t.fileSource(f); ok {
-					out = append(out, s)
-				}
-			}
-		default:
-			var et *records.Type
-			var v reflect.Value
-			func() {
-				t.Projection.Lock()
-				defer t.Projection.Unlock()
-				et = t.Projection.Type(typ)
-				if et != nil && et.Rows().Get(id) != nil {
-					v = et.Rows().Get(id).Value
-				}
-			}()
-			if et == nil || !v.IsValid() || v.FieldByName("Record").Interface().(platform.Record).Archived {
-				continue
-			}
-			out = append(out, knowledgeindex.RecordSources(et.Info(), v)...)
-		}
-	}
-	return out
+	return c
 }
 
 func (t *Tenant) knowledgeSourceReadable(store *records.Store, m platform.Member, id, field string) bool {
@@ -131,64 +94,6 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 		return nil, refusal
 	}
 	return t.gateway(nil).Embed(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, name, model, pv, input, now)
-}
-
-func (t *Tenant) fileSources() []knowledgeindex.Source {
-	if t.App(platform.FileApp) == nil {
-		return nil
-	}
-	attached, _, _ := platform.Find[platform.File](t.automation(platform.FileApp, false), platform.Query{Limit: 100000})
-	var out []knowledgeindex.Source
-	for _, f := range attached {
-		if s, ok := t.fileSource(f); ok {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-func (t *Tenant) fileSource(f platform.File) (knowledgeindex.Source, bool) {
-	if t.App(platform.FileApp) == nil || f.Archived || !strings.HasPrefix(f.ContentType, "text/") || f.Size > 1<<20 {
-		return knowledgeindex.Source{}, false
-	}
-	{
-		typ, id, _ := strings.Cut(f.Target, "/")
-		var apps []string
-		switch {
-		case typ == platform.KnowledgeDocumentType:
-			d, known := platform.Get[platform.KnowledgeDocument](t.automation(platform.KnowledgeApp, false), id)
-			if !known || d.Archived {
-				return knowledgeindex.Source{}, false
-			}
-			apps = d.Apps
-		default:
-			t.Projection.Lock()
-			et := t.Projection.Type(typ)
-			t.Projection.Unlock()
-			if et == nil || !et.Info().KnowledgeFiles {
-				return knowledgeindex.Source{}, false
-			}
-			apps = []string{et.Info().App}
-		}
-		text, ok := t.index.Text(f.Hash, func() (string, bool) {
-			body, _, err := t.files().Get(context.Background(), t.ID+"/"+f.Hash)
-			if err != nil {
-				return "", false
-			}
-			raw, _ := io.ReadAll(io.LimitReader(body, 1<<20))
-			body.Close()
-			return string(raw), true
-		})
-		if !ok {
-			return knowledgeindex.Source{}, false
-		}
-		scope := f.Target
-		if typ == platform.KnowledgeDocumentType {
-			scope = ""
-		}
-		return knowledgeindex.Source{Key: platform.FileType + "/" + f.ID, Title: f.Name, Text: text,
-			Revision: f.Hash + "/" + f.Target + "/" + strings.Join(apps, ","), Scope: scope, Apps: apps}, true
-	}
 }
 
 func (t *Tenant) embeddingNeedsRebuild(name string) bool {
@@ -340,9 +245,9 @@ func (t *Tenant) syncRecords() {
 		}
 		values, refusal := recordRead(source, context.Background(), func(t *Tenant) ([]knowledgeindex.Source, *kernel.Error) {
 			if walked {
-				return t.sourcesOf(changed), nil
+				return t.corpus().Changed(changed), nil
 			}
-			return t.sources(), nil
+			return t.corpus().All(), nil
 		})
 		if refusal != nil {
 			source.Projection.Lock()
