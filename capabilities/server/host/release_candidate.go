@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -42,11 +41,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 }
 
 func (t *Tenant) scopedReferencedDrafts(m platform.Member, kind platform.AssetKind, id, branch string, now time.Time) (releaseowner.ReleaseDraftClosure, error) {
-	if err := t.Admits(m); err != nil {
-		return releaseowner.ReleaseDraftClosure{}, err
-	}
-	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/drafts/referenced", "read", []string{build.Builder}, true)); err != nil {
+	if err := t.builderAllowed(m, "POST /v1/releases/drafts/referenced"); err != nil {
 		return releaseowner.ReleaseDraftClosure{}, err
 	}
 	world, refusal := t.draftWorldLocked(m, branch, now)
@@ -71,12 +66,19 @@ func (t *Tenant) scopedReferencedDrafts(m platform.Member, kind platform.AssetKi
 	return releaseowner.ReleaseDraftClosure{Drafts: drafts}, nil
 }
 
-func (t *Tenant) builderDrafts(m platform.Member, permission string) (build.ConstructionDrafts, error) {
+func (t *Tenant) builderAllowed(m platform.Member, permission string) error {
 	if err := t.Admits(m); err != nil {
-		return nil, err
+		return err
 	}
 	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(c, permission, "read", []string{build.Builder}, true)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *Tenant) builderDrafts(m platform.Member, permission string) (build.ConstructionDrafts, error) {
+	if err := t.builderAllowed(m, permission); err != nil {
 		return nil, err
 	}
 	owner, ok := t.App(build.ID).(build.ConstructionDrafts)
@@ -113,61 +115,7 @@ func (t *Tenant) scopedDraftRestore(m platform.Member, kind platform.AssetKind, 
 	if err != nil {
 		return releaseowner.ReleaseDraftRestore{}, err
 	}
-	typ, published, found, err := owner.DraftPublished(kind, id)
-	if err != nil || !found {
-		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The draft is unavailable")
-	}
-	if published == "" {
-		return releaseowner.ReleaseDraftRestore{Type: typ, Action: "archive", Payload: json.RawMessage(`{}`)}, nil
-	}
-	var asset platform.ReleaseAsset
-	if err := json.Unmarshal([]byte(published), &asset); err != nil {
-		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The installed version of this draft cannot be restored")
-	}
-	image := json.RawMessage(published)
-	if asset.Ref.Kind != "" {
-		lifecycle, ok := owner.(platform.AssetLifecycleOwner)
-		if !ok {
-			return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("tenant has no builder")
-		}
-		drafts, err := lifecycle.ReleaseDrafts([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{DraftsOnly: true, Member: m, At: now})
-		if err != nil {
-			return releaseowner.ReleaseDraftRestore{}, err
-		}
-		image = nil
-		for _, draft := range drafts {
-			if draft.Type == typ {
-				image = draft.Image
-				break
-			}
-		}
-	}
-	var info *platform.EntityInfo
-	for _, entity := range t.Entities(m) {
-		if entity.Type == typ {
-			info = &entity
-		}
-	}
-	if info == nil || len(image) == 0 {
-		return releaseowner.ReleaseDraftRestore{}, fmt.Errorf("The installed version of this draft cannot be restored")
-	}
-	payload, err := releaseowner.AssetDraftPayload(*info, image)
-	if err != nil {
-		return releaseowner.ReleaseDraftRestore{}, err
-	}
-	fields := map[string]json.RawMessage{}
-	_ = json.Unmarshal(payload, &fields)
-	if typ == build.ObjectType {
-		delete(fields, "actions")
-		delete(fields, "actionTypes")
-	}
-	for _, field := range info.Fields {
-		if _, ok := fields[field.Name]; !ok && !field.ReadOnly && !field.Aside {
-			fields[field.Name] = json.RawMessage("null")
-		}
-	}
-	payload, _ = json.Marshal(fields)
-	return releaseowner.ReleaseDraftRestore{Type: typ, Action: "edit", Payload: payload}, nil
+	return releaseowner.DraftRestore(owner, t.Entities(m), m, kind, id, now)
 }
 
 func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingState, error) {
@@ -175,16 +123,9 @@ func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingSt
 }
 
 func (t *Tenant) scopedWorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingState, error) {
-	if err := t.Admits(m); err != nil {
+	owner, err := t.builderDrafts(m, "GET /v1/releases/drafts/working")
+	if err != nil {
 		return releaseowner.ReleaseWorkingState{}, err
-	}
-	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/drafts/working", "read", []string{build.Builder}, true)); err != nil {
-		return releaseowner.ReleaseWorkingState{}, err
-	}
-	owner, ok := t.App(build.ID).(build.ConstructionDrafts)
-	if !ok {
-		return releaseowner.ReleaseWorkingState{}, fmt.Errorf("tenant has no builder")
 	}
 	changes, err := owner.WorkingDrafts(m.ID)
 	if err != nil {
@@ -204,11 +145,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 }
 
 func (t *Tenant) scopedPreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef, branch string, now time.Time) (releaseowner.ReleasePreview, error) {
-	if err := t.Admits(m); err != nil {
-		return releaseowner.ReleasePreview{}, err
-	}
-	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/preview", "read", []string{build.Builder}, true)); err != nil {
+	if err := t.builderAllowed(m, "POST /v1/releases/preview"); err != nil {
 		return releaseowner.ReleasePreview{}, err
 	}
 	world, refusal := t.draftWorldLocked(m, branch, now)
