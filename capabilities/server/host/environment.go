@@ -1,10 +1,11 @@
 package host
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"slices"
@@ -15,16 +16,6 @@ import (
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 )
-
-type PromotionResult struct {
-	From      string `json:"from"`
-	To        string `json:"to"`
-	Candidate string `json:"candidate"`
-	Digest    string `json:"digest"`
-	Active    bool   `json:"active"`
-	Key       string `json:"key"`
-	Assets    int    `json:"assets"`
-}
 
 func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifact, error) {
 	raw, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]byte, *kernel.Error) { return slices.Clone(t.releases.Raw(id)), nil })
@@ -66,19 +57,11 @@ func (t *Tenant) sealedBytes(id string) ([]byte, platform.SealedArtifact, error)
 	if !ok {
 		return nil, platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not sealed", id)
 	}
-	reader, _, err := t.files().Get(context.Background(), artifact.Key)
-	if err != nil {
-		return nil, artifact, fmt.Errorf("sealed candidate %s: %w", id, err)
-	}
-	defer reader.Close()
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(reader); err != nil {
-		return nil, artifact, fmt.Errorf("sealed candidate %s: %w", id, err)
-	}
-	if err := releaseowner.VerifySealed(id, artifact, buf.Bytes()); err != nil {
-		return nil, artifact, err
-	}
-	return buf.Bytes(), artifact, nil
+	raw, err := releaseowner.ReadSealed(id, artifact, func() (io.ReadCloser, error) {
+		reader, _, err := t.files().Get(context.Background(), artifact.Key)
+		return reader, err
+	})
+	return raw, artifact, err
 }
 
 func (t *Tenant) sealedOrSeal(id string, now time.Time) ([]byte, platform.SealedArtifact, error) {
@@ -90,38 +73,33 @@ func (t *Tenant) sealedOrSeal(id string, now time.Time) ([]byte, platform.Sealed
 	return t.sealedBytes(id)
 }
 
-func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, member platform.Member, now time.Time) (PromotionResult, error) {
+func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, member platform.Member, now time.Time) (releaseowner.PromotionResult, error) {
 	if from == nil || to == nil || from.ID == to.ID {
-		return PromotionResult{}, fmt.Errorf("promotion needs two different environments")
+		return releaseowner.PromotionResult{}, fmt.Errorf("promotion needs two different environments")
 	}
 	if !build.HoldsIndependentRole(member, build.Builder, build.Publisher) {
-		return PromotionResult{}, fmt.Errorf("promotion needs the builder or publisher role in %s", to.ID)
+		return releaseowner.PromotionResult{}, fmt.Errorf("promotion needs the builder or publisher role in %s", to.ID)
 	}
 	raw, artifact, err := from.sealedOrSeal(candidateID, now)
 	if err != nil {
-		return PromotionResult{}, err
+		return releaseowner.PromotionResult{}, err
 	}
 	candidate, err := platform.ReadCandidate(candidateID, raw)
 	if err != nil {
-		return PromotionResult{}, err
+		return releaseowner.PromotionResult{}, err
 	}
-	result := PromotionResult{From: from.ID, To: to.ID, Candidate: candidate.ID, Digest: artifact.Digest, Active: activate, Key: key, Assets: len(candidate.Assets)}
-	return decideWithError(to, "release:promote", func(to *Tenant) (PromotionResult, error) {
-		if err := releaseowner.MissingAssetHost(candidate, to.ID, func(app string) bool { return to.App(app) != nil }); err != nil {
+	result := releaseowner.PromotionResult{From: from.ID, To: to.ID, Candidate: candidate.ID, Digest: artifact.Digest, Active: activate, Key: key, Assets: len(candidate.Assets)}
+	return decideWithError(to, "release:promote", func(to *Tenant) (releaseowner.PromotionResult, error) {
+		replay, err := releaseowner.PromotionDestination{
+			ID: to.ID, Quarantined: to.quarantined(), HasApp: func(app string) bool { return to.App(app) != nil },
+			PriorHash:  to.releases.Request,
+			PriorBytes: to.releases.Raw,
+			Hash: func() (string, error) {
+				return acceptedformat.ReleaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
+			},
+		}.Preflight(candidate, raw, key)
+		if err != nil || replay {
 			return result, err
-		}
-		if to.quarantined() {
-			return result, fmt.Errorf("tenant %s is quarantined", to.ID)
-		}
-		if prior, ok := to.releases.Request("promotion:" + key); ok {
-			hash, hashErr := acceptedformat.ReleaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
-			if hashErr != nil || prior != hash {
-				return result, fmt.Errorf("promotion key belongs to another request")
-			}
-			return result, nil
-		}
-		if prior := to.releases.Raw(candidate.ID); prior != nil && !bytes.Equal(prior, raw) {
-			return result, fmt.Errorf("candidate %s exists in %s with different bytes", candidate.ID, to.ID)
 		}
 		var installations []platform.ReleaseInstallation
 		var bootstrap json.RawMessage
@@ -142,7 +120,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 			return result, err
 		}
 		return result, nil
-	}, func(to *Tenant, prepared preparedAccepted) (PromotionResult, error) {
+	}, func(to *Tenant, prepared preparedAccepted) (releaseowner.PromotionResult, error) {
 		if _, err := to.applyPreparedRelease(member, prepared); err != nil {
 			return result, err
 		}
@@ -176,14 +154,21 @@ func (t *Tenant) hostedTypes() map[string]bool {
 func (t *Tenant) rememberMigration(result platform.MigrationResult, member string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
 	t.Lane.Lock()
 	defer t.Lane.Unlock()
-	_, err := t.acceptHostControl("migration", member, result, now,
-		platform.AuditEntry{Action: "host.migration", Target: result.Key}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
-			image.Migrations = append(image.Migrations, platform.MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
-			return platform.SupportGrant{}, nil
-		}, evidence...)
+	_, err := t.acceptHostAction(controlowner.MigrationAction(result), member, now, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
+		controlowner.RecordMigration(image, result, member, now)
+		return platform.SupportGrant{}, nil
+	}, evidence...)
 	return err
 }
 
-func (t *Tenant) grantUsable(id string, now time.Time) (platform.SupportGrant, error) {
-	return t.console.UsableSupport(t.ID, id, now)
+func (t *Tenant) grantMember(id, missing string, now time.Time) (platform.Member, error) {
+	grant, err := t.console.UsableSupport(t.ID, id, now)
+	if err != nil {
+		return platform.Member{}, err
+	}
+	member, ok := t.Member(grant.Member)
+	if !ok {
+		return platform.Member{}, errors.New(missing)
+	}
+	return member, nil
 }

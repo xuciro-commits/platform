@@ -17,7 +17,7 @@ func (d *stagedDecision) sources() runtimekernel.ResultSources {
 }
 
 func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {
-	return t.ApplyRecordResult(l, raw, runtimekernel.RecordApply{App: t.App, CheckBindings: checkRunApplicationBindings, DefinitionType: build.AppType,
+	return t.ApplyRecordResult(l, raw, runtimekernel.RecordApply{App: t.App, CheckBindings: build.CheckRunApplicationBindings, DefinitionType: build.AppType,
 		Claims: func(result acceptedformat.Record, receipt *pb.ChangeRecord) (func() error, error) {
 			var source *runtimekernel.ClaimSet
 			if len(result.Claims) > 0 {

@@ -6,6 +6,7 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
+	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 
 	"slices"
@@ -142,28 +143,18 @@ func (t *Tenant) functionAllowed(app string, ask aigateway.ModelAsk, at time.Tim
 }
 
 func (h hostView) ValidateInstallFunction(f platform.AIFunction) error {
-	if err := f.Check(); err != nil {
-		return err
-	}
-	manifest := h.app.Manifest()
 	h.t.Projection.Lock()
 	defer h.t.Projection.Unlock()
-	et := h.t.Projection.Type(f.Object)
-	if et == nil || et.Info().App != manifest.ID {
-		return fmt.Errorf("function %s needs its owner's source object", f.Name)
-	}
-	for _, role := range f.Roles {
-		if !slices.Contains(manifest.AllRoles(), role) {
-			return fmt.Errorf("function %s names an undeclared role", f.Name)
-		}
-	}
-	for _, name := range f.Fields {
-		field, ok := et.Info().Field(name)
-		if !ok || field.AIInput != nil && !*field.AIInput || !slices.Contains([]string{"text", "longtext", "choice", "integer", "decimal", "boolean"}, field.Type) || slices.Contains(h.t.narrowable(et), name) {
-			return fmt.Errorf("function %s needs direct scalar source fields", f.Name)
-		}
-	}
-	return nil
+	return functionauthoring.FunctionInstall{Manifest: h.app.Manifest(),
+		Source: func(object string) (platform.EntityInfo, bool) {
+			et := h.t.Projection.Type(object)
+			if et == nil {
+				return platform.EntityInfo{}, false
+			}
+			return et.Info(), true
+		},
+		Narrowable: func(object string) []string { return h.t.narrowable(h.t.Projection.Type(object)) },
+	}.Validate(f)
 }
 
 func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, version int) error {

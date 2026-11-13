@@ -6,6 +6,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/resources/authoring"
 	"slices"
 	"time"
 )
@@ -52,7 +53,7 @@ func (t *Tenant) publishAcceptedChanges(p *runtimekernel.PreparedChanges) {
 }
 
 func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, member string, at time.Time) (*records.Store, error) {
-	return runtimekernel.ApplyDirectRows(t.Projection, rows, member, at, checkRunApplicationBindings)
+	return runtimekernel.ApplyDirectRows(t.Projection, rows, member, at, build.CheckRunApplicationBindings)
 }
 
 func (d *stagedDecision) stateApp(app platform.App) platform.App {

@@ -5,19 +5,16 @@ import automation "platformserver/services/automate/runtime"
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"platformserver/services/functions/runtime"
 	"platformserver/services/objects"
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	appowner "platformserver/services/apps"
-	"platformserver/services/resources/authoring"
 	"slices"
 	"time"
 )
@@ -30,84 +27,8 @@ func (t *Tenant) PageView(m platform.Member, app, owner, page string) (platform.
 }
 func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error) {
 	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationRunPage, *kernel.Error) {
-		return t.scopedApplicationRuns(m, ref, offset, limit, now, filters...)
+		return t.applicationContext().ScopedRuns(m, ref, offset, limit, now, filters...)
 	})
-}
-
-func (t *Tenant) scopedApplicationRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error) {
-	if ref.Kind != platform.AssetApp || ref.Check() != nil || offset < 0 || limit < 1 || limit > 100 {
-		return platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an application and a run page of 1–100")
-	}
-	if len(filters) > 0 {
-		filter := filters[0]
-		if filter.Kind != "" && !slices.Contains([]string{"flow", "agent", "compute", "function", "effect", "job", "dispatch"}, filter.Kind) ||
-			len(filter.State) > 64 || len(filter.Subject) > 512 || !filter.Since.IsZero() && !filter.Until.IsZero() && filter.Since.After(filter.Until) {
-			return platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a valid application run filter")
-		}
-	}
-	m = t.authorizationMember(m)
-	if refusal := t.refreshApplicationRunIndex(m, ref, now); refusal == nil {
-		if page, err := t.applicationRunsFromIndex(m, ref, offset, limit, filters...); err == nil {
-			return page, nil
-		}
-	}
-	return t.applicationContext().Runs(m, ref, offset, limit, now, filters...)
-}
-
-func (t *Tenant) refreshApplicationRunIndex(m platform.Member, ref platform.AssetRef, now time.Time) *kernel.Error {
-	key := "application/" + ref.App + "/" + ref.Name + "/" + m.ID
-	var refusal *kernel.Error
-	t.runIndex.Refresh(key, now, func() ([]monitoring.MonitoringCoverage, bool) {
-		refusal = t.rebuildApplicationRunIndex(m, ref, key, now)
-		return nil, refusal == nil
-	})
-	return refusal
-}
-
-func (t *Tenant) rebuildApplicationRunIndex(m platform.Member, ref platform.AssetRef, key string, now time.Time) *kernel.Error {
-	ctx := t.applicationContext()
-	runs := []platform.ApplicationRun{}
-	for skip := 0; ; {
-		page, refusal := ctx.Runs(m, ref, skip, 100, now)
-		if refusal != nil {
-			return refusal
-		}
-		runs = append(runs, page.Runs...)
-		skip += len(page.Runs)
-		if len(page.Runs) == 0 || skip >= page.Total || skip >= 10000 {
-			break
-		}
-	}
-	entries := make([]platform.RunIndexEntry, 0, len(runs))
-	for _, run := range runs {
-		raw, err := json.Marshal(run)
-		if err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-		entries = append(entries, platform.RunIndexEntry{ID: run.Kind + "/" + run.ID, Scope: m.ID, Type: "application", App: ref.Name, Status: run.State, At: run.Created, Payload: raw})
-	}
-	if err := t.Log().ReplaceRunIndex(t.ID, key, entries); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
-	}
-	return nil
-}
-
-func (t *Tenant) applicationRunsFromIndex(m platform.Member, ref platform.AssetRef, offset, limit int, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, error) {
-	scope := "application/" + ref.App + "/" + ref.Name + "/" + m.ID
-	indexed, err := t.Log().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: scope, Offset: 0, Limit: 1000})
-	if err != nil {
-		return platform.ApplicationRunPage{}, err
-	}
-	title := ""
-	if definitions, err := t.DefinitionsFor(m); err == nil {
-		for _, definition := range definitions {
-			if definition.Ref == ref && definition.Application != nil {
-				title = definition.Application.Title
-				break
-			}
-		}
-	}
-	return appowner.IndexedRuns(indexed.Entries, ref, title, offset, limit, filters...), nil
 }
 
 func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *kernel.Error) {
@@ -121,92 +42,15 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 func (t *Tenant) bindApplications(resource platform.AssetRef, release, dependencies string, jobOwner ...string) ([]platform.AssetBinding, error) {
 	return t.applicationContext().Bind(resource, release, dependencies, jobOwner...)
 }
-func checkRunApplicationBindings(record any) error {
-	var bindings []platform.AssetBinding
-	switch run := record.(type) {
-	case platform.FlowInstance:
-		bindings = run.Applications
-	case platform.AgentRunRecord:
-		bindings = run.Applications
-	case build.FunctionRun:
-		bindings = run.Applications
-	}
-	return platform.CheckApplicationBindings(bindings)
-}
 func (h hostView) ApplicationBindings(resource platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 	return h.t.bindApplications(resource, release, dependencies)
 }
 func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *kernel.Error) {
 	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationDiagnostic, *kernel.Error) {
-		return t.scopedApplicationRecordDiagnostic(m, ref, typ, id, now)
+		return t.applicationContext().RecordDiagnostic(m, ref, typ, id, now)
 	})
 }
 
-func (t *Tenant) scopedApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *kernel.Error) {
-	out := platform.ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []platform.ApplicationDecisionTrace{}, Runs: []platform.ApplicationRun{}}
-	runtime, refusal := t.ApplicationRuntimeOf(m, ref, now)
-	if refusal != nil {
-		return out, refusal
-	}
-	if !slices.ContainsFunc(runtime.Artifact.Model, func(binding platform.AssetBinding) bool {
-		return binding.Ref.Kind == platform.AssetObject && binding.Ref.Name == typ
-	}) {
-		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record is outside this application")
-	}
-	view, refusal := t.recordDetail(m, typ, id, now, objects.RecordSectionHistory)
-	if refusal != nil {
-		return out, refusal
-	}
-	owner := t.Projection.Type(typ).Info().App
-	ledger := t.App(owner).AcceptedLedger()
-	receipts := ledger.RecordsFor(t.ID)
-	visible := map[platform.AssetRef]bool{}
-	for _, definition := range t.Definitions(m) {
-		visible[definition.Ref] = true
-	}
-	for _, change := range view.History {
-		trace := platform.ApplicationDecisionTrace{Change: change.Change, Schema: change.Schema, At: change.At, Versions: []platform.ApplicationVersion{}}
-		if definition := t.Committed.DecisionDefinition(owner + "/" + change.Change); definition != nil && definition.Definition.Ref.Name == change.Schema {
-			projection := *definition
-			if projection.Observation != nil {
-				projection.Observation = t.visibleObservationEvidence(m, projection.Observation, now)
-			}
-			projection.Dependencies = slices.DeleteFunc(slices.Clone(definition.Dependencies), func(binding platform.AssetBinding) bool { return !visible[binding.Ref] })
-			projection.Applications = slices.DeleteFunc(slices.Clone(definition.Applications), func(binding platform.AssetBinding) bool { return !visible[binding.Ref] })
-			trace.Definition, trace.Content = &projection, &projection.Contract
-			for _, binding := range projection.Applications {
-				if binding.Ref == ref {
-					trace.Versions = append(trace.Versions, platform.ApplicationVersion{Version: binding.SourceVersion, Release: projection.Release, At: change.At, Active: binding.SourceVersion == runtime.Artifact.Version})
-				}
-			}
-		}
-		for _, receipt := range receipts {
-			if receipt.GetChangeId() != change.Change {
-				continue
-			}
-			if binding, exists := t.Committed.SchemaVersion(owner + "/" + receipt.GetSubmission().GetIdempotencyKey()); exists && trace.Content == nil {
-				trace.Content = &binding
-			}
-			break
-		}
-		out.Decisions = append(out.Decisions, trace)
-	}
-	for skip := 0; ; skip += 100 {
-		page, refusal := t.ApplicationRuns(m, ref, skip, 100, now, platform.ApplicationRunFilter{Subject: fmt.Sprintf("%s/%s", typ, id)})
-		if refusal != nil {
-			return out, refusal
-		}
-		for _, run := range page.Runs {
-			if run.Subject == fmt.Sprintf("%s/%s", typ, id) {
-				out.Runs = append(out.Runs, run)
-			}
-		}
-		if skip+len(page.Runs) >= page.Total {
-			break
-		}
-	}
-	return out, nil
-}
 func (t *Tenant) applicationContext() appowner.Context {
 	return appowner.Context{Tenant: t.ID, Admit: t.Admits, Definitions: t.Definitions, Entity: t.Entity, App: t.App,
 		Assets: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) }, Candidate: t.releases.Candidate,
@@ -297,7 +141,44 @@ func (t *Tenant) applicationContext() appowner.Context {
 			}
 			return out
 		},
-		AI: t.applicationAILocked, AIUsage: t.applicationAIUsage, RecordCount: func(m platform.Member, typ string, at time.Time) (int, *kernel.Error) {
+		AuthorizationMember: t.authorizationMember,
+		RefreshRunIndex: func(key string, now time.Time, rebuild func() bool) {
+			t.runIndex.Refresh(key, now, func() ([]monitoring.MonitoringCoverage, bool) { return nil, rebuild() })
+		},
+		ReplaceRunIndex: func(key string, entries []platform.RunIndexEntry) error {
+			return t.Log().ReplaceRunIndex(t.ID, key, entries)
+		},
+		QueryRunIndex: func(scope string) ([]platform.RunIndexEntry, error) {
+			indexed, err := t.Log().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: scope, Offset: 0, Limit: 1000})
+			return indexed.Entries, err
+		},
+		RuntimeOf: t.ApplicationRuntimeOf,
+		RunsPage:  t.ApplicationRuns,
+		RecordHistory: func(m platform.Member, typ, id string, now time.Time) ([]appowner.DecisionChange, *kernel.Error) {
+			view, refusal := t.recordDetail(m, typ, id, now, objects.RecordSectionHistory)
+			if refusal != nil {
+				return nil, refusal
+			}
+			changes := []appowner.DecisionChange{}
+			for _, change := range view.History {
+				changes = append(changes, appowner.DecisionChange{Change: change.Change, Schema: change.Schema, At: change.At})
+			}
+			return changes, nil
+		},
+		RecordOwner: func(typ string) string { return t.Projection.Type(typ).Info().App },
+		ReceiptKeys: func(owner string) map[string]string {
+			keys := map[string]string{}
+			for _, receipt := range t.App(owner).AcceptedLedger().RecordsFor(t.ID) {
+				if _, seen := keys[receipt.GetChangeId()]; !seen {
+					keys[receipt.GetChangeId()] = receipt.GetSubmission().GetIdempotencyKey()
+				}
+			}
+			return keys
+		},
+		Decision:        func(key string) *platform.DecisionDefinition { return t.Committed.DecisionDefinition(key) },
+		SchemaVersion:   func(key string) (platform.SchemaVersion, bool) { return t.Committed.SchemaVersion(key) },
+		VisibleEvidence: t.visibleObservationEvidence,
+		AI:              t.applicationAILocked, AIUsage: t.applicationAIUsage, RecordCount: func(m platform.Member, typ string, at time.Time) (int, *kernel.Error) {
 			page, err := t.Records(t.readContext(), m, typ, platform.Query{Limit: 1}, at)
 			return page.Total, err
 		},

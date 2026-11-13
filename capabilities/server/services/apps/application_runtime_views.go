@@ -12,29 +12,41 @@ import (
 )
 
 type Context struct {
-	Tenant          string
-	Admit           func(platform.Member) *kernel.Error
-	Definitions     func(platform.Member) []platform.Definition
-	Entity          func(string) (platform.EntityInfo, bool)
-	App             func(string) platform.App
-	Assets          func() ([]platform.ReleaseAsset, error)
-	Candidate       func(string) (platform.ReleaseCandidate, error)
-	Candidates      func() map[string]json.RawMessage
-	CloseCandidate  func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (platform.ReleaseCandidate, error)
-	Rows            func(platform.Member, string, platform.Query, time.Time) ([]any, *kernel.Error)
-	Computations    func(platform.Member) []Computation
-	Effects         func(platform.Member) ([]platform.Effect, *kernel.Error)
-	Jobs            func(platform.Member) ([]Job, *kernel.Error)
-	Readable        func(platform.Member, string, time.Time) bool
-	Quarantined     func() bool
-	RecoveryAllowed func(platform.Member) *kernel.Error
-	Quota           func(platform.Member, time.Time) *platform.AIQuota
-	Refusals        func() []Refusal
-	BusinessFacts   func() []platform.BusinessRefusalFact
-	ActiveVersions  func() []ActiveVersion
-	AI              func(platform.Member, []platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error)
-	AIUsage         func(platform.Member, platform.AssetRef, []platform.ApplicationAI) []platform.ApplicationAI
-	RecordCount     func(platform.Member, string, time.Time) (int, *kernel.Error)
+	Tenant              string
+	Admit               func(platform.Member) *kernel.Error
+	Definitions         func(platform.Member) []platform.Definition
+	Entity              func(string) (platform.EntityInfo, bool)
+	App                 func(string) platform.App
+	Assets              func() ([]platform.ReleaseAsset, error)
+	Candidate           func(string) (platform.ReleaseCandidate, error)
+	Candidates          func() map[string]json.RawMessage
+	CloseCandidate      func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (platform.ReleaseCandidate, error)
+	Rows                func(platform.Member, string, platform.Query, time.Time) ([]any, *kernel.Error)
+	Computations        func(platform.Member) []Computation
+	Effects             func(platform.Member) ([]platform.Effect, *kernel.Error)
+	Jobs                func(platform.Member) ([]Job, *kernel.Error)
+	Readable            func(platform.Member, string, time.Time) bool
+	Quarantined         func() bool
+	RecoveryAllowed     func(platform.Member) *kernel.Error
+	Quota               func(platform.Member, time.Time) *platform.AIQuota
+	Refusals            func() []Refusal
+	BusinessFacts       func() []platform.BusinessRefusalFact
+	ActiveVersions      func() []ActiveVersion
+	AI                  func(platform.Member, []platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error)
+	AIUsage             func(platform.Member, platform.AssetRef, []platform.ApplicationAI) []platform.ApplicationAI
+	RecordCount         func(platform.Member, string, time.Time) (int, *kernel.Error)
+	AuthorizationMember func(platform.Member) platform.Member
+	RefreshRunIndex     func(key string, now time.Time, rebuild func() bool)
+	ReplaceRunIndex     func(key string, entries []platform.RunIndexEntry) error
+	QueryRunIndex       func(scope string) ([]platform.RunIndexEntry, error)
+	RuntimeOf           func(platform.Member, platform.AssetRef, time.Time) (platform.ApplicationRuntime, *kernel.Error)
+	RunsPage            func(platform.Member, platform.AssetRef, int, int, time.Time, ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error)
+	RecordHistory       func(platform.Member, string, string, time.Time) ([]DecisionChange, *kernel.Error)
+	RecordOwner         func(typ string) string
+	ReceiptKeys         func(owner string) map[string]string
+	Decision            func(key string) *platform.DecisionDefinition
+	SchemaVersion       func(key string) (platform.SchemaVersion, bool)
+	VisibleEvidence     func(platform.Member, *platform.ObservationDecisionEvidence, time.Time) *platform.ObservationDecisionEvidence
 }
 
 type Computation struct {

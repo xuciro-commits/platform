@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	"platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
@@ -41,24 +42,8 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 		}
 		t.owner["action:"+action.Schema] = id
 	}
-	for name, owner := range t.owner {
-		if owner == id && strings.HasPrefix(name, "read:protocol:"+e.Type+":") {
-			delete(t.owner, name)
-		}
-	}
-	for _, protocol := range e.Protocols {
-		for _, name := range protocol.Reads {
-			t.owner["read:"+name] = id
-		}
-	}
-	kept := slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
-		return def.Ref.App == id && def.Source == "tenant" && def.Action != nil && def.Action.Target == info.Type && !slices.ContainsFunc(actions, func(action platform.Action) bool { return action.Schema == def.Ref.Name })
-	})
-	kept = slices.DeleteFunc(kept, func(def platform.Definition) bool {
-		return def.Ref.App == id && def.Protocol != nil && slices.ContainsFunc(def.Requires, func(ref platform.AssetRef) bool {
-			return ref.Kind == platform.AssetAction && strings.HasPrefix(ref.Name, e.Type+".")
-		})
-	})
+	build.ReplaceProtocolReads(t.owner, id, e.Type, e.Protocols)
+	kept := build.PruneInstalledObject(t.definitions, id, info, actions)
 	if len(kept) != len(t.definitions) {
 		t.setDefinitions(kept)
 	}

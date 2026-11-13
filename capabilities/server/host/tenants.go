@@ -52,9 +52,11 @@ func firstDecisions(t *Tenant, spec platform.TenantSpec, tpl platform.TenantTemp
 		},
 		Submit: func(admin platform.Member, key int, schema, typ, id string, payload any) error {
 			raw, _ := json.Marshal(payload)
-			_, err := t.Submit(admin, &pb.Submission{TenantId: t.ID, PrincipalId: admin.ID, Authority: controlowner.PlatformApp, IdempotencyKey: fmt.Sprintf("create:%d", key),
-				Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now)
-			return err
+			if _, refusal := t.Submit(admin, &pb.Submission{TenantId: t.ID, PrincipalId: admin.ID, Authority: controlowner.PlatformApp, IdempotencyKey: fmt.Sprintf("create:%d", key),
+				Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); refusal != nil {
+				return refusal
+			}
+			return nil
 		},
 	}, spec, tpl)
 }
@@ -68,7 +70,7 @@ func (h *Host) tenantRoutes(mux *http.ServeMux) {
 			}
 			WriteJSON(w, http.StatusOK, out)
 		})
-	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants", Summary: "Create a tenant from a template with its first administrator; it serves on the next request and survives restarts (host administrators)", Body: platform.CreateTenantRequest{}, Answer: HostTenantView{}},
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants", Summary: "Create a tenant from a template with its first administrator; it serves on the next request and survives restarts (host administrators)", Body: platform.CreateTenantRequest{}, Answer: controlowner.HostTenantView{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, _ *Tenant) {
 			if h.CreateTenant == nil {
 				WriteJSON(w, http.StatusNotImplemented, map[string]any{"error": "this host does not create tenants"})

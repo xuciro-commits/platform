@@ -63,7 +63,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *runtimekernel.PreparedBatch) (bo
 }
 
 func (t *Tenant) batchApply() runtimekernel.BatchApply {
-	return runtimekernel.BatchApply{App: t.App, OwnerLedger: t.ownerLedger, CheckBindings: checkRunApplicationBindings, DefinitionType: build.AppType,
+	return runtimekernel.BatchApply{App: t.App, OwnerLedger: t.ownerLedger, CheckBindings: build.CheckRunApplicationBindings, DefinitionType: build.AppType,
 		Claims: func(result acceptedformat.Batch, receipt *pb.ChangeRecord) error {
 			if len(result.Claims) == 0 {
 				return nil

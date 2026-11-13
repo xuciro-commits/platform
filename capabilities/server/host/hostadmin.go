@@ -8,56 +8,23 @@ import (
 	"net/http"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	releaseowner "platformserver/services/devops/releases"
 	controlowner "platformserver/services/security/control"
 
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"platformserver/platform"
 )
 
-type HostTenantView struct {
-	ID            string    `json:"id"`
-	Quarantined   bool      `json:"quarantined,omitempty"`
-	Fault         string    `json:"fault,omitempty"`
-	Lifecycle     string    `json:"lifecycle,omitempty"`
-	Apps          []string  `json:"apps"`
-	Members       int       `json:"members"`
-	Audit         int       `json:"audit"`
-	ActiveRelease string    `json:"activeRelease,omitempty"`
-	Candidates    int       `json:"candidates"`
-	Support       int       `json:"support"`
-	FailedWork    int       `json:"failedWork"`
-	Connectors    int       `json:"connectors"`
-	Started       time.Time `json:"started,omitempty"`
-}
-
-type HostOverview struct {
-	Now     time.Time        `json:"now"`
-	Tenants []HostTenantView `json:"tenants"`
-	Admins  int              `json:"admins"`
-}
-
-type LifecycleRequest struct {
-	Action string `json:"action"`
-	Reason string `json:"reason,omitempty"`
-}
-
 type SupportRead struct {
-	Tenant  string                `json:"tenant"`
-	Grant   string                `json:"grant"`
-	At      time.Time             `json:"at"`
-	Health  TenantHealth          `json:"health"`
-	Audit   []platform.AuditEntry `json:"audit"`
-	Answers []SupportAnswer       `json:"answers,omitempty"`
-}
-
-type SupportAnswer struct {
-	Read   string `json:"read"`
-	Answer any    `json:"answer,omitempty"`
-	Error  string `json:"error,omitempty"`
+	Tenant  string                       `json:"tenant"`
+	Grant   string                       `json:"grant"`
+	At      time.Time                    `json:"at"`
+	Health  TenantHealth                 `json:"health"`
+	Audit   []platform.AuditEntry        `json:"audit"`
+	Answers []controlowner.SupportAnswer `json:"answers,omitempty"`
 }
 
 type hostAuthorizationKey struct{}
@@ -116,34 +83,30 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 			slices.Sort(tenants)
 			WriteJSON(w, http.StatusOK, map[string]any{"subject": subject, "tenants": tenants})
 		})
-	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/overview", Summary: "Host and tenant overview: health, quarantine, lifecycle, isolation and resource use (host administrators)", Answer: HostOverview{}},
+	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/overview", Summary: "Host and tenant overview: health, quarantine, lifecycle, isolation and resource use (host administrators)", Answer: controlowner.HostOverview{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, _ *Tenant) {
-			out := HostOverview{Now: h.Now().UTC(), Tenants: []HostTenantView{}}
+			out := controlowner.HostOverview{Now: h.Now().UTC(), Tenants: []controlowner.HostTenantView{}}
 			for _, t := range h.currentTenants() {
 				out.Tenants = append(out.Tenants, h.tenantView(t))
 			}
-			slices.SortFunc(out.Tenants, func(a, b HostTenantView) int { return strings.Compare(a.ID, b.ID) })
+			slices.SortFunc(out.Tenants, func(a, b controlowner.HostTenantView) int { return strings.Compare(a.ID, b.ID) })
 			out.Admins = len(h.HostAdmins)
 			WriteJSON(w, http.StatusOK, out)
 		})
-	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}", Summary: "One tenant's console view (host administrators)", Answer: HostTenantView{}},
+	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}", Summary: "One tenant's console view (host administrators)", Answer: controlowner.HostTenantView{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
 			WriteJSON(w, http.StatusOK, h.tenantView(t))
 		})
-	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/lifecycle", Summary: "Open, suspend, resume or decommission a tenant, with a reason recorded in its audit (host administrators)", Body: LifecycleRequest{}, Answer: HostTenantView{}},
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/lifecycle", Summary: "Open, suspend, resume or decommission a tenant, with a reason recorded in its audit (host administrators)", Body: controlowner.LifecycleRequest{}, Answer: controlowner.HostTenantView{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
-			var body LifecycleRequest
-			if err := decodeBody(r, &body); err != nil {
-				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			var body controlowner.LifecycleRequest
+			if !decodeOr400(w, r, &body) {
 				return
 			}
-			if err := t.setHostLifecycle(body.Action, body.Reason, subject, h.Now(), hostRequestAuthorization(r, t.ID)...); err != nil {
-				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
-				return
-			}
-			WriteJSON(w, http.StatusOK, h.tenantView(t))
+			err := t.setHostLifecycle(body.Action, body.Reason, subject, h.Now(), hostRequestAuthorization(r, t.ID)...)
+			answer(w, http.StatusOK, http.StatusConflict, err, func() any { return h.tenantView(t) })
 		})
-	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/artifacts", Summary: "The tenant's trusted releases and saved candidates with their compatibility (host administrators)", Answer: []HostArtifactView{}},
+	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/artifacts", Summary: "The tenant's trusted releases and saved candidates with their compatibility (host administrators)", Answer: []controlowner.HostArtifactView{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
 			WriteJSON(w, http.StatusOK, t.hostArtifacts())
 		})
@@ -153,21 +116,12 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/support", Summary: "Open an authorized support session for a tenant member, with a reason and an end (host administrators)", Answer: platform.SupportGrant{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
-			var body struct {
-				Member  string `json:"member"`
-				Reason  string `json:"reason"`
-				Minutes int    `json:"minutes"`
-			}
-			if err := decodeBody(r, &body); err != nil {
-				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			var body controlowner.SupportOpenRequest
+			if !decodeOr400(w, r, &body) {
 				return
 			}
-			grant, err := t.openSupport(body.Member, body.Reason, subject, body.Minutes, h.Now(), hostRequestAuthorization(r, t.ID)...)
-			if err != nil {
-				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
-				return
-			}
-			WriteJSON(w, http.StatusOK, grant)
+			grant, err := t.openSupport(body, subject, h.Now(), hostRequestAuthorization(r, t.ID)...)
+			answer(w, http.StatusOK, http.StatusConflict, err, func() any { return grant })
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/support/{grant}", Summary: "Use an authorized support session: read the tenant's health and audit as its granted member; every use is recorded (host administrators)", Answer: SupportRead{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, _ *Tenant) {
@@ -177,18 +131,14 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 				if err == controlowner.ErrUnknownGrant {
 					continue
 				}
-				if err != nil {
-					WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
-					return
-				}
-				WriteJSON(w, http.StatusOK, read)
+				answer(w, http.StatusOK, http.StatusConflict, err, func() any { return read })
 				return
 			}
 			w.WriteHeader(http.StatusNotFound)
 		})
 }
 
-func (h *Host) tenantView(t *Tenant) HostTenantView {
+func (h *Host) tenantView(t *Tenant) controlowner.HostTenantView {
 	now := h.Now()
 	state := t
 	image := t.readImage.Load()
@@ -197,7 +147,7 @@ func (h *Host) tenantView(t *Tenant) HostTenantView {
 	} else {
 		t.Lane.Lock()
 	}
-	view := HostTenantView{ID: t.ID, Lifecycle: t.console.State(), ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}
+	view := controlowner.HostTenantView{ID: t.ID, Lifecycle: t.console.State(), ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}
 	if image == nil {
 		t.Lane.Unlock()
 	}
@@ -215,25 +165,15 @@ func (h *Host) tenantView(t *Tenant) HostTenantView {
 	if fault := t.Fault.Load(); fault != nil {
 		view.Quarantined, view.Fault = true, fault.Reason
 	}
-	for _, g := range t.supportGrants() {
-		if g.Expires.After(now) {
-			view.Support++
-		}
-	}
+	view.Support = controlowner.ActiveSupport(t.supportGrants(), now)
 	return view
 }
 
 func (h *Host) environmentRoutes(mux *http.ServeMux) {
-	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/promotions", Summary: "Promote a sealed release candidate from another tenant into this one, optionally activating it (host administrators)", Answer: PromotionResult{}},
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/promotions", Summary: "Promote a sealed release candidate from another tenant into this one, optionally activating it (host administrators)", Answer: releaseowner.PromotionResult{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, to *Tenant) {
-			var body struct {
-				From        string `json:"from"`
-				Candidate   string `json:"candidate"`
-				Key         string `json:"key"`
-				Activate    bool   `json:"activate"`
-				TargetGrant string `json:"targetGrant"`
-			}
-			if err := decodeBody(r, &body); err != nil || body.Key == "" || body.TargetGrant == "" {
+			var body releaseowner.PromotionRequest
+			if err := decodeBody(r, &body); err != nil || !body.Complete() {
 				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "from, candidate, key and targetGrant are required"})
 				return
 			}
@@ -242,32 +182,18 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 				WriteJSON(w, http.StatusNotFound, map[string]any{"error": "no such source tenant"})
 				return
 			}
-			grant, err := to.grantUsable(body.TargetGrant, h.Now())
+			member, err := to.grantMember(body.TargetGrant, "the support session names no member", h.Now())
 			if err != nil {
-				WriteJSON(w, http.StatusForbidden, map[string]any{"error": err.Error()})
-				return
-			}
-			member, ok := to.Member(grant.Member)
-			if !ok {
-				WriteJSON(w, http.StatusForbidden, map[string]any{"error": "the support session names no member"})
+				answer(w, 0, http.StatusForbidden, err, nil)
 				return
 			}
 			result, err := PromoteCandidate(from, to, body.Candidate, body.Key, body.Activate, member, h.Now())
-			if err != nil {
-				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
-				return
-			}
-			WriteJSON(w, http.StatusOK, result)
+			answer(w, http.StatusOK, http.StatusConflict, err, func() any { return result })
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/migrations", Summary: "Migrate real records from another tenant into this one through its generated actions (host administrators)", Answer: platform.MigrationResult{}},
 		func(w http.ResponseWriter, r *http.Request, _ string, to *Tenant) {
-			var body struct {
-				From        string   `json:"from"`
-				Types       []string `json:"types"`
-				SourceGrant string   `json:"sourceGrant"`
-				TargetGrant string   `json:"targetGrant"`
-			}
-			if err := decodeBody(r, &body); err != nil || body.SourceGrant == "" || body.TargetGrant == "" {
+			var body controlowner.MigrationRequest
+			if err := decodeBody(r, &body); err != nil || !body.Complete() {
 				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "from, types, sourceGrant and targetGrant are required"})
 				return
 			}
@@ -276,41 +202,42 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 				WriteJSON(w, http.StatusNotFound, map[string]any{"error": "no such source tenant"})
 				return
 			}
-			sourceGrant, err := from.grantUsable(body.SourceGrant, h.Now())
+			source, err := from.grantMember(body.SourceGrant, "the source support session names no member", h.Now())
 			if err != nil {
-				WriteJSON(w, http.StatusForbidden, map[string]any{"error": err.Error()})
+				answer(w, 0, http.StatusForbidden, err, nil)
 				return
 			}
-			targetGrant, err := to.grantUsable(body.TargetGrant, h.Now())
+			target, err := to.grantMember(body.TargetGrant, "the target support session names no member", h.Now())
 			if err != nil {
-				WriteJSON(w, http.StatusForbidden, map[string]any{"error": err.Error()})
-				return
-			}
-			source, ok := from.Member(sourceGrant.Member)
-			if !ok {
-				WriteJSON(w, http.StatusForbidden, map[string]any{"error": "the source support session names no member"})
-				return
-			}
-			target, ok := to.Member(targetGrant.Member)
-			if !ok {
-				WriteJSON(w, http.StatusForbidden, map[string]any{"error": "the target support session names no member"})
+				answer(w, 0, http.StatusForbidden, err, nil)
 				return
 			}
 			result, err := MigrateRecords(from, to, source, target, body.Types, h.Now())
-			if err != nil {
-				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
-				return
+			if err == nil {
+				err = to.rememberMigration(result, target.ID, h.Now(), hostRequestAuthorization(r, to.ID)...)
 			}
-			if err := to.rememberMigration(result, target.ID, h.Now(), hostRequestAuthorization(r, to.ID)...); err != nil {
-				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
-				return
-			}
-			WriteJSON(w, http.StatusOK, result)
+			answer(w, http.StatusOK, http.StatusConflict, err, func() any { return result })
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/migrations", Summary: "What the host console moved in or out of this tenant (host administrators)", Answer: []platform.MigrationManifest{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
 			WriteJSON(w, http.StatusOK, t.console.Migrations())
 		})
+}
+
+func answer(w http.ResponseWriter, ok, failure int, err error, v func() any) {
+	if err != nil {
+		WriteJSON(w, failure, map[string]any{"error": err.Error()})
+		return
+	}
+	WriteJSON(w, ok, v())
+}
+
+func decodeOr400(w http.ResponseWriter, r *http.Request, into any) bool {
+	if err := decodeBody(r, into); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return false
+	}
+	return true
 }
 
 func (h *Host) tenantByID(id string) *Tenant {
@@ -330,9 +257,7 @@ func decodeBodyLimit(r *http.Request, into any, limit int64) error {
 	return transport.DecodeBodyLimit(r, into, limit)
 }
 
-type HostArtifactView = controlowner.HostArtifactView
-
-func (t *Tenant) hostArtifacts() []HostArtifactView {
+func (t *Tenant) hostArtifacts() []controlowner.HostArtifactView {
 	state := t
 	if image := t.readImage.Load(); image != nil {
 		state = image.state
@@ -352,38 +277,31 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time,
 	if err := controlowner.ValidLifecycleAction(action); err != nil {
 		return err
 	}
-	request := struct{ Action, Reason string }{action, reason}
-	_, err := t.acceptHostControl("lifecycle", "host:"+subject, request, now,
-		platform.AuditEntry{Action: "host.lifecycle." + action, Target: t.ID + ":" + reason}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
-			return platform.SupportGrant{}, controlowner.ApplyLifecycle(image, action, t.quarantined(), func() bool {
-				return missingRuntime(t.desiredRuntime()) || !maps.Equal(t.desiredRuntime(), t.services.Selection()) || !slices.Equal(t.currentDisabledOwners(), t.desiredDisabledOwners()) || slices.Contains(t.desiredDisabledOwners(), controlowner.PlatformApp)
-			})
-		}, evidence...)
+	_, err := t.acceptHostAction(controlowner.LifecycleAction(t.ID, action, reason), "host:"+subject, now, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
+		return platform.SupportGrant{}, controlowner.ApplyLifecycle(image, action, t.quarantined(), func() bool {
+			return missingRuntime(t.desiredRuntime()) || !maps.Equal(t.desiredRuntime(), t.services.Selection()) || !slices.Equal(t.currentDisabledOwners(), t.desiredDisabledOwners()) || slices.Contains(t.desiredDisabledOwners(), controlowner.PlatformApp)
+		})
+	}, evidence...)
 	return err
 }
 
-func (t *Tenant) openSupport(member, reason, subject string, minutes int, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
-	if err := controlowner.ValidSupportSession(member, reason, subject, minutes, now); err != nil {
+func (t *Tenant) openSupport(request controlowner.SupportOpenRequest, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
+	if err := controlowner.ValidSupportSession(request.Member, request.Reason, subject, request.Minutes, now); err != nil {
 		return platform.SupportGrant{}, err
 	}
 	t.Lane.Lock()
 	defer t.Lane.Unlock()
-	request := struct {
-		Member, Reason string
-		Minutes        int
-	}{member, reason, minutes}
-	hash, err := platform.CanonicalDigest([]any{t.ID, subject, request, now.UTC()})
+	action := controlowner.SupportOpenAction(request)
+	id, err := controlowner.SupportGrantID(t.ID, subject, action, now)
 	if err != nil {
 		return platform.SupportGrant{}, err
 	}
-	id := "support:" + strconv.FormatInt(now.UTC().UnixNano(), 36) + ":" + hash[:12]
-	return t.acceptHostControl("support.open", "host:"+subject, request, now,
-		platform.AuditEntry{Action: "host.support.open", Target: member + ":" + reason}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
-			if _, ok := t.Member(member); !ok {
-				return platform.SupportGrant{}, controlowner.SupportError("no such member in this tenant")
-			}
-			return controlowner.OpenSupportGrant(image, id, t.ID, member, reason, subject, minutes, now), nil
-		}, evidence...)
+	return t.acceptHostAction(action, "host:"+subject, now, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
+		if _, ok := t.Member(request.Member); !ok {
+			return platform.SupportGrant{}, controlowner.SupportError("no such member in this tenant")
+		}
+		return controlowner.OpenSupportGrant(image, id, t.ID, request.Member, request.Reason, subject, request.Minutes, now), nil
+	}, evidence...)
 }
 
 func (t *Tenant) supportGrants() []platform.SupportGrant {
@@ -392,10 +310,9 @@ func (t *Tenant) supportGrants() []platform.SupportGrant {
 
 func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) (SupportRead, error) {
 	t.Lane.Lock()
-	_, err := t.acceptHostControl("support.use", "host:"+subject, struct{ ID string }{id}, now,
-		platform.AuditEntry{Action: "host.support.use", Target: id}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
-			return controlowner.UseSupportGrant(image, id, now)
-		}, evidence...)
+	_, err := t.acceptHostAction(controlowner.SupportUseAction(id), "host:"+subject, now, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
+		return controlowner.UseSupportGrant(image, id, now)
+	}, evidence...)
 	t.Lane.Unlock()
 	if err != nil {
 		return SupportRead{}, err
@@ -416,4 +333,8 @@ func (t *Tenant) acceptHostControl(action, member string, request any, now time.
 		t.changed()
 	}
 	return answer, err
+}
+
+func (t *Tenant) acceptHostAction(a controlowner.HostAction, member string, now time.Time, decide func(*platform.HostControlImage) (platform.SupportGrant, error), evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
+	return t.acceptHostControl(a.Name, member, a.Request, now, a.Audit, decide, evidence...)
 }

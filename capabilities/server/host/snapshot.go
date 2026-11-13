@@ -340,7 +340,7 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 }
 
 func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[string][]records.StoredState, error) {
-	return t.RestoreRecords(saved, checkRunApplicationBindings)
+	return t.RestoreRecords(saved, build.CheckRunApplicationBindings)
 }
 
 func (t *Tenant) Restore(raw json.RawMessage) error {
