@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	pageowner "platformserver/services/apps/pages"
+	dataowner "platformserver/services/data"
 	"strconv"
 	"strings"
 
@@ -28,25 +29,6 @@ import (
 )
 
 const releaseCommandBytes = build.JointDraftLimit * 512
-
-type ActionCheckRequest struct {
-	Target pageowner.PageModelRecord `json:"target"`
-	Inputs json.RawMessage           `json:"inputs,omitempty"`
-}
-
-type ActionConditionCheck struct {
-	Allowed     bool   `json:"allowed"`
-	NeedsInputs bool   `json:"needsInputs,omitempty"`
-	Message     string `json:"message"`
-}
-
-type ActionCheckResult struct {
-	Allowed       bool                    `json:"allowed"`
-	Message       string                  `json:"message,omitempty"`
-	Conditions    []ActionConditionCheck  `json:"conditions"`
-	Issues        []platform.FieldIssue   `json:"issues,omitempty"`
-	Authorization *platform.AuthzDecision `json:"authorization,omitempty"`
-}
 
 func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 	if err := decodeBodyLimit(r, into, releaseCommandBytes); err != nil {
@@ -64,13 +46,13 @@ func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 func (h *Host) routesBuild(rt *routes) {
 	h.routesConnectionKinds(rt)
 	h.routesPackages(rt)
-	rt.handle(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: ActionCheckRequest{}, Answer: ActionCheckResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request ActionCheckRequest
+	rt.handle(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: pageowner.ActionCheckRequest{}, Answer: pageowner.ActionCheckResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request pageowner.ActionCheckRequest
 		if decodeBodyLimit(r, &request, 64<<10) != nil || request.Target.Object == "" || request.Target.ID == "" {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an action target and optional inputs"))
 			return
 		}
-		result, refusal := recordRead(t, r.Context(), func(t *Tenant) (ActionCheckResult, *kernel.Error) {
+		result, refusal := recordRead(t, r.Context(), func(t *Tenant) (pageowner.ActionCheckResult, *kernel.Error) {
 			return t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
 		})
 		if refusal != nil {
@@ -355,8 +337,8 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
-	rt.authorized(transport.Route{Pattern: "POST /v1/pipelines/preview", Summary: "Try the current pipeline draft on authorized dataset samples without publishing or writing output", Body: PipelinePreviewRequest{}, Answer: PipelinePreview{}}, build.ID, []string{build.Builder, build.Integrator}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request PipelinePreviewRequest
+	rt.authorized(transport.Route{Pattern: "POST /v1/pipelines/preview", Summary: "Try the current pipeline draft on authorized dataset samples without publishing or writing output", Body: dataowner.PipelinePreviewRequest{}, Answer: dataowner.PipelinePreview{}}, build.ID, []string{build.Builder, build.Integrator}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request dataowner.PipelinePreviewRequest
 		if err := decodeBodyLimit(r, &request, 1<<20); err != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The pipeline trial must be a valid bounded JSON object"))
 			return
