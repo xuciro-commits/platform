@@ -1,4 +1,4 @@
-import { useHost, useReadQuery } from "@platform/app";
+import { RequestAccessButton, useHost, useReadQuery } from "@platform/app";
 import { type Api } from "@platform/api";
 import { Button, Checkbox, Disclosure, PageHeader, Panel, PropertyList, Tag, t, useWorkspace } from "@platform/ui";
 import { useState } from "react";
@@ -9,7 +9,7 @@ function PreparationReadProblem({ error, retry }: { error: Error; retry: () => v
   return <div role="alert" className="grid gap-2 text-sm text-danger">
     <p>{t(forbidden ? "This account cannot prepare application drafts in this workspace. Continue with a builder account, or ask an administrator to assign the builder role." : "Application requirements could not be loaded.")}</p>
     {forbidden ? <Disclosure summary={t("Technical details")}><p className="break-words text-xs">{error.message}</p></Disclosure> : <p className="break-words">{error.message}</p>}
-    <div className="flex flex-wrap gap-2"><Button size="sm" onClick={retry}>{t("Retry")}</Button>{forbidden && can("platform.member.grant") && <Button size="sm" onClick={() => open({ view: "members" })}>{t("Members")}</Button>}</div>
+    <div className="flex flex-wrap gap-2"><Button size="sm" onClick={retry}>{t("Retry")}</Button>{forbidden && <RequestAccessButton app="build" role="builder" />}{forbidden && can("platform.member.grant") && <Button size="sm" onClick={() => open({ view: "members" })}>{t("Members")}</Button>}</div>
   </div>;
 }
 
@@ -84,8 +84,8 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
       <Panel title={t("Assign business access")} className="grid min-w-0 grid-cols-1 gap-3">
         <p className="text-sm">{t("Grant business roles explicitly to the people who will use the application. Product installation does not grant access.")}</p>
         {!plan.roles.length && <p className="text-sm">{t("This product version declares no business role requirements.")}</p>}
-        <ul className="grid gap-2 text-sm">{plan.roles.map(item => <li key={`${item.app}/${item.role}`} className="flex flex-wrap items-center gap-2"><span className="mr-auto">{item.app} · {item.role} · {t(item.held ? "You hold this role" : "Not held by you")}</span>{!item.available ? <p className="w-full text-muted">{t("Publish the application before assigning this role.")}</p> : !item.held && can("platform.member.grant") && <Button size="sm" disabled={busy} onClick={() => void perform(async () => { await decide("platform.member.grant", { type: "platform.member", id: host.me.principalId }, { app: item.app, role: item.role }, { onRefused: setError }); })}>{t("Grant this role to me")}</Button>}</li>)}</ul>
-        {plan.roles.some(item => item.available) && (can("platform.member.grant") ? <div><Button disabled={busy} onClick={() => open({ view: "members" })}>{t("Assign business roles")}</Button></div> : plan.roles.some(item => item.available && !item.held) ? <p className="text-sm text-muted">{t("Ask an administrator to assign the required business roles, then refresh readiness.")}</p> : null)}
+        <ul className="grid gap-2 text-sm">{plan.roles.map(item => <li key={`${item.app}/${item.role}`} className="flex flex-wrap items-center gap-2"><span className="mr-auto">{item.app} · {item.role} · {t(item.held ? "You hold this role" : "Not held by you")}</span>{!item.available ? <p className="w-full text-muted">{t("Publish the application before assigning this role.")}</p> : !item.held && (can("platform.member.grant") ? <Button size="sm" disabled={busy} onClick={() => void perform(async () => { await decide("platform.member.grant", { type: "platform.member", id: host.me.principalId }, { app: item.app, role: item.role }, { onRefused: setError }); })}>{t("Grant this role to me")}</Button> : <RequestAccessButton app={item.app} role={item.role} />)}</li>)}</ul>
+        {plan.roles.some(item => item.available) && (can("platform.member.grant") ? <div><Button disabled={busy} onClick={() => open({ view: "members" })}>{t("Assign business roles")}</Button></div> : plan.roles.some(item => item.available && !item.held) ? <p className="text-sm text-muted">{t("Request a required business role, then approve it from My requests or the approver inbox.")}</p> : null)}
       </Panel>
       <Panel title={t("Initial data and application access")} className="grid min-w-0 grid-cols-1 gap-3">
         {!allPublished && <p className="text-sm text-muted">{t("Activate all product applications before running initial data requests.")}</p>}
@@ -93,7 +93,7 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
           <p className="text-sm">{t("Initial data is optional. Review and run these requests only when you need the sample data. Application access does not require running them.")}</p>
           <ol className="grid gap-2 text-sm">{plan.setup.steps.map((step, index) => <li key={step.name}><Disclosure summary={<span className="flex flex-wrap items-center gap-2"><span>{index + 1}. {step.name}</span><Tag label={t(setupStatus(setupEntries[index]?.state))} /></span>}><PropertyList items={[[t("Action"), step.schema], [t("Target"), step.target?.id ?? ""]]} /><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{step.payload}</pre>{setupEntries[index]?.reason && <p className="text-danger">{setupEntries[index]!.reason}</p>}</Disclosure></li>)}</ol>
           <Checkbox checked={reviewedSetup} onChange={setReviewedSetup}>{t("I reviewed the initial data requests.")}</Checkbox>
-          {!setupComplete && missingSetupRoles && <p className="text-sm text-muted">{t("Your initialization roles must be available and assigned before continuing.")}</p>}
+          {!setupComplete && missingSetupRoles && <div className="flex flex-wrap items-center gap-2"><p className="text-sm text-muted">{t("Your initialization roles must be available and assigned before continuing.")}</p>{plan.setup?.roles.filter(required => !plan.roles.some(item => item.app === required.app && item.role === required.role && item.held)).map(required => <RequestAccessButton key={`${required.app}/${required.role}`} app={required.app} role={required.role} />)}</div>}
           {setupRun && !setupComplete && <p className="text-sm text-muted">{t("Continue checks the original requests. Confirmed steps are skipped; unanswered steps keep their original inputs and keys.")}</p>}
           {setupComplete ? <p role="status">{t("Initial data is ready.")}</p> : <Button disabled={busy || !plan.installed || !allPublished || !reviewedSetup || missingSetupRoles} onClick={() => void initialize()}>{t(setupRun ? "Continue initialization" : "Create initial data")}</Button>}
         </div> : <p className="text-sm">{t("This product version requires no initial data requests.")}</p>}

@@ -1,4 +1,4 @@
-import { resourceEntryRoute, useHost, useNewRecord, useReadQuery } from "@platform/app";
+import { RequestAccessDialog, resourceEntryRoute, useHost, useNewRecord, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/api";
 import { Button, DataTable, Dialog, Input, Notice, PageHeader, Select, Tag, t, useCanonicalRoute, useWorkspace } from "@platform/ui";
 import { ChevronDown, File, Folder, FolderPlus, FolderTree, MoveRight, Plus } from "lucide-react";
@@ -16,6 +16,7 @@ export function Files({ project: initialProject = "", folder: initialFolder = ""
   const [search, setSearch] = useState(""), [state, setState] = useState("current");
   const [newFolder, setNewFolder] = useState(false), [name, setName] = useState("");
   const [moving, setMoving] = useState<Api.ResourceEntry>(), [destination, setDestination] = useState(""), [destinationFolder, setDestinationFolder] = useState("");
+  const [requesting, setRequesting] = useState<Api.ResourceEntry>();
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const create = useNewRecord("build.app", target => open({ view: "project", params: { id: target.id } }), { essential: true });
   const select = (selected?: Api.ResourceEntry, folder = "") => open({ view: "files", params: { ...(selected ? { id: selected.id } : {}), ...(folder ? { folder } : {}) } });
@@ -27,7 +28,7 @@ export function Files({ project: initialProject = "", folder: initialFolder = ""
     && (state === "archived" ? item.state === "archived" : item.state !== "archived") && `${item.title} ${item.ref.name} ${item.ref.kind}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const visit = (resource: Api.ResourceEntry) => {
     if (resource.ref.kind === "app") { select(resource); return; }
-    if (!resource.canOpen) { setError(t("Request project access to open this resource.")); return; }
+    if (!resource.canOpen) { setError(t("Request project access to open this resource.")); setRequesting(resource); return; }
     open(resourceEntryRoute(resource, host.opens));
   };
   const saveFolder = async () => {
@@ -48,6 +49,7 @@ export function Files({ project: initialProject = "", folder: initialFolder = ""
       {projectResource?.canOpen && host.opens.has("build.app") && <Button size="sm" onClick={() => open(resourceEntryRoute(projectResource, host.opens))}>{t("Open project")}</Button>}
     </>} />
     {error && <Notice tone="warning" message={error} />}
+    <RequestAccessDialog project={requesting?.project} open={!!requesting} onOpenChange={open => { if (!open) setRequesting(undefined); }} onRequested={() => setError("")} />
     {query.isError && <><Notice tone="danger" message={t("Resource directory could not be loaded.")} /><Button onClick={() => void query.refetch()}>{t("Retry")}</Button></>}
     <div className="grid min-h-0 flex-1 grid-cols-[14rem_minmax(0,1fr)] border border-border">
       <nav aria-label={t("Folders")} className="min-h-0 overflow-auto border-r border-border bg-surface">

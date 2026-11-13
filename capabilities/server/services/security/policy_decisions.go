@@ -261,6 +261,9 @@ func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []
 		if e.Member == "" || seen[e.Member] || !slices.Contains(projectRoles, e.Role) || !slices.Contains(members, e.Member) {
 			return nil, invalid
 		}
+		if _, err := time.Parse(time.DateOnly, e.Until); e.Until != "" && err != nil {
+			return nil, invalid
+		}
 		seen[e.Member] = true
 		if e.Role == platform.ProjectOwnerRole {
 			owners++
@@ -303,8 +306,9 @@ func (d *Policies) projectRole(member, project string) string {
 	if p == nil || p.Archived {
 		return ""
 	}
+	today := time.Now().UTC().Format(time.DateOnly)
 	for _, e := range p.Members {
-		if e.Member == member {
+		if e.Member == member && (e.Until == "" || today < e.Until) {
 			return e.Role
 		}
 	}
@@ -315,6 +319,7 @@ func (d *Policies) ProjectGrants(member string, agent bool) []platform.Grant {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var out []platform.Grant
+	today := time.Now().UTC().Format(time.DateOnly)
 	if agent {
 		return out
 	}
@@ -324,7 +329,7 @@ func (d *Policies) ProjectGrants(member string, agent bool) []platform.Grant {
 			continue
 		}
 		for _, e := range p.Members {
-			if e.Member == member && slices.Contains(projectRoles, e.Role) {
+			if e.Member == member && slices.Contains(projectRoles, e.Role) && (e.Until == "" || today < e.Until) {
 				role := e.Role
 				if role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
 					role = "builder"

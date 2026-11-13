@@ -4627,4 +4627,6 @@ register("zh-CN", {
   "Stream": "流",
   "This action is still stored in the old object draft. Migrate its action types before editing the lifecycle.": "此动作仍存储在旧对象草稿中。编辑生命周期前请先迁移其动作类型。",
   "Upload file": "上传文件",
+  "Until": "有效期至",
+  "No end": "无截止",
 });

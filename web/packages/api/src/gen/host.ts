@@ -138,6 +138,29 @@ export type AccessConfig = {
   markings?: Marking[];
 };
 
+export type AccessRequest = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  requester: string;
+  scope: string;
+  project?: string;
+  app?: string;
+  role?: string;
+  reason: string;
+  until?: string;
+  state: string;
+  approvers: string[];
+  decidedBy?: string;
+  decidedAt?: string;
+  outcome?: string;
+  granted?: string;
+  canDecide?: boolean;
+};
+
 export type Account = {
   member: string;
   displayName?: string;
@@ -4317,6 +4340,7 @@ export type ProjectAccessView = {
 export type ProjectMember = {
   member: string;
   role?: string;
+  until?: string;
 };
 
 export type ProjectPerson = {

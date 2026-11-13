@@ -396,4 +396,11 @@ register("zh-CN", {
   "This folder is empty.": "此文件夹为空。",
   "Version": "版本",
   "Object set": "对象集",
+  "Access": "访问权限",
+  "Requester": "申请人",
+  "Until": "有效期至",
+  "No end": "无截止",
+  "Access requests": "访问申请",
+  "No access requests": "没有访问申请",
+  "Request application access": "申请应用访问权限",
 });

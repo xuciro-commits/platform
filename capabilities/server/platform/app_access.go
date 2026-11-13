@@ -42,6 +42,7 @@ type AccessConfig struct {
 type ProjectMember struct {
 	Member string `json:"member" field:"required" title:"Member" help:"A member's ID in this tenant"`
 	Role   string `json:"role,omitempty" field:"required,choice:owner,editor,viewer,discoverer" title:"Role" help:"owner: edits the project's resources and manages its access; editor: edits its resources; viewer: opens them without editing"`
+	Until  string `json:"until,omitempty" title:"Until" help:"Access ends before this day (YYYY-MM-DD); empty: no end"`
 }
 
 type ProjectAsset struct {
@@ -355,7 +356,7 @@ const (
 )
 
 var auditorReads = []string{"audit", "deliveries", "work", "connectors", "settings",
-	"endpoints", "effects", "health", "personal-reads", "permissions", "access", "members", "packages", "notifications"}
+	"endpoints", "effects", "health", "personal-reads", "permissions", "access", "access-requests", "members", "packages", "notifications"}
 
 func AuditorMayRead(name string) bool {
 	for _, r := range auditorReads {

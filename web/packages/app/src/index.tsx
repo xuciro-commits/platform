@@ -45,6 +45,7 @@ export { AppSelect, RoleSelect, ProtocolSelect, MemberSelect, useTenantApps } fr
 export { ModelPicker, ModelOptionsEditor, modelOptionLabel, type ModelPurpose } from "./semantic/ModelPicker";
 export { DependencyGraph } from "./semantic/DependencyGraph";
 export { useDependencies, useProvidedCapabilities, type DependencyDescriptor, type DependencyRead, type ProvidedCapability } from "./semantic/dependencies";
+export { RequestAccessButton, RequestAccessDialog } from "./access/RequestAccess";
 
 export type AppEntry = Api.AppEntry;
 export type AssetRef = Api.AssetRef;
@@ -191,6 +192,10 @@ export function useOpenRecord(): (ref: string | { type: string; id: string; reso
   const { opens } = useHost();
   const { open } = useWorkspace();
   return (ref, options) => {
+    if (ref === "read:access-requests") {
+      open({ view: "requests" }, options);
+      return;
+    }
     if (typeof ref !== "string" && ref.resource) {
       open(resourceEntryRoute(ref.resource, opens), options);
       return;

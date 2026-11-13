@@ -38,7 +38,6 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 	if !ok || a.Target != e.Type || verb == "create" && !e.Standard.Create || verb == "edit" && !e.Standard.Edit || verb == "archive" && !e.Standard.Archive {
 		return Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Transaction step action is unavailable / 事务步骤动作不可用")
 	}
-	c.Automation = false
 	authorization := s
 	invocation := c.TransactionInput(r)
 	if verb == "edit" && e.Type == invocation.GetTarget().GetType() && id == invocation.GetTarget().GetId() {

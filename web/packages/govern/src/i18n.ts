@@ -1994,4 +1994,5 @@ register("zh-CN", {
   "Loading lineage graph…": "正在加载血缘图…",
   "Showing {n} resources": "显示 {n} 个资源",
   "Use Up and Down to move through resources. Enter opens the Inspector; F, I, X and Escape keep working.": "使用上下方向键在资源间移动。Enter 打开检查器；F、I、X 与 Escape 仍然可用。",
+  "Request a required business role, then approve it from My requests or the approver inbox.": "申请所需的业务角色，然后在“我的请求”或审批人的待办中批准。",
 });

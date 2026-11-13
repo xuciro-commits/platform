@@ -200,11 +200,29 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 			def = visible
 		case platform.AssetApp:
-			continue
+			if !m.Active() {
+				continue
+			}
 		}
 		out = append(out, def)
 	}
 	out = pageowner.FilterNavigation(out)
+	if !m.Holds("platform", "admin") {
+		pages := map[platform.AssetRef]bool{}
+		for _, definition := range out {
+			if definition.Ref.Kind == platform.AssetPage {
+				pages[definition.Ref] = true
+			}
+		}
+		out = slices.DeleteFunc(out, func(definition platform.Definition) bool {
+			if definition.Ref.Kind != platform.AssetApp {
+				return false
+			}
+			return definition.Application == nil || !slices.ContainsFunc(definition.Application.Pages, func(name string) bool {
+				return pages[platform.AssetRef{App: definition.Ref.App, Kind: platform.AssetPage, Name: name}]
+			})
+		})
+	}
 
 	opens := map[platform.AssetRef]bool{}
 	for _, def := range out {

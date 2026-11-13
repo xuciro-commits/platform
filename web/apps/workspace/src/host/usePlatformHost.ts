@@ -135,6 +135,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       }
     }
     setOutbox([...client.authorities.outbox]);
+    if (answered.some(entry => entry.state === "SUBMISSION_STATE_CONFIRMED" && /^platform\.(access\.|member\.(grant|revoke)|project\.)/.test(entry.submission.schema?.name ?? ""))) await client.refreshDeclarations().catch(() => undefined);
     if (answered.some(entry => entry.state === "SUBMISSION_STATE_CONFIRMED" || entry.outcome === "ERROR_CODE_UNKNOWN_SCHEMA")) void refresh().catch(() => undefined);
     return confirmedDecision(client.authorities.outbox, client.connection.tenant, key);
   }, [actions, client, refresh]);

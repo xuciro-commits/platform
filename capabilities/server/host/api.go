@@ -38,6 +38,7 @@ var namedReads = []transport.Route{
 	{Pattern: "GET /v1/health", Summary: "How the tenant's work stands: queues, failed work, deferral, breakers, failing connectors and endpoints (administrators)", Answer: TenantHealth{}},
 	{Pattern: "GET /v1/inbox", Summary: "Tasks offered to the caller, overdue first, in their language", Answer: []InboxTask{}},
 	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []platform.ApprovalRequest{}},
+	{Pattern: "GET /v1/access-requests", Summary: "The caller's access requests and the requests they may approve", Answer: []controlowner.AccessRequest{}},
 	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []platform.SavedView{}},
 	{Pattern: "GET /v1/agents", Summary: "The agents the apps declare", Answer: []platform.AgentInfo{}},
 	{Pattern: "GET /v1/agent-overview", Summary: "Every agent, declared and outside, with what it did, what it cost, what people made of it and whether it is suspended", Answer: []platform.AgentOverview{}},

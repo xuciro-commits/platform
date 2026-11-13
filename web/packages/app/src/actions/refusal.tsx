@@ -2,7 +2,7 @@ import {apiErrorMessage,type Api,type Entry} from "@platform/api";
 import {Button, Disclosure, Rejection, language, t, useWorkspace} from "@platform/ui";
 import {useQuery} from "@tanstack/react-query";
 import {useState} from "react";
-import {useHost, useOpenRecord} from "../index";
+import {RequestAccessButton, useHost, useOpenRecord, useReadQuery} from "../index";
 import {authzExplainRequest} from "./explain-request";
 
 export const refusalCategoryName=(category:string)=>t(({business:"Business refused",constraint:"Constraint refused",policy:"Access refused",technical:"Technical failure",input:"Input refused"} as Record<string,string>)[category]??"Request refused");
@@ -24,6 +24,8 @@ export function ActionRefusal({entry,message,original}:{entry?:Entry;message:str
  },retry:false});
  const result=evidence.data,category=result?.category??(entry?.outcome==="ERROR_CODE_POLICY_DENIED"||entry?.outcome==="ERROR_CODE_NOT_AUTHORITY"?"policy":entry?.issues?.some(issue=>!!issue.constraint)?"constraint":"");
  const policy=category==="policy",constraint=category==="constraint",business=category==="business";
+ const directory=useReadQuery<Api.ResourceDirectory>("/v1/resources",undefined,policy);
+ const resource=directory.data?.resources.find(item=>item.id===target?.id||item.draft===target?.id);
  const reason=result?.facts?.[0]?refusalFactMessage(result.facts[0]):message;
  const advice=policy?t("Ask an administrator to review access before trying again."):constraint?t("Correct the marked values before submitting a new intent."):business?t("Review the business reason and correct the inputs or follow the declared correction path."):undefined;
  return <div className="grid min-w-0 gap-2">
@@ -39,6 +41,7 @@ export function ActionRefusal({entry,message,original}:{entry?:Entry;message:str
    {target?.type&&target.id&&<Button size="sm" variant="ghost" onClick={()=>openRecord(`${target.type}/${target.id}`)}>{t("Open the original record")}</Button>}
   </div>}
   {policy&&!waiting&&<ExplainAccess entry={entry}/>}
+  {policy&&!waiting&&resource&&<div><RequestAccessButton project={resource.project}/></div>}
   {original&&<Disclosure summary={t(waiting?"Original request inputs":"Original refused inputs")}><pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(original,null,2)}</pre>{!waiting&&<p className="text-xs text-muted">{t("Retry original inputs repeats the saved request. Corrected inputs or a refreshed definition create a linked correction.")}</p>}</Disclosure>}
  </div>;
 }

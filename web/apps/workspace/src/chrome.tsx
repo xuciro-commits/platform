@@ -1,5 +1,5 @@
 import "./i18n";
-import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, PagePreview, PageWorkspace, ObjectRecordView, Records, RunView, appRegistration, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, PagePreview, PageWorkspace, ObjectRecordView, Records, RunView, RequestAccessButton, appRegistration, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/api";
 import {
   Button, DataTable, Disclosure, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -18,6 +18,7 @@ import { Search } from "./shell/Search";
 
 type Notification = Api.Notification;
 type Request = Api.ApprovalRequest;
+type AccessRequest = Api.AccessRequest;
 
 function StudioReference({ route, context, children }: { route: Route; context?: AppUI["referenceContext"]; children: ReactNode }) {
   return <>{route.params?.surface === "studio" && context ? context(route, children) : children}</>;
@@ -31,6 +32,7 @@ function MyInbox() {
   const { decide } = useHost();
   const openRecord = useOpenRecord();
   const approval = (task: InboxTask) => task.ref?.startsWith("work.approval/") ? task.ref.slice("work.approval/".length) : undefined;
+  const access = (task: InboxTask) => task.key?.startsWith("access:") ? task.key.slice("access:".length) : undefined;
   return (
     <>
       <PageHeader title={t("Tasks and approvals")} help={t("Approvals waiting for you and tasks offered to you, from every app.")} />
@@ -38,6 +40,9 @@ function MyInbox() {
         actions={(task) => approval(task) ? <>
           <Button size="sm" variant="primary" onClick={() => void decide("work.approval.approve", { type: "work.approval", id: approval(task)! }, {})}>{t("Approve")}</Button>
           <Button size="sm" variant="danger" onClick={() => void decide("work.approval.reject", { type: "work.approval", id: approval(task)! }, {})}>{t("Reject")}</Button>
+        </> : access(task) ? <>
+          <Button size="sm" variant="primary" onClick={() => void decide("platform.access.approve", { type: "platform.access-request", id: access(task)! }, {})}>{t("Approve")}</Button>
+          <Button size="sm" variant="danger" onClick={() => void decide("platform.access.reject", { type: "platform.access-request", id: access(task)! }, {})}>{t("Reject")}</Button>
         </> : task.ref?.startsWith("build.dispatch/") ? <Button size="sm" variant="primary" onClick={() => openRecord(task.ref!, { window: "tab" })}>{t("Review dispatch")}</Button> : <>
           {!task.assignee && <Button size="sm" onClick={() => void decide("work.task.claim", { type: "work.task", id: task.id }, {})}>{t("Take")}</Button>}
           {task.answers?.length
@@ -57,7 +62,8 @@ function HelpPage({ title, text, from }: { title?: string; text?: string; from?:
 
 function MyRequests() {
   const requests = useRead<Request[]>("/v1/requests") ?? [];
-  const { decide } = useHost();
+  const accessRequests = useRead<AccessRequest[]>("/v1/access-requests") ?? [];
+  const { decide, me } = useHost();
   const openRecord = useOpenRecord();
   const columns: ColumnDef<Request, any>[] = [
     { accessorKey: "title", header: t("Request") },
@@ -70,10 +76,25 @@ function MyRequests() {
     { id: "act", header: "", meta: { width: 100 }, cell: ({ row: { original: r } }) => r.state === "pending" &&
       <Button size="sm" onClick={(e) => { e.stopPropagation(); void decide("work.approval.withdraw", { type: "work.approval", id: r.id }, {}); }}>{t("Withdraw")}</Button> },
   ];
+  const accessColumns: ColumnDef<AccessRequest, any>[] = [
+    { id: "target", header: t("Access"), accessorFn: (r) => r.scope === "project" ? `${r.project} · ${r.role}` : `${r.app} · ${r.role}` },
+    { accessorKey: "requester", header: t("Requester"), meta: { width: 160 } },
+    { accessorKey: "reason", header: t("Reason"), meta: { width: 260 }, cell: (c) => <span className="truncate" title={c.getValue()}>{c.getValue()}</span> },
+    { accessorKey: "until", header: t("Until"), meta: { width: 120 }, cell: (c) => c.getValue() || t("No end") },
+    { accessorKey: "state", header: t("State"), meta: { width: 110 }, cell: ({ row: { original: r } }) => <StatusTag status={r.state} registry={requestStates} /> },
+    { id: "act", header: "", meta: { width: 220 }, cell: ({ row: { original: r } }) => r.state !== "pending" ? null : r.requester === me.principalId
+      ? <Button size="sm" onClick={(e) => { e.stopPropagation(); void decide("platform.access.withdraw", { type: "platform.access-request", id: r.id }, {}); }}>{t("Withdraw")}</Button>
+      : r.canDecide ? <span className="flex gap-1"><Button size="sm" variant="primary" onClick={(e) => { e.stopPropagation(); void decide("platform.access.approve", { type: "platform.access-request", id: r.id }, {}); }}>{t("Approve")}</Button><Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); void decide("platform.access.reject", { type: "platform.access-request", id: r.id }, {}); }}>{t("Reject")}</Button></span>
+        : null },
+  ];
   return (
     <>
       <PageHeader title={t("My requests")} help={t("What you asked for that waits for approvers, and how it ended.")} />
       <DataTable data={requests} columns={columns} getRowId={(r) => r.id} height="calc(100dvh - 190px)" empty={t("No requests")} onRowClick={(r) => openRecord(r.target)} />
+      <section className="mt-4 grid gap-2">
+        <h2 className="text-sm font-semibold">{t("Access requests")}</h2>
+        <DataTable data={accessRequests} columns={accessColumns} getRowId={(r) => r.id} height={280} empty={t("No access requests")} />
+      </section>
     </>
   );
 }
@@ -205,7 +226,7 @@ function DefinitionView({ ref, application }: { ref: AssetRef; application?: str
 function PageDefinitionView({ ref, preview, params }: { ref: AssetRef; preview: boolean; params: Record<string,string> }) {
   const { definitions } = useHost();
   const definition = findDefinition(definitions, ref);
-  if (!isPageDefinition(definition)) return <ClosedPage />;
+  if (!isPageDefinition(definition)) return <ClosedPage app={ref.app} />;
   return <ApplicationPage pageRef={definition.ref} route={{ view: preview ? "page-preview" : "page", params }} preview={preview}>{preview ? <PagePreview definition={definition} definitions={definitions} /> : <PageWorkspace definition={definition} />}</ApplicationPage>;
 }
 
@@ -219,18 +240,18 @@ function ApplicationOverview({ owner, name }: { owner: string; name: string }) {
     <Panel className="grid max-w-2xl gap-3 text-sm">
       <h2 className="font-medium">{t("Application overview")}</h2>
       <p className="text-muted">{t("No business pages are available in this application. You can view its activity and diagnose problems from application runs.")}</p>
-      <div><Button onClick={() => open({ view: "application-runs", params: { app: owner, name, application: `${owner}:${name}` } })}>{t("View application runs")}</Button></div>
+      <div className="flex flex-wrap gap-2"><RequestAccessButton app={owner} label={t("Request application access")} /><Button onClick={() => open({ view: "application-runs", params: { app: owner, name, application: `${owner}:${name}` } })}>{t("View application runs")}</Button></div>
     </Panel>
   </>;
 }
 
-function ClosedPage() {
+function ClosedPage({ app }: { app: string }) {
   const { open } = useWorkspace();
   return (
     <Panel role="status" className="grid max-w-xl gap-2 text-sm">
       <p className="font-medium">{t("This page is not open to you.")}</p>
       <p className="text-muted">{t("It may have been withdrawn, or it shows records you may not read. Whoever builds your organisation's applications can tell you which.")}</p>
-      <div><Button onClick={() => open({ view: "home" })}>{t("Back to your apps")}</Button></div>
+      <div className="flex flex-wrap gap-2"><RequestAccessButton app={app} label={t("Request application access")} /><Button onClick={() => open({ view: "home" })}>{t("Back to your apps")}</Button></div>
     </Panel>
   );
 }

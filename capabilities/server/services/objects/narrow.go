@@ -389,8 +389,10 @@ func (w *narrower) Derive(et *records.Type, v reflect.Value) (reflect.Value, boo
 				return len(d.List) == 0 && slices.ContainsFunc(d.Fields, func(path []int) bool { return slices.Equal(path, field.Index) })
 			})
 			if field.SourceType == "" && !declared || field.SourceType == "generated" && !declared {
-				out.FieldByIndex(field.Index).SetZero()
-				withheld = true
+				if !out.FieldByIndex(field.Index).IsZero() {
+					out.FieldByIndex(field.Index).SetZero()
+					withheld = true
+				}
 			}
 		}
 	}

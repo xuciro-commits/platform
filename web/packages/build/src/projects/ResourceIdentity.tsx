@@ -1,4 +1,4 @@
-import { useReadQuery } from "@platform/app";
+import { RequestAccessButton, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/api";
 import { Notice, t, useCanonicalRoute, useWorkspace, type View } from "@platform/ui";
 import { BranchDecisions } from "../branches/decisions";
@@ -27,7 +27,10 @@ export function ResourceIdentity({ view, params }: { view: View; params: Record<
   if (!rid) return <>{scoped(params)}</>;
   if (query.isLoading) return <p role="status">{t("Loading…")}</p>;
   const resource = query.data;
-  if (!resource || !resource.canOpen) return <Notice tone="warning" message={t("Request project access to open this resource.")} />;
+  if (!resource || !resource.canOpen) return <div className="grid justify-items-start gap-2">
+    <Notice tone="warning" message={t("Request project access to open this resource.")} />
+    {resource && <RequestAccessButton project={resource.project} />}
+  </div>;
   const resolved: Record<string,string> = { ...params, id: resource.draft || params.id!, application: resource.project };
   if (resource.type==="build.page") {resolved.id=resource.project;resolved.page=resource.draft!;}
   return <>{scoped(resolved)}</>;

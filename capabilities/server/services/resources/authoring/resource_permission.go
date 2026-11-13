@@ -54,9 +54,11 @@ func (r ResourceRows) Permission(m platform.Member, typ, id, kind string) (bool,
 		if resource, ok := r.ForDraft(typ, id); ok {
 			project = resource.Project
 		} else if !definition {
-			if resource, ok := r.ForObject(typ); ok {
-				project = resource.Project
+			resource, ok := r.ForObject(typ)
+			if !ok || resource.Project == WorkspaceProject {
+				return true, false
 			}
+			project = resource.Project
 		}
 	}
 	if project == "" {

@@ -297,7 +297,6 @@ func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed fu
 				if !c.Staging() || c.Replaying || tr.ApplyTxn == nil || tr.After != nil {
 					return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions require a private accepted decision / 业务事务须经私有接受决策"), true
 				}
-				c.Automation = false
 				apply := tr.ApplyTxn
 				tr.ApplyTxn = func(c Caller, r *pb.ChangeRecord, at time.Time) *kernel.Error {
 					failure = apply(c, r, at)

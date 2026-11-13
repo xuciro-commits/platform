@@ -35,10 +35,13 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 	}
 
 	seat := platform.Seat{Subjects: []string{"package-admin"}, Member: platform.Member{
-		ID: "package-admin", Roles: map[string]string{"platform": "admin", build.ID: build.Builder},
+		ID: "package-admin", Roles: map[string]string{"platform": "admin"},
 	}}
 	target := newInvariantTenant(t, "package-lifecycle-target", seat)
 	admin, _ := target.Member("package-admin")
+	if admin.Holds(build.ID, build.Builder) {
+		t.Fatal("the installation administrator must not need a builder role")
+	}
 	inspected, err := target.inspectPackage(context.Background(), platform.PackageInspectRequest{Content: platform.Raw(descriptor)})
 	if err != nil {
 		t.Fatal(err)

@@ -54,6 +54,7 @@ type Console struct {
 	profiles        map[string]*platform.Profile
 	tokens          map[string]*Token
 	minted          map[string]bool
+	accessRequests  map[string]*AccessRequest
 	lastSeen        map[string]time.Time
 	lastSeenShared  bool
 	acceptedState   json.RawMessage
@@ -94,6 +95,7 @@ func ConsoleActions(ownerActions []platform.Action) *platform.Catalog {
 	actions = append(actions, effectActions()...)
 	actions = append(actions, operationActions()...)
 	actions = append(actions, ownerActions...)
+	actions = append(actions, AccessRequestActions()...)
 	actions = append(actions, CredentialActions()...)
 	return platform.NewCatalog(actions...)
 }
@@ -102,10 +104,10 @@ func NewConsole(tenant string, newOwners func(string) Owners, seats ...platform.
 	owners := newOwners(tenant)
 	d := &Console{tenant: tenant, newOwners: newOwners, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*platform.Profile{},
 		ConsolePolicies: owners.Policies,
-		tokens:          map[string]*Token{}, minted: map[string]bool{}, lastSeen: map[string]time.Time{}, sessions: sessionTable{seen: map[string]map[string]*platform.Session{}, revoked: map[string]bool{}},
+		tokens:          map[string]*Token{}, minted: map[string]bool{}, accessRequests: map[string]*AccessRequest{}, lastSeen: map[string]time.Time{}, sessions: sessionTable{seen: map[string]map[string]*platform.Session{}, revoked: map[string]bool{}},
 		ConsolePackages: owners.Packages,
 		Credentials:     NewCredentials(tenant),
-		ledger:          platform.NewLedger(tenant, PlatformApp, ConsoleActions(owners.Actions), MemberType, ProfileType, platform.MarkingType, platform.RoleType, platform.PolicyType, platform.TeamType, TokenType, platform.ProjectType, platform.PackageType, CredentialType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
+		ledger:          platform.NewLedger(tenant, PlatformApp, ConsoleActions(owners.Actions), MemberType, ProfileType, platform.MarkingType, platform.RoleType, platform.PolicyType, platform.TeamType, TokenType, platform.ProjectType, AccessRequestType, platform.PackageType, CredentialType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -146,11 +148,12 @@ type consoleState struct {
 	Policies       map[string]*platform.PolicyRecord     `json:"policies,omitempty"`
 	Teams          map[string]*platform.Team             `json:"teams,omitempty"`
 	Tokens         map[string]*Token                     `json:"tokens,omitempty"`
+	AccessRequests map[string]*AccessRequest             `json:"accessRequests,omitempty"`
 }
 
 func (d *Console) state() consoleState {
 	policies, packages := d.ConsolePolicies.SnapshotState(), d.ConsolePackages.SnapshotState()
-	return consoleState{Credentials: d.Credentials.SnapshotState(), Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: policies.Projects, Packages: packages.Packages, PackageSources: packages.Sources, Markings: policies.Markings, Roles: policies.Roles, Policies: policies.Policies, Teams: policies.Teams, Tokens: d.tokens}
+	return consoleState{Credentials: d.Credentials.SnapshotState(), Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: policies.Projects, Packages: packages.Packages, PackageSources: packages.Sources, Markings: policies.Markings, Roles: policies.Roles, Policies: policies.Policies, Teams: policies.Teams, Tokens: d.tokens, AccessRequests: d.accessRequests}
 }
 
 func (d *Console) SnapshotFormat() string { return "platform.console.v1" }
@@ -186,6 +189,10 @@ func (d *Console) restoreAccess(s consoleState) {
 	d.tokens = s.Tokens
 	if d.tokens == nil {
 		d.tokens = map[string]*Token{}
+	}
+	d.accessRequests = s.AccessRequests
+	if d.accessRequests == nil {
+		d.accessRequests = map[string]*AccessRequest{}
 	}
 }
 
@@ -239,9 +246,9 @@ func clone(m *platform.Member) platform.Member {
 
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: platform.BuiltinManifestTitle(PlatformApp), Version: "1", Actions: d.ledger.Catalog, Roles: []string{Admin, platform.Auditor, "confidential", "restricted"},
-		Reads:       []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "packages", "contributions", "credentials", "markings"},
-		ReadSources: map[string]string{"members": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "packages": "record", "credentials": "record", "contributions": "record", "markings": "record"},
-		Everyone:    []string{"notifications", "tenant", "account", "markings"}, Inputs: map[string]bool{"heartbeat": false},
+		Reads:       []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "access-requests", "packages", "contributions", "credentials", "markings"},
+		ReadSources: map[string]string{"members": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "access-requests": "record", "packages": "record", "credentials": "record", "contributions": "record", "markings": "record"},
+		Everyone:    []string{"notifications", "tenant", "account", "markings", "access-requests"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: tenantSettings()}
 }
 
@@ -270,6 +277,10 @@ func (d *Console) Fork(ledger *platform.Ledger) (platform.App, error) {
 	}
 	if state.Tokens != nil {
 		fork.tokens = state.Tokens
+	}
+	fork.accessRequests = maps.Clone(state.AccessRequests)
+	if fork.accessRequests == nil {
+		fork.accessRequests = map[string]*AccessRequest{}
 	}
 	fork.minted, fork.lastSeen = maps.Clone(d.minted), d.lastSeen
 	d.directoryShared, fork.directoryShared = true, true
@@ -349,6 +360,11 @@ func (d *Console) validateAcceptedState(state consoleState) error {
 	for subject, id := range state.Subjects {
 		if subject == "" || state.Members[id] == nil {
 			return fmt.Errorf("accepted directory has invalid subject %q", subject)
+		}
+	}
+	for id, request := range state.AccessRequests {
+		if id == "" || request == nil || request.ID != id || request.Requester == "" || request.State == "" {
+			return fmt.Errorf("accepted access request %q is incomplete", id)
 		}
 	}
 	return nil
@@ -494,6 +510,25 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply(r)
 			}, err
 		}
+		if declared.Target == AccessRequestType {
+			d.mu.Lock()
+			apply, after, err := d.decideAccessRequest(c, s, now)
+			d.mu.Unlock()
+			if apply == nil {
+				return nil, err
+			}
+			return func(r *pb.ChangeRecord) {
+				d.mu.Lock()
+				d.acceptedState, d.acceptedDigest, d.acceptedValid = nil, "", false
+				apply(r)
+				d.mu.Unlock()
+				if after != nil {
+					if failure := after(r); failure != nil {
+						c.FailDecision(failure)
+					}
+				}
+			}, err
+		}
 		if d.host == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
@@ -603,6 +638,9 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 			}
 		}
 		return markings, nil
+	}
+	if name == "access-requests" {
+		return d.AccessRequests(c), nil
 	}
 	if h == nil || !c.Holds(PlatformApp, Admin) && (!c.Holds(PlatformApp, platform.Auditor) || !platform.AuditorMayRead(name)) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}

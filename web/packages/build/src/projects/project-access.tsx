@@ -47,6 +47,7 @@ export function ProjectAccess({ project, title }: { project: string; title: stri
               {roles.map(item => <option key={item} value={item}>{t(roleLabels[item]!)}</option>)}
             </Select>
           : <span>{t(roleLabels[original.role ?? ""] ?? original.role ?? "")}</span> },
+        { id: "until", header: t("Until"), meta: { width: 120 }, accessorFn: item => item.until ?? "", cell: ({ getValue }) => getValue() || t("No end") },
         ...(view?.manage ? [{ id: "remove", header: "", meta: { width: 48 }, cell: ({ row: { original } }: { row: { original: Api.ProjectMember } }) =>
           <Button size="icon" variant="ghost" aria-label={t("Remove {member}", { member: name(original.member) })} title={t("Remove")} disabled={busy} onClick={() => void save(members.filter(item => item.member !== original.member))}><Trash2 /></Button> }] : []),
       ]} />
