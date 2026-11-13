@@ -89,7 +89,8 @@ func (d *stagedDecision) transport() dataowner.Transport {
 		})
 	}
 	x.Retry = func(c platform.Caller, id string, at time.Time) *kernel.Error {
-		apply, err := d.controlHost().decideEffect(c, &pb.Submission{Target: &pb.EntityRef{Id: id}, Schema: &pb.SchemaRef{Name: controlowner.SchemaEffectRetry}}, at)
+		apply, err := d.controlHost().effectControl().DecideEffect(c, &pb.Submission{Target: &pb.EntityRef{Id: id}, Schema: &pb.SchemaRef{Name: controlowner.SchemaEffectRetry}}, at,
+			controlowner.SchemaEffectApprove, controlowner.SchemaEffectDiscard, controlowner.SchemaEffectResolve)
 		if err != nil {
 			return err
 		}

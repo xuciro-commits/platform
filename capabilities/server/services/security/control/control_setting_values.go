@@ -40,6 +40,14 @@ func (s *Settings) Apps(manifests []platform.Manifest) []AppSettings {
 	return out
 }
 
+func (s *Settings) AppsOf(apps []platform.App) []AppSettings {
+	manifests := make([]platform.Manifest, 0, len(apps))
+	for _, app := range apps {
+		manifests = append(manifests, app.Manifest())
+	}
+	return s.Apps(manifests)
+}
+
 func (s *Settings) Value(app, name string, declared func(app string) ([]platform.Setting, bool)) string {
 	if tenantWide, ok := strings.CutPrefix(name, PlatformApp+"/"); ok {
 		app, name = PlatformApp, tenantWide
@@ -56,6 +64,45 @@ func (s *Settings) Value(app, name string, declared func(app string) ([]platform
 		return ""
 	}
 	return settings[i].Default
+}
+
+func (s *Settings) ValueFor(app, name string, apps []platform.App) string {
+	return s.Value(app, name, func(id string) ([]platform.Setting, bool) {
+		for _, candidate := range apps {
+			if candidate.Manifest().ID == id {
+				return candidate.Manifest().Settings, true
+			}
+		}
+		return nil, false
+	})
+}
+
+type SettingDecision struct {
+	Checks         SettingChecks
+	Settings       *Settings
+	EmbeddingModel string
+	EmbeddingNext  string
+	ActiveSpace    string
+	VectorSpace    func(string) string
+}
+
+func (d SettingDecision) Decide(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id, value, refusal := d.Checks.Check(c, s, now)
+	if refusal != nil {
+		return nil, refusal
+	}
+	bindEmbedding := id == d.EmbeddingModel && !c.Replaying && c.Staging()
+	space := ""
+	if bindEmbedding && value != "" {
+		space = d.VectorSpace(value)
+	}
+	return func(*pb.ChangeRecord) {
+		d.Settings.Set(id, value)
+		if bindEmbedding {
+			d.Settings.Set(d.ActiveSpace, space)
+			d.Settings.Set(d.EmbeddingNext, "")
+		}
+	}, nil
 }
 
 type SettingChecks struct {

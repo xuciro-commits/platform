@@ -43,7 +43,7 @@ func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Tim
 		return nil, unknown()
 	}
 	if refusal := authorizationRefusal(t.authorizeEntry(m, a.Manifest().ID, "input:"+name, "action", now)); refusal != nil {
-		t.refused(m.ID, name, refusal, now)
+		t.ConnectorRoster.Refused(m.ID, name, refusal, now)
 		return nil, refusal
 	}
 	end := t.begin("input "+name, trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID), attribute.String("platform.member", m.ID))
@@ -58,7 +58,7 @@ func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Tim
 	}
 	out, err = inputApp(a, t.caller(m, a, false), name, body, now)
 	if err != nil {
-		t.refused(m.ID, name, err, now)
+		t.ConnectorRoster.Refused(m.ID, name, err, now)
 	}
 	return out, err
 }

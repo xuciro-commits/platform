@@ -156,8 +156,12 @@ func (t *Tenant) applyAcceptedControl(saved *acceptedformat.Control) error {
 }
 
 func (t *Tenant) controlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	return controlowner.Deciders{Connector: t.decideConnector, Setting: t.decideSetting, Binding: t.decideBinding, Work: t.decideWork,
-		Notification: t.decideNotification, Endpoint: t.decideEndpoint, Effect: t.decideEffect, Translation: t.decideTranslation}.Decide(c, s, at)
+	return controlowner.Deciders{
+		Connector: t.ConnectorRoster.ConnectorDecider(controlowner.SchemaConnectorOff),
+		Setting:   t.settingDecision(), Binding: t.router().DecideBinding, Work: t.work.Decide,
+		Notification: t.Notices.Decide, Endpoint: t.effectControl().EndpointDecider(controlowner.SchemaEndpointRemove),
+		Effect:      t.effectControl().EffectDecider(controlowner.SchemaEffectApprove, controlowner.SchemaEffectDiscard, controlowner.SchemaEffectResolve),
+		Translation: t.words.TranslationDecider(t.i18n.Reset)}.Decide(c, s, at)
 }
 
 func (r runtime) ControlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {

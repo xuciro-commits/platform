@@ -4,7 +4,6 @@ import (
 	"context"
 	"go.opentelemetry.io/otel/attribute"
 	"net/http"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
@@ -172,26 +171,6 @@ func (t *Tenant) effectControl() actions.EffectControl {
 			})
 		},
 		Reviewed: func(x actions.Queued) bool { return x.App == build.ID && x.Event == build.ID+"/dispatch" }}
-}
-
-func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	if s.GetSchema().GetName() == controlowner.SchemaEndpointRemove {
-		return t.effectControl().RemoveEndpoint(c, s.GetTarget().GetId(), now)
-	}
-	return t.effectControl().AddEndpoint(s.GetTarget().GetId(), s.GetPayload())
-}
-
-func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	control, id := t.effectControl(), s.GetTarget().GetId()
-	switch s.GetSchema().GetName() {
-	case controlowner.SchemaEffectApprove:
-		return control.Approve(c, id, now)
-	case controlowner.SchemaEffectDiscard:
-		return control.Discard(c, id, now)
-	case controlowner.SchemaEffectResolve:
-		return control.Resolve(c, id, s.GetPayload(), now)
-	}
-	return control.Retry(id, now)
 }
 
 func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {

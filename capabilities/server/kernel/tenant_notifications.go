@@ -2,9 +2,12 @@ package kernel
 
 import (
 	"fmt"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"reflect"
 	"slices"
 	"sync"
+	"time"
 
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
@@ -83,6 +86,26 @@ func (b *NoticeBoard) MarkKeysRead(app string, keys []string) {
 			b.all[i].Read = true
 		}
 	}
+}
+
+func (b *NoticeBoard) Decide(c platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	owner, found := b.Owner(id)
+	if !found {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	if owner != c.ID {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	return func(*pb.ChangeRecord) { b.MarkRead(id) }, nil
+}
+
+func (b *NoticeBoard) Apply(n *acceptedformat.Notices) (int, []platform.Effect) {
+	if n == nil {
+		return 0, nil
+	}
+	b.Restore(slices.Clone(n.Notices), n.Seq)
+	return n.Seq - n.Base, slices.Clone(n.Effects)
 }
 
 type NoticeDraft struct {

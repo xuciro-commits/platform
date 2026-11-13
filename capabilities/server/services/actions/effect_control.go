@@ -20,6 +20,38 @@ type EffectControl struct {
 	Reviewed  func(Queued) bool
 }
 
+func (e EffectControl) EndpointDecider(remove string) func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	return func(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+		return e.DecideEndpoint(c, s, now, remove)
+	}
+}
+
+func (e EffectControl) EffectDecider(approve, discard, resolve string) func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	return func(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+		return e.DecideEffect(c, s, now, approve, discard, resolve)
+	}
+}
+
+func (e EffectControl) DecideEndpoint(c platform.Caller, s *pb.Submission, now time.Time, remove string) (func(*pb.ChangeRecord), *kernel.Error) {
+	if s.GetSchema().GetName() == remove {
+		return e.RemoveEndpoint(c, s.GetTarget().GetId(), now)
+	}
+	return e.AddEndpoint(s.GetTarget().GetId(), s.GetPayload())
+}
+
+func (e EffectControl) DecideEffect(c platform.Caller, s *pb.Submission, now time.Time, approve, discard, resolve string) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	switch s.GetSchema().GetName() {
+	case approve:
+		return e.Approve(c, id, now)
+	case discard:
+		return e.Discard(c, id, now)
+	case resolve:
+		return e.Resolve(c, id, s.GetPayload(), now)
+	}
+	return e.Retry(id, now)
+}
+
 func (e EffectControl) RemoveEndpoint(c platform.Caller, id string, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	if !e.Endpoints.Has(id) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}

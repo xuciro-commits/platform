@@ -33,6 +33,13 @@ type LifecycleRequest struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+func (r LifecycleRequest) Prepare(tenant, subject string) (HostAction, error) {
+	if err := ValidLifecycleAction(r.Action); err != nil {
+		return HostAction{}, err
+	}
+	return LifecycleAction(tenant, r.Action, r.Reason), nil
+}
+
 type SupportAnswer struct {
 	Read   string `json:"read"`
 	Answer any    `json:"answer,omitempty"`
@@ -43,6 +50,15 @@ type SupportOpenRequest struct {
 	Member  string `json:"member"`
 	Reason  string `json:"reason"`
 	Minutes int    `json:"minutes"`
+}
+
+func (r SupportOpenRequest) Prepare(tenant, subject string, now time.Time) (HostAction, string, error) {
+	if err := ValidSupportSession(r.Member, r.Reason, subject, r.Minutes, now); err != nil {
+		return HostAction{}, "", err
+	}
+	action := SupportOpenAction(r)
+	id, err := SupportGrantID(tenant, subject, action, now)
+	return action, id, err
 }
 
 type MigrationRequest struct {

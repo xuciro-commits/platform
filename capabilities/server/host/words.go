@@ -1,29 +1,5 @@
 package host
 
-import (
-	"encoding/json"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-	"platformserver/platform"
-	"strings"
-
-	"time"
-)
-
-func (t *Tenant) decideTranslation(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	lang := strings.TrimSpace(s.GetTarget().GetId())
-	var p struct{ Text, Translation string }
-	json.Unmarshal(s.GetPayload(), &p)
-	if lang == "" || strings.ContainsAny(lang, " /") || strings.TrimSpace(p.Text) == "" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	return func(*pb.ChangeRecord) {
-		t.words.Set(lang, p.Text, strings.TrimSpace(p.Translation))
-		t.i18n.Reset()
-	}, nil
-}
-
 type Word struct {
 	Text         string            `json:"text"`
 	Translations map[string]string `json:"translations"`

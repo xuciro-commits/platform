@@ -47,9 +47,9 @@ func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *kernel.E
 	case "deliveries":
 		return h.t.Deliveries(), nil
 	case "work":
-		return h.t.Tasks(), nil
+		return h.t.work.Tasks(h.t.apps), nil
 	case "connectors":
-		return h.t.Connectors(time.Now()), nil
+		return h.t.ConnectorRoster.Views(time.Now()), nil
 	case "settings":
 		return h.t.Settings(), nil
 	case "endpoints":

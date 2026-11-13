@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -97,6 +98,16 @@ type Router struct {
 	Host     ProtocolHost
 	Bindings *Bindings
 	Tenant   string
+}
+
+func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	var p struct{ Provider string }
+	json.Unmarshal(s.GetPayload(), &p)
+	if !slices.ContainsFunc(r.Providers(id), func(b Binding) bool { return b.ID() == p.Provider }) {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	return func(*pb.ChangeRecord) { r.Rebind(id, p.Provider) }, nil
 }
 
 func (r Router) Bound(protocol string) (Binding, bool) {

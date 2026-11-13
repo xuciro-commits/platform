@@ -62,7 +62,7 @@ func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m p
 }
 
 func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, error) {
-	return t.ApplyInputResult(raw, runtimekernel.InputApply{Changes: t.changeApply(), Published: t.publishAcceptedChanges, Refused: t.refused,
+	return t.ApplyInputResult(raw, runtimekernel.InputApply{Changes: t.changeApply(), Published: t.publishAcceptedChanges, Refused: t.ConnectorRoster.Refused,
 		Input: func(app string) platform.AcceptedInputApp { return t.inputs[app] }})
 }
 

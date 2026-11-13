@@ -4,18 +4,15 @@ import automation "platformserver/services/automate/runtime"
 
 import (
 	"context"
-	"encoding/json"
 	"go.opentelemetry.io/otel/trace"
 	"log"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
-	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	controlowner "platformserver/services/security/control"
-	"slices"
 	"time"
 )
 
@@ -122,24 +119,6 @@ func (t *Tenant) step(now time.Time) (more bool) {
 	return refusal == nil && result.more
 }
 
-func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) string {
-	if !replaying {
-		return t.acceptWork(task, now)
-	}
-	return t.replay(now, replaying).Attempt(task, now)
-}
-
-func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) string {
-	if !replaying {
-		outcome := t.acceptWork(task, now)
-		t.work.Lock()
-		task.NextRun = now.Add(task.Job.Every)
-		t.work.Unlock()
-		return outcome
-	}
-	return t.replay(now, replaying).Run(task, now)
-}
-
 func (t *Tenant) replay(now time.Time, replaying bool) automation.Replay {
 	return automation.Replay{Board: &t.work, App: t.App, Delivered: t.delivered, Enqueue: func() { t.enqueue(now) },
 		Caller: func(app string) platform.Caller { return t.automation(app, replaying) },
@@ -167,24 +146,10 @@ func (t *Tenant) failedWork(caller func() platform.Caller, title, why, id string
 		Key: "failed:" + id}, now, platform.Recipient{AppRole: controlowner.Admin})
 }
 
-func (t *Tenant) Tasks() []automation.Task { return t.work.Tasks(t.apps) }
-
-func (t *Tenant) refused(member, input string, err *kernel.Error, now time.Time) {
-	t.ConnectorRoster.Refused(member, input, err, now)
-}
-
-func (t *Tenant) Connectors(now time.Time) []runtimekernel.ConnectorView {
-	return t.ConnectorRoster.Views(now)
-}
-
 func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
-	members := t.recipients(c, now, to)
-	delivery := map[string]platform.Reach{}
-	if d := t.identityOwner; d != nil {
-		for _, m := range members {
-			delivery[m] = d.Reach(m)
-		}
-	}
+	book := t.recipientBook()
+	members := book.Members(c.App, to, now.UTC().Format(time.DateOnly))
+	delivery := book.Reach(members)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	out := t.Notices.Deliver(c.App, n, now, members, delivery, func(x platform.Notification, to platform.Reach) {
@@ -195,105 +160,42 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 }
 
 func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
-	return controlowner.Recipients(c.App, to, now.UTC().Format(time.DateOnly),
-		func(app, role string) []string {
-			if t.identityOwner != nil {
-				return t.identityOwner.Holding(app, role)
-			}
-			return nil
-		},
-		func(structure, unit, role, date string) []string {
-			if t.directory == nil {
-				return nil
-			}
-			return t.directory.Holders(structure, unit, role, date)
-		})
+	return t.recipientBook().Members(c.App, to, now.UTC().Format(time.DateOnly))
+}
+
+func (t *Tenant) recipientBook() controlowner.RecipientBook {
+	var identity controlowner.IdentityOwner
+	if t.identityOwner != nil {
+		identity = t.identityOwner
+	}
+	return controlowner.RecipientBook{Identity: identity, Directory: t.directory}
 }
 
 func (t *Tenant) setting(c platform.Caller, name string) string {
-	return t.settings.Value(c.App, name, func(app string) ([]platform.Setting, bool) {
-		a := t.App(app)
-		if a == nil {
-			return nil, false
-		}
-		return transport.ManifestOf(a, t.definitionsFingerprint()).Settings, true
-	})
+	return t.settings.ValueFor(c.App, name, t.apps)
 }
 
 func (t *Tenant) Settings() []controlowner.AppSettings {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	manifests := make([]platform.Manifest, 0, len(t.apps))
-	for _, a := range t.apps {
-		manifests = append(manifests, a.Manifest())
-	}
-	return t.settings.Apps(manifests)
+	return t.settings.AppsOf(t.apps)
 }
 
-func (t *Tenant) decideConnector(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	id := s.GetTarget().GetId()
-	if !t.ConnectorRoster.Known(id) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	off := s.GetSchema().GetName() == controlowner.SchemaConnectorOff
-	return func(*pb.ChangeRecord) { t.ConnectorRoster.SetDisabled(id, off) }, nil
-}
-
-func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	id, value, refusal := controlowner.SettingChecks{App: t.App, Logging: t.logging().CheckSetting,
-		Values: []func(string, string) *kernel.Error{t.checkEmbeddingSetting, t.modelResolver().CheckSetting}}.Check(c, s, now)
-	if refusal != nil {
-		return nil, refusal
-	}
-	bindEmbedding := id == platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingModel && !c.Replaying && c.Staging()
-	space := ""
-	if bindEmbedding && value != "" {
-		space = t.vectorSpace(value)
-	}
-	return func(*pb.ChangeRecord) {
-		t.settings.Set(id, value)
-		if bindEmbedding {
-			t.settings.Set(embeddingActiveSpace, space)
-			t.settings.Set(platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingNext, "")
-		}
-	}, nil
-}
-
-func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	id := s.GetTarget().GetId()
-	var p struct{ Provider string }
-	json.Unmarshal(s.GetPayload(), &p)
-	if !slices.ContainsFunc(t.router().Providers(id), func(b actions.Binding) bool { return b.ID() == p.Provider }) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	return func(*pb.ChangeRecord) { t.router().Rebind(id, p.Provider) }, nil
-}
-
-func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	id := s.GetTarget().GetId()
-	t.work.Lock()
-	known := t.work.Knows(id)
-	t.work.Unlock()
-	if !known {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	return func(*pb.ChangeRecord) { t.work.Retried(id, now) }, nil
-}
-
-func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	id := s.GetTarget().GetId()
-	owner, found := t.Notices.Owner(id)
-	if !found {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	if owner != c.ID {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
-	}
-	return func(*pb.ChangeRecord) { t.Notices.MarkRead(id) }, nil
+func (t *Tenant) settingDecision() controlowner.Decider {
+	return controlowner.SettingDecision{
+		Checks: controlowner.SettingChecks{App: t.App, Logging: t.logging().CheckSetting,
+			Values: []func(string, string) *kernel.Error{t.checkEmbeddingSetting, t.modelResolver().CheckSetting}},
+		Settings:       &t.settings,
+		EmbeddingModel: platform.KnowledgeApp + "/" + platform.SettingKnowledgeEmbeddingModel,
+		EmbeddingNext:  platform.KnowledgeApp + "/" + platform.SettingKnowledgeEmbeddingNext,
+		ActiveSpace:    embeddingActiveSpace,
+		VectorSpace:    t.vectorSpace,
+	}.Decide
 }
 
 func (t *Tenant) workLoop() automation.WorkLoop {
-	return automation.WorkLoop{Board: &t.work, Apps: t.apps, Active: t.OwnerActive, Attempt: t.attempt, Run: t.run}
+	return automation.Worker{Board: &t.work, Apps: t.apps, Active: t.OwnerActive, Accept: t.acceptWork,
+		Replay: func(now time.Time) automation.Replay { return t.replay(now, true) }}.Loop()
 }
 
 func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
@@ -307,12 +209,7 @@ func (t *Tenant) installAcceptedIntents(intents []platform.Effect) {
 }
 
 func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
-	apps := slices.Clone(d.tenant.apps)
-	if i, ok := d.tenant.appIndex[controlowner.PlatformApp]; ok {
-		apps[i] = d.stateApp(apps[i])
-	}
-	view := &Tenant{ownerSet: d.tenant.with(apps), directory: d.directoryView()}
-	return view.recipients(c, now, to)
+	return (controlowner.RecipientBook{Directory: d.directoryView()}).Members(c.App, to, now.UTC().Format(time.DateOnly))
 }
 
 func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
@@ -331,12 +228,9 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 func (d *stagedDecision) Seen(c platform.Caller, keys ...string) { d.Notices.Seen(c.App, keys) }
 
 func (t *Tenant) applyAcceptedNotices(n *acceptedformat.Notices) {
-	if n == nil {
-		return
-	}
-	t.Notices.Restore(slices.Clone(n.Notices), n.Seq)
+	delta, effects := t.Notices.Apply(n)
 	t.opsMu.Lock()
-	t.acted += n.Seq - n.Base
+	t.acted += delta
 	t.opsMu.Unlock()
-	t.outbound.Add(t.current(), n.Effects...)
+	t.outbound.Add(t.current(), effects...)
 }

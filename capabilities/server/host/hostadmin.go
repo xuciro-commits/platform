@@ -104,7 +104,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 				transport.AnswerOr(w, http.StatusBadRequest, nil, err)
 				return
 			}
-			if err := t.setHostLifecycle(body.Action, body.Reason, subject, h.Now(), hostRequestAuthorization(r, t.ID)...); err != nil {
+			if err := t.setHostLifecycle(body, subject, h.Now(), hostRequestAuthorization(r, t.ID)...); err != nil {
 				transport.AnswerOr(w, http.StatusConflict, nil, err)
 				return
 			}
@@ -249,17 +249,18 @@ func (t *Tenant) hostArtifacts() []controlowner.HostArtifactView {
 	return controlowner.HostArtifacts(state.releases.Ids(), state.releases.Active(), func(id string) []byte { return state.releases.Raw(id) })
 }
 
-func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
+func (t *Tenant) setHostLifecycle(request controlowner.LifecycleRequest, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
 	if now.IsZero() {
 		now = Now()
 	}
 	t.Lane.Lock()
 	defer t.Lane.Unlock()
-	if err := controlowner.ValidLifecycleAction(action); err != nil {
+	action, err := request.Prepare(t.ID, subject)
+	if err != nil {
 		return err
 	}
-	_, err := t.acceptHostAction(controlowner.LifecycleAction(t.ID, action, reason), "host:"+subject, now, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
-		return platform.SupportGrant{}, controlowner.ApplyLifecycle(image, action, t.quarantined(), func() bool {
+	_, err = t.acceptHostAction(action, "host:"+subject, now, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
+		return platform.SupportGrant{}, controlowner.ApplyLifecycle(image, request.Action, t.quarantined(), func() bool {
 			return missingRuntime(t.desiredRuntime()) || !maps.Equal(t.desiredRuntime(), t.services.Selection()) || !slices.Equal(t.currentDisabledOwners(), t.desiredDisabledOwners()) || slices.Contains(t.desiredDisabledOwners(), controlowner.PlatformApp)
 		})
 	}, evidence...)
@@ -267,13 +268,9 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time,
 }
 
 func (t *Tenant) openSupport(request controlowner.SupportOpenRequest, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
-	if err := controlowner.ValidSupportSession(request.Member, request.Reason, subject, request.Minutes, now); err != nil {
-		return platform.SupportGrant{}, err
-	}
 	t.Lane.Lock()
 	defer t.Lane.Unlock()
-	action := controlowner.SupportOpenAction(request)
-	id, err := controlowner.SupportGrantID(t.ID, subject, action, now)
+	action, id, err := request.Prepare(t.ID, subject, now)
 	if err != nil {
 		return platform.SupportGrant{}, err
 	}

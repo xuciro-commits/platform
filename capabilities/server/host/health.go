@@ -78,7 +78,7 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 	h := TenantHealth{Status: "ok", Started: monitoring.Started, Built: monitoring.Built(), Apps: len(t.apps), Queues: []monitoring.QueueHealth{}, Breakers: t.Breakers(now)}
 	h.Queues, h.Failed = t.queueHealth(now)
 	h.OpenBreakers = monitoring.OpenBreakers(h.Breakers)
-	for _, c := range t.Connectors(now) {
+	for _, c := range t.ConnectorRoster.Views(now) {
 		if !slices.Contains([]string{"healthy", "unspecified", "unknown"}, c.Health) && !c.Disabled {
 			h.Connectors++
 		}

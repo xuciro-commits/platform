@@ -34,7 +34,7 @@ func (t *Tenant) desiredDisabledOwners() []string {
 
 func (t *Tenant) checkOwnerRemoval(disabled []string) error {
 	return packages.CheckOwnerRemoval(disabled, func(id string) bool { return t.App(id) != nil }, t.baseModules(), func(removed map[string]bool) error {
-		for _, task := range t.Tasks() {
+		for _, task := range t.work.Tasks(t.apps) {
 			if removed[task.App] && task.Kind != "job" && !slices.Contains([]string{"done", "cancelled"}, task.State) {
 				return fmt.Errorf("Finish or resolve work %s before removing %s", task.ID, task.App)
 			}
