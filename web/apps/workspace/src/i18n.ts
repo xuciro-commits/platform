@@ -280,6 +280,8 @@ register("zh-CN", {
   "Discard local draft": "删除本地草稿",
   "Prepared at {time}.": "已于 {time} 准备完成。",
   "Connect to sign in. A new or expired identity cannot use prepared content.": "请联网登录。新身份或已过期身份无法使用已准备内容。",
+  "This view could not be displayed.": "此视图无法显示。",
+  "Reload": "重新加载",
   "This workspace task could not be reopened. Connect and reload; saved inputs were retained.": "无法重新打开此工作区任务。请联网后重新加载，已保存输入仍然保留。",
   "Prepared sign-in configuration could not be opened. Connect and reload.": "无法打开已准备的登录配置，请联网后重新加载。",
   "Offline preparation is unavailable in this browser.": "此浏览器无法准备离线内容。",

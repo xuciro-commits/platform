@@ -151,7 +151,7 @@ func (d *stagedDecision) Readable(c platform.Caller, ref string) bool {
 	if at.IsZero() {
 		at = time.Now()
 	}
-	return d.tenant.readableIn(d.Records, c.Member, ref, at)
+	return d.tenant.readableAs(d.Records, c, ref, at)
 }
 
 type stagedEffectPanic struct{}

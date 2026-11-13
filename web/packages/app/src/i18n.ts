@@ -1373,6 +1373,7 @@ register("zh-CN", {
   "Request access": "申请访问权限",
   "Request project access": "申请项目访问权限",
   "Request application access": "申请应用访问权限",
+  "Request application role": "申请应用角色",
   "The project's owners decide this request. Approval applies the project role immediately; no new sign-in is needed.": "由项目 Owner 审批。批准后立即获得项目角色，无需重新登录。",
   "The platform administrators decide this request. Approval applies the business role immediately; no new sign-in is needed.": "由平台管理员审批。批准后立即获得业务角色，无需重新登录。",
   "Reason": "理由",

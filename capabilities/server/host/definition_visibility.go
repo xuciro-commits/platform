@@ -256,7 +256,11 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			continue
 		}
 		if def, ok := appsauthoring.ProjectApplication(registered, applications); ok {
-			out = append(out, def)
+			if index := slices.IndexFunc(out, func(candidate platform.Definition) bool { return candidate.Ref == def.Ref }); index >= 0 {
+				out[index] = def
+			} else {
+				out = append(out, def)
+			}
 		}
 	}
 	out = pageowner.FilterExplorationAssets(out)

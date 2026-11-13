@@ -53,6 +53,10 @@ func (t *Tenant) entityView(m platform.Member) []platform.EntityInfo {
 }
 
 func (t *Tenant) readableIn(store *records.Store, m platform.Member, ref string, now time.Time) bool {
+	return t.readableAs(store, platform.NewCaller(runtime{t: t}, m, "", false, false), ref, now)
+}
+
+func (t *Tenant) readableAs(store *records.Store, c platform.Caller, ref string, now time.Time) bool {
 	typ, id, _ := strings.Cut(ref, "/")
 	if typ == "enterprise.element" && t.directory != nil {
 		_, ok := t.directory.Element(id, now.UTC().Format(time.DateOnly))
@@ -66,7 +70,7 @@ func (t *Tenant) readableIn(store *records.Store, m platform.Member, ref string,
 	if r == nil {
 		return false
 	}
-	visible, err := t.visibleIn(store, m, et, now)
+	visible, err := t.visibleForCallerIn(store, platform.NewCaller(runtime{t: t}, c.Member, et.Info().App, c.Replaying, c.Automation), et, now)
 	return err == nil && (visible == nil || visible(r.Value))
 }
 
