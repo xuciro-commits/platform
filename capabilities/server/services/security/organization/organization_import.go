@@ -1,8 +1,6 @@
 package organization
 
 import (
-	"encoding/json"
-	"fmt"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -154,10 +152,6 @@ func (m *Model) Sync(source string, elements []Element, relationships []Relation
 	return m.sync(source, elements, relationships, today, false)
 }
 
-func (m *Model) ReplaySync(source string, elements []Element, relationships []Relationship, today platform.Date) SyncResult {
-	return m.sync(source, elements, relationships, today, true)
-}
-
 func (m *Model) sync(source string, elements []Element, relationships []Relationship, today platform.Date, replay bool) SyncResult {
 	owner, res := "source:"+source, SyncResult{}
 	seen := map[string]bool{}
@@ -250,43 +244,6 @@ func (m *Model) sync(source string, elements []Element, relationships []Relation
 func SyncClosed(source string) string { return "no longer in " + source }
 
 func ImportedElementID(tenant, id string) string { return "tenant:" + tenant + ":" + id }
-
-func (m Model) PreviewImport(s Slice, linkID, content, base string, today platform.Date) (Model, error) {
-	if base != m.Fingerprint() {
-		return Model{}, fmt.Errorf("The enterprise model changed; preview the import again")
-	}
-	if content != s.Fingerprint() {
-		return Model{}, fmt.Errorf("The shared slice differs from its preview")
-	}
-	raw, _ := json.Marshal(m)
-	var next Model
-	json.Unmarshal(raw, &next)
-	link := next.TenantLinkOf(linkID)
-	if link == nil || link.Tenant != s.Tenant {
-		return Model{}, fmt.Errorf("The tenant link does not match the shared slice")
-	}
-	if s.UAF != "" && s.UAF != m.UAF {
-		return Model{}, fmt.Errorf("The shared slice uses a different UAF version")
-	}
-	root := slices.IndexFunc(s.Elements, func(e Element) bool {
-		return e.ID == link.Root && e.Stereotype == Organization && !e.Deleted && e.ActiveOn(today)
-	})
-	if root < 0 {
-		return Model{}, fmt.Errorf("The tenant link root is not a shared active organisation")
-	}
-	s, err := next.NamespaceSlice(s)
-	if err != nil {
-		return Model{}, err
-	}
-	next.ImportOn(s, today)
-	link = next.TenantLinkOf(linkID)
-	link.Content, link.UpdatedAt = content, today
-	return next, nil
-}
-
-func (m Model) NamespaceSlice(s Slice) (Slice, error) {
-	return Slice{}, fmt.Errorf("Full enterprise imports are retired; use the retained original binary for historical input recovery")
-}
 
 func closeSourceElement(e *Element, day platform.Date, reason string) {
 	e.Until, e.Closed = day, reason

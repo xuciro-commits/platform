@@ -30,10 +30,6 @@ type ReleasePage struct {
 	ActiveID   string           `json:"activeId"`
 }
 
-type ReleaseCandidateSaved struct {
-	ID string `json:"id"`
-}
-
 type SavedReleaseReview struct {
 	AI                   []platform.ApplicationAI `json:"ai,omitempty"`
 	Preview              ReleasePreview           `json:"preview"`

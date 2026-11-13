@@ -21,38 +21,6 @@ func (p *Page) UnmarshalJSON(raw []byte) error {
 	return p.checkEnvelope()
 }
 
-var pageCompatibility = func() struct {
-	Section struct {
-		BindingPaths  []string `json:"bindingPaths"`
-		ResourcePaths []string `json:"resourcePaths"`
-	} `json:"section"`
-	Scope struct {
-		BindingPaths  []string `json:"bindingPaths"`
-		OverlayPaths  []string `json:"overlayPaths"`
-		DocumentPaths []string `json:"documentPaths"`
-	} `json:"scope"`
-	ScalarFieldPaths []string `json:"scalarFieldPaths"`
-	ArrayFieldPaths  []string `json:"arrayFieldPaths"`
-} {
-	var result struct {
-		Section struct {
-			BindingPaths  []string `json:"bindingPaths"`
-			ResourcePaths []string `json:"resourcePaths"`
-		} `json:"section"`
-		Scope struct {
-			BindingPaths  []string `json:"bindingPaths"`
-			OverlayPaths  []string `json:"overlayPaths"`
-			DocumentPaths []string `json:"documentPaths"`
-		} `json:"scope"`
-		ScalarFieldPaths []string `json:"scalarFieldPaths"`
-		ArrayFieldPaths  []string `json:"arrayFieldPaths"`
-	}
-	if err := json.Unmarshal(pageWidgetJSON, &result); err != nil {
-		panic(err)
-	}
-	return result
-}()
-
 var externalFrameASCII = regexp.MustCompile(`^[!-~]+$`)
 
 var externalFrameOrigin = regexp.MustCompile(`^https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::[1-9][0-9]{0,4})?$`)

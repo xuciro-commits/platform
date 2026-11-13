@@ -9,8 +9,6 @@ import (
 	"reflect"
 )
 
-const SchemaQuery = QueryType + ".publish"
-
 type Query struct {
 	platform.Record
 	Name            string              `json:"name" field:"required,search"`

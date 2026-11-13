@@ -356,10 +356,6 @@ func (c *Committed) HoldPending(d persistence.StateDelta) {
 	}
 }
 
-func (c *Committed) CacheSizes() (answers, schemas int) {
-	return len(c.answers), len(c.schemaVersions)
-}
-
 type Sequences struct {
 	mu   sync.Mutex
 	last map[string]int

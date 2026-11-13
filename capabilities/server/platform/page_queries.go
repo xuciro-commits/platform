@@ -283,8 +283,6 @@ func (p Page) QueryReferences() []AssetRef {
 	return refs
 }
 
-func (p Page) DocumentVariables() map[string]PageVariable { return p.InputSchema.Variables }
-
 func (p Page) WindowVariableObject(id string) string { return p.CollectionInputObject(id).Name }
 
 func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition, engines ...RuleEngine) error {

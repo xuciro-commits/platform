@@ -59,10 +59,6 @@ func (t *Owner) SelectionFrom(store *records.Store, m platform.Member, typ strin
 	return t.recordSelectionFrom(store, m, typ, q, now)
 }
 
-func (t *Owner) SelectionForCallerFrom(store *records.Store, c platform.Caller, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	return t.recordSelectionForCallerFrom(store, c, typ, q, now)
-}
-
 func (t *Owner) readRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
 	domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
 	page, refusal := t.recordSelectionForCallerFrom(store, c, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now)

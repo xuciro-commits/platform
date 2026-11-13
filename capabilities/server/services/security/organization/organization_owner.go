@@ -627,12 +627,6 @@ func Profile() []ProfileEntry {
 	}
 }
 
-var Vocabulary = map[string]bool{
-	Placement: true, Membership: true, FillsPost: true, Performs: true, Exhibits: true,
-	Owns: true, "OwnsProcess": true, "Enables": true, "MotivatedBy": true,
-	"MilestoneDependency": true, "ProjectSequence": true,
-}
-
 func Views(mm *DirectoryModel) []Viewpoint {
 	return []Viewpoint{{ID: "organization", Title: "Organisation", Note: "Units, posts and people", Elements: []string{Organization, Post, Person}, Relationships: []string{Placement, Membership, FillsPost, Owns}}}
 }

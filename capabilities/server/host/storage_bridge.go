@@ -15,8 +15,6 @@ type (
 	Journals   = persistence.Journals
 )
 
-type resultIdentity = persistence.Identity
-
 func OpenJournal(ctx context.Context, url string) (*persistence.Postgres, error) {
 	j, err := persistence.OpenPostgres(ctx, url, runtimekernel.AcceptedIdentity)
 	if err == nil {

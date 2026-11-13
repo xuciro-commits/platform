@@ -8,12 +8,9 @@ import (
 )
 
 const (
-	FileApp            = "files"
-	FileType           = "files.file"
-	SchemaFileAttach   = "files.file.attach"
-	SchemaFileDetach   = "files.file.detach"
-	SchemaFileAnnotate = "files.file.annotate"
-	SettingFileMax     = "max-size-mb"
+	FileApp        = "files"
+	FileType       = "files.file"
+	SettingFileMax = "max-size-mb"
 )
 
 type File struct {

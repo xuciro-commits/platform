@@ -76,16 +76,6 @@ func (t *Tenant) Texts(app string) []string {
 	return transport.Texts(parts)
 }
 
-func (t *Tenant) Untranslated(app, lang string) []string {
-	out := []string{}
-	for _, s := range t.Texts(app) {
-		if !t.i18n.CanSay(lang, s) {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 func (t *Tenant) meaning(app string) string {
 	var infos []platform.EntityInfo
 	for _, et := range t.Projection.SortedTypes() {

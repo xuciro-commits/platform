@@ -450,22 +450,3 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 	}
 	return &preparedOperationInput{ref: ref, requestHash: requestHash}, nil
 }
-
-func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*platform.FlowBatchFrame, *kernel.Error) {
-	owner, before, current, refusal := t.continuousSnapshot(m, id, now)
-	if refusal != nil {
-		return nil, refusal
-	}
-	frame, err := owner.ExpandFrame(before, t.frames())
-	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
-	}
-	_, latest, _, refusal := t.continuousSnapshot(current, id, now)
-	if refusal != nil {
-		return nil, refusal
-	}
-	if latest.Revision != before.Revision {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its state was read")
-	}
-	return frame, nil
-}

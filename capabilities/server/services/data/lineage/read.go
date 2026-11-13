@@ -20,7 +20,6 @@ type LineageTotal Total
 type LineageCoverage Coverage
 type LineageUnreadable Unreadable
 type LineageImpact Impact
-type LineageImpactItem ImpactItem
 type LineageFieldNode FieldNode
 type LineageFieldEdge FieldEdge
 

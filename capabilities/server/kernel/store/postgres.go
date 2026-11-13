@@ -19,8 +19,6 @@ import (
 	"platformserver/platform"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/metric"
 )
 
 type Entry struct {
@@ -34,9 +32,6 @@ type Entry struct {
 }
 
 const FormatEpoch = 1
-
-var appendHistogram, _ = otel.Meter("platformserver").Float64Histogram("platform.journal.append",
-	metric.WithUnit("ms"), metric.WithDescription("Time to append a journal entry"))
 
 func SameTime(result, entry time.Time) bool {
 	return result.Equal(entry) || result.Truncate(time.Microsecond).Equal(entry)

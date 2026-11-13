@@ -245,12 +245,6 @@ func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan platform.FlowBa
 	return source.CheckCheckpoint(connection, hash, intake, x, checkpoint, tick)
 }
 
-func (t *Tenant) PullContinuousSources(now time.Time) {
-	for _, pull := range t.continuousSources(now) {
-		pull()
-	}
-}
-
 func (t *Tenant) continuousSources(now time.Time) []func() {
 	if t.businessStopped() || !t.OwnerActive(platform.FlowApp) || !t.streamMu.TryLock() {
 		return nil

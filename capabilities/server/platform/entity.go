@@ -3,7 +3,6 @@ package platform
 import (
 	"encoding/json"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	ruleexpr "platformserver/expr"
@@ -477,11 +476,6 @@ func (c Caller) FindOf(t reflect.Type, q Query) ([]any, int, *kernel.Error) {
 		return nil, 0, notFound()
 	}
 	return c.rt.Find(c, t, q)
-}
-
-func (c Caller) PutAt(now time.Time, cause string, entity any) *kernel.Error {
-	r := &pb.ChangeRecord{RecordedTime: timestamppb.New(now), Submission: &pb.Submission{PrincipalId: c.ID, Schema: &pb.SchemaRef{Name: cause}}}
-	return c.Put(r, entity)
 }
 
 func (c Caller) Check(entity any) *kernel.Error {

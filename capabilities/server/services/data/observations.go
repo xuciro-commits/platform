@@ -3,7 +3,6 @@ package data
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"slices"
 	"time"
 
@@ -170,8 +169,6 @@ func (o *Owner) ExecutionObservation(record Observation) (platform.ObservationDe
 
 const ObservationType = "build.observation"
 
-const SchemaObservation = ObservationType + ".publish"
-
 type Observation struct {
 	platform.Record
 	Name                       string                         `json:"name" field:"required,search" source:"record"`
@@ -216,8 +213,6 @@ type EnterpriseTarget struct {
 	Until      string   `json:"until,omitempty"`
 	Properties []string `json:"properties,omitempty"`
 }
-
-var ValueSourceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 func (e EnterpriseTarget) Check() error {
 	return fmt.Errorf("Enterprise slice targets are retired; use explicit directory actions")

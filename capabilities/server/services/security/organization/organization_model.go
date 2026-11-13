@@ -21,7 +21,6 @@ const (
 	Placement    = "ActualResourceRelationship"
 	Membership   = "ActualOrganizationRole"
 	FillsPost    = "FillsPost"
-	Performs     = "IsCapableToPerform"
 	Exhibits     = "Exhibits"
 	System       = "System"
 	Owns         = "ResponsibleFor"

@@ -594,10 +594,6 @@ func (t *Owner) refsIn(v any) []string {
 
 func (t *Owner) Narrowable(et *records.Type) []string { return t.narrowable(et) }
 
-func (t *Owner) Narrowed(m platform.Member, value any, at time.Time, held bool) any {
-	return t.narrowed(m, value, at, held)
-}
-
 func (t *Owner) NarrowedSource(m platform.Member, value any, at time.Time, held bool, source string) any {
 	return t.narrowedSource(m, value, at, held, source)
 }

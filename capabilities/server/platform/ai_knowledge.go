@@ -9,7 +9,6 @@ import (
 const (
 	KnowledgeApp                   = "knowledge"
 	KnowledgeDocumentType          = "knowledge.document"
-	KnowledgeTermType              = "knowledge.term"
 	SettingKnowledgeEmbeddingModel = "embedding-model"
 	SettingKnowledgeEmbeddingNext  = "embedding-next-model"
 )

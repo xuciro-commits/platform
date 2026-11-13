@@ -35,10 +35,6 @@ func (p Page) LoopFactor(owner string) (int, error) {
 	return factor, nil
 }
 
-type PageCollectionBuilder struct {
-	Fields []string `json:"fields"`
-}
-
 func (p Page) collectionBuilderInput(id, owner string, object AssetRef) bool {
 	d := p.InputSchema
 	sections := p.DataBindings
@@ -270,10 +266,4 @@ func (p Page) CheckComputeResource(c PageComputeResource, object EntityInfo, op 
 		return fmt.Errorf("compute output needs a nonnullable numeric value")
 	}
 	return nil
-}
-
-type PageLoop struct {
-	Collection   string `json:"collection"`
-	ItemVariable string `json:"itemVariable"`
-	Limit        int    `json:"limit"`
 }

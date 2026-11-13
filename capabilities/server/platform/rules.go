@@ -173,10 +173,6 @@ type Expr = ruleexpr.Expr
 
 type ExprLiteral = ruleexpr.Literal
 
-type ExprAggregate = ruleexpr.Aggregate
-
-type ExprWindowReference = ruleexpr.WindowReference
-
 type ExprWindowType = ruleexpr.WindowType
 
 type ExprWindowSummary = ruleexpr.WindowSummary

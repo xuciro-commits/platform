@@ -269,10 +269,6 @@ func (t *Tenant) retry(id string, now time.Time) bool {
 	return t.work.Retry(id, now)
 }
 
-func (t *Tenant) Connect(descriptors ...*pb.ConnectorDescriptor) error {
-	return t.connectors.Register(descriptors...)
-}
-
 func (t *Tenant) refused(member, input string, err *kernel.Error, now time.Time) {
 	t.connectors.Refused(member, input, err, now)
 }

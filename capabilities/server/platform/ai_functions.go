@@ -226,12 +226,6 @@ func (f AIFunction) ValidateOutput(raw []byte) error {
 	return nil
 }
 
-type RecordAdvice struct {
-	Summary  string `json:"summary"`
-	Category string `json:"category"`
-	Review   bool   `json:"review"`
-}
-
 type RetainedFunctionAssets interface {
 	FunctionReleaseAsset(string, string) (ReleaseAsset, error)
 }

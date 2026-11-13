@@ -372,12 +372,10 @@ func (s *Store) TypeCount() int                     { return len(s.types) }
 func (s *Store) Types() iter.Seq2[string, *Type]    { return maps.All(s.types) }
 func (s *Store) Parent() *Store                     { return s.parent }
 func (s *Store) Generation() uint64                 { return s.generation }
-func (s *Store) BaseGeneration() uint64             { return s.baseGeneration }
 func (s *Store) Writes() iter.Seq[string]           { return maps.Keys(s.writes) }
 func (s *Store) Written(ref string) bool            { return s.writes[ref] }
 func (s *Store) WriteCount() int                    { return len(s.writes) }
 func (s *Store) TrackWrite(ref string)              { s.writes[ref] = true }
-func (s *Store) Dirty() Index[bool]                 { return s.dirty }
 func (s *Store) TakeDirty() Index[bool]             { dirty := s.dirty; s.dirty = Index[bool]{}; return dirty }
 func (s *Store) MarkDirty(ref string)               { s.dirty.Set(ref, true) }
 func (s *Store) RememberChange(change, ref string)  { s.recentChanges.Remember(change, ref) }
@@ -389,12 +387,11 @@ func (s *Store) SetTouched(touched func(string, string)) { s.touched = touched }
 func (s *Store) InheritDecision(base *Store) {
 	s.parent, s.baseGeneration, s.writes = base.parent, base.baseGeneration, maps.Clone(base.writes)
 }
-func (s *Store) Restored()                       { s.generation++ }
-func (et *Type) Info() platform.EntityInfo       { return et.info }
-func (et *Type) Rows() Rows                      { return et.rows }
-func (et *Type) Knowledge() bool                 { return et.knowledge }
-func (et *Type) RetainedProjection() bool        { return et.retainedProjection }
-func (et *Type) DerivedSnapshot() DerivedIndexes { return et.indexes }
+func (s *Store) Restored()                 { s.generation++ }
+func (et *Type) Info() platform.EntityInfo { return et.info }
+func (et *Type) Rows() Rows                { return et.rows }
+func (et *Type) Knowledge() bool           { return et.knowledge }
+func (et *Type) RetainedProjection() bool  { return et.retainedProjection }
 func NewTypeView(info platform.EntityInfo, rows Rows, retained bool) *Type {
 	return &Type{info: info, rows: rows, retainedProjection: retained}
 }
@@ -436,8 +433,6 @@ func (s *Store) Anchor(parent *Store) error {
 	s.parent, s.baseGeneration, s.writes = parent, generation, writes
 	return nil
 }
-
-func (s *Store) ChangeRoot() Index[[]string] { return s.recentChanges.Entries }
 
 type StoredState struct {
 	HistoryHead string          `json:"historyHead,omitempty"`

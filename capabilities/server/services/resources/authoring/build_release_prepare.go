@@ -107,7 +107,3 @@ func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]pla
 	}
 	return nil, nil
 }
-
-func (b *Build) AssetDraftID(ref platform.AssetRef) string {
-	return b.data.DraftID(ref)
-}

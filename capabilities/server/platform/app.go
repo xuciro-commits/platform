@@ -130,11 +130,6 @@ func (c Caller) WithTransactionInput(input *pb.Submission) Caller {
 	return c
 }
 
-func (c Caller) WithInputDiagnostics(report func(*kernel.Error, []FieldIssue)) Caller {
-	c.inputRefused = report
-	return c
-}
-
 func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 
 type StagedDecision interface {

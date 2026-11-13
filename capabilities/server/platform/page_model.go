@@ -10,8 +10,6 @@ import (
 	"strings"
 )
 
-const PageModelProfile = "platform.page.v2.110"
-
 const PageModelMaxFields = 64
 
 type FieldRef struct {
@@ -71,8 +69,6 @@ func ModelObject(typ string) AssetRef {
 	app, _, _ := strings.Cut(typ, ".")
 	return AssetRef{App: app, Kind: AssetObject, Name: typ}
 }
-
-var modelScalarSlots = pageWidgets.Runtime.ModelBinding.FieldSlots
 
 func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) error {
 	safe, err := p.Safety()
@@ -394,8 +390,6 @@ func (b PageDataBinding) EffectiveFields(info EntityInfo) []FieldRef {
 	return fields
 }
 
-const PageCompositeProfile = "platform.page.v2.111"
-
 type ModelViewBinding struct {
 	Model       ModelBinding        `json:"model"`
 	Roles       map[string]FieldRef `json:"roles,omitempty"`
@@ -445,10 +439,6 @@ type PageExternalFrame struct {
 type PageActionParameter struct {
 	Parameter string `json:"parameter"`
 	Field     string `json:"field"`
-}
-
-type PageActionTable struct {
-	Parameters []PageActionParameter `json:"parameters"`
 }
 
 func ActionParameterCompatible(f FieldInfo, p Field) bool {
@@ -656,12 +646,6 @@ type Page struct {
 type SelectionVariable struct {
 	Name   string   `json:"name"`
 	Object AssetRef `json:"object"`
-}
-
-type PageFacet struct {
-	Field    string `json:"field"`
-	Variable string `json:"variable"`
-	Kind     string `json:"kind"`
 }
 
 type PageInlineEdit struct {

@@ -271,16 +271,15 @@ func (s *CurrentScope) Fork(info func(string) platform.EntityInfo) *CurrentScope
 func (s *CurrentScope) Configure(backend persistence.RuntimeState, tenant string, applied int64, position func() int64) {
 	s.backend, s.tenant, s.applied, s.position = backend, tenant, applied, position
 }
-func (s *CurrentScope) Backend() persistence.RuntimeState           { return s.backend }
-func (s *CurrentScope) UseBackend(backend persistence.RuntimeState) { s.backend = backend }
-func (s *CurrentScope) View() persistence.StateReadView             { return s.view }
-func (s *CurrentScope) Bind(view persistence.StateReadView)         { s.view = view }
-func (s *CurrentScope) Tenant() string                              { return s.tenant }
-func (s *CurrentScope) Applied() int64                              { return s.applied }
-func (s *CurrentScope) MarkApplied(position int64)                  { s.applied = position }
-func (s *CurrentScope) Position() func() int64                      { return s.position }
-func (s *CurrentScope) Release() string                             { return s.release }
-func (s *CurrentScope) SelectRelease(release string)                { s.release = release }
+func (s *CurrentScope) Backend() persistence.RuntimeState   { return s.backend }
+func (s *CurrentScope) View() persistence.StateReadView     { return s.view }
+func (s *CurrentScope) Bind(view persistence.StateReadView) { s.view = view }
+func (s *CurrentScope) Tenant() string                      { return s.tenant }
+func (s *CurrentScope) Applied() int64                      { return s.applied }
+func (s *CurrentScope) MarkApplied(position int64)          { s.applied = position }
+func (s *CurrentScope) Position() func() int64              { return s.position }
+func (s *CurrentScope) Release() string                     { return s.release }
+func (s *CurrentScope) SelectRelease(release string)        { s.release = release }
 func (s *CurrentScope) Source(typ string, info *platform.EntityInfo) RowSource {
 	return &currentRows{store: s, typ: typ, info: info}
 }

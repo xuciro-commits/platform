@@ -144,10 +144,6 @@ func (c *Catalog) Enabled(schema string) bool {
 
 const AnyMember = "*"
 
-func (c *Catalog) Permits(role, schema string) bool {
-	return slices.ContainsFunc(c.For(role), func(a Action) bool { return a.Schema == schema })
-}
-
 func (c *Catalog) PermitsAny(roles []string, schema string) bool {
 	return slices.ContainsFunc(c.ForRoles(roles), func(a Action) bool { return a.Schema == schema })
 }

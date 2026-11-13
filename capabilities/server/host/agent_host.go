@@ -9,7 +9,6 @@ import (
 	"platformserver/services/actions"
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
-	"platformserver/services/data/transform"
 	controlowner "platformserver/services/security/control"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -400,8 +399,6 @@ func (t *Tenant) suspended(member string) bool {
 	v, ok := t.held(platform.SwitchType + "/" + member)
 	return ok && v.(platform.Switch).Suspended
 }
-
-func (t *Tenant) Think(now time.Time) { integrations.OnLane(t.agentTurns().Due(now)) }
 
 func (t *Tenant) agentTurns() agentowner.Turns {
 	return agentowner.Turns{Agents: t.agents, Stopped: t.businessStopped, Quarantined: t.quarantined,

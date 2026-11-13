@@ -15,8 +15,6 @@ import (
 	dataowner "platformserver/services/data"
 )
 
-const observationResponseBytes = 1 << 20
-
 type ObservationEvaluation struct {
 	Observation *platform.ObservationResult `json:"observation,omitempty"`
 	Matched     bool                        `json:"matched"`

@@ -239,10 +239,6 @@ func (x *Translator) lookup(app, lang, s string) (string, bool) {
 	return "", false
 }
 
-func (x *Translator) says(lang, s string, depth int) bool {
-	return x.saysInApp("", lang, s, depth)
-}
-
 func (x *Translator) saysInApp(app, lang, s string, depth int) bool {
 	if _, ok := x.lookup(app, lang, s); ok || depth > maxSay || !strings.ContainsFunc(s, unicode.IsLetter) {
 		return ok || depth <= maxSay
@@ -381,8 +377,6 @@ func (tr *Translator) TranslateMessages(v any, lang string) any {
 func NewTranslator(apps func() []platform.App, manifest func(platform.App) platform.Manifest, tenant func() map[string]map[string]string, base platform.Languages) Translator {
 	return Translator{apps: apps, manifest: manifest, tenant: tenant, base: base}
 }
-
-func (x *Translator) CanSay(lang, text string) bool { return x.says(lang, text, 0) }
 
 func WalkChoices(v any, f func(map[string]any, []any)) {
 	walkChoicesWithApp(v, "", func(_ string, m map[string]any, c []any) { f(m, c) })

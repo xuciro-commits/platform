@@ -151,20 +151,6 @@ func (e Enterprise) Related(element, stereotype string, outgoing bool, now time.
 	return e.c.rt.Related(e.c, element, stereotype, outgoing, now)
 }
 
-func (e Enterprise) Capable(element string, now time.Time) []string {
-	out := e.Related(element, "Exhibits", true, now)
-	for _, cap := range e.Related(element, "IsCapableToPerform", true, now) {
-		if !slices.Contains(out, cap) {
-			out = append(out, cap)
-		}
-	}
-	return out
-}
-
-func (e Enterprise) Located(element string, now time.Time) []string {
-	return e.Related(element, "ActualResourceRelationship", true, now)
-}
-
 func (e Enterprise) Of(organisation string, now time.Time) []string {
 	return e.Related(organisation, "OwnsProcess", true, now)
 }

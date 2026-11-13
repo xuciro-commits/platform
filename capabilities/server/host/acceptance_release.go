@@ -101,10 +101,6 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 	return saved, nil
 }
 
-func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind, draftID, candidateID, key string, now time.Time) (string, error) {
-	return t.SaveReleaseCandidates(m, []build.JointDraftRef{{Kind: kind, ID: draftID}}, candidateID, key, now)
-}
-
 func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDraftRef, candidateID, key string, now time.Time) (string, error) {
 	return decideWithError(t, "release", func(t *Tenant) (string, error) {
 		return t.prepareSaveReleaseCandidates(m, drafts, candidateID, key, now)

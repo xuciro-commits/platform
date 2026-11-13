@@ -45,10 +45,6 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*runtim
 	return t.PrepareChanges(plan, t.changeApply())
 }
 
-func (t *Tenant) applyAcceptedChanges(p *runtimekernel.PreparedChanges) error {
-	return t.PromoteChanges(p, t.changeApply())
-}
-
 func (t *Tenant) publishAcceptedChanges(p *runtimekernel.PreparedChanges) {
 	if p.Child != nil {
 		t.publishAcceptedBatch(p.Child.Result)

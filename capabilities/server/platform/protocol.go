@@ -614,10 +614,9 @@ type RelationsHost interface {
 type AttachedRelations interface{ AttachRelations(RelationsHost) }
 
 const (
-	RelationsApp     = "relations"
-	RelationLinkType = "platform.link"
-	CommentType      = "platform.comment"
-	FollowType       = "platform.follow"
+	RelationsApp = "relations"
+	CommentType  = "platform.comment"
+	FollowType   = "platform.follow"
 )
 
 type RecordComment struct {

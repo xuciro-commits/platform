@@ -5,7 +5,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
-	"slices"
 	"strings"
 )
 
@@ -233,36 +232,4 @@ func closingUsage(m Model, id string, day platform.Date) string {
 		}
 	}
 	return ""
-}
-
-func checkSourceRelationships(m Model, mm *DirectoryModel, prefix string, today platform.Date) *kernel.Error {
-	for _, r := range m.Relationships {
-		if !strings.HasPrefix(r.ID, prefix) {
-			continue
-		}
-		for _, period := range r.PeriodsFromLegacy() {
-			if period.Until != "" && period.Until <= today {
-				continue
-			}
-			from := period.From
-			if from < today {
-				from = today
-			}
-			candidate := copyModel(m)
-			candidate.Relationships = slices.DeleteFunc(candidate.Relationships, func(other Relationship) bool { return other.ID == r.ID })
-			p := payload{Stereotype: r.Stereotype, Source: r.Source, Target: r.Target, Kind: r.Kind, Role: r.Role, Relation: r.Relation, Share: r.Share, Primary: r.Primary, From: from, Until: period.Until}
-			_, err := decideRelationship(&candidate, mm, "", p, true, true)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (e *Enterprise) ValidateImportedModel(model Model, sourceTenant string, today platform.Date) error {
-	if refusal := checkSourceRelationships(model, directory(), "fed:"+sourceTenant+":", today); refusal != nil {
-		return refusal
-	}
-	return nil
 }

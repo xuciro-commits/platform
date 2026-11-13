@@ -90,15 +90,6 @@ func findTask(xs []*Task, id string) *Task {
 	return nil
 }
 
-func (b *WorkBoard) AnyDelivery(id string) *Task {
-	for _, q := range b.Queues {
-		if t := findTask(q, id); t != nil {
-			return t
-		}
-	}
-	return nil
-}
-
 func (b *WorkBoard) Settled(task *Task) {
 	b.Queues[task.App] = slices.DeleteFunc(b.Queues[task.App], func(x *Task) bool { return x == task })
 	if task.State == "failed" {

@@ -500,10 +500,6 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 	return result, nil
 }
 
-func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	return b.singleDraftAssets(kind, id)
-}
-
 type JointDraftAssets struct {
 	Before []platform.ReleaseAsset `json:"-"`
 	After  []platform.ReleaseAsset `json:"-"`

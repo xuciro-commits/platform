@@ -81,16 +81,6 @@ func schemaFamily(action Action) uint32 {
 	return 1
 }
 
-func (l *Ledger) HistoricalSchemas(schemas ...*pb.SchemaRef) *kernel.Error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if err := l.schemas.Learn(schemas...); err != nil {
-		return err
-	}
-	l.schemaRefs = append(l.schemaRefs, schemas...)
-	return nil
-}
-
 func (l *Ledger) Declarations() []*pb.AuthorityDeclaration { return l.declarations }
 
 func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
