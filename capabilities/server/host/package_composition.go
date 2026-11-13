@@ -6,8 +6,6 @@ import (
 	"platformserver/platform"
 	"platformserver/services/devops/packages"
 	controlowner "platformserver/services/security/control"
-	"slices"
-	"strings"
 )
 
 func (t *Tenant) baseModules() []platform.CapabilityModule {
@@ -27,11 +25,7 @@ func (t *Tenant) baseModules() []platform.CapabilityModule {
 
 func (h *Host) routesComposition(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "GET /v1/composition", Summary: "Selected runtime contracts, implementations and immutable dependency order", Answer: platform.CompositionPlan{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		modules := slices.DeleteFunc(t.baseModules(), func(m platform.CapabilityModule) bool {
-			id, owner := strings.CutPrefix(m.ID, "platform.owner.")
-			return owner && !t.OwnerActive(id)
-		})
-		plan, err := platform.ResolveComposition(modules, nil)
+		plan, err := packages.ActiveComposition(t.baseModules(), t.OwnerActive)
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return

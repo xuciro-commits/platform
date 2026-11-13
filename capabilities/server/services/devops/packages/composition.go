@@ -59,6 +59,14 @@ func (c Composition) Modules() []platform.CapabilityModule {
 	return modules
 }
 
+func ActiveComposition(modules []platform.CapabilityModule, active func(string) bool) (platform.CompositionPlan, error) {
+	modules = slices.DeleteFunc(modules, func(module platform.CapabilityModule) bool {
+		id, owner := strings.CutPrefix(module.ID, "platform.owner.")
+		return owner && !active(id)
+	})
+	return platform.ResolveComposition(modules, nil)
+}
+
 func CheckOwnerRemoval(disabled []string, known func(string) bool, modules []platform.CapabilityModule, open func(removed map[string]bool) error) error {
 	removed := map[string]bool{}
 	for _, id := range disabled {

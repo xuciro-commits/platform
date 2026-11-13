@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	build "platformserver/services/resources/authoring"
 )
 
@@ -17,6 +19,40 @@ type Impact struct {
 	Removals   func(removed, replaced map[platform.AssetRef]bool) []platform.PackageImpactReference
 	Extensions func(platform.ReleaseCandidate) ([]platform.PackageImpactExtension, error)
 	Runs       func(ref platform.AssetRef, offset int) (platform.ApplicationRunPage, *kernel.Error)
+}
+
+func StoredImpact(store *records.Store, definitions []platform.Definition, active func(string) bool, extensions func(platform.ReleaseCandidate) ([]platform.PackageImpactExtension, error), runs func(platform.AssetRef, int) (platform.ApplicationRunPage, *kernel.Error)) Impact {
+	resources := Resources(store)
+	return Impact{Resources: resources,
+		Records: func(typ string) (int, bool) {
+			if objects := store.Type(typ); objects != nil {
+				return objects.Rows().Len(), true
+			}
+			return 0, false
+		},
+		Connection: func(id string) (platform.PackageImpactConnection, bool, error) {
+			record := store.Type(dataowner.ConnectionType).Rows().Get(id)
+			if record == nil {
+				return platform.PackageImpactConnection{}, false, nil
+			}
+			connection := record.Value.Interface().(dataowner.Connection)
+			var definition dataowner.ConnectionDefinition
+			if connection.Published != "" {
+				var accepted platform.ReleaseAsset
+				if err := dataowner.DecodeDescriptor([]byte(connection.Published), &accepted); err != nil {
+					return platform.PackageImpactConnection{}, false, err
+				}
+				if err := dataowner.DecodeDescriptor(accepted.Body, &definition); err != nil {
+					return platform.PackageImpactConnection{}, false, err
+				}
+			}
+			return platform.PackageImpactConnection{Configured: connection.Address != "" && (!definition.Credential || connection.Secret != ""), Credential: definition.Credential}, true, nil
+		},
+		Removals: func(removed, replaced map[platform.AssetRef]bool) []platform.PackageImpactReference {
+			return RemovalImpacts(resources, definitions, active, removed, replaced)
+		},
+		Extensions: extensions,
+		Runs:       runs}
 }
 
 func (i Impact) Of(id string, after []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error) {

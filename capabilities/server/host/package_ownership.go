@@ -17,25 +17,15 @@ func (h *Host) routesPackageOwnership(rt *routes) {
 			return
 		}
 		catalog := t.App("platform").(interface{ PackageViews() []platform.PackageView })
-		for _, view := range catalog.PackageViews() {
-			if view.Descriptor.ID != r.PathValue("id") || view.Descriptor.Version != r.URL.Query().Get("version") {
-				continue
-			}
-			managed := packages.Managed{Descriptor: view.Descriptor, Resources: resourceRows(t.Projection)}
-			id, _ := managed.Project()
-			var project *build.Application
-			if row := t.Projection.Type(build.AppType).Rows().Get(id); row != nil {
-				application := row.Value.Interface().(build.Application)
-				project = &application
-			}
-			plan, err := managed.Ownership(project, t.builders[build.ID])
-			if err != nil {
-				WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-				return
-			}
-			WriteJSON(w, http.StatusOK, plan)
+		plan, err := packages.OwnershipFor(catalog.PackageViews(), r.PathValue("id"), r.URL.Query().Get("version"), t.Projection, t.builders[build.ID])
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "The exact product version is unavailable"})
+		if plan == nil {
+			WriteJSON(w, http.StatusNotFound, map[string]string{"error": "The exact product version is unavailable"})
+			return
+		}
+		WriteJSON(w, http.StatusOK, plan)
 	})
 }

@@ -46,6 +46,14 @@ type Resolver struct {
 	Policy   platform.AIInferencePolicy
 }
 
+func ResolverFor(setting func(string, string) string, policy *platform.AIInferencePolicy, registry Registry) Resolver {
+	r := Resolver{Setting: setting, Registry: registry}
+	if policy != nil {
+		r.Policy = *policy
+	}
+	return r
+}
+
 func (r Resolver) MostTokens() int {
 	n, _ := strconv.Atoi(r.Setting(platform.AIApp, platform.AISettingMaxTokens))
 	return n

@@ -31,7 +31,7 @@ func (t *Tenant) draftWorldLocked(m platform.Member, branch string, now time.Tim
 	if refusal != nil {
 		return nil, refusal
 	}
-	return world.view, nil
+	return world, nil
 }
 
 func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id, branch string, now time.Time) (releaseowner.ReleaseDraftClosure, error) {

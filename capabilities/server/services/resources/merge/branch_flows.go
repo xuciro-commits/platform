@@ -153,11 +153,12 @@ func Evaluate[S, R any](w Workspace, e Evaluator[S, R], m platform.Member, branc
 }
 
 type Flow struct {
+	Tenant   string
 	Read     func(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error)
-	Submit   func(m platform.Member, key, schema, id string, payload any, now time.Time) *kernel.Error
+	Submit   func(m platform.Member, submission *pb.Submission, now time.Time) *kernel.Error
 	Detail   func(m platform.Member, id string, now time.Time) (BranchDetail, *kernel.Error)
 	Plan     func(m platform.Member, branch build.Branch, resolutions []BranchResolution, now time.Time) ([]ResourcePlan, *kernel.Error)
-	Recheck  func(m platform.Member, branch build.Branch, now time.Time)
+	Evaluate func(m platform.Member, branch build.Branch, now time.Time) (BranchCheck, *kernel.Error)
 	Reviewer func(id string) bool
 }
 
@@ -195,15 +196,35 @@ func (f Flow) Rebase(m platform.Member, id string, request BranchResolveRequest,
 		default:
 			payload["op"], payload["spec"] = "update", plan.Merged
 		}
-		if refusal := f.Submit(m, "branch:"+id+":save:"+strconv.Itoa(seq), build.BranchType+".save", id, payload, now); refusal != nil {
+		if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":save:"+strconv.Itoa(seq), build.BranchType+".save", id, payload), now); refusal != nil {
 			return BranchDetail{}, nil, refusal
 		}
 	}
 	if rebased, refusal := f.Read(m, id, now); refusal == nil && len(rebased.Changes) > 0 {
-		f.Recheck(m, rebased, now)
+		if check, refusal := f.Evaluate(m, rebased, now); refusal == nil {
+			_ = f.RecordCheck(m, rebased, check, now)
+		}
 	}
 	detail, refusal := f.Detail(m, id, now)
 	return detail, nil, refusal
+}
+
+func (f Flow) RecordCheck(m platform.Member, branch build.Branch, check BranchCheck, now time.Time) *kernel.Error {
+	schema := build.BranchType + ".check"
+	if branch.State == build.BranchProposed {
+		schema = build.BranchType + ".recheck"
+	}
+	return f.Submit(m, Submission(f.Tenant, m, "branch:"+branch.ID+":check:"+strconv.Itoa(int(branch.Record.Revision)), schema, branch.ID,
+		map[string]any{"check": check}), now)
+}
+
+func (f Flow) Save(m platform.Member, plan SavePlan, typ, draft string, now time.Time) (BranchDetail, *kernel.Error) {
+	if submission := plan.Save(f.Tenant, m, typ, draft); submission != nil {
+		if refusal := f.Submit(m, submission, now); refusal != nil {
+			return BranchDetail{}, refusal
+		}
+	}
+	return f.Detail(m, plan.Branch.ID, now)
 }
 
 func (f Flow) Propose(m platform.Member, id string, reviewers []string, note string, evaluate func(build.Branch) (BranchCheck, []BranchResourceDiff, *kernel.Error), now time.Time) (BranchDetail, *kernel.Error) {
@@ -232,7 +253,8 @@ func (f Flow) Propose(m platform.Member, id string, reviewers []string, note str
 	if reviewers == nil {
 		reviewers = []string{}
 	}
-	if refusal := f.Submit(m, "branch:"+id+":propose:"+strconv.Itoa(len(branch.Changes)), build.BranchType+".propose", id, map[string]any{"reviewers": reviewers, "note": note, "checks": check}, now); refusal != nil {
+	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":propose:"+strconv.Itoa(len(branch.Changes)), build.BranchType+".propose", id,
+		map[string]any{"reviewers": reviewers, "note": note, "checks": check}), now); refusal != nil {
 		return BranchDetail{}, refusal
 	}
 	return f.Detail(m, id, now)
@@ -389,7 +411,8 @@ func (f Flow) Review(m platform.Member, id string, request BranchReviewRequest, 
 	if branch.Proposal != nil {
 		reviews = len(branch.Proposal.Reviews)
 	}
-	if refusal := f.Submit(m, "branch:"+id+":review:"+strconv.Itoa(len(branch.Changes))+":"+strconv.Itoa(reviews+1), build.BranchType+".review", id, map[string]any{"decision": request.Decision, "note": request.Note}, now); refusal != nil {
+	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":review:"+strconv.Itoa(len(branch.Changes))+":"+strconv.Itoa(reviews+1), build.BranchType+".review", id,
+		map[string]any{"decision": request.Decision, "note": request.Note}), now); refusal != nil {
 		return BranchDetail{}, refusal
 	}
 	return f.Detail(m, id, now)
@@ -400,7 +423,7 @@ func (f Flow) Finish(m platform.Member, id, verb string, now time.Time) (BranchD
 	if refusal != nil {
 		return BranchDetail{}, refusal
 	}
-	if refusal := f.Submit(m, "branch:"+id+":"+verb+":"+strconv.Itoa(int(branch.Record.Revision)), build.BranchType+"."+verb, id, map[string]any{}, now); refusal != nil {
+	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":"+verb+":"+strconv.Itoa(int(branch.Record.Revision)), build.BranchType+"."+verb, id, map[string]any{}), now); refusal != nil {
 		return BranchDetail{}, refusal
 	}
 	return f.Detail(m, id, now)

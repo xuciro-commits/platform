@@ -40,7 +40,7 @@ func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submi
 			if refusal != nil {
 				return trialowner.Simulation{}, refusal
 			}
-			draft = t.newStagedDecisionOn(world.view.Projection.ForkRecords())
+			draft = t.newStagedDecisionOn(world.Projection.ForkRecords())
 			if build.BranchDraftType(s.GetTarget().GetType()) {
 				s.ExpectedRevision = nil
 			}

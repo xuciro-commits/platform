@@ -32,6 +32,18 @@ type SavePlan struct {
 	Spec        json.RawMessage
 }
 
+type MergePlan struct {
+	Check      *BranchCheck
+	Submission *pb.Submission
+	Actions    []Action
+	Applied    []BranchResourceCheck
+}
+
+type WorldPlan struct {
+	Branch  build.Branch
+	Actions []Action
+}
+
 func Refuse(message string, args ...any) *kernel.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, message, args...)
 }
@@ -417,6 +429,44 @@ func (w Workspace) BranchDiff(m platform.Member, id string, now time.Time) (Bran
 		out.Conflicts += len(plan.Diff.Conflicts)
 	}
 	return out, nil
+}
+
+func (w Workspace) PlanMerge(m platform.Member, id string, resolutions []BranchResolution, simulate bool, now time.Time) (MergePlan, *kernel.Error) {
+	branch, refusal := w.Branch(m, id, now)
+	if refusal != nil {
+		return MergePlan{}, refusal
+	}
+	check, plans, refusal := w.ReadyToMerge(m, branch, resolutions, simulate, now)
+	if refusal != nil {
+		return MergePlan{}, refusal
+	}
+	submission, actions, applied, refusal := w.MergeSubmission(m, id, branch, check, plans)
+	if refusal != nil {
+		return MergePlan{}, refusal
+	}
+	return MergePlan{Check: check, Submission: submission, Actions: actions, Applied: applied}, nil
+}
+
+func (w Workspace) WorldPlan(m platform.Member, id string, now time.Time) (WorldPlan, *kernel.Error) {
+	branch, refusal := w.Branch(m, id, now)
+	if refusal != nil {
+		return WorldPlan{}, refusal
+	}
+	if branch.State != build.BranchOpen && branch.State != build.BranchProposed {
+		return WorldPlan{}, Refuse("The branch is {state}; only an open or proposed branch has a staged world", branch.State)
+	}
+	plans, refusal := w.Plan(m, branch, nil, now)
+	if refusal != nil {
+		return WorldPlan{}, refusal
+	}
+	if conflicts := ConflictsOf(plans); len(conflicts) > 0 {
+		return WorldPlan{}, Refuse("The branch conflicts with main in {count} resources; rebase it first", len(conflicts))
+	}
+	actions, refusal := w.Actions(plans)
+	if refusal != nil {
+		return WorldPlan{}, refusal
+	}
+	return WorldPlan{Branch: branch, Actions: actions}, nil
 }
 
 func (w Workspace) splitCodeBuild(plan ResourcePlan) (json.RawMessage, json.RawMessage) {

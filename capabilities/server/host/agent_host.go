@@ -1,11 +1,8 @@
 package host
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"platformserver/services/actions"
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
@@ -66,48 +63,19 @@ func (h hostView) AgentSurface(reader platform.Member, app string) platform.Agen
 	return agentowner.SurfaceSource{Builder: build.ID, Call: call, Criteria: h.t.modelCriteria}.Surface(app, h.t.Definitions(reader))
 }
 
-const agentObjectRows = 50
-
 func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMessage, now time.Time) (platform.AgentObservation, *kernel.Error) {
 	reader.AIContext = true
-	invalid := func(message string) (platform.AgentObservation, *kernel.Error) {
-		return platform.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
-	}
-	var req objects.ObjectSetRequest
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || req.Offset < 0 || req.Limit < 0 || req.Set.Check() != nil {
-		return invalid("The object set request is not valid")
-	}
-	aggregated := len(req.Groups) > 0 || len(req.Measures) > 0 || req.Window != nil || req.Histogram != nil || req.MaxRows != 0 || req.Collection != nil
-	out := platform.AgentObservation{}
-	switch op {
-	case "load":
-		if aggregated {
-			return invalid("A load carries no aggregate options")
-		}
-		if req.Limit == 0 || req.Limit > agentObjectRows {
-			req.Limit = agentObjectRows
-		}
-		caller := platform.NewCaller(runtime{t: h.t}, reader, "", false, false)
-		page, object, err := h.t.loadObjectSet(h.t.Projection, caller, req.Set, objects.Window{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true}, now)
-		if err != nil {
-			return out, err
-		}
-		return agentowner.ObjectObservation(object, page), nil
-	case "aggregate":
-		if len(req.Sort) > 0 || req.Offset != 0 || req.Limit != 0 || req.Format || req.Window != nil || req.Histogram != nil || req.Collection != nil {
-			return invalid("An aggregate carries groups and measures only")
-		}
-		result, err := h.t.aggregateObjectSet(reader, req, now)
-		if err != nil {
-			return out, err
-		}
-		out.Body, _ = json.Marshal(result)
-	default:
-		return invalid("Unknown object set operation")
-	}
-	return out, nil
+	return agentowner.Objects{
+		Load: func(q agentowner.ObjectQuery, now time.Time) (any, string, *kernel.Error) {
+			caller := platform.NewCaller(runtime{t: h.t}, reader, "", false, false)
+			page, object, err := h.t.loadObjectSet(h.t.Projection, caller, q.Set, objects.Window{Sort: q.Sort, Offset: q.Offset, Limit: q.Limit, Bounded: true}, now)
+			return page, object, err
+		},
+		Aggregate: func(q agentowner.ObjectQuery, now time.Time) (any, *kernel.Error) {
+			return h.t.aggregateObjectSet(reader, objects.ObjectSetRequest{Set: q.Set, Sort: q.Sort, Offset: q.Offset, Limit: q.Limit,
+				Groups: q.Groups, Measures: q.Measures, Window: q.Window, Histogram: q.Histogram, MaxRows: q.MaxRows, Collection: q.Collection, Format: q.Format}, now)
+		},
+	}.ObserveRaw(op, raw, now)
 }
 
 func (h hostView) AgentSources(value any) []string { return h.t.refsIn(value) }
@@ -126,11 +94,7 @@ func (h hostView) ExternalAgentMembers() []platform.Member {
 	return h.t.identityOwner.AgentMembers()
 }
 func (h hostView) AgentDecisionMembers() []string {
-	var out []string
-	for _, entry := range h.t.Audit() {
-		out = append(out, entry.Member)
-	}
-	return out
+	return agentowner.DecisionMembers(h.t.Audit())
 }
 func readAgentHost[T any](h hostView, read func(*Tenant) (T, *kernel.Error)) (T, *kernel.Error) {
 	if h.decision != nil {
@@ -181,23 +145,30 @@ func (h hostView) AgentProviderAvailable(provider string, now time.Time) bool {
 	return h.t.breakers.Allow("ai:"+provider, now, false)
 }
 func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AIModel, member platform.Member, request platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
-	_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
-		c := platform.NewCaller(runtime{t: t}, member, platform.AgentApp, false, false)
-		return struct{}{}, authorizationRefusal(t.authorizeNative(c, "model:"+request.Model, "action", []string{platform.AnyMember}, true))
-	})
-	if refusal != nil {
-		return platform.ChatAnswer{}, &platform.AIError{Status: 403, Detail: refusal.Message}
-	}
-	answer, failure := h.t.call(provider, model, member, request, now)
-	_, _ = recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
-		if value, ok := t.held(platform.RunType + "/" + request.Run); ok {
-			if run, ok := value.(platform.AgentRunRecord); ok {
-				answer.Usage = agentowner.RunUsage(answer.Usage, run)
+	return aigateway.AgentCall{
+		Authorize: func(member platform.Member, request platform.ChatRequest) *platform.AIError {
+			_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+				c := platform.NewCaller(runtime{t: t}, member, platform.AgentApp, false, false)
+				return struct{}{}, authorizationRefusal(t.authorizeNative(c, "model:"+request.Model, "action", []string{platform.AnyMember}, true))
+			})
+			if refusal != nil {
+				return &platform.AIError{Status: 403, Detail: refusal.Message}
 			}
-		}
-		return struct{}{}, nil
-	})
-	return answer, failure
+			return nil
+		},
+		Call: h.t.call,
+		Answer: func(request platform.ChatRequest, answer platform.ChatAnswer) platform.ChatAnswer {
+			_, _ = recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+				if value, ok := t.held(platform.RunType + "/" + request.Run); ok {
+					if run, ok := value.(platform.AgentRunRecord); ok {
+						answer.Usage = agentowner.RunUsage(answer.Usage, run)
+					}
+				}
+				return struct{}{}, nil
+			})
+			return answer
+		},
+	}.Run(provider, model, member, request, now)
 }
 
 func (h hostView) MeterAgentUsage(member platform.Member, usage platform.AIUsage) *kernel.Error {
@@ -236,10 +207,7 @@ func (t *Tenant) candidateEvaluation() agentowner.CandidateEvaluation {
 }
 
 func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEvaluationRequest, now time.Time) (string, error) {
-	if t.agents == nil {
-		return "", fmt.Errorf("the agent capability is unavailable")
-	}
-	return agentowner.ReleaseEvaluation{Tenant: t.ID, Candidate: t.candidateEvaluation(),
+	return agentowner.ReleaseRunner{Tenant: t.ID, Candidate: t.candidateEvaluation(), Agent: t.agents != nil,
 		Existing: func(id string) (platform.Evaluation, bool) {
 			return platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), id)
 		},
@@ -260,8 +228,8 @@ func (t *Tenant) suspended(member string) bool {
 	return ok && v.(platform.Switch).Suspended
 }
 
-func (t *Tenant) agentTurns() agentowner.Turns {
-	return agentowner.Turns{Agents: t.agents, Stopped: t.businessStopped, Quarantined: t.quarantined,
+func (t *Tenant) agentSchedule() agentowner.Schedule {
+	return agentowner.Schedule{Agents: t.agents, Stopped: t.businessStopped, Quarantined: t.quarantined, Recording: t.Recording,
 		DueTurns: func(now time.Time) []platform.AgentTurn {
 			turns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]platform.AgentTurn, *kernel.Error) { return t.agents.DueAgentTurns(now), nil })
 			return turns
@@ -276,44 +244,14 @@ func (t *Tenant) agentTurns() agentowner.Turns {
 			})
 			return running && refusal == nil
 		},
-		Call: t.call, Meter: t.meter, Step: t.applyAgentStep, Wake: wakeWork}
-}
-
-func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool {
-	applied, refusal := decideOnImage(t, context.Background(), "agent:settle", func(t *Tenant) (bool, *kernel.Error) {
-		return t.prepareAgentStep(b, now), nil
-	}, func(t *Tenant, candidate preparedAccepted, applied bool, refusal *kernel.Error) (bool, *kernel.Error) {
-		if len(candidate.entry.Body) != 0 {
-			t.finishAgentStep(candidate)
-		}
-		return applied && !t.quarantined(), refusal
-	})
-	return applied && refusal == nil
-}
-
-func (t *Tenant) prepareAgentStep(b platform.AgentResultStep, now time.Time) bool {
-	return agentowner.StepPreparation{Quarantined: t.quarantined, Recording: t.Recording,
+		Call: t.call, Meter: t.meter, Step: t.applyAgentStep, Wake: wakeWork,
 		Run: func(id string) (platform.AgentRunRecord, bool) {
 			return platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
 		},
-		Evaluation: t.evaluation,
-		Allows:     func(run platform.AgentRunRecord) bool { return t.agents.AllowsAgentRun(run) },
-		Accept:     t.acceptAgentStep,
+		Evaluation: t.evaluation, Accept: t.acceptAgentStep,
 		Failed: func(at time.Time, run, detail string) {
 			t.observeOwnerRun(at, "agent", run, platform.AgentApp, "", "failed", "Agent step", detail)
 		},
-	}.Prepare(b, now)
-}
-
-func (t *Tenant) evaluation(id string) (platform.Evaluation, bool) {
-	return platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), id)
-}
-
-func (t *Tenant) Evaluate(now time.Time) {
-	if t.agents == nil || t.ai == nil {
-		return
-	}
-	agentowner.EvaluationQueue{Stopped: t.businessStopped,
 		Queued: func() ([]platform.Evaluation, *kernel.Error) {
 			return recordRead(t, context.Background(), func(t *Tenant) ([]platform.Evaluation, *kernel.Error) {
 				evals, _, refusal := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
@@ -330,11 +268,39 @@ func (t *Tenant) Evaluate(now time.Time) {
 			})
 			return current, refusal == nil
 		},
-		Evaluate: func(ev platform.Evaluation, at time.Time, step func(*platform.Evaluation) bool) platform.Evaluation {
-			return t.agentEvaluator.Evaluate(t.agents.AgentEvaluationRuntime(), ev, at, step)
-		},
-		Apply: t.applyAgentStep,
-	}.Drain(now)
+		Evaluator: t.agentEvaluator,
+	}
+}
+
+func (t *Tenant) agentTurns() agentowner.Turns {
+	return t.agentSchedule().Turns()
+}
+
+func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool {
+	applied, refusal := decideOnImage(t, context.Background(), "agent:settle", func(t *Tenant) (bool, *kernel.Error) {
+		return t.prepareAgentStep(b, now), nil
+	}, func(t *Tenant, candidate preparedAccepted, applied bool, refusal *kernel.Error) (bool, *kernel.Error) {
+		if len(candidate.entry.Body) != 0 {
+			t.finishAgentStep(candidate)
+		}
+		return applied && !t.quarantined(), refusal
+	})
+	return applied && refusal == nil
+}
+
+func (t *Tenant) prepareAgentStep(b platform.AgentResultStep, now time.Time) bool {
+	return t.agentSchedule().Prepare(b, now)
+}
+
+func (t *Tenant) evaluation(id string) (platform.Evaluation, bool) {
+	return platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), id)
+}
+
+func (t *Tenant) Evaluate(now time.Time) {
+	if t.agents == nil || t.ai == nil {
+		return
+	}
+	t.agentSchedule().Drain(now)
 }
 
 func (h hostView) AgentModelConfigurationDigest(model platform.AIModel, provider platform.AIProvider, binding *platform.AIModelBinding) (string, error) {

@@ -45,11 +45,13 @@ func (t *Tenant) ResourceReadable(m platform.Member, typ, id string) bool {
 func (t *Tenant) LineageCache() *lineage.Cache[lineage.Host] { return &t.lineageCache }
 
 func (t *Tenant) BranchView(m platform.Member, id string, now time.Time) (lineage.Host, *kernel.Error) {
-	world, refusal := t.branchWorldLocked(m, id, now)
-	if refusal != nil {
-		return nil, refusal
-	}
-	return world.view, nil
+	return recordRead(t, context.Background(), func(t *Tenant) (lineage.Host, *kernel.Error) {
+		world, refusal := t.branchWorldLocked(m, id, now)
+		if refusal != nil {
+			return nil, refusal
+		}
+		return world, nil
+	})
 }
 
 func (t *Tenant) lineage(ctx context.Context, m platform.Member, request lineage.LineageRequest) (lineage.Lineage, *kernel.Error) {

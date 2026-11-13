@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
 )
@@ -26,6 +27,22 @@ type PackageOwnershipEntry struct {
 	Version   uint32            `json:"version"`
 	Ref       platform.AssetRef `json:"ref"`
 	From      string            `json:"from"`
+}
+
+func OwnershipFor(views []platform.PackageView, id, version string, store *records.Store, owner build.ConstructionDrafts) (*PackageOwnership, error) {
+	view := FindView(views, id, version)
+	if view == nil {
+		return nil, nil
+	}
+	managed := Managed{Descriptor: view.Descriptor, Resources: Resources(store)}
+	projectID, _ := managed.Project()
+	var project *build.Application
+	if row := store.Type(build.AppType).Rows().Get(projectID); row != nil {
+		application := row.Value.Interface().(build.Application)
+		project = &application
+	}
+	plan, err := managed.Ownership(project, owner)
+	return &plan, err
 }
 
 func (m Managed) Ownership(project *build.Application, owner build.ConstructionDrafts) (PackageOwnership, error) {

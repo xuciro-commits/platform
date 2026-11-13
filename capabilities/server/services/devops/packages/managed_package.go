@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"reflect"
+	"slices"
 	"strings"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	build "platformserver/services/resources/authoring"
@@ -27,6 +31,141 @@ type Managed struct {
 	Descriptor platform.PackageDescriptor
 	Resources  []build.Resource
 	Rows       ManagedRows
+}
+
+type ManagedPreparation struct {
+	Managed
+	Archive    bool
+	Available  []platform.ReleaseAsset
+	At         time.Time
+	Upgrade    bool
+	Downgrade  bool
+	Owner      build.ConstructionDrafts
+	Code       func() ([]platform.ReleaseAsset, error)
+	Impact     func(string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
+	Bootstrap  func(platform.ReleaseCandidate, platform.AssetReleaseContext) error
+	Registry   func() (*platform.AssetRegistry, error)
+	Projection *records.Store
+
+	CheckExtensions func() error
+	CheckStorage    func(upgrade, downgrade bool) error
+}
+
+func NewManaged(caller platform.Caller, descriptor platform.PackageDescriptor, rows func() *records.Store, install func(platform.ReleaseInstallation), fail func(*kernel.Error)) Managed {
+	return Managed{Caller: caller, Descriptor: descriptor, Resources: Resources(rows()), Rows: ManagedRows{
+		Archived: func(resource build.Resource, archived bool) any {
+			return rows().ArchivedCopy(resource.Type, resource.Draft, archived)
+		},
+		Decode:  func(typ string, image json.RawMessage) (any, error) { return rows().DecodeRow(typ, image) },
+		Image:   func(record string) json.RawMessage { return rows().RowImage(record) },
+		Install: install,
+		Fail:    fail,
+	}}
+}
+
+func Resources(store *records.Store) []build.Resource {
+	var resources []build.Resource
+	if directory := store.Type(build.ResourceType); directory != nil {
+		for _, row := range directory.Rows().All() {
+			resources = append(resources, row.Value.Interface().(build.Resource))
+		}
+	}
+	return resources
+}
+
+func RestoreReferencedResources(store *records.Store, installations []platform.ReleaseInstallation) {
+	referenced := map[platform.AssetRef]bool{}
+	for _, installation := range installations {
+		if installation.Ref != nil {
+			referenced[*installation.Ref] = true
+		}
+	}
+	for _, resource := range Resources(store) {
+		if !referenced[resource.Ref] {
+			continue
+		}
+		et := store.Type(resource.Type)
+		if et == nil {
+			continue
+		}
+		current := et.Rows().Get(resource.Draft)
+		if current == nil || !records.Header(current.Value).Archived {
+			continue
+		}
+		value := reflect.New(current.Value.Type()).Elem()
+		value.Set(current.Value)
+		records.Header(value).Archived = false
+		copy := *current
+		copy.Value = value
+		et.SetRow(resource.Draft, &copy)
+	}
+}
+
+func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *kernel.Error) {
+	if p.Descriptor.Blueprint == nil && !p.Archive {
+		return nil, nil
+	}
+	if p.Archive {
+		return p.Managed.Archive, nil
+	}
+	code, err := p.Code()
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+	}
+	candidate, err := BlueprintCandidate(*p.Descriptor.Blueprint, p.Owner, p.Available)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+	}
+	owned, err := p.Owner.CompleteBlueprintAssets(p.Descriptor.Blueprint.Assets)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+	}
+	refs, refusal := p.Managed.Owned(code, owned)
+	if refusal != nil {
+		return nil, refusal
+	}
+	impact, err := p.Impact(p.Descriptor.ID, owned)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package impact could not be inspected: {reason}", err.Error())
+	}
+	if len(impact.References) > 0 {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before switching the product version", impact.References[0].Resource.String(), impact.References[0].Consumer.String())
+	}
+	projectID, _ := p.Managed.Project()
+	context := platform.AssetReleaseContext{Member: p.Caller.Member, At: p.At, ManagedBy: p.Descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: p.Upgrade}
+	if err := p.Bootstrap(candidate, context); err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())
+	}
+	registry, err := p.Registry()
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+	}
+	end, err := registry.BeginBootstrap(candidate.Assets)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+	}
+	defer end()
+	owned = slices.DeleteFunc(slices.Clone(candidate.Assets), func(asset platform.ReleaseAsset) bool { return !refs[asset.Ref] })
+	plans, err := registry.PrepareReleaseAssets(owned, context)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+	}
+	if err := p.CheckExtensions(); err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package version breaks an extension: {reason}", err.Error())
+	}
+	if err := p.CheckStorage(p.Upgrade, p.Downgrade); err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package version cannot read the current data: {reason}", err.Error())
+	}
+	media := make([]platform.ReleaseInstallation, 0, len(plans))
+	for _, plan := range plans {
+		ref := plan.Ref
+		media = append(media, platform.ReleaseInstallation{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Ref: &ref, Record: plan.Record})
+	}
+	mediaVersions, err := records.PrepareMediaVersionImages(p.Projection, media)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+	}
+	return func(r *pb.ChangeRecord) { p.Managed.Install(r, refs, plans, mediaVersions) }, nil
 }
 
 func (m Managed) Project() (id, name string) {
