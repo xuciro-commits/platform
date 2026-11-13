@@ -1,0 +1,413 @@
+{
+  "name": "mesproductionstart",
+  "title": "Upstream start coordination",
+  "fields": [
+    {
+      "name": "order",
+      "title": "Shop order",
+      "type": "reference",
+      "ref": "build.mesorder",
+      "required": true,
+      "inverse": "starts"
+    },
+    {
+      "name": "execution",
+      "title": "Execution batch",
+      "type": "reference",
+      "ref": "build.mesbatch",
+      "required": true
+    },
+    {
+      "name": "upstream",
+      "title": "Upstream production order",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "shoporder",
+      "title": "Stable shop identity",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "line",
+      "title": "Production line",
+      "type": "reference",
+      "ref": "enterprise.element",
+      "stereotype": "ActualOrganization",
+      "formulaExpr": {
+        "op": "path",
+        "kind": "reference",
+        "args": [
+          {
+            "op": "",
+            "kind": "reference",
+            "ref": "order"
+          }
+        ],
+        "path": [
+          "line"
+        ]
+      }
+    }
+  ],
+  "access": [
+    {
+      "role": "operator",
+      "read": "unit",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "supervisor",
+      "read": "below",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "queued",
+      "title": "Queued"
+    },
+    {
+      "name": "pending",
+      "title": "Pending"
+    },
+    {
+      "name": "confirmed",
+      "title": "Confirmed"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "firststart",
+      "kind": "unique",
+      "fields": [
+        "order"
+      ],
+      "message": "The first execution batch starts upstream production once."
+    },
+    {
+      "name": "acceptedfacts",
+      "kind": "immutable",
+      "fields": [
+        "order",
+        "execution",
+        "upstream",
+        "shoporder",
+        "archived"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    }
+  ],
+  "actions": [
+    {
+      "name": "send",
+      "title": "Send the original production request",
+      "from": [
+        "queued"
+      ],
+      "roles": [
+        "operator",
+        "supervisor",
+        "quality",
+        "production"
+      ],
+      "transaction": {
+        "subject": "build.mesproductionstart",
+        "steps": [
+          {
+            "name": "state",
+            "kind": "update",
+            "target": {
+              "type": "build.mesproductionstart",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "pending"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.upstream"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "upstream"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.shoporder"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "shoporder"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "The declared business conditions are not satisfied.",
+        "confirmation": {
+          "parties": [
+            {
+              "name": "upstream",
+              "title": "Upstream production provider",
+              "writeback": "mesproductionstart"
+            }
+          ],
+          "deadlineSeconds": 3600,
+          "onPartial": "hold",
+          "onExpire": "hold",
+          "onComplete": "acknowledge",
+          "reviewerRole": "supervisor"
+        }
+      },
+      "inputs": [
+        {
+          "name": "upstream",
+          "title": "Upstream production order",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "shoporder",
+          "title": "Stable shop identity",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "acknowledge",
+      "title": "Keep the confirmed coordination outcome",
+      "from": [
+        "pending"
+      ],
+      "roles": [
+        "operator",
+        "supervisor",
+        "quality",
+        "production"
+      ],
+      "transaction": {
+        "subject": "build.mesproductionstart",
+        "steps": [
+          {
+            "name": "state",
+            "kind": "update",
+            "target": {
+              "type": "build.mesproductionstart",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "confirmed"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.mesproductionstart",
+    "steps": [
+      {
+        "name": "seal",
+        "kind": "update",
+        "target": {
+          "type": "build.mesproductionstart",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "shoporder",
+            "from": "shoporder"
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "order"
+            },
+            {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "execution"
+                }
+              ],
+              "path": [
+                "order"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "execution"
+                }
+              ],
+              "path": [
+                "state"
+              ]
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "active"
+              }
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "upstream"
+            },
+            {
+              "op": "path",
+              "kind": "text",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "order"
+                }
+              ],
+              "path": [
+                "upstream"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "shoporder"
+            },
+            {
+              "op": "path",
+              "kind": "text",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "order"
+                }
+              ],
+              "path": [
+                "deliverykey"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "message": "The coordination retains its original shop, upstream binding and actual execution facts."
+  },
+  "type": "build.mesproductionstart",
+  "scope": {
+    "unit": "line",
+    "structure": "site"
+  },
+  "enterpriseUse": {
+    "op": "",
+    "kind": "boolean",
+    "lit": {
+      "value": false
+    }
+  }
+}

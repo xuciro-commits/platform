@@ -1,0 +1,606 @@
+{
+  "roots": [
+    {
+      "app": "build",
+      "kind": "app",
+      "name": "mesapp"
+    }
+  ],
+  "assets": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "mesrequirements"
+      },
+      "path": "queries/mesrequirements.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "messkills"
+      },
+      "path": "queries/messkills.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.mesfirststart"
+      },
+      "path": "flows/mesfirststart.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesupstreamorder"
+      },
+      "path": "objects/mesupstreamorder.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "source",
+        "name": "mesproductionplansource"
+      },
+      "path": "integrations/sources/mesproductionplansource.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "mesproductionplans"
+      },
+      "path": "queries/mesproductionplans.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesupstreamorder"
+      },
+      "path": "pages/mesupstreamorder.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "mesproductionoutcomes"
+      },
+      "path": "queries/mesproductionoutcomes.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "mesproductionrestart"
+      },
+      "path": "integrations/writebacks/mesproductionrestart.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.mesproductioncorrectstart"
+      },
+      "path": "flows/mesproductioncorrectstart.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesproductionstart"
+      },
+      "path": "objects/mesproductionstart.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.mesproductionstartdispatch"
+      },
+      "path": "flows/mesproductionstartdispatch.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesproductionstart"
+      },
+      "path": "pages/mesproductionstart.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesproductionresult"
+      },
+      "path": "objects/mesproductionresult.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.mesproductionresultdispatch"
+      },
+      "path": "flows/mesproductionresultdispatch.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesproductionresult"
+      },
+      "path": "pages/mesproductionresult.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "mesproductionstart"
+      },
+      "path": "integrations/writebacks/mesproductionstart.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "mesproductionconfirm"
+      },
+      "path": "integrations/writebacks/mesproductionconfirm.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "source",
+        "name": "mesproductionreceiptsource"
+      },
+      "path": "integrations/sources/mesproductionreceiptsource.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "dataset",
+        "name": "mesproductionreceipts"
+      },
+      "path": "integrations/datasets/mesproductionreceipts.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.dataset-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mescapability"
+      },
+      "path": "objects/mescapability.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mescenter"
+      },
+      "path": "objects/mescenter.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesresource"
+      },
+      "path": "objects/mesresource.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.messkill"
+      },
+      "path": "objects/messkill.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesrouting"
+      },
+      "path": "objects/mesrouting.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesoperation"
+      },
+      "path": "objects/mesoperation.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesrequirement"
+      },
+      "path": "objects/mesrequirement.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesorder"
+      },
+      "path": "objects/mesorder.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesbatch"
+      },
+      "path": "objects/mesbatch.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesissue"
+      },
+      "path": "objects/mesissue.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.messignature"
+      },
+      "path": "objects/messignature.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesissue"
+      },
+      "path": "pages/mesissue.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "messignature"
+      },
+      "path": "pages/messignature.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mescapability"
+      },
+      "path": "pages/mescapability.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mescenter"
+      },
+      "path": "pages/mescenter.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesresource"
+      },
+      "path": "pages/mesresource.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "messkill"
+      },
+      "path": "pages/messkill.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesrouting"
+      },
+      "path": "pages/mesrouting.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesoperation"
+      },
+      "path": "pages/mesoperation.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesrequirement"
+      },
+      "path": "pages/mesrequirement.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesorder"
+      },
+      "path": "pages/mesorder.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesbatch"
+      },
+      "path": "pages/mesbatch.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "app",
+        "name": "mesapp"
+      },
+      "path": "applications/mesapp.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "test-plan",
+        "name": "manufacturingassembly"
+      },
+      "path": "tests/test-plans/manufacturingassembly.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "test-plan",
+        "name": "manufacturingmachining"
+      },
+      "path": "tests/test-plans/manufacturingmachining.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "sample-set",
+        "name": "manufacturingexample"
+      },
+      "path": "tests/sample-sets/manufacturingexample.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.samples-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesdevice"
+      },
+      "path": "objects/mesdevice.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesdowntime"
+      },
+      "path": "objects/mesdowntime.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "link-type",
+        "name": "mesdowntimehistory"
+      },
+      "path": "objects/link-types/mesdowntimehistory.json",
+      "contractVersion": 4,
+      "sourceVersion": "1.link-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "connection",
+        "name": "mesobservations"
+      },
+      "path": "integrations/connections/mesobservations.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "observation",
+        "name": "messtates"
+      },
+      "path": "integrations/observations/messtates.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.observation-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.mesdowntimereview"
+      },
+      "path": "flows/mesdowntimereview.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesdevice"
+      },
+      "path": "pages/mesdevice.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesdowntime"
+      },
+      "path": "pages/mesdowntime.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "function",
+        "name": "mesreview"
+      },
+      "path": "functions/mesreview.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.function-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "evaluation-set",
+        "name": "mesreviewquality"
+      },
+      "path": "tests/evaluations/mesreviewquality.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.evaluation-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "agent",
+        "name": "erpcorrection"
+      },
+      "path": "agents/erpcorrection.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.agent-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "agent",
+        "name": "materialplanner"
+      },
+      "path": "agents/materialplanner.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.agent-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "connection",
+        "name": "productionupstream"
+      },
+      "path": "integrations/connections/productionupstream.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    }
+  ],
+  "guide": "docs/guide.md",
+  "setup": {
+    "steps": "setup.json",
+    "roles": "roles/requirements.json"
+  }
+}

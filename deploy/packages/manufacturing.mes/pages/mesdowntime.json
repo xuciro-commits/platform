@@ -1,0 +1,662 @@
+{
+  "format": 4,
+  "name": "mesdowntime",
+  "title": "Downtime",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesdowntime"
+  },
+  "dataBindings": [
+    {
+      "id": "current",
+      "owner": "current",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesdowntime"
+      },
+      "model": {
+        "type": "build.mesdowntime",
+        "fields": [
+          {
+            "name": "device"
+          },
+          {
+            "name": "since"
+          },
+          {
+            "name": "until"
+          },
+          {
+            "name": "review"
+          },
+          {
+            "name": "retired"
+          },
+          {
+            "name": "reason"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "device"
+        },
+        {
+          "name": "since"
+        },
+        {
+          "name": "until"
+        },
+        {
+          "name": "review"
+        },
+        {
+          "name": "retired"
+        },
+        {
+          "name": "reason"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selection": "current",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "detail",
+      "owner": "detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesdowntime"
+      },
+      "model": {
+        "type": "build.mesdowntime",
+        "fields": [
+          {
+            "name": "device"
+          },
+          {
+            "name": "since"
+          },
+          {
+            "name": "until"
+          },
+          {
+            "name": "openstart"
+          },
+          {
+            "name": "openend"
+          },
+          {
+            "name": "review"
+          },
+          {
+            "name": "retired"
+          },
+          {
+            "name": "reason"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "device"
+        },
+        {
+          "name": "since"
+        },
+        {
+          "name": "until"
+        },
+        {
+          "name": "openstart"
+        },
+        {
+          "name": "openend"
+        },
+        {
+          "name": "review"
+        },
+        {
+          "name": "retired"
+        },
+        {
+          "name": "reason"
+        }
+      ],
+      "ports": {
+        "selection": "current",
+        "selectionMode": "read",
+        "widget": "record-view"
+      }
+    },
+    {
+      "id": "predecessors",
+      "owner": "predecessors",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesdowntime"
+      },
+      "model": {
+        "type": "build.mesdowntime",
+        "fields": [
+          {
+            "name": "device"
+          },
+          {
+            "name": "since"
+          },
+          {
+            "name": "until"
+          },
+          {
+            "name": "reason"
+          },
+          {
+            "name": "retired"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "device"
+        },
+        {
+          "name": "since"
+        },
+        {
+          "name": "until"
+        },
+        {
+          "name": "reason"
+        },
+        {
+          "name": "retired"
+        }
+      ],
+      "ports": {
+        "collectionVariable": "previousEvents",
+        "parentable": "true",
+        "selection": "previous",
+        "selectionMode": "write",
+        "widget": "table"
+      },
+      "limit": 50
+    },
+    {
+      "id": "previousdetail",
+      "owner": "previousdetail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesdowntime"
+      },
+      "model": {
+        "type": "build.mesdowntime",
+        "fields": [
+          {
+            "name": "since"
+          },
+          {
+            "name": "until"
+          },
+          {
+            "name": "reason"
+          },
+          {
+            "name": "retired"
+          },
+          {
+            "name": "review"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "since"
+        },
+        {
+          "name": "until"
+        },
+        {
+          "name": "reason"
+        },
+        {
+          "name": "retired"
+        },
+        {
+          "name": "review"
+        }
+      ],
+      "ports": {
+        "selection": "previous",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    },
+    {
+      "id": "provenance",
+      "owner": "provenance",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesdowntime"
+      },
+      "model": {
+        "type": "build.mesdowntime",
+        "fields": [
+          {
+            "name": "source"
+          },
+          {
+            "name": "sourceversion"
+          },
+          {
+            "name": "sourcerevision"
+          },
+          {
+            "name": "processingversion"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "source"
+        },
+        {
+          "name": "sourceversion"
+        },
+        {
+          "name": "sourcerevision"
+        },
+        {
+          "name": "processingversion"
+        }
+      ],
+      "ports": {
+        "selection": "current",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesdowntime.reason"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesdowntime.review"
+        }
+      ]
+    },
+    {
+      "id": "current",
+      "owner": "current",
+      "binding": "current"
+    },
+    {
+      "id": "detail",
+      "owner": "detail",
+      "binding": "detail",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesdowntime.reason"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesdowntime.review"
+        }
+      ]
+    },
+    {
+      "id": "predecessors",
+      "owner": "predecessors",
+      "binding": "predecessors"
+    },
+    {
+      "id": "previousdetail",
+      "owner": "previousdetail",
+      "binding": "previousdetail"
+    },
+    {
+      "id": "provenance",
+      "owner": "provenance",
+      "binding": "provenance"
+    }
+  ],
+  "inputSchema": {
+    "variables": {
+      "currentEvent": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "current"
+        }
+      },
+      "downtimeTab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "detail"
+      },
+      "previousEvents": {
+        "scope": "page",
+        "type": "object-set",
+        "mode": "resource",
+        "source": {
+          "query": "predecessors",
+          "kind": "plan"
+        }
+      }
+    },
+    "queries": {
+      "predecessors": {
+        "direction": "reverse",
+        "title": "Predecessor events",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.mesdowntime"
+        },
+        "query": {
+          "ref": {
+            "app": "build",
+            "kind": "link-type",
+            "name": "mesdowntimehistory"
+          },
+          "sourceVersion": "1.link-1"
+        },
+        "for": {
+          "variable": "currentEvent"
+        },
+        "sort": [
+          "since"
+        ],
+        "limit": 50
+      }
+    },
+    "selections": [
+      {
+        "name": "current",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.mesdowntime"
+        }
+      },
+      {
+        "name": "previous",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.mesdowntime"
+        }
+      }
+    ]
+  },
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "current",
+        "parent": "workspace",
+        "kind": "page",
+        "binding": "current",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "detail",
+        "parent": "eventpanel",
+        "kind": "page",
+        "binding": "detail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "eventpanel",
+        "parent": "workspace",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "downtimeTab",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "history",
+        "parent": "eventpanel",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "predecessors",
+        "parent": "history",
+        "kind": "page",
+        "binding": "predecessors",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "previousdetail",
+        "parent": "history",
+        "kind": "page",
+        "binding": "previousdetail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "provenance",
+        "parent": "eventpanel",
+        "kind": "page",
+        "binding": "provenance",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "workspace",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      }
+    ],
+    "owners": {
+      "current": "current",
+      "detail": "detail",
+      "predecessors": "predecessors",
+      "previousdetail": "previousdetail",
+      "provenance": "provenance"
+    },
+    "root": "root"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": {
+        "formatVersion": 2,
+        "nodes": {
+          "current": {
+            "kind": "widget",
+            "section": "current",
+            "size": {
+              "maxHeight": 640,
+              "minWidth": 420,
+              "scroll": "auto",
+              "weight": 3
+            }
+          },
+          "detail": {
+            "kind": "widget",
+            "section": "detail",
+            "title": "Current interval"
+          },
+          "eventpanel": {
+            "children": [
+              "detail",
+              "history",
+              "provenance"
+            ],
+            "kind": "tabs",
+            "size": {
+              "maxHeight": 640,
+              "minWidth": 320,
+              "scroll": "auto",
+              "weight": 2
+            },
+            "title": "Downtime detail"
+          },
+          "history": {
+            "children": [
+              "predecessors",
+              "previousdetail"
+            ],
+            "gap": 16,
+            "kind": "rows",
+            "title": "History"
+          },
+          "predecessors": {
+            "kind": "widget",
+            "section": "predecessors"
+          },
+          "previousdetail": {
+            "kind": "widget",
+            "section": "previousdetail"
+          },
+          "provenance": {
+            "kind": "widget",
+            "section": "provenance",
+            "title": "Source and versions"
+          },
+          "root": {
+            "children": [
+              "workspace"
+            ],
+            "kind": "rows"
+          },
+          "workspace": {
+            "children": [
+              "current",
+              "eventpanel"
+            ],
+            "gap": 16,
+            "kind": "columns",
+            "title": "Downtime workspace"
+          }
+        },
+        "root": "root",
+        "uiProfile": "platform.page.v2.111"
+      },
+      "sections": [
+        {
+          "binding": "current",
+          "configVersion": 1,
+          "id": "current",
+          "title": "Downtime events",
+          "triggers": [
+            "current"
+          ]
+        },
+        {
+          "binding": "detail",
+          "configVersion": 1,
+          "id": "detail",
+          "title": "Downtime detail",
+          "triggers": [
+            "detail"
+          ]
+        },
+        {
+          "binding": "predecessors",
+          "configVersion": 1,
+          "id": "predecessors",
+          "title": "Predecessor events",
+          "triggers": [
+            "predecessors"
+          ]
+        },
+        {
+          "binding": "previousdetail",
+          "configVersion": 1,
+          "id": "previousdetail",
+          "title": "Original human decision",
+          "triggers": [
+            "previousdetail"
+          ]
+        },
+        {
+          "binding": "provenance",
+          "configVersion": 1,
+          "id": "provenance",
+          "title": "Source and versions",
+          "triggers": [
+            "provenance"
+          ]
+        }
+      ]
+    }
+  }
+}

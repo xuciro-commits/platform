@@ -1,0 +1,3081 @@
+{
+  "name": "mesbatch",
+  "title": "Execution batch",
+  "fields": [
+    {
+      "name": "order",
+      "title": "Shop order",
+      "type": "reference",
+      "ref": "build.mesorder",
+      "inverse": "batches",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Batch reference",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Batch quantity",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "routing",
+      "title": "Routing version",
+      "type": "reference",
+      "ref": "build.mesrouting",
+      "required": true
+    },
+    {
+      "name": "routingversion",
+      "title": "Fixed routing version",
+      "type": "integer",
+      "readOnly": true
+    },
+    {
+      "name": "operation",
+      "title": "Current operation",
+      "type": "reference",
+      "ref": "build.mesoperation",
+      "required": true
+    },
+    {
+      "name": "resource",
+      "title": "Current resource",
+      "type": "reference",
+      "ref": "build.mesresource"
+    },
+    {
+      "name": "operator",
+      "title": "Current operator",
+      "type": "text"
+    },
+    {
+      "name": "good",
+      "title": "Good quantity",
+      "type": "integer"
+    },
+    {
+      "name": "scrap",
+      "title": "Scrap quantity",
+      "type": "integer"
+    },
+    {
+      "name": "issuecount",
+      "title": "Accepted exception count",
+      "type": "integer"
+    },
+    {
+      "name": "issue",
+      "title": "Current exception",
+      "type": "reference",
+      "ref": "build.mesissue"
+    },
+    {
+      "name": "reviewer",
+      "title": "Reviewed by",
+      "type": "text"
+    },
+    {
+      "name": "approver",
+      "title": "Approved by",
+      "type": "text"
+    },
+    {
+      "name": "decision",
+      "title": "Disposition",
+      "type": "choice",
+      "choices": "rework,scrap,use-as-is"
+    },
+    {
+      "name": "target",
+      "title": "Rework operation",
+      "type": "reference",
+      "ref": "build.mesoperation"
+    },
+    {
+      "name": "upstreamstart",
+      "title": "Needs upstream start",
+      "type": "boolean",
+      "formulaExpr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not-empty",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "coalesce",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "order"
+                      }
+                    ],
+                    "path": [
+                      "upstream"
+                    ]
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": ""
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "empty",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "coalesce",
+                "kind": "reference",
+                "args": [
+                  {
+                    "op": "path",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "order"
+                      }
+                    ],
+                    "path": [
+                      "startrequest"
+                    ]
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": ""
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "line",
+      "title": "Production line",
+      "type": "reference",
+      "ref": "enterprise.element",
+      "stereotype": "ActualOrganization",
+      "formulaExpr": {
+        "op": "path",
+        "kind": "reference",
+        "args": [
+          {
+            "op": "",
+            "kind": "reference",
+            "ref": "operation"
+          }
+        ],
+        "path": [
+          "center",
+          "line"
+        ]
+      }
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "below",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "operator",
+      "read": "unit",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "queued",
+      "title": "Queued"
+    },
+    {
+      "name": "active",
+      "title": "Active"
+    },
+    {
+      "name": "hold",
+      "title": "Hold"
+    },
+    {
+      "name": "done",
+      "title": "Done"
+    },
+    {
+      "name": "scrapped",
+      "title": "Scrapped"
+    }
+  ],
+  "versionPins": [
+    {
+      "reference": "routing",
+      "version": "routingversion"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "batchidentity",
+      "kind": "immutable",
+      "fields": [
+        "order",
+        "name",
+        "quantity",
+        "routing",
+        "routingversion"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "batchquantity",
+      "kind": "expression",
+      "fields": [
+        "quantity",
+        "good",
+        "scrap"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": ">",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "integer",
+                "ref": "quantity"
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": ">=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "coalesce",
+                "kind": "integer",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "good"
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": ">=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "coalesce",
+                "kind": "integer",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "scrap"
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": "<=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "+",
+                "kind": "integer",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "good"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "coalesce",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "scrap"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "ref": "quantity"
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Good and scrap quantities cannot exceed this fixed batch."
+    },
+    {
+      "name": "fixedoperation",
+      "kind": "expression",
+      "fields": [
+        "routing",
+        "operation"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "path",
+            "kind": "reference",
+            "args": [
+              {
+                "op": "",
+                "kind": "reference",
+                "ref": "operation"
+              }
+            ],
+            "path": [
+              "routing"
+            ]
+          },
+          {
+            "op": "",
+            "kind": "reference",
+            "ref": "routing"
+          }
+        ]
+      },
+      "message": "The current operation belongs to the fixed routing version."
+    },
+    {
+      "name": "originalcases",
+      "kind": "expression",
+      "fields": [
+        "issue",
+        "issuecount",
+        "reviewer",
+        "approver",
+        "state"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "count",
+                "kind": "integer",
+                "agg": {
+                  "source": "issues"
+                }
+              },
+              {
+                "op": "coalesce",
+                "kind": "integer",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "issuecount"
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "if",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "reviewer"
+                      },
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "sum",
+                    "kind": "integer",
+                    "agg": {
+                      "source": "signatures"
+                    },
+                    "in": {
+                      "op": "if",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "item.issue"
+                            },
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "issue"
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 1
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "sum",
+                        "kind": "integer",
+                        "agg": {
+                          "source": "signatures"
+                        },
+                        "in": {
+                          "op": "if",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "and",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "and",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "reference",
+                                          "ref": "item.issue"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "reference",
+                                          "ref": "issue"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "ref": "item.meaning"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "reviewed"
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "text",
+                                      "ref": "item.actor"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "text",
+                                      "ref": "reviewer"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 1
+                              }
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 0
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 1
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "if",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "empty",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "coalesce",
+                            "kind": "text",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "text",
+                                "ref": "approver"
+                              },
+                              {
+                                "op": "",
+                                "kind": "text",
+                                "lit": {
+                                  "value": ""
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "sum",
+                            "kind": "integer",
+                            "agg": {
+                              "source": "signatures"
+                            },
+                            "in": {
+                              "op": "if",
+                              "kind": "integer",
+                              "args": [
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "reference",
+                                      "ref": "item.issue"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "reference",
+                                      "ref": "issue"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "integer",
+                                  "lit": {
+                                    "value": 1
+                                  }
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "integer",
+                                  "lit": {
+                                    "value": 0
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 1
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "and",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "not",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "=",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "text",
+                                    "ref": "reviewer"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "text",
+                                    "ref": "approver"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "sum",
+                                "kind": "integer",
+                                "agg": {
+                                  "source": "signatures"
+                                },
+                                "in": {
+                                  "op": "if",
+                                  "kind": "integer",
+                                  "args": [
+                                    {
+                                      "op": "and",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "and",
+                                          "kind": "boolean",
+                                          "args": [
+                                            {
+                                              "op": "=",
+                                              "kind": "boolean",
+                                              "args": [
+                                                {
+                                                  "op": "",
+                                                  "kind": "reference",
+                                                  "ref": "item.issue"
+                                                },
+                                                {
+                                                  "op": "",
+                                                  "kind": "reference",
+                                                  "ref": "issue"
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "op": "=",
+                                              "kind": "boolean",
+                                              "args": [
+                                                {
+                                                  "op": "",
+                                                  "kind": "choice",
+                                                  "ref": "item.meaning"
+                                                },
+                                                {
+                                                  "op": "",
+                                                  "kind": "choice",
+                                                  "lit": {
+                                                    "value": "approved"
+                                                  }
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "op": "=",
+                                          "kind": "boolean",
+                                          "args": [
+                                            {
+                                              "op": "",
+                                              "kind": "text",
+                                              "ref": "item.actor"
+                                            },
+                                            {
+                                              "op": "",
+                                              "kind": "text",
+                                              "ref": "approver"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 1
+                                      }
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 0
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "op": "",
+                                "kind": "integer",
+                                "lit": {
+                                  "value": 1
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "sum",
+                                "kind": "integer",
+                                "agg": {
+                                  "source": "signatures"
+                                },
+                                "in": {
+                                  "op": "if",
+                                  "kind": "integer",
+                                  "args": [
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "reference",
+                                          "ref": "item.issue"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "reference",
+                                          "ref": "issue"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 1
+                                      }
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 0
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "op": "",
+                                "kind": "integer",
+                                "lit": {
+                                  "value": 2
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Exception counts and distinct signatures must match their actual accepted records.",
+      "reads": {
+        "collections": {
+          "issues": {
+            "app": "build",
+            "object": "build.mesissue",
+            "set": "issues",
+            "policy": "complete"
+          },
+          "signatures": {
+            "app": "build",
+            "object": "build.messignature",
+            "set": "signatures",
+            "policy": "complete"
+          }
+        }
+      }
+    },
+    {
+      "name": "terminalquantity",
+      "kind": "expression",
+      "fields": [
+        "state",
+        "quantity",
+        "good",
+        "scrap"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "choice",
+                "ref": "state"
+              },
+              {
+                "op": "",
+                "kind": "choice",
+                "lit": {
+                  "value": "done"
+                }
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "good"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "quantity"
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "scrap"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "if",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "scrapped"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "coalesce",
+                        "kind": "integer",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "ref": "scrap"
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 0
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "quantity"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "coalesce",
+                        "kind": "integer",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "ref": "good"
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 0
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "coalesce",
+                        "kind": "integer",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "ref": "good"
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 0
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "coalesce",
+                        "kind": "integer",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "ref": "scrap"
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 0
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "A terminal batch accounts for all of its units as good or scrap."
+    },
+    {
+      "name": "batchname",
+      "kind": "unique",
+      "fields": [
+        "order",
+        "name"
+      ],
+      "message": "A shop order has one execution batch for each batch reference."
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.mesbatch",
+    "steps": [
+      {
+        "name": "queued",
+        "kind": "update",
+        "target": {
+          "type": "build.mesbatch",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "state",
+            "expr": {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "queued"
+              }
+            }
+          },
+          {
+            "field": "good",
+            "expr": {
+              "op": "",
+              "kind": "integer",
+              "lit": {
+                "value": 0
+              }
+            }
+          },
+          {
+            "field": "scrap",
+            "expr": {
+              "op": "",
+              "kind": "integer",
+              "lit": {
+                "value": 0
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "order"
+                }
+              ],
+              "path": [
+                "state"
+              ]
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "draft"
+              }
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "order"
+                }
+              ],
+              "path": [
+                "routing"
+              ]
+            },
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "routing"
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "routing"
+                }
+              ],
+              "path": [
+                "state"
+              ]
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "published"
+              }
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "routing"
+                }
+              ],
+              "path": [
+                "first"
+              ]
+            },
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "operation"
+            }
+          ]
+        }
+      ]
+    },
+    "message": "New batches use their draft shop order and the published routing first operation."
+  },
+  "actions": [
+    {
+      "name": "start",
+      "title": "Start this operation",
+      "from": [
+        "queued"
+      ],
+      "roles": [
+        "operator"
+      ],
+      "transaction": {
+        "subject": "build.mesbatch",
+        "steps": [
+          {
+            "name": "started",
+            "kind": "update",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "resource",
+                "from": "resource"
+              },
+              {
+                "field": "operator",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "caller.id"
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "active"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "execute",
+            "kind": "work",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "work": {
+              "title": "Complete the active operation or report an exception",
+              "member": {
+                "op": "",
+                "kind": "text",
+                "ref": "caller.id"
+              },
+              "key": {
+                "op": "",
+                "kind": "text",
+                "ref": "name"
+              }
+            }
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "order"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "released"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "operation"
+                },
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.operation"
+                }
+              ]
+            },
+            {
+              "op": "path",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.resource"
+                }
+              ],
+              "path": [
+                "active"
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.resource"
+                    }
+                  ],
+                  "path": [
+                    "center"
+                  ]
+                },
+                {
+                  "op": "path",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "operation"
+                    }
+                  ],
+                  "path": [
+                    "center"
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "kind": "boolean",
+              "agg": {
+                "source": "requirements"
+              },
+              "in": {
+                "op": "in",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "item.capability"
+                  },
+                  {
+                    "op": "values",
+                    "kind": "set",
+                    "agg": {
+                      "source": "skills",
+                      "field": [
+                        "capability"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "The resource must belong to this work center and hold every required capability.",
+        "reads": {
+          "collections": {
+            "requirements": {
+              "app": "build",
+              "object": "build.mesrequirement",
+              "query": "mesrequirements",
+              "version": 1,
+              "of": "operation",
+              "policy": "complete"
+            },
+            "skills": {
+              "app": "build",
+              "object": "build.messkill",
+              "query": "messkills",
+              "version": 1,
+              "of": "resource",
+              "policy": "complete"
+            }
+          }
+        }
+      },
+      "inputs": [
+        {
+          "name": "operation",
+          "title": "Current operation",
+          "type": "reference",
+          "ref": "build.mesoperation",
+          "required": true
+        },
+        {
+          "name": "resource",
+          "title": "Production resource",
+          "type": "reference",
+          "ref": "build.mesresource",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "complete",
+      "title": "Complete this operation",
+      "from": [
+        "active"
+      ],
+      "roles": [
+        "operator"
+      ],
+      "transaction": {
+        "subject": "build.mesbatch",
+        "steps": [
+          {
+            "name": "closework",
+            "kind": "work",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "work": {
+              "close": true,
+              "title": "Operation completed",
+              "key": {
+                "op": "",
+                "kind": "text",
+                "ref": "name"
+              }
+            }
+          },
+          {
+            "name": "completed",
+            "kind": "update",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "operation",
+                "expr": {
+                  "op": "if",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "coalesce",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "path",
+                              "kind": "reference",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "operation"
+                                }
+                              ],
+                              "path": [
+                                "next"
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "lit": {
+                                "value": ""
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "operation"
+                    },
+                    {
+                      "op": "path",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "operation"
+                        }
+                      ],
+                      "path": [
+                        "next"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "if",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "coalesce",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "path",
+                              "kind": "reference",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "operation"
+                                }
+                              ],
+                              "path": [
+                                "next"
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "lit": {
+                                "value": ""
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "done"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "queued"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "good",
+                "expr": {
+                  "op": "if",
+                  "kind": "integer",
+                  "args": [
+                    {
+                      "op": "empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "coalesce",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "path",
+                              "kind": "reference",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "operation"
+                                }
+                              ],
+                              "path": [
+                                "next"
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "lit": {
+                                "value": ""
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "quantity"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "reportupstream",
+            "kind": "work",
+            "target": {
+              "type": "build.mesorder",
+              "via": "order"
+            },
+            "when": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "not-empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "text",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "order"
+                            }
+                          ],
+                          "path": [
+                            "upstream"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "done"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "scrapped"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "work": {
+              "title": "Review and report the completed production batch",
+              "body": {
+                "op": "",
+                "kind": "text",
+                "ref": "name"
+              },
+              "role": "supervisor",
+              "key": {
+                "op": "concat",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "name"
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": "-upstream"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "guard": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "operator"
+            },
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "caller.id"
+            }
+          ]
+        },
+        "message": "Only the actual active operator completes this operation."
+      }
+    },
+    {
+      "name": "report",
+      "title": "Report a production exception",
+      "from": [
+        "queued",
+        "active"
+      ],
+      "roles": [
+        "operator",
+        "quality"
+      ],
+      "transaction": {
+        "subject": "build.mesbatch",
+        "steps": [
+          {
+            "name": "exception",
+            "kind": "create",
+            "target": {
+              "type": "build.mesissue"
+            },
+            "changes": [
+              {
+                "field": "batch",
+                "from": "$subject"
+              },
+              {
+                "field": "serial",
+                "expr": {
+                  "op": "+",
+                  "kind": "integer",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "ref": "issuecount"
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "operation",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "operation"
+                }
+              },
+              {
+                "field": "code",
+                "from": "code"
+              }
+            ]
+          },
+          {
+            "name": "closework",
+            "kind": "work",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "work": {
+              "close": true,
+              "title": "Operation paused by an exception",
+              "key": {
+                "op": "",
+                "kind": "text",
+                "ref": "name"
+              }
+            }
+          },
+          {
+            "name": "held",
+            "kind": "update",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "issuecount",
+                "expr": {
+                  "op": "+",
+                  "kind": "integer",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "ref": "issuecount"
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "issue",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.exception"
+                }
+              },
+              {
+                "field": "reviewer",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "lit": {
+                    "value": ""
+                  }
+                }
+              },
+              {
+                "field": "approver",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "lit": {
+                    "value": ""
+                  }
+                }
+              },
+              {
+                "field": "decision",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": ""
+                  }
+                }
+              },
+              {
+                "field": "target",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "lit": {
+                    "value": ""
+                  }
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "hold"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "review",
+            "kind": "work",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "work": {
+              "title": "Review the production exception and propose its disposition",
+              "role": "quality",
+              "key": {
+                "op": "concat",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "name"
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": "-quality"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "code",
+          "title": "Exception code",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "review",
+      "title": "Sign reviewed disposition",
+      "from": [
+        "hold"
+      ],
+      "roles": [
+        "quality"
+      ],
+      "transaction": {
+        "subject": "build.mesbatch",
+        "steps": [
+          {
+            "name": "signature",
+            "kind": "create",
+            "target": {
+              "type": "build.messignature"
+            },
+            "changes": [
+              {
+                "field": "batch",
+                "from": "$subject"
+              },
+              {
+                "field": "issue",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "issue"
+                }
+              },
+              {
+                "field": "meaning",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "reviewed"
+                  }
+                }
+              },
+              {
+                "field": "decision",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "input.decision"
+                }
+              },
+              {
+                "field": "target",
+                "expr": {
+                  "op": "if",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "input.decision"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "rework"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.target"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "lit": {
+                        "value": ""
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "reviewed",
+            "kind": "update",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "reviewer",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "caller.id"
+                }
+              },
+              {
+                "field": "decision",
+                "from": "decision"
+              },
+              {
+                "field": "target",
+                "expr": {
+                  "op": "if",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "input.decision"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "rework"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.target"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "lit": {
+                        "value": ""
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "empty",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "coalesce",
+                  "kind": "text",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "reviewer"
+                    },
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "lit": {
+                        "value": ""
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "if",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "input.decision"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "rework"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "not-empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "coalesce",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "input.target"
+                            },
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "lit": {
+                                "value": ""
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "input.target"
+                            }
+                          ],
+                          "path": [
+                            "routing"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "routing"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "<=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "input.target"
+                            }
+                          ],
+                          "path": [
+                            "number"
+                          ]
+                        },
+                        {
+                          "op": "path",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "operation"
+                            }
+                          ],
+                          "path": [
+                            "number"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "boolean",
+                  "lit": {
+                    "value": true
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "message": "Review once, and choose an existing operation at or before the held operation in its fixed routing."
+      },
+      "inputs": [
+        {
+          "name": "decision",
+          "title": "Disposition",
+          "type": "choice",
+          "choices": "rework,scrap,use-as-is",
+          "required": true
+        },
+        {
+          "name": "target",
+          "title": "Rework operation (only for rework)",
+          "type": "reference",
+          "ref": "build.mesoperation"
+        }
+      ]
+    },
+    {
+      "name": "approve",
+      "title": "Sign approved disposition",
+      "from": [
+        "hold"
+      ],
+      "roles": [
+        "quality"
+      ],
+      "transaction": {
+        "subject": "build.mesbatch",
+        "steps": [
+          {
+            "name": "signature",
+            "kind": "create",
+            "target": {
+              "type": "build.messignature"
+            },
+            "changes": [
+              {
+                "field": "batch",
+                "from": "$subject"
+              },
+              {
+                "field": "issue",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "issue"
+                }
+              },
+              {
+                "field": "meaning",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "approved"
+                  }
+                }
+              },
+              {
+                "field": "decision",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "decision"
+                }
+              },
+              {
+                "field": "target",
+                "expr": {
+                  "op": "coalesce",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "target"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "lit": {
+                        "value": ""
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "approved",
+            "kind": "update",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "approver",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "caller.id"
+                }
+              },
+              {
+                "field": "operation",
+                "expr": {
+                  "op": "if",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "decision"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "rework"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "target"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "operation"
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "if",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "decision"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "scrap"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "scrapped"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "queued"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "good",
+                "expr": {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              },
+              {
+                "field": "scrap",
+                "expr": {
+                  "op": "if",
+                  "kind": "integer",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "decision"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "scrap"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "quantity"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "closequality",
+            "kind": "work",
+            "target": {
+              "type": "build.mesbatch",
+              "id": "$subject"
+            },
+            "work": {
+              "close": true,
+              "title": "Disposition approved by a second person",
+              "key": {
+                "op": "concat",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "name"
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": "-quality"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "reportupstream",
+            "kind": "work",
+            "target": {
+              "type": "build.mesorder",
+              "via": "order"
+            },
+            "when": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "not-empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "text",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "order"
+                            }
+                          ],
+                          "path": [
+                            "upstream"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "done"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "state"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "scrapped"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "work": {
+              "title": "Review and report the completed production batch",
+              "body": {
+                "op": "",
+                "kind": "text",
+                "ref": "name"
+              },
+              "role": "supervisor",
+              "key": {
+                "op": "concat",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "name"
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": "-upstream"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "reviewer"
+                        },
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "empty",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "coalesce",
+                  "kind": "text",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "approver"
+                    },
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "lit": {
+                        "value": ""
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "reviewer"
+                    },
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "caller.id"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "message": "A different quality member approves the original reviewed disposition."
+      }
+    }
+  ],
+  "sets": [
+    {
+      "name": "issues",
+      "from": "issues",
+      "direction": "inverse",
+      "object": "build.mesissue",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "signatures",
+      "from": "signatures",
+      "direction": "inverse",
+      "object": "build.messignature",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "type": "build.mesbatch",
+  "scope": {
+    "unit": "line",
+    "structure": "site"
+  },
+  "enterpriseUse": {
+    "op": "and",
+    "kind": "boolean",
+    "args": [
+      {
+        "op": "!=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "choice",
+            "ref": "state"
+          },
+          {
+            "op": "",
+            "kind": "choice",
+            "lit": {
+              "value": "done"
+            }
+          }
+        ]
+      },
+      {
+        "op": "!=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "choice",
+            "ref": "state"
+          },
+          {
+            "op": "",
+            "kind": "choice",
+            "lit": {
+              "value": "scrapped"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

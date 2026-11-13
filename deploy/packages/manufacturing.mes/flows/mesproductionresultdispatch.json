@@ -1,0 +1,78 @@
+{
+  "name": "build.mesproductionresultdispatch",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesproductionresult"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.mesproductionresult.send"
+    }
+  ],
+  "definition": {
+    "name": "mesproductionresultdispatch",
+    "title": "Production result coordination",
+    "object": "build.mesproductionresult",
+    "when": "queued",
+    "steps": [
+      {
+        "name": "send",
+        "kind": "action",
+        "act": "build.mesproductionresult.send",
+        "target": {
+          "source": "subject",
+          "path": [
+            "id"
+          ]
+        },
+        "next": "done",
+        "retryAttempts": 1,
+        "inputs": {
+          "upstream": {
+            "source": "subject",
+            "path": [
+              "upstream"
+            ]
+          },
+          "shoporder": {
+            "source": "subject",
+            "path": [
+              "shoporder"
+            ]
+          },
+          "batch": {
+            "source": "subject",
+            "path": [
+              "batch"
+            ]
+          },
+          "yield": {
+            "source": "subject",
+            "path": [
+              "yield"
+            ]
+          },
+          "scrap": {
+            "source": "subject",
+            "path": [
+              "scrap"
+            ]
+          },
+          "final": {
+            "source": "subject",
+            "path": [
+              "final"
+            ]
+          }
+        }
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

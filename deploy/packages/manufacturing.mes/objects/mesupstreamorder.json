@@ -1,0 +1,95 @@
+{
+  "name": "mesupstreamorder",
+  "title": "Upstream production plan",
+  "fields": [
+    {
+      "name": "providerid",
+      "title": "Upstream order identity",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "number",
+      "title": "Production order reference",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "product",
+      "title": "Product identity",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Planned quantity",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "providerstate",
+      "title": "Upstream state",
+      "type": "choice",
+      "choices": "released,running,closed",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "operator",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "supervisor",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "integrator",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "upstreamidentity",
+      "kind": "immutable",
+      "fields": [
+        "providerid",
+        "product",
+        "archived"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    }
+  ],
+  "type": "build.mesupstreamorder"
+}

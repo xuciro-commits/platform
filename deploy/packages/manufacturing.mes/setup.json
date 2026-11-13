@@ -1,0 +1,264 @@
+{
+  "steps": [
+    {
+      "name": "configure1",
+      "app": "enterprise",
+      "schema": "enterprise.kind.add",
+      "target": {
+        "type": "enterprise.model",
+        "id": "site"
+      },
+      "payload": "{\"name\":\"Sites\",\"kind\":\"site\"}"
+    },
+    {
+      "name": "configure2",
+      "app": "enterprise",
+      "schema": "enterprise.element.add",
+      "target": {
+        "type": "enterprise.element",
+        "id": "sampleplant"
+      },
+      "payload": "{\"stereotype\":\"ActualOrganization\",\"name\":\"Example plant\",\"kind\":\"plant\"}"
+    },
+    {
+      "name": "configure3",
+      "app": "enterprise",
+      "schema": "enterprise.element.add",
+      "target": {
+        "type": "enterprise.element",
+        "id": "L1"
+      },
+      "payload": "{\"stereotype\":\"ActualOrganization\",\"name\":\"Example assembly line\",\"kind\":\"line\"}"
+    },
+    {
+      "name": "configure4",
+      "app": "enterprise",
+      "schema": "enterprise.element.add",
+      "target": {
+        "type": "enterprise.element",
+        "id": "L2"
+      },
+      "payload": "{\"stereotype\":\"ActualOrganization\",\"name\":\"Example machining line\",\"kind\":\"line\"}"
+    },
+    {
+      "name": "configure5",
+      "app": "enterprise",
+      "schema": "enterprise.relationship.add",
+      "target": {
+        "type": "enterprise.relationship",
+        "id": "sampleassemblysite"
+      },
+      "payload": "{\"stereotype\":\"ActualResourceRelationship\",\"source\":\"L1\",\"target\":\"sampleplant\",\"kind\":\"site\"}"
+    },
+    {
+      "name": "configure6",
+      "app": "enterprise",
+      "schema": "enterprise.relationship.add",
+      "target": {
+        "type": "enterprise.relationship",
+        "id": "samplemachiningsite"
+      },
+      "payload": "{\"stereotype\":\"ActualResourceRelationship\",\"source\":\"L2\",\"target\":\"sampleplant\",\"kind\":\"site\"}"
+    },
+    {
+      "name": "configure14",
+      "app": "build",
+      "schema": "build.mescapability.create",
+      "target": {
+        "type": "build.mescapability",
+        "id": "sampletorque"
+      },
+      "payload": "{\"name\":\"Torque tooling\",\"code\":\"sampletorque\"}"
+    },
+    {
+      "name": "configure15",
+      "app": "build",
+      "schema": "build.mescapability.create",
+      "target": {
+        "type": "build.mescapability",
+        "id": "samplesafety"
+      },
+      "payload": "{\"name\":\"Safety qualification\",\"code\":\"samplesafety\"}"
+    },
+    {
+      "name": "configure16",
+      "app": "build",
+      "schema": "build.mescenter.create",
+      "target": {
+        "type": "build.mescenter",
+        "id": "sampleassembly"
+      },
+      "payload": "{\"name\":\"Assembly work center\",\"line\":\"L1\"}"
+    },
+    {
+      "name": "configure17",
+      "app": "build",
+      "schema": "build.mesresource.create",
+      "target": {
+        "type": "build.mesresource",
+        "id": "samplebench"
+      },
+      "payload": "{\"name\":\"Assembly station\",\"center\":\"sampleassembly\",\"active\":true}"
+    },
+    {
+      "name": "configure18",
+      "app": "build",
+      "schema": "build.mesrouting.create",
+      "target": {
+        "type": "build.mesrouting",
+        "id": "sampleassemblyroute"
+      },
+      "payload": "{\"code\":\"sampleassembly\",\"name\":\"Assembly procedure\",\"version\":1,\"from\":\"2026-01-01\"}"
+    },
+    {
+      "name": "configure19",
+      "app": "build",
+      "schema": "build.mesoperation.create",
+      "target": {
+        "type": "build.mesoperation",
+        "id": "sampleassemble"
+      },
+      "payload": "{\"routing\":\"sampleassemblyroute\",\"number\":10,\"name\":\"Assembly\",\"center\":\"sampleassembly\"}"
+    },
+    {
+      "name": "configure20",
+      "app": "build",
+      "schema": "build.messkill.create",
+      "target": {
+        "type": "build.messkill",
+        "id": "samplebenchsampletorque"
+      },
+      "payload": "{\"resource\":\"samplebench\",\"capability\":\"sampletorque\"}"
+    },
+    {
+      "name": "configure21",
+      "app": "build",
+      "schema": "build.mesrequirement.create",
+      "target": {
+        "type": "build.mesrequirement",
+        "id": "sampleassemblesampletorque"
+      },
+      "payload": "{\"operation\":\"sampleassemble\",\"capability\":\"sampletorque\"}"
+    },
+    {
+      "name": "configure22",
+      "app": "build",
+      "schema": "build.messkill.create",
+      "target": {
+        "type": "build.messkill",
+        "id": "samplebenchsamplesafety"
+      },
+      "payload": "{\"resource\":\"samplebench\",\"capability\":\"samplesafety\"}"
+    },
+    {
+      "name": "configure23",
+      "app": "build",
+      "schema": "build.mesrequirement.create",
+      "target": {
+        "type": "build.mesrequirement",
+        "id": "sampleassemblesamplesafety"
+      },
+      "payload": "{\"operation\":\"sampleassemble\",\"capability\":\"samplesafety\"}"
+    },
+    {
+      "name": "configure24",
+      "app": "build",
+      "schema": "build.mesrouting.edit",
+      "target": {
+        "type": "build.mesrouting",
+        "id": "sampleassemblyroute"
+      },
+      "payload": "{\"first\":\"sampleassemble\"}"
+    },
+    {
+      "name": "configure25",
+      "app": "build",
+      "schema": "build.mesrouting.release",
+      "target": {
+        "type": "build.mesrouting",
+        "id": "sampleassemblyroute"
+      },
+      "payload": "{}"
+    },
+    {
+      "name": "configure26",
+      "app": "build",
+      "schema": "build.mescenter.create",
+      "target": {
+        "type": "build.mescenter",
+        "id": "samplemachining"
+      },
+      "payload": "{\"name\":\"Machining work center\",\"line\":\"L2\"}"
+    },
+    {
+      "name": "configure27",
+      "app": "build",
+      "schema": "build.mesresource.create",
+      "target": {
+        "type": "build.mesresource",
+        "id": "samplecnc"
+      },
+      "payload": "{\"name\":\"Machining station\",\"center\":\"samplemachining\",\"active\":true}"
+    },
+    {
+      "name": "configure28",
+      "app": "build",
+      "schema": "build.mesrouting.create",
+      "target": {
+        "type": "build.mesrouting",
+        "id": "samplemachiningroute"
+      },
+      "payload": "{\"code\":\"samplemachining\",\"name\":\"Machining procedure\",\"version\":1,\"from\":\"2026-01-01\"}"
+    },
+    {
+      "name": "configure29",
+      "app": "build",
+      "schema": "build.mesoperation.create",
+      "target": {
+        "type": "build.mesoperation",
+        "id": "samplemachine"
+      },
+      "payload": "{\"routing\":\"samplemachiningroute\",\"number\":10,\"name\":\"Machining\",\"center\":\"samplemachining\"}"
+    },
+    {
+      "name": "configure30",
+      "app": "build",
+      "schema": "build.messkill.create",
+      "target": {
+        "type": "build.messkill",
+        "id": "samplecncsamplesafety"
+      },
+      "payload": "{\"resource\":\"samplecnc\",\"capability\":\"samplesafety\"}"
+    },
+    {
+      "name": "configure31",
+      "app": "build",
+      "schema": "build.mesrequirement.create",
+      "target": {
+        "type": "build.mesrequirement",
+        "id": "samplemachinesamplesafety"
+      },
+      "payload": "{\"operation\":\"samplemachine\",\"capability\":\"samplesafety\"}"
+    },
+    {
+      "name": "configure32",
+      "app": "build",
+      "schema": "build.mesrouting.edit",
+      "target": {
+        "type": "build.mesrouting",
+        "id": "samplemachiningroute"
+      },
+      "payload": "{\"first\":\"samplemachine\"}"
+    },
+    {
+      "name": "configure33",
+      "app": "build",
+      "schema": "build.mesrouting.release",
+      "target": {
+        "type": "build.mesrouting",
+        "id": "samplemachiningroute"
+      },
+      "payload": "{}"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "name": "mesrequirement",
+  "title": "Operation capability requirement",
+  "fields": [
+    {
+      "name": "operation",
+      "title": "Operation",
+      "type": "reference",
+      "ref": "build.mesoperation",
+      "inverse": "requirements",
+      "required": true
+    },
+    {
+      "name": "capability",
+      "title": "Required capability",
+      "type": "reference",
+      "ref": "build.mescapability",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "operator",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "requiredcapability",
+      "kind": "unique",
+      "fields": [
+        "operation",
+        "capability"
+      ],
+      "message": "An operation requires each capability once."
+    }
+  ],
+  "type": "build.mesrequirement"
+}

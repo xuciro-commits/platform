@@ -1,0 +1,348 @@
+{
+  "format": 4,
+  "name": "mesbatch",
+  "title": "Execution batches",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesbatch"
+  },
+  "dataBindings": [
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesbatch"
+      },
+      "model": {
+        "type": "build.mesbatch",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "order"
+          },
+          {
+            "name": "quantity"
+          },
+          {
+            "name": "routing"
+          },
+          {
+            "name": "routingversion"
+          },
+          {
+            "name": "operation"
+          },
+          {
+            "name": "resource"
+          },
+          {
+            "name": "operator"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "good"
+          },
+          {
+            "name": "scrap"
+          },
+          {
+            "name": "issue"
+          },
+          {
+            "name": "reviewer"
+          },
+          {
+            "name": "approver"
+          },
+          {
+            "name": "decision"
+          },
+          {
+            "name": "target"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "order"
+        },
+        {
+          "name": "quantity"
+        },
+        {
+          "name": "routing"
+        },
+        {
+          "name": "routingversion"
+        },
+        {
+          "name": "operation"
+        },
+        {
+          "name": "resource"
+        },
+        {
+          "name": "operator"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "good"
+        },
+        {
+          "name": "scrap"
+        },
+        {
+          "name": "issue"
+        },
+        {
+          "name": "reviewer"
+        },
+        {
+          "name": "approver"
+        },
+        {
+          "name": "decision"
+        },
+        {
+          "name": "target"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesbatch"
+      },
+      "model": {
+        "type": "build.mesbatch",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "order"
+          },
+          {
+            "name": "quantity"
+          },
+          {
+            "name": "routing"
+          },
+          {
+            "name": "routingversion"
+          },
+          {
+            "name": "operation"
+          },
+          {
+            "name": "resource"
+          },
+          {
+            "name": "operator"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "good"
+          },
+          {
+            "name": "scrap"
+          },
+          {
+            "name": "issue"
+          },
+          {
+            "name": "reviewer"
+          },
+          {
+            "name": "approver"
+          },
+          {
+            "name": "decision"
+          },
+          {
+            "name": "target"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "order"
+        },
+        {
+          "name": "quantity"
+        },
+        {
+          "name": "routing"
+        },
+        {
+          "name": "routingversion"
+        },
+        {
+          "name": "operation"
+        },
+        {
+          "name": "resource"
+        },
+        {
+          "name": "operator"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "good"
+        },
+        {
+          "name": "scrap"
+        },
+        {
+          "name": "issue"
+        },
+        {
+          "name": "reviewer"
+        },
+        {
+          "name": "approver"
+        },
+        {
+          "name": "decision"
+        },
+        {
+          "name": "target"
+        }
+      ],
+      "ports": {
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesbatch.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesbatch.edit"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesbatch.start"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesbatch.complete"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesbatch.report"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesbatch.review"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.mesbatch.approve"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "binding": "list"
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "binding": "detail"
+    }
+  ],
+  "inputSchema": {},
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "page",
+        "kind": "page"
+      },
+      {
+        "id": "binding:list",
+        "parent": "page",
+        "kind": "page",
+        "binding": "list"
+      },
+      {
+        "id": "binding:detail",
+        "parent": "page",
+        "kind": "page",
+        "binding": "detail"
+      }
+    ],
+    "owners": {
+      "detail": "binding:detail",
+      "list": "binding:list"
+    },
+    "root": "page"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": null,
+      "sections": [
+        {
+          "binding": "list",
+          "id": "list",
+          "triggers": [
+            "list"
+          ]
+        },
+        {
+          "binding": "detail",
+          "id": "detail",
+          "triggers": [
+            "detail"
+          ]
+        }
+      ]
+    }
+  }
+}

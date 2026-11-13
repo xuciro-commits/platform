@@ -1,0 +1,10 @@
+[
+  {
+    "app": "enterprise",
+    "role": "admin"
+  },
+  {
+    "app": "build",
+    "role": "builder"
+  }
+]

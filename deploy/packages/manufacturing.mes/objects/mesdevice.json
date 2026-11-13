@@ -1,0 +1,268 @@
+{
+  "name": "mesdevice",
+  "type": "build.mesdevice",
+  "title": "Observed equipment",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "resource",
+      "title": "Production resource",
+      "type": "reference",
+      "ref": "build.mesresource",
+      "required": true
+    },
+    {
+      "name": "device",
+      "title": "Source device identifier",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Supervising unit",
+      "type": "reference",
+      "required": true,
+      "ref": "enterprise.element",
+      "stereotype": "ActualOrganization"
+    },
+    {
+      "name": "notify",
+      "title": "Request a downtime reason",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "name": "remindhours",
+      "title": "Reason reminder after (hours)",
+      "type": "integer",
+      "required": true
+    }
+  ],
+  "constraints": [
+    {
+      "name": "reminderlimit",
+      "kind": "range",
+      "fields": [
+        "remindhours"
+      ],
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": ">=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "integer",
+                "ref": "remindhours"
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": "<=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "integer",
+                "ref": "remindhours"
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 168
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "message": "A reminder is disabled at zero or due within seven days."
+    }
+  ],
+  "states": [
+    {
+      "name": "ready",
+      "title": "Ready"
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "below",
+      "create": true,
+      "edit": true
+    },
+    {
+      "role": "operator",
+      "read": "unit",
+      "create": false,
+      "edit": false
+    },
+    {
+      "role": "quality",
+      "read": "below",
+      "create": false,
+      "edit": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "events",
+      "from": "events",
+      "direction": "inverse",
+      "object": "build.mesdowntime",
+      "where": [
+        {
+          "op": "not",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "boolean",
+              "ref": "retired"
+            }
+          ]
+        }
+      ],
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "datetime",
+            "ref": "since"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "retiredevents",
+      "from": "events",
+      "direction": "inverse",
+      "object": "build.mesdowntime",
+      "where": [
+        {
+          "op": "",
+          "kind": "boolean",
+          "ref": "retired"
+        }
+      ],
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "datetime",
+            "ref": "since"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "actions": [
+    {
+      "name": "observe",
+      "title": "Record observed downtime",
+      "from": [
+        "ready"
+      ],
+      "roles": [
+        "supervisor"
+      ],
+      "transaction": {
+        "subject": "build.mesdevice",
+        "guard": {
+          "op": "",
+          "kind": "boolean",
+          "ref": "observation.ready"
+        },
+        "message": "Read the declared observation source to record state intervals.",
+        "steps": [
+          {
+            "name": "events",
+            "kind": "intervals",
+            "intervals": {
+              "source": "messtates",
+              "set": "events",
+              "predecessors": {
+                "ref": {
+                  "app": "build",
+                  "kind": "link-type",
+                  "name": "mesdowntimehistory"
+                },
+                "sourceVersion": "1.link-1"
+              },
+              "fields": {
+                "subject": "device",
+                "source": "source",
+                "sourceVersion": "sourceversion",
+                "sourceRevision": "sourcerevision",
+                "processingVersion": "processingversion",
+                "since": "since",
+                "until": "until",
+                "openStart": "openstart",
+                "openEnd": "openend",
+                "retired": "retired",
+                "review": "review"
+              }
+            }
+          },
+          {
+            "name": "retired",
+            "kind": "for-each",
+            "forEach": {
+              "set": "retiredevents",
+              "steps": [
+                {
+                  "name": "closeretired",
+                  "kind": "work",
+                  "work": {
+                    "close": true,
+                    "key": {
+                      "op": "concat",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "lit": {
+                            "value": "downtime:"
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "row.id"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "scope": {
+    "unit": "unit",
+    "structure": "site"
+  }
+}

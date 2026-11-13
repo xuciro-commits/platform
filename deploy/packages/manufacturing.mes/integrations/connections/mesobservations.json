@@ -1,0 +1,6 @@
+{
+  "name": "mesobservations",
+  "title": "Equipment state store",
+  "kind": "http",
+  "credential": false
+}

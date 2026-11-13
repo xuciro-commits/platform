@@ -1,0 +1,161 @@
+{
+  "name": "manufacturingassembly",
+  "title": "Assembly routing and complete split",
+  "roots": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesrouting"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesoperation"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesorder"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesbatch"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mescenter"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesresource"
+    }
+  ],
+  "at": "2026-10-21T09:00:00Z",
+  "steps": [
+    {
+      "type": "build.mescenter",
+      "id": "assemblycenter",
+      "action": "build.mescenter.create",
+      "payload": "{\"name\":\"Assembly\",\"line\":\"assembly\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesresource",
+      "id": "assemblyresource",
+      "action": "build.mesresource.create",
+      "payload": "{\"name\":\"Assembly station\",\"center\":\"assemblycenter\",\"active\":true}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesrouting",
+      "id": "assemblyroute",
+      "action": "build.mesrouting.create",
+      "payload": "{\"code\":\"PORTABLE\",\"name\":\"Assembly procedure\",\"version\":1,\"from\":\"2026-01-01\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesoperation",
+      "id": "assemblyoperation",
+      "action": "build.mesoperation.create",
+      "payload": "{\"routing\":\"assemblyroute\",\"number\":10,\"name\":\"Assembly\",\"center\":\"assemblycenter\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesrouting",
+      "id": "assemblyroute",
+      "action": "build.mesrouting.edit",
+      "payload": "{\"first\":\"assemblyoperation\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesrouting",
+      "id": "assemblyroute",
+      "action": "build.mesrouting.release",
+      "payload": "{}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesorder",
+      "id": "assemblyorder",
+      "action": "build.mesorder.create",
+      "payload": "{\"number\":\"assemblyorder\",\"product\":\"Synthetic Assembly\",\"routing\":\"assemblyroute\",\"quantity\":3}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesbatch",
+      "id": "assemblybatch",
+      "action": "build.mesbatch.create",
+      "payload": "{\"name\":\"assemblybatch\",\"order\":\"assemblyorder\",\"routing\":\"assemblyroute\",\"operation\":\"assemblyoperation\",\"quantity\":2}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesorder",
+      "id": "assemblyorder",
+      "action": "build.mesorder.release",
+      "payload": "{}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.mesbatch",
+      "id": "assemblyremaining",
+      "action": "build.mesbatch.create",
+      "payload": "{\"name\":\"assemblyremaining\",\"order\":\"assemblyorder\",\"routing\":\"assemblyroute\",\"operation\":\"assemblyoperation\",\"quantity\":1}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesorder",
+      "id": "assemblyorder",
+      "action": "build.mesorder.release",
+      "payload": "{}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesoperation",
+      "id": "assemblyoperation",
+      "action": "build.mesoperation.edit",
+      "payload": "{\"name\":\"Changed after release\"}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.mesbatch",
+      "id": "assemblylate",
+      "action": "build.mesbatch.create",
+      "payload": "{\"name\":\"assemblylate\",\"order\":\"assemblyorder\",\"routing\":\"assemblyroute\",\"operation\":\"assemblyoperation\",\"quantity\":1}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.mesbatch",
+      "id": "assemblybatch",
+      "action": "build.mesbatch.start",
+      "payload": "{\"operation\":\"assemblyoperation\",\"resource\":\"assemblyresource\"}",
+      "expect": "refused"
+    }
+  ],
+  "organization": {
+    "structures": [
+      {
+        "id": "site",
+        "name": "Sites",
+        "kind": "site"
+      }
+    ],
+    "units": [
+      {
+        "id": "assembly",
+        "name": "assembly",
+        "kind": "line"
+      }
+    ],
+    "edges": [],
+    "memberships": [
+      {
+        "party": "",
+        "unit": "assembly",
+        "role": "employee"
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "erpcorrection",
+  "title": "Upstream order correction",
+  "description": "Help a supervisor resolve a refused production report by reading the authorized upstream order directory. Compare the product, quantities and remaining facts with the actual shop order. Only a definite refusal can be corrected; an unknown result must first be reconciled under its original identity. Propose a confirmed replacement order and explain why.",
+  "instructions": "Help a supervisor resolve a refused production report by reading the authorized upstream order directory. Compare the product, quantities and remaining facts with the actual shop order. Only a definite refusal can be corrected; an unknown result must first be reconciled under its original identity. Propose a confirmed replacement order and explain why. Use only permitted current sources. Never invent an ID or quantity. Changes and external inquiries use the declared checkpoint tools and remain subject to the original server rules. When required facts or a confirmed target are missing, ask the person. Do not claim a pending or unknown request has succeeded.",
+  "tools": [
+    "query:mesproductionplans",
+    "build.mesproductionresult.correct"
+  ],
+  "budget": {
+    "Steps": 8,
+    "Tokens": 8000,
+    "Actions": 3,
+    "Cost": 0.1
+  },
+  "checkpoints": [
+    "build.mesproductionresult.correct"
+  ],
+  "handoffRole": "supervisor",
+  "cases": [
+    {
+      "name": "missingtarget",
+      "goal": "A person requests a business change but has supplied no confirmed target identity. Ask the person to identify the target before proposing a change.",
+      "asks": true,
+      "avoids": [
+        "build.mesproductionresult.correct"
+      ]
+    },
+    {
+      "name": "missingfacts",
+      "goal": "The person has not provided the business facts required for the requested change. Ask which facts and confirmed record to use; do not invent them.",
+      "asks": true,
+      "avoids": [
+        "build.mesproductionresult.correct"
+      ]
+    }
+  ]
+}

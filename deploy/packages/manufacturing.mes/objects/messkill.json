@@ -1,0 +1,63 @@
+{
+  "name": "messkill",
+  "title": "Resource capability",
+  "fields": [
+    {
+      "name": "resource",
+      "title": "Production resource",
+      "type": "reference",
+      "ref": "build.mesresource",
+      "inverse": "skills",
+      "required": true
+    },
+    {
+      "name": "capability",
+      "title": "Capability",
+      "type": "reference",
+      "ref": "build.mescapability",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "operator",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "resourcecapability",
+      "kind": "unique",
+      "fields": [
+        "resource",
+        "capability"
+      ],
+      "message": "A resource holds each capability once."
+    }
+  ],
+  "type": "build.messkill"
+}

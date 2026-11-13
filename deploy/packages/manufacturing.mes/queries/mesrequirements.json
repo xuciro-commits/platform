@@ -1,0 +1,11 @@
+{
+  "name": "mesrequirements",
+  "title": "mesrequirements",
+  "description": "Complete equipment capability matching input.",
+  "object": "build.mesrequirement",
+  "by": "operation",
+  "sort": [
+    "id"
+  ],
+  "limit": 200
+}

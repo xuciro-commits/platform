@@ -1,0 +1,2554 @@
+{
+  "name": "mesproductionresult",
+  "title": "Production result coordination",
+  "fields": [
+    {
+      "name": "order",
+      "title": "Shop order",
+      "type": "reference",
+      "ref": "build.mesorder",
+      "required": true
+    },
+    {
+      "name": "execution",
+      "title": "Execution batch",
+      "type": "reference",
+      "ref": "build.mesbatch",
+      "required": true
+    },
+    {
+      "name": "upstream",
+      "title": "Upstream production order",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "shoporder",
+      "title": "Stable shop identity",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "batch",
+      "title": "Stable result identity",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "yield",
+      "title": "Actual good quantity",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "scrap",
+      "title": "Actual scrap quantity",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "final",
+      "title": "Close upstream order",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "name": "attempt",
+      "title": "Coordination attempt",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "previous",
+      "title": "Original rejected coordination",
+      "type": "reference",
+      "ref": "build.mesproductionresult",
+      "inverse": "corrections"
+    },
+    {
+      "name": "correction",
+      "title": "Correction reason",
+      "type": "longtext"
+    },
+    {
+      "name": "replacement",
+      "title": "Corrected upstream plan",
+      "type": "reference",
+      "ref": "build.mesupstreamorder"
+    },
+    {
+      "name": "coordination",
+      "title": "Exact coordination subject",
+      "type": "text",
+      "formulaExpr": {
+        "op": "concat",
+        "kind": "text",
+        "args": [
+          {
+            "op": "",
+            "kind": "text",
+            "lit": {
+              "value": "build.mesproductionresult/"
+            }
+          },
+          {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        ]
+      }
+    },
+    {
+      "name": "previoussubject",
+      "title": "Original coordination subject",
+      "type": "text",
+      "formulaExpr": {
+        "op": "if",
+        "kind": "text",
+        "args": [
+          {
+            "op": "empty",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "coalesce",
+                "kind": "reference",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "previous"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": ""
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "text",
+            "ref": "coordination"
+          },
+          {
+            "op": "path",
+            "kind": "text",
+            "args": [
+              {
+                "op": "",
+                "kind": "reference",
+                "ref": "previous"
+              }
+            ],
+            "path": [
+              "coordination"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "line",
+      "title": "Production line",
+      "type": "reference",
+      "ref": "enterprise.element",
+      "stereotype": "ActualOrganization",
+      "formulaExpr": {
+        "op": "path",
+        "kind": "reference",
+        "args": [
+          {
+            "op": "",
+            "kind": "reference",
+            "ref": "execution"
+          }
+        ],
+        "path": [
+          "line"
+        ]
+      }
+    }
+  ],
+  "access": [
+    {
+      "role": "operator",
+      "read": "unit",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "supervisor",
+      "read": "below",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "queued",
+      "title": "Queued"
+    },
+    {
+      "name": "pending",
+      "title": "Pending"
+    },
+    {
+      "name": "confirmed",
+      "title": "Confirmed"
+    },
+    {
+      "name": "needsstart",
+      "title": "Needsstart"
+    },
+    {
+      "name": "starting",
+      "title": "Starting"
+    },
+    {
+      "name": "superseded",
+      "title": "Superseded"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "originalresult",
+      "kind": "unique",
+      "fields": [
+        "execution",
+        "attempt"
+      ],
+      "message": "Each execution batch has one result for each accepted coordination attempt."
+    },
+    {
+      "name": "acceptedfacts",
+      "kind": "immutable",
+      "fields": [
+        "order",
+        "execution",
+        "upstream",
+        "shoporder",
+        "batch",
+        "yield",
+        "scrap",
+        "final",
+        "attempt",
+        "previous",
+        "correction",
+        "replacement",
+        "coordination",
+        "previoussubject",
+        "archived"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "onecorrection",
+      "kind": "unique",
+      "fields": [
+        "previous"
+      ],
+      "message": "A refused coordination has one original successor."
+    },
+    {
+      "name": "originalsuccessor",
+      "kind": "expression",
+      "fields": [
+        "state",
+        "attempt"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "count",
+            "kind": "integer",
+            "agg": {
+              "source": "corrections"
+            }
+          },
+          {
+            "op": "if",
+            "kind": "integer",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "superseded"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 1
+                }
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Only a superseded coordination has one original linked correction.",
+      "reads": {
+        "collections": {
+          "corrections": {
+            "app": "build",
+            "object": "build.mesproductionresult",
+            "set": "corrections",
+            "policy": "complete"
+          }
+        }
+      }
+    }
+  ],
+  "actions": [
+    {
+      "name": "send",
+      "title": "Send the original production request",
+      "from": [
+        "queued"
+      ],
+      "roles": [
+        "operator",
+        "supervisor",
+        "quality",
+        "production"
+      ],
+      "transaction": {
+        "subject": "build.mesproductionresult",
+        "steps": [
+          {
+            "name": "state",
+            "kind": "update",
+            "target": {
+              "type": "build.mesproductionresult",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "pending"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.upstream"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "upstream"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.shoporder"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "shoporder"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.batch"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "batch"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.yield"
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "yield"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.scrap"
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "scrap"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "boolean",
+                  "ref": "input.final"
+                },
+                {
+                  "op": "",
+                  "kind": "boolean",
+                  "ref": "final"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "The declared business conditions are not satisfied.",
+        "confirmation": {
+          "parties": [
+            {
+              "name": "upstream",
+              "title": "Upstream production provider",
+              "writeback": "mesproductionconfirm",
+              "reconcile": {
+                "source": "mesproductionreceiptsource",
+                "keyField": "batch",
+                "keyInput": "batch",
+                "resultField": "status",
+                "expected": "accepted",
+                "everySeconds": 1
+              }
+            }
+          ],
+          "deadlineSeconds": 3600,
+          "onPartial": "hold",
+          "onExpire": "hold",
+          "onComplete": "acknowledge",
+          "reviewerRole": "supervisor"
+        }
+      },
+      "inputs": [
+        {
+          "name": "upstream",
+          "title": "Upstream production order",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "shoporder",
+          "title": "Stable shop identity",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "batch",
+          "title": "Stable result identity",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "yield",
+          "title": "Actual good quantity",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "scrap",
+          "title": "Actual scrap quantity",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "final",
+          "title": "Close upstream order",
+          "type": "boolean",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "acknowledge",
+      "title": "Keep the confirmed coordination outcome",
+      "from": [
+        "pending"
+      ],
+      "roles": [
+        "operator",
+        "supervisor",
+        "quality",
+        "production"
+      ],
+      "transaction": {
+        "subject": "build.mesproductionresult",
+        "steps": [
+          {
+            "name": "state",
+            "kind": "update",
+            "target": {
+              "type": "build.mesproductionresult",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "confirmed"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    },
+    {
+      "name": "correct",
+      "title": "Correct the refused upstream association",
+      "from": [
+        "pending",
+        "starting"
+      ],
+      "roles": [
+        "supervisor"
+      ],
+      "transaction": {
+        "subject": "build.mesproductionresult",
+        "steps": [
+          {
+            "name": "correction",
+            "kind": "create",
+            "target": {
+              "type": "build.mesproductionresult"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "order"
+                }
+              },
+              {
+                "field": "execution",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "execution"
+                }
+              },
+              {
+                "field": "shoporder",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "shoporder"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "batch"
+                }
+              },
+              {
+                "field": "yield",
+                "expr": {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "yield"
+                }
+              },
+              {
+                "field": "scrap",
+                "expr": {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "scrap"
+                }
+              },
+              {
+                "field": "final",
+                "expr": {
+                  "op": "",
+                  "kind": "boolean",
+                  "ref": "final"
+                }
+              },
+              {
+                "field": "previous",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "attempt",
+                "expr": {
+                  "op": "+",
+                  "kind": "integer",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "replacement",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.replacement"
+                }
+              },
+              {
+                "field": "upstream",
+                "expr": {
+                  "op": "path",
+                  "kind": "text",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.replacement"
+                    }
+                  ],
+                  "path": [
+                    "providerid"
+                  ]
+                }
+              },
+              {
+                "field": "correction",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.correction"
+                }
+              }
+            ]
+          },
+          {
+            "name": "superseded",
+            "kind": "update",
+            "target": {
+              "type": "build.mesproductionresult",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "superseded"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": ">",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "count",
+                      "kind": "integer",
+                      "agg": {
+                        "source": "outcomes"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "kind": "boolean",
+                  "agg": {
+                    "source": "outcomes"
+                  },
+                  "in": {
+                    "op": "or",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "item.state"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "confirmed"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "boolean",
+                        "ref": "item.partial"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "op": "any",
+                  "kind": "boolean",
+                  "agg": {
+                    "source": "outcomes"
+                  },
+                  "in": {
+                    "op": "",
+                    "kind": "boolean",
+                    "ref": "item.partial"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "count",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "corrections"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            },
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "not-empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.replacement"
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.replacement"
+                        }
+                      ],
+                      "path": [
+                        "product"
+                      ]
+                    },
+                    {
+                      "op": "path",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "order"
+                        }
+                      ],
+                      "path": [
+                        "product"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": ">=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.replacement"
+                        }
+                      ],
+                      "path": [
+                        "quantity"
+                      ]
+                    },
+                    {
+                      "op": "path",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "order"
+                        }
+                      ],
+                      "path": [
+                        "quantity"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "input.replacement"
+                            }
+                          ],
+                          "path": [
+                            "providerstate"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "released"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "input.replacement"
+                            }
+                          ],
+                          "path": [
+                            "providerstate"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "running"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not-empty",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.correction"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "Correct only a conclusively refused request, with a fitting upstream plan and a reason. Retain unknown requests for original-key reconciliation.",
+        "reads": {
+          "collections": {
+            "corrections": {
+              "app": "build",
+              "object": "build.mesproductionresult",
+              "set": "corrections",
+              "policy": "complete"
+            },
+            "outcomes": {
+              "app": "build",
+              "object": "build.confirmation",
+              "query": "mesproductionoutcomes",
+              "version": 1,
+              "of": "$subject.coordination",
+              "policy": "visible"
+            }
+          }
+        }
+      },
+      "inputs": [
+        {
+          "name": "replacement",
+          "title": "Corrected upstream plan",
+          "type": "reference",
+          "ref": "build.mesupstreamorder",
+          "required": true
+        },
+        {
+          "name": "correction",
+          "title": "Correction reason",
+          "type": "longtext",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "startcorrected",
+      "title": "Start the corrected upstream association",
+      "from": [
+        "needsstart"
+      ],
+      "roles": [
+        "operator",
+        "supervisor",
+        "quality",
+        "production"
+      ],
+      "transaction": {
+        "subject": "build.mesproductionresult",
+        "steps": [
+          {
+            "name": "starting",
+            "kind": "update",
+            "target": {
+              "type": "build.mesproductionresult",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "starting"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.upstream"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "upstream"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.shoporder"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "shoporder"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "The declared business conditions are not satisfied.",
+        "confirmation": {
+          "parties": [
+            {
+              "name": "upstream",
+              "title": "Corrected upstream production plan",
+              "writeback": "mesproductionrestart"
+            }
+          ],
+          "deadlineSeconds": 3600,
+          "onPartial": "hold",
+          "onExpire": "hold",
+          "onComplete": "continuereport",
+          "reviewerRole": "supervisor"
+        }
+      },
+      "inputs": [
+        {
+          "name": "upstream",
+          "title": "Upstream production order",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "shoporder",
+          "title": "Stable shop identity",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "continuereport",
+      "title": "Keep corrected upstream start",
+      "from": [
+        "starting"
+      ],
+      "roles": [
+        "operator",
+        "supervisor",
+        "quality",
+        "production"
+      ],
+      "transaction": {
+        "subject": "build.mesproductionresult",
+        "steps": [
+          {
+            "name": "queued",
+            "kind": "update",
+            "target": {
+              "type": "build.mesproductionresult",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "queued"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.mesproductionresult",
+    "steps": [
+      {
+        "name": "seal",
+        "kind": "update",
+        "target": {
+          "type": "build.mesproductionresult",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "shoporder",
+            "from": "shoporder"
+          },
+          {
+            "field": "state",
+            "expr": {
+              "op": "if",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "queued"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "needsstart"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "order"
+            },
+            {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "execution"
+                }
+              ],
+              "path": [
+                "order"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "or",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "execution"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "done"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "execution"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "scrapped"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "shoporder"
+            },
+            {
+              "op": "path",
+              "kind": "text",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "order"
+                }
+              ],
+              "path": [
+                "deliverykey"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "decimal",
+              "ref": "yield"
+            },
+            {
+              "op": "path",
+              "kind": "integer",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "execution"
+                }
+              ],
+              "path": [
+                "good"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "decimal",
+              "ref": "scrap"
+            },
+            {
+              "op": "path",
+              "kind": "integer",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "execution"
+                }
+              ],
+              "path": [
+                "scrap"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "message": "A result retains its actual physical batch.",
+    "reads": {
+      "collections": {
+        "previousoutcomes": {
+          "app": "build",
+          "object": "build.confirmation",
+          "query": "mesproductionoutcomes",
+          "version": 1,
+          "of": "$subject.previoussubject",
+          "policy": "visible"
+        }
+      }
+    },
+    "refusals": [
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "ref": "attempt"
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 1
+                  }
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "ref": "attempt"
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 1
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "coalesce",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "previous"
+                            },
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "lit": {
+                                "value": ""
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "upstream"
+                        },
+                        {
+                          "op": "path",
+                          "kind": "text",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "order"
+                            }
+                          ],
+                          "path": [
+                            "upstream"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "originalassociation",
+        "message": "The first result retains its original upstream association.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "not",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "coalesce",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "previous"
+                            },
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "lit": {
+                                "value": ""
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction0",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "+",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "previous"
+                            }
+                          ],
+                          "path": [
+                            "attempt"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 1
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction1",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "previous"
+                            }
+                          ],
+                          "path": [
+                            "state"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "pending"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "previous"
+                            }
+                          ],
+                          "path": [
+                            "state"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "starting"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction2",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "execution"
+                    },
+                    {
+                      "op": "path",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "previous"
+                        }
+                      ],
+                      "path": [
+                        "execution"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction3",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "batch"
+                    },
+                    {
+                      "op": "path",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "previous"
+                        }
+                      ],
+                      "path": [
+                        "batch"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction4",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "boolean",
+                      "ref": "final"
+                    },
+                    {
+                      "op": "path",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "previous"
+                        }
+                      ],
+                      "path": [
+                        "final"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction5",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "order"
+                    },
+                    {
+                      "op": "path",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "previous"
+                        }
+                      ],
+                      "path": [
+                        "order"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction6",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "not-empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "replacement"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "text",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "replacement"
+                            }
+                          ],
+                          "path": [
+                            "product"
+                          ]
+                        },
+                        {
+                          "op": "path",
+                          "kind": "text",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "order"
+                            }
+                          ],
+                          "path": [
+                            "product"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": ">=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "replacement"
+                            }
+                          ],
+                          "path": [
+                            "quantity"
+                          ]
+                        },
+                        {
+                          "op": "path",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "order"
+                            }
+                          ],
+                          "path": [
+                            "quantity"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "or",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "path",
+                              "kind": "choice",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "replacement"
+                                }
+                              ],
+                              "path": [
+                                "providerstate"
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "released"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "path",
+                              "kind": "choice",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "replacement"
+                                }
+                              ],
+                              "path": [
+                                "providerstate"
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "running"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction7",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "upstream"
+                    },
+                    {
+                      "op": "path",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "replacement"
+                        }
+                      ],
+                      "path": [
+                        "providerid"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction8",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "not-empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "correction"
+                        },
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction9",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      },
+      {
+        "when": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "attempt"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": ">",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "count",
+                          "kind": "integer",
+                          "agg": {
+                            "source": "previousoutcomes"
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "all",
+                      "kind": "boolean",
+                      "agg": {
+                        "source": "previousoutcomes"
+                      },
+                      "in": {
+                        "op": "or",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "item.state"
+                              },
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "confirmed"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "op": "",
+                            "kind": "boolean",
+                            "ref": "item.partial"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "op": "any",
+                      "kind": "boolean",
+                      "agg": {
+                        "source": "previousoutcomes"
+                      },
+                      "in": {
+                        "op": "",
+                        "kind": "boolean",
+                        "ref": "item.partial"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "level": "block",
+        "code": "correction10",
+        "message": "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.",
+        "translations": {
+          "zh-CN": "纠正必须保留原批次与可读的确切拒绝结果；未知结果不得改换目标重发。"
+        }
+      }
+    ]
+  },
+  "sets": [
+    {
+      "name": "corrections",
+      "from": "corrections",
+      "direction": "inverse",
+      "object": "build.mesproductionresult",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "type": "build.mesproductionresult",
+  "scope": {
+    "unit": "line",
+    "structure": "site"
+  },
+  "enterpriseUse": {
+    "op": "",
+    "kind": "boolean",
+    "lit": {
+      "value": false
+    }
+  }
+}

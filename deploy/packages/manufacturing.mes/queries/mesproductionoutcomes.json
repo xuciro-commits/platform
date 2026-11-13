@@ -1,0 +1,11 @@
+{
+  "name": "mesproductionoutcomes",
+  "title": "Exact original coordination outcomes",
+  "description": "Only the current member visible receipts for the exact coordination subject.",
+  "object": "build.confirmation",
+  "by": "subject",
+  "sort": [
+    "id"
+  ],
+  "limit": 200
+}

@@ -1,0 +1,161 @@
+{
+  "name": "manufacturingmachining",
+  "title": "Machining routing and complete split",
+  "roots": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesrouting"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesoperation"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesorder"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesbatch"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mescenter"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesresource"
+    }
+  ],
+  "at": "2026-10-21T09:00:00Z",
+  "steps": [
+    {
+      "type": "build.mescenter",
+      "id": "machiningcenter",
+      "action": "build.mescenter.create",
+      "payload": "{\"name\":\"Machining\",\"line\":\"machining\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesresource",
+      "id": "machiningresource",
+      "action": "build.mesresource.create",
+      "payload": "{\"name\":\"Machining station\",\"center\":\"machiningcenter\",\"active\":true}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesrouting",
+      "id": "machiningroute",
+      "action": "build.mesrouting.create",
+      "payload": "{\"code\":\"PORTABLE\",\"name\":\"Machining procedure\",\"version\":2,\"from\":\"2026-01-01\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesoperation",
+      "id": "machiningoperation",
+      "action": "build.mesoperation.create",
+      "payload": "{\"routing\":\"machiningroute\",\"number\":10,\"name\":\"Machining\",\"center\":\"machiningcenter\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesrouting",
+      "id": "machiningroute",
+      "action": "build.mesrouting.edit",
+      "payload": "{\"first\":\"machiningoperation\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesrouting",
+      "id": "machiningroute",
+      "action": "build.mesrouting.release",
+      "payload": "{}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesorder",
+      "id": "machiningorder",
+      "action": "build.mesorder.create",
+      "payload": "{\"number\":\"machiningorder\",\"product\":\"Synthetic Machining\",\"routing\":\"machiningroute\",\"quantity\":3}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesbatch",
+      "id": "machiningbatch",
+      "action": "build.mesbatch.create",
+      "payload": "{\"name\":\"machiningbatch\",\"order\":\"machiningorder\",\"routing\":\"machiningroute\",\"operation\":\"machiningoperation\",\"quantity\":2}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesorder",
+      "id": "machiningorder",
+      "action": "build.mesorder.release",
+      "payload": "{}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.mesbatch",
+      "id": "machiningremaining",
+      "action": "build.mesbatch.create",
+      "payload": "{\"name\":\"machiningremaining\",\"order\":\"machiningorder\",\"routing\":\"machiningroute\",\"operation\":\"machiningoperation\",\"quantity\":1}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesorder",
+      "id": "machiningorder",
+      "action": "build.mesorder.release",
+      "payload": "{}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.mesoperation",
+      "id": "machiningoperation",
+      "action": "build.mesoperation.edit",
+      "payload": "{\"name\":\"Changed after release\"}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.mesbatch",
+      "id": "machininglate",
+      "action": "build.mesbatch.create",
+      "payload": "{\"name\":\"machininglate\",\"order\":\"machiningorder\",\"routing\":\"machiningroute\",\"operation\":\"machiningoperation\",\"quantity\":1}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.mesbatch",
+      "id": "machiningbatch",
+      "action": "build.mesbatch.start",
+      "payload": "{\"operation\":\"machiningoperation\",\"resource\":\"machiningresource\"}",
+      "expect": "refused"
+    }
+  ],
+  "organization": {
+    "structures": [
+      {
+        "id": "site",
+        "name": "Sites",
+        "kind": "site"
+      }
+    ],
+    "units": [
+      {
+        "id": "machining",
+        "name": "machining",
+        "kind": "line"
+      }
+    ],
+    "edges": [],
+    "memberships": [
+      {
+        "party": "",
+        "unit": "machining",
+        "role": "employee"
+      }
+    ]
+  }
+}

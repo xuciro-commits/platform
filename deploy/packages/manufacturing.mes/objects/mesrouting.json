@@ -1,0 +1,269 @@
+{
+  "name": "mesrouting",
+  "title": "Routing version",
+  "fields": [
+    {
+      "name": "code",
+      "title": "Routing code",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "version",
+      "title": "Business version",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "from",
+      "title": "Effective from",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "until",
+      "title": "Effective until",
+      "type": "date"
+    },
+    {
+      "name": "first",
+      "title": "First operation",
+      "type": "reference",
+      "ref": "build.mesoperation"
+    }
+  ],
+  "sets": [
+    {
+      "name": "operations",
+      "from": "operations",
+      "direction": "inverse",
+      "object": "build.mesoperation",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "versioning": {
+    "key": "code",
+    "version": "version",
+    "validFrom": "from",
+    "validUntil": "until",
+    "pin": "on_create"
+  },
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "operator",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "published",
+      "title": "Published"
+    }
+  ],
+  "actions": [
+    {
+      "name": "release",
+      "title": "Publish routing version",
+      "from": [
+        "draft"
+      ],
+      "roles": [
+        "supervisor"
+      ],
+      "transaction": {
+        "subject": "build.mesrouting",
+        "steps": [
+          {
+            "name": "published",
+            "kind": "update",
+            "target": {
+              "type": "build.mesrouting",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "published"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "count",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "operations"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            },
+            {
+              "op": "<=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "count",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "operations"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 64
+                  }
+                }
+              ]
+            },
+            {
+              "op": "not-empty",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "first"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "first"
+                    }
+                  ],
+                  "path": [
+                    "routing"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "kind": "boolean",
+              "agg": {
+                "source": "operations"
+              },
+              "in": {
+                "op": ">=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "item.number"
+                  },
+                  {
+                    "op": "path",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "first"
+                      }
+                    ],
+                    "path": [
+                      "number"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "A routing needs a bounded set of operations and its first business operation.",
+        "reads": {
+          "collections": {
+            "operations": {
+              "app": "build",
+              "object": "build.mesoperation",
+              "set": "operations",
+              "policy": "complete"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "type": "build.mesrouting"
+}

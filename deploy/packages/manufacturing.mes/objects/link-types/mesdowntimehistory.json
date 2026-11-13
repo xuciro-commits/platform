@@ -1,0 +1,26 @@
+{
+  "name": "mesdowntimehistory",
+  "title": "Downtime predecessors",
+  "description": "Keeps the original interval and human reason when a correction splits or merges it.",
+  "parent": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesdowntime"
+  },
+  "child": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesdowntime"
+  },
+  "forward": "successors",
+  "reverse": "predecessors",
+  "storage": "edge",
+  "cardinality": "many-to-many",
+  "deletePolicy": "owner",
+  "required": false,
+  "via": "",
+  "roles": [
+    "builder",
+    "supervisor"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "productionupstream",
+  "title": "Upstream production provider",
+  "kind": "http",
+  "credential": true
+}

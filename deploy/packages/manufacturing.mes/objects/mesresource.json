@@ -1,0 +1,74 @@
+{
+  "name": "mesresource",
+  "title": "Production resource",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "center",
+      "title": "Work center",
+      "type": "reference",
+      "ref": "build.mescenter",
+      "required": true
+    },
+    {
+      "name": "active",
+      "title": "Active",
+      "type": "boolean",
+      "required": true
+    }
+  ],
+  "sets": [
+    {
+      "name": "skills",
+      "from": "skills",
+      "direction": "inverse",
+      "object": "build.messkill",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "operator",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "type": "build.mesresource"
+}

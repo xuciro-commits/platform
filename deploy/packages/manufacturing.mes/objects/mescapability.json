@@ -1,0 +1,59 @@
+{
+  "name": "mescapability",
+  "title": "Equipment capability",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "code",
+      "title": "Capability code",
+      "type": "text",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "operator",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "capabilitycode",
+      "kind": "unique",
+      "fields": [
+        "code"
+      ],
+      "message": "A capability code identifies one capability."
+    }
+  ],
+  "type": "build.mescapability"
+}

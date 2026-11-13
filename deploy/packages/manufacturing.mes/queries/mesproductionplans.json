@@ -1,0 +1,10 @@
+{
+  "name": "mesproductionplans",
+  "title": "Available upstream production plans",
+  "description": "Complete currently imported upstream plans. The provider still decides each command.",
+  "object": "build.mesupstreamorder",
+  "sort": [
+    "id"
+  ],
+  "limit": 200
+}

@@ -1,0 +1,215 @@
+{
+  "format": 4,
+  "name": "messignature",
+  "title": "Disposition signatures",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.messignature"
+  },
+  "dataBindings": [
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.messignature"
+      },
+      "model": {
+        "type": "build.messignature",
+        "fields": [
+          {
+            "name": "batch"
+          },
+          {
+            "name": "issue"
+          },
+          {
+            "name": "meaning"
+          },
+          {
+            "name": "decision"
+          },
+          {
+            "name": "target"
+          },
+          {
+            "name": "actor"
+          },
+          {
+            "name": "at"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "batch"
+        },
+        {
+          "name": "issue"
+        },
+        {
+          "name": "meaning"
+        },
+        {
+          "name": "decision"
+        },
+        {
+          "name": "target"
+        },
+        {
+          "name": "actor"
+        },
+        {
+          "name": "at"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.messignature"
+      },
+      "model": {
+        "type": "build.messignature",
+        "fields": [
+          {
+            "name": "batch"
+          },
+          {
+            "name": "issue"
+          },
+          {
+            "name": "meaning"
+          },
+          {
+            "name": "decision"
+          },
+          {
+            "name": "target"
+          },
+          {
+            "name": "actor"
+          },
+          {
+            "name": "at"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "batch"
+        },
+        {
+          "name": "issue"
+        },
+        {
+          "name": "meaning"
+        },
+        {
+          "name": "decision"
+        },
+        {
+          "name": "target"
+        },
+        {
+          "name": "actor"
+        },
+        {
+          "name": "at"
+        }
+      ],
+      "ports": {
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.messignature.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.messignature.edit"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "binding": "list"
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "binding": "detail"
+    }
+  ],
+  "inputSchema": {},
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "page",
+        "kind": "page"
+      },
+      {
+        "id": "binding:list",
+        "parent": "page",
+        "kind": "page",
+        "binding": "list"
+      },
+      {
+        "id": "binding:detail",
+        "parent": "page",
+        "kind": "page",
+        "binding": "detail"
+      }
+    ],
+    "owners": {
+      "detail": "binding:detail",
+      "list": "binding:list"
+    },
+    "root": "page"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": null,
+      "sections": [
+        {
+          "binding": "list",
+          "id": "list",
+          "triggers": [
+            "list"
+          ]
+        },
+        {
+          "binding": "detail",
+          "id": "detail",
+          "triggers": [
+            "detail"
+          ]
+        }
+      ]
+    }
+  }
+}

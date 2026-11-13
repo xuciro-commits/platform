@@ -1,0 +1,33 @@
+{
+  "name": "build.mesdowntimereview",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesdowntime"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.mesdowntime.requestreason"
+    }
+  ],
+  "definition": {
+    "name": "mesdowntimereview",
+    "title": "Request a reason for new downtime",
+    "object": "build.mesdowntime",
+    "when": "open",
+    "steps": [
+      {
+        "name": "request",
+        "kind": "action",
+        "act": "requestreason",
+        "next": "done"
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

@@ -1,0 +1,619 @@
+{
+  "name": "mesdowntime",
+  "type": "build.mesdowntime",
+  "title": "Downtime event",
+  "plural": "Downtime events",
+  "fields": [
+    {
+      "name": "device",
+      "title": "Observed equipment",
+      "type": "reference",
+      "ref": "build.mesdevice",
+      "inverse": "events",
+      "required": true
+    },
+    {
+      "name": "source",
+      "title": "Observation source",
+      "type": "text"
+    },
+    {
+      "name": "sourceversion",
+      "title": "Source version",
+      "type": "text"
+    },
+    {
+      "name": "sourcerevision",
+      "title": "Source revision",
+      "type": "text"
+    },
+    {
+      "name": "processingversion",
+      "title": "Processing version",
+      "type": "text"
+    },
+    {
+      "name": "since",
+      "title": "Known from",
+      "type": "datetime"
+    },
+    {
+      "name": "until",
+      "title": "Known until",
+      "type": "datetime"
+    },
+    {
+      "name": "openstart",
+      "title": "Start remains open",
+      "type": "boolean"
+    },
+    {
+      "name": "openend",
+      "title": "End remains open",
+      "type": "boolean"
+    },
+    {
+      "name": "retired",
+      "title": "Superseded interval",
+      "type": "boolean"
+    },
+    {
+      "name": "review",
+      "title": "Requires review",
+      "type": "boolean",
+      "write": [
+        "builder",
+        "supervisor"
+      ]
+    },
+    {
+      "name": "reason",
+      "title": "Reason",
+      "type": "longtext"
+    },
+    {
+      "name": "unit",
+      "title": "Supervising unit",
+      "type": "reference",
+      "formulaExpr": {
+        "op": "path",
+        "kind": "reference",
+        "args": [
+          {
+            "op": "",
+            "kind": "reference",
+            "ref": "device"
+          }
+        ],
+        "path": [
+          "unit"
+        ]
+      },
+      "ref": "enterprise.element",
+      "stereotype": "ActualOrganization"
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "below",
+      "create": true,
+      "edit": true
+    },
+    {
+      "role": "operator",
+      "read": "unit",
+      "create": false,
+      "edit": false
+    },
+    {
+      "role": "quality",
+      "read": "below",
+      "create": false,
+      "edit": false
+    }
+  ],
+  "states": [
+    {
+      "name": "open",
+      "title": "Needs a reason"
+    },
+    {
+      "name": "reasoned",
+      "title": "Reason recorded"
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.mesdowntime",
+    "guard": {
+      "op": "",
+      "kind": "boolean",
+      "ref": "observation.ready"
+    },
+    "message": "An accepted observation is required to create an interval.",
+    "steps": [
+      {
+        "name": "observed",
+        "kind": "update",
+        "target": {
+          "type": "build.mesdowntime",
+          "id": "$subject"
+        },
+        "changes": []
+      }
+    ]
+  },
+  "actions": [
+    {
+      "name": "reason",
+      "title": "Record downtime reason",
+      "from": [
+        "open",
+        "reasoned"
+      ],
+      "roles": [
+        "operator",
+        "supervisor"
+      ],
+      "inputs": [
+        {
+          "name": "reason",
+          "title": "Reason",
+          "type": "longtext",
+          "required": true,
+          "minLength": 3
+        }
+      ],
+      "transaction": {
+        "subject": "build.mesdowntime",
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "boolean",
+                  "ref": "retired"
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "boolean",
+                  "ref": "review"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "Choose a current interval; corrected intervals require supervisor review.",
+        "steps": [
+          {
+            "name": "reason",
+            "kind": "update",
+            "target": {
+              "type": "build.mesdowntime",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "reason",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.reason"
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "reasoned"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "closed",
+            "kind": "work",
+            "work": {
+              "close": true,
+              "key": {
+                "op": "concat",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": "downtime:"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "id"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "review",
+      "title": "Review corrected downtime",
+      "from": [
+        "open",
+        "reasoned"
+      ],
+      "roles": [
+        "supervisor"
+      ],
+      "inputs": [
+        {
+          "name": "reason",
+          "title": "Reason",
+          "type": "longtext",
+          "required": true,
+          "minLength": 3
+        }
+      ],
+      "transaction": {
+        "subject": "build.mesdowntime",
+        "guard": {
+          "op": "not",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "boolean",
+              "ref": "retired"
+            }
+          ]
+        },
+        "message": "Choose a current interval; corrected intervals require supervisor review.",
+        "steps": [
+          {
+            "name": "reason",
+            "kind": "update",
+            "target": {
+              "type": "build.mesdowntime",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "reason",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.reason"
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "reasoned"
+                  }
+                }
+              },
+              {
+                "field": "review",
+                "expr": {
+                  "op": "",
+                  "kind": "boolean",
+                  "lit": {
+                    "value": false
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "closed",
+            "kind": "work",
+            "work": {
+              "close": true,
+              "key": {
+                "op": "concat",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": "downtime:"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "id"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "requestreason",
+      "title": "Request downtime review",
+      "from": [
+        "open"
+      ],
+      "roles": [
+        "supervisor"
+      ],
+      "transaction": {
+        "subject": "build.mesdowntime",
+        "steps": [
+          {
+            "name": "due",
+            "kind": "work",
+            "when": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "device"
+                    }
+                  ],
+                  "path": [
+                    "notify"
+                  ]
+                },
+                {
+                  "op": ">",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "device"
+                        }
+                      ],
+                      "path": [
+                        "remindhours"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "work": {
+              "title": "Downtime needs a reason",
+              "body": {
+                "op": "",
+                "kind": "text",
+                "lit": {
+                  "value": "Review this equipment interval and its predecessor history before giving a reason."
+                }
+              },
+              "role": "supervisor",
+              "structure": "site",
+              "unit": {
+                "op": "path",
+                "kind": "reference",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "device"
+                  }
+                ],
+                "path": [
+                  "unit"
+                ]
+              },
+              "key": {
+                "op": "concat",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": "downtime:"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "id"
+                  }
+                ]
+              },
+              "due": {
+                "op": "add-hours",
+                "kind": "datetime",
+                "args": [
+                  {
+                    "op": "$now",
+                    "kind": "datetime"
+                  },
+                  {
+                    "op": "path",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "device"
+                      }
+                    ],
+                    "path": [
+                      "remindhours"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "immediate",
+            "kind": "work",
+            "when": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "device"
+                    }
+                  ],
+                  "path": [
+                    "notify"
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "device"
+                        }
+                      ],
+                      "path": [
+                        "remindhours"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "work": {
+              "title": "Downtime needs a reason",
+              "body": {
+                "op": "",
+                "kind": "text",
+                "lit": {
+                  "value": "Review this equipment interval and its predecessor history before giving a reason."
+                }
+              },
+              "role": "supervisor",
+              "structure": "site",
+              "unit": {
+                "op": "path",
+                "kind": "reference",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "device"
+                  }
+                ],
+                "path": [
+                  "unit"
+                ]
+              },
+              "key": {
+                "op": "concat",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": "downtime:"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "id"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "name": "observedprovenance",
+      "kind": "immutable",
+      "fields": [
+        "device",
+        "source",
+        "sourceversion",
+        "sourcerevision",
+        "processingversion",
+        "since",
+        "until",
+        "openstart",
+        "openend",
+        "retired"
+      ],
+      "expr": {
+        "op": "not",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "boolean",
+            "ref": "observation.ready"
+          }
+        ]
+      },
+      "message": "Observed boundaries and provenance change only through the original source."
+    }
+  ],
+  "scope": {
+    "unit": "unit",
+    "structure": "site"
+  }
+}

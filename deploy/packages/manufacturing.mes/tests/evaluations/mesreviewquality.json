@@ -1,0 +1,54 @@
+{
+  "name": "mesreviewquality",
+  "title": "Manufacturing review advice evaluation",
+  "function": {
+    "ref": {
+      "app": "build",
+      "kind": "function",
+      "name": "mesreview"
+    },
+    "sourceVersion": "1.function-1"
+  },
+  "model": "",
+  "policy": {
+    "compareFields": [
+      "category",
+      "review"
+    ],
+    "minQuality": 1,
+    "maxCostUsd": 0.1,
+    "maxLatencyMillis": 30000,
+    "cases": [
+      {
+        "name": "missingfacts1",
+        "input": {
+          "number": "SYNTHETIC-1",
+          "product": "Assembly without verified capacity",
+          "quantity": 4,
+          "state": "draft"
+        },
+        "expected": {
+          "summary": "Human reference: check the missing business facts before a consequential change.",
+          "category": "review",
+          "review": true,
+          "confidence": 0.9
+        }
+      },
+      {
+        "name": "missingfacts2",
+        "input": {
+          "number": "SYNTHETIC-2",
+          "product": "Machining without verified material availability",
+          "quantity": 10,
+          "state": "released"
+        },
+        "expected": {
+          "summary": "Human reference: check the missing business facts before a consequential change.",
+          "category": "review",
+          "review": true,
+          "confidence": 0.9
+        }
+      }
+    ]
+  }
+}

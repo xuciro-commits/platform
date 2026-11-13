@@ -1,0 +1,68 @@
+{
+  "name": "messtates",
+  "title": "Equipment state intervals",
+  "connection": {
+    "app": "build",
+    "kind": "connection",
+    "name": "mesobservations"
+  },
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesdevice"
+  },
+  "deviceField": "device",
+  "signal": "state",
+  "unit": "state",
+  "path": "/observations",
+  "windowSeconds": 300,
+  "expectedRetentionSeconds": 86400,
+  "expectedGranularitySeconds": 10,
+  "roles": [
+    "supervisor",
+    "operator"
+  ],
+  "scheduled": false,
+  "requireComplete": true,
+  "intervals": {
+    "valueKind": "choice",
+    "when": {
+      "op": "=",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "",
+          "kind": "choice",
+          "ref": "sample.value"
+        },
+        {
+          "op": "",
+          "kind": "choice",
+          "lit": {
+            "value": "down"
+          }
+        }
+      ]
+    },
+    "maxGapSeconds": 30,
+    "latePolicy": "correct",
+    "latenessSeconds": 60,
+    "maxIntervals": 64
+  },
+  "decision": {
+    "mode": "intervals",
+    "when": {
+      "op": "",
+      "kind": "boolean",
+      "lit": {
+        "value": true
+      }
+    },
+    "action": {
+      "app": "build",
+      "kind": "action",
+      "name": "build.mesdevice.observe"
+    },
+    "inputs": {}
+  }
+}

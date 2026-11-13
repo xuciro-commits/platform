@@ -1,0 +1,269 @@
+{
+  "name": "messignature",
+  "title": "Disposition signature",
+  "fields": [
+    {
+      "name": "batch",
+      "title": "Execution batch",
+      "type": "reference",
+      "ref": "build.mesbatch",
+      "inverse": "signatures",
+      "required": true
+    },
+    {
+      "name": "issue",
+      "title": "Production exception",
+      "type": "reference",
+      "ref": "build.mesissue",
+      "inverse": "signatures",
+      "required": true
+    },
+    {
+      "name": "meaning",
+      "title": "Signature meaning",
+      "type": "choice",
+      "choices": "reviewed,approved",
+      "required": true
+    },
+    {
+      "name": "decision",
+      "title": "Disposition",
+      "type": "choice",
+      "choices": "rework,scrap,use-as-is",
+      "required": true
+    },
+    {
+      "name": "target",
+      "title": "Rework operation",
+      "type": "reference",
+      "ref": "build.mesoperation"
+    },
+    {
+      "name": "actor",
+      "title": "Signed by",
+      "type": "text",
+      "formulaExpr": {
+        "op": "",
+        "kind": "text",
+        "ref": "caller.id"
+      }
+    },
+    {
+      "name": "at",
+      "title": "Signed at",
+      "type": "datetime",
+      "formulaExpr": {
+        "op": "$now",
+        "kind": "datetime"
+      }
+    },
+    {
+      "name": "line",
+      "title": "Production line",
+      "type": "reference",
+      "ref": "enterprise.element",
+      "stereotype": "ActualOrganization",
+      "formulaExpr": {
+        "op": "path",
+        "kind": "reference",
+        "args": [
+          {
+            "op": "",
+            "kind": "reference",
+            "ref": "issue"
+          }
+        ],
+        "path": [
+          "line"
+        ]
+      }
+    }
+  ],
+  "access": [
+    {
+      "role": "quality",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "supervisor",
+      "read": "below",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "operator",
+      "read": "unit",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "originalsignature",
+      "kind": "immutable",
+      "fields": [
+        "batch",
+        "issue",
+        "meaning",
+        "decision",
+        "target",
+        "actor",
+        "at",
+        "archived"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "onemeaning",
+      "kind": "unique",
+      "fields": [
+        "issue",
+        "meaning"
+      ],
+      "message": "An exception has one signature for each meaning."
+    },
+    {
+      "name": "oneperson",
+      "kind": "unique",
+      "fields": [
+        "issue",
+        "actor"
+      ],
+      "message": "The two signatures belong to different people."
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.messignature",
+    "steps": [
+      {
+        "name": "seal",
+        "kind": "update",
+        "target": {
+          "type": "build.messignature",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "meaning",
+            "from": "meaning"
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "batch"
+            },
+            {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "issue"
+                }
+              ],
+              "path": [
+                "batch"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "issue"
+            },
+            {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "batch"
+                }
+              ],
+              "path": [
+                "issue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "batch"
+                }
+              ],
+              "path": [
+                "state"
+              ]
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "hold"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "message": "A signature belongs to the actual held batch and its current exception."
+  },
+  "type": "build.messignature",
+  "scope": {
+    "unit": "line",
+    "structure": "site"
+  },
+  "enterpriseUse": {
+    "op": "",
+    "kind": "boolean",
+    "lit": {
+      "value": false
+    }
+  }
+}

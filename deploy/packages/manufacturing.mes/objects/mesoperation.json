@@ -1,0 +1,236 @@
+{
+  "name": "mesoperation",
+  "title": "Routing operation",
+  "fields": [
+    {
+      "name": "routing",
+      "title": "Routing version",
+      "type": "reference",
+      "ref": "build.mesrouting",
+      "inverse": "operations",
+      "required": true
+    },
+    {
+      "name": "number",
+      "title": "Operation number",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "center",
+      "title": "Work center",
+      "type": "reference",
+      "ref": "build.mescenter",
+      "required": true
+    },
+    {
+      "name": "next",
+      "title": "Next operation",
+      "type": "reference",
+      "ref": "build.mesoperation",
+      "inverse": "predecessors"
+    },
+    {
+      "name": "instructions",
+      "title": "Operator instructions",
+      "type": "longtext"
+    }
+  ],
+  "sets": [
+    {
+      "name": "requirements",
+      "from": "requirements",
+      "direction": "inverse",
+      "object": "build.mesrequirement",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "predecessors",
+      "from": "predecessors",
+      "direction": "inverse",
+      "object": "build.mesoperation",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "operator",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "operationnumber",
+      "kind": "unique",
+      "fields": [
+        "routing",
+        "number"
+      ],
+      "message": "A routing version has one operation for each business number."
+    },
+    {
+      "name": "forward",
+      "kind": "expression",
+      "fields": [
+        "routing",
+        "number",
+        "next"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": ">",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "integer",
+                "ref": "number"
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": "if",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "next"
+                  }
+                ]
+              },
+              {
+                "op": "",
+                "kind": "boolean",
+                "lit": {
+                  "value": true
+                }
+              },
+              {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "path",
+                        "kind": "reference",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "next"
+                          }
+                        ],
+                        "path": [
+                          "routing"
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "routing"
+                      }
+                    ]
+                  },
+                  {
+                    "op": ">",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "path",
+                        "kind": "integer",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "next"
+                          }
+                        ],
+                        "path": [
+                          "number"
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "number"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Next operations stay in this routing and advance their business number."
+    }
+  ],
+  "type": "build.mesoperation"
+}

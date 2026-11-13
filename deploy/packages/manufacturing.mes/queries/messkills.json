@@ -1,0 +1,11 @@
+{
+  "name": "messkills",
+  "title": "messkills",
+  "description": "Complete equipment capability matching input.",
+  "object": "build.messkill",
+  "by": "resource",
+  "sort": [
+    "id"
+  ],
+  "limit": 200
+}

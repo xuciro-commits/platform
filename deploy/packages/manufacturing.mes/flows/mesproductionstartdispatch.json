@@ -1,0 +1,54 @@
+{
+  "name": "build.mesproductionstartdispatch",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesproductionstart"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.mesproductionstart.send"
+    }
+  ],
+  "definition": {
+    "name": "mesproductionstartdispatch",
+    "title": "Upstream start coordination",
+    "object": "build.mesproductionstart",
+    "when": "queued",
+    "steps": [
+      {
+        "name": "send",
+        "kind": "action",
+        "act": "build.mesproductionstart.send",
+        "target": {
+          "source": "subject",
+          "path": [
+            "id"
+          ]
+        },
+        "next": "done",
+        "retryAttempts": 1,
+        "inputs": {
+          "upstream": {
+            "source": "subject",
+            "path": [
+              "upstream"
+            ]
+          },
+          "shoporder": {
+            "source": "subject",
+            "path": [
+              "shoporder"
+            ]
+          }
+        }
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "mesproductionplansource",
+  "title": "Upstream production plans",
+  "connection": "productionupstream",
+  "profile": "json",
+  "url": "/v1/queries/build/productionorderupstream",
+  "path": "records",
+  "object": "build.mesupstreamorder",
+  "objectBindings": {
+    "build.mesupstreamorder": {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesupstreamorder"
+    }
+  },
+  "key": "id",
+  "mapping": [
+    {
+      "from": "id",
+      "to": "providerid"
+    },
+    {
+      "from": "number",
+      "to": "number"
+    },
+    {
+      "from": "product",
+      "to": "product"
+    },
+    {
+      "from": "quantity",
+      "to": "quantity"
+    },
+    {
+      "from": "state",
+      "to": "providerstate"
+    }
+  ]
+}

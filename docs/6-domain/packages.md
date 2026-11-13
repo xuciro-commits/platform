@@ -109,7 +109,15 @@ read-when: 改动产品包、Marketplace 安装、升级、卸载、重装、产
 
 Marketplace 的精确产品版本提供“Transfer existing resources…”：审阅原拥有者和资源修订号，创建目标受管项目，再经 `build.resource.rehome` 转移。重试只列尚未归位的资源；保留 RID、类型名、业务应用身份、记录、媒体和历史。项目容器自身保持项目 ID，带文件夹的资源先移出文件夹，陈旧资源修订被拒绝。所有权转移与原拥有者无关：未受管资源或任一产品的资源都可转给蓝图含同一资源引用的产品。被依赖的产品先转移并安装，原产品最后退役；它仅归档尚归它所有的资源。业务应用可以跨项目归位，项目容器不能移动。所有 blueprint asset 仍属于 `build`，转移只改变所有权与依赖，不产生第二套事务权威。
 
-## 6.27 现存差距
+## 6.27 作者态包源
+
+- `deploy/packages/*.json` 是运行层消费的不可变制品，不由手编辑；每个产品版本的作者态源位于 `deploy/packages/<id>/`。
+- 源目录的 `package.json` 只保存包级字段；`blueprint.json` 只保存 roots、asset 路径、guide 与 setup 路径；一个 asset 一个文件，asset body 不进入 blueprint。
+- 资源按类型进入固定目录：对象、动作、查询、页面、应用、流程、函数、Agent、集成、测试和文档分开；没有内容的目录不预建。
+- `package.lock.json` 由 `scripts/package-source.mjs pack` 生成，记录依赖、制品摘要和各 asset 摘要；`make check` 校验制品和 lock 没有过期。
+- `pack` 只改变作者态和打包路径，不改变 `PackageDescriptor`、安装、升级和运行语义。
+
+## 6.28 现存差距
 
 - `draining` 只设置状态，静态代码没有阻止新使用；界面明确标为“标记卸载”，不宣称运行排空已完成。
 - `Uninstall` 实际是 archive；永久删除、输出 detach、制品 GC 未实现。

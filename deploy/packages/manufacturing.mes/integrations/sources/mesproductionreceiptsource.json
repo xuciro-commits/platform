@@ -1,0 +1,9 @@
+{
+  "name": "mesproductionreceiptsource",
+  "title": "Accepted upstream batches",
+  "connection": "productionupstream",
+  "profile": "json",
+  "url": "/v1/queries/build/productionbatchupstream",
+  "path": "records",
+  "dataset": "mesproductionreceipts"
+}

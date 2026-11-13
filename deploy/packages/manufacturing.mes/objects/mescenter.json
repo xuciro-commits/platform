@@ -1,0 +1,51 @@
+{
+  "name": "mescenter",
+  "title": "Work center",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "line",
+      "title": "Production line",
+      "type": "reference",
+      "required": true,
+      "ref": "enterprise.element",
+      "stereotype": "ActualOrganization"
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "operator",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "type": "build.mescenter"
+}

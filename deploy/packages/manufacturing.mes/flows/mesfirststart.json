@@ -1,0 +1,76 @@
+{
+  "name": "build.mesfirststart",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesbatch"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.mesorder.startupstream"
+    }
+  ],
+  "definition": {
+    "name": "mesfirststart",
+    "title": "Coordinate the first active execution batch",
+    "object": "build.mesbatch",
+    "when": "active",
+    "steps": [
+      {
+        "name": "configured",
+        "kind": "branch",
+        "condition": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "json",
+              "ref": "subject.upstreamstart"
+            },
+            {
+              "op": "",
+              "kind": "json",
+              "lit": {
+                "value": true
+              }
+            }
+          ]
+        },
+        "cases": {
+          "true": "start",
+          "false": "done"
+        },
+        "error": "done"
+      },
+      {
+        "name": "start",
+        "kind": "action",
+        "act": "build.mesorder.startupstream",
+        "target": {
+          "source": "subject",
+          "path": [
+            "order"
+          ]
+        },
+        "inputs": {
+          "execution": {
+            "source": "subject",
+            "path": [
+              "id"
+            ]
+          }
+        },
+        "next": "done",
+        "error": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

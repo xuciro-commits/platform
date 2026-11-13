@@ -1,0 +1,15 @@
+{
+  "name": "mesproductionstart",
+  "title": "Production start",
+  "object": "build.mesproductionstart",
+  "on": "confirmation",
+  "connection": "productionupstream",
+  "method": "POST",
+  "path": "/v1/protocols/production.orders/2/start/{upstream}",
+  "mapping": [
+    {
+      "from": "shoporder",
+      "to": "shoporder"
+    }
+  ]
+}

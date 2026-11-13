@@ -1,0 +1,1773 @@
+{
+  "name": "mesorder",
+  "title": "Shop order",
+  "fields": [
+    {
+      "name": "number",
+      "title": "Shop order reference",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "product",
+      "title": "Product",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "routing",
+      "title": "Routing version",
+      "type": "reference",
+      "ref": "build.mesrouting",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Planned quantity",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "upstream",
+      "title": "Upstream production order",
+      "type": "text"
+    },
+    {
+      "name": "good",
+      "title": "Completed good quantity",
+      "type": "integer"
+    },
+    {
+      "name": "scrap",
+      "title": "Completed scrap quantity",
+      "type": "integer"
+    },
+    {
+      "name": "deliverykey",
+      "title": "Stable shop identity",
+      "type": "text"
+    },
+    {
+      "name": "startrequest",
+      "title": "Upstream start coordination",
+      "type": "reference",
+      "ref": "build.mesproductionstart"
+    },
+    {
+      "name": "advice",
+      "title": "Adopted review advice",
+      "type": "longtext",
+      "sourceType": "generated",
+      "readOnly": true
+    },
+    {
+      "name": "advicecategory",
+      "title": "Advice category",
+      "type": "choice",
+      "choices": "routine,review",
+      "sourceType": "generated",
+      "readOnly": true
+    },
+    {
+      "name": "advicereview",
+      "title": "Needs review",
+      "type": "boolean",
+      "sourceType": "generated",
+      "readOnly": true
+    },
+    {
+      "name": "line",
+      "title": "Production line",
+      "type": "reference",
+      "ref": "enterprise.element",
+      "stereotype": "ActualOrganization",
+      "formulaExpr": {
+        "op": "path",
+        "kind": "reference",
+        "args": [
+          {
+            "op": "",
+            "kind": "reference",
+            "ref": "routing"
+          }
+        ],
+        "path": [
+          "first",
+          "center",
+          "line"
+        ]
+      }
+    }
+  ],
+  "sets": [
+    {
+      "name": "batches",
+      "from": "batches",
+      "direction": "inverse",
+      "object": "build.mesbatch",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "starts",
+      "from": "starts",
+      "direction": "inverse",
+      "object": "build.mesproductionstart",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "below",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "operator",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "released",
+      "title": "Released"
+    },
+    {
+      "name": "completed",
+      "title": "Completed"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "positivequantity",
+      "kind": "expression",
+      "fields": [
+        "quantity"
+      ],
+      "level": "record",
+      "expr": {
+        "op": ">",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "integer",
+            "ref": "quantity"
+          },
+          {
+            "op": "",
+            "kind": "integer",
+            "lit": {
+              "value": 0
+            }
+          }
+        ]
+      },
+      "message": "A shop order plans a positive whole-unit quantity."
+    },
+    {
+      "name": "splitquantity",
+      "kind": "expression",
+      "fields": [
+        "routing",
+        "quantity",
+        "state"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "all",
+            "kind": "boolean",
+            "agg": {
+              "source": "batches"
+            },
+            "in": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "item.routing"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "routing"
+                    }
+                  ]
+                },
+                {
+                  "op": ">",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "item.quantity"
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "op": "<=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "count",
+                "kind": "integer",
+                "agg": {
+                  "source": "batches"
+                }
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 100
+                }
+              }
+            ]
+          },
+          {
+            "op": "if",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "draft"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "<=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "sum",
+                    "kind": "integer",
+                    "agg": {
+                      "source": "batches"
+                    },
+                    "in": {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "item.quantity"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "quantity"
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "sum",
+                    "kind": "integer",
+                    "agg": {
+                      "source": "batches"
+                    },
+                    "in": {
+                      "op": "",
+                      "kind": "integer",
+                      "ref": "item.quantity"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "quantity"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "The complete batch split retains its original routing and planned quantity.",
+      "reads": {
+        "collections": {
+          "batches": {
+            "app": "build",
+            "object": "build.mesbatch",
+            "set": "batches",
+            "policy": "complete"
+          },
+          "starts": {
+            "app": "build",
+            "object": "build.mesproductionstart",
+            "set": "starts",
+            "policy": "complete"
+          },
+          "plans": {
+            "app": "build",
+            "object": "build.mesupstreamorder",
+            "query": "mesproductionplans",
+            "version": 1,
+            "policy": "complete"
+          }
+        }
+      }
+    },
+    {
+      "name": "originalplan",
+      "kind": "immutable",
+      "fields": [
+        "number",
+        "product",
+        "routing",
+        "quantity",
+        "upstream",
+        "deliverykey",
+        "archived"
+      ],
+      "expr": {
+        "op": "not-empty",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "coalesce",
+            "kind": "text",
+            "args": [
+              {
+                "op": "",
+                "kind": "text",
+                "ref": "deliverykey"
+              },
+              {
+                "op": "",
+                "kind": "text",
+                "lit": {
+                  "value": ""
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "shopnumber",
+      "kind": "unique",
+      "fields": [
+        "number"
+      ],
+      "message": "Each shop order has a distinct business reference."
+    },
+    {
+      "name": "originalstart",
+      "kind": "expression",
+      "fields": [
+        "startrequest"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "empty",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "coalesce",
+                "kind": "reference",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "startrequest"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": ""
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "count",
+                "kind": "integer",
+                "agg": {
+                  "source": "starts"
+                }
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "count",
+                    "kind": "integer",
+                    "agg": {
+                      "source": "starts"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "startrequest"
+                      }
+                    ],
+                    "path": [
+                      "shoporder"
+                    ]
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "deliverykey"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "The shop order retains its original first-start coordination.",
+      "reads": {
+        "collections": {
+          "batches": {
+            "app": "build",
+            "object": "build.mesbatch",
+            "set": "batches",
+            "policy": "complete"
+          },
+          "starts": {
+            "app": "build",
+            "object": "build.mesproductionstart",
+            "set": "starts",
+            "policy": "complete"
+          },
+          "plans": {
+            "app": "build",
+            "object": "build.mesupstreamorder",
+            "query": "mesproductionplans",
+            "version": 1,
+            "policy": "complete"
+          }
+        }
+      }
+    }
+  ],
+  "actions": [
+    {
+      "name": "release",
+      "title": "Release the complete batch split",
+      "from": [
+        "draft"
+      ],
+      "roles": [
+        "supervisor"
+      ],
+      "transaction": {
+        "subject": "build.mesorder",
+        "steps": [
+          {
+            "name": "released",
+            "kind": "update",
+            "target": {
+              "type": "build.mesorder",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "released"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "count",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "batches"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "sum",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "batches"
+                  },
+                  "in": {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "item.quantity"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "ref": "quantity"
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "kind": "boolean",
+              "agg": {
+                "source": "batches"
+              },
+              "in": {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "item.routing"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "routing"
+                      }
+                    ]
+                  },
+                  {
+                    "op": ">",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "item.quantity"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "The complete batch quantities must equal the shop order.",
+        "reads": {
+          "collections": {
+            "batches": {
+              "app": "build",
+              "object": "build.mesbatch",
+              "set": "batches",
+              "policy": "complete"
+            },
+            "starts": {
+              "app": "build",
+              "object": "build.mesproductionstart",
+              "set": "starts",
+              "policy": "complete"
+            },
+            "plans": {
+              "app": "build",
+              "object": "build.mesupstreamorder",
+              "query": "mesproductionplans",
+              "version": 1,
+              "policy": "complete"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "complete",
+      "title": "Complete the whole shop order",
+      "from": [
+        "released"
+      ],
+      "roles": [
+        "supervisor"
+      ],
+      "transaction": {
+        "subject": "build.mesorder",
+        "steps": [
+          {
+            "name": "completed",
+            "kind": "update",
+            "target": {
+              "type": "build.mesorder",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "good",
+                "expr": {
+                  "op": "sum",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "batches"
+                  },
+                  "in": {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "item.good"
+                  }
+                }
+              },
+              {
+                "field": "scrap",
+                "expr": {
+                  "op": "sum",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "batches"
+                  },
+                  "in": {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "item.scrap"
+                  }
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "completed"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "count",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "batches"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "kind": "boolean",
+              "agg": {
+                "source": "batches"
+              },
+              "in": {
+                "op": "or",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "item.state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "done"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "item.state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "scrapped"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "Every batch must finish with its original good or scrap result.",
+        "reads": {
+          "collections": {
+            "batches": {
+              "app": "build",
+              "object": "build.mesbatch",
+              "set": "batches",
+              "policy": "complete"
+            },
+            "starts": {
+              "app": "build",
+              "object": "build.mesproductionstart",
+              "set": "starts",
+              "policy": "complete"
+            },
+            "plans": {
+              "app": "build",
+              "object": "build.mesupstreamorder",
+              "query": "mesproductionplans",
+              "version": 1,
+              "policy": "complete"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "startupstream",
+      "title": "Coordinate the first active batch",
+      "from": [
+        "released"
+      ],
+      "roles": [
+        "operator",
+        "supervisor"
+      ],
+      "transaction": {
+        "subject": "build.mesorder",
+        "steps": [
+          {
+            "name": "start",
+            "kind": "create",
+            "target": {
+              "type": "build.mesproductionstart"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "execution",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.execution"
+                }
+              },
+              {
+                "field": "upstream",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "upstream"
+                }
+              },
+              {
+                "field": "shoporder",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "deliverykey"
+                }
+              }
+            ]
+          },
+          {
+            "name": "linked",
+            "kind": "update",
+            "target": {
+              "type": "build.mesorder",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "startrequest",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.start"
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "not-empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "upstream"
+                        },
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "count",
+                      "kind": "integer",
+                      "agg": {
+                        "source": "starts"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.execution"
+                        }
+                      ],
+                      "path": [
+                        "order"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.$subject"
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.execution"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "active"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "any",
+              "kind": "boolean",
+              "agg": {
+                "source": "plans"
+              },
+              "in": {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "item.providerid"
+                      },
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "upstream"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "item.product"
+                      },
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "product"
+                      }
+                    ]
+                  },
+                  {
+                    "op": ">=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.quantity"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "quantity"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "or",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "item.providerstate"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "released"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "item.providerstate"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "running"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "Refresh the upstream plans and choose an open order for this product with enough planned quantity.",
+        "reads": {
+          "collections": {
+            "batches": {
+              "app": "build",
+              "object": "build.mesbatch",
+              "set": "batches",
+              "policy": "complete"
+            },
+            "starts": {
+              "app": "build",
+              "object": "build.mesproductionstart",
+              "set": "starts",
+              "policy": "complete"
+            },
+            "plans": {
+              "app": "build",
+              "object": "build.mesupstreamorder",
+              "query": "mesproductionplans",
+              "version": 1,
+              "policy": "complete"
+            }
+          }
+        }
+      },
+      "inputs": [
+        {
+          "name": "execution",
+          "title": "First active execution batch",
+          "type": "reference",
+          "ref": "build.mesbatch",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "reportbatch",
+      "title": "Report an actual completed batch",
+      "from": [
+        "released",
+        "completed"
+      ],
+      "roles": [
+        "supervisor"
+      ],
+      "transaction": {
+        "subject": "build.mesorder",
+        "steps": [
+          {
+            "name": "result",
+            "kind": "create",
+            "target": {
+              "type": "build.mesproductionresult"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "execution",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.execution"
+                }
+              },
+              {
+                "field": "upstream",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "upstream"
+                }
+              },
+              {
+                "field": "shoporder",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "deliverykey"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "concat",
+                  "kind": "text",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "deliverykey"
+                    },
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "lit": {
+                        "value": "/batch/"
+                      }
+                    },
+                    {
+                      "op": "path",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.execution"
+                        }
+                      ],
+                      "path": [
+                        "name"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "yield",
+                "expr": {
+                  "op": "path",
+                  "kind": "integer",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.execution"
+                    }
+                  ],
+                  "path": [
+                    "good"
+                  ]
+                }
+              },
+              {
+                "field": "scrap",
+                "expr": {
+                  "op": "path",
+                  "kind": "integer",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.execution"
+                    }
+                  ],
+                  "path": [
+                    "scrap"
+                  ]
+                }
+              },
+              {
+                "field": "final",
+                "expr": {
+                  "op": "",
+                  "kind": "boolean",
+                  "ref": "input.final"
+                }
+              },
+              {
+                "field": "attempt",
+                "expr": {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 1
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "closereport",
+            "kind": "work",
+            "target": {
+              "type": "build.mesorder",
+              "id": "$subject"
+            },
+            "work": {
+              "title": "Production result requested",
+              "close": true,
+              "key": {
+                "op": "concat",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "input.execution"
+                      }
+                    ],
+                    "path": [
+                      "name"
+                    ]
+                  },
+                  {
+                    "op": "",
+                    "kind": "text",
+                    "lit": {
+                      "value": "-upstream"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.execution"
+                    }
+                  ],
+                  "path": [
+                    "order"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              ]
+            },
+            {
+              "op": "or",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.execution"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "done"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.execution"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "scrapped"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "startrequest"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "confirmed"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "if",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "boolean",
+                  "ref": "input.final"
+                },
+                {
+                  "op": "all",
+                  "kind": "boolean",
+                  "agg": {
+                    "source": "batches"
+                  },
+                  "in": {
+                    "op": "or",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "item.state"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "done"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "item.state"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "scrapped"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "boolean",
+                  "lit": {
+                    "value": true
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "message": "Report the actual good/scrap result after upstream start is confirmed; closing upstream requires all local batches terminal.",
+        "reads": {
+          "collections": {
+            "batches": {
+              "app": "build",
+              "object": "build.mesbatch",
+              "set": "batches",
+              "policy": "complete"
+            },
+            "starts": {
+              "app": "build",
+              "object": "build.mesproductionstart",
+              "set": "starts",
+              "policy": "complete"
+            },
+            "plans": {
+              "app": "build",
+              "object": "build.mesupstreamorder",
+              "query": "mesproductionplans",
+              "version": 1,
+              "policy": "complete"
+            }
+          }
+        }
+      },
+      "inputs": [
+        {
+          "name": "execution",
+          "title": "Completed execution batch",
+          "type": "reference",
+          "ref": "build.mesbatch",
+          "required": true
+        },
+        {
+          "name": "final",
+          "title": "Close upstream order",
+          "type": "boolean",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "adoptadvice",
+      "title": "Adopt review advice",
+      "from": [
+        "draft",
+        "released",
+        "completed"
+      ],
+      "roles": [
+        "supervisor"
+      ],
+      "inputs": [
+        {
+          "name": "proposal",
+          "title": "Proposal",
+          "type": "reference",
+          "ref": "build.function-call",
+          "required": true
+        },
+        {
+          "name": "summary",
+          "title": "Review advice",
+          "type": "longtext",
+          "required": true
+        },
+        {
+          "name": "category",
+          "title": "Advice category",
+          "type": "choice",
+          "choices": "routine,review",
+          "required": true
+        },
+        {
+          "name": "review",
+          "title": "Needs review",
+          "type": "boolean",
+          "required": true
+        }
+      ],
+      "adoption": {
+        "function": {
+          "app": "build",
+          "name": "mesreview"
+        },
+        "input": "proposal",
+        "mapping": [
+          {
+            "output": "summary",
+            "input": "summary"
+          },
+          {
+            "output": "category",
+            "input": "category"
+          },
+          {
+            "output": "review",
+            "input": "review"
+          }
+        ]
+      },
+      "transaction": {
+        "subject": "build.mesorder",
+        "steps": [
+          {
+            "name": "adopt",
+            "kind": "update",
+            "target": {
+              "type": "build.mesorder",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "advice",
+                "from": "summary"
+              },
+              {
+                "field": "advicecategory",
+                "from": "category"
+              },
+              {
+                "field": "advicereview",
+                "from": "review"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.mesorder",
+    "steps": [
+      {
+        "name": "number",
+        "kind": "sequence",
+        "sequence": {
+          "Name": "messhops",
+          "Pattern": "SHOP-{year}-{n:6}",
+          "Yearly": true
+        }
+      },
+      {
+        "name": "identity",
+        "kind": "update",
+        "target": {
+          "type": "build.mesorder",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "deliverykey",
+            "expr": {
+              "op": "concat",
+              "kind": "text",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "caller.tenant"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "lit": {
+                    "value": "/"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "step.number"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "type": "build.mesorder",
+  "scope": {
+    "unit": "line",
+    "structure": "site"
+  },
+  "enterpriseUse": {
+    "op": "!=",
+    "kind": "boolean",
+    "args": [
+      {
+        "op": "",
+        "kind": "choice",
+        "ref": "state"
+      },
+      {
+        "op": "",
+        "kind": "choice",
+        "lit": {
+          "value": "completed"
+        }
+      }
+    ]
+  }
+}

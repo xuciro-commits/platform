@@ -1,0 +1,38 @@
+{
+  "name": "manufacturingexample",
+  "title": "Synthetic assembly and machining setup",
+  "samples": [
+    {
+      "type": "build.mescenter",
+      "records": [
+        {
+          "id": "sampleassembly",
+          "name": "Assembly work center",
+          "line": "A"
+        },
+        {
+          "id": "samplemachining",
+          "name": "Machining work center",
+          "line": "M"
+        }
+      ]
+    },
+    {
+      "type": "build.mesresource",
+      "records": [
+        {
+          "id": "samplebench",
+          "name": "Assembly bench",
+          "center": "sampleassembly",
+          "active": true
+        },
+        {
+          "id": "samplecnc",
+          "name": "CNC station",
+          "center": "samplemachining",
+          "active": true
+        }
+      ]
+    }
+  ]
+}

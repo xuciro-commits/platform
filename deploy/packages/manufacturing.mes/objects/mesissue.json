@@ -1,0 +1,328 @@
+{
+  "name": "mesissue",
+  "title": "Production exception",
+  "fields": [
+    {
+      "name": "batch",
+      "title": "Execution batch",
+      "type": "reference",
+      "ref": "build.mesbatch",
+      "inverse": "issues",
+      "required": true
+    },
+    {
+      "name": "serial",
+      "title": "Exception number",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "operation",
+      "title": "Reported operation",
+      "type": "reference",
+      "ref": "build.mesoperation",
+      "required": true
+    },
+    {
+      "name": "code",
+      "title": "Exception code",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "reporter",
+      "title": "Reported by",
+      "type": "text",
+      "formulaExpr": {
+        "op": "",
+        "kind": "text",
+        "ref": "caller.id"
+      }
+    },
+    {
+      "name": "at",
+      "title": "Reported at",
+      "type": "datetime",
+      "formulaExpr": {
+        "op": "$now",
+        "kind": "datetime"
+      }
+    },
+    {
+      "name": "line",
+      "title": "Production line",
+      "type": "reference",
+      "ref": "enterprise.element",
+      "stereotype": "ActualOrganization",
+      "formulaExpr": {
+        "op": "path",
+        "kind": "reference",
+        "args": [
+          {
+            "op": "",
+            "kind": "reference",
+            "ref": "operation"
+          }
+        ],
+        "path": [
+          "center",
+          "line"
+        ]
+      }
+    }
+  ],
+  "access": [
+    {
+      "role": "operator",
+      "read": "unit",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "quality",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "supervisor",
+      "read": "below",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "signatures",
+      "from": "signatures",
+      "direction": "inverse",
+      "object": "build.messignature",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [
+    {
+      "name": "originalexception",
+      "kind": "immutable",
+      "fields": [
+        "batch",
+        "serial",
+        "operation",
+        "code",
+        "reporter",
+        "at",
+        "archived"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "batchissue",
+      "kind": "unique",
+      "fields": [
+        "batch",
+        "serial"
+      ],
+      "message": "A batch has one exception for each accepted exception number."
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.mesissue",
+    "steps": [
+      {
+        "name": "seal",
+        "kind": "update",
+        "target": {
+          "type": "build.mesissue",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "code",
+            "from": "code"
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "or",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "batch"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "active"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "batch"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "queued"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "operation"
+            },
+            {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "batch"
+                }
+              ],
+              "path": [
+                "operation"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "integer",
+              "ref": "serial"
+            },
+            {
+              "op": "+",
+              "kind": "integer",
+              "args": [
+                {
+                  "op": "coalesce",
+                  "kind": "integer",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "batch"
+                        }
+                      ],
+                      "path": [
+                        "issuecount"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 1
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "message": "An exception records the current operation and the next number of its actual batch."
+  },
+  "type": "build.mesissue",
+  "scope": {
+    "unit": "line",
+    "structure": "site"
+  },
+  "enterpriseUse": {
+    "op": "",
+    "kind": "boolean",
+    "lit": {
+      "value": false
+    }
+  }
+}

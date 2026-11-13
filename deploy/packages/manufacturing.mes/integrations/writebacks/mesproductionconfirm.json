@@ -1,0 +1,31 @@
+{
+  "name": "mesproductionconfirm",
+  "title": "Production confirm",
+  "object": "build.mesproductionresult",
+  "on": "confirmation",
+  "connection": "productionupstream",
+  "method": "POST",
+  "path": "/v1/protocols/production.orders/2/confirm/{upstream}",
+  "mapping": [
+    {
+      "from": "shoporder",
+      "to": "shoporder"
+    },
+    {
+      "from": "batch",
+      "to": "batch"
+    },
+    {
+      "from": "yield",
+      "to": "yield"
+    },
+    {
+      "from": "scrap",
+      "to": "scrap"
+    },
+    {
+      "from": "final",
+      "to": "final"
+    }
+  ]
+}

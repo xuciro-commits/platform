@@ -1,0 +1,54 @@
+{
+  "name": "build.mesproductioncorrectstart",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.mesproductionresult"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.mesproductionresult.startcorrected"
+    }
+  ],
+  "definition": {
+    "name": "mesproductioncorrectstart",
+    "title": "Start a corrected upstream association",
+    "object": "build.mesproductionresult",
+    "when": "needsstart",
+    "steps": [
+      {
+        "name": "start",
+        "kind": "action",
+        "act": "build.mesproductionresult.startcorrected",
+        "target": {
+          "source": "subject",
+          "path": [
+            "id"
+          ]
+        },
+        "inputs": {
+          "upstream": {
+            "source": "subject",
+            "path": [
+              "upstream"
+            ]
+          },
+          "shoporder": {
+            "source": "subject",
+            "path": [
+              "shoporder"
+            ]
+          }
+        },
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}
