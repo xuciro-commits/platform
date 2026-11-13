@@ -41,32 +41,7 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter monitoring.MonitoringR
 		page.Coverage = append(page.Coverage, monitoring.MonitoringCoverage{Source: "run-index", Basis: "latest", Limitation: "index-unavailable"})
 		return page, nil
 	}
-	out := monitoring.MonitoringRunPage{Runs: []monitoring.MonitoringRun{}, Offset: filter.Offset, Limit: filter.Limit, Coverage: coverage}
-	for _, entry := range indexed.Entries {
-		var run monitoring.MonitoringRun
-		if json.Unmarshal(entry.Payload, &run) != nil {
-			continue
-		}
-		if run.ID == "" {
-			run.ID = entry.ID
-		}
-		if run.Delayed {
-			out.Overview.DelayedSyncs++
-		}
-		if run.Status == "failed" {
-			out.Overview.FailedRuns++
-			if run.Type == "delivery" {
-				out.Overview.FailedDeliveries++
-			}
-		}
-		if (filter.Type == "" || run.Type == filter.Type) && (filter.Status == "" || run.Status == filter.Status) {
-			out.Runs = append(out.Runs, run)
-		}
-	}
-	out.Total = len(out.Runs)
-	start := min(filter.Offset, out.Total)
-	out.Runs = out.Runs[start:min(start+filter.Limit, out.Total)]
-	return out, nil
+	return monitoring.FromIndex(indexed.Entries, filter, coverage), nil
 }
 
 func (t *Tenant) refreshRunIndex(m platform.Member, now time.Time) ([]monitoring.MonitoringCoverage, *kernel.Error) {

@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"cmp"
+	"encoding/json"
 	"slices"
 	"strings"
 	"time"
@@ -209,4 +210,33 @@ func (r *Runs) Agents(agents []platform.AgentRunRecord) {
 		}
 		r.Add(run)
 	}
+}
+
+func FromIndex(entries []platform.RunIndexEntry, filter MonitoringRunFilter, coverage []MonitoringCoverage) MonitoringRunPage {
+	out := MonitoringRunPage{Runs: []MonitoringRun{}, Offset: filter.Offset, Limit: filter.Limit, Coverage: coverage}
+	for _, entry := range entries {
+		var run MonitoringRun
+		if json.Unmarshal(entry.Payload, &run) != nil {
+			continue
+		}
+		if run.ID == "" {
+			run.ID = entry.ID
+		}
+		if run.Delayed {
+			out.Overview.DelayedSyncs++
+		}
+		if run.Status == "failed" {
+			out.Overview.FailedRuns++
+			if run.Type == "delivery" {
+				out.Overview.FailedDeliveries++
+			}
+		}
+		if (filter.Type == "" || run.Type == filter.Type) && (filter.Status == "" || run.Status == filter.Status) {
+			out.Runs = append(out.Runs, run)
+		}
+	}
+	out.Total = len(out.Runs)
+	start := min(filter.Offset, out.Total)
+	out.Runs = out.Runs[start:min(start+filter.Limit, out.Total)]
+	return out
 }

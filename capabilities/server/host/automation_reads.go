@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/functions/authoring"
+	"platformserver/services/objects"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -34,70 +35,22 @@ func (t *Tenant) readQueryVersionFrom(store *records.Store, c platform.Caller, a
 }
 
 func (t *Tenant) readDeclaredQueryFrom(store *records.Store, c platform.Caller, q platform.NamedQuery, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
-	values := struct {
-		For string `json:"for,omitempty"`
-	}{}
-	if len(inputs) > 0 && string(inputs) != "null" {
-		if _, err := platform.DecodeValue(inputs, 32<<10); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		var keys map[string]json.RawMessage
-		if err := json.Unmarshal(inputs, &keys); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Query inputs must be an object")
-		}
-		for key := range keys {
-			if key != "for" {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Unknown query parameter {field}", key)
-			}
-		}
-		if err := json.Unmarshal(inputs, &values); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Query record reference must be a string")
-		}
-	}
-	page, refusal := t.runDeclaredQueryFrom(store, c.Member, q, values.For, now)
+	target, refusal := objects.DeclaredQueryFor(inputs)
 	if refusal != nil {
 		return nil, refusal
 	}
-	sources := []string{}
+	page, refusal := t.runDeclaredQueryFrom(store, c.Member, q, target, now)
+	if refusal != nil {
+		return nil, refusal
+	}
 	store.Lock()
 	et := store.Type(q.Object)
 	store.Unlock()
-	for _, value := range page.Records {
-		if row, ok := value.(InterfaceRecord); ok {
-			ref := row.Type + "/" + row.ID
-			sources = append(sources, ref)
-			for _, field := range q.InterfaceShape.Fields {
-				sources = append(sources, ref+"#"+field.Name)
-			}
-			continue
-		}
-		row, _ := json.Marshal(value)
-		var fields map[string]json.RawMessage
-		_ = json.Unmarshal(row, &fields)
-		var id string
-		_ = json.Unmarshal(fields["id"], &id)
-		if id == "" {
-			continue
-		}
-		ref := q.Object + "/" + id
-		sources = append(sources, ref)
-		if et != nil {
-			for _, field := range et.Info().Fields {
-				if field.ReadsAny(c.RolesIn(et.Info().App), c.Rules()) {
-					sources = append(sources, ref+"#"+field.Name)
-				}
-			}
-		}
+	var info platform.EntityInfo
+	if et != nil {
+		info = et.Info()
 	}
-	raw, err := json.Marshal(struct {
-		Records []any    `json:"records"`
-		Total   int      `json:"total"`
-		Sources []string `json:"sources"`
-	}{page.Records, page.Total, sources})
-	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	return raw, nil
+	return objects.DeclaredQueryAnswer(c, q, info, et != nil, page.Records, page.Total)
 }
 
 func (r runtime) ReadQuery(c platform.Caller, app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
