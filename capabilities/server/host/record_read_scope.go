@@ -9,6 +9,7 @@ import (
 	"platformserver/kernel/records"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/resources/authoring"
+	enterprisemodel "platformserver/services/security/organization"
 
 	"time"
 
@@ -194,8 +195,10 @@ func (t *Tenant) EnterpriseReferences(ctx context.Context, m platform.Member, el
 	})
 }
 
-func (t *Tenant) EnterpriseUsage(ctx context.Context, m platform.Member, id, until string, now time.Time) (EnterpriseUsage, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (EnterpriseUsage, *kernel.Error) { return t.enterpriseUsageRead(m, id, until, now) })
+func (t *Tenant) EnterpriseUsage(ctx context.Context, m platform.Member, id, until string, now time.Time) (enterprisemodel.EnterpriseUsage, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (enterprisemodel.EnterpriseUsage, *kernel.Error) {
+		return t.enterpriseUsageRead(m, id, until, now)
+	})
 }
 
 func (t *Tenant) Search(ctx context.Context, reader *platform.Member, q string, now time.Time) []build.Hit {

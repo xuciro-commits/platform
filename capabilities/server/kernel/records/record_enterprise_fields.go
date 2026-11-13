@@ -488,3 +488,158 @@ func EnterpriseReferences(s *Store, element string, offset, limit int, view func
 	}
 	return groups
 }
+
+type RetainedBody struct {
+	Type string
+	Raw  json.RawMessage
+}
+
+type enterpriseDeclaration struct {
+	Type   string                  `json:"type"`
+	Name   string                  `json:"name"`
+	Ref    string                  `json:"ref"`
+	Fields []enterpriseDeclaration `json:"fields"`
+	Entity *enterpriseDeclaration  `json:"entity"`
+}
+
+func EnterpriseHistoricalPaths(store *Store, objectType, objectPrefix string, typeOf func(string) string, retained []RetainedBody) map[string][][]string {
+	paths := map[string][][]string{}
+	seen := map[string]bool{}
+	add := func(typ string, path []string) {
+		key := typ + "/" + strings.Join(path, ".")
+		if typ == "" || len(path) == 0 || seen[key] {
+			return
+		}
+		seen[key] = true
+		paths[typ] = append(paths[typ], slices.Clone(path))
+	}
+	var fields func(string, []platform.FieldInfo, []string)
+	fields = func(typ string, items []platform.FieldInfo, prefix []string) {
+		for _, field := range items {
+			path := append(slices.Clone(prefix), field.Name)
+			if field.Ref == "enterprise.element" {
+				add(typ, path)
+			}
+			if len(field.Fields) > 0 {
+				fields(typ, field.Fields, path)
+			}
+		}
+	}
+	bodies := slices.Clone(retained)
+	func() {
+		store.Lock()
+		defer store.Unlock()
+		for _, et := range store.Types() {
+			fields(et.Info().Type, et.Info().Fields, nil)
+		}
+		if objects := store.Type(objectType); objects != nil {
+			for _, row := range objects.Rows().All() {
+				typ := typeOf(BusinessField(objects.Info(), row.Value, "name"))
+				if published := BusinessField(objects.Info(), row.Value, "published"); published != "" {
+					bodies = append(bodies, RetainedBody{typ, json.RawMessage(published)})
+				}
+				for _, change := range row.RecordHistory() {
+					for _, field := range change.Fields {
+						if field.Field != "published" {
+							continue
+						}
+						for _, raw := range []json.RawMessage{field.Before, field.After} {
+							var published string
+							if json.Unmarshal(raw, &published) == nil && published != "" {
+								bodies = append(bodies, RetainedBody{typ, json.RawMessage(published)})
+							}
+						}
+					}
+				}
+			}
+		}
+	}()
+	for _, body := range bodies {
+		var declaration enterpriseDeclaration
+		if json.Unmarshal(body.Raw, &declaration) != nil {
+			continue
+		}
+		typ := body.Type
+		if declaration.Type != "" {
+			typ = declaration.Type
+		} else if declaration.Name != "" && strings.HasPrefix(typ, objectPrefix) {
+			typ = typeOf(declaration.Name)
+		}
+		if declaration.Entity != nil {
+			declaration = *declaration.Entity
+		}
+		var walk func([]enterpriseDeclaration, []string)
+		walk = func(items []enterpriseDeclaration, prefix []string) {
+			for _, field := range items {
+				path := append(slices.Clone(prefix), field.Name)
+				if field.Ref == "enterprise.element" {
+					add(typ, path)
+				}
+				walk(field.Fields, path)
+			}
+		}
+		walk(declaration.Fields, nil)
+	}
+	return paths
+}
+
+func HistoryNamesEnterprise(paths [][]string, changes []RecordChange, id string) bool {
+	for _, change := range changes {
+		for _, field := range change.Fields {
+			for _, path := range paths {
+				if len(path) == 0 || path[0] != field.Field {
+					continue
+				}
+				for _, raw := range []json.RawMessage{field.Before, field.After} {
+					if enterpriseHistoryJSONNames(raw, path[1:], id) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func enterpriseHistoryJSONNames(raw json.RawMessage, path []string, id string) bool {
+	var value any
+	if len(raw) == 0 || json.Unmarshal(raw, &value) != nil {
+		return false
+	}
+	var names func(any, []string) bool
+	names = func(value any, path []string) bool {
+		if rows, ok := value.([]any); ok {
+			return slices.ContainsFunc(rows, func(row any) bool { return names(row, path) })
+		}
+		if len(path) == 0 {
+			reference, ok := value.(string)
+			return ok && reference == id
+		}
+		object, ok := value.(map[string]any)
+		if !ok {
+			return false
+		}
+		return names(object[path[0]], path[1:])
+	}
+	return names(value, path)
+}
+
+func EnterpriseCurrent(info platform.EntityInfo, value reflect.Value, now time.Time, engines ...platform.RuleEngine) bool {
+	if Header(value).Archived {
+		return false
+	}
+	if info.EnterpriseUse == nil {
+		return true
+	}
+	program, err := info.CompileEnterpriseUse(engines...)
+	if err != nil {
+		return true
+	}
+	context := platform.ExprContext{Refs: map[string]platform.ExprValue{}, Now: now, Today: now.UTC().Format(time.DateOnly)}
+	context.Refs["archived"] = platform.ExprPresent("boolean", Header(value).Archived)
+	for _, field := range info.Fields {
+		context.Refs[field.Name] = platform.ExprValue{Kind: platform.RuleFieldKind(field.Type), Status: "value", Data: rowJSON(value.FieldByIndex(field.Index).Interface())}
+	}
+	result, err := program.Eval(context)
+	return err != nil || string(result.Value.Data) != "false"
+}

@@ -4,7 +4,6 @@ import (
 	"platformserver/kernel/records"
 	controlowner "platformserver/services/security/control"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
@@ -15,55 +14,9 @@ import (
 	"platformserver/platform"
 )
 
-type EnterpriseUsageItem struct {
-	Kind    string `json:"kind"`
-	Title   string `json:"title"`
-	Ref     string `json:"ref,omitempty"`
-	Field   string `json:"field,omitempty"`
-	Current bool   `json:"current"`
-}
-
-type EnterpriseUsage struct {
-	CanDelete          bool                  `json:"canDelete"`
-	CanClose           bool                  `json:"canClose"`
-	HasRestrictedUsage bool                  `json:"hasRestrictedUsage"`
-	Items              []EnterpriseUsageItem `json:"items"`
-}
-
-func enterpriseRecordCurrent(info platform.EntityInfo, value reflect.Value, now time.Time, engines ...platform.RuleEngine) bool {
-	if records.Header(value).Archived {
-		return false
-	}
-	if info.EnterpriseUse == nil {
-		return true
-	}
-	program, err := info.CompileEnterpriseUse(engines...)
-	if err != nil {
-		return true
-	}
-	context := platform.ExprContext{Refs: map[string]platform.ExprValue{}, Now: now, Today: now.UTC().Format(time.DateOnly)}
-	context.Refs["archived"] = platform.ExprPresent("boolean", records.Header(value).Archived)
-	for _, field := range info.Fields {
-		context.Refs[field.Name] = platform.ExprValue{Kind: platform.RuleFieldKind(field.Type), Status: "value", Data: jsonOf(value.FieldByIndex(field.Index).Interface())}
-	}
-	result, err := program.Eval(context)
-	return err != nil || string(result.Value.Data) != "false"
-}
-
-func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *records.Store, id, until string, now time.Time, details bool) EnterpriseUsage {
-	result := EnterpriseUsage{CanDelete: true, CanClose: true, Items: []EnterpriseUsageItem{}}
+func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *records.Store, id, until string, now time.Time, details bool) enterprisemodel.EnterpriseUsage {
+	result := enterprisemodel.EnterpriseUsage{CanDelete: true, CanClose: true, Items: []enterprisemodel.EnterpriseUsageItem{}}
 	historicalPaths := t.enterpriseHistoricalReferencePaths(store)
-	add := func(item EnterpriseUsageItem, visible bool) {
-		result.CanDelete = false
-		if item.Current {
-			result.CanClose = false
-		}
-		if visible {
-			result.Items = append(result.Items, item)
-		} else {
-			result.HasRestrictedUsage = true
-		}
-	}
 	var types []*records.Type
 	rows := map[string][]*records.Row{}
 	func() {
@@ -83,11 +36,11 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *records.Store
 	for _, et := range types {
 		for _, r := range rows[et.Info().Type] {
 			paths := records.MatchingRefsWithAccess(et.Info().Fields, "", r.Value, id, nil, true)
-			historical := historyNamesEnterprisePaths(historicalPaths[et.Info().Type], r.RecordHistory(), id)
+			historical := records.HistoryNamesEnterprise(historicalPaths[et.Info().Type], r.RecordHistory(), id)
 			if len(paths) == 0 && !historical {
 				continue
 			}
-			current := len(paths) > 0 && enterpriseRecordCurrent(et.Info(), r.Value, now, t.services.Rules)
+			current := len(paths) > 0 && records.EnterpriseCurrent(et.Info(), r.Value, now, t.services.Rules)
 			visible := false
 			title, field := "", ""
 			if details {
@@ -104,7 +57,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *records.Store
 					}
 				}
 			}
-			add(EnterpriseUsageItem{Kind: "record", Title: title, Ref: "record:" + et.Info().Type + "/" + records.Header(r.Value).ID, Field: field, Current: current}, visible)
+			result.Add(enterprisemodel.EnterpriseUsageItem{Kind: "record", Title: title, Ref: "record:" + et.Info().Type + "/" + records.Header(r.Value).ID, Field: field, Current: current}, visible)
 		}
 	}
 	if directory, ok := t.App(controlowner.PlatformApp).(platform.IdentityDirectory); ok {
@@ -114,11 +67,11 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *records.Store
 			if strings.HasPrefix(usage.Member, "team:") {
 				ref = usage.Member
 			}
-			add(EnterpriseUsageItem{Kind: "grant", Title: usage.Member, Ref: ref, Current: usage.Current}, visible)
+			result.Add(enterprisemodel.EnterpriseUsageItem{Kind: "grant", Title: usage.Member, Ref: ref, Current: usage.Current}, visible)
 		}
 	}
 	if root := t.setting(platform.RouteCaller(c, controlowner.PlatformApp), "enterpriseRoot"); root == id {
-		add(EnterpriseUsageItem{Kind: "tenant", Title: t.ID, Ref: "tenant:" + t.ID, Current: true}, details)
+		result.Add(enterprisemodel.EnterpriseUsageItem{Kind: "tenant", Title: t.ID, Ref: "tenant:" + t.ID, Current: true}, details)
 	}
 	return result
 }
@@ -134,15 +87,15 @@ func (t *Tenant) checkEnterpriseUsage(c platform.Caller, store *records.Store, i
 	return nil
 }
 
-func (t *Tenant) enterpriseUsageRead(m platform.Member, id, until string, now time.Time) (EnterpriseUsage, *kernel.Error) {
+func (t *Tenant) enterpriseUsageRead(m platform.Member, id, until string, now time.Time) (enterprisemodel.EnterpriseUsage, *kernel.Error) {
 	if err := t.Admits(m); err != nil {
-		return EnterpriseUsage{}, err
+		return enterprisemodel.EnterpriseUsage{}, err
 	}
 	if until == "" {
 		until = now.UTC().Format(time.DateOnly)
 	}
 	if _, err := time.Parse(time.DateOnly, until); err != nil {
-		return EnterpriseUsage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid effective period")
+		return enterprisemodel.EnterpriseUsage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid effective period")
 	}
 	c := platform.NewCaller(runtime{t: t, scoped: true}, m, enterprisemodel.ID, false, false)
 	result := t.enterpriseExternalUsage(c, t.Projection, id, until, now, true)
@@ -150,48 +103,9 @@ func (t *Tenant) enterpriseUsageRead(m platform.Member, id, until string, now ti
 	if err != nil {
 		return result, err
 	}
-	element := model.ElementOf(id)
-	if element == nil || element.Deleted {
+	result, found := model.Usage(id, until, result)
+	if !found {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The enterprise element is unavailable")
-	}
-	if element.Owner != "" {
-		result.CanDelete = false
-		result.CanClose = false
-	}
-	add := func(kind, title, ref string, current bool) {
-		result.CanDelete = false
-		if current {
-			result.CanClose = false
-		}
-		result.Items = append(result.Items, EnterpriseUsageItem{Kind: kind, Title: title, Ref: ref, Current: current})
-	}
-	if element.Published {
-		add("publication", element.Name, element.ID, true)
-	}
-	for _, r := range model.Relationships {
-		if r.Source == id || r.Target == id {
-			current := slices.ContainsFunc(r.PeriodsFromLegacy(), func(p platform.Period) bool { return p.Until == "" || p.Until > until })
-			add("relationship", r.Relation, r.ID, current)
-		}
-	}
-	for _, v := range model.Views {
-		_, placed := v.Layout[id]
-		if placed || slices.Contains(v.Elements, id) || slices.Contains(v.Context, id) || slices.ContainsFunc(v.Pins, func(p enterprisemodel.Pin) bool { return p.Anchor == id || p.Ref == "record:enterprise.element/"+id }) {
-			add("view", v.Name, v.ID, false)
-		}
-	}
-	for _, link := range model.TenantLinks {
-		if link.Organization == id {
-			add("tenant-link", link.Tenant, link.ID, true)
-		}
-	}
-
-	currentProperties := model.ElementPropertyUses(id, until)
-	for _, otherID := range model.ElementPropertyUses(id, "") {
-		other := model.ElementOf(otherID)
-		if other != nil {
-			add("property", other.Name, other.ID, slices.Contains(currentProperties, other.ID))
-		}
 	}
 	return result, nil
 }

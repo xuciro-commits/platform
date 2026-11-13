@@ -188,7 +188,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-usage", Summary: "Uses preventing removal or closure of an enterprise element", Answer: EnterpriseUsage{}, Query: []transport.Param{{Name: "element", Description: "The enterprise element"}, {Name: "until", Description: "Proposed closure day"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-usage", Summary: "Uses preventing removal or closure of an enterprise element", Answer: enterprisemodel.EnterpriseUsage{}, Query: []transport.Param{{Name: "element", Description: "The enterprise element"}, {Name: "until", Description: "Proposed closure day"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 
 		answer, err := t.enterpriseUsageRead(m, r.URL.Query().Get("element"), r.URL.Query().Get("until"), h.Now())
 
