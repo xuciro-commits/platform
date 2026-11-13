@@ -1,15 +1,14 @@
 package host
 
 import (
-	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
-	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/services/ai/gateway"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
@@ -26,51 +25,29 @@ func (t *Tenant) usage() runtimekernel.UsageApply {
 
 func (t *Tenant) usagePredecessor() (string, error) { return t.usage().Predecessor() }
 
+func (t *Tenant) usageAcceptance() aigateway.UsageAcceptance {
+	return aigateway.UsageAcceptance{Tenant: t.ID,
+		Prior: func() []platform.AIUsage { return t.ai.Usage() },
+		Caller: func(m platform.Member) platform.Caller {
+			return platform.NewCaller(runtime{t: t, scoped: true}, m, platform.AIApp, false, true)
+		},
+		Authorize: func(c platform.Caller, valid bool) (platform.AuthzDecision, *kernel.Error) {
+			decision := t.authorizeNative(c, "usage:observe", "derive", nil, valid)
+			return decision, authorizationRefusal(decision)
+		},
+		Predecessor: t.usagePredecessor,
+		Apply:       func(raw []byte) error { _, err := t.ApplyUsageResult(raw, t.usage()); return err },
+		Quarantine:  t.quarantine,
+		Applied:     func() { t.acceptedResultApplied(); t.operationsChanged(platform.AIApp) }}
+}
+
 func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Error {
-	if u.Call != "" {
-		for _, prior := range t.ai.Usage() {
-			if prior.Call != u.Call {
-				continue
-			}
-			a, _ := platform.CanonicalDigest(prior)
-			b, _ := platform.CanonicalDigest(u)
-			if a != b {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT, "The model usage differs from its accepted reading")
-			}
-			return nil
-		}
-	}
-	c := platform.NewCaller(runtime{t: t, scoped: true}, platform.Member{ID: "app:" + platform.AIApp, Tenant: m.Tenant}, platform.AIApp, false, true)
-	decision := t.authorizeNative(c, "usage:observe", "derive", nil, m.Tenant == t.ID && m.ID != "" && m.ID == u.Member && acceptedformat.ValidUsage(u))
-	if refusal := authorizationRefusal(decision); refusal != nil {
+	r, raw, refusal := t.usageAcceptance().Seal(m, u)
+	if refusal != nil || raw == nil {
 		return refusal
 	}
-	before, err := t.usagePredecessor()
-	if err != nil {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage cannot be accepted")
-	}
-	r := acceptedformat.Usage{Version: 1, Kind: "usage-result", Tenant: t.ID, App: platform.AIApp, Member: m.ID, At: u.At.UTC(), Before: before, Usage: u}
-	r.Authorizations = []acceptedformat.AuthorizationEvidence{{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Action: "usage:observe"}, Decision: decision, Roles: slices.Clone(c.RolesHere())}}
-	r.RequestHash, err = acceptedformat.UsageHash(before, u)
-	if err != nil {
-		return unknown()
-	}
-	r.Key = "usage:" + r.RequestHash
-	r.Digest, err = acceptedformat.DigestUsage(r)
-	if err != nil {
-		return unknown()
-	}
-	raw, err := json.Marshal(r)
-	if err != nil {
-		return unknown()
-	}
-	if _, err := acceptedformat.DecodeUsage(raw); err != nil {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage cannot be accepted")
-	}
-	principal, _ := json.Marshal(m)
-	candidate := preparedAccepted{entry: Entry{App: platform.AIApp, Kind: "accepted-result", Principal: principal, Body: raw, At: r.At}, key: r.Key, hash: r.RequestHash}
-	if t.preparedResult != nil {
-		*t.preparedResult = candidate
+	candidate := preparedAccepted{entry: runtimekernel.AcceptedEntry(platform.AIApp, m, raw, r.At, nil), key: r.Key, hash: r.RequestHash}
+	if t.stage(candidate) {
 		return nil
 	}
 	return t.finishUsage(candidate)
@@ -81,22 +58,7 @@ func (t *Tenant) finishUsage(candidate preparedAccepted) *kernel.Error {
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage was not accepted")
 	}
-	saved, err := acceptedformat.DecodeUsage(committed)
-	if err != nil || saved.Key != candidate.key || saved.RequestHash != candidate.hash {
-		t.quarantine(fmt.Errorf("committed model usage differs: %v", err))
-		return unknown()
-	}
-	if _, err := t.applyAcceptedUsage(committed); err != nil {
-		t.quarantine(err)
-		return unknown()
-	}
-	t.acceptedResultApplied()
-	t.operationsChanged(platform.AIApp)
-	return nil
-}
-
-func (t *Tenant) applyAcceptedUsage(raw []byte) (acceptedformat.Usage, error) {
-	return t.ApplyUsageResult(raw, t.usage())
+	return t.usageAcceptance().Finish(committed, candidate.key, candidate.hash)
 }
 
 func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome string) {
@@ -112,102 +74,53 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 			outcome = pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 		}
 	}()
-	input, err := automation.StateOfTask(task)
-	if err != nil {
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	result := acceptedformat.Work{Version: 3, Kind: "work-result", Tenant: t.ID, App: task.App,
-		At: now.UTC(), Input: input, Outcome: "ok"}
-	works := t.forkWorkState()
-	if prior, err := works.Get(task.ID); err == nil {
-		result.PriorWork, _ = protojson.Marshal(prior)
-	}
-	generation, _, refusal := works.Start(task.ID, "host")
-	if refusal != nil {
-		return refusal.Error()
-	}
-	result.Key = fmt.Sprintf("work:%s:%d", task.ID, generation)
-	result.RequestHash, err = acceptedformat.WorkInputHash(input, result.PriorWork)
-	if err != nil {
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	draft := t.newStagedDecision()
-	draft.At = now
-	if task.Event != nil {
-		draft.Hops = task.Event.Hops + 1
-	}
-	c := platform.NewCaller(draft, platform.Member{ID: "app:" + task.App, Tenant: t.ID}, task.App, false, true)
-	refusal = decideWork(t, draft, c, task, now)
-	result.Authorizations = slices.Clone(draft.Authorizations)
-	if refusal != nil {
-		result.Outcome = refusal.Error()
-		draft = t.newStagedDecision()
-		draft.At = now
-	}
-	if err := works.Finish(task.ID, generation, result.Outcome != "ok"); err != nil {
-		return err.Error()
-	}
-	finished, _ := works.Get(task.ID)
-	result.Work, _ = protojson.Marshal(finished)
-	result.After = task.Settle(int(generation), result.Outcome, t.retryOf(task.App), now)
-	if result.After.State == "failed" && t.App(controlowner.PlatformApp) != nil {
-		admin := platform.NewCaller(draft, platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, controlowner.PlatformApp, false, true)
-		admin.Notify(platform.Notification{Title: "Delivery to " + task.App + " failed: " + task.Title,
-			Body: result.Outcome + ". Retry it in Settings → Automation once the cause is fixed.", Key: "failed:" + task.ID},
-			now, platform.Recipient{AppRole: controlowner.Admin})
-	}
-	if err := draft.WorkDecision(draft.sources(), &result, now); err != nil {
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	if task.Kind == "job" && result.Outcome == "ok" && len(result.Changes) == 0 &&
-		result.Notices == nil && len(result.Intents) == 0 && len(result.States) == 0 && result.Control == nil && len(result.Unique) == 0 {
-		return result.Outcome
-	}
-	if task.Kind == "job" {
-		bindings, err := t.bindApplications(platform.AssetRef{App: task.App, Kind: platform.AssetApp, Name: task.App}, "", "", task.App)
-		if err != nil {
-			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-		}
-		result.After.Applications = bindings
-	}
-	raw, err := runtimekernel.SealWork(result)
-	if err != nil {
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	if _, err := t.prepareAcceptedChanges(result.ChangePlan()); err != nil {
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	principal, _ := json.Marshal(c.Member)
-	entry := Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.FlowVersions()}
-	if t.preparedResult != nil {
-		*t.preparedResult = preparedAccepted{entry: entry, key: result.Key, hash: result.RequestHash, uploads: t.preparedResult.uploads}
-		return result.Outcome
-	}
-	committed, err := t.acceptResult(entry, result.Key, result.RequestHash)
-	if err != nil {
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	return t.finishCommittedWork(task.App, result.Key, result.RequestHash, committed)
+	return automation.WorkAcceptance{Tenant: t.ID, Fork: t.forkWorkState, Retry: t.retryOf,
+		Bind: func(app string) ([]platform.AssetBinding, error) {
+			return t.bindApplications(platform.AssetRef{App: app, Kind: platform.AssetApp, Name: app}, "", "", app)
+		},
+		Draft: func(task *automation.Task, now time.Time) automation.WorkDraft {
+			draft := t.newStagedDecision()
+			draft.At = now
+			if task.Event != nil {
+				draft.Hops = task.Event.Hops + 1
+			}
+			c := platform.NewCaller(draft, platform.Member{ID: "app:" + task.App, Tenant: t.ID}, task.App, false, true)
+			return automation.WorkDraft{
+				Decide: func() (*kernel.Error, []acceptedformat.AuthorizationEvidence) {
+					refusal := decideWork(t, draft, c, task, now)
+					return refusal, slices.Clone(draft.Authorizations)
+				},
+				Reset: func() { draft = t.newStagedDecision(); draft.At = now },
+				Failed: func(title, why, id string) {
+					t.failedWork(func() platform.Caller {
+						return platform.NewCaller(draft, platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, controlowner.PlatformApp, false, true)
+					}, title, why, id, now)
+				},
+				Decision: func(result *acceptedformat.Work) error { return draft.WorkDecision(draft.sources(), result, now) },
+				Commit: func(result acceptedformat.Work) string {
+					conflict := pb.ErrorCode_ERROR_CODE_CONFLICT.String()
+					raw, err := runtimekernel.SealWork(result)
+					if err != nil {
+						return conflict
+					}
+					if _, err := t.prepareAcceptedChanges(result.ChangePlan()); err != nil {
+						return conflict
+					}
+					entry := runtimekernel.AcceptedEntry(task.App, c.Member, raw, now, draft.FlowVersions())
+					if t.stage(preparedAccepted{entry: entry, key: result.Key, hash: result.RequestHash}) {
+						return result.Outcome
+					}
+					committed, err := t.acceptResult(entry, result.Key, result.RequestHash)
+					if err != nil {
+						return conflict
+					}
+					return t.finishCommittedWork(task.App, result.Key, result.RequestHash, committed)
+				}}
+		}}.Accept(task, now)
 }
 
 func (t *Tenant) finishCommittedWork(app, key, hash string, committed []byte) string {
-	saved, err := acceptedformat.DecodeWork(committed)
-	if err != nil || saved.Tenant != t.ID || saved.App != app || saved.Key != key || saved.RequestHash != hash {
-		t.quarantine(fmt.Errorf("committed work differs from input: %v", err))
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	if _, err := t.applyAcceptedWork(committed); err != nil {
-		t.quarantine(err)
-		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-	}
-	t.acceptedResultApplied()
-	t.enqueue(saved.At)
-	if len(saved.Changes) == 0 && len(saved.States) == 0 && saved.Notices == nil {
-		t.operationsChanged(saved.App)
-	} else {
-		t.changedOwner(saved.App)
-	}
-	return saved.Outcome
+	return t.FinishWork(app, key, hash, committed, runtimekernel.CommittedWork{Settlement: t.settlement(), Apply: t.applyAcceptedWork})
 }
 
 func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automation.Task, now time.Time) (refusal *kernel.Error) {
@@ -262,41 +175,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 
 func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	return t.ApplyWorkResult(raw, runtimekernel.WorkApply{Changes: t.changeApply(), Works: t.works, App: t.App, Published: t.publishAcceptedChanges,
-		Task: func(result acceptedformat.Work) (platform.ScheduledTaskState, string, func(*pb.Work), error) {
-			var task *automation.Task
-			t.work.Lock()
-			if result.Input.Kind == "job" {
-				task = t.work.Job(result.Input.ID)
-			} else {
-				task = t.work.Delivery(result.App, result.Input.ID)
-			}
-			t.work.Unlock()
-			if task == nil {
-				return platform.ScheduledTaskState{}, "", nil, fmt.Errorf("work result needs missing work %s", result.Input.ID)
-			}
-			before, err := automation.StateOfTask(task)
-			if err != nil {
-				return before, "", nil, fmt.Errorf("work result predecessor differs")
-			}
-			return before, task.ID, func(*pb.Work) {
-				t.work.Lock()
-				task.RestoreOutcome(automation.Task{ScheduledTask: result.After})
-				if task.Kind == "delivery" {
-					switch task.State {
-					case "done", "failed":
-						t.work.Settled(task)
-					}
-				}
-				t.work.Unlock()
-				if task.Kind == "delivery" {
-					s := task.Event.Record.GetSubmission()
-					t.delivered(platform.Delivery{At: result.At, App: task.Event.App, Action: s.GetSchema().GetName(), Target: runtimekernel.Target(s),
-						Subscriber: task.App, Outcome: result.Outcome, Attempt: task.Attempts})
-				}
-			}, nil
-		}})
+		Task: t.work.Restorer(t.delivered)})
 }
 
 func (t *Tenant) forkWorkState() *kernel.Works { return runtimekernel.ForkWorks(t.works) }
-
-func (t *Tenant) installAcceptedWork(finished *pb.Work) { runtimekernel.InstallWork(t.works, finished) }

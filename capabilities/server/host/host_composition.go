@@ -10,22 +10,9 @@ import (
 	"platformserver/services/devops/packages"
 	controlowner "platformserver/services/security/control"
 	"slices"
-	"strings"
 
 	"platformserver/platform"
 )
-
-type HostComposition struct {
-	Current               map[string]string           `json:"current"`
-	Desired               map[string]string           `json:"desired"`
-	Available             []platform.CapabilityModule `json:"available"`
-	State                 string                      `json:"state"`
-	Reason                string                      `json:"reason,omitempty"`
-	Owners                []platform.CapabilityModule `json:"owners"`
-	DisabledOwners        []string                    `json:"disabledOwners"`
-	DesiredDisabledOwners []string                    `json:"desiredDisabledOwners"`
-	Storage               platform.CapabilityModule   `json:"storage"`
-}
 
 func (t *Tenant) desiredRuntime() map[string]string {
 	selection := t.console.RuntimeSelection()
@@ -35,23 +22,10 @@ func (t *Tenant) desiredRuntime() map[string]string {
 	return selection
 }
 
-func (t *Tenant) compositionView(providers platform.RuntimeProviders) HostComposition {
-	view := HostComposition{Current: t.services.Selection(), Desired: t.desiredRuntime(), Available: providers.Modules(), State: "ready", Storage: t.services.StorageModule}
-	view.DisabledOwners, view.DesiredDisabledOwners = t.currentDisabledOwners(), t.desiredDisabledOwners()
-	view.Owners = []platform.CapabilityModule{}
-	for _, module := range t.baseModules() {
-		if strings.HasPrefix(module.ID, "platform.owner.") {
-			view.Owners = append(view.Owners, module)
-		}
-	}
-	if missingRuntime(view.Desired) || slices.Contains(view.DesiredDisabledOwners, controlowner.PlatformApp) {
-		view.State, view.Reason = "maintenance", "A required implementation is removed; business access remains stopped"
-	} else if !maps.Equal(view.Current, view.Desired) || !slices.Equal(view.DisabledOwners, view.DesiredDisabledOwners) {
-		view.State, view.Reason = "restart-required", "The selection is saved; restart this host to activate the checked composition"
-	} else if t.console.Suspended() {
-		view.State = "suspended"
-	}
-	return view
+func (t *Tenant) compositionView(providers platform.RuntimeProviders) packages.HostComposition {
+	return packages.CompositionState{Current: t.services.Selection(), Desired: t.desiredRuntime(), Available: providers.Modules(), Base: t.baseModules(),
+		Storage: t.services.StorageModule, DisabledOwners: t.currentDisabledOwners(), DesiredDisabledOwners: t.desiredDisabledOwners(),
+		Suspended: t.console.Suspended(), PlatformApp: controlowner.PlatformApp}.View()
 }
 
 func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
@@ -69,10 +43,10 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 		}
 		WriteJSON(w, http.StatusOK, preview)
 	})
-	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/composition", Summary: "Current and saved foundational provider selection and supported maintenance mode", Answer: HostComposition{}}, func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
+	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/composition", Summary: "Current and saved foundational provider selection and supported maintenance mode", Answer: packages.HostComposition{}}, func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.compositionView(providers))
 	})
-	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/composition", Summary: "Save a checked provider selection and stop business access until supported restart and recovery", Body: acceptedformat.CompositionRequest{}, Answer: HostComposition{}}, func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/composition", Summary: "Save a checked provider selection and stop business access until supported restart and recovery", Body: acceptedformat.CompositionRequest{}, Answer: packages.HostComposition{}}, func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
 		var body acceptedformat.CompositionRequest
 		if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -110,11 +84,4 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 	})
 }
 
-func missingRuntime(selection map[string]string) bool {
-	for _, provider := range selection {
-		if provider == "" {
-			return true
-		}
-	}
-	return false
-}
+func missingRuntime(selection map[string]string) bool { return packages.MissingRuntime(selection) }

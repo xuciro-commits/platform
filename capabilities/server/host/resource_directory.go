@@ -1,20 +1,16 @@
 package host
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
+	"cmp"
 	"net/http"
-	"slices"
-	"strings"
-	"time"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/kernel/records"
-	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
+	"slices"
+	"time"
 )
 
 func (t *Tenant) resourceActionActive(name string) bool {
@@ -23,64 +19,12 @@ func (t *Tenant) resourceActionActive(name string) bool {
 		action, _ := owner.Manifest().Actions.Action(name)
 		target = action.Target
 	}
-	names := []string{name}
-	if target != "" && target != name {
-		names = append(names, target)
-	}
-	_, retired := findResource(t.Projection, []persistence.StateFilter{
-		{Path: []string{"value", "state"}, Values: []string{"archived"}},
-		{Path: []string{"value", "ref", "name"}, Values: names},
-	}, func(resource build.Resource) bool {
-		return resource.ManagedBy != "" && resource.State == "archived" &&
-			(resource.Ref.Name == name || resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == target)
-	})
-	return !retired
-}
-
-func findResource(store *records.Store, filters []persistence.StateFilter, match func(build.Resource) bool) (build.Resource, bool) {
-	resources := store.Type(build.ResourceType)
-	if resources == nil {
-		return build.Resource{}, false
-	}
-	if view := store.Current().View(); view != nil {
-		after := ""
-		for {
-			ids, err := view.StateCandidates(context.Background(), store.Current().Tenant(), build.ResourceType, filters, after, 256, store.Current().Applied())
-			if err != nil {
-				panic(fmt.Errorf("resource candidates: %w", err))
-			}
-			for _, id := range ids {
-				if row := resources.Rows().Get(id); row != nil {
-					resource := row.Value.Interface().(build.Resource)
-					if match(resource) {
-						return resource, true
-					}
-				}
-			}
-			if len(ids) < 256 {
-				break
-			}
-			after = ids[len(ids)-1]
-		}
-		return build.Resource{}, false
-	}
-	for _, row := range resources.Rows().All() {
-		resource := row.Value.Interface().(build.Resource)
-		if match(resource) {
-			return resource, true
-		}
-	}
-	return build.Resource{}, false
+	return !build.ResourceActionRetired(t.Projection, name, target)
 }
 
 func (t *Tenant) ResourceRole(m platform.Member, project string) string {
-	if m.Holds("platform", "admin") || build.HoldsIndependentRole(m, build.Builder) {
-		return platform.ProjectOwnerRole
-	}
-	if access, ok := t.App("platform").(platform.ProjectAccess); ok {
-		return access.ProjectRole(m.ID, project)
-	}
-	return ""
+	access, _ := t.App("platform").(platform.ProjectAccess)
+	return build.ProjectRoleOf(m, access, project)
 }
 
 func (t *Tenant) ResourcePermission(store *records.Store, m platform.Member, typ, id, kind string, held bool) (bool, bool) {
@@ -91,47 +35,13 @@ func (t *Tenant) ResourcePermission(store *records.Store, m platform.Member, typ
 		store.Lock()
 		defer store.Unlock()
 	}
-	return build.ResourceRows{
-		Get: func(typ, id string) (any, bool) {
-			if row := store.Type(typ).Rows().Get(id); row != nil {
-				return row.Value.Interface(), true
-			}
-			return nil, false
-		},
-		ForDraft: func(typ, id string) (build.Resource, bool) {
-			return findResource(store, []persistence.StateFilter{
-				{Path: []string{"value", "type"}, Values: []string{typ}},
-				{Path: []string{"value", "draft"}, Values: []string{id}},
-			}, func(resource build.Resource) bool { return resource.Type == typ && resource.Draft == id })
-		},
-		ForObject: func(typ string) (build.Resource, bool) {
-			return findResource(store, []persistence.StateFilter{
-				{Path: []string{"value", "ref", "kind"}, Values: []string{string(platform.AssetObject)}},
-				{Path: []string{"value", "ref", "name"}, Values: []string{typ}},
-			}, func(resource build.Resource) bool {
-				return resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == typ
-			})
-		},
-		Role: func(project string) string { return t.ResourceRole(m, project) },
-	}.Permission(m, typ, id, kind)
+	return build.StoreResourceRows(store, func(project string) string { return t.ResourceRole(m, project) }).Permission(m, typ, id, kind)
 }
 
 func (t *Tenant) resourceDirectory(m platform.Member) build.ResourceDirectory {
-	var resources []build.Resource
-	var folders []build.Folder
 	t.Projection.Lock()
 	defer t.Projection.Unlock()
-	if rows := t.Projection.Type(build.ResourceType); rows != nil {
-		for _, row := range rows.Rows().All() {
-			resources = append(resources, row.Value.Interface().(build.Resource))
-		}
-	}
-	if rows := t.Projection.Type(build.FolderType); rows != nil {
-		for _, row := range rows.Rows().All() {
-			folders = append(folders, row.Value.Interface().(build.Folder))
-		}
-	}
-	return build.NewDirectory(resources, folders, func(project string) string { return t.ResourceRole(m, project) })
+	return build.StoreDirectory(t.Projection, func(project string) string { return t.ResourceRole(m, project) })
 }
 
 func (t *Tenant) initializeResources(now time.Time) error {
@@ -144,92 +54,27 @@ func (t *Tenant) initializeResources(now time.Time) error {
 	if refusal := t.recordReadRefusal(); refusal != nil {
 		return refusal
 	}
-	return build.ResourceBootstrap{Tenant: t.ID, Definitions: t.definitions,
-		Drafts: func(match func(string) bool) []build.DraftRecord {
-			t.Projection.Lock()
-			defer t.Projection.Unlock()
-			var out []build.DraftRecord
-			for _, recordType := range t.Projection.Types() {
-				if typ := recordType.Info().Type; match(typ) {
-					for id, row := range recordType.Rows().All() {
-						out = append(out, build.DraftRecord{Type: typ, ID: id, Value: row.Value.Interface()})
-					}
-				}
-			}
-			return out
-		},
-		Exists: func(rid string) bool {
-			t.Projection.Lock()
-			defer t.Projection.Unlock()
-			existing := t.Projection.Type(build.ResourceType)
-			return existing != nil && existing.Rows().Get(rid) != nil
-		},
-		Snapshot: func() (apps []build.Application, resources []build.Resource) {
-			t.Projection.Lock()
-			defer t.Projection.Unlock()
-			if rows := t.Projection.Type(build.AppType); rows != nil {
-				for _, row := range rows.Rows().All() {
-					apps = append(apps, row.Value.Interface().(build.Application))
-				}
-			}
-			if rows := t.Projection.Type(build.ResourceType); rows != nil {
-				for _, row := range rows.Rows().All() {
-					resources = append(resources, row.Value.Interface().(build.Resource))
-				}
-			}
-			return apps, resources
-		},
-		Submit: func(s *pb.Submission) error {
-			if refusal := t.submitAutomated(owner, t.automation(build.ID, false), s, now); refusal != nil {
-				return refusal
-			}
-			return nil
-		}}.Initialize()
-}
-
-type BranchReviewers struct {
-	People   []platform.ProjectPerson `json:"people"`
-	Required int                      `json:"required"`
-}
-
-type WorkingStateView struct {
-	Record *build.WorkingState `json:"record,omitempty"`
-	ID     string              `json:"id"`
-}
-
-type WorkingStateList struct {
-	Resources []build.WorkingState `json:"resources"`
+	return build.StoreBootstrap(t.ID, t.definitions, t.Projection, func(s *pb.Submission) error {
+		if refusal := t.submitAutomated(owner, t.automation(build.ID, false), s, now); refusal != nil {
+			return refusal
+		}
+		return nil
+	}).Initialize()
 }
 
 func (h *Host) routesResources(rt *routes) {
-	rt.recordRead(transport.Route{Pattern: "GET /v1/markings/{id}/resources", Summary: "Resources carrying a marking, without their data", Answer: []build.ResourceEntry{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/markings/{id}/resources", Summary: "Resources carrying a marking, without their data", Answer: []build.ResourceEntry{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]build.ResourceEntry, *kernel.Error) {
 		caller := t.caller(m, t.App("platform"), false)
 		if refusal := authorizationRefusal(t.authorizeNative(caller, "GET /v1/markings/{id}/resources", "read", []string{"admin", platform.Auditor}, true)); refusal != nil {
-			Reply(w, nil, refusal)
-			return
+			return nil, refusal
 		}
-		id := r.PathValue("id")
-		marked := map[platform.AssetRef]bool{}
-		for _, node := range t.markingsIn(t.Projection, false).Graph.Nodes {
-			if slices.Contains(node.EffectiveCompartments, id) || slices.Contains(platform.Markings[1:], id) && platform.MarkingRank(node.Effective) >= platform.MarkingRank(id) {
-				marked[platform.AssetRef{App: build.ID, Kind: platform.AssetKind(node.Kind), Name: node.Name}] = true
-			}
-		}
-		resources := []build.ResourceEntry{}
+		marked := t.markingsIn(t.Projection, false).Marked(r.PathValue("id"))
 		t.Projection.Lock()
-		for _, row := range t.Projection.Type(build.ResourceType).Rows().All() {
-			resource := row.Value.Interface().(build.Resource)
-			if marked[resource.Ref] && !resource.Archived {
-				role := t.ResourceRole(m, resource.Project)
-				resources = append(resources, build.ResourceEntry{Resource: resource, Path: []string{}, CanOpen: role != "" && role != platform.ProjectDiscovererRole, CanEdit: false})
-			}
-		}
+		resources := build.StoreResources(t.Projection)
 		t.Projection.Unlock()
-		slices.SortFunc(resources, func(a, b build.ResourceEntry) int { return strings.Compare(a.ID, b.ID) })
-		WriteJSON(w, http.StatusOK, resources)
-	})
-
-	rt.recordRead(transport.Route{Pattern: "GET /v1/branches/{id}/reviewers", Summary: "Eligible non-author editors and the project approval requirement", Answer: BranchReviewers{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		return build.MarkedResources(marked, resources, func(project string) string { return t.ResourceRole(m, project) }), nil
+	}))
+	rt.recordRead(transport.Route{Pattern: "GET /v1/branches/{id}/reviewers", Summary: "Eligible non-author editors and the project approval requirement", Answer: build.BranchReviewers{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		branch, refusal := t.ReadBranch(m, r.PathValue("id"), h.Now())
 		if refusal != nil {
 			Reply(w, nil, refusal)
@@ -240,89 +85,47 @@ func (h *Host) routesResources(rt *routes) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		out := BranchReviewers{People: []platform.ProjectPerson{}, Required: required}
-		for _, id := range t.identity.Holding(build.ID, build.Builder) {
-			member, found := t.Member(id)
-			if !found || !member.Active() || member.Agent || id == branch.Created.By || id == m.ID || slices.ContainsFunc(branch.Changes, func(change build.BranchChange) bool { return change.By == id }) {
-				continue
-			}
-			eligible := true
-			for _, project := range projects {
-				role := t.ResourceRole(member, project)
-				if role != platform.ProjectOwnerRole && role != platform.ProjectEditorRole {
-					eligible = false
-					break
+		WriteJSON(w, http.StatusOK, build.ReviewerHooks{Holding: t.identity.Holding(build.ID, build.Builder), Member: t.Member, Role: t.ResourceRole,
+			Name: func(id string) string {
+				profile, _ := t.App("platform").(platform.IdentityProfile)
+				if profile == nil {
+					return id
 				}
-			}
-			if eligible {
-				name := id
-				if profile, ok := t.App("platform").(platform.IdentityProfile); ok {
-					if display := profile.Account(id).DisplayName; display != "" {
-						name = display
-					}
-				}
-				out.People = append(out.People, platform.ProjectPerson{ID: id, Name: name})
-			}
-		}
-		WriteJSON(w, http.StatusOK, out)
+				return cmp.Or(profile.Account(id).DisplayName, id)
+			}}.Eligible(branch, m.ID, projects, required))
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}", Summary: "All current builder's private resource edits on this branch", Answer: WorkingStateList{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		states := []build.WorkingState{}
-		query := platform.Query{Domain: platform.Raw([][]any{{"branch", "=", r.PathValue("branch")}}), Limit: 500, Sort: []string{"id"}}
-		for {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}", Summary: "All current builder's private resource edits on this branch", Answer: build.WorkingStateList{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		list, refusal, err := build.ReadWorkingStates(r.PathValue("branch"), func(query platform.Query) ([]any, *kernel.Error) {
 			page, refusal := t.recordsRead(m, build.WorkingStateType, query, h.Now())
-			if refusal != nil {
-				Reply(w, nil, refusal)
-				return
-			}
-			var selected []build.WorkingState
-			if err := json.Unmarshal(platform.Raw(page.Records), &selected); err != nil {
-				WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-				return
-			}
-			for _, state := range selected {
-				if !state.Archived {
-					states = append(states, state)
-				}
-			}
-			if len(page.Records) < query.Limit {
-				break
-			}
-			query.Offset += len(page.Records)
-		}
-		WriteJSON(w, http.StatusOK, WorkingStateList{Resources: states})
-	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}/{type}/{draft}", Summary: "Only the current builder's private working state", Answer: WorkingStateView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		id := build.WorkingStateID(m.ID, r.PathValue("branch"), r.PathValue("type"), r.PathValue("draft"))
-		raw, refusal := t.readRecordFrom(t.Projection, t.branchCaller(m), build.WorkingStateType, id, h.Now())
-		view := WorkingStateView{ID: id}
-		if refusal == nil {
-			var state build.WorkingState
-			if err := json.Unmarshal(raw, &state); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if !state.Archived {
-				view.Record = &state
-			}
-		} else if refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
-			Reply(w, nil, refusal)
+			return page.Records, refusal
+		})
+		if err != nil {
+			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		WriteJSON(w, http.StatusOK, view)
+		transport.Answer(w, list, refusal)
+	})
+	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}/{type}/{draft}", Summary: "Only the current builder's private working state", Answer: build.WorkingStateView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		id := build.WorkingStateID(m.ID, r.PathValue("branch"), r.PathValue("type"), r.PathValue("draft"))
+		raw, refusal := t.readRecordFrom(t.Projection, t.branchCaller(m), build.WorkingStateType, id, h.Now())
+		view, refusal, err := build.ReadWorkingState(id, raw, refusal)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		transport.Answer(w, view, refusal)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/resources", Summary: "Visible resource identities and their project and folder locations", Answer: build.ResourceDirectory{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.resourceDirectory(m))
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/resources/{rid}", Summary: "Resolve one stable resource identity", Answer: build.ResourceEntry{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		for _, entry := range t.resourceDirectory(m).Resources {
-			if entry.ID == r.PathValue("rid") {
-				WriteJSON(w, http.StatusOK, entry)
-				return
-			}
+	rt.recordRead(transport.Route{Pattern: "GET /v1/resources/{rid}", Summary: "Resolve one stable resource identity", Answer: build.ResourceEntry{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (build.ResourceEntry, *kernel.Error) {
+		entries := t.resourceDirectory(m).Resources
+		index := slices.IndexFunc(entries, func(entry build.ResourceEntry) bool { return entry.ID == r.PathValue("rid") })
+		if index < 0 {
+			return build.ResourceEntry{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The resource is unavailable")
 		}
-		Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The resource is unavailable"))
-	})
+		return entries[index], nil
+	}))
 }
 
 func (h hostView) ManagedDefinition(ref platform.AssetRef) bool {
@@ -330,10 +133,5 @@ func (h hostView) ManagedDefinition(ref platform.AssetRef) bool {
 	if h.decision != nil {
 		store = h.decision.Records
 	}
-	directory := store.Type(build.ResourceType)
-	if directory == nil {
-		return false
-	}
-	row := directory.Rows().Get(platform.ResourceID(h.t.ID, ref))
-	return row != nil && row.Value.Interface().(build.Resource).ManagedBy != ""
+	return build.ManagedDefinition(store, h.t.ID, ref)
 }

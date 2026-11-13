@@ -1,23 +1,19 @@
 package host
 
-import automation "platformserver/services/automate/runtime"
-
 import (
 	"encoding/json"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/transport"
+	"platformserver/platform"
 	"platformserver/services/actions"
+	automation "platformserver/services/automate/runtime"
 	dataowner "platformserver/services/data"
 	"platformserver/services/objects"
-	controlowner "platformserver/services/security/control"
-
-	"platformserver/kernel/transport"
-
-	"reflect"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/platform"
 	"platformserver/services/resources/authoring"
+	controlowner "platformserver/services/security/control"
 	enterprisemodel "platformserver/services/security/organization"
+	"reflect"
 )
 
 var namedReads = []transport.Route{
@@ -74,7 +70,7 @@ type MeView struct {
 	TenantID    string                `json:"tenantId"`
 	PrincipalID string                `json:"principalId"`
 	Profile     platform.Member       `json:"profile"`
-	Apps        []AppEntry            `json:"apps"`
+	Apps        []transport.AppEntry  `json:"apps"`
 	Tenants     []transport.MeTenant  `json:"tenants"`
 	Language    string                `json:"language"`
 	Languages   []string              `json:"languages"`

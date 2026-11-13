@@ -3,14 +3,16 @@ package host
 import (
 	"fmt"
 	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/ontology"
+	"platformserver/services/security"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -61,114 +63,43 @@ func (h hostView) installationView(recordView *records.Store) *Tenant {
 }
 
 func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error {
-	for protocol, provider := range h.t.bindings.All() {
-		if provider != h.app.Manifest().ID {
-			continue
-		}
-		belongs := false
-		for _, provision := range h.t.App(provider).Manifest().Provides {
-			for _, schema := range provision.Actions {
-				belongs = belongs || provision.Protocol.ID() == protocol && strings.HasPrefix(schema, e.Type+".")
-			}
-		}
-		if belongs && !slices.ContainsFunc(e.Protocols, func(p platform.Provision) bool { return p.Protocol.ID() == protocol }) {
-			return fmt.Errorf("protocol %s is bound to this object; retain its provider declaration", protocol)
-		}
-	}
-	draft := h.installationDraft()
-	if current := draft.Projection.Type(e.Type); current != nil && current.Info().Go != reflect.TypeOf(e.Model) {
-		current.SetRows(records.Index[*records.Row]{})
-	}
-	if err := draft.Install(h.app, e, actions, pages...); err != nil {
-		return err
-	}
 	var engine platform.RuleEngine = h.t.services.Rules
 	if c.Replaying {
 		engine = platform.NativeRules{}
 	}
-	for _, et := range draft.Projection.SortedTypes() {
-		if err := draft.checkRecordSetDeclarations(et.Info(), engine); err != nil {
-			return err
-		}
-		if err := platform.CheckConstraints(et.Info(), draft.Entity, true, engine); err != nil {
-			return err
-		}
-	}
-	for _, def := range h.t.definitions {
-		if def.LinkType != nil {
-			view := hostView{t: draft, app: h.t.App(def.Ref.App)}
-			if err := view.ValidateInstallLinkType(*def.LinkType); err != nil {
-				return err
-			}
-			for _, l := range def.LinkVersions {
-				if err := view.ValidateInstallLinkType(l); err != nil {
-					return err
-				}
-			}
-		}
-		if def.Application != nil {
-			for _, q := range def.Application.Queries {
-				if q.Object.Name == e.Type {
-					if err := draft.checkPageQueries(def.Application.QueryPage()); err != nil {
-						return err
+	return ontology.InstallDependents{
+		App: h.app.Manifest().ID, Entity: e, Actions: actions, GeneratedPage: generatedPage, Engine: engine,
+		Definitions: h.t.definitions, Bindings: h.t.bindings.All(),
+		Provisions: func(provider string) []platform.Provision { return h.t.App(provider).Manifest().Provides },
+		Begin: func() ontology.InstallDraft {
+			draft := h.installationDraft()
+			owner := func(id string) hostView { return hostView{t: draft, app: h.t.App(id)} }
+			return ontology.InstallDraft{
+				Reset: func() {
+					if current := draft.Projection.Type(e.Type); current != nil && current.Info().Go != reflect.TypeOf(e.Model) {
+						current.SetRows(records.Index[*records.Row]{})
 					}
-					break
-				}
+				},
+				Install: func() error { return draft.Install(h.app, e, actions, pages...) },
+				Types: func() []platform.EntityInfo {
+					var out []platform.EntityInfo
+					for _, et := range draft.Projection.SortedTypes() {
+						out = append(out, et.Info())
+					}
+					return out
+				},
+				CheckSets: func(info platform.EntityInfo, engine platform.RuleEngine) error {
+					return draft.checkRecordSetDeclarations(info, engine)
+				},
+				Entity: draft.Entity, CheckQueries: draft.checkPageQueries,
+				App:         func(id string) platform.App { return draft.App(id) },
+				LinkType:    func(app string, l platform.LinkType) error { return owner(app).ValidateInstallLinkType(l) },
+				Query:       func(app string, q platform.NamedQuery) error { return owner(app).ValidateInstallQuery(q) },
+				Function:    func(app string, f platform.AIFunction) error { return owner(app).ValidateInstallFunction(f) },
+				InstallPage: func(app platform.App, p platform.Page) error { return draft.InstallPage(app, p) },
 			}
-		}
-		if def.Query != nil && def.Query.Object == e.Type {
-			view := hostView{t: draft, app: h.t.App(def.Ref.App)}
-			if err := view.ValidateInstallQuery(*def.Query); err != nil {
-				return err
-			}
-			for _, q := range def.QueryVersions {
-				if err := view.ValidateInstallQuery(q); err != nil {
-					return err
-				}
-			}
-		}
-		if def.Function != nil && def.Function.Object == e.Type {
-			if err := (hostView{t: draft, app: h.t.App(def.Ref.App)}).ValidateInstallFunction(*def.Function); err != nil {
-				return err
-			}
-		}
-	}
-	removedAction := func(ref platform.AssetRef) bool {
-		owned := ref.App == h.app.Manifest().ID && slices.ContainsFunc(h.t.definitions, func(d platform.Definition) bool {
-			return d.Ref == ref && d.Action != nil && d.Action.Target == e.Type
-		})
-		return owned && !slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == ref.Name })
-	}
-	for _, def := range h.t.definitions {
-		if def.Ref.Kind != platform.AssetPage || def.Page == nil ||
-			def.Ref.App == h.app.Manifest().ID && def.Ref.Name == generatedPage {
-			continue
-		}
-		p, err := def.Page.Safety()
-		if err != nil {
-			return err
-		}
-		if p.Object.Name != e.Type && !slices.ContainsFunc(p.QueryReferences(), func(ref platform.AssetRef) bool { return ref.Kind == platform.AssetObject && ref.Name == e.Type }) && !slices.ContainsFunc(p.DataBindings, func(s platform.PageDataBinding) bool {
-			return s.Object.Name == e.Type
-		}) {
-			continue
-		}
-		for _, trigger := range p.ActionTriggers {
-			for _, ref := range trigger.Actions {
-				if removedAction(ref) {
-					return fmt.Errorf("page %s: removed action %s", p.Name, ref.Name)
-				}
-			}
-		}
-		owner := draft.App(def.Ref.App)
-		if owner == nil {
-			return fmt.Errorf("page %s has no owner %s", def.Ref, def.Ref.App)
-		}
-		if err := draft.InstallPage(owner, p); err != nil {
-			return fmt.Errorf("release dependent %s: %w", def.Ref, err)
-		}
-	}
-	return nil
+		},
+	}.Validate()
 }
 
 func (h hostView) OwnerOf(dataClass string) (string, bool) {
@@ -222,19 +153,7 @@ func (h hostView) Holding(app, role string) []string {
 }
 
 func (h hostView) Action(schema string) (string, platform.Action, bool) {
-	a := h.t.App(h.t.owner["action:"+schema])
-	if a == nil {
-		return "", platform.Action{}, false
-	}
-	declared, ok := a.Manifest().Actions.Action(schema)
-	if !ok {
-		for _, definition := range h.t.definitions {
-			if definition.Ref == (platform.AssetRef{App: a.Manifest().ID, Kind: platform.AssetAction, Name: schema}) && definition.Action != nil && definition.Action.Schema == schema {
-				return a.Manifest().ID, *definition.Action, true
-			}
-		}
-	}
-	return a.Manifest().ID, declared, ok
+	return ontology.DeclaredAction(h.t.App(h.t.owner["action:"+schema]), h.t.definitions, schema)
 }
 
 func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -249,14 +168,13 @@ func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 }
 
 func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	decide := func() (*pb.ChangeRecord, *kernel.Error) {
+	return platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
 		a := h.t.App(h.t.owner["action:"+s.GetSchema().GetName()])
 		if a == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return platform.Decide(c, a, s, now)
-	}
-	return platform.Attempt(c, decide)
+	})
 }
 
 func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
@@ -341,43 +259,17 @@ func (h hostView) ValidateInstallApplication(a platform.Application) error {
 func (h hostView) Entity(typ string) (platform.EntityInfo, bool) { return h.t.Entity(typ) }
 
 func (h hostView) EntitySource(typ string) (platform.AssetBinding, bool) {
-	for _, definition := range h.t.definitions {
-		if definition.Ref.Kind == platform.AssetObject && definition.Ref.Name == typ && definition.Version != "" {
-			return platform.AssetBinding{Ref: definition.Ref, SourceVersion: definition.Version}, true
-		}
-	}
-	return platform.AssetBinding{}, false
+	return ontology.EntitySource(h.t.definitions, typ)
 }
 
 func (h hostView) Declares(name string) bool { return h.t.declares(name) }
 
 func (h hostView) Interfaces() []platform.Interface {
-	return h.t.interfaces()
-}
-
-func (t *Tenant) interfaces() []platform.Interface {
-	seen := map[platform.AssetRef]bool{}
-	out := []platform.Interface{}
-	for _, definition := range t.definitions {
-		if definition.Interface == nil || seen[definition.Ref] {
-			continue
-		}
-		seen[definition.Ref] = true
-		out = append(out, *definition.Interface)
+	manifests := make([]platform.Manifest, len(h.t.apps))
+	for i, app := range h.t.apps {
+		manifests[i] = app.Manifest()
 	}
-	for _, app := range t.apps {
-		manifest := app.Manifest()
-		for _, shape := range manifest.Interfaces {
-			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetInterface, Name: shape.Name}
-			if seen[ref] {
-				continue
-			}
-			seen[ref] = true
-			out = append(out, shape)
-		}
-	}
-	slices.SortFunc(out, func(a, b platform.Interface) int { return strings.Compare(a.Name, b.Name) })
-	return out
+	return ontology.Interfaces(h.t.definitions, manifests)
 }
 
 func (h hostView) BindInterfaceQuery(q platform.NamedQuery, drafts ...platform.EntityInfo) (platform.NamedQuery, error) {
@@ -415,49 +307,26 @@ func (h hostView) Record(ref string) (any, bool) {
 }
 
 func (h hostView) BuildProcesses() platform.ProcessDefinitions { return h.Processes() }
+func (h hostView) roles() runtimekernel.OptionalRoles {
+	return runtimekernel.OptionalRoles{Directory: h.Directory()}
+}
+
 func (h hostView) Calendar(party string, day platform.Date) platform.Calendar {
-	if directory := h.Directory(); directory != nil {
-		return directory.Calendar(party, day)
-	}
-	return platform.Calendar{}
+	return h.roles().Calendar(party, day)
 }
 func (h hostView) Units(party, structure string, day platform.Date) []string {
-	if directory := h.Directory(); directory != nil {
-		return directory.Units(party, structure, day)
-	}
-	return nil
+	return h.roles().PartyUnits(party, structure, day)
 }
 func (h hostView) Holders(structure, unit, role string, day platform.Date) []string {
-	if directory := h.Directory(); directory != nil {
-		return directory.Holders(structure, unit, role, day)
-	}
-	return nil
+	return h.roles().Holders(structure, unit, role, day)
 }
 
 func (h hostView) RuleQuery(app, name string, version int) (platform.NamedQuery, int, bool) {
-	owner := h.t.App(app)
-	if owner == nil {
-		return platform.NamedQuery{}, 0, false
-	}
-	if source, ok := owner.(interface {
-		QueryDefinition(string, int) (platform.NamedQuery, int, bool)
-	}); ok {
-		return source.QueryDefinition(name, version)
-	}
-	if version == 0 {
-		q, ok := h.t.namedQuery(app, name)
-		return q, 0, ok
-	}
-	return platform.NamedQuery{}, 0, false
+	return ontology.RuleQuery(h.t.App(app), name, version, func(name string) (platform.NamedQuery, bool) { return h.t.namedQuery(app, name) })
 }
 
 func (h hostView) ModelQueryBinding(ref platform.AssetRef) (platform.AssetBinding, bool) {
-	for _, d := range h.t.definitions {
-		if d.Ref == ref && d.Query != nil {
-			return platform.AssetBinding{Ref: ref, SourceVersion: d.Version}, true
-		}
-	}
-	return platform.AssetBinding{}, false
+	return ontology.ModelQueryBinding(h.t.definitions, ref)
 }
 
 func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
@@ -486,14 +355,7 @@ func (h hostView) BuildProcessConsumptions() []platform.Consumption {
 }
 
 func (h hostView) ProjectApprovals(project string) int {
-	if access, ok := h.t.App("platform").(interface {
-		SnapshotState() platform.AuthorizationState
-	}); ok {
-		if config := access.SnapshotState().Projects[project]; config != nil {
-			return max(1, config.Approvals)
-		}
-	}
-	return 1
+	return security.ProjectApprovals(h.t.App("platform"), project)
 }
 
 func (h hostView) CheckResourceSchema(schema string, version *platform.SchemaVersion) *kernel.Error {
@@ -509,10 +371,5 @@ func (h hostView) CheckResourceSchema(schema string, version *platform.SchemaVer
 }
 
 func (h hostView) CompartmentExists(id string) bool {
-	for _, marking := range h.t.App("platform").(interface{ MarkingViews() []platform.Marking }).MarkingViews() {
-		if marking.ID == id && !marking.Classification && !marking.Archived {
-			return true
-		}
-	}
-	return false
+	return security.CompartmentExists(h.t.App("platform"), id)
 }

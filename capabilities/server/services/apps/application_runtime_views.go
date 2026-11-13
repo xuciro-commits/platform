@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 	"slices"
@@ -29,9 +31,8 @@ type Context struct {
 	Quarantined         func() bool
 	RecoveryAllowed     func(platform.Member) *kernel.Error
 	Quota               func(platform.Member, time.Time) *platform.AIQuota
-	Refusals            func() []Refusal
-	BusinessFacts       func() []platform.BusinessRefusalFact
-	ActiveVersions      func() []ActiveVersion
+	Refusals            func(field ...string) map[string]acceptedformat.Refusal
+	Answers             func(field ...string) map[string]json.RawMessage
 	AI                  func(platform.Member, []platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error)
 	AIUsage             func(platform.Member, platform.AssetRef, []platform.ApplicationAI) []platform.ApplicationAI
 	RecordCount         func(platform.Member, string, time.Time) (int, *kernel.Error)
@@ -41,9 +42,9 @@ type Context struct {
 	QueryRunIndex       func(scope string) ([]platform.RunIndexEntry, error)
 	RuntimeOf           func(platform.Member, platform.AssetRef, time.Time) (platform.ApplicationRuntime, *kernel.Error)
 	RunsPage            func(platform.Member, platform.AssetRef, int, int, time.Time, ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error)
-	RecordHistory       func(platform.Member, string, string, time.Time) ([]DecisionChange, *kernel.Error)
+	RecordHistory       func(platform.Member, string, string, time.Time) ([]records.RecordChange, *kernel.Error)
 	RecordOwner         func(typ string) string
-	ReceiptKeys         func(owner string) map[string]string
+	Receipts            func(owner string) []*pb.ChangeRecord
 	Decision            func(key string) *platform.DecisionDefinition
 	SchemaVersion       func(key string) (platform.SchemaVersion, bool)
 	VisibleEvidence     func(platform.Member, *platform.ObservationDecisionEvidence, time.Time) *platform.ObservationDecisionEvidence
@@ -62,13 +63,6 @@ type Job struct {
 	ID, Kind, App, Title, State, Error string
 	Last                               time.Time
 	Withheld                           bool
-}
-
-type Refusal struct {
-	Submission json.RawMessage
-	Error      kernel.Error
-	Business   *platform.BusinessRefusalFact
-	Issues     []platform.FieldIssue
 }
 
 type ActiveVersion struct {

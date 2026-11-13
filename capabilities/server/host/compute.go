@@ -147,7 +147,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 				if !ok || member.Tenant != t.ID {
 					return member, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation member is no longer authorised")
 				}
-				if !t.operationCurrent(x.ID, x.Generation) {
+				if !t.operationClaims().Current(x.ID, x.Generation) {
 					return member, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation was cancelled")
 				}
 				return member, authorizationRefusal(t.operationAuthorization(member, x.App, b, now))
@@ -156,7 +156,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		StillAuthorised: func(ctx context.Context, x platform.Effect, b compute.OperationBinding, now time.Time) (bool, *kernel.Error) {
 			return recordRead(t, ctx, func(t *Tenant) (bool, *kernel.Error) {
 				latest, ok := t.Member(b.Member)
-				return ok && t.operationAuthorization(latest, x.App, b, now).Allow && t.operationCurrent(x.ID, x.Generation), nil
+				return ok && t.operationAuthorization(latest, x.App, b, now).Allow && t.operationClaims().Current(x.ID, x.Generation), nil
 			})
 		},
 		RulesRevoked: func(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *kernel.Error) {

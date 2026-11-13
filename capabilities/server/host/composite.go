@@ -3,16 +3,11 @@ package host
 import (
 	"encoding/json"
 	"fmt"
-
-	"google.golang.org/protobuf/proto"
-
-	acceptedformat "platformserver/kernel/acceptedformat"
-
-	"strconv"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -32,87 +27,35 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []platform.Compo
 }
 
 func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platform.CompositeEdit, now time.Time) (platform.CompositeAnswer, error) {
-	if err := t.Admits(m); err != nil {
-		return platform.CompositeAnswer{}, err
-	}
-	if key == "" || len(key) > 200 || len(edits) == 0 || len(edits) > 64 || now.IsZero() {
-		return platform.CompositeAnswer{}, fmt.Errorf("a composite needs an idempotency key and one to 64 edits")
-	}
-	if t.App(build.ID) == nil {
-		return platform.CompositeAnswer{}, fmt.Errorf("this tenant runs no builder")
-	}
-	if t.quarantined() {
-		return platform.CompositeAnswer{}, fmt.Errorf("tenant is quarantined")
-	}
-	saved := acceptedformat.Composite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: build.ID, Member: m.ID,
-		Key: "composite:" + key, At: now.UTC(), Edits: edits}
-	var err error
-	saved.RequestHash, err = acceptedformat.CompositeRequestHash(t.ID, m.ID, saved.Key, edits)
-	if err != nil {
-		return platform.CompositeAnswer{}, err
-	}
-	if prior := t.Committed.CompositeAnswer(saved.Key); len(prior) > 0 {
-		answer, err := acceptedformat.DecodeComposite(prior)
-		if err != nil || answer.RequestHash != saved.RequestHash {
-			return platform.CompositeAnswer{}, fmt.Errorf("composite key belongs to another request")
-		}
-		return compositeAnswer(answer)
-	}
-	if digest, exists := t.Committed.Composite(saved.Key); exists {
-		for i, edit := range edits {
-			r := t.App(build.ID).AcceptedLedger().AcceptedFor(t.ID, key+"#"+strconv.Itoa(i))
-			x := r.GetSubmission()
-			if x.GetPrincipalId() != m.ID || x.GetSchema().GetName() != edit.Schema || !proto.Equal(x.GetTarget(), edit.Target) || !acceptedformat.SameCompositePayload(x.GetPayload(), edit.Payload) {
-				return platform.CompositeAnswer{}, fmt.Errorf("historical composite key belongs to another request")
+	var draft *stagedDecision
+	answer, prepared, err := (build.CompositePlan{
+		Tenant: t.ID, Admits: t.Admits, Quarantined: t.quarantined, Bound: t.delegatedBound,
+		Hosted:      func() bool { return t.App(build.ID) != nil },
+		PriorAnswer: t.Committed.CompositeAnswer, PriorDigest: t.Committed.Composite,
+		Receipt:     func(id string) *pb.ChangeRecord { return t.App(build.ID).AcceptedLedger().AcceptedFor(t.ID, id) },
+		ActionOwner: func(schema string) platform.App { return t.App(t.owner["action:"+schema]) },
+		Begin: func() build.CompositeDraft {
+			draft = t.newStagedDecision()
+			return build.CompositeDraft{
+				Decide: func(m platform.Member, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+					return platform.Decide(platform.NewCaller(draft, m, build.ID, false, false), app, s, at)
+				},
+				AnswerRequests: draft.answerRequests, StageObservers: draft.stageObservers,
+				BatchResult: func(receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
+					return draft.batchResult(build.ID, receipt.GetSubmission(), receipt, at)
+				},
 			}
-		}
-		return platform.CompositeAnswer{Key: key, Applied: len(edits), Digest: digest}, nil
+		},
+	}).Prepare(m, key, edits, now)
+	if err != nil || prepared == nil {
+		return answer, err
 	}
-	draft := t.newStagedDecision()
-	var receipt *pb.ChangeRecord
-	for i, edit := range edits {
-		app := t.App(t.owner["action:"+edit.Schema])
-		if app == nil || app.Manifest().ID != build.ID {
-			saved.Refusal = fmt.Sprintf("edit %d: %s is not a builder action", i+1, edit.Schema)
-			break
-		}
-		sub := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: key + "#" + strconv.Itoa(i), Target: edit.Target, Schema: &pb.SchemaRef{Name: edit.Schema, Version: 1}, Payload: edit.Payload, ExpectedRevision: edit.ExpectedRevision}
-		if refusal := t.delegatedBound(m, sub); refusal != nil {
-			saved.Refusal = fmt.Sprintf("edit %d: %s refused (%s): %s", i+1, edit.Schema, refusal.Error(), refusal.Message)
-			break
-		}
-		r, refusal := platform.Decide(platform.NewCaller(draft, m, build.ID, false, false), app, sub, now)
-		if refusal != nil {
-			saved.Refusal = fmt.Sprintf("edit %d: %s refused (%s): %s", i+1, edit.Schema, refusal.Error(), refusal.Message)
-			break
-		}
-		receipt = r
-	}
-	if saved.Refusal == "" {
-		if refusal := draft.answerRequests(now); refusal != nil {
-			saved.Refusal = fmt.Sprintf("%s: %s", refusal.Error(), refusal.Message)
-		}
-	}
-	if saved.Refusal == "" {
-		if refusal := draft.stageObservers(); refusal != nil {
-			saved.Refusal = fmt.Sprintf("%s: %s", refusal.Error(), refusal.Message)
-		}
-	}
-	if saved.Refusal == "" {
-		saved.Changes, err = draft.batchResult(build.ID, receipt.GetSubmission(), receipt, now)
-		if err != nil {
-			return platform.CompositeAnswer{}, err
-		}
-	}
-	raw, err := acceptedformat.EncodeComposite(saved)
-	if err != nil {
-		return platform.CompositeAnswer{}, err
-	}
+	saved := prepared.Saved
 	principal, _ := json.Marshal(m)
-	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.FlowVersions()}
+	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: prepared.Raw, At: now, Versions: draft.FlowVersions()}
 	if t.preparedResult != nil {
 		*t.preparedResult = preparedAccepted{entry: entry, key: saved.Key, hash: saved.RequestHash, uploads: t.preparedResult.uploads}
-		return compositeAnswer(saved)
+		return build.CompositeAnswerOf(saved)
 	}
 	committed, err := t.acceptResult(entry, saved.Key, saved.RequestHash)
 	if err != nil {
@@ -136,44 +79,23 @@ func (t *Tenant) finishCommittedComposite(m platform.Member, saved acceptedforma
 	}
 	t.acceptedResultApplied()
 	t.changed()
-	return compositeAnswer(applied)
-}
-
-type compositeRefusal string
-
-func (r compositeRefusal) Error() string { return string(r) }
-
-func compositeAnswer(saved acceptedformat.Composite) (platform.CompositeAnswer, error) {
-	if saved.Refusal != "" {
-		return platform.CompositeAnswer{}, compositeRefusal(saved.Refusal)
-	}
-	return platform.CompositeAnswer{Key: strings.TrimPrefix(saved.Key, "composite:"), Applied: len(saved.Edits), Digest: saved.Digest}, nil
+	return build.CompositeAnswerOf(applied)
 }
 
 func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, error) {
-	saved, err := acceptedformat.DecodeComposite(raw)
-	if err != nil {
-		return saved, err
-	}
-	if saved.Tenant != t.ID {
-		return saved, fmt.Errorf("composite result belongs to another tenant")
-	}
-	if prior, ok := t.Committed.Composite(saved.Key); ok {
-		if prior != saved.Digest {
-			return saved, fmt.Errorf("composite idempotency key changed")
-		}
-		return saved, nil
-	}
-	if saved.Refusal == "" {
-		batch, _, _ := acceptedformat.DecodeBatch(saved.Changes)
-		if _, err := t.applyAcceptedBatch(t.App(build.ID).AcceptedLedger(), saved.Changes); err != nil {
-			return saved, err
-		}
-		t.publishAcceptedBatch(batch)
-		t.audit.Remember(platform.AuditEntry{At: saved.At, Member: saved.Member, App: build.ID, Action: "composite", Target: saved.Key})
-	}
-	t.Committed.SaveComposite(saved.Key, saved.Digest)
-	t.Committed.SaveCompositeAnswer(saved.Key, raw)
-	t.enqueue(saved.At)
-	return saved, nil
+	return build.CompositeApply{
+		Tenant: t.ID, PriorDigest: t.Committed.Composite, Remember: t.audit.Remember, Enqueue: t.enqueue,
+		ApplyBatch: func(changes []byte) error {
+			batch, _, _ := acceptedformat.DecodeBatch(changes)
+			if _, err := t.applyAcceptedBatch(t.App(build.ID).AcceptedLedger(), changes); err != nil {
+				return err
+			}
+			t.publishAcceptedBatch(batch)
+			return nil
+		},
+		Save: func(key, digest string, raw []byte) {
+			t.Committed.SaveComposite(key, digest)
+			t.Committed.SaveCompositeAnswer(key, raw)
+		},
+	}.Apply(raw)
 }

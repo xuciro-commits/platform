@@ -1,8 +1,6 @@
 package host
 
 import (
-	"encoding/json"
-	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
@@ -12,89 +10,39 @@ import (
 	"time"
 )
 
-func encodeAcceptedInputRefusal(tenant, app, name string, m platform.Member, body []byte, at time.Time, refusal *kernel.Error) ([]byte, error) {
-	result, err := runtimekernel.InputResult(tenant, app, name, m.ID, body, at)
-	if err != nil {
-		return nil, err
-	}
-	result.Refusal = refusal
-	return runtimekernel.SealInput(result)
-}
-
 func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, now time.Time) (any, *kernel.Error) {
-	if m.ID == "" || m.Tenant != t.ID || name == "" {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The connector input has an invalid identity")
-	}
-	hash, hashErr := acceptedformat.InputHash(t.ID, a.Manifest().ID, name, m.ID, body)
-	if hashErr != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	key := "input:" + hash
-	if saved := t.Committed.Input(a.Manifest().ID + "/" + key); len(saved) != 0 {
-		return t.answerAcceptedInput(a, saved)
-	}
-	draft := t.newStagedDecision()
-	entry := t.authorizeEntry(m, a.Manifest().ID, "input:"+name, "action", now)
-	draft.Authorizations = append(draft.Authorizations, acceptedformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: "input:" + name}, Decision: entry, Roles: slices.Clone(m.RolesIn(a.Manifest().ID))})
-	answer, refusal, unsupported := decideAcceptedInput(a, draft, m, name, body, now)
-	if unsupported {
-		return nil, refusal
-	}
-	var raw []byte
-	var err error
-	if refusal != nil {
-		raw, err = encodeAcceptedInputRefusal(t.ID, a.Manifest().ID, name, m, body, now, refusal)
-	} else {
-		raw, err = draft.InputDecision(draft.sources(), a.Manifest().ID, name, m, body, answer, now)
-	}
-	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This input cannot produce a bounded accepted result")
-	}
-	result, err := acceptedformat.DecodeInput(raw)
-	if err == nil {
-		_, err = t.prepareAcceptedChanges(result.ChangePlan())
-	}
-	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	principal, _ := json.Marshal(m)
-	var versions map[string]int
-	if t.procs != nil {
-		versions = draft.FlowVersions()
-	}
-	entryResult := Entry{App: a.Manifest().ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: versions}
-	if t.preparedResult != nil {
-		*t.preparedResult = preparedAccepted{entry: entryResult, key: key, hash: hash, uploads: t.preparedResult.uploads}
-		return answer, refusal
-	}
-	committed, err := t.acceptResult(entryResult, key, hash)
-	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	return t.finishCommittedInput(a, m, name, key, hash, committed)
+	return t.AcceptInput(a, m, name, body, now, runtimekernel.InputAcceptance{CommittedInput: t.committedInput(),
+		Draft: func() runtimekernel.InputDraft {
+			draft := t.newStagedDecision()
+			return runtimekernel.InputDraft{Decision: &draft.Decision, Sources: draft.sources,
+				Decide: func(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, at time.Time) (any, *kernel.Error, bool) {
+					return decideAcceptedInput(a, draft, m, name, body, at)
+				}}
+		},
+		Authorize: t.authorizeEntry,
+		Prepare: func(plan acceptedformat.ChangePlan) error {
+			_, err := t.prepareAcceptedChanges(plan)
+			return err
+		},
+		Flows: t.procs != nil,
+		Stage: func(entry Entry, key, hash string) bool {
+			return t.stage(preparedAccepted{entry: entry, key: key, hash: hash})
+		},
+		Commit: t.acceptResult})
 }
 
-func (t *Tenant) finishCommittedInput(a platform.AcceptedInputApp, m platform.Member, name, key, hash string, committed []byte) (answer any, refusal *kernel.Error) {
-	defer func() {
-		if failure := recover(); failure != nil {
-			t.quarantine(fmt.Errorf("apply committed connector result: %v", failure))
-			answer = nil
-			refusal = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-	}()
-	result, applied, err := t.applyAcceptedInput(committed)
-	if err != nil || result.Key != key || result.RequestHash != hash || result.Member != m.ID ||
-		result.Name != name || result.App != a.Manifest().ID {
-		t.quarantine(fmt.Errorf("committed connector input differs from request: %v", err))
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+func (t *Tenant) committedInput() runtimekernel.CommittedInput {
+	return runtimekernel.CommittedInput{Settlement: t.settlement(), Apply: t.applyAcceptedInput,
+		Remember: func(e platform.AuditEntry) { t.audit.Remember(e) }}
+}
+
+func (t *Tenant) stage(candidate preparedAccepted) bool {
+	if t.preparedResult == nil {
+		return false
 	}
-	t.acceptedResultApplied()
-	if applied && result.Refusal == nil {
-		t.audit.Remember(platform.AuditEntry{At: result.At, Member: m.ID, App: result.App, Action: "input:" + name})
-		t.enqueue(result.At)
-		t.changedOwner(result.App)
-	}
-	return t.answerAcceptedInput(a, committed)
+	candidate.uploads = t.preparedResult.uploads
+	*t.preparedResult = candidate
+	return true
 }
 
 func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m platform.Member, name string, body []byte, at time.Time) (answer any, refusal *kernel.Error, unsupported bool) {
@@ -113,23 +61,6 @@ func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m p
 	return answer, refusal, false
 }
 
-func (t *Tenant) answerAcceptedInput(a platform.AcceptedInputApp, raw []byte) (any, *kernel.Error) {
-	result, err := acceptedformat.DecodeInput(raw)
-	if err != nil || result.Tenant != t.ID || result.App != a.Manifest().ID {
-		t.quarantine(fmt.Errorf("saved connector answer is incompatible: %v", err))
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	if result.Refusal != nil {
-		return nil, result.Refusal
-	}
-	answer, err := a.DecodeAcceptedInput(result.Answer)
-	if err != nil {
-		t.quarantine(fmt.Errorf("saved connector answer cannot be decoded: %w", err))
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	return answer, nil
-}
-
 func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, error) {
 	return t.ApplyInputResult(raw, runtimekernel.InputApply{Changes: t.changeApply(), Published: t.publishAcceptedChanges, Refused: t.refused,
 		Input: func(app string) platform.AcceptedInputApp { return t.inputs[app] }})
@@ -143,5 +74,5 @@ func (t *Tenant) finishPreparedInput(m platform.Member, name string, candidate p
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	return t.finishCommittedInput(t.App(candidate.entry.App).(platform.AcceptedInputApp), m, name, candidate.key, candidate.hash, committed)
+	return t.FinishInput(t.App(candidate.entry.App).(platform.AcceptedInputApp), m, name, candidate.key, candidate.hash, committed, t.committedInput())
 }

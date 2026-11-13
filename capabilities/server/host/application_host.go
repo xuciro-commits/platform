@@ -10,8 +10,10 @@ import (
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	appowner "platformserver/services/apps"
@@ -103,44 +105,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 			quota := t.ai.Quota(m, t.limits(), at)
 			return &quota
 		},
-		Refusals: func() []appowner.Refusal {
-			out := []appowner.Refusal{}
-			for _, r := range t.Committed.AllRefusals() {
-				out = append(out, appowner.Refusal{Submission: r.Submission, Error: r.Error, Business: r.Business, Issues: r.Issues})
-			}
-			return out
-		},
-		BusinessFacts: func() []platform.BusinessRefusalFact {
-			out := []platform.BusinessRefusalFact{}
-			for _, raw := range t.Committed.AllAnswers("business") {
-				var header struct{ Kind string }
-				if json.Unmarshal(raw, &header) != nil || header.Kind != "record-batch" {
-					continue
-				}
-				result, _, err := acceptedformat.DecodeBatch(raw)
-				if err == nil {
-					out = append(out, result.Business...)
-				}
-			}
-			return out
-		},
-		ActiveVersions: func() []appowner.ActiveVersion {
-			out := []appowner.ActiveVersion{}
-			for key, raw := range t.Committed.AllAnswers("active") {
-				if len(key) < 8 || key[:8] != "release:" {
-					continue
-				}
-				release, err := acceptedformat.DecodeRelease(raw)
-				if err != nil || !release.Active {
-					continue
-				}
-				candidate, err := platform.ReadCandidate(release.CandidateID, release.Bytes)
-				if err == nil {
-					out = append(out, appowner.ActiveVersion{Candidate: candidate, At: release.At})
-				}
-			}
-			return out
-		},
+		Refusals: t.Committed.AllRefusals, Answers: t.Committed.AllAnswers,
 		AuthorizationMember: t.authorizationMember,
 		RefreshRunIndex: func(key string, now time.Time, rebuild func() bool) {
 			t.runIndex.Refresh(key, now, func() ([]monitoring.MonitoringCoverage, bool) { return nil, rebuild() })
@@ -154,27 +119,15 @@ func (t *Tenant) applicationContext() appowner.Context {
 		},
 		RuntimeOf: t.ApplicationRuntimeOf,
 		RunsPage:  t.ApplicationRuns,
-		RecordHistory: func(m platform.Member, typ, id string, now time.Time) ([]appowner.DecisionChange, *kernel.Error) {
+		RecordHistory: func(m platform.Member, typ, id string, now time.Time) ([]records.RecordChange, *kernel.Error) {
 			view, refusal := t.recordDetail(m, typ, id, now, objects.RecordSectionHistory)
 			if refusal != nil {
 				return nil, refusal
 			}
-			changes := []appowner.DecisionChange{}
-			for _, change := range view.History {
-				changes = append(changes, appowner.DecisionChange{Change: change.Change, Schema: change.Schema, At: change.At})
-			}
-			return changes, nil
+			return view.History, nil
 		},
-		RecordOwner: func(typ string) string { return t.Projection.Type(typ).Info().App },
-		ReceiptKeys: func(owner string) map[string]string {
-			keys := map[string]string{}
-			for _, receipt := range t.App(owner).AcceptedLedger().RecordsFor(t.ID) {
-				if _, seen := keys[receipt.GetChangeId()]; !seen {
-					keys[receipt.GetChangeId()] = receipt.GetSubmission().GetIdempotencyKey()
-				}
-			}
-			return keys
-		},
+		RecordOwner:     func(typ string) string { return t.Projection.Type(typ).Info().App },
+		Receipts:        func(owner string) []*pb.ChangeRecord { return t.App(owner).AcceptedLedger().RecordsFor(t.ID) },
 		Decision:        func(key string) *platform.DecisionDefinition { return t.Committed.DecisionDefinition(key) },
 		SchemaVersion:   func(key string) (platform.SchemaVersion, bool) { return t.Committed.SchemaVersion(key) },
 		VisibleEvidence: t.visibleObservationEvidence,

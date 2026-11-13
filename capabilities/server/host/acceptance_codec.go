@@ -6,8 +6,10 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
+	"time"
 )
 
 func (d *stagedDecision) sources() runtimekernel.ResultSources {
@@ -19,16 +21,7 @@ func (d *stagedDecision) sources() runtimekernel.ResultSources {
 func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {
 	return t.ApplyRecordResult(l, raw, runtimekernel.RecordApply{App: t.App, CheckBindings: build.CheckRunApplicationBindings, DefinitionType: build.AppType,
 		Claims: func(result acceptedformat.Record, receipt *pb.ChangeRecord) (func() error, error) {
-			var source *runtimekernel.ClaimSet
-			if len(result.Claims) > 0 {
-				source = &runtimekernel.ClaimSet{Origin: result.Origin, Claims: result.Claims}
-				if _, err := t.claims.Prepare(t.ID, result.Row.Type, result.Row.ID, receipt.GetChangeId(), source); err != nil {
-					return nil, err
-				}
-			}
-			return func() error {
-				return t.claims.Apply(t.ID, result.Row.Type, result.Row.ID, receipt.GetChangeId(), result.At, source)
-			}, nil
+			return t.claims.RecordClaims(t.ID, result, receipt)
 		}})
 }
 
@@ -56,4 +49,59 @@ func (t *Tenant) acceptedResultApplied() {
 		t.closeRecordRead()
 		t.openRecordRead(context.Background())
 	}
+}
+
+func (t *Tenant) settlement() runtimekernel.Settlement {
+	return runtimekernel.Settlement{
+		Quarantine:        t.quarantine,
+		Applied:           t.acceptedResultApplied,
+		Enqueue:           t.enqueue,
+		ChangedOwner:      t.changedOwner,
+		OperationsChanged: t.operationsChanged,
+	}
+}
+
+func (t *Tenant) changeApply() runtimekernel.ChangeApply {
+	return runtimekernel.ChangeApply{Batch: t.batchApply(),
+		Check: func(plan acceptedformat.ChangePlan) error {
+			if err := t.validateAcceptedControl(plan.Control); err != nil {
+				return err
+			}
+			if err := t.notices.Check(plan.Notices); err != nil {
+				return err
+			}
+			if err := t.validateAcceptedIntents(plan.Intents); err != nil {
+				return err
+			}
+			if err := runtimekernel.CheckStates(t.states, plan.States); err != nil {
+				return err
+			}
+			return t.sequences.Check(plan.SequenceBases, plan.Sequences)
+		},
+		Apply: func(plan acceptedformat.ChangePlan) error {
+			if err := t.applyAcceptedControl(plan.Control); err != nil {
+				return err
+			}
+			if err := runtimekernel.ApplyStates(t.states, plan.States); err != nil {
+				return err
+			}
+			t.applyAcceptedNotices(plan.Notices)
+			t.installAcceptedIntents(plan.Intents)
+			t.sequences.Set(plan.Sequences)
+			return nil
+		}}
+}
+
+func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*runtimekernel.PreparedChanges, error) {
+	return t.PrepareChanges(plan, t.changeApply())
+}
+
+func (t *Tenant) publishAcceptedChanges(p *runtimekernel.PreparedChanges) {
+	if p.Child != nil {
+		t.publishAcceptedBatch(p.Child.Result)
+	}
+}
+
+func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, member string, at time.Time) (*records.Store, error) {
+	return runtimekernel.ApplyDirectRows(t.Projection, rows, member, at, build.CheckRunApplicationBindings)
 }

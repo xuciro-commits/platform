@@ -1,7 +1,6 @@
 package host
 
 import (
-	"encoding/json"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -28,34 +27,35 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 		return objects.ContextView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	m := *reader
-	view, err := t.recordDetail(m, typ, id, now, objects.RecordSectionHistory, objects.RecordSectionLinks)
-	if err != nil {
-		return objects.ContextView{}, err
-	}
-	t.Projection.Lock()
-	et := t.Projection.Type(typ)
-	t.Projection.Unlock()
-	out := objects.RecordContext(typ, view.Record, view.History, view.Related, et.Info())
-	if t.linker != nil {
-		for _, ref := range t.linker.Links(t.caller(m, t.linker.(platform.App), false), typ+"/"+id) {
-			if t.readable(m, ref, now) {
-				out.Links = append(out.Links, ref)
+	records := func(present bool, typ string) func(q platform.Query) ([]any, bool) {
+		return func(q platform.Query) ([]any, bool) {
+			if !present {
+				return nil, false
 			}
+			page, err := t.recordsRead(m, typ, q, now)
+			return page.Records, err == nil
 		}
 	}
-	if t.procs != nil {
-		key, _ := json.Marshal([]any{[]any{"key", "=", id}})
-		if instances, err := t.recordsRead(m, platform.FlowInstanceType, platform.Query{Domain: key, Sort: []string{"id"}}, now); err == nil {
-			out.AddFlows(instances.Records)
-		}
-	}
-	if t.tasks != nil {
-		about, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}})
-		if tasks, err := t.recordsRead(m, platform.WorkTaskType, platform.Query{Domain: about, Sort: []string{"id"}}, now); err == nil {
-			out.AddTasks(tasks.Records)
-		}
-	}
-	return out, nil
+	return objects.ContextReader{
+		Detail: func(sections ...string) (objects.RecordView, *kernel.Error) {
+			return t.recordDetail(m, typ, id, now, sections...)
+		},
+		Info: func() platform.EntityInfo {
+			t.Projection.Lock()
+			et := t.Projection.Type(typ)
+			t.Projection.Unlock()
+			return et.Info()
+		},
+		Links: func(entity string) []string {
+			if t.linker == nil {
+				return nil
+			}
+			return t.linker.Links(t.caller(m, t.linker.(platform.App), false), entity)
+		},
+		Readable: func(ref string) bool { return t.readable(m, ref, now) },
+		Flows:    records(t.procs != nil, platform.FlowInstanceType),
+		Tasks:    records(t.tasks != nil, platform.WorkTaskType),
+	}.Read(typ, id)
 }
 
 func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []build.Hit {
@@ -72,15 +72,4 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 		search.Owned = owner.Manifest().Entities
 	}
 	return search.Find(q)
-}
-
-func (t *Tenant) protocolActions(protocol string) []platform.Action {
-	for _, a := range t.LiveApps() {
-		for _, p := range a.Manifest().Provides {
-			if p.Protocol.ID() == protocol {
-				return p.Protocol.Actions
-			}
-		}
-	}
-	return nil
 }

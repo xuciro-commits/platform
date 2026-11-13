@@ -7,7 +7,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 	"slices"

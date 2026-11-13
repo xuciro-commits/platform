@@ -4,6 +4,7 @@ import (
 	"context"
 	"platformserver/services/resources/monitoring"
 	"slices"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -107,4 +108,13 @@ func (t *Tenant) preparedUploads() []string {
 		return nil
 	}
 	return t.preparedResult.uploads
+}
+
+func (t *Tenant) stageCandidate(draft *stagedDecision, app string, body, principal []byte, key, hash string, at time.Time, finish func(preparedAccepted)) {
+	candidate := preparedAccepted{entry: Entry{App: app, Kind: "accepted-result", Principal: principal, Body: body, At: at, Versions: draft.FlowVersions()}, key: key, hash: hash, uploads: t.preparedUploads()}
+	if t.preparedResult != nil {
+		*t.preparedResult = candidate
+		return
+	}
+	finish(candidate)
 }

@@ -110,3 +110,48 @@ func ControlNext(current map[string]json.RawMessage, saved *acceptedformat.Contr
 	}
 	return current, nil
 }
+
+func ControlImages(values map[string]any) (map[string]json.RawMessage, error) {
+	out := map[string]json.RawMessage{}
+	for kind, v := range values {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		out[kind] = raw
+	}
+	return out, nil
+}
+
+func ValidateControl(saved *acceptedformat.Control, capture func() (map[string]json.RawMessage, error), fork func(map[string]json.RawMessage) error) error {
+	if saved == nil {
+		return nil
+	}
+	current, err := capture()
+	if err != nil {
+		return err
+	}
+	current, err = ControlNext(current, saved)
+	if err != nil {
+		return err
+	}
+	return fork(current)
+}
+
+func ApplyControl(saved *acceptedformat.Control, install func(kind string, image json.RawMessage) error, patchEffects func(json.RawMessage) error) error {
+	if saved == nil {
+		return nil
+	}
+	for _, change := range saved.Changes {
+		var err error
+		if change.Kind == "effects" {
+			err = patchEffects(change.Image)
+		} else {
+			err = install(change.Kind, change.Image)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/services/resources/authoring"
+	"slices"
+	"time"
 )
 
 type PromotionRequest struct {
@@ -34,10 +38,9 @@ type PromotionDestination struct {
 	HasApp      func(string) bool
 	PriorHash   func(key string) (string, bool)
 	PriorBytes  func(candidate string) json.RawMessage
-	Hash        func() (string, error)
 }
 
-func (t PromotionDestination) Preflight(candidate platform.ReleaseCandidate, raw []byte, key string) (bool, error) {
+func (t PromotionDestination) Preflight(candidate platform.ReleaseCandidate, raw []byte, key string, hash func() (string, error)) (bool, error) {
 	if err := MissingAssetHost(candidate, t.ID, t.HasApp); err != nil {
 		return false, err
 	}
@@ -45,7 +48,7 @@ func (t PromotionDestination) Preflight(candidate platform.ReleaseCandidate, raw
 		return false, fmt.Errorf("tenant %s is quarantined", t.ID)
 	}
 	if prior, ok := t.PriorHash("promotion:" + key); ok {
-		hash, err := t.Hash()
+		hash, err := hash()
 		if err != nil || prior != hash {
 			return false, fmt.Errorf("promotion key belongs to another request")
 		}
@@ -71,4 +74,99 @@ func ReadSealed(id string, artifact platform.SealedArtifact, open func() (io.Rea
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+type PromotionPlan struct {
+	Result    PromotionResult
+	Candidate platform.ReleaseCandidate
+	Raw       []byte
+	From      string
+	Key       string
+	Activate  bool
+	Member    platform.Member
+	At        time.Time
+}
+
+func PlanPromotion(from, to, candidateID, key string, activate bool, member platform.Member, now time.Time, sealed func(id string, now time.Time) ([]byte, platform.SealedArtifact, error)) (PromotionPlan, error) {
+	if !build.HoldsIndependentRole(member, build.Builder, build.Publisher) {
+		return PromotionPlan{}, fmt.Errorf("promotion needs the builder or publisher role in %s", to)
+	}
+	raw, artifact, err := sealed(candidateID, now)
+	if err != nil {
+		return PromotionPlan{}, err
+	}
+	candidate, err := platform.ReadCandidate(candidateID, raw)
+	if err != nil {
+		return PromotionPlan{}, err
+	}
+	return PromotionPlan{
+		Result:    PromotionResult{From: from, To: to, Candidate: candidate.ID, Digest: artifact.Digest, Active: activate, Key: key, Assets: len(candidate.Assets)},
+		Candidate: candidate, Raw: raw, From: from, Key: key, Activate: activate, Member: member, At: now,
+	}, nil
+}
+
+func (p PromotionPlan) Prepare(destination PromotionDestination, lifecycle func(platform.ReleaseCandidate, platform.Member, time.Time, bool) ([]platform.ReleaseInstallation, json.RawMessage, error), commit func(acceptedformat.Release) error) (PromotionResult, error) {
+	replay, err := destination.Preflight(p.Candidate, p.Raw, p.Key, func() (string, error) {
+		return acceptedformat.ReleaseRequestHash(destination.ID, p.Member.ID, "promotion:"+p.Key, p.Candidate.ID, p.Activate)
+	})
+	if err != nil || replay {
+		return p.Result, err
+	}
+	var installations []platform.ReleaseInstallation
+	var bootstrap json.RawMessage
+	if p.Activate {
+		if installations, bootstrap, err = lifecycle(p.Candidate, p.Member, p.At, false); err != nil {
+			return p.Result, err
+		}
+	}
+	saved := acceptedformat.Release{Version: 2, Kind: "release-result", Tenant: destination.ID, App: build.ID, Member: p.Member.ID,
+		Key: "promotion:" + p.Key, At: p.At.UTC(), CandidateID: p.Candidate.ID, Bytes: slices.Clone(p.Raw), Active: p.Activate, Installations: installations, Bootstrap: bootstrap, From: p.From}
+	if p.Activate {
+		saved.Version = 4
+	}
+	if saved.RequestHash, err = acceptedformat.ReleaseRequestHash(destination.ID, p.Member.ID, saved.Key, p.Candidate.ID, p.Activate); err != nil {
+		return p.Result, err
+	}
+	return p.Result, commit(saved)
+}
+
+type Sealer struct {
+	Tenant string
+	Raw    func(id string) ([]byte, error)
+	Put    func(key string, raw []byte) error
+	Commit func(artifact platform.SealedArtifact) error
+	Find   func(id string) (platform.SealedArtifact, bool)
+	Open   func(key string) (io.ReadCloser, error)
+}
+
+func (s Sealer) Seal(id string, now time.Time) (platform.SealedArtifact, error) {
+	raw, err := s.Raw(id)
+	if err != nil {
+		return platform.SealedArtifact{}, err
+	}
+	artifact, err := SealArtifact(s.Tenant, id, raw, now)
+	if err != nil {
+		return platform.SealedArtifact{}, err
+	}
+	if err := s.Put(artifact.Key, raw); err != nil {
+		return platform.SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
+	}
+	if err := s.Commit(artifact); err != nil {
+		return platform.SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", artifact.Candidate)
+	}
+	return artifact, nil
+}
+
+func (s Sealer) SealedOrSeal(id string, now time.Time) ([]byte, platform.SealedArtifact, error) {
+	if _, ok := s.Find(id); !ok {
+		if _, err := s.Seal(id, now); err != nil {
+			return nil, platform.SealedArtifact{}, err
+		}
+	}
+	artifact, ok := s.Find(id)
+	if !ok {
+		return nil, platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not sealed", id)
+	}
+	raw, err := ReadSealed(id, artifact, func() (io.ReadCloser, error) { return s.Open(artifact.Key) })
+	return raw, artifact, err
 }

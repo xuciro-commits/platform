@@ -255,7 +255,23 @@ type PreparationHooks struct {
 	Drafts    func() (build.ConstructionDrafts, bool)
 	Records   func(typ string, q platform.Query) (int, []any, *kernel.Error)
 	App       func(string) platform.App
-	Model     func(string, string, platform.ModelOptions) (string, string)
+	Resolve   func(purpose, model string, options platform.ModelOptions) (string, *kernel.Error)
+	Callable  func(model string) *kernel.Error
+}
+
+func (h PreparationHooks) modelProblem(purpose, model string, options platform.ModelOptions) (string, string) {
+	resolved, refusal := h.Resolve(purpose, model, options)
+	if refusal != nil {
+		problem := refusal.Message
+		if problem == "" {
+			problem = "The selected model is disabled or missing"
+		}
+		return model, problem
+	}
+	if refusal = h.Callable(resolved); refusal != nil {
+		return resolved, "Ask an AI administrator to grant access to this model"
+	}
+	return resolved, ""
 }
 
 func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (PackagePreparation, *kernel.Error) {
@@ -301,7 +317,7 @@ func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (Pac
 		}
 		return state, nil
 	}
-	answer, err := Preparation(id, version, blueprint, installed, candidate, m, PreparationSource{Find: find, App: hooks.App, Model: hooks.Model})
+	answer, err := Preparation(id, version, blueprint, installed, candidate, m, PreparationSource{Find: find, App: hooks.App, Model: hooks.modelProblem})
 	if err != nil {
 		return fail(err)
 	}

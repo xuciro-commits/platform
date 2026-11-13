@@ -122,18 +122,14 @@ func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]
 	return releaseowner.ExtensionReview(candidate, t.releaseStoredShapes(), shapes, t.Entity, (hostView{t: t}).EntitySource)
 }
 
-func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, members ...platform.Member) (*releaseowner.ReleaseUpgradePlan, error) {
-	var member platform.Member
-	if len(members) > 0 {
-		member = members[0]
-	}
+func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, member platform.Member) (*releaseowner.ReleaseUpgradePlan, error) {
 	installations, bootstrap, err := t.prepareReleaseLifecycleLocked(candidate, member, time.Now().UTC(), true)
 	if err != nil {
 		return nil, err
 	}
 	records := t.Projection
 	if len(bootstrap) > 0 {
-		prepared, err := t.prepareAcceptedBatch(t.App("build").AcceptedLedger(), bootstrap)
+		prepared, err := t.PrepareBatch(t.App("build").AcceptedLedger(), bootstrap, t.batchApply())
 		if err != nil || prepared == nil {
 			return nil, fmt.Errorf("upgrade bootstrap cannot prepare: %v", err)
 		}

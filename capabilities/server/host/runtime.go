@@ -5,11 +5,12 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/kernel/records"
+	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 )
 
 type runtime struct {
+	runtimekernel.SharedRuntime
 	t      *Tenant
 	scoped bool
 }
@@ -23,17 +24,6 @@ func (r runtime) CheckEnterpriseUsage(c platform.Caller, id, until string, delet
 }
 func (r runtime) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
 	return r.t.checkTenantConnection(c, id, now)
-}
-
-func (runtime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	if !c.Replaying {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A new decision requires a private runtime")
-	}
-	return app.Submit(c, s, at)
-}
-
-func (runtime) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
-	return decide()
 }
 
 func (r runtime) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
@@ -71,50 +61,31 @@ func (r runtime) Emit(c platform.Caller, kind, key, entity string, data any, now
 	return r.t.emitFor(c, kind, key, entity, data, now)
 }
 
+func (r runtime) roles() runtimekernel.OptionalRoles {
+	return runtimekernel.OptionalRoles{Directory: r.t.directory, Linker: r.t.linker, Tasks: r.t.tasks}
+}
+
 func (r runtime) Units(c platform.Caller, structure string, now time.Time) []string {
-	if r.t.directory == nil {
-		return nil
-	}
-	return r.t.directory.Units("member:"+c.ID, structure, c.Today(now))
+	return r.roles().MemberUnits(c, structure, now)
 }
 
-func (r runtime) Element(c platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
-	if r.t.directory == nil {
-		return platform.ElementInfo{}, false
-	}
-	return r.t.directory.Element(id, now.UTC().Format(time.DateOnly))
+func (r runtime) Element(_ platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
+	return r.roles().Element(id, now)
 }
 
-func (r runtime) Related(c platform.Caller, element, stereotype string, outgoing bool, now time.Time) []string {
-	if r.t.directory == nil {
-		return nil
-	}
-	return r.t.directory.Related(element, stereotype, outgoing, now.UTC().Format(time.DateOnly))
+func (r runtime) Related(_ platform.Caller, element, stereotype string, outgoing bool, now time.Time) []string {
+	return r.roles().Related(element, stereotype, outgoing, now)
 }
 
-func (r runtime) Links(c platform.Caller, entity string) []string {
-	var out []string
-	if r.t.linker != nil {
-		out = r.t.linker.Links(c, entity)
-	}
-	return records.AppendRelationNeighbors(out, c.OwnedRelations(entity), entity)
-}
+func (r runtime) Links(c platform.Caller, entity string) []string { return r.roles().Links(c, entity) }
 
 func (r runtime) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
-	if r.t.linker == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	return r.t.linker.Link(c, from, to, key, now)
+	return r.roles().Link(c, from, to, key, now)
 }
 
 func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
-	if r.t.tasks == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	return r.t.tasks.Assign(c, rec, a)
+	return r.roles().Assign(c, rec, a)
 }
-
-func (runtime) StagedDecision() platform.StagedDecision { return nil }
 
 func (r runtime) Readable(c platform.Caller, ref string) bool {
 	return r.t.readable(c.Member, ref, time.Now())
@@ -124,24 +95,7 @@ func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *ker
 	return r.t.router().BoundProvider(c, protocol)
 }
 
-func (r runtime) Seen(c platform.Caller, keys ...string)          { r.t.notices.MarkKeysRead(c.App, keys) }
-func (runtime) InputRefused(*kernel.Error, []platform.FieldIssue) {}
-func (runtime) RequestApproval(platform.Caller, string, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Approval requests require a private decision")
-}
-func (runtime) RequestOperation(platform.Caller, *pb.ChangeRecord, platform.OperationRequest) (platform.OperationCall, *kernel.Error) {
-	return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation requests require a private decision")
-}
-func (runtime) CancelOperation(platform.Caller, *pb.ChangeRecord, string) *kernel.Error {
-	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation cancellation requires a private decision")
-}
-func (runtime) RequestCompilation(platform.Caller, *pb.ChangeRecord, string, string, platform.CodeBuildRequest) (platform.OperationCall, *kernel.Error) {
-	return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Compilation requests require a private decision")
-}
-func (runtime) RequestFunction(platform.Caller, *pb.ChangeRecord, platform.FunctionRequest) (platform.FunctionCall, *kernel.Error) {
-	return platform.FunctionCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Function requests require a private decision")
-}
-
+func (r runtime) Seen(c platform.Caller, keys ...string) { r.t.notices.MarkKeysRead(c.App, keys) }
 func (r runtime) AuthorizationEngine() platform.AuthorizationEngine {
 	return r.t.services.Authorization
 }

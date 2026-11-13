@@ -5,6 +5,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"slices"
@@ -151,7 +152,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 			out.Monitoring.ConstraintFailures++
 		}
 	}
-	for _, fact := range ctx.BusinessFacts() {
+	for _, fact := range ctx.businessFacts() {
 		typ, _, _ := strings.Cut(fact.Subject, "/")
 		if !model[typ] || fact.Member != m.ID && !ctx.Readable(m, fact.Subject, now) {
 			continue
@@ -175,7 +176,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 	if count := out.Monitoring.Accepted + out.Monitoring.Refused; count > 0 {
 		out.Monitoring.RefusalRate = float64(out.Monitoring.Refused) / float64(count)
 	}
-	for _, release := range ctx.ActiveVersions() {
+	for _, release := range ctx.activeVersions() {
 		candidate := release.Candidate
 		if !slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == ref }) {
 			continue
@@ -273,4 +274,37 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		out.Recovery.State = "attention"
 	}
 	return out, nil
+}
+
+func (ctx Context) businessFacts() []platform.BusinessRefusalFact {
+	out := []platform.BusinessRefusalFact{}
+	for _, raw := range ctx.Answers("business") {
+		var header struct{ Kind string }
+		if json.Unmarshal(raw, &header) != nil || header.Kind != "record-batch" {
+			continue
+		}
+		result, _, err := acceptedformat.DecodeBatch(raw)
+		if err == nil {
+			out = append(out, result.Business...)
+		}
+	}
+	return out
+}
+
+func (ctx Context) activeVersions() []ActiveVersion {
+	out := []ActiveVersion{}
+	for key, raw := range ctx.Answers("active") {
+		if !strings.HasPrefix(key, "release:") {
+			continue
+		}
+		release, err := acceptedformat.DecodeRelease(raw)
+		if err != nil || !release.Active {
+			continue
+		}
+		candidate, err := platform.ReadCandidate(release.CandidateID, release.Bytes)
+		if err == nil {
+			out = append(out, ActiveVersion{Candidate: candidate, At: release.At})
+		}
+	}
+	return out
 }

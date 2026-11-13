@@ -1,11 +1,6 @@
 package host
 
-import (
-	"fmt"
-	"net/http"
-	"sync"
-	"time"
-)
+import "sync"
 
 type changes struct {
 	mu          sync.Mutex
@@ -86,37 +81,4 @@ func (t *Tenant) changeState() (int64, int64, <-chan struct{}) {
 		c.wake = make(chan struct{})
 	}
 	return c.seq, c.data, c.wake
-}
-
-func followChanges(w http.ResponseWriter, r *http.Request, t *Tenant) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	var data int64 = -1
-	for {
-		seq, nextData, wake := t.changeState()
-		event := "operations"
-		if data != nextData {
-			event = "changed"
-		}
-		data = nextData
-		fmt.Fprintf(w, "event: %s\ndata: %d\n\n", event, seq)
-		flusher.Flush()
-		for waiting := true; waiting; {
-			select {
-			case <-r.Context().Done():
-				return
-			case <-wake:
-				waiting = false
-				time.Sleep(150 * time.Millisecond)
-			case <-time.After(25 * time.Second):
-				fmt.Fprint(w, ": keep-alive\n\n")
-				flusher.Flush()
-			}
-		}
-	}
 }

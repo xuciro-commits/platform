@@ -4,7 +4,6 @@ import releaseowner "platformserver/services/devops/releases"
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"slices"
 	"time"
@@ -198,13 +197,6 @@ func (t *Tenant) registerInstalledAsset(plan platform.AssetInstallation) error {
 	}
 	t.setDefinitions(append(t.definitions, definition))
 	return nil
-}
-
-func (t *Tenant) anchorReleaseRecords(draft *records.Store) error {
-	if draft == nil {
-		return fmt.Errorf("release has no prepared record view")
-	}
-	return draft.Anchor(t.Projection)
 }
 
 func (t *Tenant) registerOwnedAssetMetadata() error {

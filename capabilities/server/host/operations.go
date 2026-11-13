@@ -151,23 +151,23 @@ func (t *Tenant) replay(now time.Time, replaying bool) automation.Replay {
 		},
 		Finish:  func(id string, generation uint32, failed bool) { t.works.Finish(id, generation, failed) },
 		SetHops: func(n int) { t.hops = n },
-		Failed:  func(title, why, id string) { t.failedWork(title, why, id, now, replaying) },
+		Failed: func(title, why, id string) {
+			t.failedWork(func() platform.Caller { return t.automation(controlowner.PlatformApp, replaying) }, title, why, id, now)
+		},
 		Observe: func(source, runID, app, resource, status, title, detail string) {
 			t.observeOwnerRun(now, source, runID, app, resource, status, title, detail)
 		}}
 }
 
-func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool) {
+func (t *Tenant) failedWork(caller func() platform.Caller, title, why, id string, now time.Time) {
 	if t.App(controlowner.PlatformApp) == nil {
 		return
 	}
-	t.automation(controlowner.PlatformApp, replaying).Notify(platform.Notification{Title: title, Body: why + ". Retry it in Settings → Automation once the cause is fixed.",
+	caller().Notify(platform.Notification{Title: title, Body: why + ". Retry it in Settings → Automation once the cause is fixed.",
 		Key: "failed:" + id}, now, platform.Recipient{AppRole: controlowner.Admin})
 }
 
 func (t *Tenant) Tasks() []automation.Task { return t.work.Tasks(t.apps) }
-
-func (t *Tenant) retry(id string, now time.Time) bool { return t.work.Retried(id, now) }
 
 func (t *Tenant) refused(member, input string, err *kernel.Error, now time.Time) {
 	t.connectors.Refused(member, input, err, now)
@@ -185,7 +185,13 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 			delivery[m] = d.Reach(m)
 		}
 	}
-	return t.notice(c, n, now, members, delivery)
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	out := t.notices.Deliver(c.App, n, now, members, delivery, func(x platform.Notification, to platform.Reach) {
+		t.outbound.Add(trace.SpanContext{}, t.planMailNotice(x, to)...)
+	})
+	t.acted += len(out)
+	return out
 }
 
 func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
@@ -202,28 +208,6 @@ func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Reci
 			}
 			return t.directory.Holders(structure, unit, role, date)
 		})
-}
-
-func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Time, members []string, delivery map[string]platform.Reach) []string {
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	var out []string
-	for _, m := range members {
-		to, known := delivery[m]
-		if !known {
-			to = platform.Reach{InApp: true}
-		}
-		x := n
-		x.App, x.At, x.Read = c.App, now, !to.InApp
-		x, posted := t.notices.Post(x, m)
-		if !posted {
-			continue
-		}
-		t.outbound.Add(trace.SpanContext{}, t.planMailNotice(x, to)...)
-		out = append(out, m)
-	}
-	t.acted += len(out)
-	return out
 }
 
 func (t *Tenant) setting(c platform.Caller, name string) string {
@@ -293,7 +277,7 @@ func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) 
 	if !known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	return func(*pb.ChangeRecord) { t.retry(id, now) }, nil
+	return func(*pb.ChangeRecord) { t.work.Retried(id, now) }, nil
 }
 
 func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
@@ -310,4 +294,49 @@ func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.
 
 func (t *Tenant) workLoop() automation.WorkLoop {
 	return automation.WorkLoop{Board: &t.work, Apps: t.apps, Active: t.OwnerActive, Attempt: t.attempt, Run: t.run}
+}
+
+func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
+	return runtimekernel.CheckIntents(t.ID, intents, func(app string) bool { return t.App(app) != nil }, func(id string) bool {
+		return t.outbound.Any(func(e actions.Queued) bool { return e.ID == id })
+	})
+}
+
+func (t *Tenant) installAcceptedIntents(intents []platform.Effect) {
+	t.outbound.Add(t.current(), intents...)
+}
+
+func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
+	apps := slices.Clone(d.tenant.apps)
+	if i, ok := d.tenant.appIndex[controlowner.PlatformApp]; ok {
+		apps[i] = d.stateApp(apps[i])
+	}
+	view := &Tenant{ownerSet: d.tenant.with(apps), directory: d.directoryView()}
+	return view.recipients(c, now, to)
+}
+
+func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
+	console, _ := d.tenant.App(controlowner.PlatformApp).(platform.IdentityProfile)
+	if private, ok := d.States[controlowner.PlatformApp].(platform.IdentityProfile); ok {
+		console = private
+	}
+	return d.Notices.Deliver(c.App, n, now, d.recipients(c, now, to), console, func(x platform.Notification, reach platform.Reach) []platform.Effect {
+		router := d.routingTenant()
+		router.opsMu.Lock()
+		defer router.opsMu.Unlock()
+		return router.planMailNotice(x, reach)
+	})
+}
+
+func (d *stagedDecision) Seen(c platform.Caller, keys ...string) { d.Notices.Seen(c.App, keys) }
+
+func (t *Tenant) applyAcceptedNotices(n *acceptedformat.Notices) {
+	if n == nil {
+		return
+	}
+	t.notices.Restore(slices.Clone(n.Notices), n.Seq)
+	t.opsMu.Lock()
+	t.acted += n.Seq - n.Base
+	t.opsMu.Unlock()
+	t.outbound.Add(t.current(), n.Effects...)
 }

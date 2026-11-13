@@ -202,6 +202,8 @@ type ObservationReads struct {
 	LevelRank      func(string) int
 	Query          func(platform.ObservationQuery) (platform.ObservationPage, error)
 	Summarize      func(member string, from, to time.Time) (platform.ObservationSummary, error)
+	Audit          func(platform.AuditQuery) (platform.AuditPage, error)
+	PersonalReads  func(platform.PersonalReadQuery) (platform.PersonalReadPage, error)
 	Remember       func(action, target string)
 	Flush          func()
 	Dropped        func() int64

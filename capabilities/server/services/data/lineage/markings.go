@@ -2,10 +2,12 @@ package lineage
 
 import (
 	"reflect"
+	"slices"
 	"sync"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
+	build "platformserver/services/resources/authoring"
 )
 
 type MarkingIndex struct {
@@ -124,4 +126,14 @@ func (c *MarkingCache[K]) Get(key K, generation uint64, image bool, build func()
 		shared.index = index
 	}
 	return index
+}
+
+func (i MarkingIndex) Marked(id string) map[platform.AssetRef]bool {
+	marked := map[platform.AssetRef]bool{}
+	for _, node := range i.Graph.Nodes {
+		if slices.Contains(node.EffectiveCompartments, id) || slices.Contains(platform.Markings[1:], id) && platform.MarkingRank(node.Effective) >= platform.MarkingRank(id) {
+			marked[platform.AssetRef{App: build.ID, Kind: platform.AssetKind(node.Kind), Name: node.Name}] = true
+		}
+	}
+	return marked
 }

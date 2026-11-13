@@ -1,19 +1,16 @@
 package host
 
-import transport "platformserver/kernel/transport"
-
 import (
 	"encoding/json"
 	"io"
 	"net/http"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/kernel/transport"
+	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
 	"slices"
-	"strconv"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-	"platformserver/platform"
 )
 
 func (h *Host) routesIntegration(rt *routes) {
@@ -74,11 +71,7 @@ func (h *Host) routesIntegration(rt *routes) {
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/capabilities/calls/compute/{id}", Summary: "Read a retained compute result after rechecking member and protected sources", Answer: platform.OperationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.ReadOperation(r.Context(), m, r.PathValue("id"))
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
+		transport.Answer(w, answer, err)
 	})
 	rt.public(transport.Route{Pattern: "GET /a2a/{tenant}/{agent}/.well-known/agent-card.json", Summary: "A published agent's A2A 1.0 card"}, func(w http.ResponseWriter, r *http.Request) {
 		tenants := h.currentTenants()
@@ -91,71 +84,57 @@ func (h *Host) routesIntegration(rt *routes) {
 	})
 	rt.public(transport.Route{Pattern: "POST /a2a/{tenant}/{agent}", Summary: "A2A 1.0 JSON-RPC to a published agent; the caller signs in with the host's issuer", Body: json.RawMessage{}}, h.serveA2A)
 	rt.handle(transport.Route{Pattern: "POST /mcp", Summary: "MCP: the caller's catalog as tools (JSON-RPC)", Body: json.RawMessage{}}, h.mcp)
-	rt.recordRead(transport.Route{Pattern: "GET /v1/lineage",
-		Summary: "Data lineage across connections, sources, datasets, pipelines, object types and writebacks the caller may read, with dataset versions, stale inputs and propagated markings",
-		Query: []transport.Param{
-			{Name: "mode", Description: "overview or focus; defaults from focus/ref"},
-			{Name: "project", Description: "a project RID used as the overview scope"},
-			{Name: "focus", Description: "a resource RID or lineage node ID"},
-			{Name: "ref", Description: "an app/kind/name resource reference"},
-			{Name: "node", Description: "a legacy lineage node ID"},
-			{Name: "branch", Description: "a branch ID; reads its staged definitions and no main run evidence"},
-			{Name: "direction", Description: "upstream, downstream or both"},
-			{Name: "depth", Description: "1 to 3"},
-			{Name: "nodeLimit", Description: "response node cap, at most 2000"},
-			{Name: "edgeLimit", Description: "response edge cap, at most 5000"},
-			{Name: "fields", Description: "off or on: include field nodes and edges"},
-			{Name: "field", Description: "a field node ID to trace upstream and downstream"},
-		}, Answer: lineage.Lineage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		depth, err := lineageInt(r, "depth", 0)
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		nodeLimit, err := lineageInt(r, "nodeLimit", 0)
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		edgeLimit, err := lineageInt(r, "edgeLimit", 0)
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		focus := r.URL.Query().Get("focus")
-		if focus == "" {
-			focus = r.URL.Query().Get("node")
-		}
-		out, refusal := lineage.NewReader(t).Read(m, lineage.LineageRequest{
-			Mode: r.URL.Query().Get("mode"), Project: r.URL.Query().Get("project"),
-			Focus: focus, Ref: r.URL.Query().Get("ref"), Direction: r.URL.Query().Get("direction"),
-			Depth: depth, NodeLimit: nodeLimit, EdgeLimit: edgeLimit, Branch: r.URL.Query().Get("branch"),
-			Fields: r.URL.Query().Get("fields") == "on", Field: r.URL.Query().Get("field"),
-		})
-		if refusal != nil {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/lineage", Summary: "Data lineage across connections, sources, datasets, pipelines, object types and writebacks the caller may read, with dataset versions, stale inputs and propagated markings", Query: []transport.Param{{Name: "mode", Description: "overview or focus; defaults from focus/ref"}, {Name: "project", Description: "a project RID used as the overview scope"}, {Name: "focus", Description: "a resource RID or lineage node ID"}, {Name: "ref", Description: "an app/kind/name resource reference"}, {Name: "node", Description: "a legacy lineage node ID"}, {Name: "branch", Description: "a branch ID; reads its staged definitions and no main run evidence"}, {Name: "direction", Description: "upstream, downstream or both"}, {Name: "depth", Description: "1 to 3"}, {Name: "nodeLimit", Description: "response node cap, at most 2000"}, {Name: "edgeLimit", Description: "response edge cap, at most 5000"}, {Name: "fields", Description: "off or on: include field nodes and edges"}, {Name: "field", Description: "a field node ID to trace upstream and downstream"}}, Answer: lineage.Lineage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		out, refusal := lineage.NewReader(t).ReadValues(m, r.URL.Query())
+		transport.Answer(w, out, refusal)
+	})
+	rt.handle(transport.Route{Pattern: "GET /v1/integration-effects", Summary: "Build writeback delivery status for builders and integrators, excluding payloads", Answer: []dataowner.IntegrationEffect{}}, transport.Answering(func(_ *http.Request, m platform.Member, t *Tenant) ([]dataowner.IntegrationEffect, *kernel.Error) {
+		return t.integrationEffects(m, h.Now())
+	}))
+}
+
+func observationRoute[B, R any](f func(*http.Request, platform.Member, *Tenant, platform.AssetRef, B) (R, *kernel.Error)) func(http.ResponseWriter, *http.Request, platform.Member, *Tenant) {
+	return func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request B
+		if refusal := dataowner.DecodeObservationRequest(r.Body, &request); refusal != nil {
 			Reply(w, nil, refusal)
 			return
 		}
-		WriteJSON(w, http.StatusOK, out)
-	})
-	rt.handle(transport.Route{Pattern: "GET /v1/integration-effects", Summary: "Build writeback delivery status for builders and integrators, excluding payloads", Answer: []dataowner.IntegrationEffect{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		out, err := t.integrationEffects(m, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
-	})
+		out, refusal := f(r, m, t, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetObservation, Name: r.PathValue("name")}, request)
+		transport.Answer(w, out, t.i18n.Said(refusal, t.Language(m, r)))
+	}
 }
 
-func lineageInt(r *http.Request, name string, fallback int) (int, *kernel.Error) {
-	raw := r.URL.Query().Get(name)
-	if raw == "" {
-		return fallback, nil
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value < 0 {
-		return 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, name+" is a non-negative integer")
-	}
-	return value, nil
+func (h *Host) routesObservations(rt *routes) {
+	rt.handle(transport.Route{Pattern: "GET /v1/observations", Summary: "Declared external observation sources available through original member and model permissions", Answer: []dataowner.ObservationInfo{}}, translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]dataowner.ObservationInfo, *kernel.Error) {
+		return t.Observations(m)
+	}))
+	rt.handle(transport.Route{Pattern: "POST /v1/observations/{app}/{name}/read", Summary: "Read a current protocol point or bounded external window without storing points in tenant state", Body: dataowner.ObservationRead{}, Answer: platform.ObservationResult{}}, observationRoute(func(r *http.Request, m platform.Member, t *Tenant, ref platform.AssetRef, request dataowner.ObservationRead) (platform.ObservationResult, *kernel.Error) {
+		return t.ReadObservation(r.Context(), m, ref, request, h.Now())
+	}))
+	rt.handle(transport.Route{Pattern: "POST /v1/observations/{app}/{name}/evaluate", Summary: "Evaluate one external summary with the shared rule language and submit only compact results through the original business action", Body: dataowner.ObservationEvaluate{}, Answer: ObservationEvaluation{}}, observationRoute(func(r *http.Request, m platform.Member, t *Tenant, ref platform.AssetRef, request dataowner.ObservationEvaluate) (ObservationEvaluation, *kernel.Error) {
+		return t.EvaluateObservation(r.Context(), m, ref, request, h.Now())
+	}))
+}
+
+func publishedPipelineQuery() platform.Query {
+	filter := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "state"), platform.ExprLiteralValue("text", "published")}}
+	return platform.Query{Filter: &filter, Sort: []string{"id"}}
+}
+
+func (h *Host) routesSchedules(rt *routes) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/schedules", Summary: "Independent pipeline schedules visible to the caller, with their next due time and last build", Answer: []dataowner.PipelineSchedule{}}, transport.Answering(func(_ *http.Request, m platform.Member, t *Tenant) ([]dataowner.PipelineSchedule, *kernel.Error) {
+		now := h.Now()
+		page, refusal := t.recordSelectionFrom(t.Projection, m, platform.ScheduleType, platform.Query{Sort: []string{"id"}}, now)
+		if refusal != nil {
+			return nil, refusal
+		}
+		return t.DataOwner().PipelineSchedules(page.Records, func(id string) (dataowner.Pipeline, bool) {
+			view, refusal := t.recordOf(m, dataowner.PipelineType, id, now)
+			if refusal != nil {
+				return dataowner.Pipeline{}, false
+			}
+			return view.Record.(dataowner.Pipeline), true
+		})
+	}))
 }

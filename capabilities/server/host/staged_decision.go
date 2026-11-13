@@ -1,11 +1,10 @@
 package host
 
 import (
-	"encoding/json"
-	"fmt"
 	"maps"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/services/actions"
 	"platformserver/services/objects"
 
 	"platformserver/kernel/records"
@@ -26,7 +25,7 @@ type stagedDecision struct {
 	confirmationCompleting *confirmationCompletion
 	control                *controlDecision
 	tenant                 *Tenant
-	requests               []request
+	requests               []actions.PendingRequest
 	operationInputs        map[string][]*preparedOperationInput
 }
 
@@ -66,82 +65,20 @@ func (d *stagedDecision) decideApp(c platform.Caller, app platform.App, s *pb.Su
 }
 
 func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, view *Tenant, release string, retained ...[]platform.ReleaseAsset) (*pb.ChangeRecord, *kernel.Error) {
-	if app.AcceptedLedger() == nil {
+	r, err, ok := d.DecideApp(c, app, s, at, func() (*platform.DecisionDefinition, error) {
+		return view.decisionDefinition(app.Manifest().ID, s, release, retained...)
+	})
+	if !ok {
 		unsupportedStagedEffect()
 	}
-	id := app.Manifest().ID
-	if d.Receiving[app.AcceptedLedger()] {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held owner")
-	}
-	if d.Active[id] || len(d.Active) >= acceptedformat.MaxHops {
-		unsupportedStagedEffect()
-	}
-	d.Active[id] = true
-	defer func() { delete(d.Active, id) }()
-	if d.At.IsZero() {
-		d.At = at
-	}
-	c.Roles = maps.Clone(c.Roles)
-	definition, definitionErr := view.decisionDefinition(id, s, release, retained...)
-	if definitionErr != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The execution definition and dependencies are unavailable")
-	}
-	previous := d.CurrentSubmission
-	d.CurrentSubmission = proto.Clone(s).(*pb.Submission)
-	defer func() { d.CurrentSubmission = previous }()
-	r, err := app.Submit(c, proto.Clone(s).(*pb.Submission), at)
-	if err != nil && d.Failure == nil {
-		d.Failure = err
-	}
-	if d.Failure != nil {
-		return nil, d.Failure
-	}
-	if r != nil && definition != nil {
-		if d.ObservationInput != nil {
-			definition.Observation = d.ObservationInput
-		}
-		definition.Contract.Family = r.GetSubmission().GetSchema().GetVersion()
-		if d.Definitions == nil {
-			d.Definitions = map[string]*platform.DecisionDefinition{}
-		}
-		d.Definitions[id+"/"+r.GetChangeId()] = definition
-	}
-	return r, nil
+	return r, err
 }
 
 func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
-	if tracker, ok := d.tenant.App(c.App).(interface {
-		TrackResource(platform.Caller, *pb.ChangeRecord, time.Time)
-	}); ok {
-		tracker.TrackResource(c, record, d.At)
-	}
-	changed := slices.Clone(d.Changed[c.App+"/"+record.GetChangeId()])
-	d.Events = append(d.Events, platform.Event{App: c.App, Record: record, Changed: changed})
-	schema := record.GetSubmission().GetSchema().GetName()
-	if publisher, ok := d.tenant.App(c.App).(platform.AcceptedPublisher); ok &&
-		slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
-		ref := record.GetSubmission().GetTarget()
-		var raw []byte
-		var err error
-		func() {
-			d.Records.Lock()
-			defer d.Records.Unlock()
-			et := d.Records.Type(ref.GetType())
-			if et != nil && et.Rows().Get(ref.GetId()) != nil {
-				raw, err = json.Marshal(et.Rows().Get(ref.GetId()).Value.Interface())
-			}
-		}()
-		if len(raw) == 0 || err != nil || publisher.ValidateAcceptedPublication(schema, raw) != nil {
-			unsupportedStagedEffect()
-		}
-		if err := d.tenant.installPublicationLinkConstraint(d.Records, schema, raw); err != nil {
-			d.Failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, records.LinkCardinalityFailure)
-			return
-		}
-		if d.Publications == nil {
-			d.Publications = map[string]*acceptedformat.Publication{}
-		}
-		d.Publications[c.App+"/"+record.GetChangeId()] = &acceptedformat.Publication{Schema: schema, Image: raw}
+	if !d.PublishRecord(d.tenant.App(c.App), c, record, func(schema string, raw []byte) error {
+		return d.tenant.installPublicationLinkConstraint(d.Records, schema, raw)
+	}) {
+		unsupportedStagedEffect()
 	}
 }
 
@@ -159,6 +96,11 @@ type stagedEffectPanic struct{}
 
 func unsupportedStagedEffect() { panic(stagedEffectPanic{}) }
 
+func isStagedEffect(failure any) bool {
+	_, ok := failure.(stagedEffectPanic)
+	return ok
+}
+
 func (d *stagedDecision) Probe(c platform.Caller, protocol, action, id string, payload []byte, at time.Time) *kernel.Error {
 	return d.routingTenant().router().Probe(c, protocol, action, id, payload, at)
 }
@@ -171,14 +113,8 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 		return
 	}
 	q.Payload = slices.Clone(platform.Raw(q.Payload))
-	if d.RequestCounts == nil {
-		d.RequestCounts = map[string]int{}
-	}
-	key := c.App + "/" + r.GetChangeId()
-	n := d.RequestCounts[key]
-	d.RequestCounts[key]++
-	d.requests = append(d.requests, request{Request: q, caller: c,
-		record: proto.Clone(r).(*pb.ChangeRecord), n: n})
+	d.requests = append(d.requests, actions.PendingRequest{Request: q, Caller: c,
+		Record: proto.Clone(r).(*pb.ChangeRecord), N: d.NextRequest(c.App + "/" + r.GetChangeId())})
 }
 func (d *stagedDecision) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
 	return d.routingTenant().router().Query(c, protocol, read, provider...)
@@ -189,9 +125,7 @@ func (d *stagedDecision) Setting(c platform.Caller, name string) string {
 func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
 	planned, err := d.routingTenant().planAppEffects(c, kind, key, entity, data, now, d.Intents)
 	if err != nil {
-		if d.Failure == nil {
-			d.Failure = err
-		}
+		d.FailDecision(err)
 		return 0, err
 	}
 	d.Intents = append(d.Intents, planned...)
@@ -199,8 +133,7 @@ func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data 
 	return len(planned), nil
 }
 func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
-	view := d.enterpriseUsageTenant()
-	return view.checkEnterpriseUsage(c, d.Records, id, until, deleting, now)
+	return d.enterpriseUsageTenant().checkEnterpriseUsage(c, d.Records, id, until, deleting, now)
 }
 func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
 	return d.routingTenant().checkTenantConnection(c, id, now)
@@ -248,9 +181,7 @@ func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key str
 	}
 	owner := d.stateApp(d.tenant.linker.(platform.App))
 	err := owner.(platform.Linker).Link(c, from, to, key, now)
-	if err != nil && d.Failure == nil {
-		d.Failure = err
-	}
+	d.FailDecision(err)
 	return err
 }
 func (d *stagedDecision) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
@@ -258,47 +189,11 @@ func (d *stagedDecision) Assign(c platform.Caller, r *pb.ChangeRecord, a platfor
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	err := d.tenant.tasks.Assign(c, r, a)
-	if err != nil && d.Failure == nil {
-		d.Failure = err
-	}
+	d.FailDecision(err)
 	return err
 }
-func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name string, date time.Time) (number string, err *kernel.Error) {
-	defer func() {
-		if err != nil && d.Failure == nil {
-			d.Failure = err
-		}
-	}()
-	if rec.GetChangeId() == "" || rec.GetSubmission().GetAuthority() != c.App ||
-		rec.GetSubmission().GetTenantId() != d.tenant.ID {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	app := d.tenant.App(c.App)
-	if app == nil {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	i := slices.IndexFunc(app.Manifest().Sequences, func(s platform.Sequence) bool { return s.Name == name })
-	if i < 0 {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	s, year := app.Manifest().Sequences[i], 0
-	if s.Yearly {
-		year = date.Year()
-	}
-	key := fmt.Sprintf("%s/%s/%d", c.App, name, year)
-	if _, taken := d.Allocated[key]; !taken {
-		d.SequenceBases[key] = d.Sequences[key]
-	}
-	if _, started := d.Sequences[key]; !started && s.SeedRecord != "" {
-		waterline, problem := d.SequenceWaterline(c.App, s, date.Year())
-		if problem != nil {
-			return "", problem
-		}
-		d.Sequences[key] = waterline
-	}
-	d.Sequences[key]++
-	d.Allocated[key] = d.Sequences[key]
-	return s.Format(date.Year(), d.Sequences[key]), nil
+func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name string, date time.Time) (string, *kernel.Error) {
+	return d.AllocateNumber(c, d.tenant.ID, d.tenant.App, rec, name, date)
 }
 
 func (d *stagedDecision) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
@@ -310,4 +205,86 @@ func (d *stagedDecision) directoryView() platform.Directory {
 		return d.stateApp(owner).(platform.Directory)
 	}
 	return d.tenant.directory
+}
+
+func (d *stagedDecision) stateApp(app platform.App) platform.App {
+	fork, ok := d.PrivateApp(app, func(fork platform.App) { (hostView{t: d.tenant, app: fork, decision: d}).bindOwner(fork) })
+	if !ok {
+		unsupportedStagedEffect()
+	}
+	return fork
+}
+
+func (d *stagedDecision) attachPrivateHosts() {
+	for _, app := range d.PrivateApps {
+		(hostView{t: d.tenant, app: app, decision: d}).bindOwner(app)
+	}
+}
+
+func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)) (r *pb.ChangeRecord, err *kernel.Error) {
+	saved := *d
+	*d = *d.privateFork()
+	d.attachPrivateHosts()
+	defer func() {
+		if p := recover(); p != nil {
+			*d = saved
+			d.attachPrivateHosts()
+			panic(p)
+		}
+	}()
+	r, err = decide()
+	if err == nil {
+		err = d.CheckAttempt(r, len(saved.Events))
+	}
+	if err != nil {
+		*d = saved
+		d.attachPrivateHosts()
+	}
+	return r, err
+}
+
+func (d *stagedDecision) privateFork() *stagedDecision {
+	fork := *d
+	forked, ok := d.Decision.Fork(d.tenant.App)
+	if !ok {
+		unsupportedStagedEffect()
+	}
+	fork.Decision = forked
+	fork.operationInputs = maps.Clone(d.operationInputs)
+	for hash, pending := range fork.operationInputs {
+		fork.operationInputs[hash] = slices.Clone(pending)
+	}
+	fork.requests = slices.Clone(d.requests)
+	for id, app := range fork.PrivateApps {
+		if !d.Shared(id, app) {
+			(hostView{t: d.tenant, app: app, decision: &fork}).bindOwner(app)
+		}
+	}
+	fork.forkControlDecision(d.control)
+	return &fork
+}
+
+func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
+	probe := d.privateFork()
+	err := probe.runProbe(c, decide)
+	if err != nil {
+		d.AdoptRefusal(&probe.Decision, err)
+	}
+	return err
+}
+
+func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
+	return d.RunProbe(d, c, decide, isStagedEffect)
+}
+
+func (d *stagedDecision) stageObservers() *kernel.Error {
+	refusal, ok := d.StageObservers(runtimekernel.ObserverHooks{Apps: d.tenant.LiveApps, Private: d.stateApp,
+		Caller: func(id string) platform.Caller {
+			return platform.NewCaller(d, platform.Member{ID: "app:" + id, Tenant: d.tenant.ID}, id, false, true)
+		},
+		Events: func(e platform.Event) []string { return d.tenant.router().Events(e) }})
+	if !ok {
+		unsupportedStagedEffect()
+	}
+	return refusal
 }

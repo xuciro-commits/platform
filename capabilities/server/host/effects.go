@@ -105,27 +105,17 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 }
 
 func (t *Tenant) sendWithUsage(ep actions.Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
-	if ep.Kind == acceptedformat.ModelEndpoint {
+	switch ep.Kind {
+	case acceptedformat.ModelEndpoint:
 		return t.sendModel(x, now)
+	case "email":
+		return t.transport().Mail(ep, x, now), nil
+	case "a2a":
+		return t.transport().A2A(ep, x, false), nil
+	case "connection":
+		return t.dataClient().Writeback(x), nil
 	}
-	return t.send(ep, x, now), nil
-}
-
-func (t *Tenant) send(ep actions.Endpoint, x platform.Effect, now time.Time) platform.Outcome {
-	if ep.Kind == acceptedformat.ModelEndpoint {
-		out, _ := t.sendModel(x, now)
-		return out
-	}
-	if ep.Kind == "email" {
-		return t.transport().Mail(ep, x, now)
-	}
-	if ep.Kind == "a2a" {
-		return t.transport().A2A(ep, x, false)
-	}
-	if ep.Kind == "connection" {
-		return t.dataClient().Writeback(x)
-	}
-	return t.transport().Webhook(ep, x, now)
+	return t.transport().Webhook(ep, x, now), nil
 }
 
 func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
@@ -148,7 +138,7 @@ func (t *Tenant) prepareEffectSettlement(effect string, o platform.Outcome, usag
 	if t.quarantined() {
 		return
 	}
-	if o.Generation != 0 && !t.operationCurrent(effect, o.Generation) {
+	if o.Generation != 0 && !t.operationClaims().Current(effect, o.Generation) {
 		return
 	}
 	if o.Generation != 0 && o.Result == "delivered" {

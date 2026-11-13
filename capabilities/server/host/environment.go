@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,26 +16,39 @@ import (
 	controlowner "platformserver/services/security/control"
 )
 
+func (t *Tenant) sealer() releaseowner.Sealer {
+	return releaseowner.Sealer{
+		Tenant: t.ID,
+		Raw: func(id string) ([]byte, error) {
+			raw, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]byte, *kernel.Error) { return slices.Clone(t.releases.Raw(id)), nil })
+			if refusal != nil {
+				return nil, refusal
+			}
+			return raw, nil
+		},
+		Put: func(key string, raw []byte) error {
+			return t.files().Put(context.Background(), key, raw, "application/json")
+		},
+		Commit: func(artifact platform.SealedArtifact) error {
+			t.Lane.Lock()
+			defer t.Lane.Unlock()
+			if err := t.releases.Seal(artifact.Candidate, artifact); err != nil {
+				return err
+			}
+			t.StateEpoch.Add(1)
+			t.changedOwner(build.ID)
+			return nil
+		},
+		Find: t.SealedArtifact,
+		Open: func(key string) (io.ReadCloser, error) {
+			reader, _, err := t.files().Get(context.Background(), key)
+			return reader, err
+		},
+	}
+}
+
 func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifact, error) {
-	raw, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]byte, *kernel.Error) { return slices.Clone(t.releases.Raw(id)), nil })
-	if refusal != nil {
-		return platform.SealedArtifact{}, refusal
-	}
-	artifact, err := releaseowner.SealArtifact(t.ID, id, raw, now)
-	if err != nil {
-		return platform.SealedArtifact{}, err
-	}
-	if err := t.files().Put(context.Background(), artifact.Key, raw, "application/json"); err != nil {
-		return platform.SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
-	}
-	t.Lane.Lock()
-	defer t.Lane.Unlock()
-	if err := t.releases.Seal(artifact.Candidate, artifact); err != nil {
-		return platform.SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", artifact.Candidate)
-	}
-	t.StateEpoch.Add(1)
-	t.changedOwner(build.ID)
-	return artifact, nil
+	return t.sealer().Seal(id, now)
 }
 
 func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {
@@ -52,79 +64,24 @@ func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {
 	return releaseowner.FindSealed(state.releases.Sealed(), id)
 }
 
-func (t *Tenant) sealedBytes(id string) ([]byte, platform.SealedArtifact, error) {
-	artifact, ok := t.SealedArtifact(id)
-	if !ok {
-		return nil, platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not sealed", id)
-	}
-	raw, err := releaseowner.ReadSealed(id, artifact, func() (io.ReadCloser, error) {
-		reader, _, err := t.files().Get(context.Background(), artifact.Key)
-		return reader, err
-	})
-	return raw, artifact, err
-}
-
-func (t *Tenant) sealedOrSeal(id string, now time.Time) ([]byte, platform.SealedArtifact, error) {
-	if _, ok := t.SealedArtifact(id); !ok {
-		if _, err := t.SealCandidate(id, now); err != nil {
-			return nil, platform.SealedArtifact{}, err
-		}
-	}
-	return t.sealedBytes(id)
-}
-
 func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, member platform.Member, now time.Time) (releaseowner.PromotionResult, error) {
 	if from == nil || to == nil || from.ID == to.ID {
 		return releaseowner.PromotionResult{}, fmt.Errorf("promotion needs two different environments")
 	}
-	if !build.HoldsIndependentRole(member, build.Builder, build.Publisher) {
-		return releaseowner.PromotionResult{}, fmt.Errorf("promotion needs the builder or publisher role in %s", to.ID)
-	}
-	raw, artifact, err := from.sealedOrSeal(candidateID, now)
+	plan, err := releaseowner.PlanPromotion(from.ID, to.ID, candidateID, key, activate, member, now, from.sealer().SealedOrSeal)
 	if err != nil {
 		return releaseowner.PromotionResult{}, err
 	}
-	candidate, err := platform.ReadCandidate(candidateID, raw)
-	if err != nil {
-		return releaseowner.PromotionResult{}, err
-	}
-	result := releaseowner.PromotionResult{From: from.ID, To: to.ID, Candidate: candidate.ID, Digest: artifact.Digest, Active: activate, Key: key, Assets: len(candidate.Assets)}
 	return decideWithError(to, "release:promote", func(to *Tenant) (releaseowner.PromotionResult, error) {
-		replay, err := releaseowner.PromotionDestination{
-			ID: to.ID, Quarantined: to.quarantined(), HasApp: func(app string) bool { return to.App(app) != nil },
-			PriorHash:  to.releases.Request,
-			PriorBytes: to.releases.Raw,
-			Hash: func() (string, error) {
-				return acceptedformat.ReleaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
-			},
-		}.Preflight(candidate, raw, key)
-		if err != nil || replay {
-			return result, err
-		}
-		var installations []platform.ReleaseInstallation
-		var bootstrap json.RawMessage
-		if activate {
-			if installations, bootstrap, err = to.prepareReleaseLifecycleLocked(candidate, member, now, false); err != nil {
-				return result, err
-			}
-		}
-		saved := acceptedformat.Release{Version: 2, Kind: "release-result", Tenant: to.ID, App: build.ID, Member: member.ID,
-			Key: "promotion:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: slices.Clone(raw), Active: activate, Installations: installations, Bootstrap: bootstrap, From: from.ID}
-		if activate {
-			saved.Version = 4
-		}
-		if saved.RequestHash, err = acceptedformat.ReleaseRequestHash(to.ID, member.ID, saved.Key, candidate.ID, activate); err != nil {
-			return result, err
-		}
-		if _, err := to.commitReleaseLocked(member, saved); err != nil {
-			return result, err
-		}
-		return result, nil
+		return plan.Prepare(releaseowner.PromotionDestination{ID: to.ID, Quarantined: to.quarantined(), HasApp: func(app string) bool { return to.App(app) != nil },
+			PriorHash: to.releases.Request, PriorBytes: to.releases.Raw,
+		}, to.prepareReleaseLifecycleLocked, func(saved acceptedformat.Release) error {
+			_, err := to.releaseAcceptance().Commit(member, saved)
+			return err
+		})
 	}, func(to *Tenant, prepared preparedAccepted) (releaseowner.PromotionResult, error) {
-		if _, err := to.applyPreparedRelease(member, prepared); err != nil {
-			return result, err
-		}
-		return result, nil
+		_, err := to.applyPreparedRelease(member)(to, prepared)
+		return plan.Result, err
 	})
 }
 

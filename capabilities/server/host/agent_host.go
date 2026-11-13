@@ -23,7 +23,7 @@ import (
 )
 
 func (h hostView) ProtocolActions(protocol string) []platform.Action {
-	return h.t.protocolActions(protocol)
+	return actions.ProtocolActions(h.t.LiveApps(), protocol)
 }
 func (h hostView) ProtocolProvider(schema string) (platform.App, string, bool) {
 	return h.t.router().Provider(schema)

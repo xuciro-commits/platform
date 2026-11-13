@@ -114,7 +114,7 @@ func IntegrationEffects(effects []platform.Effect) []IntegrationEffect {
 	return out
 }
 
-func TxnWritebackEffect(c platform.Caller, receipt *pb.ChangeRecord, step string, target platform.TxnRef, raw json.RawMessage, at time.Time, private bool, credential func(WritebackRequest) *kernel.Error) (platform.Effect, *kernel.Error) {
+func TxnWritebackEffect(c platform.Caller, receipt *pb.ChangeRecord, step string, target platform.TxnRef, raw json.RawMessage, at time.Time, private bool, credential func(WritebackRequest) *kernel.Error, bind func(typ string) ([]platform.AssetBinding, error), declared func() []platform.Effect) (platform.Effect, *kernel.Error) {
 	if !private || !c.Staging() || c.App != App || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
 		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects require their original private owner")
 	}
@@ -127,5 +127,17 @@ func TxnWritebackEffect(c platform.Caller, receipt *pb.ChangeRecord, step string
 	}
 	key := receipt.GetChangeId() + ":" + step
 	endpoint := WritebackEndpoint + request.Connection
-	return platform.Effect{ID: fmt.Sprintf("%s:%s:transaction:%s:%s", c.Tenant, c.App, key, endpoint), App: c.App, Endpoint: endpoint, Event: c.App + "/transaction", Key: key, Target: target.Type + "/" + target.ID, At: at, Due: at, State: "pending", Body: string(raw)}, nil
+	effect := platform.Effect{ID: fmt.Sprintf("%s:%s:transaction:%s:%s", c.Tenant, c.App, key, endpoint), App: c.App, Endpoint: endpoint, Event: c.App + "/transaction", Key: key, Target: target.Type + "/" + target.ID, At: at, Due: at, State: "pending", Body: string(raw)}
+	applications, err := bind(receipt.GetSubmission().GetTarget().GetType())
+	if err != nil {
+		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+	}
+	effect.Applications = applications
+	if slices.ContainsFunc(declared(), func(existing platform.Effect) bool { return existing.ID == effect.ID }) {
+		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A transaction step declared the same outbound intent twice")
+	}
+	if !strings.HasPrefix(effect.Target, c.App+".") {
+		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects cannot target another authority")
+	}
+	return effect, nil
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
 
@@ -145,4 +146,16 @@ func RedactedEffects(queued []Queued, now time.Time) []platform.Effect {
 		out = append(out, x)
 	}
 	return out
+}
+
+func (o *Outbox) State(id string) (acceptedformat.EffectState, bool) {
+	current, found := o.Get(id)
+	if !found {
+		return acceptedformat.EffectState{}, false
+	}
+	return acceptedformat.EffectState{Effect: current.Effect, Since: current.Since}, true
+}
+
+func (o *Outbox) Settled(id string, after acceptedformat.EffectState) {
+	o.Update(id, func(x *Queued) { x.Effect, x.Since, x.Sending = after.Effect, after.Since, false })
 }

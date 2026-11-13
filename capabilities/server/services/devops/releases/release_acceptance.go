@@ -13,7 +13,8 @@ import (
 type AcceptedAssets struct {
 	Available    func() ([]platform.ReleaseAsset, error)
 	WithBindings func(roots []platform.AssetRef, available []platform.ReleaseAsset) (platform.ReleaseCandidate, error)
-	Code         func() (map[platform.AssetRef]bool, error)
+	Apps         func() []platform.App
+	CodeAssets   func(platform.App) ([]platform.ReleaseAsset, error)
 }
 
 func RunningRelease(saved platform.ReleaseCandidate, assets AcceptedAssets) (platform.ReleaseCandidate, error) {
@@ -42,9 +43,15 @@ func AcceptedInstallationRelease(saved platform.ReleaseCandidate, assets Accepte
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}
-	code, err := assets.Code()
-	if err != nil {
-		return platform.ReleaseCandidate{}, err
+	code := map[platform.AssetRef]bool{}
+	for _, app := range assets.Apps() {
+		owned, err := assets.CodeAssets(app)
+		if err != nil {
+			return platform.ReleaseCandidate{}, err
+		}
+		for _, asset := range owned {
+			code[asset.Ref] = true
+		}
 	}
 	frozen := map[platform.AssetRef]platform.ReleaseAsset{}
 	roots := []platform.AssetRef{}

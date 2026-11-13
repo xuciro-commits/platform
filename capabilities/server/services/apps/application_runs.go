@@ -82,11 +82,6 @@ func (c Context) runsFromIndex(m platform.Member, ref platform.AssetRef, offset,
 	return IndexedRuns(indexed, ref, title, offset, limit, filters...), nil
 }
 
-type DecisionChange struct {
-	Change, Schema string
-	At             time.Time
-}
-
 func (c Context) RecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *kernel.Error) {
 	out := platform.ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []platform.ApplicationDecisionTrace{}, Runs: []platform.ApplicationRun{}}
 	runtime, refusal := c.RuntimeOf(m, ref, now)
@@ -103,7 +98,12 @@ func (c Context) RecordDiagnostic(m platform.Member, ref platform.AssetRef, typ,
 		return out, refusal
 	}
 	owner := c.RecordOwner(typ)
-	receipts := c.ReceiptKeys(owner)
+	receipts := map[string]string{}
+	for _, receipt := range c.Receipts(owner) {
+		if _, seen := receipts[receipt.GetChangeId()]; !seen {
+			receipts[receipt.GetChangeId()] = receipt.GetSubmission().GetIdempotencyKey()
+		}
+	}
 	visible := map[platform.AssetRef]bool{}
 	for _, definition := range c.Definitions(m) {
 		visible[definition.Ref] = true

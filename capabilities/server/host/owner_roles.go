@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 
+	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway"
 )
@@ -36,9 +37,9 @@ func ownerRolesOf(owners ownerSet, active func(string) bool) (ownerRoles, error)
 		if _, ok := a.(platform.Listener); ok {
 			r.listeners = append(r.listeners, id)
 		}
-		if err := errors.Join(claimRole(&r.identity, a, "identity"), claimRole(&r.directory, a, "directory"),
-			claimRole(&r.linker, a, "link"), claimRole(&r.ai, a, "model"), claimRole(&r.tasks, a, "task"),
-			claimRole(&r.procs, a, "process"), claimRole(&r.agents, a, "agent"), claimRole(&r.knowledge, a, "glossary")); err != nil {
+		if err := errors.Join(runtimekernel.ClaimRole(&r.identity, a, "identity"), runtimekernel.ClaimRole(&r.directory, a, "directory"),
+			runtimekernel.ClaimRole(&r.linker, a, "link"), runtimekernel.ClaimRole(&r.ai, a, "model"), runtimekernel.ClaimRole(&r.tasks, a, "task"),
+			runtimekernel.ClaimRole(&r.procs, a, "process"), runtimekernel.ClaimRole(&r.agents, a, "agent"), runtimekernel.ClaimRole(&r.knowledge, a, "glossary")); err != nil {
 			return ownerRoles{}, err
 		}
 	}
@@ -81,9 +82,9 @@ func (s *ownerSet) place(apps []platform.App) {
 	s.states, s.inputs, s.assets = map[string]platform.AcceptedStateApp{}, map[string]platform.AcceptedInputApp{}, map[string]platform.AssetLifecycleOwner{}
 	for i, a := range apps {
 		id := s.ids[i]
-		register(s.states, id, a)
-		register(s.inputs, id, a)
-		register(s.assets, id, a)
+		runtimekernel.RegisterOwner(s.states, id, a)
+		runtimekernel.RegisterOwner(s.inputs, id, a)
+		runtimekernel.RegisterOwner(s.assets, id, a)
 	}
 }
 
@@ -109,22 +110,4 @@ func (s ownerSet) assetOwners(active func(string) bool) []platform.AssetLifecycl
 		}
 	}
 	return out
-}
-
-func register[T any](m map[string]T, id string, a platform.App) {
-	if x, ok := a.(T); ok {
-		m[id] = x
-	}
-}
-
-func claimRole[T any](slot *T, a platform.App, role string) error {
-	x, ok := a.(T)
-	if !ok {
-		return nil
-	}
-	if any(*slot) != nil {
-		return fmt.Errorf("two %s owners", role)
-	}
-	*slot = x
-	return nil
 }

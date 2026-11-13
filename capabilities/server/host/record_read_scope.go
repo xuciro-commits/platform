@@ -1,25 +1,22 @@
 package host
 
-import runtimekernel "platformserver/kernel"
-import "platformserver/kernel/transport"
-
 import (
 	"context"
 	"errors"
 	"fmt"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
+	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
-	enterprisemodel "platformserver/services/security/organization"
-
 	"time"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-	persistence "platformserver/kernel/store"
-	"platformserver/platform"
 )
+
+import "platformserver/kernel/transport"
 
 type recordReadScope struct {
 	ctx         context.Context
@@ -166,35 +163,14 @@ func (t *Tenant) RecordOf(ctx context.Context, m platform.Member, typ, id string
 	return recordRead(t, ctx, func(t *Tenant) (objects.RecordView, *kernel.Error) { return t.recordOf(m, typ, id, now) })
 }
 
-func (t *Tenant) Context(ctx context.Context, reader *platform.Member, typ, id string, now time.Time) (objects.ContextView, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (objects.ContextView, *kernel.Error) { return t.contextRead(reader, typ, id, now) })
-}
-
 func (t *Tenant) Export(ctx context.Context, m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
 	return recordRead(t, ctx, func(t *Tenant) ([]byte, *kernel.Error) { return t.exportRead(m, typ, q, now) })
-}
-
-func (t *Tenant) EnterpriseReferences(ctx context.Context, m platform.Member, element string, offset, limit int, now time.Time) ([]records.EnterpriseReferenceGroup, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) ([]records.EnterpriseReferenceGroup, *kernel.Error) {
-		return t.enterpriseReferencesRead(m, element, offset, limit, now)
-	})
-}
-
-func (t *Tenant) EnterpriseUsage(ctx context.Context, m platform.Member, id, until string, now time.Time) (enterprisemodel.EnterpriseUsage, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (enterprisemodel.EnterpriseUsage, *kernel.Error) {
-		return t.enterpriseUsageRead(m, id, until, now)
-	})
 }
 
 func (t *Tenant) Search(ctx context.Context, reader *platform.Member, q string, now time.Time) []build.Hit {
 	out, _ := recordRead(t, ctx, func(t *Tenant) ([]build.Hit, *kernel.Error) { return t.searchRead(reader, q, now), nil })
 	return out
 }
-func (t *Tenant) Readable(ctx context.Context, m platform.Member, ref string, now time.Time) bool {
-	out, _ := recordRead(t, ctx, func(t *Tenant) (bool, *kernel.Error) { return t.readable(m, ref, now), nil })
-	return out
-}
-
 func (t *Tenant) readRecords(ctx context.Context, read func(*records.Store)) error {
 	_, refusal := recordRead(t, ctx, func(t *Tenant) (struct{}, *kernel.Error) {
 		read(t.Projection)

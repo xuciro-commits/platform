@@ -7,10 +7,7 @@ import (
 	"maps"
 	"platformserver/services/resources/monitoring"
 	"slices"
-	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 
@@ -110,7 +107,7 @@ func (t *Tenant) endLane() {
 }
 
 func (t *Tenant) countReadImage(ctx context.Context, outcome string) {
-	monitoring.Meters.ReadImages.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
+	monitoring.CountReadImage(ctx, t.ID, outcome)
 }
 
 func readImageState[T any](t *Tenant, state *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {
@@ -148,42 +145,19 @@ func readImageState[T any](t *Tenant, state *Tenant, ctx context.Context, read f
 	return value, refusal, nil
 }
 
-func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	for attempt := 0; attempt < 3; attempt++ {
-		if ctx.Err() != nil || t.quarantined() {
-			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-		image := t.readImage.Load()
-		if image == nil {
-			break
-		}
-		value, refusal, err := readImageState(t, image.state, ctx, read)
-		if err == nil {
-			return value, refusal
-		}
-		var mismatch *persistence.StatePositionError
-		if !errors.As(err, &mismatch) || mismatch.Position <= mismatch.Applied {
-			if mismatch != nil {
-				t.countReadImage(ctx, "quarantined")
+func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (T, *kernel.Error) {
+	return runtimekernel.ImageRead[T]{
+		Quarantined: t.quarantined,
+		Load: func() (func() (T, *kernel.Error, error), <-chan struct{}) {
+			image := t.readImage.Load()
+			if image == nil {
+				return nil, nil
 			}
-			return value, refusal
-		}
-		if attempt == 2 {
-			break
-		}
-		t.countReadImage(ctx, "retried")
-		timer := time.NewTimer(50 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		case <-image.next:
-			timer.Stop()
-		case <-timer.C:
-		}
-	}
-	t.countReadImage(ctx, "fallback")
-	return readFromLane(t, ctx, read)
+			return func() (T, *kernel.Error, error) { return readImageState(t, image.state, ctx, read) }, image.next
+		},
+		Count:    func(outcome string) { t.countReadImage(ctx, outcome) },
+		Fallback: func() (T, *kernel.Error) { return readFromLane(t, ctx, read) },
+	}.Run(ctx)
 }
 
 func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {

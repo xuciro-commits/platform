@@ -58,19 +58,13 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 				return page.Total, page.Records, refusal
 			},
 			App: (hostView{t: t}).App,
-			Model: func(purpose, model string, options platform.ModelOptions) (string, string) {
+			Resolve: func(purpose, model string, options platform.ModelOptions) (string, *kernel.Error) {
 				binding, _, refusal := t.modelResolver().Resolve(purpose, model, options)
-				if refusal != nil {
-					problem := refusal.Message
-					if problem == "" {
-						problem = "The selected model is disabled or missing"
-					}
-					return model, problem
-				}
-				if _, _, refusal = t.ai.Callable(m, binding.Model); refusal != nil {
-					return binding.Model, "Ask an AI administrator to grant access to this model"
-				}
-				return binding.Model, ""
+				return binding.Model, refusal
+			},
+			Callable: func(model string) *kernel.Error {
+				_, _, refusal := t.ai.Callable(m, model)
+				return refusal
 			},
 		})
 	})
@@ -80,11 +74,11 @@ func (h *Host) routesPackageSources(rt *routes) {
 	h.routesPackageReview(rt)
 	rt.authorized(transport.Route{Pattern: "POST /v1/packages/inspect", Summary: "Inspect an online or local platform package without installing or executing it", Body: platform.PackageInspectRequest{}, Answer: platform.PackagePreview{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request platform.PackageInspectRequest
-		if err := transport.DecodeBodyLimit(r, &request, packages.MaxPackageImportBytes+4096); err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
-			return
+		err := transport.DecodeBodyLimit(r, &request, packages.MaxPackageImportBytes+4096)
+		var preview platform.PackagePreview
+		if err == nil {
+			preview, err = t.inspectPackage(r.Context(), request)
 		}
-		preview, err := t.inspectPackage(r.Context(), request)
 		if err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
 			return

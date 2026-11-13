@@ -3,11 +3,9 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
@@ -86,15 +84,10 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 			}
 		}
 		source := opts.source
-		if prior := t.priorOf(a, s.GetIdempotencyKey()); source != nil && prior.Record != nil {
-			previous := prior.Record.GetSubmission()
-			if previous.GetPrincipalId() != m.ID || !proto.Equal(previous.GetTarget(), s.GetTarget()) || !proto.Equal(previous.GetSchema(), s.GetSchema()) && !source.deleted {
-				return out, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+		if source != nil {
+			if record, refusal, done := t.priorOf(a, s.GetIdempotencyKey()).SourceReplay(m.ID, s, source.deleted); done {
+				return answer{record: record}, refusal
 			}
-			return answer{record: prior.Record}, nil
-		} else if source != nil && prior.Refusal != nil {
-			saved := prior.Refusal.Error
-			return out, &saved
 		}
 		if err = t.delegatedBound(m, s); err != nil {
 			return out, err
@@ -147,44 +140,12 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	if t.businessStopped() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
 	}
-	if s.GetTenantId() != t.ID || s.GetPrincipalId() != m.ID {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	if refusal := t.CheckSubmission(a, m, s); refusal != nil {
+		return nil, refusal
 	}
-	if s.GetAuthority() != a.Manifest().ID {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_AUTHORITY}
-	}
-	if s.GetIdempotencyKey() == "" || s.GetTarget() == nil || s.GetSchema() == nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")
-	}
-	prior := t.priorOf(a, s.GetIdempotencyKey())
-	if len(prior.Answer) > 0 {
-		result, receipt, err := acceptedformat.DecodeBatch(prior.Answer)
-		hash, hashErr := acceptedformat.SubmissionHash(s, binding)
-		if err != nil || hashErr != nil || result.RequestHash != hash {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
-		}
-		return receipt, nil
-	}
-	if prior.Record != nil {
-		if !proto.Equal(prior.Record.GetSubmission(), s) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
-		}
-		saved, bound := t.Committed.SchemaVersion(a.Manifest().ID + "/" + s.GetIdempotencyKey())
-		if bound != (binding != nil) || binding != nil && saved != *binding {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
-		}
-		return prior.Record, nil
-	}
-	hash, err := acceptedformat.SubmissionHash(s, binding)
-	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission cannot be encoded")
-	}
-	if prior.Refusal != nil {
-		if prior.Refusal.RequestHash != hash {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
-		}
-		saved := prior.Refusal.Error
-		return nil, &saved
+	record, hash, refusal, done := t.ReplayPrior(a, s, binding)
+	if done {
+		return record, refusal
 	}
 	if s.GetSchema().GetName() == controlowner.SchemaCredentialSave {
 		if _, failure := controlowner.DecodeCredentialWrite(t.ID, s.GetPayload()); failure != nil {
@@ -228,36 +189,14 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 		record = nil
 		refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A prepared Compute input was not consumed by this accepted Flow decision")
 	}
-	var raw []byte
-	if refusal != nil {
-		refusal = actions.Explained(refusal, a, s.GetSchema().GetName(), runtimekernel.Target(s))
-		fact, business := draft.BusinessRefusals[refusal]
-		var businessFact *platform.BusinessRefusalFact
-		if business {
-			businessFact = &fact
-		}
-		raw, err = acceptedformat.EncodeBusinessRefusal(s, now, refusal, binding, businessFact, draft.InputIssues[refusal]...)
-	} else {
-		raw, err = draft.SealResult(draft.sources(), a.Manifest().ID, s, record, now)
-		if err == nil && opts.source != nil {
-			raw, err = acceptedformat.AttachSourceClaims(raw, opts.source.Origin, opts.source.Claims)
-			if err == nil {
-				_, err = t.claims.Prepare(t.ID, s.GetTarget().GetType(), s.GetTarget().GetId(), record.GetChangeId(), opts.source)
-			}
-		}
-		if err != nil {
-			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The action could not be accepted: {reason}", err.Error())
-			var preparationRefusal *kernel.Error
-			if errors.As(err, &preparationRefusal) {
-				refusal = preparationRefusal
-			}
-			var budget *acceptedformat.ResultBudgetError
-			if errors.As(err, &budget) {
-				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted result needs {bytes} bytes; limit is {limit} bytes / 接受结果超出字节预算", budget.Bytes, budget.Limit)
-			}
-			raw, err = acceptedformat.EncodeSchemaRefusal(s, now, refusal, binding)
-		}
-	}
+	raw, refusal, err := draft.Outcome(draft.sources(), runtimekernel.OutcomeHooks{
+		Explain: func(r *kernel.Error) *kernel.Error {
+			return actions.Explained(r, a, s.GetSchema().GetName(), runtimekernel.Target(s))
+		},
+		Claims: func(record *pb.ChangeRecord, source *runtimekernel.ClaimSet) error {
+			_, err := t.claims.Prepare(t.ID, s.GetTarget().GetType(), s.GetTarget().GetId(), record.GetChangeId(), source)
+			return err
+		}}, a.Manifest().ID, s, record, refusal, binding, opts.source, now)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
 	}
@@ -285,74 +224,11 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 			refusal = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}()
-	var envelope struct{ Kind string }
-	if err := json.Unmarshal(committed, &envelope); err != nil {
-		t.quarantine(fmt.Errorf("committed result is not an envelope: %w", err))
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	if envelope.Kind == "refusal" {
-		saved, sub, err := acceptedformat.DecodeRefusal(committed)
-		if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
-			saved.RequestHash != hash || sub.GetPrincipalId() != m.ID {
-			t.quarantine(fmt.Errorf("committed refusal differs from the accepted request: %v", err))
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-		t.Committed.SaveRefusal(saved.App+"/"+sub.GetIdempotencyKey(), saved)
-		t.acceptedResultApplied()
-		t.changedOwner(saved.App)
-		answer := saved.Error
-		return nil, &answer
-	}
-	if envelope.Kind == "record-batch" {
-		saved, receipt, err := acceptedformat.DecodeBatch(committed)
-		sub, subErr := acceptedformat.BatchSubmission(saved, receipt)
-		if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
-			saved.RequestHash != hash || subErr != nil || sub.GetPrincipalId() != m.ID {
-			t.quarantine(fmt.Errorf("committed batch differs from the accepted request: %v", err))
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-		applied, err := t.applyAcceptedBatch(a.AcceptedLedger(), committed)
-		if err != nil {
-			t.quarantine(fmt.Errorf("committed record batch could not be applied: %w", err))
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-		t.acceptedResultApplied()
-		if applied {
-			t.audit.Remember(submitted(m.ID, a, sub, saved.At))
-			t.publishAcceptedBatch(saved)
-			t.changedOwner(saved.App)
-		}
-		t.enqueue(saved.At)
-		return receipt, nil
-	}
-	saved, receipt, err := acceptedformat.DecodeRecord(committed)
-	if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
-		saved.RequestHash != hash || receipt.GetSubmission().GetPrincipalId() != m.ID {
-		t.quarantine(fmt.Errorf("committed result differs from the accepted request: %v", err))
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	for _, subscriber := range saved.Event.Subscribers {
-		if t.App(subscriber) == nil {
-			t.quarantine(fmt.Errorf("committed result requires missing subscriber %s", subscriber))
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-	}
-	applied, err := t.applyAcceptedResult(a.AcceptedLedger(), committed)
-	if err != nil {
-		t.quarantine(fmt.Errorf("committed accepted result could not be applied: %w", err))
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	t.acceptedResultApplied()
-	if saved.At.IsZero() {
-		saved.At = receipt.GetRecordedTime().AsTime()
-	}
-	if applied {
-		t.audit.Remember(submitted(m.ID, a, receipt.GetSubmission(), saved.At))
-		t.publishAccepted(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed}, saved.Event)
-		t.changedOwner(saved.App)
-	}
-	t.enqueue(saved.At)
-	return receipt, nil
+	return t.FinishCommitted(a, m, hash, committed, runtimekernel.CommittedResult{Settlement: t.settlement(), App: t.App, ApplyBatch: t.applyAcceptedBatch, ApplyRecord: t.applyAcceptedResult,
+		Remember: func(member string, a platform.App, s *pb.Submission, at time.Time) {
+			t.audit.Remember(submitted(member, a, s, at))
+		},
+		PublishBatch: t.publishAcceptedBatch, Publish: t.publishAccepted})
 }
 
 func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *kernel.Error) {
@@ -367,7 +243,7 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 	}()
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil &&
 		draft.tenant.App(draft.tenant.owner["action:"+platform.WorkApprovalRequestSchema]) != nil {
-		record, refusal = draft.requestApproval(a, m, s, now)
+		record, refusal = draft.approvals().Submit(a, m, s, now)
 	} else {
 		caller := platform.NewCaller(draft, m, a.Manifest().ID, false, automation)
 		if source := draft.sourceProjection; source != nil {
