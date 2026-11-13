@@ -8,6 +8,9 @@ import { PackageRequirements } from "./package-preparation";
 import { PackageOwnership } from "./package-ownership";
 import { PackageImpact } from "./package-impact";
 
+const packageDecisionTimeout = 120_000;
+const awaitingConfirmation = (state?: string) => state === "SUBMISSION_STATE_PENDING" || state === "SUBMISSION_STATE_SENDING" || state === "SUBMISSION_STATE_UNKNOWN";
+
 export function Apps({tab="catalog"}:{tab?:string}) {
   const { holds} = useHost(), { open } = useWorkspace();
   const packages = useRead<Api.PackageView[]>("/v1/packages");
@@ -52,17 +55,25 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
       setReview({schema,id,payload,view,details:results.map(result=>result.body as Api.PackageReview)});return;
     }
     setBusy(id); setRefused((r) => ({ ...r, [id]: "" }));
-    const submit=(action:string,target:string,body:unknown)=>decide(action,{type:"platform.package",id:target},body,{onRefused:reason=>setRefused(current=>({...current,[id]:`${target}: ${reason}`}))});
+    const submit=async(action:string,target:string,body:unknown)=>{
+      let state:string|undefined;
+      const accepted=await decide(action,{type:"platform.package",id:target},body,{timeoutMs:packageDecisionTimeout,onOutcome:entry=>{state=entry.state;},onRefused:reason=>setRefused(current=>({...current,[id]:`${target}: ${reason}`}))});
+      return {accepted,state};
+    };
     if(confirmed && schema!=="platform.package.retire") {
       const statuses={...progress};
       for(const step of review!.view.plan.steps) {
         if(statuses[step.id]==="installed") continue;
         const action=step.id===review!.id&&["platform.package.downgrade","platform.package.rollback"].includes(review!.schema)?review!.schema:step.action;
-        if(!await submit(action,step.id,{id:step.id,version:step.version})){statuses[step.id]="failed";setProgress(statuses);setBusy("");return;}
+        const answer=await submit(action,step.id,{id:step.id,version:step.version});
+        if(!answer.accepted){statuses[step.id]=awaitingConfirmation(answer.state)?"unconfirmed":"failed";setProgress(statuses);setBusy("");return;}
         statuses[step.id]="installed";
         setProgress({...statuses});
       }
-    } else if(!await submit(schema,id,payload)){setBusy("");return;}
+    } else {
+      const answer=await submit(schema,id,payload);
+      if(!answer.accepted){setBusy("");return;}
+    }
     setReview(undefined);
     setBusy("");
   };
@@ -172,15 +183,16 @@ function PackageList({ items, updates }: { items: Api.PackageView[];updates?:boo
           {review.details.map(detail => <PackageImpact key={detail.id} impact={detail.impact} />)}
           {review.schema!=="platform.package.retire" && <ol aria-label={t("Installation order")} className="divide-y divide-border">{review.view.plan.steps.map(step=>{
             const status=progress[step.id]??step.status;
-            return <li key={step.id} className="grid gap-1 py-2"><div className="flex flex-wrap justify-between gap-2"><span>{step.title||step.id}</span><span className="flex items-center gap-2"><Tag label={t(status==="installed"?"Installed":status==="failed"?"Failed":"Pending")} tone={status==="installed"?"success":status==="failed"?"danger":"warning"} />{status!=="installed" && <span>{t(step.action==="platform.package.upgrade"?"Upgrade":step.action==="platform.package.downgrade"?"Downgrade":"Install")} · {step.version}</span>}</span></div>{step.installedVersion&&step.installedVersion!==step.version&&<span className="text-xs text-muted">{t("Installed version")}: {step.installedVersion}</span>}{step.problem&&<span className="text-xs text-[var(--tone-danger)]">{step.problem}</span>}</li>;
+            return <li key={step.id} className="grid gap-1 py-2"><div className="flex flex-wrap justify-between gap-2"><span>{step.title||step.id}</span><span className="flex items-center gap-2"><Tag label={t(status==="installed"?"Installed":status==="unconfirmed"?"Awaiting confirmation":status==="failed"?"Failed":"Pending")} tone={status==="installed"?"success":status==="failed"?"danger":"warning"} />{status!=="installed" && <span>{t(step.action==="platform.package.upgrade"?"Upgrade":step.action==="platform.package.downgrade"?"Downgrade":"Install")} · {step.version}</span>}</span></div>{step.installedVersion&&step.installedVersion!==step.version&&<span className="text-xs text-muted">{t("Installed version")}: {step.installedVersion}</span>}{step.problem&&<span className="text-xs text-[var(--tone-danger)]">{step.problem}</span>}</li>;
           })}</ol>}
           <ul aria-label={t("Resource changes")} className="max-h-72 overflow-auto divide-y divide-border">{review.details.flatMap(detail=>detail.changes.map(change=><li key={`${detail.id}/${change.ref.app}/${change.ref.kind}/${change.ref.name}`} className="flex flex-wrap gap-2 py-1 text-xs"><Tag label={t(change.change)}/><span className="text-muted">{change.ref.kind}</span><span className="break-all">{change.ref.name}</span><span className="text-muted">{change.before||"—"} → {change.after||"—"}</span></li>))}</ul>
           {review.details.some(detail=>detail.extensions.length>0) && <ul aria-label={t("Customer extensions")} className="divide-y divide-border">{review.details.flatMap(detail=>detail.extensions.map(extension=><li key={`${detail.id}/${extension.type}`} className="py-2 text-xs"><strong>{extension.type}</strong><p>{extension.issue?t(extension.issue):t("Compatible with this version")}</p><p className="text-muted">{extension.fields.join(", ")}</p></li>))}</ul>}
           {review.details.some(detail=>detail.removals.length>0) && <section aria-label={t("References affected by removal")} className="grid gap-2"><h3 className="font-semibold">{t("References affected by removal")}</h3><p className="text-muted">{t(review.schema==="platform.package.retire"?"These resources will keep their data and references, but the removed resources will be unavailable.":"Update these references before upgrading this product.")}</p><ul className="divide-y divide-border">{review.details.flatMap(detail=>detail.removals.map(impact=><li key={`${detail.id}/${impact.resource.name}/${impact.consumer.kind}/${impact.consumer.name}`} className="grid gap-1 py-2 text-xs"><strong>{impact.consumer.name}</strong><span className="text-muted">{impact.resource.kind} · {impact.resource.name}</span></li>))}</ul></section>}
           {review.details.flatMap(detail=>detail.problems??[]).map(problem=><Notice key={problem} tone="danger" message={t(problem)}/>)}
           {review.view.plan.problems?.map(problem=><Notice key={problem} tone="warning" message={t(problem)}/>)}
+          {Object.values(progress).includes("unconfirmed") && <Notice tone="warning" message={t("The server may already have completed this step. Retry checks the same request without installing it again.")}/>}
           {refused[review.id] && <Notice tone="danger" role="alert" message={refused[review.id]!}/>}
-          <div className="flex justify-end gap-2"><Button disabled={busy===review.id} onClick={()=>setReview(undefined)}>{t("Cancel")}</Button><Button variant="primary" disabled={busy===review.id || !!review.view.plan.problems?.length || review.view.plan.steps.some(step=>(progress[step.id]??step.status)==="failed") || review.details.some(detail=>detail.problems?.length)} onClick={()=>void act(review.schema,review.id,review.payload,true)}>{t(review.schema==="platform.package.retire"?"Retire":review.schema==="platform.package.upgrade"?"Upgrade":review.schema==="platform.package.downgrade"?"Downgrade":review.schema==="platform.package.rollback"?"Roll back":"Install")}</Button></div>
+          <div className="flex justify-end gap-2"><Button disabled={busy===review.id} onClick={()=>setReview(undefined)}>{t("Cancel")}</Button><Button variant="primary" disabled={busy===review.id || !!review.view.plan.problems?.length || review.view.plan.steps.some(step=>(progress[step.id]??step.status)==="failed") || review.details.some(detail=>detail.problems?.length)} onClick={()=>void act(review.schema,review.id,review.payload,true)}>{t(Object.values(progress).includes("unconfirmed")?"Retry confirmation":review.schema==="platform.package.retire"?"Retire":review.schema==="platform.package.upgrade"?"Upgrade":review.schema==="platform.package.downgrade"?"Downgrade":review.schema==="platform.package.rollback"?"Roll back":"Install")}</Button></div>
         </div>}
       </Dialog>
     </div>

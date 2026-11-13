@@ -53,6 +53,7 @@ export type Definition = Omit<Api.Definition,"page">&{page?:PageUI.Page};
 export type Me = Api.MeView;
 export type Decision = {
   evidence?: string[]; expectedRevision?: number; quiet?: boolean;
+  timeoutMs?: number;
   schemaVersion?: Api.SchemaVersion;
   originalKey?: string;
   correctionOf?: string;

@@ -110,7 +110,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     let answered: Entry[];
     try {
       key = original?.submission.idempotencyKey ?? pending?.submission.idempotencyKey ?? client.draft(schema, target, payload, options.evidence, options.expectedRevision, options.schemaVersion ?? actions?.find(action => action.schema === schema)?.schemaVersion, options.correctionOf);
-      answered = original && ["SUBMISSION_STATE_CONFIRMED", "SUBMISSION_STATE_REJECTED", "SUBMISSION_STATE_CONFLICT"].includes(original.state) ? [await client.repeat(key!)] : await client.send(key);
+      answered = original && ["SUBMISSION_STATE_CONFIRMED", "SUBMISSION_STATE_REJECTED", "SUBMISSION_STATE_CONFLICT"].includes(original.state) ? [await client.repeat(key!, options.timeoutMs)] : await client.send(key, options.timeoutMs);
     } catch (error) {
       if (original) options.onOutcome?.(original);
       setOutbox([...client.authorities.outbox]);

@@ -256,6 +256,8 @@ register("zh-CN", {
   "Continue checks the original requests. Confirmed steps are skipped; unanswered steps keep their original inputs and keys.": "继续时会核对原请求，跳过已确认步骤；尚未确认的步骤保留原输入和请求键。",
   "This package requires no initial data requests.": "此包无需执行初始数据请求。",
   "Awaiting confirmation": "等待确认",
+  "Retry confirmation": "重试确认",
+  "The server may already have completed this step. Retry checks the same request without installing it again.": "服务器可能已经完成这一步。重试只会查询同一请求的结果，不会重复安装。",
   "Completed": "已完成",
   "Not started": "尚未开始",
   "Finish uninstalling this package in Packages before preparing applications.": "请先在程序包页面完成卸载，再准备应用。",
