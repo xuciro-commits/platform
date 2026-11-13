@@ -70,7 +70,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	defer func() {
 		if p := recover(); p != nil {
 			t.hops = 0
-			t.quarantine(fmt.Errorf("accepted work: %v", p))
+			t.observeOwnerRun(Now(), "work", "", task.App, "", "failed", "Accepted work", fmt.Sprint(p))
 			outcome = pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 		}
 	}()

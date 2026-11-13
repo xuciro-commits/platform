@@ -5,8 +5,8 @@ import automation "platformserver/services/automate/runtime"
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"go.opentelemetry.io/otel/trace"
+	"log"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
@@ -85,7 +85,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 func (t *Tenant) step(now time.Time) (more bool) {
 	defer func() {
 		if failure := recover(); failure != nil {
-			t.quarantine(fmt.Errorf("owned work panicked: %v", failure))
+			log.Printf("tenant %s: owned work panicked: %v", t.ID, failure)
 			more = false
 		}
 	}()

@@ -151,12 +151,9 @@ func (s *Sequence) ApplyBatch(l *platform.Ledger, raw []byte, h BatchApply) (boo
 	return s.PromoteBatch(prepared, h)
 }
 
-func (s *Sequence) CheckSubmission(a platform.App, m platform.Member, sub *pb.Submission) *kernel.Error {
+func (s *Sequence) CheckSubmission(m platform.Member, sub *pb.Submission) *kernel.Error {
 	if sub.GetTenantId() != s.ID || sub.GetPrincipalId() != m.ID {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
-	}
-	if sub.GetAuthority() != a.Manifest().ID {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_AUTHORITY}
 	}
 	if sub.GetIdempotencyKey() == "" || sub.GetTarget() == nil || sub.GetSchema() == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")

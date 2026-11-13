@@ -140,7 +140,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	if t.businessStopped() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
 	}
-	if refusal := t.CheckSubmission(a, m, s); refusal != nil {
+	if refusal := t.CheckSubmission(m, s); refusal != nil {
 		return nil, refusal
 	}
 	record, hash, refusal, done := t.ReplayPrior(a, s, binding)
