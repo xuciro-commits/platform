@@ -3,11 +3,8 @@ package host
 import transport "platformserver/kernel/transport"
 
 import (
-	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 
 	controlowner "platformserver/services/security/control"
 	"strconv"
@@ -27,11 +24,7 @@ func (h *Host) routesCore(rt *routes) {
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		page, err := t.BusinessRefusals(m, r.URL.Query().Get("type"), r.URL.Query().Get("id"), offset, limit, h.Now(), r.URL.Query().Get("key"))
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, page)
+		transport.Answer(w, page, err)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: changed for data changes, operations for queue-only progress (F-32)", Answer: LiveQueryFrame{}},
 		func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -91,11 +84,7 @@ func (h *Host) routesCore(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: Explanation{},
 		Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, err := t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
+		transport.Answer(w, out, err)
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/authz/explain", Summary: "Explain the ordered owner authorization decision for a record, fields and source", Body: platform.AuthzRequest{}, Answer: platform.AuthzDecision{}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request platform.AuthzRequest
@@ -103,11 +92,7 @@ func (h *Host) routesCore(rt *routes) {
 			return
 		}
 		decision, err := t.ExplainOperation(request, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, decision)
+		transport.Answer(w, decision, err)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/sessions", Summary: "The caller's sessions: the credentials the host has seen act as them, the current one marked", Answer: []platform.Session{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, consoleOf(t).Sessions(m.ID, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), h.Now()))
@@ -128,46 +113,26 @@ func (h *Host) routesCore(rt *routes) {
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/{read}", Summary: "A named read of an app, such as inbox, requests, notifications, views, settings, members or audit; the app decides who may read it"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		name := r.PathValue("read")
-		inputs, err := namedReadInputs(t.App(t.owner["read:"+name]), name, r.URL.Query())
+		inputs, err := transport.NamedReadInputs(t.App(t.owner["read:"+name]), name, r.URL.Query())
 		if err != nil {
 			Reply(w, nil, err)
 			return
 		}
 		out, err := t.read(m, name, inputs)
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		if declarationReads[r.PathValue("read")] {
-			out = t.i18n.Translate(out, t.Language(m, r))
-		}
-		if messageReads[r.PathValue("read")] {
-			out = t.i18n.TranslateMessages(out, t.Language(m, r))
-		}
-		WriteJSON(w, http.StatusOK, out)
+		t.answerRead(w, r, m, name, out, err)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/apps/{app}/reads/{read}", Summary: "A named read selected by its original app; the same owner authorization and field filtering apply"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		name := r.PathValue("read")
-		inputs, err := namedReadInputs(t.App(r.PathValue("app")), name, r.URL.Query())
+		inputs, err := transport.NamedReadInputs(t.App(r.PathValue("app")), name, r.URL.Query())
 		if err != nil {
 			Reply(w, nil, err)
 			return
 		}
 		out, err := t.readFromApp(m, r.PathValue("app"), name, inputs)
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		if declarationReads[name] {
-			out = t.i18n.Translate(out, t.Language(m, r))
-		}
-		if messageReads[name] {
-			out = t.i18n.TranslateMessages(out, t.Language(m, r))
-		}
-		WriteJSON(w, http.StatusOK, out)
+		t.answerRead(w, r, m, name, out, err)
 	})
-	rt.public(transport.Route{Pattern: "GET /v1/sign-in", Summary: "How the workspace signs in: the OpenID issuer and client, or development identities", Answer: SignIn{}}, func(w http.ResponseWriter, _ *http.Request) {
-		out := SignIn{}
+	rt.public(transport.Route{Pattern: "GET /v1/sign-in", Summary: "How the workspace signs in: the OpenID issuer and client, or development identities", Answer: transport.SignIn{}}, func(w http.ResponseWriter, _ *http.Request) {
+		out := transport.SignIn{}
 		if h.Issuer != "" {
 			out.Issuer, out.Client = h.Issuer, h.Client
 		} else if h.Development {
@@ -187,38 +152,14 @@ func (h *Host) routesCore(rt *routes) {
 	})
 }
 
-func namedReadInputs(app platform.App, name string, query url.Values) (json.RawMessage, *kernel.Error) {
-	if app == nil {
-		return nil, nil
-	}
-	fields, declared := app.Manifest().ReadInputs[name]
-	if !declared {
-		return nil, nil
-	}
-	values := map[string]any{}
-	for _, field := range fields {
-		if !query.Has(field.Name) {
-			continue
+func (t *Tenant) answerRead(w http.ResponseWriter, r *http.Request, m platform.Member, name string, out any, refusal *kernel.Error) {
+	if refusal == nil {
+		if declarationReads[name] {
+			out = t.i18n.Translate(out, t.Language(m, r))
 		}
-		text := query.Get(field.Name)
-		var value any = text
-		var err error
-		switch field.Type {
-		case "integer":
-			value, err = strconv.ParseInt(text, 10, 64)
-		case "number":
-			value, err = strconv.ParseFloat(text, 64)
-		case "boolean":
-			value, err = strconv.ParseBool(text)
+		if messageReads[name] {
+			out = t.i18n.TranslateMessages(out, t.Language(m, r))
 		}
-		if err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, fmt.Sprintf("Read input %s must be %s", field.Name, field.Type))
-		}
-		values[field.Name] = value
 	}
-	raw, err := json.Marshal(values)
-	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Read inputs cannot be encoded as JSON")
-	}
-	return raw, nil
+	transport.Answer(w, out, refusal)
 }

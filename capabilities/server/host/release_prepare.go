@@ -12,17 +12,10 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/services/resources/authoring"
 
+	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
-
-func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly ...bool) (*stagedDecision, json.RawMessage, error) {
-	return t.bootstrapOwnerDraftsLocked(candidate, context, len(definitionOnly) > 0 && definitionOnly[0], nil)
-}
-
-func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool, request *releaseowner.OwnerDraftRequest, existing ...*stagedDecision) (*stagedDecision, json.RawMessage, error) {
-	return t.bootstrapOwnerDraftsLockedWithArchived(candidate, context, definitionOnly, request, false, existing...)
-}
 
 func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool, request *releaseowner.OwnerDraftRequest, includeArchived bool, existing ...*stagedDecision) (*stagedDecision, json.RawMessage, error) {
 	registry, err := t.assetRegistryLocked()
@@ -71,114 +64,56 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 	}
 	defer endBootstrap()
 	decision.attachPrivateHosts()
-	var receipt *pb.ChangeRecord
-	declare := func(asset platform.ReleaseAsset) error {
-		if context.DraftsOnly && asset.Ref.Kind != platform.AssetMediaSet {
-			return nil
-		}
-		plans, err := registry.PrepareReleaseAssets([]platform.ReleaseAsset{asset}, context)
-		if err != nil {
-			return err
-		}
-		for _, plan := range plans {
-			if context.DraftsOnly && plan.Ref.Kind == platform.AssetMediaSet {
-				var set platform.MediaSet
-				if err := json.Unmarshal(plan.Image, &set); err != nil {
-					return err
-				}
-				caller := platform.NewCaller(decision, context.Member, plan.Ref.App, false, false)
-				if refusal := decision.Put(caller, receipt, set); refusal != nil {
-					return refusal
-				}
-				ref := plan.Ref
-				images, err := records.PrepareMediaVersionImages(view.Projection, []platform.ReleaseInstallation{{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Ref: &ref, Record: plan.Record}})
-				if err != nil {
-					return err
-				}
-				for _, snapshot := range images {
-					if refusal := decision.Put(caller, receipt, snapshot); refusal != nil {
-						return refusal
-					}
-				}
-				for i, event := range decision.Events {
-					if event.Record == receipt {
-						decision.Events[i].Changed = slices.Clone(decision.Changed[event.App+"/"+receipt.GetChangeId()])
-					}
+	receipt, err := releaseowner.BootstrapStage{
+		Tenant: t.ID, Candidate: candidate, Context: context, Request: request, IncludeArchived: includeArchived, Registry: registry, Drafts: drafts,
+		Put: func(app string, receipt *pb.ChangeRecord, value any) *kernel.Error {
+			return decision.Put(platform.NewCaller(decision, context.Member, app, false, false), receipt, value)
+		},
+		MediaVersions: func(plan platform.AssetInstallation) ([]platform.MediaSetVersion, error) {
+			ref := plan.Ref
+			return records.PrepareMediaVersionImages(view.Projection, []platform.ReleaseInstallation{{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Ref: &ref, Record: plan.Record}})
+		},
+		KeepChanges: func(receipt *pb.ChangeRecord) {
+			for i, event := range decision.Events {
+				if event.Record == receipt {
+					decision.Events[i].Changed = slices.Clone(decision.Changed[event.App+"/"+receipt.GetChangeId()])
 				}
 			}
-			if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{Private: true}); err != nil {
-				return err
+		},
+		Register: view.registerInstalledAsset,
+		Entity: func(typ, name string) (platform.EntityInfo, bool, bool) {
+			et := decision.Records.Type(typ)
+			if et == nil {
+				return platform.EntityInfo{}, false, false
 			}
-			if context.DraftsOnly {
-				continue
-			}
-			if err := view.registerInstalledAsset(plan); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	assets := map[platform.AssetRef]platform.ReleaseAsset{}
-	hasDraft := map[platform.AssetRef]bool{}
-	for _, draft := range drafts {
-		hasDraft[draft.Ref] = true
-	}
-	for _, asset := range candidate.Assets {
-		assets[asset.Ref] = asset
-		if context.ManagedAssets != nil && !context.ManagedAssets[asset.Ref] {
-			continue
-		}
-		if !hasDraft[asset.Ref] && !context.DraftsOnly {
-			if err := declare(asset); err != nil {
-				return nil, nil, err
-			}
-		}
-	}
-	for ordinal, draft := range drafts {
-		et := decision.Records.Type(draft.Type)
-		if et == nil {
-			return nil, nil, fmt.Errorf("%s does not host %s", t.ID, draft.Type)
-		}
-		matches, err := decision.Records.DraftMatches(draft.Type, releaseowner.DraftLogicalName(draft.Ref), includeArchived, context.ManagedBy != "")
-		if err != nil {
-			return nil, nil, err
-		}
-		if matches > 1 {
-			return nil, nil, fmt.Errorf("asset draft %s/%s is ambiguous", draft.Type, draft.Name)
-		}
-		if request != nil && (matches > 0 || et.Rows().Get(draft.Name) != nil) {
-			return nil, nil, fmt.Errorf("asset %s already has a draft; open that draft instead", draft.Ref)
-		}
-		app := view.App(et.Info().App)
-		if matches == 0 {
-			submission, err := releaseowner.DraftSubmission(t.ID, candidate.ID, context, request, ordinal, draft, et.Info())
-			if err != nil {
-				return nil, nil, err
-			}
+			return et.Info(), et.Rows().Get(name) != nil, true
+		},
+		Matches: decision.Records.DraftMatches,
+		Decide: func(info platform.EntityInfo, draft platform.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error) {
+			app := view.App(info.App)
 			if request != nil {
 				if refusal := t.delegatedBound(context.Member, submission); refusal != nil {
-					return nil, nil, refusal
+					return nil, refusal
 				}
 			}
-			answer, rejected := platform.Decide(platform.NewCaller(decision, context.Member, et.Info().App, false, context.ManagedBy != ""), app, submission, context.At)
+			answer, rejected := platform.Decide(platform.NewCaller(decision, context.Member, info.App, false, context.ManagedBy != ""), app, submission, context.At)
 			if rejected != nil {
-				return nil, nil, releaseowner.DraftRefusal(app, draft, rejected)
+				return nil, releaseowner.DraftRefusal(app, draft, rejected)
 			}
-			receipt = answer
-		}
-		private := decision.stateApp(app)
-		apps := slices.Clone(view.apps)
-		apps[view.appIndex[et.Info().App]] = private
-		view.ownerSet = view.with(apps)
-		(hostView{t: view, app: private}).bindOwner(private)
-		registry, err = view.assetRegistryLocked()
-		if err != nil {
-			return nil, nil, err
-		}
-		if err := declare(assets[draft.Ref]); err != nil {
-			return nil, nil, err
-		}
-		decision.attachPrivateHosts()
+			return answer, nil
+		},
+		Rebind: func(appID string) (*platform.AssetRegistry, error) {
+			private := decision.stateApp(view.App(appID))
+			apps := slices.Clone(view.apps)
+			apps[view.appIndex[appID]] = private
+			view.ownerSet = view.with(apps)
+			(hostView{t: view, app: private}).bindOwner(private)
+			return view.assetRegistryLocked()
+		},
+		AttachHosts: decision.attachPrivateHosts,
+	}.Run()
+	if err != nil {
+		return nil, nil, err
 	}
 	if !context.DraftsOnly {
 		view.installingSet = false
@@ -215,24 +150,14 @@ type releaseInstallationRuntime struct{ t *Tenant }
 func (r releaseInstallationRuntime) HasAgentRuntime() bool { return r.t.agents != nil }
 
 func (r releaseInstallationRuntime) ReleaseProject(candidate platform.ReleaseCandidate) string {
-	r.t.Projection.Lock()
-	defer r.t.Projection.Unlock()
-	resources := r.t.Projection.Type(build.ResourceType)
-	if resources == nil {
-		return ""
-	}
-	rows := []build.Resource{}
-	for _, row := range resources.Rows().All() {
-		rows = append(rows, row.Value.Interface().(build.Resource))
-	}
-	return releaseowner.ResourceProject(candidate, rows)
+	return releaseowner.ResourceProject(candidate, records.LockedRows[build.Resource](r.t.Projection, build.ResourceType))
 }
 
 func (r releaseInstallationRuntime) Registry() (*platform.AssetRegistry, error) {
 	return r.t.assetRegistryLocked()
 }
 func (r releaseInstallationRuntime) Bootstrap(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool) (releaseowner.InstallationRuntime, json.RawMessage, error) {
-	decision, raw, err := r.t.releaseBootstrapLocked(candidate, context, definitionOnly)
+	decision, raw, err := r.t.bootstrapOwnerDraftsLockedWithArchived(candidate, context, definitionOnly, nil, false)
 	if err != nil {
 		return nil, nil, err
 	}

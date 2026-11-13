@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+type pair[A, B any] struct {
+	first  A
+	second B
+}
+
 const embeddingActiveSpace = "knowledge/embedding-active-space"
 
 func (t *Tenant) corpus() knowledgeindex.Corpus {
@@ -59,17 +64,13 @@ func (t *Tenant) knowledgeSourceReadable(store *records.Store, m platform.Member
 }
 
 func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32, error) {
-	type configured struct {
-		model    platform.AIModel
-		provider platform.AIProvider
-	}
 	return knowledgeindex.Embedder{
 		Model: func() (platform.AIModel, platform.AIProvider, *kernel.Error) {
-			value, err := recordRead(t, context.Background(), func(t *Tenant) (configured, *kernel.Error) {
+			value, err := recordRead(t, context.Background(), func(t *Tenant) (pair[platform.AIModel, platform.AIProvider], *kernel.Error) {
 				model, provider, refusal := t.ai.Model(name)
-				return configured{model: model, provider: provider}, refusal
+				return pair[platform.AIModel, platform.AIProvider]{model, provider}, refusal
 			})
-			return value.model, value.provider, err
+			return value.first, value.second, err
 		},
 		Stage: func(binding platform.AIModelBinding, pv platform.AIProvider) *kernel.Error {
 			_, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageRuntime)
@@ -139,10 +140,7 @@ func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []s
 }
 
 func (t *Tenant) knowledgeContext() knowledgeindex.Context {
-	source := t
-	if t.readOrigin != nil {
-		source = t.readOrigin
-	}
+	source := t.readOriginOrSelf()
 	setting := func(name string) string {
 		value, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
 			return t.setting(t.automation(platform.KnowledgeApp, false), name), nil
@@ -169,40 +167,45 @@ func (t *Tenant) knowledgeContext() knowledgeindex.Context {
 	}
 }
 
-func (t *Tenant) syncRecords() {
-	source := t
+func (t *Tenant) readOriginOrSelf() *Tenant {
 	if t.readOrigin != nil {
-		source = t.readOrigin
+		return t.readOrigin
 	}
-	source.index.Sync(func(walked bool) ([]knowledgeindex.Source, map[string]bool, bool) {
-		source.Projection.Lock()
-		image := source.readImage.Load()
-		if image == nil || image.records != source.Projection.Generation() {
-			source.Projection.Unlock()
-			return nil, nil, false
-		}
-		dirty := source.Projection.TakeDirty()
-		source.Projection.Unlock()
-		changed := map[string]bool{}
-		for ref, marked := range dirty.All() {
-			changed[ref] = marked
-		}
-		values, refusal := recordRead(source, context.Background(), func(t *Tenant) ([]knowledgeindex.Source, *kernel.Error) {
-			if walked {
-				return t.corpus().Changed(changed), nil
-			}
-			return t.corpus().All(), nil
-		})
-		if refusal != nil {
+	return t
+}
+
+func (t *Tenant) syncRecords() {
+	source := t.readOriginOrSelf()
+	source.index.Sync(knowledgeindex.Changes{
+		Take: func() (map[string]bool, bool) {
 			source.Projection.Lock()
+			defer source.Projection.Unlock()
+			image := source.readImage.Load()
+			if image == nil || image.records != source.Projection.Generation() {
+				return nil, false
+			}
+			changed := map[string]bool{}
+			for ref, marked := range source.Projection.TakeDirty().All() {
+				changed[ref] = marked
+			}
+			return changed, true
+		},
+		Restore: func(changed map[string]bool) {
+			source.Projection.Lock()
+			defer source.Projection.Unlock()
 			for ref := range changed {
 				source.Projection.MarkDirty(ref)
 			}
-			source.Projection.Unlock()
-			return nil, nil, false
-		}
-		return values, changed, true
-	})
+		},
+		Corpus: func(changed map[string]bool, walked bool) ([]knowledgeindex.Source, *kernel.Error) {
+			return recordRead(source, context.Background(), func(t *Tenant) ([]knowledgeindex.Source, *kernel.Error) {
+				if walked {
+					return t.corpus().Changed(changed), nil
+				}
+				return t.corpus().All(), nil
+			})
+		},
+	}.Load)
 }
 
 func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, at time.Time) []platform.Passage {

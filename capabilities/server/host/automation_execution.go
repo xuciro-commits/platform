@@ -62,12 +62,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 	apps := slices.Clone(h.t.apps)
 	rt := &flowExecutionRuntime{stagedDecision: h.decision, view: view, release: release, shapes: map[string]platform.EntityInfo{}, assets: slices.Clone(assets)}
 	for i, owner := range apps {
-		selected := []platform.ReleaseAsset{}
-		for _, asset := range assets {
-			if asset.Ref.App == owner.Manifest().ID {
-				selected = append(selected, asset)
-			}
-		}
+		selected := automation.AssetsOf(assets, owner.Manifest().ID)
 		if len(selected) == 0 {
 			continue
 		}
@@ -99,16 +94,11 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 		for _, action := range bound.Manifest().Actions.All() {
 			view.owner["action:"+action.Schema] = view.ids[i]
 		}
-		for _, entity := range bound.Manifest().Entities {
-			if !slices.ContainsFunc(selected, func(a platform.ReleaseAsset) bool {
-				return a.Ref.Kind == platform.AssetObject && a.Ref.Name == entity.Type
-			}) {
-				continue
-			}
-			info, err := platform.Describe(bound.Manifest().ID, entity, func(reflect.Type) string { return "" })
-			if err != nil {
-				return nil, err
-			}
+		shapes, err := automation.RetainedShapes(bound.Manifest().ID, bound.Manifest().Entities, selected)
+		if err != nil {
+			return nil, err
+		}
+		for _, info := range shapes {
 			rt.shapes[info.Type] = info
 			view.owner[info.Type] = view.ids[i]
 		}
@@ -209,55 +199,6 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 	return &records.Row{Value: decoded.Elem(), Format: value.Format, HistoryHead: value.HistoryHead, HistoryParent: value.HistoryParent, History: value.History, LoadHistory: value.LoadHistory, HistoryCount: value.HistoryCount}, nil
 }
 
-type retainedRows struct {
-	runtime       *flowExecutionRuntime
-	current, info platform.EntityInfo
-	rows          records.Rows
-}
-
-func (s *retainedRows) IDs(after string, limit int) []string { return s.rows.IDs(after, limit) }
-func (s *retainedRows) Get(id string) *records.Row {
-	row := s.rows.Get(id)
-	if row == nil {
-		return nil
-	}
-	value, refusal := s.runtime.retainedRow(s.current, s.info, row)
-	if refusal != nil {
-		panic(retainedReadRefusal{refusal})
-	}
-	return value
-}
-
-func (s *retainedRows) GetBatch(ids []string) map[string]*records.Row {
-	rows := s.rows.GetBatch(ids)
-	for id, row := range rows {
-		if row == nil {
-			continue
-		}
-		value, refusal := s.runtime.retainedRow(s.current, s.info, row)
-		if refusal != nil {
-			panic(retainedReadRefusal{refusal})
-		}
-		rows[id] = value
-	}
-	return rows
-}
-
-type retainedReadRefusal struct{ refusal *kernel.Error }
-
-func (r *flowExecutionRuntime) recoverRetainedRead(refusal **kernel.Error) {
-	if failure := recover(); failure != nil {
-		saved, ok := failure.(retainedReadRefusal)
-		if !ok {
-			panic(failure)
-		}
-		r.FailDecision(saved.refusal)
-		if refusal != nil {
-			*refusal = saved.refusal
-		}
-	}
-}
-
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 	r.Records.Lock()
 	valid := r.readSource == r.Records && r.readStore != nil && r.readSQLView == r.Records.Current().View()
@@ -285,8 +226,15 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 			if current == nil {
 				return nil, conflictRefusal(fmt.Errorf("retained object %s has no current storage", typ))
 			}
-			source := &retainedRows{runtime: r, current: current.Info(), info: info, rows: origins[typ].rows}
-			store.ReplaceReadType(info, records.SourceRows(source), true)
+			stored, original := current.Info(), origins[typ].rows
+			store.ReplaceReadType(info, records.SourceRows(automation.RetainedRows[*records.Row]{
+				List:  func(after string, limit int) []string { return original.IDs(after, limit) },
+				Fetch: func(id string) *records.Row { return original.Get(id) },
+				Batch: func(ids []string) map[string]*records.Row { return original.GetBatch(ids) },
+				Convert: func(row *records.Row) (*records.Row, *kernel.Error) {
+					return r.retainedRow(stored, info, row)
+				},
+			}), true)
 		}
 		r.readSource, r.readStore, r.readOrigins, r.readSQLView = r.Records, store, origins, store.Current().View()
 	}
@@ -320,16 +268,23 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 	}
 	return r.Records.Get(c, typ, id)
 }
-func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) (refusal *kernel.Error) {
-	defer r.recoverRetainedRead(&refusal)
+func retainedRead[T any](r *flowExecutionRuntime, read func(view *Tenant) (T, *kernel.Error)) (output T, refusal *kernel.Error) {
+	defer automation.RecoverRetained(r.FailDecision, &refusal)
 	view, err := r.readView()
 	if err != nil {
-		return err
+		return output, err
 	}
-	return view.Projection.Check(c, entity, r.At)
+	return read(view)
+}
+
+func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) *kernel.Error {
+	_, refusal := retainedRead(r, func(view *Tenant) (struct{}, *kernel.Error) {
+		return struct{}{}, view.Projection.Check(c, entity, r.At)
+	})
+	return refusal
 }
 func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platform.Query) (out []any, total int, refusal *kernel.Error) {
-	defer r.recoverRetainedRead(&refusal)
+	defer automation.RecoverRetained(r.FailDecision, &refusal)
 	view, err := r.readView()
 	if err != nil {
 		return nil, 0, err
@@ -339,7 +294,7 @@ func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platf
 	return d.Find(c, typ, q)
 }
 func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
-	defer r.recoverRetainedRead(&refusal)
+	defer automation.RecoverRetained(r.FailDecision, &refusal)
 	if refusal := authorizationRefusal(r.stagedDecision.Authorize(c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at)); refusal != nil {
 		return nil, refusal
 	}
@@ -360,7 +315,7 @@ func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at 
 	return raw, conflictRefusal(marshalErr)
 }
 func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (output json.RawMessage, refs []string, refusal *kernel.Error) {
-	defer r.recoverRetainedRead(&refusal)
+	defer automation.RecoverRetained(r.FailDecision, &refusal)
 	view, err := r.readView()
 	if err != nil {
 		return nil, nil, err
@@ -370,32 +325,23 @@ func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string,
 	})
 }
 
-func (r *flowExecutionRuntime) ReadQuery(c platform.Caller, app, name string, input json.RawMessage, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
-	defer r.recoverRetainedRead(&refusal)
-	view, err := r.readView()
-	if err != nil {
-		return nil, err
-	}
-	return view.readQueryFrom(view.Projection, c, app, name, input, at)
+func (r *flowExecutionRuntime) ReadQuery(c platform.Caller, app, name string, input json.RawMessage, at time.Time) (json.RawMessage, *kernel.Error) {
+	return retainedRead(r, func(view *Tenant) (json.RawMessage, *kernel.Error) {
+		return view.readQueryFrom(view.Projection, c, app, name, input, at)
+	})
 }
-func (r *flowExecutionRuntime) ReadQueryVersion(c platform.Caller, app, name string, version int, input json.RawMessage, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
-	defer r.recoverRetainedRead(&refusal)
-	view, err := r.readView()
-	if err != nil {
-		return nil, err
-	}
-	return view.readQueryVersionFrom(view.Projection, c, app, name, version, input, at)
+func (r *flowExecutionRuntime) ReadQueryVersion(c platform.Caller, app, name string, version int, input json.RawMessage, at time.Time) (json.RawMessage, *kernel.Error) {
+	return retainedRead(r, func(view *Tenant) (json.RawMessage, *kernel.Error) {
+		return view.readQueryVersionFrom(view.Projection, c, app, name, version, input, at)
+	})
 }
-func (r *flowExecutionRuntime) ReadRuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
-	defer r.recoverRetainedRead(&refusal)
-	view, err := r.readView()
-	if err != nil {
-		return nil, err
-	}
-	return view.readRuleQueryFrom(view.Projection, c, set, input, at)
+func (r *flowExecutionRuntime) ReadRuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, at time.Time) (json.RawMessage, *kernel.Error) {
+	return retainedRead(r, func(view *Tenant) (json.RawMessage, *kernel.Error) {
+		return view.readRuleQueryFrom(view.Projection, c, set, input, at)
+	})
 }
 func (r *flowExecutionRuntime) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (output platform.RecordSetResult, refusal *kernel.Error) {
-	defer r.recoverRetainedRead(&refusal)
+	defer automation.RecoverRetained(r.FailDecision, &refusal)
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: object, Record: id}
 	if refusal := authorizationRefusal(r.stagedDecision.Authorize(c, question, at)); refusal != nil {
 		return platform.RecordSetResult{}, refusal
@@ -407,7 +353,7 @@ func (r *flowExecutionRuntime) ReadRecordSet(c platform.Caller, object, id, name
 	return view.readRecordSetFrom(view.Projection, c, object, id, name, at)
 }
 func (r *flowExecutionRuntime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) (decision platform.AuthzDecision) {
-	defer r.recoverRetainedRead(nil)
+	defer automation.RecoverRetained(r.FailDecision, nil)
 	view, err := r.readView()
 	if err != nil {
 		r.FailDecision(err)
@@ -420,7 +366,7 @@ func (r *flowExecutionRuntime) Authorize(c platform.Caller, q platform.AuthzRequ
 }
 
 func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, entity any) (refusal *kernel.Error) {
-	defer r.recoverRetainedRead(&refusal)
+	defer automation.RecoverRetained(r.FailDecision, &refusal)
 	defer func() {
 		if refusal != nil {
 			r.FailDecision(refusal)

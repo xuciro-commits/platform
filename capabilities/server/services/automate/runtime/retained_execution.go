@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformkernel/kernel"
 	"platformserver/platform"
+	"reflect"
 	"slices"
 )
 
@@ -133,4 +135,83 @@ func RetainedDefinitions(definitions []platform.Definition, assets []platform.Re
 		}
 	}
 	return definitions, nil
+}
+
+func AssetsOf(assets []platform.ReleaseAsset, app string) []platform.ReleaseAsset {
+	selected := []platform.ReleaseAsset{}
+	for _, asset := range assets {
+		if asset.Ref.App == app {
+			selected = append(selected, asset)
+		}
+	}
+	return selected
+}
+
+func RetainedShapes(app string, entities []platform.Entity, selected []platform.ReleaseAsset) ([]platform.EntityInfo, error) {
+	var out []platform.EntityInfo
+	for _, entity := range entities {
+		if !slices.ContainsFunc(selected, func(a platform.ReleaseAsset) bool {
+			return a.Ref.Kind == platform.AssetObject && a.Ref.Name == entity.Type
+		}) {
+			continue
+		}
+		info, err := platform.Describe(app, entity, func(reflect.Type) string { return "" })
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+type retainedReadRefusal struct{ refusal *kernel.Error }
+
+func RecoverRetained(fail func(*kernel.Error), refusal **kernel.Error) {
+	if failure := recover(); failure != nil {
+		saved, ok := failure.(retainedReadRefusal)
+		if !ok {
+			panic(failure)
+		}
+		fail(saved.refusal)
+		if refusal != nil {
+			*refusal = saved.refusal
+		}
+	}
+}
+
+type RetainedRows[R comparable] struct {
+	List    func(after string, limit int) []string
+	Fetch   func(id string) R
+	Batch   func(ids []string) map[string]R
+	Convert func(R) (R, *kernel.Error)
+}
+
+func (s RetainedRows[R]) IDs(after string, limit int) []string { return s.List(after, limit) }
+
+func (s RetainedRows[R]) Get(id string) R {
+	var none R
+	row := s.Fetch(id)
+	if row == none {
+		return none
+	}
+	return s.convert(row)
+}
+
+func (s RetainedRows[R]) GetBatch(ids []string) map[string]R {
+	var none R
+	rows := s.Batch(ids)
+	for id, row := range rows {
+		if row != none {
+			rows[id] = s.convert(row)
+		}
+	}
+	return rows
+}
+
+func (s RetainedRows[R]) convert(row R) R {
+	value, refusal := s.Convert(row)
+	if refusal != nil {
+		panic(retainedReadRefusal{refusal})
+	}
+	return value
 }

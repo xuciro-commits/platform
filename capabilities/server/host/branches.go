@@ -7,6 +7,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	trialowner "platformserver/services/devops/trials"
 	ontology "platformserver/services/ontology"
@@ -55,7 +56,7 @@ func (t *Tenant) branchCaller(m platform.Member) platform.Caller {
 }
 
 func (t *Tenant) branchWorkspace() branches.Workspace {
-	return branches.Workspace{Tenant: t.ID, Role: t.ResourceRole, Base: t.branchBaseLocked,
+	return branches.Workspace{Tenant: t.ID, Role: t.ResourceRole, Base: func() string { return t.Projection.BranchBase(t.releases.Active(), build.BranchDraftType) },
 		Read: func(m platform.Member, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
 			return t.readRecordFrom(t.Projection, t.branchCaller(m), typ, id, now)
 		},
@@ -63,34 +64,10 @@ func (t *Tenant) branchWorkspace() branches.Workspace {
 			page, refusal := t.recordsFrom(t.Projection, m, typ, q, now)
 			return page.Records, refusal
 		},
-		Fields: func(typ string) ([]platform.FieldInfo, bool) {
-			t.Projection.Lock()
-			defer t.Projection.Unlock()
-			if et := t.Projection.Type(typ); et != nil {
-				return et.Info().Fields, true
-			}
-			return nil, false
-		},
-		Resources: func() []build.Resource {
-			t.Projection.Lock()
-			defer t.Projection.Unlock()
-			var out []build.Resource
-			if resources := t.Projection.Type(build.ResourceType); resources != nil {
-				for _, row := range resources.Rows().All() {
-					out = append(out, row.Value.Interface().(build.Resource))
-				}
-			}
-			return out
-		},
+		Fields:    func(typ string) ([]platform.FieldInfo, bool) { return records.LockedFields(t.Projection, typ) },
+		Resources: func() []build.Resource { return records.LockedRows[build.Resource](t.Projection, build.ResourceType) },
 		Project: func(id string) (build.Application, bool) {
-			t.Projection.Lock()
-			defer t.Projection.Unlock()
-			if apps := t.Projection.Type(build.AppType); apps != nil {
-				if row := apps.Rows().Get(id); row != nil {
-					return row.Value.Interface().(build.Application), true
-				}
-			}
-			return build.Application{}, false
+			return records.LockedRow[build.Application](t.Projection, build.AppType, id)
 		},
 		Stored: func(module string) bool { return t.artifactStored(context.Background(), module) },
 	}
@@ -110,12 +87,6 @@ func (t *Tenant) resourceProject(typ, draft string) string {
 
 func (t *Tenant) mainDraftOf(m platform.Member, typ, id string, now time.Time) (branches.MainDraft, *kernel.Error) {
 	return t.branchWorkspace().Main(m, typ, id, now)
-}
-
-func (t *Tenant) branchDetail(m platform.Member, branch build.Branch, now time.Time) (branches.BranchDetail, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (branches.BranchDetail, *kernel.Error) {
-		return t.branchWorkspace().Detail(m, branch, now)
-	})
 }
 
 func (t *Tenant) ListBranches(m platform.Member, now time.Time) ([]branches.BranchDetail, *kernel.Error) {
@@ -164,7 +135,9 @@ func (t *Tenant) SaveBranchResource(m platform.Member, id, typ, draft string, re
 func (t *Tenant) appendBranchSave(m platform.Member, plan branches.SavePlan, typ, draft string, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	s := plan.Save(t.ID, m, typ, draft)
 	if s == nil {
-		return t.branchDetail(m, plan.Branch, now)
+		return recordRead(t, context.Background(), func(t *Tenant) (branches.BranchDetail, *kernel.Error) {
+			return t.branchWorkspace().Detail(m, plan.Branch, now)
+		})
 	}
 	if _, refusal := t.Submit(m, s, now); refusal != nil {
 		return branches.BranchDetail{}, refusal

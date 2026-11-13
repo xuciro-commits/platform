@@ -36,7 +36,7 @@ var namedReads = []transport.Route{
 	{Pattern: "GET /v1/endpoints", Summary: "Outbound endpoints (administrators)", Answer: []actions.EndpointView{}},
 	{Pattern: "GET /v1/effects", Summary: "Outbound effects and their state (administrators)", Answer: []platform.Effect{}},
 	{Pattern: "GET /v1/health", Summary: "How the tenant's work stands: queues, failed work, deferral, breakers, failing connectors and endpoints (administrators)", Answer: TenantHealth{}},
-	{Pattern: "GET /v1/inbox", Summary: "Tasks offered to the caller, overdue first, in their language", Answer: []InboxTask{}},
+	{Pattern: "GET /v1/inbox", Summary: "Tasks offered to the caller, overdue first, in their language", Answer: []transport.InboxTask{}},
 	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []platform.ApprovalRequest{}},
 	{Pattern: "GET /v1/access-requests", Summary: "The caller's access requests and the requests they may approve", Answer: []controlowner.AccessRequest{}},
 	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []platform.SavedView{}},
@@ -58,11 +58,6 @@ var namedReads = []transport.Route{
 	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []platform.RelationNote{}},
 }
 
-type InboxTask struct {
-	platform.WorkTask
-	AnswerTitles []string `json:"answerTitles,omitempty"`
-}
-
 type SubmissionAnswer struct {
 	Record *pb.ChangeRecord    `json:"record,omitempty"`
 	Error  *platform.ErrorBody `json:"error,omitempty"`
@@ -79,24 +74,13 @@ type MeView struct {
 	PrincipalID string                `json:"principalId"`
 	Profile     platform.Member       `json:"profile"`
 	Apps        []AppEntry            `json:"apps"`
-	Tenants     []MeTenant            `json:"tenants"`
+	Tenants     []transport.MeTenant  `json:"tenants"`
 	Language    string                `json:"language"`
 	Languages   []string              `json:"languages"`
 	Preferred   string                `json:"preferred,omitempty"`
 	Currency    string                `json:"currency"`
 	Account     platform.Account      `json:"account"`
 	Tenant      platform.TenantRecord `json:"tenant"`
-}
-
-type MeTenant struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
-}
-
-type SignIn struct {
-	Issuer     string                   `json:"issuer,omitempty"`
-	Client     string                   `json:"client,omitempty"`
-	Identities []platform.LoginIdentity `json:"identities,omitempty"`
 }
 
 func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {

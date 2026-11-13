@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -14,123 +13,76 @@ import (
 )
 
 type stagedCandidate struct {
-	candidate platform.ReleaseCandidate
-	reader    *Tenant
-	drafts    []build.JointDraftRef
+	trialowner.StagedCandidate
+	reader *Tenant
 }
 
 func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.CandidateSimulation, *kernel.Error) {
-		return t.scopedSimulateCandidate(builder, request)
-	})
-}
-
-func (t *Tenant) scopedSimulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *kernel.Error) {
 	return t.simulateCandidate(builder, request, nil)
 }
 
 func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest, staged *stagedCandidate) (trialowner.CandidateSimulation, *kernel.Error) {
 	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.CandidateSimulation, *kernel.Error) {
-		return t.simulateStagedCandidateRead(builder, request, staged)
-	})
-}
-
-func (t *Tenant) simulateStagedCandidateRead(builder platform.Member, request trialowner.CandidateSimulationRequest, staged *stagedCandidate) (trialowner.CandidateSimulation, *kernel.Error) {
-	var empty trialowner.CandidateSimulation
-	if err := t.Admits(builder); err != nil {
-		return empty, err
-	}
-	caller := platform.NewCaller(runtime{t: t}, builder, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}, true)); err != nil {
-		return empty, err
-	}
-	var stagedCandidate *platform.ReleaseCandidate
-	if staged != nil {
-		stagedCandidate = &staged.candidate
-	}
-	if refusal := request.Check(stagedCandidate); refusal != nil {
-		return empty, refusal
-	}
-	if t.quarantined() {
-		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	m, members, refusal := request.Members(builder, t.member)
-	if refusal != nil {
-		return empty, refusal
-	}
-	kind, id := request.Root()
-	drafts := []build.JointDraftRef{{Kind: kind, ID: id}}
-	var candidate platform.ReleaseCandidate
-	var err error
-	diagnostic := ""
-	reader := t
-	if staged != nil {
-		reader = staged.reader
-	}
-	if staged != nil && request.FunctionID == "" {
-		candidate = staged.candidate
-	} else if request.CandidateID != "" {
-		candidate, err = t.releases.Candidate(request.CandidateID)
-	} else {
-		if len(request.Roots) > 0 {
-			owner, ok := t.App(build.ID).(build.ConstructionDrafts)
-			if !ok {
-				err = fmt.Errorf("Construction draft owner is unavailable")
-			} else {
-				drafts, err = owner.RootDrafts(request.Roots)
-			}
+		var empty trialowner.CandidateSimulation
+		if err := t.Admits(builder); err != nil {
+			return empty, err
 		}
-		if request.ApplicationID != "" {
-			owner, ok := t.App(build.ID).(build.ConstructionDrafts)
-			if !ok {
-				err = fmt.Errorf("Construction draft owner is unavailable")
-			} else {
-				drafts, err = owner.ApplicationDrafts(request.ApplicationID)
-			}
+		caller := platform.NewCaller(runtime{t: t}, builder, build.ID, false, false)
+		if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}, true)); err != nil {
+			return empty, err
 		}
+		var stagedCandidate *platform.ReleaseCandidate
+		reader := t
+		var selected *trialowner.StagedCandidate
 		if staged != nil {
-			if root := (build.JointDraftRef{Kind: kind, ID: id}); !slices.Contains(staged.drafts, root) {
-				drafts = append(slices.Clone(staged.drafts), root)
-			} else {
-				drafts = staged.drafts
-			}
+			stagedCandidate, reader, selected = &staged.Candidate, staged.reader, &staged.StagedCandidate
+		}
+		if refusal := request.Check(stagedCandidate); refusal != nil {
+			return empty, refusal
+		}
+		if t.quarantined() {
+			return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		m, members, refusal := request.Members(builder, t.member)
+		if refusal != nil {
+			return empty, refusal
+		}
+		candidate, functionName, err := request.Select(trialowner.CandidateSource{
+			Drafts: func() (build.ConstructionDrafts, bool) {
+				owner, ok := t.App(build.ID).(build.ConstructionDrafts)
+				return owner, ok
+			},
+			Candidate: func(id string) (platform.ReleaseCandidate, error) { return t.releases.Candidate(id) },
+			Preview: func(drafts []build.JointDraftRef) (string, platform.ReleaseCandidate, error) {
+				review, prepared, problem := reader.previewReleaseLocked(drafts, builder)
+				return review.Diagnostic, prepared, problem
+			},
+			Function: func(id string) string {
+				selected, _ := platform.Get[build.Function](reader.automation(build.ID, false), id)
+				return selected.Name
+			},
+		}, selected)
+		environment, environmentErr := t.simulationEnvironment(candidate, request.Samples)
+		if environmentErr == nil {
+			environmentErr = platform.CheckSimulationOrganization(request.Organization)
+			environment.Organization = request.Organization
 		}
 		if err == nil {
-			review, prepared, problem := reader.previewReleaseLocked(drafts, builder)
-			candidate, err, diagnostic = prepared, problem, review.Diagnostic
+			err = environmentErr
 		}
-	}
-	if request.Sample != "" && err == nil {
-		err = request.SelectSample(candidate)
-	}
-	functionName := ""
-	if request.FunctionID != "" {
-		selected, _ := platform.Get[build.Function](reader.automation(build.ID, false), request.FunctionID)
-		functionName = selected.Name
-	}
-	if err == nil && diagnostic != "" {
-		err = fmt.Errorf("%s", diagnostic)
-	}
-	environment, environmentErr := t.simulationEnvironment(candidate, request.Samples)
-	if environmentErr == nil {
-		environmentErr = platform.CheckSimulationOrganization(request.Organization)
-		environment.Organization = request.Organization
-	}
-	if err == nil {
-		err = environmentErr
-	}
-	if err != nil {
-		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
-	}
-	if refusal := trialowner.CandidateModules(candidate, environment.Modules, func(module string) ([]byte, error) { return t.readArtifact(context.Background(), module) }); refusal != nil {
-		return empty, refusal
-	}
-	out, problem := runCandidateSimulation(request, candidate, environment, m, members, functionName)
-	if problem != nil {
-		return empty, problem
-	}
-	return trialowner.RunActors(request, out, m, members, func(actor platform.Member) (trialowner.CandidateSimulation, *kernel.Error) {
-		return runCandidateSimulation(request, candidate, environment, actor, members, functionName)
+		if err != nil {
+			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
+		}
+		if refusal := trialowner.CandidateModules(candidate, environment.Modules, func(module string) ([]byte, error) { return t.readArtifact(context.Background(), module) }); refusal != nil {
+			return empty, refusal
+		}
+		out, problem := runCandidateSimulation(request, candidate, environment, m, members, functionName)
+		if problem != nil {
+			return empty, problem
+		}
+		return trialowner.RunActors(request, out, m, members, func(actor platform.Member) (trialowner.CandidateSimulation, *kernel.Error) {
+			return runCandidateSimulation(request, candidate, environment, actor, members, functionName)
+		})
 	})
 }
 
@@ -194,7 +146,7 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 			}
 			return inbox.([]platform.WorkTask), true
 		},
-		Waiting: func() (bool, bool) { return len(pendingComputeEffects(t)) != 0, len(pendingFunctionEffects(t)) != 0 },
+		Waiting: func() (bool, bool) { return len(pendingComputeEffects(t)) != 0, len(pendingFunctionCalls(t)) != 0 },
 		Faulted: func() string {
 			if fault := t.Fault.Load(); fault != nil {
 				return fault.Reason

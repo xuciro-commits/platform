@@ -4,7 +4,6 @@ import transport "platformserver/kernel/transport"
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"platformserver/kernel/records"
@@ -23,17 +22,18 @@ import (
 	"platformserver/platform"
 )
 
-func enterpriseApp(t *Tenant) platform.EnterpriseQueries {
-	d, _ := t.App(enterprisemodel.ID).(platform.EnterpriseQueries)
-	return d
+func enterpriseModel(w http.ResponseWriter, t *Tenant) (platform.EnterpriseQueries, bool) {
+	app, _ := t.App(enterprisemodel.ID).(platform.EnterpriseQueries)
+	if app == nil {
+		Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This tenant has no enterprise model"))
+	}
+	return app, app != nil
 }
 
 func (h *Host) routesRecords(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: pageowner.PageModelRead{}, Answer: pageowner.PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request *pageowner.PageModelRead
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&request) != nil || request == nil || decoder.Decode(new(any)) != io.EOF {
+		request, ok := transport.DecodeOne[pageowner.PageModelRead](w, r, 1<<20)
+		if !ok {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A model read needs one bounded request"))
 			return
 		}
@@ -49,7 +49,6 @@ func (h *Host) routesRecords(rt *routes) {
 		}{value, t.i18n.TranslateInApp(value.Fields, owner, t.Language(m, r))})
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/page-model/rules", Summary: "List original action criteria available to the builder model inspector", Answer: []pageowner.PageModelRule{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-
 		c := platform.NewCaller(runtime{t: t}, m, "build", false, false)
 		if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/page-model/rules", "read", []string{"builder"}, true)); err != nil {
 			Reply(w, nil, err)
@@ -67,7 +66,6 @@ func (h *Host) routesRecords(rt *routes) {
 		WriteJSON(w, http.StatusOK, values)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/record-sets/{type}/{id}/{name}", Summary: "Read a bounded declared collection through its original owner", Answer: platform.RecordSetResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-
 		info, ok := t.Entity(r.PathValue("type"))
 		if !ok {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable"))
@@ -134,14 +132,9 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, err)
 			return
 		}
-		for i := range rows {
-			if rows[i].Error != nil {
-				rows[i].Error.Issues = t.localizedFieldIssues(m, rows[i].Error.Issues, t.Language(m, r))
-				if len(rows[i].Error.Issues) > 0 {
-					rows[i].Error.Message = rows[i].Error.Issues[0].Message
-				}
-			}
-		}
+		objects.LocalizeImportRows(rows, func(issues []platform.FieldIssue) []platform.FieldIssue {
+			return t.localizedFieldIssues(m, issues, t.Language(m, r))
+		})
 		WriteJSON(w, http.StatusOK, rows)
 	})
 	exportCSV := func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant, q platform.Query) {
@@ -150,36 +143,22 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, err)
 			return
 		}
-		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-		w.Header().Set("Content-Disposition", "attachment; filename="+r.PathValue("type")+".csv")
-		w.Write(out)
+		transport.WriteCSV(w, r.PathValue("type"), out)
 	}
 	rt.recordRead(transport.Route{Pattern: "GET /v1/export/{type}", Summary: "The records a list shows the caller, as CSV",
 		Query: []transport.Param{{Name: "domain", Description: "Filters in the prefix form"}, {Name: "search", Description: "Words to find"}, {Name: "sort", Description: "Fields, comma-separated"}, {Name: "archived", Description: "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
-		if sort := r.URL.Query().Get("sort"); sort != "" {
-			q.Sort = strings.Split(sort, ",")
-		}
-		exportCSV(w, r, m, t, q)
+		exportCSV(w, r, m, t, objects.QueryFromValues(r.URL.Query()))
 	})
 	rt.recordRead(transport.Route{Pattern: "POST /v1/export/{type}", Summary: "Export the caller's complete authorized record query as CSV, including sets, relations and business time", Body: platform.Query{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))
-		decoder.DisallowUnknownFields()
-		var q *platform.Query
-		if decoder.Decode(&q) != nil || q == nil || q.Limit < 0 || q.Offset < 0 || decoder.Decode(new(any)) != io.EOF {
+		q, ok := transport.DecodeOne[platform.Query](w, r, platform.QuerySetMaxBytes)
+		if !ok || q.Limit < 0 || q.Offset < 0 {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
 		exportCSV(w, r, m, t, *q)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []transport.Param{{Name: "domain", Description: "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {Name: "search", Description: "Words to find"}, {Name: "sort", Description: "Fields, comma-separated; -field for descending"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in the page"}, {Name: "archived", Description: "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
-		if sort := r.URL.Query().Get("sort"); sort != "" {
-			q.Sort = strings.Split(sort, ",")
-		}
-		fmt.Sscan(r.URL.Query().Get("offset"), &q.Offset)
-		fmt.Sscan(r.URL.Query().Get("limit"), &q.Limit)
-		page, err := t.recordsRead(m, r.PathValue("type"), q, h.Now())
+		page, err := t.recordsRead(m, r.PathValue("type"), objects.PagedQueryFromValues(r.URL.Query()), h.Now())
 		if err == nil && r.PathValue("type") == build.ObjectType {
 			page, err = t.objectDraftPage(m, page)
 		}
@@ -190,16 +169,13 @@ func (h *Host) routesRecords(rt *routes) {
 		WriteJSON(w, http.StatusOK, page)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-usage", Summary: "Uses preventing removal or closure of an enterprise element", Answer: enterprisemodel.EnterpriseUsage{}, Query: []transport.Param{{Name: "element", Description: "The enterprise element"}, {Name: "until", Description: "Proposed closure day"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-
 		answer, err := t.enterpriseUsageRead(m, r.URL.Query().Get("element"), r.URL.Query().Get("until"), h.Now())
-
 		if err != nil {
 			Reply(w, nil, err)
 			return
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-
 	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-references", Summary: "Records that name an enterprise element, at any nesting depth, by entity type and page", Answer: []records.EnterpriseReferenceGroup{}, Query: []transport.Param{{Name: "element", Description: "The element's id"}, {Name: "offset", Description: "Records to skip, by column"}, {Name: "limit", Description: "Records per column (default 50, at most 200)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := pageBounds(r, 0, 50)
 		if offset < 0 || limit < 0 {
@@ -227,9 +203,8 @@ func (h *Host) routesRecords(rt *routes) {
 			}
 			limit = n
 		}
-		app := enterpriseApp(t)
-		if app == nil {
-			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This tenant has no enterprise model"))
+		app, ok := enterpriseModel(w, t)
+		if !ok {
 			return
 		}
 		out, err := app.Query(strings.Split(r.URL.Query().Get("stereotype"), ","), r.URL.Query().Get("kind"), r.URL.Query().Get("q"),
@@ -245,9 +220,8 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, err)
 			return
 		}
-		app := enterpriseApp(t)
-		if app == nil {
-			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This tenant has no enterprise model"))
+		app, ok := enterpriseModel(w, t)
+		if !ok {
 			return
 		}
 		out, err := app.Resolve(strings.Split(r.URL.Query().Get("ids"), ","), h.Now())
@@ -306,14 +280,7 @@ func (h *Host) routesRecords(rt *routes) {
 			return
 		}
 		if r.PathValue("type") == build.ObjectType {
-			if record, refusal := t.objectDraftRecord(m, view.Record); refusal == nil {
-				view.Record = record
-			} else {
-				if view.ValueErrors == nil {
-					view.ValueErrors = map[string]string{}
-				}
-				view.ValueErrors["actions"] = refusal.Message
-			}
+			objects.DraftView(&view, func(record any) (any, *kernel.Error) { return t.objectDraftRecord(m, record) })
 		}
 		WriteJSON(w, http.StatusOK, view)
 	})
@@ -341,12 +308,5 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.
 }
 
 func (t *Tenant) objectDraftPage(m platform.Member, page RecordPage) (RecordPage, *kernel.Error) {
-	for index, record := range page.Records {
-		canonical, err := t.objectDraftRecord(m, record)
-		if err != nil {
-			return page, err
-		}
-		page.Records[index] = canonical
-	}
-	return page, nil
+	return objects.DraftPage(page, func(record any) (any, *kernel.Error) { return t.objectDraftRecord(m, record) })
 }

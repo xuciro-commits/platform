@@ -1,6 +1,7 @@
 package host
 
 import runtimekernel "platformserver/kernel"
+import "platformserver/kernel/transport"
 
 import (
 	"context"
@@ -87,19 +88,6 @@ func (t *Tenant) closeRecordRead() {
 	}
 }
 
-type laneHolderKey struct{}
-
-func withLaneHolder(ctx context.Context, holder string) context.Context {
-	return context.WithValue(ctx, laneHolderKey{}, holder)
-}
-
-func laneHolderOf(ctx context.Context, fallback string) string {
-	if holder, ok := ctx.Value(laneHolderKey{}).(string); ok && holder != "" {
-		return holder
-	}
-	return fallback
-}
-
 func (t *Tenant) recordReadRefusal() *kernel.Error {
 	if t.readError() != nil || t.quarantined() {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -144,7 +132,7 @@ func readFromLane[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, 
 }
 
 func lockedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	if err := t.Lane.Hold(ctx, laneHolderOf(ctx, "read")); err != nil {
+	if err := t.Lane.Hold(ctx, transport.LaneHolderOf(ctx, "read")); err != nil {
 		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read was cancelled while waiting for the tenant")
 	}
 	defer t.Lane.Unlock()

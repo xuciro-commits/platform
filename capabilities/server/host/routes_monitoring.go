@@ -3,13 +3,8 @@ package host
 import (
 	"encoding/json"
 	"net/http"
-	"slices"
-	"strconv"
-	"strings"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
@@ -17,9 +12,6 @@ import (
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 )
-
-const maxObservationWindow = 30 * 24 * time.Hour
-const maxAuditWindow = 400 * 24 * time.Hour
 
 func (h *Host) routesMonitoring(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "GET /v1/audit", Summary: "Immutable accepted and security audit events, newest first, with retained coverage", Answer: platform.AuditPage{}, Query: []transport.Param{
@@ -33,23 +25,19 @@ func (h *Host) routesMonitoring(rt *routes) {
 		{Name: "limit", Description: "1-200, default 100"},
 	}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		now := h.Now()
-		query, refusal := auditQuery(r, t.ID, now)
+		query, refusal := monitoring.AuditQuery(r.URL.Query(), t.ID, now)
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
 		}
 		page, err := t.Log().QueryAuditEntries(query)
 		if err != nil {
-			if query.Cursor != "" && strings.Contains(err.Error(), "invalid audit cursor") {
-				Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-				return
-			}
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: "Audit records are unavailable"})
+			Reply(w, nil, monitoring.QueryFailure(err, query.Cursor, "invalid audit cursor", "Audit records are unavailable"))
 			return
 		}
 		t.audit.Remember(platform.AuditEntry{
 			At: now, Member: m.ID, App: controlowner.PlatformApp,
-			Action: "platform.audit.read", Target: auditFilterSummary(query),
+			Action: "platform.audit.read", Target: monitoring.AuditFilterSummary(query),
 		})
 		WriteJSON(w, http.StatusOK, page)
 	})
@@ -62,23 +50,19 @@ func (h *Host) routesMonitoring(rt *routes) {
 		{Name: "limit", Description: "1-200, default 100"},
 	}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		now := h.Now()
-		query, refusal := personalReadQuery(r, t.ID, now)
+		query, refusal := monitoring.PersonalReadQuery(r.URL.Query(), t.ID, now)
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
 		}
 		page, err := t.Log().QueryPersonalReads(query)
 		if err != nil {
-			if query.Cursor != "" && strings.Contains(err.Error(), "invalid audit cursor") {
-				Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-				return
-			}
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: "Personal-read audit is unavailable"})
+			Reply(w, nil, monitoring.QueryFailure(err, query.Cursor, "invalid audit cursor", "Personal-read audit is unavailable"))
 			return
 		}
 		t.audit.Remember(platform.AuditEntry{
 			At: now, Member: m.ID, App: controlowner.PlatformApp,
-			Action: "platform.personal-reads.read", Target: personalReadFilterSummary(query),
+			Action: "platform.personal-reads.read", Target: monitoring.PersonalReadFilterSummary(query),
 		})
 		WriteJSON(w, http.StatusOK, page)
 	})
@@ -99,19 +83,9 @@ func (h *Host) routesMonitoring(rt *routes) {
 		{Name: "offset", Description: "Nonnegative run offset, default 0"},
 		{Name: "limit", Description: "1-100, default 50"},
 	}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		filter := monitoring.MonitoringRunFilter{Type: r.URL.Query().Get("type"), Status: r.URL.Query().Get("status"), Limit: 50}
-		for key, dest := range map[string]*int{"offset": &filter.Offset, "limit": &filter.Limit} {
-			if r.URL.Query().Has(key) {
-				value, err := strconv.Atoi(r.URL.Query().Get(key))
-				if err != nil {
-					Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-					return
-				}
-				*dest = value
-			}
-		}
-		if !filter.Valid() {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+		filter, refusal := monitoring.RunFilterFrom(r.URL.Query())
+		if refusal != nil {
+			Reply(w, nil, refusal)
 			return
 		}
 		page, refusal := t.monitoringRuns(m, filter, h.Now())
@@ -136,39 +110,10 @@ func (h *Host) routesMonitoring(rt *routes) {
 		{Name: "cursor", Description: "opaque cursor from the previous page"},
 		{Name: "limit", Description: "1-200, default 100"},
 	}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		now := h.Now()
-		query, refusal := observationQuery(r, t.ID, now)
+		page, refusal := observationReads(m, t, h.Now()).Logs(r.URL.Query())
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
-		}
-		tenantWide := m.Holds(controlowner.PlatformApp, controlowner.Admin) || m.Holds(controlowner.PlatformApp, platform.Auditor)
-		if !tenantWide {
-			query.Member = m.ID
-		}
-		t.audit.Remember(platform.AuditEntry{
-			At:     now,
-			Member: m.ID,
-			App:    controlowner.PlatformApp,
-			Action: "platform.log.read",
-			Target: observationFilterSummary(query),
-		})
-		t.FlushObservations()
-		page, err := t.Log().QueryObservations(query)
-		if err != nil {
-			if query.Cursor != "" && strings.Contains(err.Error(), "invalid observation cursor") {
-				Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-				return
-			}
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: "Operational logs are unavailable"})
-			return
-		}
-		if !tenantWide {
-			page.Coverage.Filtered = true
-		}
-		page.Coverage.Dropped = t.observations.Dropped()
-		if (query.Source == "" || query.Source == "request") && t.logging().RequestPercent() < 100 {
-			page.Coverage.Sampled = true
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
@@ -178,48 +123,21 @@ func (h *Host) routesMonitoring(rt *routes) {
 		{Name: "q", Description: "search the redacted message"}, {Name: "cursor", Description: "opaque cursor"},
 		{Name: "limit", Description: "1-200, default 100"},
 	}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		now := h.Now()
-		query, refusal := observationQuery(r, t.ID, now)
+		page, refusal := observationReads(m, t, h.Now()).Traces(r.URL.Query())
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
-		}
-		query.Source = "request"
-		query.Level = ""
-		if !m.Holds(controlowner.PlatformApp, controlowner.Admin) && !m.Holds(controlowner.PlatformApp, platform.Auditor) {
-			query.Member = m.ID
-		}
-		t.audit.Remember(platform.AuditEntry{At: now, Member: m.ID, App: controlowner.PlatformApp, Action: "platform.trace.read", Target: observationFilterSummary(query)})
-		page, err := t.Log().QueryObservations(query)
-		if err != nil {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: "Traces are unavailable"})
-			return
-		}
-		page.Coverage.Dropped = t.observations.Dropped()
-		if t.logging().RequestPercent() < 100 {
-			page.Coverage.Sampled = true
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/monitoring/metrics", Summary: "Fixed operational rollups for the selected time window", Answer: platform.ObservationSummary{}, Query: []transport.Param{
 		{Name: "from", Description: "Inclusive RFC 3339 start"}, {Name: "to", Description: "Exclusive RFC 3339 end"},
 	}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		now := h.Now()
-		query, refusal := observationQuery(r, t.ID, now)
+		summary, refusal := observationReads(m, t, h.Now()).Metrics(r.URL.Query())
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
 		}
-		if !m.Holds(controlowner.PlatformApp, controlowner.Admin) && !m.Holds(controlowner.PlatformApp, platform.Auditor) {
-			query.Member = m.ID
-		}
-		summary, err := t.Log().SummarizeObservations(t.ID, query.Member, query.From, query.To)
-		if err != nil {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: "Metrics are unavailable"})
-			return
-		}
-		summary.Dropped = t.observations.Dropped()
-		t.audit.Remember(platform.AuditEntry{At: now, Member: m.ID, App: controlowner.PlatformApp, Action: "platform.metrics.read", Target: observationFilterSummary(query)})
 		WriteJSON(w, http.StatusOK, summary)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/alerts", Summary: "Active automations with a notification effect visible to the caller", Answer: []monitoring.MonitoringAlert{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -246,183 +164,22 @@ func (h *Host) routesMonitoring(rt *routes) {
 	})
 }
 
-func auditQuery(r *http.Request, tenant string, now time.Time) (platform.AuditQuery, *kernel.Error) {
-	query, refusal := auditWindow(r, now)
-	if refusal != nil {
-		return platform.AuditQuery{}, refusal
+func observationReads(m platform.Member, t *Tenant, now time.Time) monitoring.ObservationReads {
+	return monitoring.ObservationReads{
+		Tenant: t.ID, Now: now, Member: m.ID,
+		TenantWide: m.Holds(controlowner.PlatformApp, controlowner.Admin) || m.Holds(controlowner.PlatformApp, platform.Auditor),
+		LevelRank:  runtimekernel.ObservationLevelRank,
+		Query: func(q platform.ObservationQuery) (platform.ObservationPage, error) {
+			return t.Log().QueryObservations(q)
+		},
+		Summarize: func(member string, from, to time.Time) (platform.ObservationSummary, error) {
+			return t.Log().SummarizeObservations(t.ID, member, from, to)
+		},
+		Remember: func(action, target string) {
+			t.audit.Remember(platform.AuditEntry{At: now, Member: m.ID, App: controlowner.PlatformApp, Action: action, Target: target})
+		},
+		Flush:          func() { t.FlushObservations() },
+		Dropped:        func() int64 { return t.observations.Dropped() },
+		RequestPercent: func() int { return t.logging().RequestPercent() },
 	}
-	query.Tenant = tenant
-	query.Member = r.URL.Query().Get("member")
-	query.App = r.URL.Query().Get("app")
-	query.Action = r.URL.Query().Get("action")
-	query.Search = r.URL.Query().Get("q")
-	query.Cursor = r.URL.Query().Get("cursor")
-	limit, refusal := auditLimitFrom(r)
-	if refusal != nil {
-		return platform.AuditQuery{}, refusal
-	}
-	query.Limit = limit
-	return query, nil
-}
-
-func personalReadQuery(r *http.Request, tenant string, now time.Time) (platform.PersonalReadQuery, *kernel.Error) {
-	window, refusal := auditWindow(r, now)
-	if refusal != nil {
-		return platform.PersonalReadQuery{}, refusal
-	}
-	limit, refusal := auditLimitFrom(r)
-	if refusal != nil {
-		return platform.PersonalReadQuery{}, refusal
-	}
-	query := platform.PersonalReadQuery{
-		Tenant: tenant, From: window.From, To: window.To,
-		Member: r.URL.Query().Get("member"), Type: r.URL.Query().Get("type"),
-		Cursor: r.URL.Query().Get("cursor"), Limit: limit,
-	}
-	return query, nil
-}
-
-func auditWindow(r *http.Request, now time.Time) (platform.AuditQuery, *kernel.Error) {
-	values := r.URL.Query()
-	to := now.UTC()
-	if text := values.Get("to"); text != "" {
-		parsed, err := time.Parse(time.RFC3339, text)
-		if err != nil {
-			return platform.AuditQuery{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-		}
-		to = parsed.UTC()
-	}
-	from := to.AddDate(0, 0, -30)
-	if text := values.Get("from"); text != "" {
-		parsed, err := time.Parse(time.RFC3339, text)
-		if err != nil {
-			return platform.AuditQuery{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-		}
-		from = parsed.UTC()
-	}
-	if !from.Before(to) || to.Sub(from) > maxAuditWindow {
-		return platform.AuditQuery{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	return platform.AuditQuery{From: from, To: to}, nil
-}
-
-func auditLimitFrom(r *http.Request) (int, *kernel.Error) {
-	limit := 100
-	if text := r.URL.Query().Get("limit"); text != "" {
-		parsed, err := strconv.Atoi(text)
-		if err != nil || parsed < 1 || parsed > 200 {
-			return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-		}
-		limit = parsed
-	}
-	return limit, nil
-}
-
-func auditFilterSummary(query platform.AuditQuery) string {
-	parts := []string{"from=" + query.From.Format(time.RFC3339), "to=" + query.To.Format(time.RFC3339), "limit=" + strconv.Itoa(query.Limit)}
-	for _, filter := range []struct{ name, value string }{
-		{"member", query.Member}, {"app", query.App}, {"action", query.Action}, {"cursor", query.Cursor},
-	} {
-		if filter.value != "" {
-			parts = append(parts, filter.name+"="+filter.value)
-		}
-	}
-	if query.Search != "" {
-		parts = append(parts, "q=set")
-	}
-	return strings.Join(parts, " ")
-}
-
-func personalReadFilterSummary(query platform.PersonalReadQuery) string {
-	parts := []string{"from=" + query.From.Format(time.RFC3339), "to=" + query.To.Format(time.RFC3339), "limit=" + strconv.Itoa(query.Limit)}
-	for _, filter := range []struct{ name, value string }{{"member", query.Member}, {"type", query.Type}, {"cursor", query.Cursor}} {
-		if filter.value != "" {
-			parts = append(parts, filter.name+"="+filter.value)
-		}
-	}
-	return strings.Join(parts, " ")
-}
-
-func observationQuery(r *http.Request, tenant string, now time.Time) (platform.ObservationQuery, *kernel.Error) {
-	invalid := func() (platform.ObservationQuery, *kernel.Error) {
-		return platform.ObservationQuery{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	values := r.URL.Query()
-	to := now.UTC()
-	if text := values.Get("to"); text != "" {
-		parsed, err := time.Parse(time.RFC3339, text)
-		if err != nil {
-			return invalid()
-		}
-		to = parsed.UTC()
-	}
-	from := to.Add(-time.Hour)
-	if text := values.Get("from"); text != "" {
-		parsed, err := time.Parse(time.RFC3339, text)
-		if err != nil {
-			return invalid()
-		}
-		from = parsed.UTC()
-	}
-	if !from.Before(to) || to.Sub(from) > maxObservationWindow {
-		return invalid()
-	}
-	limit := 100
-	if text := values.Get("limit"); text != "" {
-		parsed, err := strconv.Atoi(text)
-		if err != nil || parsed < 1 || parsed > 200 {
-			return invalid()
-		}
-		limit = parsed
-	}
-	level := values.Get("level")
-	if level != "" && runtimekernel.ObservationLevelRank(level) < 0 {
-		return invalid()
-	}
-	source := values.Get("source")
-	if source != "" && !slices.Contains([]string{"request", "submit", "run", "worker", "data", "app"}, source) {
-		return invalid()
-	}
-	return platform.ObservationQuery{
-		Tenant:    tenant,
-		From:      from,
-		To:        to,
-		Level:     level,
-		Source:    source,
-		App:       values.Get("app"),
-		Member:    values.Get("member"),
-		RequestID: values.Get("requestId"),
-		TraceID:   values.Get("traceId"),
-		RunID:     values.Get("runId"),
-		Resource:  values.Get("resource"),
-		Search:    values.Get("q"),
-		Cursor:    values.Get("cursor"),
-		Limit:     limit,
-	}, nil
-}
-
-func observationFilterSummary(query platform.ObservationQuery) string {
-	parts := []string{
-		"from=" + query.From.Format(time.RFC3339),
-		"to=" + query.To.Format(time.RFC3339),
-		"limit=" + strconv.Itoa(query.Limit),
-	}
-	for _, filter := range []struct{ name, value string }{
-		{"level", query.Level},
-		{"source", query.Source},
-		{"app", query.App},
-		{"member", query.Member},
-		{"requestId", query.RequestID},
-		{"traceId", query.TraceID},
-		{"runId", query.RunID},
-		{"resource", query.Resource},
-	} {
-		if filter.value != "" {
-			parts = append(parts, filter.name+"="+filter.value)
-		}
-	}
-	if query.Search != "" {
-		parts = append(parts, "q=set")
-	}
-	return strings.Join(parts, " ")
 }

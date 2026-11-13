@@ -93,7 +93,7 @@ func (rt *routes) recordRead(route transport.Route, f func(http.ResponseWriter, 
 			return
 		}
 		buffered := &laneBuffer{target: w}
-		_, err := coordinatedRecordRead(t, withLaneHolder(r.Context(), route.Pattern), func(t *Tenant) (struct{}, *kernel.Error) {
+		_, err := coordinatedRecordRead(t, transport.WithLaneHolder(r.Context(), route.Pattern), func(t *Tenant) (struct{}, *kernel.Error) {
 			f(buffered, r, m, t)
 			return struct{}{}, nil
 		})

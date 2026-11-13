@@ -8,6 +8,7 @@ import (
 	"net/http"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/services/ai/gateway"
+	trialowner "platformserver/services/devops/trials"
 	controlowner "platformserver/services/security/control"
 
 	"strings"
@@ -50,69 +51,43 @@ func configureFunctionFixtureModel(t *Tenant, model string, at time.Time) error 
 	return nil
 }
 
-func pendingFunctionEffects(t *Tenant) []platform.Effect {
-	var pending []platform.Effect
+func pendingFunctionCalls(t *Tenant) []trialowner.FunctionCall {
+	var pending []trialowner.FunctionCall
 	for _, effect := range t.outbound.Select(nil) {
 		var ask aigateway.ModelAsk
 		if effect.Endpoint == acceptedformat.ModelEndpoint && !platform.EffectSettled(effect.State) && json.Unmarshal([]byte(effect.Body), &ask) == nil && ask.Function != nil {
-			pending = append(pending, effect.Effect)
+			pending = append(pending, trialowner.FunctionCall{Effect: effect.Effect, Record: ask.Record})
 		}
 	}
 	return pending
 }
 
 func settleFunctionFixture(t *Tenant, actor platform.Member, fixture platform.FunctionFixture, now time.Time) (bool, error) {
-	pending := pendingFunctionEffects(t)
-	if len(pending) == 0 {
-		return false, nil
-	}
-	if len(pending) != 1 {
-		return false, fmt.Errorf("one fixed answer needs exactly one pending function call")
-	}
-	effect := pending[0]
-	var ask aigateway.ModelAsk
-	if err := json.Unmarshal([]byte(effect.Body), &ask); err != nil {
-		return false, err
-	}
-	response, err := json.Marshal(map[string]any{
-		"choices": []any{map[string]any{"message": map[string]string{"content": fixture.Output}}},
-		"usage":   map[string]int{"prompt_tokens": fixture.InputTokens, "completion_tokens": fixture.OutputTokens},
-	})
-	if err != nil {
-		return false, err
-	}
-	client := t.AIClient
-	defer func() { t.AIClient = client }()
-	t.AIClient = func(*http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(response))}, nil
-	}
-	outcome, usage := t.sendModel(effect, now)
-	if usage != nil {
-		usage.Millis = 0
-	}
-	t.settleWithUsage(effect.ID, outcome, usage, now)
-	if t.quarantined() {
-		return false, fmt.Errorf("fixture settlement failed")
-	}
-	kind, id, ok := strings.Cut(ask.Record, "/")
-	if !ok || kind != build.FunctionCallType {
-		return false, fmt.Errorf("fixture reply is not a builder function call")
-	}
-	view, refusal := t.recordOf(actor, kind, id, now)
-	if refusal != nil {
-		return false, nil
-	}
-	run, ok := view.Record.(build.FunctionRun)
-	if !ok || run.State != fixture.ExpectState {
-		return false, nil
-	}
-	if fixture.ExpectOutput != "" {
-		actual, err := platform.CanonicalDigest(json.RawMessage(run.Output))
-		if err != nil {
-			return false, nil
-		}
-		expected, err := platform.CanonicalDigest(json.RawMessage(fixture.ExpectOutput))
-		return err == nil && actual == expected, nil
-	}
-	return true, nil
+	return trialowner.FunctionFixtureHooks{
+		Pending: func() []trialowner.FunctionCall { return pendingFunctionCalls(t) },
+		Settle: func(call trialowner.FunctionCall, response []byte) error {
+			client := t.AIClient
+			defer func() { t.AIClient = client }()
+			t.AIClient = func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(response))}, nil
+			}
+			outcome, usage := t.sendModel(call.Effect, now)
+			if usage != nil {
+				usage.Millis = 0
+			}
+			t.settleWithUsage(call.Effect.ID, outcome, usage, now)
+			if t.quarantined() {
+				return fmt.Errorf("fixture settlement failed")
+			}
+			return nil
+		},
+		Run: func(actor platform.Member, kind, id string) (string, json.RawMessage, bool) {
+			view, refusal := t.recordOf(actor, kind, id, now)
+			if refusal != nil {
+				return "", nil, false
+			}
+			run, ok := view.Record.(build.FunctionRun)
+			return run.State, json.RawMessage(run.Output), ok
+		},
+	}.Apply(actor, fixture)
 }

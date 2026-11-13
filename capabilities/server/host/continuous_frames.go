@@ -11,7 +11,6 @@ import (
 	"platformserver/platform"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/functions/runtime"
-	"slices"
 	"time"
 )
 
@@ -29,27 +28,16 @@ func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time)
 }
 
 func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time.Time) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *kernel.Error) {
-	if t.quarantined() || m.Tenant != t.ID {
-		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
-	}
-	current, ok := t.Member(m.ID)
-	current.Scopes = slices.Clone(m.Scopes)
-	if !ok || t.Admits(current) != nil {
-		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
-	}
-	f, ok := t.procs.(platform.ContinuousFlowOwner)
-	if !ok {
-		return nil, platform.FlowInstance{}, current, unknown()
-	}
-	v, refusal := t.recordOf(current, platform.FlowInstanceType, id, now)
-	if refusal != nil {
-		return nil, platform.FlowInstance{}, current, refusal
-	}
-	x, ok := v.Record.(platform.FlowInstance)
-	if !ok || x.Withheld || x.OnBehalf != current.ID {
-		return nil, platform.FlowInstance{}, current, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A source batch acts only for its original Flow member")
-	}
-	return f, x, current, nil
+	return automation.FlowSnapshot{Tenant: t.ID, Quarantined: t.quarantined, Member: t.Member, Admits: t.Admits,
+		Owner: func() (platform.ContinuousFlowOwner, bool) {
+			f, ok := t.procs.(platform.ContinuousFlowOwner)
+			return f, ok
+		},
+		Record: func(current platform.Member, id string) (any, *kernel.Error) {
+			view, refusal := t.recordOf(current, platform.FlowInstanceType, id, now)
+			return view.Record, refusal
+		},
+	}.Take(m, id)
 }
 
 func (t *Tenant) cleanupFlowArtifactsFor(m platform.Member, id string, now time.Time) *kernel.Error {
@@ -164,84 +152,69 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Submission, now time.Time, opts submitOptions) (*pb.ChangeRecord, *kernel.Error, bool) {
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
-	type preflight struct {
-		sub     *pb.Submission
-		binding *platform.SchemaVersion
-		record  *pb.ChangeRecord
-		handled bool
-	}
-	first, err := decideOnImage(t, context.Background(), "flow:replay-preflight", func(t *Tenant) (preflight, *kernel.Error) {
-		value := preflight{sub: sub}
-		if owner, ok := t.procs.(platform.ContinuousFlowOwner); ok {
-			var refusal *kernel.Error
-			if opts.versioned {
-				value.binding, refusal = t.submissionSchemaVersion(owner, sub, opts.contentVersion)
-				if refusal != nil && refusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
-					return value, refusal
-				}
-			} else {
-				value.sub = t.currentSubmissionSchema(owner, sub)
-			}
-			if prior := t.priorOf(owner, sub.GetIdempotencyKey()); refusal != nil || prior.Refusal != nil || prior.Record != nil {
-				value.handled = true
-				value.record, refusal = t.accept(owner, m, value.sub, now, acceptOptions{binding: value.binding, schemaRefusal: refusal})
-				return value, refusal
-			}
+	first, err := decideOnImage(t, context.Background(), "flow:replay-preflight", func(t *Tenant) (automation.ReplayPreflightResult, *kernel.Error) {
+		owner, ok := t.procs.(platform.ContinuousFlowOwner)
+		if !ok {
+			return automation.ReplayPreflightResult{Sub: sub}, nil
 		}
-		return value, nil
-	}, func(t *Tenant, candidate preparedAccepted, value preflight, refusal *kernel.Error) (preflight, *kernel.Error) {
-		value.record, refusal = t.finishPreparedSubmission(m, candidate, value.record, refusal)
+		return automation.ReplayPreflight{Versioned: opts.versioned,
+			Version: func() (*platform.SchemaVersion, *kernel.Error) {
+				return t.submissionSchemaVersion(owner, sub, opts.contentVersion)
+			},
+			Current: func(sub *pb.Submission) *pb.Submission { return t.currentSubmissionSchema(owner, sub) },
+			Settled: func() bool {
+				prior := t.priorOf(owner, sub.GetIdempotencyKey())
+				return prior.Refusal != nil || prior.Record != nil
+			},
+			Accept: func(sub *pb.Submission, binding *platform.SchemaVersion, schemaRefusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+				return t.accept(owner, m, sub, now, acceptOptions{binding: binding, schemaRefusal: schemaRefusal})
+			},
+		}.Run(sub)
+	}, func(t *Tenant, candidate preparedAccepted, value automation.ReplayPreflightResult, refusal *kernel.Error) (automation.ReplayPreflightResult, *kernel.Error) {
+		value.Record, refusal = t.finishPreparedSubmission(m, candidate, value.Record, refusal)
 		return value, refusal
 	})
-	if err != nil || first.handled {
-		return first.record, err, true
+	if err != nil || first.Handled {
+		return first.Record, err, true
 	}
-	sub = first.sub
-	type replayContext struct {
-		asset    platform.FlowDeadLetterAsset
-		member   platform.Member
-		instance platform.FlowInstance
-	}
-	load := func(t *Tenant) (replayContext, *kernel.Error) {
-		view, refusal := t.recordOf(m, "flow.dead-letter", sub.GetTarget().GetId(), now)
-		if refusal != nil {
-			return replayContext{}, refusal
-		}
-		asset, ok := view.Record.(platform.FlowDeadLetterAsset)
-		if !ok || asset.Withheld {
-			return replayContext{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dead letter's protected source is unavailable")
-		}
-		if asset.Action != "" {
-			return replayContext{asset: asset}, nil
-		}
-		_, instance, current, refusal := t.continuousSnapshotLocked(m, asset.Instance, now)
-		return replayContext{asset, current, instance}, refusal
+	sub = first.Sub
+	load := func(t *Tenant) (automation.ReplayContext, *kernel.Error) {
+		return automation.DeadLetterLoad{
+			Record: func(id string) (any, *kernel.Error) {
+				view, refusal := t.recordOf(m, "flow.dead-letter", id, now)
+				return view.Record, refusal
+			},
+			Snapshot: func(instance string) (platform.FlowInstance, platform.Member, *kernel.Error) {
+				_, x, current, refusal := t.continuousSnapshotLocked(m, instance, now)
+				return x, current, refusal
+			},
+		}.Load(sub.GetTarget().GetId())
 	}
 	initial, err := recordRead(t, context.Background(), load)
 	if err != nil {
 		return nil, err, true
 	}
-	if initial.asset.Action != "" {
+	if initial.Asset.Action != "" {
 		return nil, nil, false
 	}
-	if initial.instance.CleanupPending {
-		if err := t.cleanupFlowArtifactsFor(initial.member, initial.instance.ID, now); err != nil {
+	if initial.Instance.CleanupPending {
+		if err := t.cleanupFlowArtifactsFor(initial.Member, initial.Instance.ID, now); err != nil {
 			return nil, err, true
 		}
 	}
 	store := t.frames()
-	var preparedContext replayContext
+	var preparedContext automation.ReplayContext
 	prepared, err := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedBatch, *kernel.Error) {
 		var refusal *kernel.Error
 		preparedContext, refusal = load(t)
 		if refusal != nil {
 			return nil, refusal
 		}
-		if preparedContext.asset.Action != "" {
+		if preparedContext.Asset.Action != "" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dead letter changed while its replay was prepared")
 		}
 		f := t.procs.(platform.ContinuousFlowOwner)
-		plan, refusal := f.PlanDeadLetterReplay(preparedContext.instance, t.automation(platform.FlowApp, false), preparedContext.asset)
+		plan, refusal := f.PlanDeadLetterReplay(preparedContext.Instance, t.automation(platform.FlowApp, false), preparedContext.Asset)
 		if refusal != nil {
 			return nil, refusal
 		}
@@ -263,13 +236,13 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		}
 	}()
 	if request, ok := prepared.OperationRequest(); ok {
-		preparedInput, err = t.prepareContinuousOperationInput(preparedContext.member, preparedContext.instance.ID, request)
+		preparedInput, err = t.prepareContinuousOperationInput(preparedContext.Member, preparedContext.Instance.ID, request)
 		if err != nil {
 			return nil, err, true
 		}
 	}
 	record, err := decideOnImage(t, context.Background(), "flow:replay", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
-		f, latest, current, refusal := t.continuousSnapshotLocked(preparedContext.member, preparedContext.instance.ID, now)
+		f, latest, current, refusal := t.continuousSnapshotLocked(preparedContext.Member, preparedContext.Instance.ID, now)
 		if refusal != nil {
 			return nil, refusal
 		}
@@ -285,12 +258,12 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 				return nil, refusal
 			}
 		}
-		return t.accept(prepared.Decision(f), current, sub, now, acceptOptions{binding: first.binding, inputs: []*preparedOperationInput{preparedInput}})
+		return t.accept(prepared.Decision(f), current, sub, now, acceptOptions{binding: first.Binding, inputs: []*preparedOperationInput{preparedInput}})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		if len(candidate.entry.Body) > 0 {
 			retained, inputRetained = true, preparedInput != nil
 		}
-		record, refusal = t.finishPreparedSubmission(preparedContext.member, candidate, record, refusal)
+		record, refusal = t.finishPreparedSubmission(preparedContext.Member, candidate, record, refusal)
 		if _, rejected := t.Committed.Refusal(platform.FlowApp + "/" + sub.GetIdempotencyKey()); rejected {
 			retained, inputRetained = false, false
 		}

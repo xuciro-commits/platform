@@ -93,6 +93,61 @@ func (s ChatSetup) Prepare(m platform.Member, req platform.ChatRequest, stage st
 	return model, pv, req, nil
 }
 
+type ChatRun struct {
+	Available bool
+	Setup     func(req platform.ChatRequest) (platform.AIModel, platform.AIProvider, platform.ChatRequest, *kernel.Error)
+	Call      func(pv platform.AIProvider, model platform.AIModel, m platform.Member, req platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError)
+	Meter     func(m platform.Member, usage platform.AIUsage) *kernel.Error
+}
+
+func (c ChatRun) Run(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
+	if !c.Available {
+		return platform.ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
+	}
+	if len(req.Messages) == 0 {
+		return platform.ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}, nil
+	}
+	model, pv, req, refusal := c.Setup(req)
+	if refusal != nil {
+		return platform.ChatAnswer{}, refusal, nil
+	}
+	if len(delta) > 0 {
+		req.Delta = delta[0]
+	}
+	answer, failure := c.Call(pv, model, m, req, now)
+	if answer.Usage.Model != "" {
+		if err := c.Meter(m, answer.Usage); err != nil {
+			return platform.ChatAnswer{}, err, nil
+		}
+	}
+	return answer, nil, failure
+}
+
+type ModelDispatch struct {
+	Gate func(ask ModelAsk, m platform.Member, out platform.Outcome) (platform.Outcome, platform.AIModel, platform.AIProvider, bool, *kernel.Error)
+	Call func(pv platform.AIProvider, model platform.AIModel, m platform.Member, req platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError)
+}
+
+func (d ModelDispatch) Send(tenant string, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
+	out := platform.Outcome{Effect: x.ID}
+	var ask ModelAsk
+	if json.Unmarshal([]byte(x.Body), &ask) != nil {
+		out.Result, out.Detail = "rejected", "The saved model request is invalid"
+		return out, nil
+	}
+	m := platform.Member{ID: "app:" + x.App, Tenant: tenant}
+	gated, enabled, pv, ready, refusal := d.Gate(ask, m, out)
+	if refusal != nil {
+		out.Result, out.Detail = "rejected", refusal.Message
+		return out, nil
+	}
+	if !ready {
+		return gated, nil
+	}
+	answer, failure := d.Call(pv, enabled, m, ask.Request(x), now)
+	return ask.Outcome(gated, answer, failure)
+}
+
 type ModelPlanning struct {
 	Resolver   Resolver
 	Provider   func(model string) platform.AIProvider

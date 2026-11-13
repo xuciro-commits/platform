@@ -36,17 +36,10 @@ func (h hostView) AgentContext(reader *platform.Member, typ, id string, now time
 	if err != nil {
 		return platform.AgentObservation{}, err
 	}
-	raw, _ := json.Marshal(view)
-	return platform.AgentObservation{Body: raw, Sources: h.t.refsIn(view)}, nil
+	return agentowner.Observe(view, h.t.refsIn(view)), nil
 }
 func (h hostView) AgentSearch(reader *platform.Member, q string, now time.Time) platform.AgentObservation {
-	found := h.t.searchRead(aiContextReader(reader), q, now)
-	out := platform.AgentObservation{}
-	for _, hit := range found {
-		out.Sources = append(out.Sources, hit.Type+"/"+hit.ID)
-	}
-	out.Body, _ = json.Marshal(found)
-	return out
+	return agentowner.SearchObservation(h.t.searchRead(aiContextReader(reader), q, now), func(hit build.Hit) string { return hit.Type + "/" + hit.ID })
 }
 func (h hostView) AgentQuery(reader platform.Member, query platform.NamedQuery, of string, now time.Time) (platform.AgentObservation, *kernel.Error) {
 	reader.AIContext = true
@@ -62,8 +55,7 @@ func (h hostView) AgentRead(reader platform.Member, name string, inputs ...json.
 	if err != nil {
 		return platform.AgentObservation{}, err
 	}
-	raw, _ := json.Marshal(value)
-	return platform.AgentObservation{Body: raw, Sources: h.t.refsIn(value)}, nil
+	return agentowner.Observe(value, h.t.refsIn(value)), nil
 }
 func (h hostView) AgentSurface(reader platform.Member, app string) platform.AgentSurface {
 	reader.AIContext = true
@@ -72,17 +64,7 @@ func (h hostView) AgentSurface(reader platform.Member, app string) platform.Agen
 	if found && slices.ContainsFunc(h.t.Catalog(reader), func(a platform.Action) bool { return a.Schema == action.Schema }) {
 		call = &platform.AgentAction{Owner: owner, Action: action}
 	}
-	return agentowner.SurfaceSource{Builder: build.ID, Call: call, Conditions: func(ref platform.AssetRef) []string {
-		criteria, ok := h.t.modelCriteria(ref)
-		if !ok {
-			return nil
-		}
-		var out []string
-		for _, condition := range criteria.Conditions {
-			out = append(out, condition.Message)
-		}
-		return out
-	}}.Surface(app, h.t.Definitions(reader))
+	return agentowner.SurfaceSource{Builder: build.ID, Call: call, Criteria: h.t.modelCriteria}.Surface(app, h.t.Definitions(reader))
 }
 
 const agentObjectRows = 50
@@ -131,12 +113,7 @@ func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMe
 
 func (h hostView) AgentSources(value any) []string { return h.t.refsIn(value) }
 func (h hostView) AgentKnowledge(reader *platform.Member, app, q string, limit int, now time.Time) json.RawMessage {
-	found := h.t.Knowledge(aiContextReader(reader), app, q, limit, now)
-	for i := range found {
-		found[i].Text = agents.Clip(found[i].Text, 700)
-	}
-	raw, _ := json.Marshal(found)
-	return raw
+	return agentowner.KnowledgeObservation(h.t.Knowledge(aiContextReader(reader), app, q, limit, now))
 }
 func (h hostView) AgentAppReader(app string) *platform.Member { return h.t.appReader(app) }
 func (h hostView) AgentMeaning(app string) string             { return h.t.meaning(app) }
@@ -175,11 +152,7 @@ func (h hostView) AgentUsage() []platform.AIUsage {
 }
 
 func (h hostView) WithAgentRead(read func(platform.AgentEvaluationRuntime) *kernel.Error) *kernel.Error {
-	source := h.t
-	if source.readOrigin != nil {
-		source = source.readOrigin
-	}
-	_, refusal := recordRead(source, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+	_, refusal := recordRead(h.t.readOriginOrSelf(), context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
 		if t.agents == nil {
 			return struct{}{}, unknown()
 		}
@@ -195,32 +168,24 @@ func (h hostView) ScopeAgentRun(run string) func() {
 }
 
 func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, stage string) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
-	type selection struct {
-		binding  platform.AIModelBinding
-		provider platform.AIProvider
-	}
-	value, refusal := readAgentHost(h, func(t *Tenant) (selection, *kernel.Error) {
+	value, refusal := readAgentHost(h, func(t *Tenant) (pair[platform.AIModelBinding, platform.AIProvider], *kernel.Error) {
 		binding, provider, refusal := t.modelResolver().Resolve("agent", name, options)
 		if refusal == nil {
 			binding, refusal = t.modelResolver().Stage(binding, provider, stage)
 		}
-		return selection{binding: binding, provider: provider}, refusal
+		return pair[platform.AIModelBinding, platform.AIProvider]{binding, provider}, refusal
 	})
-	return value.binding, value.provider, refusal
+	return value.first, value.second, refusal
 }
 func (h hostView) AgentModel(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {
-	type selection struct {
-		model    platform.AIModel
-		provider platform.AIProvider
-	}
-	value, refusal := readAgentHost(h, func(t *Tenant) (selection, *kernel.Error) {
+	value, refusal := readAgentHost(h, func(t *Tenant) (pair[platform.AIModel, platform.AIProvider], *kernel.Error) {
 		if t.ai == nil {
-			return selection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "AI capability unavailable")
+			return pair[platform.AIModel, platform.AIProvider]{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "AI capability unavailable")
 		}
 		model, provider, refusal := t.ai.Model(name)
-		return selection{model: model, provider: provider}, refusal
+		return pair[platform.AIModel, platform.AIProvider]{model, provider}, refusal
 	})
-	return value.model, value.provider, refusal
+	return value.first, value.second, refusal
 }
 
 func (h hostView) AgentProviderAvailable(provider string, now time.Time) bool {

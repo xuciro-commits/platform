@@ -15,8 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -156,9 +154,9 @@ func (h *Host) join(t *Tenant, _ platform.IdentitySessions, subject string, now 
 	return refusal == nil
 }
 
-func (h *Host) tenantsOf(r *http.Request) []MeTenant {
+func (h *Host) tenantsOf(r *http.Request) []transport.MeTenant {
 	subject, _ := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-	out := []MeTenant{}
+	out := []transport.MeTenant{}
 	for _, t := range h.currentTenants() {
 		if d := consoleOf(t); d != nil {
 			if _, ok := d.MemberBySubject(subject); !ok {
@@ -168,7 +166,7 @@ func (h *Host) tenantsOf(r *http.Request) []MeTenant {
 			if p, ok := t.App(controlowner.PlatformApp).(platform.IdentityProfile); ok {
 				name = p.TenantRecord().Name
 			}
-			out = append(out, MeTenant{ID: t.ID, Name: name})
+			out = append(out, transport.MeTenant{ID: t.ID, Name: name})
 		}
 	}
 	return out
@@ -259,60 +257,12 @@ func (h *Host) scrapeAllowed(r *http.Request) bool {
 	return ok && h.HostAdmins[subject]
 }
 
-var statuses = map[pb.ErrorCode]int{
-	pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT:     http.StatusBadRequest,
-	pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA:       http.StatusBadRequest,
-	pb.ErrorCode_ERROR_CODE_NOT_FOUND:            http.StatusNotFound,
-	pb.ErrorCode_ERROR_CODE_POLICY_DENIED:        http.StatusForbidden,
-	pb.ErrorCode_ERROR_CODE_NOT_AUTHORITY:        http.StatusMisdirectedRequest,
-	pb.ErrorCode_ERROR_CODE_CONFLICT:             http.StatusConflict,
-	pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT: http.StatusConflict,
-	pb.ErrorCode_ERROR_CODE_REDIRECT_CYCLE:       http.StatusConflict,
-	pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE:    http.StatusUnprocessableEntity,
-}
-
 func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error, issues ...platform.FieldIssue) {
-	switch {
-	case err != nil:
-		body := platform.ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues}
-		if len(issues) > 0 && issues[0].Constraint != "" {
-			body.Code = "CONSTRAINT_VIOLATION"
-			body.Message = issues[0].Constraint + ": " + issues[0].Message
-		}
-		status := statuses[err.Code]
-		if status == 0 {
-			status = http.StatusInternalServerError
-		}
-		WriteJSON(w, status, map[string]any{"error": body})
-	case record == nil:
-		WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
-	default:
-		raw, _ := protojson.Marshal(record)
-		WriteJSON(w, http.StatusOK, map[string]json.RawMessage{"record": raw})
-	}
+	transport.Reply(w, record, err, issues...)
 }
 
-func WriteJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
-}
+func WriteJSON(w http.ResponseWriter, status int, v any) { transport.WriteJSON(w, status, v) }
 
 func pageBounds(r *http.Request, offsetDefault, limitDefault int) (int, int) {
-	offset, limit := offsetDefault, limitDefault
-	if value := r.URL.Query().Get("offset"); value != "" {
-		parsed, err := strconv.Atoi(value)
-		if err != nil {
-			return -1, -1
-		}
-		offset = parsed
-	}
-	if value := r.URL.Query().Get("limit"); value != "" {
-		parsed, err := strconv.Atoi(value)
-		if err != nil {
-			return -1, -1
-		}
-		limit = parsed
-	}
-	return offset, limit
+	return transport.PageBounds(r, offsetDefault, limitDefault)
 }

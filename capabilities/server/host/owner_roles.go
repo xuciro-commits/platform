@@ -7,13 +7,14 @@ import (
 	"net/http"
 
 	"platformserver/platform"
+	"platformserver/services/ai/gateway"
 )
 
 type ownerRoles struct {
 	identity  platform.IdentityDirectory
 	directory platform.Directory
 	linker    platform.Linker
-	ai        models
+	ai        aigateway.Models
 	tasks     platform.Tasks
 	procs     platform.Processes
 	agents    platform.AgentRuntime

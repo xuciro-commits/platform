@@ -7,11 +7,34 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
+
+type Models interface {
+	platform.AcceptedInputApp
+	Snapshot() (json.RawMessage, error)
+	Callable(m platform.Member, name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
+	Model(name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
+	Provider(id string) (platform.AIProvider, bool)
+	Meter(u platform.AIUsage)
+	Spent(member string, now time.Time) int
+	Reservation(string) (platform.AIReservation, bool)
+	Usage() []platform.AIUsage
+	Quota(platform.Member, platform.AIDefaults, time.Time) platform.AIQuota
+}
+
+func Limits(setting func(app, name string) string) platform.AIDefaults {
+	number := func(app, name string) int {
+		n, _ := strconv.Atoi(setting(app, name))
+		return n
+	}
+	return platform.AIDefaults{People: number(platform.AIApp, platform.AISettingDailyTokens), Agents: number(platform.AgentApp, platform.SettingAgentDaily),
+		PerMinute: number(platform.AIApp, platform.AISettingPerMinute)}
+}
 
 type Registry interface {
 	Model(name string) (platform.AIModel, platform.AIProvider, *kernel.Error)

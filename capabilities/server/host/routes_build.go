@@ -15,8 +15,6 @@ import (
 	"net/http"
 	pageowner "platformserver/services/apps/pages"
 	dataowner "platformserver/services/data"
-	"strconv"
-	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -30,19 +28,6 @@ import (
 
 const releaseCommandBytes = build.JointDraftLimit * 512
 
-func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
-	if err := decodeBodyLimit(r, into, releaseCommandBytes); err != nil {
-		var large *http.MaxBytesError
-		if errors.As(err, &large) {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
-		}
-		return false
-	}
-	return true
-}
-
 func (h *Host) routesBuild(rt *routes) {
 	h.routesConnectionKinds(rt)
 	h.routesPackages(rt)
@@ -55,19 +40,11 @@ func (h *Host) routesBuild(rt *routes) {
 		result, refusal := recordRead(t, r.Context(), func(t *Tenant) (pageowner.ActionCheckResult, *kernel.Error) {
 			return t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
 		})
-		if refusal != nil {
-			Reply(w, nil, refusal)
-			return
-		}
-		WriteJSON(w, http.StatusOK, result)
+		transport.Answer(w, result, refusal)
 	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/build/drafts/actions", Summary: "Describe saved object actions for authoring without installing them or granting execution", Answer: []platform.CapabilityDescriptor{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		actions, err := t.DraftActionCapabilities(m)
-		if err != nil {
-			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, actions)
+		transport.AnswerOr(w, http.StatusConflict, actions, err)
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none", Body: struct {
 		Key   string                   `json:"key"`
@@ -108,23 +85,10 @@ func (h *Host) routesBuild(rt *routes) {
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: build.Process{}, Answer: ProcessDiagnostics{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var p build.Process
-		raw, err := io.ReadAll(io.LimitReader(r.Body, (128<<10)+1))
-		if err != nil || len(raw) > 128<<10 {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
-		if _, err = platform.DecodeValue(raw, 128<<10); err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		decoder := json.NewDecoder(strings.NewReader(string(raw)))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&p) != nil || decoder.Decode(new(any)) != io.EOF {
-			w.WriteHeader(http.StatusBadRequest)
+		if !transport.DecodeValueBody(w, r, &p, 128<<10) {
 			return
 		}
 		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (ProcessDiagnostics, *kernel.Error) {
-
 			world, refusal := t.draftWorldLocked(m, r.URL.Query().Get("branch"), h.Now())
 			if refusal != nil {
 				return ProcessDiagnostics{}, refusal
@@ -137,48 +101,24 @@ func (h *Host) routesBuild(rt *routes) {
 			if refusal := owner.CheckProcess(platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p); refusal != nil {
 				answer.Valid = false
 				message := refusal.Message
-				node := ""
-				parts := strings.SplitN(message, ": ", 2)
-				if len(parts) == 2 {
-					if strings.HasPrefix(parts[0], "step ") {
-						node = strings.TrimPrefix(parts[0], "step ")
-					}
-					if strings.HasPrefix(parts[0], "Node ") {
-						node = strings.TrimPrefix(parts[0], "Node ")
-					}
-				}
+				node := build.ProcessIssueNode(message)
 				answer.Issues = append(answer.Issues, ProcessDiagnostic{Node: node, Code: refusal.Code.String(), Message: message})
 			}
 			return answer, nil
 		})
-		if refusal != nil {
-			Reply(w, nil, refusal)
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
+		transport.Answer(w, answer, refusal)
 	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/releases/candidates", Summary: "Builder and publisher saved release inventory from committed candidate bytes", Query: []transport.Param{{Name: "offset", Description: "Candidates to skip"}, {Name: "limit", Description: "Candidates in the page, 1 to 100 (default 20)"}, {Name: "application", Description: "Application name; filter candidates before pagination"}}, Answer: releaseowner.ReleasePage{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		offset, limit := 0, 20
-		for name, target := range map[string]*int{"offset": &offset, "limit": &limit} {
-			if raw := r.URL.Query().Get(name); raw != "" {
-				value, err := strconv.Atoi(raw)
-				if err != nil {
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-				*target = value
-			}
-		}
+		offset, limit := transport.PageBounds(r, 0, 20)
 		if offset < 0 || limit < 1 || limit > 100 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		answer, err := t.SavedReleases(m, offset, limit, r.URL.Query().Get("application"))
-		if err != nil {
-			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			return
+		if err == nil {
+			answer = h.withPromotions(t.ID, answer)
 		}
-		WriteJSON(w, http.StatusOK, h.withPromotions(t.ID, answer))
+		transport.AnswerOr(w, http.StatusConflict, answer, err)
 	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/releases/candidates/{id}", Summary: "Builder and publisher review of sealed definitions against actual running definitions", Answer: releaseowner.SavedReleaseReview{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.ReviewSavedRelease(m, r.PathValue("id"))
@@ -191,69 +131,27 @@ func (h *Host) routesBuild(rt *routes) {
 	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/releases/drafts/change", Summary: "Builder-only field-level difference between one draft and what is installed", Query: []transport.Param{{Name: "kind", Description: "Draft kind"}, {Name: "id", Description: "Draft id"}}, Answer: build.DraftChange{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.DraftChange(m, platform.AssetKind(r.URL.Query().Get("kind")), r.URL.Query().Get("id"))
-		if err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
+		transport.AnswerOr(w, http.StatusBadRequest, answer, err)
 	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/releases/drafts/restore", Summary: "Builder-only action and payload that discard one draft's working changes: an edit back to what is installed, or archiving a draft never installed", Query: []transport.Param{{Name: "kind", Description: "Draft kind"}, {Name: "id", Description: "Draft id"}}, Answer: releaseowner.ReleaseDraftRestore{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.DraftRestore(m, platform.AssetKind(r.URL.Query().Get("kind")), r.URL.Query().Get("id"), h.Now())
-		if err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
+		transport.AnswerOr(w, http.StatusBadRequest, answer, err)
 	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/releases/drafts/working", Summary: "Builder-only working state on main: the drafts whose latest edit is the caller's and that differ from what is installed", Answer: releaseowner.ReleaseWorkingState{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.WorkingDrafts(m)
-		if err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
+		transport.AnswerOr(w, http.StatusBadRequest, answer, err)
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved drafts a chosen draft depends on and that are not installed yet; on main an application closure keeps only the caller's working state", Body: releaseowner.ReleaseDraftsRequest{}, Answer: releaseowner.ReleaseDraftClosure{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
-		if readErr != nil || len(body) > 4096 {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
 		var request releaseowner.ReleaseDraftsRequest
-		decoder := json.NewDecoder(strings.NewReader(string(body)))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || request.ID == "" {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "a draft kind and id are required"})
-			return
-		}
-		var trailing any
-		if err := decoder.Decode(&trailing); err != io.EOF {
-			w.WriteHeader(http.StatusBadRequest)
+		if !transport.DecodeCommand(w, r, &request, 4096, func() bool { return request.ID != "" }, "a draft kind and id are required") {
 			return
 		}
 		answer, err := t.ReferencedDrafts(m, request.Kind, request.ID, request.Branch, h.Now())
-		if err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
+		transport.AnswerOr(w, http.StatusBadRequest, answer, err)
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of up to 128 saved drafts with their installed development definitions", Body: releaseowner.ReleasePreviewRequest{}, Answer: releaseowner.ReleasePreview{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		body, readErr := io.ReadAll(io.LimitReader(r.Body, releaseCommandBytes+1))
-		if readErr != nil || len(body) > releaseCommandBytes {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
 		var request releaseowner.ReleasePreviewRequest
-		decoder := json.NewDecoder(strings.NewReader(string(body)))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || len(request.Drafts) == 0 || len(request.Drafts) > build.JointDraftLimit {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "between 1 and 128 drafts are required"})
-			return
-		}
-		var trailing any
-		if err := decoder.Decode(&trailing); err != io.EOF {
-			w.WriteHeader(http.StatusBadRequest)
+		if !transport.DecodeCommand(w, r, &request, releaseCommandBytes, func() bool { return len(request.Drafts) > 0 && len(request.Drafts) <= build.JointDraftLimit }, "between 1 and 128 drafts are required") {
 			return
 		}
 		answer, err := t.PreviewReleaseDrafts(m, request.Drafts, request.Branch, h.Now())
@@ -263,24 +161,16 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
-	draftsOf := func(request releaseowner.ReleaseSaveRequest) []build.JointDraftRef {
-		if len(request.Drafts) > 0 {
-			return request.Drafts
-		}
-		return []build.JointDraftRef{{Kind: request.Kind, ID: request.ID}}
-	}
 	rt.authorized(transport.Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it", Body: releaseowner.ReleaseSaveRequest{}, Answer: releaseowner.ReleaseSaved{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request releaseowner.ReleaseSaveRequest
-		if !decodeReleaseBody(w, r, &request) {
+		if !transport.DecodeLimited(w, r, &request, releaseCommandBytes) {
 			return
 		}
-		if (request.ID == "" && len(request.Drafts) == 0) ||
-			(request.ID != "" && len(request.Drafts) > 0) || len(request.Drafts) > build.JointDraftLimit ||
-			request.CandidateID == "" || request.Key == "" {
+		if !request.Valid() {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		id, err := t.SaveReleaseCandidates(m, draftsOf(request), request.CandidateID, request.Key, h.Now())
+		id, err := t.SaveReleaseCandidates(m, request.Refs(), request.CandidateID, request.Key, h.Now())
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
@@ -293,7 +183,7 @@ func (h *Host) routesBuild(rt *routes) {
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run the original function or agent evaluator against a saved candidate", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ReleaseEvaluationRequest
-		if !decodeReleaseBody(w, r, &request) {
+		if !transport.DecodeLimited(w, r, &request, releaseCommandBytes) {
 			return
 		}
 		if request.CandidateID == "" || (request.PlanID == "") == (request.Agent == "") || request.Key == "" {
@@ -309,7 +199,7 @@ func (h *Host) routesBuild(rt *routes) {
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/releases/active", Summary: "Builder and publisher atomic installation and activation of a saved object/page/application closure", Body: releaseowner.ReleaseActivateRequest{}, Answer: releaseowner.ReleaseActive{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request releaseowner.ReleaseActivateRequest
-		if !decodeReleaseBody(w, r, &request) {
+		if !transport.DecodeLimited(w, r, &request, releaseCommandBytes) {
 			return
 		}
 		if request.CandidateID == "" || request.Key == "" {
@@ -331,11 +221,7 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		page, err := t.queryWindowRead(m, r.PathValue("app"), r.PathValue("name"), r.URL.Query().Get("for"), r.URL.Query().Get("version"), platform.Query{Search: r.URL.Query().Get("search"), Offset: offset, Limit: limit}, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, page)
+		transport.Answer(w, page, err)
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/pipelines/preview", Summary: "Try the current pipeline draft on authorized dataset samples without publishing or writing output", Body: dataowner.PipelinePreviewRequest{}, Answer: dataowner.PipelinePreview{}}, build.ID, []string{build.Builder, build.Integrator}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request dataowner.PipelinePreviewRequest
@@ -344,11 +230,7 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		out, err := t.PreviewPipeline(m, request, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
+		transport.Answer(w, out, err)
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/simulate", Summary: "Try an authorized action as yourself in a private decision; only a builder may choose another member",
 		Query: []transport.Param{{Name: "as", Description: "the member it is tried as; empty: yourself; another member requires a builder"}, {Name: "branch", Description: "a branch id: the action is tried in that branch's staged world, where resources that exist only on the branch can be tried; requires a builder"}}, Body: []byte{}, Answer: trialowner.Simulation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -359,27 +241,17 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		out, err := t.Simulate(m, r.URL.Query().Get("as"), r.URL.Query().Get("branch"), s, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
+		transport.Answer(w, out, err)
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test an application draft closure or retained candidate with synthetic samples, controlled members and original executor traces",
 		Body: trialowner.CandidateSimulationRequest{}, Answer: trialowner.CandidateSimulation{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request trialowner.CandidateSimulationRequest
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&request) != nil || decoder.Decode(new(any)) != io.EOF {
+		if decodeBodyLimit(r, &request, 1<<20) != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The test plan must be a valid bounded JSON object"))
 			return
 		}
 		out, err := t.SimulateCandidate(m, request)
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
+		transport.Answer(w, out, err)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/projects/{id}/access", Summary: "A project's members and roles; owners, builders and administrators also get the people they may add", Answer: platform.ProjectAccessView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		d, _ := t.App(controlowner.PlatformApp).(platform.ProjectAccess)

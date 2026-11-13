@@ -8,7 +8,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	acceptedformat "platformserver/kernel/acceptedformat"
-	"strconv"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -20,26 +19,8 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-type models interface {
-	platform.AcceptedInputApp
-	Snapshot() (json.RawMessage, error)
-	Callable(m platform.Member, name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
-	Model(name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
-	Provider(id string) (platform.AIProvider, bool)
-	Meter(u platform.AIUsage)
-	Spent(member string, now time.Time) int
-	Reservation(string) (platform.AIReservation, bool)
-	Usage() []platform.AIUsage
-	Quota(platform.Member, platform.AIDefaults, time.Time) platform.AIQuota
-}
-
 func (t *Tenant) limits() platform.AIDefaults {
-	number := func(app, name string) int {
-		n, _ := strconv.Atoi(t.setting(t.automation(app, false), name))
-		return n
-	}
-	return platform.AIDefaults{People: number(platform.AIApp, platform.AISettingDailyTokens), Agents: number(platform.AgentApp, platform.SettingAgentDaily),
-		PerMinute: number(platform.AIApp, platform.AISettingPerMinute)}
+	return aigateway.Limits(func(app, name string) string { return t.setting(t.automation(app, false), name) })
 }
 
 func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req platform.ChatRequest, input, output int, now time.Time) *platform.AIError {
@@ -94,46 +75,29 @@ func (t *Tenant) DesignChat(m platform.Member, req platform.ChatRequest, now tim
 }
 
 func (t *Tenant) chatForStage(m platform.Member, req platform.ChatRequest, now time.Time, stage string, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
-	if t.ai == nil {
-		return platform.ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
-	}
-	if len(req.Messages) == 0 {
-		return platform.ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}, nil
-	}
-	var model platform.AIModel
-	var pv platform.AIProvider
-	_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
-		var err *kernel.Error
-		model, pv, req, err = aigateway.ChatSetup{
-			Design: func() *kernel.Error {
-				c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
-				return authorizationRefusal(t.authorizeNative(c, "POST /v1/build/ai/chat", "action", []string{build.Builder}, true))
-			},
-			Suspended: t.suspended,
-			Callable: func(m platform.Member, name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {
-				return t.ai.Callable(m, name)
-			},
-			Authorize: func(name string) *kernel.Error {
-				c := platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false)
-				return authorizationRefusal(t.authorizeNative(c, "model:"+name, "action", []string{platform.AnyMember}, true))
-			},
-			Resolver: t.modelResolver(),
-		}.Prepare(m, req, stage)
-		return struct{}{}, err
-	})
-	if refusal != nil {
-		return platform.ChatAnswer{}, refusal, nil
-	}
-	if len(delta) > 0 {
-		req.Delta = delta[0]
-	}
-	answer, failure := t.call(pv, model, m, req, now)
-	if answer.Usage.Model != "" {
-		if err := t.meter(m, answer.Usage); err != nil {
-			return platform.ChatAnswer{}, err, nil
-		}
-	}
-	return answer, nil, failure
+	return aigateway.ChatRun{Available: t.ai != nil, Call: t.call, Meter: t.meter,
+		Setup: func(req platform.ChatRequest) (model platform.AIModel, pv platform.AIProvider, prepared platform.ChatRequest, refusal *kernel.Error) {
+			_, refusal = recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+				var err *kernel.Error
+				model, pv, prepared, err = aigateway.ChatSetup{
+					Design: func() *kernel.Error {
+						c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
+						return authorizationRefusal(t.authorizeNative(c, "POST /v1/build/ai/chat", "action", []string{build.Builder}, true))
+					},
+					Suspended: t.suspended,
+					Callable: func(m platform.Member, name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {
+						return t.ai.Callable(m, name)
+					},
+					Authorize: func(name string) *kernel.Error {
+						c := platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false)
+						return authorizationRefusal(t.authorizeNative(c, "model:"+name, "action", []string{platform.AnyMember}, true))
+					},
+					Resolver: t.modelResolver(),
+				}.Prepare(m, req, stage)
+				return struct{}{}, err
+			})
+			return
+		}}.Run(m, req, now, delta...)
 }
 
 func (t *Tenant) gateway(mostTokens func() int) aigateway.Calls {
@@ -209,38 +173,23 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 }
 
 func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
-	out := platform.Outcome{Effect: x.ID}
-	var ask aigateway.ModelAsk
-	if json.Unmarshal([]byte(x.Body), &ask) != nil {
-		out.Result, out.Detail = "rejected", "The saved model request is invalid"
-		return out, nil
-	}
-	m := platform.Member{ID: "app:" + x.App, Tenant: t.ID}
-	var enabled platform.AIModel
-	var pv platform.AIProvider
-	ready, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
-		var ok bool
-		out, enabled, pv, ok = ask.Ready(out, aigateway.ModelSend{
-			Allowed:   func() bool { return t.functionAllowed(x.App, ask, now) },
-			Available: t.ai != nil,
-			Model:     func(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) { return t.ai.Model(name) },
-			Authorize: func(name string) *kernel.Error {
-				c := platform.NewCaller(runtime{t: t}, m, x.App, false, true)
-				return authorizationRefusal(t.authorizeNative(c, "model:"+name, "action", nil, true))
-			},
-			Resolver: t.modelResolver(),
-		})
-		return ok, nil
-	})
-	if refusal != nil {
-		out.Result, out.Detail = "rejected", refusal.Message
-		return out, nil
-	}
-	if !ready {
-		return out, nil
-	}
-	answer, failure := t.call(pv, enabled, m, ask.Request(x), now)
-	return ask.Outcome(out, answer, failure)
+	return aigateway.ModelDispatch{Call: t.call,
+		Gate: func(ask aigateway.ModelAsk, m platform.Member, out platform.Outcome) (gated platform.Outcome, enabled platform.AIModel, pv platform.AIProvider, ready bool, refusal *kernel.Error) {
+			_, refusal = recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+				gated, enabled, pv, ready = ask.Ready(out, aigateway.ModelSend{
+					Allowed:   func() bool { return t.functionAllowed(x.App, ask, now) },
+					Available: t.ai != nil,
+					Model:     func(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) { return t.ai.Model(name) },
+					Authorize: func(name string) *kernel.Error {
+						c := platform.NewCaller(runtime{t: t}, m, x.App, false, true)
+						return authorizationRefusal(t.authorizeNative(c, "model:"+name, "action", nil, true))
+					},
+					Resolver: t.modelResolver(),
+				})
+				return struct{}{}, nil
+			})
+			return
+		}}.Send(t.ID, x, now)
 }
 
 func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, usage *platform.AIUsage) (platform.App, *pb.Submission) {

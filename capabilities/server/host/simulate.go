@@ -2,8 +2,6 @@ package host
 
 import (
 	"context"
-	"encoding/json"
-	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
@@ -12,99 +10,59 @@ import (
 	trialowner "platformserver/services/devops/trials"
 	"platformserver/services/resources/authoring"
 	"slices"
-	"strings"
 	"time"
 )
 
 func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submission, now time.Time) (trialowner.Simulation, *kernel.Error) {
 	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.Simulation, *kernel.Error) {
-		return t.scopedSimulate(member, as, branch, s, now)
-	})
-}
-
-func (t *Tenant) scopedSimulate(member platform.Member, as, branch string, s *pb.Submission, now time.Time) (trialowner.Simulation, *kernel.Error) {
-	if err := t.Admits(member); err != nil {
-		return trialowner.Simulation{}, err
-	}
-	member = t.authorizationMember(member)
-	if !member.Active() {
-		return trialowner.Simulation{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
-	}
-	if s == nil || s.GetSchema() == nil || s.GetTarget() == nil {
-		return trialowner.Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "a submission with a schema and a target is required")
-	}
-	if t.quarantined() {
-		return trialowner.Simulation{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	m := member
-	if as != "" && as != member.ID || branch != "" {
-		caller := platform.NewCaller(runtime{t: t, scoped: true}, member, build.ID, false, false)
-		if refusal := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate", "action", []string{build.Builder}, true)); refusal != nil {
-			return trialowner.Simulation{}, refusal
-		}
-	}
-	if as != "" && as != member.ID {
-		other, ok := t.member(as)
-		if !ok {
-			return trialowner.Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", as)
-		}
-		m = other
-	}
-	a := t.App(t.owner["action:"+s.GetSchema().GetName()])
-	if a == nil {
-		return trialowner.Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "{action} cannot be tried", s.GetSchema().GetName())
-	}
-	s = proto.Clone(s).(*pb.Submission)
-	s.TenantId, s.PrincipalId, s.Authority = t.ID, m.ID, a.Manifest().ID
-	s = t.currentSubmissionSchema(a, s)
-	if err := t.delegatedBound(m, s); err != nil {
-		return trialowner.Simulation{}, err
-	}
-	if s.GetIdempotencyKey() == "" {
-		s.IdempotencyKey = "simulate"
-	}
-	var draft *stagedDecision
-	if branch == "" {
-		draft = t.newStagedDecision()
-	} else {
-		world, refusal := t.branchWorldLocked(member, branch, now)
+		member, m, a, s, refusal := trialowner.SubmissionTrial{
+			Admits:        t.Admits,
+			Authorization: t.authorizationMember,
+			Quarantined:   t.quarantined,
+			Authorize: func(member platform.Member) *kernel.Error {
+				caller := platform.NewCaller(runtime{t: t, scoped: true}, member, build.ID, false, false)
+				return authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate", "action", []string{build.Builder}, true))
+			},
+			Member:  t.member,
+			Owner:   func(schema string) platform.App { return t.App(t.owner["action:"+schema]) },
+			Current: t.currentSubmissionSchema,
+			Bound:   t.delegatedBound,
+			Tenant:  t.ID,
+		}.Prepare(member, as, branch, s)
 		if refusal != nil {
 			return trialowner.Simulation{}, refusal
 		}
-		draft = t.newStagedDecisionOn(world.view.Projection.ForkRecords())
-		if build.BranchDraftType(s.GetTarget().GetType()) {
-			s.ExpectedRevision = nil
-		}
-	}
-	draft.Simulation = true
-	_, refusal := decideAcceptedAs(a, draft, m, s, now, false)
-	out := trialowner.Simulation{Changes: []trialowner.SimulatedChange{}}
-	if refusal != nil {
-		out.Refusal = actions.Explained(refusal, a, s.GetSchema().GetName(), runtimekernel.Target(s)).Message
-		out.RefusalCode = refusal.Code.String()
-		out.Issues = t.readableFieldIssues(member, draft.InputIssues[refusal], now)
-		out.Unsupported = platform.IsOutsideAcceptedBoundary(refusal)
-		return out, nil
-	}
-	out.Accepted = true
-	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, ownerSet: t.ownerSet, Projection: draft.Records, directory: t.directory}
-	for _, ref := range slices.Sorted(func(yield func(string) bool) {
-		for k := range draft.Records.Writes() {
-			if !yield(k) {
-				return
+		var draft *stagedDecision
+		if branch == "" {
+			draft = t.newStagedDecision()
+		} else {
+			world, refusal := t.branchWorldLocked(member, branch, now)
+			if refusal != nil {
+				return trialowner.Simulation{}, refusal
+			}
+			draft = t.newStagedDecisionOn(world.view.Projection.ForkRecords())
+			if build.BranchDraftType(s.GetTarget().GetType()) {
+				s.ExpectedRevision = nil
 			}
 		}
-	}) {
-		typ, id, _ := strings.Cut(ref, "/")
-		domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
-		page, err := view.recordsRead(member, typ, platform.Query{Domain: domain, Limit: 1, Archived: true}, now)
-		if err != nil || len(page.Records) == 0 {
-			continue
+		draft.Simulation = true
+		_, refusal = decideAcceptedAs(a, draft, m, s, now, false)
+		out := trialowner.Simulation{Changes: []trialowner.SimulatedChange{}}
+		if refusal != nil {
+			out.Refusal = actions.Explained(refusal, a, s.GetSchema().GetName(), runtimekernel.Target(s)).Message
+			out.RefusalCode = refusal.Code.String()
+			out.Issues = t.readableFieldIssues(member, draft.InputIssues[refusal], now)
+			out.Unsupported = platform.IsOutsideAcceptedBoundary(refusal)
+			return out, nil
 		}
-		raw, _ := json.Marshal(page.Records[0])
-		out.Changes = append(out.Changes, trialowner.SimulatedChange{Type: typ, ID: id, Record: raw})
-	}
-	return out, nil
+		out.Accepted = true
+		view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, ownerSet: t.ownerSet, Projection: draft.Records, directory: t.directory}
+		out.Changes = trialowner.SimulatedChanges(slices.Sorted(draft.Records.Writes()), func(typ string, q platform.Query) ([]any, *kernel.Error) {
+			page, refusal := view.recordsRead(member, typ, q, now)
+			return page.Records, refusal
+		})
+		return out, nil
+	})
 }
 
 func (r runtime) TraceEnabled() bool { return r.t.simulationTrace != nil }

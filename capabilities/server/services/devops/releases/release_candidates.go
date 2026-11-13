@@ -54,6 +54,18 @@ type ReleaseSaveRequest struct {
 	Key         string                `json:"key"`
 }
 
+func (r ReleaseSaveRequest) Valid() bool {
+	return !(r.ID == "" && len(r.Drafts) == 0) && !(r.ID != "" && len(r.Drafts) > 0) && len(r.Drafts) <= build.JointDraftLimit &&
+		r.CandidateID != "" && r.Key != ""
+}
+
+func (r ReleaseSaveRequest) Refs() []build.JointDraftRef {
+	if len(r.Drafts) > 0 {
+		return r.Drafts
+	}
+	return []build.JointDraftRef{{Kind: r.Kind, ID: r.ID}}
+}
+
 type ReleaseDraftsRequest struct {
 	Kind   platform.AssetKind `json:"kind"`
 	ID     string             `json:"id"`

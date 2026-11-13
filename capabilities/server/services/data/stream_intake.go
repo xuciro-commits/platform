@@ -11,8 +11,35 @@ import (
 )
 
 type StreamRecords struct {
-	Source     func(id string) (Source, bool, error)
-	Connection func(id string) (Connection, bool, error)
+	Record     func(typ, id string) (any, error)
+	Source     func(Source) (Source, error)
+	Connection func(Connection) (Connection, error)
+}
+
+func (r StreamRecords) source(id string) (Source, bool, error) {
+	record, err := r.Record(SourceType, id)
+	if err != nil {
+		return Source{}, false, err
+	}
+	source, ok := record.(Source)
+	if ok {
+		source, err = r.Source(source)
+		ok = err == nil
+	}
+	return source, ok, nil
+}
+
+func (r StreamRecords) connection(id string) (Connection, bool, error) {
+	record, err := r.Record(ConnectionType, id)
+	if err != nil {
+		return Connection{}, false, err
+	}
+	connection, ok := record.(Connection)
+	if ok {
+		connection, err = r.Connection(connection)
+		ok = err == nil
+	}
+	return connection, ok, nil
 }
 
 func (r StreamRecords) Resolve(m platform.Member, name string, intake *platform.StreamIntake) (Source, Connection, string, *kernel.Error) {
@@ -22,14 +49,14 @@ func (r StreamRecords) Resolve(m platform.Member, name string, intake *platform.
 	if intake == nil {
 		return refuse("The Flow has no controlled source intake")
 	}
-	source, ok, err := r.Source(intake.SourceRecord)
+	source, ok, err := r.source(intake.SourceRecord)
 	if err != nil {
 		return refuse("The Flow source is not readable")
 	}
 	if !ok {
 		return refuse("The Flow source must be a published incremental stream source")
 	}
-	connection, ok, err := r.Connection(source.Connection)
+	connection, ok, err := r.connection(source.Connection)
 	if err != nil {
 		return refuse("The Flow connection is not readable")
 	}
@@ -167,4 +194,37 @@ func (source Source) Resume(before platform.FlowInstance, hash string, intake *p
 	}
 	source.Cursor = checkpoint.Cursor
 	return source, nil
+}
+
+type StreamConsumption struct {
+	Read    func(source Source, columns []string) ([]map[string]any, string, *kernel.Error)
+	Tick    func() (platform.FlowBatch, bool, *kernel.Error)
+	Consume func(batch platform.FlowBatch) (platform.FlowBatchOutcome, *kernel.Error)
+}
+
+func (c StreamConsumption) Run(before platform.FlowInstance, source Source, connection Connection, hash string, intake *platform.StreamIntake, budget int, latestBootstrap bool) (platform.FlowBatchOutcome, *kernel.Error) {
+	rows, cursor, refusal := c.Read(source, StreamColumns(source, intake))
+	if refusal != nil {
+		return platform.FlowBatchOutcome{}, refusal
+	}
+	source.Cursor = cursor
+	rows, refusal = TrimStreamRows(source, rows, budget)
+	if refusal != nil {
+		return platform.FlowBatchOutcome{}, refusal
+	}
+	if len(rows) == 0 && !latestBootstrap {
+		tick, due, tickErr := c.Tick()
+		if tickErr != nil {
+			return platform.FlowBatchOutcome{}, tickErr
+		}
+		if due {
+			return c.Consume(tick)
+		}
+		return platform.FlowBatchOutcome{}, nil
+	}
+	batch, refusal := StreamBatch(before, source, connection, hash, intake, rows)
+	if refusal != nil {
+		return platform.FlowBatchOutcome{}, refusal
+	}
+	return c.Consume(batch)
 }

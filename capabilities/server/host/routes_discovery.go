@@ -7,10 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"platformserver/services/actions"
-	dataowner "platformserver/services/data"
 	releaseowner "platformserver/services/devops/releases"
 	controlowner "platformserver/services/security/control"
-	"slices"
 	"strconv"
 	"time"
 
@@ -73,7 +71,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 			http.Error(w, "Entity declarations are unavailable", http.StatusInternalServerError)
 		}
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []DispatchTarget{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []build.DispatchTarget{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, refusal := t.DispatchTargets(m, r.PathValue("id"), h.Now())
 		if refusal != nil {
 			Reply(w, nil, t.i18n.Said(refusal, t.Language(m, r)))
@@ -83,39 +81,21 @@ func (h *Host) routesDiscovery(rt *routes) {
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: platform.ApplicationRunPage{}, Query: []transport.Param{{Name: "offset", Description: "Nonnegative run offset"}, {Name: "limit", Description: "1–100, default 50"}, {Name: "kind", Description: "Run kind"}, {Name: "state", Description: "Original owner state"}, {Name: "subject", Description: "Exact type/id"}, {Name: "since", Description: "Inclusive RFC3339 startup time"}, {Name: "until", Description: "Inclusive RFC3339 startup time"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := pageBounds(r, 0, 50)
-		filter := platform.ApplicationRunFilter{Kind: r.URL.Query().Get("kind"), State: r.URL.Query().Get("state"), Subject: r.URL.Query().Get("subject")}
-		for key, target := range map[string]*time.Time{"since": &filter.Since, "until": &filter.Until} {
-			if value := r.URL.Query().Get(key); value != "" {
-				parsed, err := time.Parse(time.RFC3339, value)
-				if err != nil {
-					Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a valid application run time range"))
-					return
-				}
-				*target = parsed
-			}
-		}
-		answer, err := t.ApplicationRuns(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetApp, Name: r.PathValue("name")}, offset, limit, h.Now(), filter)
-		if err != nil {
-			Reply(w, nil, err)
+		filter, refusal := transport.ApplicationRunFilterOf(r.URL.Query())
+		if refusal != nil {
+			Reply(w, nil, refusal)
 			return
 		}
-		WriteJSON(w, http.StatusOK, answer)
+		answer, err := t.ApplicationRuns(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetApp, Name: r.PathValue("name")}, offset, limit, h.Now(), filter)
+		transport.Answer(w, answer, err)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runtime", Summary: "Installed application artifact, retained versions, authorized capacity and original-owner recovery projection", Answer: platform.ApplicationRuntime{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.ApplicationRuntimeOf(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetApp, Name: r.PathValue("name")}, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
+		transport.Answer(w, answer, err)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/records/{type}/{id}/diagnostic", Summary: "Original authorized record decisions and application runs without time-based execution attribution", Answer: platform.ApplicationDiagnostic{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.ApplicationRecordDiagnostic(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetApp, Name: r.PathValue("name")}, r.PathValue("type"), r.PathValue("id"), h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
+		transport.Answer(w, answer, err)
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if err := t.WriteView("definitions", m, t.Language(m, r), w, r); err != nil {
@@ -129,27 +109,15 @@ func (h *Host) routesDiscovery(rt *routes) {
 			focus = platform.AssetRef{App: query.Get("app"), Kind: platform.AssetKind(query.Get("kind")), Name: query.Get("name")}
 		}
 		answer, err := t.describer().DependencyView(m, focus, query.Get("app"))
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
+		t.answerIn(w, r, m, answer, err)
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/provides", Summary: "Capabilities offered by the same authorized asset descriptions, optionally selected by kind and side", Query: []transport.Param{{Name: "kind", Description: "action, query, function, operation, protocol or interface"}, {Name: "side", Description: "pure, effect or authoritative"}}, Answer: []releaseowner.ProvidedCapability{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.describer().ProvidedCapabilities(m, r.URL.Query().Get("kind"), r.URL.Query().Get("side"))
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
+		t.answerIn(w, r, m, answer, err)
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/pages/{app}/{name}/{contentVersion}", Summary: "Read exact published page content through current member discovery permissions", Answer: platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.PageContentDefinition(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetPage, Name: r.PathValue("name")}, r.PathValue("contentVersion"))
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
+		t.answerIn(w, r, m, answer, err)
 	})
 	rt.metadata(transport.Route{Pattern: "GET /v1/capabilities", Summary: "Typed Block projections of the caller's installed owner capabilities", Answer: []platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.capabilities(m), t.Language(m, r)))
@@ -165,48 +133,21 @@ func (h *Host) routesDiscovery(rt *routes) {
 			}
 		}
 		answer, err := t.describeCapability(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetKind(r.PathValue("kind")), Name: r.PathValue("name")}, version)
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
+		t.answerIn(w, r, m, answer, err)
 	})
 }
 
-type DispatchTarget struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-}
-
-func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time) ([]DispatchTarget, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) ([]DispatchTarget, *kernel.Error) { return t.scopedDispatchTargets(member, id, at) })
-}
-
-func (t *Tenant) scopedDispatchTargets(member platform.Member, id string, at time.Time) ([]DispatchTarget, *kernel.Error) {
-	if refusal := t.Admits(member); refusal != nil {
-		return nil, refusal
-	}
-	caller := platform.NewCaller(runtime{t: t}, member, build.ID, false, false)
-	run, found := platform.Get[platform.DispatchRun](caller, id)
-	if !found || member.Agent || !member.Holds(build.ID, run.Definition.ReviewerRole) || !(hostView{t: t}).Readable(member, run.Subject, at) {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the current dispatch reviewer may choose an external target")
-	}
-	out := []DispatchTarget{}
-	for offset := 0; ; {
-		connections, total, refusal := platform.Find[dataowner.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","ready"]]`), Sort: []string{"title", "id"}, Limit: 500, Offset: offset})
-		if refusal != nil {
-			return nil, refusal
-		}
-		for _, connection := range connections {
-			if slices.Contains([]string{"http", "odata"}, connection.Kind) {
-				out = append(out, DispatchTarget{ID: connection.ID, Title: connection.Title})
-			}
-		}
-		offset += len(connections)
-		if offset >= total {
-			return out, nil
-		}
-	}
+func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time) ([]build.DispatchTarget, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) ([]build.DispatchTarget, *kernel.Error) {
+		return build.DispatchTargets(build.DispatchTargetHooks{
+			Admits:     t.Admits,
+			Caller:     func() platform.Caller { return platform.NewCaller(runtime{t: t}, member, build.ID, false, false) },
+			Automation: func() platform.Caller { return t.automation(build.ID, false) },
+			Readable: func(member platform.Member, subject string, at time.Time) bool {
+				return (hostView{t: t}).Readable(member, subject, at)
+			},
+		}, member, id, at)
+	})
 }
 
 func (t *Tenant) WriteView(kind string, m platform.Member, lang string, w http.ResponseWriter, r *http.Request) error {
@@ -222,4 +163,11 @@ func (t *Tenant) WriteView(kind string, m platform.Member, lang string, w http.R
 		}
 		return nil, nil
 	}, t.i18n.Translate)
+}
+
+func (t *Tenant) answerIn(w http.ResponseWriter, r *http.Request, m platform.Member, answer any, refusal *kernel.Error) {
+	if refusal == nil {
+		answer = t.i18n.Translate(answer, t.Language(m, r))
+	}
+	transport.Answer(w, answer, refusal)
 }

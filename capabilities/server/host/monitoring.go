@@ -44,6 +44,17 @@ func monitoringRecords[T any](t *Tenant, m platform.Member, typ string, coverage
 	}, coverage)
 }
 
+func collectRuns[T any](t *Tenant, m platform.Member, runs *monitoring.Runs, now time.Time, source, basis, limitation, typ string, add func([]T)) *kernel.Error {
+	coverage := monitoring.MonitoringCoverage{Source: source, Basis: basis, Limitation: limitation}
+	rows, refusal := monitoringRecords[T](t, m, typ, &coverage, now)
+	if refusal != nil {
+		return refusal
+	}
+	add(rows)
+	runs.Cover(coverage)
+	return nil
+}
+
 func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.MonitoringRunFilter, now time.Time) (monitoring.MonitoringRunPage, *kernel.Error) {
 	out := monitoring.MonitoringRunPage{Runs: []monitoring.MonitoringRun{}, Offset: filter.Offset, Limit: filter.Limit, Coverage: []monitoring.MonitoringCoverage{}}
 	m = t.authorizationMember(m)
@@ -83,13 +94,9 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 	}
 	t.DataOwner().SourceRuns(runs, sources, &coverage, now)
 	runs.Cover(coverage)
-	coverage = monitoring.MonitoringCoverage{Source: "pipeline", Basis: "latest", Limitation: "latest-only"}
-	pipelines, refusal := monitoringRecords[dataowner.Pipeline](t, m, dataowner.PipelineType, &coverage, now)
-	if refusal != nil {
+	if refusal := collectRuns(t, m, runs, now, "pipeline", "latest", "latest-only", dataowner.PipelineType, func(rows []dataowner.Pipeline) { dataowner.PipelineRuns(runs, rows) }); refusal != nil {
 		return runs.Partial(), refusal
 	}
-	dataowner.PipelineRuns(runs, pipelines)
-	runs.Cover(coverage)
 	compilations := map[string]time.Time{}
 	coverage = monitoring.MonitoringCoverage{Source: "compute", Basis: "retained", Readable: true, Limitation: "caller-only"}
 	for _, queued := range t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint }) {
@@ -113,41 +120,27 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 		runs.Add(monitoring.MonitoringRun{Type: "function", Source: "compute", ID: "compute:" + effect.ID, Title: cmp.Or(binding.Definition.Title, binding.Definition.Name), ResourceRef: result.Ref, RecordRef: effect.Target, When: effect.At, Status: monitoring.ComputeStatus(result.State), OwnerStatus: result.State})
 	}
 	runs.Cover(coverage)
-	coverage = monitoring.MonitoringCoverage{Source: "code", Basis: "latest", Limitation: "latest-only"}
-	codes, refusal := monitoringRecords[build.Code](t, m, build.CodeType, &coverage, now)
-	if refusal != nil {
-		return runs.Partial(), refusal
+	for _, collect := range []func() *kernel.Error{
+		func() *kernel.Error {
+			return collectRuns(t, m, runs, now, "code", "latest", "latest-only", build.CodeType, func(rows []build.Code) { build.CodeRuns(runs, rows, compilations) })
+		},
+		func() *kernel.Error {
+			return collectRuns(t, m, runs, now, "projection", "latest", "latest-only", dataowner.DatasetType, func(rows []dataowner.Dataset) { dataowner.DatasetRuns(runs, rows) })
+		},
+		func() *kernel.Error {
+			return collectRuns(t, m, runs, now, "function", "retained", "", build.FunctionCallType, func(rows []build.FunctionRun) { build.FunctionRuns(runs, rows) })
+		},
+		func() *kernel.Error {
+			return collectRuns(t, m, runs, now, "flow", "retained", "permission-filtered", platform.FlowInstanceType, func(rows []platform.FlowInstance) { runs.Flows(rows, automation.SchemaFlowRetry) })
+		},
+		func() *kernel.Error {
+			return collectRuns(t, m, runs, now, "agent", "retained", "permission-filtered", platform.RunType, runs.Agents)
+		},
+	} {
+		if refusal := collect(); refusal != nil {
+			return runs.Partial(), refusal
+		}
 	}
-	build.CodeRuns(runs, codes, compilations)
-	runs.Cover(coverage)
-	coverage = monitoring.MonitoringCoverage{Source: "projection", Basis: "latest", Limitation: "latest-only"}
-	datasets, refusal := monitoringRecords[dataowner.Dataset](t, m, dataowner.DatasetType, &coverage, now)
-	if refusal != nil {
-		return runs.Partial(), refusal
-	}
-	dataowner.DatasetRuns(runs, datasets)
-	runs.Cover(coverage)
-	coverage = monitoring.MonitoringCoverage{Source: "function", Basis: "retained"}
-	functions, refusal := monitoringRecords[build.FunctionRun](t, m, build.FunctionCallType, &coverage, now)
-	if refusal != nil {
-		return runs.Partial(), refusal
-	}
-	build.FunctionRuns(runs, functions)
-	runs.Cover(coverage)
-	coverage = monitoring.MonitoringCoverage{Source: "flow", Basis: "retained", Limitation: "permission-filtered"}
-	flows, refusal := monitoringRecords[platform.FlowInstance](t, m, platform.FlowInstanceType, &coverage, now)
-	if refusal != nil {
-		return runs.Partial(), refusal
-	}
-	runs.Flows(flows, automation.SchemaFlowRetry)
-	runs.Cover(coverage)
-	coverage = monitoring.MonitoringCoverage{Source: "agent", Basis: "retained", Limitation: "permission-filtered"}
-	agents, refusal := monitoringRecords[platform.AgentRunRecord](t, m, platform.RunType, &coverage, now)
-	if refusal != nil {
-		return runs.Partial(), refusal
-	}
-	runs.Agents(agents)
-	runs.Cover(coverage)
 	coverage = monitoring.MonitoringCoverage{Source: "work", Basis: "current"}
 	value, refusal := t.read(m, "work")
 	if refusal != nil && refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED && refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
