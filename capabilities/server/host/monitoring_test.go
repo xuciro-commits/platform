@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	dataowner "platformserver/services/data"
+	"platformserver/services/resources/monitoring"
 	"reflect"
 	"slices"
 	"strings"
@@ -218,7 +219,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	host := NewHost(Tokens(map[string]string{"admin": "admin", "builder": "builder", "other": "other", "scoped": "scoped", "user": "user"}), live.Tenant)
 	host.Now = func() time.Time { return now }
 	handler := host.Handler()
-	read := func(member, query string) MonitoringRunPage {
+	read := func(member, query string) monitoring.MonitoringRunPage {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodGet, "/v1/monitoring/runs"+query, nil)
 		req.Header.Set("Authorization", "Bearer "+member)
@@ -231,13 +232,13 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		if strings.Contains(recorder.Body.String(), "hidden payload") || strings.Contains(recorder.Body.String(), "hidden failure") {
 			t.Fatalf("%s received protected effect details", member)
 		}
-		var page MonitoringRunPage
+		var page monitoring.MonitoringRunPage
 		if err := json.Unmarshal(recorder.Body.Bytes(), &page); err != nil {
 			t.Fatal(err)
 		}
 		return page
 	}
-	find := func(page MonitoringRunPage, id string) MonitoringRun {
+	find := func(page monitoring.MonitoringRunPage, id string) monitoring.MonitoringRun {
 		t.Helper()
 		for _, run := range page.Runs {
 			if run.ID == id {
@@ -245,7 +246,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			}
 		}
 		t.Fatalf("missing %s in %+v", id, page.Runs)
-		return MonitoringRun{}
+		return monitoring.MonitoringRun{}
 	}
 	t.Run("authorized owners and full overview", func(t *testing.T) {
 		beforeRecords := live.recordImage(t)
@@ -257,19 +258,19 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		adminPage := read("admin", "?limit=100")
 		builderPage := read("builder", "?limit=100")
 		userPage := read("user", "?limit=100")
-		if userPage.Total != 0 || userPage.Overview != (MonitoringOverview{}) {
+		if userPage.Total != 0 || userPage.Overview != (monitoring.MonitoringOverview{}) {
 			t.Fatalf("unprivileged user received runs or counts: %+v", userPage)
 		}
-		if adminPage.Overview != (MonitoringOverview{FailedRuns: 7, DelayedSyncs: 1, FailedDeliveries: 3}) {
+		if adminPage.Overview != (monitoring.MonitoringOverview{FailedRuns: 7, DelayedSyncs: 1, FailedDeliveries: 3}) {
 			t.Fatalf("administrator overview: %+v", adminPage.Overview)
 		}
-		if builderPage.Overview != (MonitoringOverview{FailedRuns: 5, DelayedSyncs: 1, FailedDeliveries: 2}) {
+		if builderPage.Overview != (monitoring.MonitoringOverview{FailedRuns: 5, DelayedSyncs: 1, FailedDeliveries: 2}) {
 			t.Fatalf("builder overview: %+v", builderPage.Overview)
 		}
 		if find(builderPage, "compute:"+call.ID).Retryable {
 			t.Fatal("compute call advertises an invented retry")
 		}
-		for _, page := range []MonitoringRunPage{adminPage, builderPage} {
+		for _, page := range []monitoring.MonitoringRunPage{adminPage, builderPage} {
 			for _, run := range page.Runs {
 				if run.ID == "compute:"+otherCall.ID || page.Overview == adminPage.Overview && run.ID == "compute:"+call.ID {
 					t.Fatalf("another caller's compute appeared in %+v", page)
@@ -282,13 +283,13 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			}
 		}
 		for _, source := range []string{"flow", "agent"} {
-			if !slices.ContainsFunc(adminPage.Coverage, func(c MonitoringCoverage) bool {
+			if !slices.ContainsFunc(adminPage.Coverage, func(c monitoring.MonitoringCoverage) bool {
 				return c.Source == source && c.Readable && c.Basis == "retained" && c.Limitation == "permission-filtered"
 			}) {
 				t.Fatalf("missing explicit coverage for %s", source)
 			}
 		}
-		if !slices.ContainsFunc(adminPage.Coverage, func(c MonitoringCoverage) bool {
+		if !slices.ContainsFunc(adminPage.Coverage, func(c monitoring.MonitoringCoverage) bool {
 			return c.Source == "delivery-attempts" && !c.Readable && c.Limitation == "not-included"
 		}) {
 			t.Fatal("delivery attempts coverage changed")
@@ -406,7 +407,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		if len(live.entries) != beforeEntries || len(differingTypes(beforeRecords, live.recordImage(t))) != 0 {
 			t.Fatal("monitoring changed Flow or Agent accepted records")
 		}
-		for _, page := range []MonitoringRunPage{adminPage, builderPage} {
+		for _, page := range []monitoring.MonitoringRunPage{adminPage, builderPage} {
 			for id, want := range map[string]string{waiting: "pending", done: "ok", compensated: "failed", rollback: "running", cancelled: "cancelled"} {
 				run := find(page, "flow:"+id)
 				view, refusal := live.RecordOf(t.Context(), admin, platform.FlowInstanceType, id, now)
@@ -444,11 +445,11 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 				t.Fatalf("the other participant received builder's run: %+v", run)
 			}
 		}
-		if page := read("user", "?limit=100"); page.Total != 0 || page.Overview != (MonitoringOverview{}) {
+		if page := read("user", "?limit=100"); page.Total != 0 || page.Overview != (monitoring.MonitoringOverview{}) {
 			t.Fatalf("an unrelated member received runs or counts: %+v", page)
 		}
 		for _, check := range []struct {
-			before, after MonitoringOverview
+			before, after monitoring.MonitoringOverview
 			failed        int
 		}{{beforeAdmin, adminPage.Overview, 4}, {beforeBuilder, builderPage.Overview, 2}} {
 			if check.after.FailedRuns != check.before.FailedRuns+check.failed || check.after.DelayedSyncs != check.before.DelayedSyncs || check.after.FailedDeliveries != check.before.FailedDeliveries {
@@ -472,7 +473,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		}
 		page := read("admin", "?limit=100")
 		run := find(page, "flow:"+rollback)
-		if run.Status != "failed" || run.OwnerStatus != "stuck" || !run.Retryable || run.RetrySchema != automation.SchemaFlowRetry || run.RetryTarget == nil || *run.RetryTarget != (MonitoringRetryTarget{Type: platform.FlowInstanceType, ID: rollback}) || run.RetrySchemaVersion == nil || run.RetrySchemaVersion.Check() != nil || run.RetryKind != "retry" {
+		if run.Status != "failed" || run.OwnerStatus != "stuck" || !run.Retryable || run.RetrySchema != automation.SchemaFlowRetry || run.RetryTarget == nil || *run.RetryTarget != (monitoring.MonitoringRetryTarget{Type: platform.FlowInstanceType, ID: rollback}) || run.RetrySchemaVersion == nil || run.RetrySchemaVersion.Check() != nil || run.RetryKind != "retry" {
 			t.Fatalf("the stuck Flow has no original recovery action: %+v", run)
 		}
 		if page.Overview.FailedRuns != adminPage.Overview.FailedRuns+1 || find(read("builder", "?limit=100"), run.ID).Retryable || find(read("scoped", "?limit=100"), run.ID).Retryable {
@@ -540,8 +541,8 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		if recorder.Code != http.StatusUnauthorized {
 			t.Fatalf("anonymous monitoring: HTTP %d", recorder.Code)
 		}
-		_, refusal := recordRead(live.Tenant, context.Background(), func(t *Tenant) (MonitoringRunPage, *kernel.Error) {
-			return t.monitoringRuns(platform.Member{ID: "admin", Tenant: "another-tenant", Roles: admin.Roles}, MonitoringRunFilter{Limit: 50}, now)
+		_, refusal := recordRead(live.Tenant, context.Background(), func(t *Tenant) (monitoring.MonitoringRunPage, *kernel.Error) {
+			return t.monitoringRuns(platform.Member{ID: "admin", Tenant: "another-tenant", Roles: admin.Roles}, monitoring.MonitoringRunFilter{Limit: 50}, now)
 		})
 		if refusal == nil {
 			t.Fatal("another tenant was admitted to monitoring")

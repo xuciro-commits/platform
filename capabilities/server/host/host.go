@@ -13,6 +13,7 @@ import (
 	"platformserver/services/data/blobs"
 	"platformserver/services/data/transform"
 	"platformserver/services/functions/runtime"
+	"platformserver/services/resources/monitoring"
 
 	runtimekernel "platformserver/kernel"
 	"platformserver/services/devops/releases"
@@ -45,7 +46,7 @@ type Tenant struct {
 	simulationTrace   func(platform.DecisionTrace)
 	schedules         dataowner.ReadSchedules
 	observations      runtimekernel.ObservationBuffer
-	runIndex          runtimekernel.RunIndexCache[[]MonitoringCoverage]
+	runIndex          runtimekernel.RunIndexCache[[]monitoring.MonitoringCoverage]
 	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	ownerRoles
 	claims       runtimekernel.SourceClaims

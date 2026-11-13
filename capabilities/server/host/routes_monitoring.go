@@ -93,13 +93,13 @@ func (h *Host) routesMonitoring(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "GET /v1/monitoring/log-policies", Summary: "Effective tenant and application log policies", Answer: []controlowner.LogPolicyView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.LogPolicies())
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/runs", Summary: "Current and retained runs visible through their original owners, with unfiltered overview counts and recovery actions", Answer: MonitoringRunPage{}, Query: []transport.Param{
+	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/runs", Summary: "Current and retained runs visible through their original owners, with unfiltered overview counts and recovery actions", Answer: monitoring.MonitoringRunPage{}, Query: []transport.Param{
 		{Name: "type", Description: "sync, build, automation, function or delivery; empty selects all"},
 		{Name: "status", Description: "ok, failed, pending, running, warning, paused, cancelled or unknown; empty selects all"},
 		{Name: "offset", Description: "Nonnegative run offset, default 0"},
 		{Name: "limit", Description: "1-100, default 50"},
 	}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		filter := MonitoringRunFilter{Type: r.URL.Query().Get("type"), Status: r.URL.Query().Get("status"), Limit: 50}
+		filter := monitoring.MonitoringRunFilter{Type: r.URL.Query().Get("type"), Status: r.URL.Query().Get("status"), Limit: 50}
 		for key, dest := range map[string]*int{"offset": &filter.Offset, "limit": &filter.Limit} {
 			if r.URL.Query().Has(key) {
 				value, err := strconv.Atoi(r.URL.Query().Get(key))
@@ -110,7 +110,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 				*dest = value
 			}
 		}
-		if !filter.valid() {
+		if !filter.Valid() {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
@@ -222,14 +222,14 @@ func (h *Host) routesMonitoring(rt *routes) {
 		t.audit.Remember(platform.AuditEntry{At: now, Member: m.ID, App: controlowner.PlatformApp, Action: "platform.metrics.read", Target: observationFilterSummary(query)})
 		WriteJSON(w, http.StatusOK, summary)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/alerts", Summary: "Active automations with a notification effect visible to the caller", Answer: []MonitoringAlert{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		coverage := MonitoringCoverage{Source: "alerts", Basis: "current"}
+	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/alerts", Summary: "Active automations with a notification effect visible to the caller", Answer: []monitoring.MonitoringAlert{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		coverage := monitoring.MonitoringCoverage{Source: "alerts", Basis: "current"}
 		processes, refusal := monitoringRecords[build.Process](t, m, build.ProcessType, &coverage, h.Now())
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
 		}
-		out := []MonitoringAlert{}
+		out := []monitoring.MonitoringAlert{}
 		for _, process := range processes {
 			var installed build.Process
 			if process.Archived || process.Paused || json.Unmarshal([]byte(process.Published), &installed) != nil || installed.Kind != "automation" {
@@ -237,7 +237,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 			}
 			for _, step := range installed.Steps {
 				if step.Notify != nil {
-					out = append(out, MonitoringAlert{ID: process.ID, Title: installed.Title, Object: installed.Object, Repeat: installed.Repeat, Message: step.Notify.Body, Role: step.Notify.Role})
+					out = append(out, monitoring.MonitoringAlert{ID: process.ID, Title: installed.Title, Object: installed.Object, Repeat: installed.Repeat, Message: step.Notify.Body, Role: step.Notify.Role})
 					break
 				}
 			}

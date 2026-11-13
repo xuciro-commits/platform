@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/services/functions/runtime"
+	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -56,7 +57,7 @@ func (t *Tenant) scopedApplicationRuns(m platform.Member, ref platform.AssetRef,
 func (t *Tenant) refreshApplicationRunIndex(m platform.Member, ref platform.AssetRef, now time.Time) *kernel.Error {
 	key := "application/" + ref.App + "/" + ref.Name + "/" + m.ID
 	var refusal *kernel.Error
-	t.runIndex.Refresh(key, now, func() ([]MonitoringCoverage, bool) {
+	t.runIndex.Refresh(key, now, func() ([]monitoring.MonitoringCoverage, bool) {
 		refusal = t.rebuildApplicationRunIndex(m, ref, key, now)
 		return nil, refusal == nil
 	})
