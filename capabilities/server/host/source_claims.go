@@ -2,12 +2,7 @@ package host
 
 import (
 	"context"
-	"encoding/json"
-	runtimekernel "platformserver/kernel"
-	"strings"
 	"time"
-
-	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -15,141 +10,96 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	"platformserver/services/objects"
+	"platformserver/services/resources/authoring"
 )
 
-type sourceSubmission struct {
-	binding *platform.DataSourceBinding
-	row     dataowner.SourceRow
-	deleted bool
-}
-
-type RecordFieldProvenance = objects.RecordFieldProvenance
-
-type RecordProvenance = objects.RecordProvenance
-
-func (t *Tenant) selectedSourceValue(typ, id, attribute string, history []records.RecordChange, incoming *acceptedformat.SourceClaim) RecordFieldProvenance {
-	return t.objectOwner(t.Projection).SelectedSourceValue(typ, id, attribute, history, incoming)
-}
-
-func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, source *sourceSubmission, now time.Time) (*pb.Submission, *runtimekernel.ClaimSet, *kernel.Error) {
-	if source.deleted {
-		projected, claims, refusal := t.prepareSourceDeletion(sub, source, now)
-		if refusal != nil {
-			return nil, nil, refusal
-		}
-		caller := platform.NewCaller(runtime{t: t, scoped: true}, m, sub.GetAuthority(), false, false)
-		decision := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "write", Type: sub.GetTarget().GetType(), Record: sub.GetTarget().GetId(), Action: projected.GetSchema().GetName()}, now, false)
-		if !decision.Allow {
-			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, decision.Reason)
-		}
-		return projected, claims, nil
-	}
-	values, attributes, refusal := dataowner.SourceAttributes(sub.GetPayload(), source.binding, source.row)
-	if refusal != nil {
-		return nil, nil, refusal
-	}
-	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, sub.GetAuthority(), false, false)
-	kind := "write"
-	if strings.HasSuffix(sub.GetSchema().GetName(), ".create") {
-		kind = "create"
-	}
-	decision := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: kind, Type: sub.GetTarget().GetType(), Record: sub.GetTarget().GetId(), Action: sub.GetSchema().GetName(), Fields: attributes}, now, false)
-	if !decision.Allow || len(decision.Withheld) > 0 {
-		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, decision.Reason)
-	}
-	t.Projection.Lock()
-	et := t.Projection.Type(sub.GetTarget().GetType())
-	var history []records.RecordChange
-	archived := false
-	change := ""
-	if et != nil {
-		if row := et.Rows().Get(sub.GetTarget().GetId()); row != nil {
-			history = row.RecordHistory()
-			header := records.Header(row.Value)
-			archived, change = header.Archived, header.Changed.Change
-		}
-	}
-	t.Projection.Unlock()
-	restore := archived && t.objectOwner(t.Projection).SourceRestores(sub.GetTarget().GetType(), sub.GetTarget().GetId(), change)
-	claims := make([]acceptedformat.SourceClaim, 0, len(attributes))
-	payload := map[string]json.RawMessage{}
-	for _, attribute := range attributes {
-		claim := acceptedformat.SourceClaim{Attribute: attribute, Connector: source.binding.Kind + ":" + source.binding.Source, SourceTime: *source.row.At, Payload: values[attribute]}
-		claims = append(claims, claim)
-		selected := t.selectedSourceValue(sub.GetTarget().GetType(), sub.GetTarget().GetId(), attribute, history, &claim)
-		if selected.Kind != "" {
-			payload[attribute] = selected.Value
-		}
-	}
-	claims = append(claims, acceptedformat.SourceClaim{Attribute: "$record", Connector: source.binding.Kind + ":" + source.binding.Source, SourceTime: *source.row.At, Payload: json.RawMessage("true")})
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source row cannot be encoded")
-	}
-	copy := proto.Clone(sub).(*pb.Submission)
-	copy.Payload = encoded
-	origin := source.row.Origin
-	if origin == sub.GetTarget().GetId() {
-		origin = ""
-	}
-	return copy, &runtimekernel.ClaimSet{Origin: origin, Claims: claims, Restore: restore}, nil
-}
-
-func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmission, now time.Time) (*pb.Submission, *runtimekernel.ClaimSet, *kernel.Error) {
-	typ, id := sub.GetTarget().GetType(), sub.GetTarget().GetId()
-	t.Projection.Lock()
-	et := t.Projection.Type(typ)
-	row := et.Rows().Get(id)
-	history := row.RecordHistory()
-	fields := et.Info().Fields
-	t.Projection.Unlock()
-	connector := source.binding.Kind + ":" + source.binding.Source
-	copy := proto.Clone(sub).(*pb.Submission)
-	verb := "edit"
-	if t.objectOwner(t.Projection).SourceDeletionRemoves(typ, id, connector) {
-		verb = "archive"
-	}
-	copy.Schema = &pb.SchemaRef{Name: typ + "." + verb, Version: 1}
-	copy.Payload = json.RawMessage("{}")
-	at := now
-	if source.row.At != nil {
-		at = *source.row.At
-	}
-	claim := acceptedformat.SourceClaim{Attribute: "$record", Connector: connector, SourceTime: at, Payload: json.RawMessage("false")}
-	claims := []acceptedformat.SourceClaim{claim}
-	if verb == "edit" {
-		payload := map[string]json.RawMessage{}
-		for _, field := range fields {
-			if selected := t.selectedSourceValue(typ, id, field.Name, history, &claim); selected.Kind == "source" {
-				payload[field.Name] = selected.Value
-				claims = append(claims, acceptedformat.SourceClaim{Attribute: field.Name, Connector: selected.Connector, SourceTime: *selected.SourceTime, Payload: selected.Value})
+func (t *Tenant) sourcePreparation() dataowner.SourcePreparation {
+	return dataowner.SourcePreparation{
+		Record: func(typ, id string, required bool) (dataowner.SourceRecord, *kernel.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.SourceRecord, *kernel.Error) {
+				history, fields, archived, change, refusal := t.objectOwner(t.Projection).SourceState(typ, id, required)
+				return dataowner.SourceRecord{History: history, Fields: fields, Archived: archived, Change: change}, refusal
+			})
+		},
+		Objects: func(object string) (platform.EntityInfo, map[string]bool, *kernel.Error) {
+			type answer struct {
+				info platform.EntityInfo
+				rows map[string]bool
 			}
-		}
-		copy.Payload = platform.Raw(payload)
+			value, refusal := recordRead(t, context.Background(), func(t *Tenant) (answer, *kernel.Error) {
+				info, rows, refusal := t.objectOwner(t.Projection).SourceObjectStates(object)
+				return answer{info: info, rows: rows}, refusal
+			})
+			return value.info, value.rows, refusal
+		},
+		Authorize: func(m platform.Member, app, typ, id, action, kind string, fields []string, at time.Time) *kernel.Error {
+			caller := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
+			decision := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: kind, Type: typ, Record: id, Action: action, Fields: fields}, at, false)
+			if !decision.Allow || fields != nil && len(decision.Withheld) > 0 {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, decision.Reason)
+			}
+			return nil
+		},
+		Selected: func(typ, id, attribute string, history []records.RecordChange, incoming *acceptedformat.SourceClaim) dataowner.SelectedSourceValue {
+			selected := t.objectOwner(t.Projection).SelectedSourceValue(typ, id, attribute, history, incoming)
+			return dataowner.SelectedSourceValue{Kind: selected.Kind, Value: selected.Value, Connector: selected.Connector, SourceTime: selected.SourceTime}
+		},
+		Restores: func(typ, id, change string) bool {
+			return t.objectOwner(t.Projection).SourceRestores(typ, id, change)
+		},
+		Deletes: func(typ, id, connector string) bool {
+			return t.objectOwner(t.Projection).SourceDeletionRemoves(typ, id, connector)
+		},
+		Claimed: func(object, id, connector string, info platform.EntityInfo) bool {
+			return t.Claims.ClaimedBySource(t.ID, object, id, connector, info)
+		},
 	}
-	return copy, &runtimekernel.ClaimSet{Claims: claims}, nil
+}
+
+func (t *Tenant) declaredRows(object, kind, source string, input []map[string]any, now time.Time) ([]dataowner.SourceRow, *platform.DataSourceBinding, error) {
+	type answer struct {
+		rows    []dataowner.SourceRow
+		binding *platform.DataSourceBinding
+	}
+	value, err := readWithError(t, context.Background(), func(t *Tenant) (answer, error) {
+		var info platform.EntityInfo
+		t.Projection.Lock()
+		if entity := t.Projection.Type(object); entity != nil {
+			info = entity.Info()
+		}
+		t.Projection.Unlock()
+		rows, binding, err := dataowner.DeclaredSourceRows(info, kind, source, input, now, func(id string) string {
+			if resolved, failure := t.Claims.Identity.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
+				return resolved[0].ID
+			}
+			return id
+		})
+		return answer{rows: rows, binding: binding}, err
+	})
+	return value.rows, value.binding, err
+}
+
+func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []dataowner.SourceRow, now time.Time) (int, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) {
+		merged := 0
+		resolver := t.DataOwner().MatchResolver(t.automation(build.ID, false), object, producer, func(offset int) ([]any, int, *kernel.Error) {
+			page, err := t.recordsRead(member, object, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, now)
+			return page.Records, page.Total, err
+		})
+		if resolver != nil {
+			for i := range rows {
+				resolver.Resolve(&rows[i])
+			}
+			merged = resolver.Merged
+		}
+		t.Projection.Lock()
+		defer t.Projection.Unlock()
+		entity := t.Projection.Type(object)
+		dataowner.AssignVerbs(rows, func(id string) bool { return entity != nil && entity.Rows().Get(id) != nil })
+		return merged, nil
+	})
 }
 
 func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBinding, current []dataowner.SourceRow, now time.Time) ([]dataowner.SourceRow, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.SourceRow, *kernel.Error) {
-		present, complete := dataowner.PresentSourceRows(current)
-		if !complete {
-			return nil, nil
-		}
-		connector := dataowner.SourceConnector(binding)
-		var ids []string
-		t.Projection.Lock()
-		defer t.Projection.Unlock()
-		et := t.Projection.Type(object)
-		if et == nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
-		}
-		for id, row := range et.Rows().All() {
-			if !present[id] && !records.Header(row.Value).Archived && dataowner.ClaimedBySource(t.Claims.Facts, t.ID, object, id, connector, et.Info()) {
-				ids = append(ids, id)
-			}
-		}
-		return dataowner.DeletionRows(ids, now), nil
-	})
+	return t.sourcePreparation().Absent(object, binding, current, now)
 }

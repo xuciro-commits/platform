@@ -12,6 +12,7 @@ import (
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	dataowner "platformserver/services/data"
 	controlowner "platformserver/services/security/control"
 	"time"
 )
@@ -24,7 +25,7 @@ func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_COD
 
 type submitOptions struct {
 	report         func(*kernel.Error, []platform.FieldIssue)
-	source         *sourceSubmission
+	source         *dataowner.SourceApplication
 	versioned      bool
 	contentVersion string
 }
@@ -85,7 +86,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 		}
 		source := opts.source
 		if source != nil {
-			if record, refusal, done := t.priorOf(a, s.GetIdempotencyKey()).SourceReplay(m.ID, s, source.deleted); done {
+			if record, refusal, done := t.priorOf(a, s.GetIdempotencyKey()).SourceReplay(m.ID, s, source.Deleted); done {
 				return answer{record: record}, refusal
 			}
 		}
@@ -102,10 +103,11 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 			s = t.currentSubmissionSchema(a, s)
 		}
 		if source != nil {
-			s, decision.source, err = t.prepareSourceSubmission(m, s, source, now)
-			if err != nil {
-				return out, err
+			prepared, refusal := t.sourcePreparation().Prepare(m, s, source, now)
+			if refusal != nil {
+				return out, refusal
 			}
+			s, decision.source = prepared.Submission, &runtimekernel.ClaimSet{Origin: prepared.Origin, Claims: prepared.Claims, Restore: prepared.Restore}
 		}
 		end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 			attribute.String("platform.target", runtimekernel.Target(s)), attribute.String("platform.member", m.ID))

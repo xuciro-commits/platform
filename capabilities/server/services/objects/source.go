@@ -15,6 +15,42 @@ type RecordProvenance struct {
 	Fields map[string]RecordFieldProvenance `json:"fields"`
 }
 
+func (t *Owner) SourceState(typ, id string, required bool) ([]records.RecordChange, []platform.FieldInfo, bool, string, *kernel.Error) {
+	t.Store.Lock()
+	defer t.Store.Unlock()
+	entity := t.Store.Type(typ)
+	if entity == nil {
+		if required {
+			return nil, nil, false, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
+		}
+		return nil, nil, false, "", nil
+	}
+	fields := entity.Info().Fields
+	row := entity.Rows().Get(id)
+	if row == nil {
+		if required {
+			return nil, fields, false, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
+		}
+		return nil, fields, false, "", nil
+	}
+	header := records.Header(row.Value)
+	return row.RecordHistory(), fields, header.Archived, header.Changed.Change, nil
+}
+
+func (t *Owner) SourceObjectStates(object string) (platform.EntityInfo, map[string]bool, *kernel.Error) {
+	t.Store.Lock()
+	defer t.Store.Unlock()
+	entity := t.Store.Type(object)
+	if entity == nil {
+		return platform.EntityInfo{}, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
+	}
+	rows := map[string]bool{}
+	for id, row := range entity.Rows().All() {
+		rows[id] = records.Header(row.Value).Archived
+	}
+	return entity.Info(), rows, nil
+}
+
 func (t *Owner) RecordProvenance(m platform.Member, typ, id string, now time.Time) (RecordProvenance, *kernel.Error) {
 	m = t.authorizationMember(m)
 	caller := t.caller(m, "")

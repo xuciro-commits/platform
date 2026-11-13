@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -9,6 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	contract "platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/platform"
 )
 
 type ClaimSet struct {
@@ -94,4 +96,22 @@ func (c SourceClaims) Apply(tenant, typ, id, change string, at time.Time, prepar
 		}
 	}
 	return nil
+}
+
+func (c SourceClaims) ClaimedBySource(tenant, object, id, connector string, info platform.EntityInfo) bool {
+	ref := &pb.EntityRef{Type: object, Id: id}
+	live, known := false, false
+	for _, claim := range c.Facts.CurrentClaims(tenant, ref, "$record") {
+		if claim.GetFact().GetProvenance().GetConnectorId() == connector {
+			live, known = string(claim.GetFact().GetPayload()) == "true", true
+		}
+	}
+	if !known {
+		for _, field := range info.Fields {
+			live = live || slices.ContainsFunc(c.Facts.CurrentClaims(tenant, ref, field.Name), func(claim *pb.FactRecord) bool {
+				return claim.GetFact().GetProvenance().GetConnectorId() == connector
+			})
+		}
+	}
+	return live
 }

@@ -2,12 +2,12 @@ package host
 
 import (
 	"context"
-	"log"
-	"platformkernel/kernel"
-	dataowner "platformserver/services/data"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
 )
 
@@ -15,62 +15,55 @@ func (t *Tenant) ProjectDatasets(now time.Time) {
 	if t.businessStopped() || !t.OwnerActive(build.ID) {
 		return
 	}
-	type projection struct{ object, app, dataset string }
-	wanted, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]projection, *kernel.Error) {
-		var wanted []projection
-		for _, et := range t.Projection.SortedTypes() {
-			info := et.Info()
-			for _, binding := range info.DataSources {
-				if binding.Kind == "dataset" {
-					wanted = append(wanted, projection{info.Type, info.App, binding.Source})
-				}
-			}
-		}
-		return wanted, nil
-	})
-	if refusal != nil {
-		return
-	}
-	for _, p := range wanted {
-		t.projectDataset(p.object, p.app, p.dataset, now)
-	}
+	t.datasetMerge().ProjectAll(now)
 }
 
-func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
-	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (dataowner.DatasetPreparation, *kernel.Error) {
-		return t.DataOwner().PrepareProjection(t.automation(build.ID, false), build.ID, build.Builder, object, dataset), nil
-	})
-	if refusal != nil || prepared.Dataset.ID == "" {
-		return
-	}
-	member := prepared.Member
-	result := dataowner.DatasetMerge{Unguarded: t.unguarded,
-		DeclaredRows: t.declaredRows,
-		PrepareRows: func(object, producer string, rows []dataowner.SourceRow) *kernel.Error {
-			_, refusal := t.prepareRows(member, object, producer, rows, now)
+func (t *Tenant) datasetMerge() dataowner.DatasetMerge {
+	return dataowner.DatasetMerge{
+		Tenant: t.ID, Authority: build.ID,
+		Targets: func() ([]dataowner.DatasetTarget, *kernel.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.DatasetTarget, *kernel.Error) {
+				t.Projection.Lock()
+				defer t.Projection.Unlock()
+				var targets []dataowner.DatasetTarget
+				for _, entity := range t.Projection.SortedTypes() {
+					info := entity.Info()
+					for _, binding := range info.DataSources {
+						if binding.Kind == "dataset" {
+							targets = append(targets, dataowner.DatasetTarget{Object: info.Type, App: info.App, Dataset: binding.Source})
+						}
+					}
+				}
+				return targets, nil
+			})
+		},
+		Prepare: func(object, dataset string, at time.Time) (dataowner.DatasetPreparation, *kernel.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.DatasetPreparation, *kernel.Error) {
+				return t.DataOwner().PrepareProjection(t.automation(build.ID, false), build.ID, build.Builder, object, dataset), nil
+			})
+		},
+		SubmitResult: func(member platform.Member, dataset string, submission *pb.Submission, at time.Time) *kernel.Error {
+			_, refusal := t.Submit(member, submission, at)
 			return refusal
 		},
-		Refused:  func(key string) bool { return t.integrationRefused(app, key) },
-		Answered: func(key string) bool { return t.integrationAnswered(app, key) },
-		Submit: func(binding *platform.DataSourceBinding, row dataowner.SourceRow, key string) *kernel.Error {
-			return t.submitIntegrationRow(member, app, object, binding, row, key, now)
+		Unguarded:    t.unguarded,
+		DeclaredRows: t.declaredRows,
+		PrepareRows: func(member platform.Member, object, producer string, rows []dataowner.SourceRow, at time.Time) *kernel.Error {
+			_, refusal := t.prepareRows(member, object, producer, rows, at)
+			return refusal
 		},
-		Absent: func(binding *platform.DataSourceBinding, rows []dataowner.SourceRow, at time.Time) ([]dataowner.SourceRow, *kernel.Error) {
-			return t.absentSourceRows(object, binding, rows, at)
-		}}.Project(object, dataset, prepared.Dataset, prepared.Data, prepared.Version, prepared.Marking, prepared.Err, now)
-	if sub := dataowner.ProjectionSubmission(t.ID, build.ID, member, dataset, prepared.Previous, prepared.Known, result); sub != nil {
-		if _, err := t.Submit(member, sub, now); err != nil {
-			log.Printf("dataset projection result of %s not kept: %s", result.Object, err.Message)
-		}
+		Refused: t.integrationRefused, Answered: t.integrationAnswered,
+		Submit: func(member platform.Member, app, object string, binding *platform.DataSourceBinding, row dataowner.SourceRow, key string, at time.Time) *kernel.Error {
+			return t.integration().SubmitIntegrationRow(member, app, object, binding, row, key, at)
+		},
+		Absent: t.absentSourceRows,
 	}
 }
 
-func (t *Tenant) integrationAnswered(app, key string) bool {
-	value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) { return t.integrationAnsweredRead(app, key), nil })
+func (t *Tenant) integrationAnswered(authority, key string) bool {
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
+		owner := t.App(authority)
+		return owner != nil && t.priorOf(owner, key).Known(), nil
+	})
 	return value
-}
-
-func (t *Tenant) integrationAnsweredRead(app, key string) bool {
-	owner := t.App(app)
-	return owner != nil && t.priorOf(owner, key).Known()
 }

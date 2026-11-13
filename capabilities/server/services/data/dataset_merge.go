@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"log"
 	"slices"
 	"time"
 
@@ -13,16 +14,47 @@ import (
 )
 
 type DatasetMerge struct {
+	Tenant       string
+	Authority    string
+	Targets      func() ([]DatasetTarget, *kernel.Error)
+	Prepare      func(object, dataset string, at time.Time) (DatasetPreparation, *kernel.Error)
+	SubmitResult func(member platform.Member, dataset string, submission *pb.Submission, at time.Time) *kernel.Error
 	Unguarded    func(object, marking string) []string
 	DeclaredRows func(object, kind, source string, input []map[string]any, at time.Time) ([]SourceRow, *platform.DataSourceBinding, error)
-	PrepareRows  func(object, producer string, rows []SourceRow) *kernel.Error
-	Refused      func(key string) bool
-	Answered     func(key string) bool
-	Submit       func(binding *platform.DataSourceBinding, row SourceRow, key string) *kernel.Error
-	Absent       func(binding *platform.DataSourceBinding, rows []SourceRow, at time.Time) ([]SourceRow, *kernel.Error)
+	PrepareRows  func(member platform.Member, object, producer string, rows []SourceRow, at time.Time) *kernel.Error
+	Refused      func(authority, key string) bool
+	Answered     func(authority, key string) bool
+	Submit       func(member platform.Member, app, object string, binding *platform.DataSourceBinding, row SourceRow, key string, at time.Time) *kernel.Error
+	Absent       func(object string, binding *platform.DataSourceBinding, rows []SourceRow, at time.Time) ([]SourceRow, *kernel.Error)
 }
 
-func (m DatasetMerge) Project(object, dataset string, ds Dataset, data []map[string]any, version int, marking string, readErr error, now time.Time) DatasetProjection {
+type DatasetTarget struct {
+	Object  string
+	App     string
+	Dataset string
+}
+
+func (m DatasetMerge) ProjectAll(at time.Time) {
+	targets, refusal := m.Targets()
+	if refusal != nil {
+		return
+	}
+	for _, target := range targets {
+		prepared, refusal := m.Prepare(target.Object, target.Dataset, at)
+		if refusal != nil || prepared.Dataset.ID == "" {
+			continue
+		}
+		member := prepared.Member
+		result := m.Project(member, target.App, target.Object, target.Dataset, prepared.Dataset, prepared.Data, prepared.Version, prepared.Marking, prepared.Err, at)
+		if submission := ProjectionSubmission(m.Tenant, m.Authority, member, target.Dataset, prepared.Previous, prepared.Known, result); submission != nil {
+			if err := m.SubmitResult(member, target.Dataset, submission, at); err != nil {
+				log.Printf("dataset projection result of %s not kept: %s", result.Object, err.Message)
+			}
+		}
+	}
+}
+
+func (m DatasetMerge) Project(member platform.Member, app, object, dataset string, ds Dataset, data []map[string]any, version int, marking string, readErr error, now time.Time) DatasetProjection {
 	result := DatasetProjection{Object: object, Version: ds.Version, At: now, Rows: len(data), MergeVersion: 1, Marking: marking, Compartments: slices.Clone(ds.Compartments)}
 	paused := func(reason string) DatasetProjection {
 		result.Paused = reason
@@ -43,7 +75,7 @@ func (m DatasetMerge) Project(object, dataset string, ds Dataset, data []map[str
 	if err != nil || binding == nil {
 		return paused(fmt.Sprintf("The data source binding is unavailable: %v", err))
 	}
-	if refusal := m.PrepareRows(object, "dataset:"+ds.Name, rows); refusal != nil {
+	if refusal := m.PrepareRows(member, object, "dataset:"+ds.Name, rows, now); refusal != nil {
 		return paused(refusal.Message)
 	}
 	problem := func(row SourceRow, message string) {
@@ -61,13 +93,13 @@ func (m DatasetMerge) Project(object, dataset string, ds Dataset, data []map[str
 			problem(row, row.Error)
 			continue
 		}
-		if m.Refused(key(row)) {
+		if m.Refused(app, key(row)) {
 			problem(row, "refused")
 			continue
 		}
-		if !m.Answered(key(row)) {
-			if err := m.Submit(binding, row, key(row)); err != nil {
-				if !m.Refused(key(row)) {
+		if !m.Answered(app, key(row)) {
+			if err := m.Submit(member, app, object, binding, row, key(row), now); err != nil {
+				if !m.Refused(app, key(row)) {
 					return paused(fmt.Sprintf("Paused at %s: %s", row.ID, err.Message))
 				}
 				problem(row, err.Message)
@@ -77,12 +109,12 @@ func (m DatasetMerge) Project(object, dataset string, ds Dataset, data []map[str
 		result.Written++
 	}
 	if result.Refused == 0 {
-		removed, refusal := m.Absent(binding, rows, at)
+		removed, refusal := m.Absent(object, binding, rows, at)
 		if refusal != nil {
 			return paused(refusal.Message)
 		}
 		for _, row := range removed {
-			if refusal := m.Submit(binding, row, key(row)); refusal != nil {
+			if refusal := m.Submit(member, app, object, binding, row, key(row), now); refusal != nil {
 				problem(row, refusal.Message)
 			} else {
 				result.Deleted++

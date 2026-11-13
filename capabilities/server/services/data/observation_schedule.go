@@ -18,10 +18,21 @@ type ScheduledObservation struct {
 }
 
 type ObservationSchedule struct {
-	Member   func(id string) (platform.Member, bool)
-	Records  func(m platform.Member, object string, q platform.Query, at time.Time) ([]any, int, *kernel.Error)
-	Windows  *ObservationWindows
-	Evaluate func(m platform.Member, ref platform.AssetRef, q ObservationEvaluate, at time.Time) *kernel.Error
+	Member      func(id string) (platform.Member, bool)
+	Definitions func() ([]platform.Definition, error)
+	Active      func(record string) bool
+	Publisher   func(record string) (string, []string, bool)
+	Records     func(m platform.Member, object string, q platform.Query, at time.Time) ([]any, int, *kernel.Error)
+	Windows     *ObservationWindows
+	Evaluate    func(m platform.Member, ref platform.AssetRef, q ObservationEvaluate, at time.Time) *kernel.Error
+}
+
+func (s ObservationSchedule) RunDue(at time.Time) {
+	definitions, err := s.Definitions()
+	if err != nil {
+		return
+	}
+	s.Run(ScheduledObservations(definitions, s.Active, s.Publisher), at)
 }
 
 func (s ObservationSchedule) Run(sources []ScheduledObservation, at time.Time) {

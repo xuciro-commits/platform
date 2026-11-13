@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
@@ -33,24 +34,35 @@ type PipelineInputs struct {
 
 type Integration struct {
 	Tenant             string
+	Authority          string
 	Rules              platform.RuleEngine
 	Files              func() platform.FileStore
 	Member             func(id string) (platform.Member, bool)
 	Automation         func() platform.Member
+	Sources            func() ([]Source, *kernel.Error)
+	Quarantined        func() bool
 	Pending            func(typ, id string, execution *IntegrationExecution) bool
+	Target             func(object string) (string, bool)
 	ReadSource         func(Source) ([]map[string]any, error)
 	ConnectionMarkings func(connection string) (platform.MarkingSet, *kernel.Error)
+	Source             SourcePreparation
 	DeclaredRows       func(object, kind, source string, input []map[string]any, now time.Time) ([]SourceRow, *platform.DataSourceBinding, error)
 	PrepareRows        func(member platform.Member, object, producer string, rows []SourceRow, now time.Time) (int, *kernel.Error)
 	AbsentRows         func(object string, binding *platform.DataSourceBinding, current []SourceRow, now time.Time) ([]SourceRow, *kernel.Error)
-	LoadDataset        func(member platform.Member, dataset, producer string, marking platform.MarkingSet, rows []map[string]any, key string, now time.Time, transaction string) *kernel.Error
-	Refused            func(key string) bool
-	ApplyRows          func(member platform.Member, plan IntegrationPreparation, execution *IntegrationExecution, now time.Time, pull *SourcePull) bool
-	SourceResult       func(member platform.Member, s Source, pull SourcePull, phase string, revision *uint32, now time.Time) *kernel.Error
-	PipelineResult     func(member platform.Member, p Pipeline, run PipelineRun, phase string, revision *uint32, now time.Time) *kernel.Error
+	Refused            func(authority, key string) bool
+	Submit             func(member platform.Member, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
+	SubmitSource       func(member platform.Member, submission *pb.Submission, binding *platform.DataSourceBinding, row SourceRow, now time.Time) *kernel.Error
+	SubmitBackground   func(member platform.Member, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
+	ObserveRun         func(at time.Time, kind, key, app, resource, status, title, detail string)
 	PipelineInputs     func(p Pipeline, marking string, compartments []string) (PipelineInputs, *kernel.Error)
+	PipelinePlan       func() (PipelinePlan, *kernel.Error)
+	CurrentPipeline    func(id string) (Pipeline, *kernel.Error)
 	Unguarded          func(object, marking string) []string
-	DatasetOutput      func(dataset, key string) (int, error)
+	OutputVersion      func(dataset, key string) (int, error)
+	ScheduleExists     func(id string) bool
+	PipelineProject    func(id string) string
+	ExecutionSchedules func() ([]platform.Schedule, *kernel.Error)
+	Composite          func(member platform.Member, key string, edits []platform.CompositeEdit, now time.Time) error
 }
 
 type IntegrationPreparation struct {
@@ -218,7 +230,7 @@ func (g Integration) PullSource(s Source, now time.Time) {
 			if plan.Data != nil {
 				key := "source:" + pull.Execution.ID + ":dataset"
 				if err := g.LoadDataset(member, plan.Dataset, plan.Producer, platform.MarkingSet{Level: plan.Marking, Compartments: plan.Compartments}, plan.Data, key, pull.At, plan.Transaction); err != nil {
-					if !g.Refused(key) {
+					if !g.Refused(g.Authority, key) {
 						return
 					}
 					pull.Error = err.Message
@@ -371,13 +383,13 @@ func (g Integration) RunPipeline(p Pipeline, now time.Time) {
 		} else if plan.Dataset != "" {
 			key := "pipeline:" + run.Execution.ID + ":dataset"
 			if err := g.LoadDataset(member, plan.Dataset, plan.Producer, platform.MarkingSet{Level: plan.Marking, Compartments: plan.Compartments}, plan.Data, key, run.At, "snapshot"); err != nil {
-				if !g.Refused(key) {
+				if !g.Refused(g.Authority, key) {
 					return
 				}
 				run.Error = err.Message
 			} else {
 				run.Written = len(plan.Data)
-				output, err := g.DatasetOutput(plan.Dataset, key)
+				output, err := g.OutputVersion(plan.Dataset, key)
 				if err != nil {
 					log.Printf("pipeline output version unavailable: %v", err)
 					return

@@ -264,24 +264,6 @@ func SourceConnector(binding *platform.DataSourceBinding) string {
 	return binding.Kind + ":" + binding.Source
 }
 
-func ClaimedBySource(facts *kernel.FactLog, tenant, object, id, connector string, info platform.EntityInfo) bool {
-	ref := &pb.EntityRef{Type: object, Id: id}
-	live, known := false, false
-	for _, claim := range facts.CurrentClaims(tenant, ref, "$record") {
-		if claim.GetFact().GetProvenance().GetConnectorId() == connector {
-			live, known = string(claim.GetFact().GetPayload()) == "true", true
-		}
-	}
-	if !known {
-		for _, field := range info.Fields {
-			live = live || slices.ContainsFunc(facts.CurrentClaims(tenant, ref, field.Name), func(claim *pb.FactRecord) bool {
-				return claim.GetFact().GetProvenance().GetConnectorId() == connector
-			})
-		}
-	}
-	return live
-}
-
 func DeletionRows(ids []string, now time.Time) []SourceRow {
 	slices.Sort(ids)
 	var removed []SourceRow

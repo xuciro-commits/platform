@@ -3,12 +3,10 @@ package host
 import (
 	"context"
 	"encoding/json"
-	acceptedformat "platformserver/kernel/acceptedformat"
 	dataowner "platformserver/services/data"
 
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -37,39 +35,7 @@ func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *platfor
 }
 
 func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.ChangeRecord, *kernel.Error, bool) {
-	for _, app := range t.apps {
-		var original *pb.Submission
-		var receipt *pb.ChangeRecord
-		prior := t.priorOf(app, key)
-		if len(prior.Answer) > 0 {
-			result, saved, err := acceptedformat.DecodeBatch(prior.Answer)
-			if err != nil {
-				return nil, dataowner.ObservationUnavailable(err), true
-			}
-			receipt = saved
-			original, err = acceptedformat.BatchSubmission(result, saved)
-			if err != nil {
-				return nil, dataowner.ObservationUnavailable(err), true
-			}
-		} else if prior.Record != nil {
-			receipt, original = prior.Record, prior.Record.GetSubmission()
-		}
-		if original != nil {
-			if original.GetPrincipalId() != m.ID || original.GetCorrelationId() != identity {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
-			}
-			return receipt, nil, true
-		}
-		if saved := prior.Refusal; saved != nil {
-			var original pb.Submission
-			if len(saved.Submission) == 0 || protojson.Unmarshal(saved.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetCorrelationId() != identity {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
-			}
-			refusal := saved.Error
-			return nil, &refusal, true
-		}
-	}
-	return nil, nil, false
+	return t.Committed.ReusedPrior(t.apps, t.ID, key, m.ID, identity)
 }
 
 func (t *Tenant) observationDecision() dataowner.ObservationDecision {
