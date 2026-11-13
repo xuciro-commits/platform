@@ -18,18 +18,6 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-type ResourceEntry struct {
-	build.Resource
-	Path    []string `json:"path"`
-	CanOpen bool     `json:"canOpen"`
-	CanEdit bool     `json:"canEdit"`
-}
-
-type ResourceDirectory struct {
-	Resources []ResourceEntry `json:"resources"`
-	Folders   []build.Folder  `json:"folders"`
-}
-
 func (t *Tenant) resourceActionActive(name string) bool {
 	target := ""
 	if owner := t.App(t.owner["action:"+name]); owner != nil {
@@ -174,49 +162,22 @@ func (t *Tenant) ResourcePermission(store *records.Store, m platform.Member, typ
 	return allowed, definition && allowed
 }
 
-func (t *Tenant) resourceDirectory(m platform.Member) ResourceDirectory {
-	out := ResourceDirectory{Resources: []ResourceEntry{}, Folders: []build.Folder{}}
+func (t *Tenant) resourceDirectory(m platform.Member) build.ResourceDirectory {
+	var resources []build.Resource
+	var folders []build.Folder
 	t.Projection.Lock()
 	defer t.Projection.Unlock()
-	if resources := t.Projection.Type(build.ResourceType); resources != nil {
-		for _, row := range resources.Rows().All() {
-			resource := row.Value.Interface().(build.Resource)
-			role := t.ResourceRole(m, resource.Project)
-			if role == "" {
-				continue
-			}
-			out.Resources = append(out.Resources, ResourceEntry{Resource: resource, CanOpen: role != platform.ProjectDiscovererRole, CanEdit: resource.ManagedBy == "" && (role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole)})
+	if rows := t.Projection.Type(build.ResourceType); rows != nil {
+		for _, row := range rows.Rows().All() {
+			resources = append(resources, row.Value.Interface().(build.Resource))
 		}
 	}
-	if folders := t.Projection.Type(build.FolderType); folders != nil {
-		for _, row := range folders.Rows().All() {
-			folder := row.Value.Interface().(build.Folder)
-			if !folder.Archived && t.ResourceRole(m, folder.Project) != "" {
-				out.Folders = append(out.Folders, folder)
-			}
+	if rows := t.Projection.Type(build.FolderType); rows != nil {
+		for _, row := range rows.Rows().All() {
+			folders = append(folders, row.Value.Interface().(build.Folder))
 		}
 	}
-	projects := map[string]string{}
-	for _, resource := range out.Resources {
-		if resource.Type == build.AppType {
-			projects[resource.Draft] = resource.Title
-		}
-	}
-	folders := map[string]build.Folder{}
-	for _, folder := range out.Folders {
-		folders[folder.ID] = folder
-	}
-	for i := range out.Resources {
-		resource := &out.Resources[i]
-		for folder := folders[resource.Folder]; folder.ID != ""; folder = folders[folder.Parent] {
-			resource.Path = append(resource.Path, folder.Name)
-		}
-		slices.Reverse(resource.Path)
-		resource.Path = append([]string{projects[resource.Project]}, resource.Path...)
-	}
-	slices.SortFunc(out.Resources, func(a, b ResourceEntry) int { return strings.Compare(a.ID, b.ID) })
-	slices.SortFunc(out.Folders, func(a, b build.Folder) int { return strings.Compare(a.ID, b.ID) })
-	return out
+	return build.NewDirectory(resources, folders, func(project string) string { return t.ResourceRole(m, project) })
 }
 
 func (t *Tenant) initializeResources(now time.Time) error {
@@ -310,50 +271,25 @@ func (t *Tenant) initializeResources(now time.Time) error {
 	return t.migrateLegacyResourceProjects(owner, now)
 }
 
-type legacyResourceProject struct {
-	ID      string `json:"id"`
-	Project string `json:"project"`
-}
-
 func (t *Tenant) migrateLegacyResourceProjects(owner platform.App, now time.Time) error {
-	referenced := map[platform.AssetRef][]string{}
-	projects := map[string]bool{}
+	var apps []build.Application
+	var resources []build.Resource
 	t.Projection.Lock()
-	if apps := t.Projection.Type(build.AppType); apps != nil {
-		for _, row := range apps.Rows().All() {
-			app := row.Value.Interface().(build.Application)
-			if app.Archived {
-				continue
-			}
-			projects[app.ID] = true
-			for _, ref := range app.Resources {
-				referenced[ref] = appendUnique(referenced[ref], app.ID)
-			}
-			for _, page := range app.Pages {
-				ref := platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: page}
-				referenced[ref] = appendUnique(referenced[ref], app.ID)
-			}
+	if rows := t.Projection.Type(build.AppType); rows != nil {
+		for _, row := range rows.Rows().All() {
+			apps = append(apps, row.Value.Interface().(build.Application))
 		}
 	}
-	assignments := []legacyResourceProject{}
-	if resources := t.Projection.Type(build.ResourceType); resources != nil {
-		for _, row := range resources.Rows().All() {
-			resource := row.Value.Interface().(build.Resource)
-			if resource.Project != build.WorkspaceProject || resource.ManagedBy != "" || resource.Ref.Kind == platform.AssetApp {
-				continue
-			}
-			owners := referenced[resource.Ref]
-			if len(owners) != 1 || !projects[owners[0]] || owners[0] == build.WorkspaceProject {
-				continue
-			}
-			assignments = append(assignments, legacyResourceProject{ID: resource.ID, Project: owners[0]})
+	if rows := t.Projection.Type(build.ResourceType); rows != nil {
+		for _, row := range rows.Rows().All() {
+			resources = append(resources, row.Value.Interface().(build.Resource))
 		}
 	}
 	t.Projection.Unlock()
+	assignments := build.LegacyProjectAssignments(apps, resources)
 	if len(assignments) == 0 {
 		return nil
 	}
-	slices.SortFunc(assignments, func(a, b legacyResourceProject) int { return strings.Compare(a.ID, b.ID) })
 	digest, err := platform.CanonicalDigest(assignments)
 	if err != nil {
 		return err
@@ -365,13 +301,6 @@ func (t *Tenant) migrateLegacyResourceProjects(owner platform.App, now time.Time
 		return refusal
 	}
 	return nil
-}
-
-func appendUnique(values []string, value string) []string {
-	if slices.Contains(values, value) {
-		return values
-	}
-	return append(values, value)
 }
 
 type BranchReviewers struct {
@@ -389,7 +318,7 @@ type WorkingStateList struct {
 }
 
 func (h *Host) routesResources(rt *routes) {
-	rt.recordRead(transport.Route{Pattern: "GET /v1/markings/{id}/resources", Summary: "Resources carrying a marking, without their data", Answer: []ResourceEntry{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/markings/{id}/resources", Summary: "Resources carrying a marking, without their data", Answer: []build.ResourceEntry{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		caller := t.caller(m, t.App("platform"), false)
 		if refusal := authorizationRefusal(t.authorizeNative(caller, "GET /v1/markings/{id}/resources", "read", []string{"admin", platform.Auditor}, true)); refusal != nil {
 			Reply(w, nil, refusal)
@@ -402,17 +331,17 @@ func (h *Host) routesResources(rt *routes) {
 				marked[platform.AssetRef{App: build.ID, Kind: platform.AssetKind(node.Kind), Name: node.Name}] = true
 			}
 		}
-		resources := []ResourceEntry{}
+		resources := []build.ResourceEntry{}
 		t.Projection.Lock()
 		for _, row := range t.Projection.Type(build.ResourceType).Rows().All() {
 			resource := row.Value.Interface().(build.Resource)
 			if marked[resource.Ref] && !resource.Archived {
 				role := t.ResourceRole(m, resource.Project)
-				resources = append(resources, ResourceEntry{Resource: resource, Path: []string{}, CanOpen: role != "" && role != platform.ProjectDiscovererRole, CanEdit: false})
+				resources = append(resources, build.ResourceEntry{Resource: resource, Path: []string{}, CanOpen: role != "" && role != platform.ProjectDiscovererRole, CanEdit: false})
 			}
 		}
 		t.Projection.Unlock()
-		slices.SortFunc(resources, func(a, b ResourceEntry) int { return strings.Compare(a.ID, b.ID) })
+		slices.SortFunc(resources, func(a, b build.ResourceEntry) int { return strings.Compare(a.ID, b.ID) })
 		WriteJSON(w, http.StatusOK, resources)
 	})
 
@@ -498,10 +427,10 @@ func (h *Host) routesResources(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, view)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/resources", Summary: "Visible resource identities and their project and folder locations", Answer: ResourceDirectory{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/resources", Summary: "Visible resource identities and their project and folder locations", Answer: build.ResourceDirectory{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.resourceDirectory(m))
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/resources/{rid}", Summary: "Resolve one stable resource identity", Answer: ResourceEntry{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/resources/{rid}", Summary: "Resolve one stable resource identity", Answer: build.ResourceEntry{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		for _, entry := range t.resourceDirectory(m).Resources {
 			if entry.ID == r.PathValue("rid") {
 				WriteJSON(w, http.StatusOK, entry)

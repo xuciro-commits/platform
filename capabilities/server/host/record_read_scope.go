@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"platformserver/kernel/records"
 	automation "platformserver/services/automate/runtime"
+	"platformserver/services/resources/authoring"
 
 	"time"
 
@@ -197,8 +198,8 @@ func (t *Tenant) EnterpriseUsage(ctx context.Context, m platform.Member, id, unt
 	return recordRead(t, ctx, func(t *Tenant) (EnterpriseUsage, *kernel.Error) { return t.enterpriseUsageRead(m, id, until, now) })
 }
 
-func (t *Tenant) Search(ctx context.Context, reader *platform.Member, q string, now time.Time) []Hit {
-	out, _ := recordRead(t, ctx, func(t *Tenant) ([]Hit, *kernel.Error) { return t.searchRead(reader, q, now), nil })
+func (t *Tenant) Search(ctx context.Context, reader *platform.Member, q string, now time.Time) []build.Hit {
+	out, _ := recordRead(t, ctx, func(t *Tenant) ([]build.Hit, *kernel.Error) { return t.searchRead(reader, q, now), nil })
 	return out
 }
 func (t *Tenant) Readable(ctx context.Context, m platform.Member, ref string, now time.Time) bool {

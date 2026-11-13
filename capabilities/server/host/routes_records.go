@@ -264,7 +264,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, view)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/search", Summary: "Records of every type the caller may read, by words and by the types' names", Answer: []Hit{}, Query: []transport.Param{{Name: "q", Description: "What to find"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/search", Summary: "Records of every type the caller may read, by words and by the types' names", Answer: []build.Hit{}, Query: []transport.Param{{Name: "q", Description: "What to find"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.searchRead(&m, r.URL.Query().Get("q"), h.Now()))
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/knowledge", Summary: "Passages of the knowledge the caller may read, best first", Answer: []platform.Passage{}, Query: []transport.Param{{Name: "q", Description: "What to find"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

@@ -4,14 +4,12 @@ import (
 	"encoding/json"
 	"platformserver/kernel/records"
 	"reflect"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
-	controlowner "platformserver/services/security/control"
 )
 
 type ContextView struct {
@@ -116,79 +114,20 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 	return out, nil
 }
 
-type Hit struct {
-	Type      string         `json:"type"`
-	TypeTitle string         `json:"typeTitle,omitempty"`
-	ID        string         `json:"id"`
-	Title     string         `json:"title"`
-	Group     string         `json:"group"`
-	Resource  *ResourceEntry `json:"resource,omitempty"`
-}
-
-var searchScopes = map[byte]string{'#': build.AppType, ':': build.ObjectType, '@': controlowner.MemberType}
-
-func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []Hit {
+func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []build.Hit {
 	if reader == nil || reader.Tenant != t.ID {
 		return nil
 	}
 	m := *reader
-	out := []Hit{}
-	q = strings.TrimSpace(q)
-	only := ""
-	if q != "" {
-		if scope, ok := searchScopes[q[0]]; ok {
-			only, q = scope, strings.TrimSpace(q[1:])
-		}
-	}
-	if q == "" && only == "" {
-		return out
-	}
-	text := strings.ToLower(q)
-	counts := map[string]int{}
-	for _, resource := range t.resourceDirectory(m).Resources {
-		if resource.State == "archived" || only != "" && resource.Type != only || counts[resource.Type] >= 5 {
-			continue
-		}
-		if !strings.Contains(strings.ToLower(resource.Title+" "+resource.Ref.Name+" "+string(resource.Ref.Kind)+" "+resource.ID), text) {
-			continue
-		}
-		out = append(out, Hit{Type: resource.Type, ID: resource.Draft, Title: resource.Title, Group: "resource", Resource: &resource})
-		counts[resource.Type]++
-	}
-	resources := map[string]bool{}
+	search := build.Search{Resources: t.resourceDirectory(m).Resources, Entities: t.Entities(m), Names: t.names,
+		Read: func(typ string, query platform.Query) ([]any, *kernel.Error) {
+			page, err := t.recordsRead(m, typ, query, now)
+			return page.Records, err
+		}}
 	if owner := t.App(build.ID); owner != nil {
-		for _, entity := range owner.Manifest().Entities {
-			resources[entity.Type] = true
-		}
+		search.Owned = owner.Manifest().Entities
 	}
-	for _, info := range t.Entities(m) {
-		if info.Type == platform.FollowType || info.Type == build.ResourceType || build.BranchDraftType(info.Type) || only != "" && info.Type != only {
-			continue
-		}
-		query := platform.Query{Search: q, Limit: 5}
-		if rest, named := t.names(info, q); named && only == "" {
-			query.Search = rest
-		}
-		page, err := t.recordsRead(m, info.Type, query, now)
-		if err != nil {
-			continue
-		}
-		group := "object"
-		if info.Type == controlowner.MemberType {
-			group = "member"
-		} else if resources[info.Type] || info.App != build.ID {
-			group = "resource"
-		}
-		for _, r := range page.Records {
-			v := reflect.ValueOf(r)
-			hit := Hit{Type: info.Type, TypeTitle: info.Title, ID: v.FieldByName("ID").String(), Group: group}
-			if f, ok := info.Field(info.Display); ok {
-				hit.Title = v.FieldByIndex(f.Index).String()
-			}
-			out = append(out, hit)
-		}
-	}
-	return out
+	return search.Find(q)
 }
 
 func (t *Tenant) protocolActions(protocol string) []platform.Action {
