@@ -25,7 +25,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 				saved, applied, err := t.applyAcceptedInput(body)
 				return runtimekernel.ReplayedResult{App: saved.App, Member: saved.Member, At: saved.At, Applied: applied, After: func(at time.Time) {
 					if saved.Refusal == nil {
-						t.audit.Remember(platform.AuditEntry{At: at, Member: saved.Member, App: saved.App, Action: "input:" + saved.Name})
+						t.AuditLog.Remember(platform.AuditEntry{At: at, Member: saved.Member, App: saved.App, Action: "input:" + saved.Name})
 						t.enqueue(at)
 					}
 				}}, err
@@ -64,7 +64,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 			}
 		},
 		App:           t.App,
-		Audit:         func(entry platform.AuditEntry) { t.audit.Remember(entry) },
+		Audit:         func(entry platform.AuditEntry) { t.AuditLog.Remember(entry) },
 		Enqueue:       t.enqueue,
 		PublishBatch:  t.publishAcceptedBatch,
 		PublishRecord: t.publishAccepted,

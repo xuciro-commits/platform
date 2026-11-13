@@ -26,7 +26,7 @@ func (t *Tenant) backfillAudit(entries []Entry) {
 			if err != nil {
 				continue
 			}
-			t.audit.Remember(platform.AuditEntry{
+			t.AuditLog.Remember(platform.AuditEntry{
 				ID: "submit:" + entry.App + ":" + receipt.GetSubmission().GetIdempotencyKey(),
 				At: saved.At, Member: member.ID, App: entry.App,
 				Action: receipt.GetSubmission().GetSchema().GetName(),
@@ -42,7 +42,7 @@ func (t *Tenant) backfillAudit(entries []Entry) {
 			if err != nil {
 				continue
 			}
-			t.audit.Remember(platform.AuditEntry{
+			t.AuditLog.Remember(platform.AuditEntry{
 				ID: "submit:" + entry.App + ":" + sub.GetIdempotencyKey(),
 				At: saved.At, Member: member.ID, App: entry.App,
 				Action: sub.GetSchema().GetName(),
@@ -54,7 +54,7 @@ func (t *Tenant) backfillAudit(entries []Entry) {
 			if err != nil {
 				continue
 			}
-			t.audit.Remember(platform.AuditEntry{
+			t.AuditLog.Remember(platform.AuditEntry{
 				At: input.At, Member: input.Member, App: input.App, Action: "input:" + input.Name,
 			})
 			written++

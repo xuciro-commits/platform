@@ -44,7 +44,6 @@ type Tenant struct {
 	simulation        bool
 	simulationTrace   func(platform.DecisionTrace)
 	schedules         dataowner.ReadSchedules
-	observations      runtimekernel.ObservationBuffer
 	runIndex          runtimekernel.RunIndexCache[[]monitoring.MonitoringCoverage]
 	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	ownerRoles
@@ -61,7 +60,6 @@ type Tenant struct {
 	staged        compute.Channel
 	definitions   []platform.Definition
 	flowArtifacts automation.FrameCollector
-	audit         runtimekernel.AuditLog
 	events        []automation.QueuedEvent
 	bindings      *actions.Bindings
 	change        changes
@@ -82,7 +80,7 @@ type Tenant struct {
 	includeArchivedDefinitions bool
 }
 
-func (t *Tenant) Audit() []platform.AuditEntry { return t.audit.All() }
+func (t *Tenant) Audit() []platform.AuditEntry { return t.AuditLog.All() }
 
 func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
 	if services.BindOwner == nil {

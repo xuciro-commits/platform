@@ -16,7 +16,7 @@ import (
 )
 
 func (t *Tenant) bindAuditStore() {
-	t.audit.SetSink(func(entry platform.AuditEntry) {
+	t.AuditLog.SetSink(func(entry platform.AuditEntry) {
 		if err := t.Log().SaveAuditEntries(t.ID, []platform.AuditEntry{entry}); err != nil {
 			log.Printf("audit %s: %v", t.ID, err)
 		}
@@ -56,7 +56,7 @@ func (t *Tenant) recordObservation(event platform.Observation) {
 	}
 	event.At = event.At.UTC()
 	event.Tenant = t.ID
-	if err := t.observations.Record(t.Log(), event, logging.QuotaBytes()); err != nil {
+	if err := t.ObservationBuffer.Record(t.Log(), event, logging.QuotaBytes()); err != nil {
 		log.Printf("observation usage %s: %v", t.ID, err)
 	}
 }
@@ -66,7 +66,7 @@ func (t *Tenant) observeOwnerRun(at time.Time, source, runID, app, resource, sta
 }
 
 func (t *Tenant) FlushObservations() {
-	if err := t.observations.Flush(t.Log(), Now()); err != nil {
+	if err := t.ObservationBuffer.Flush(t.Log(), Now()); err != nil {
 		log.Printf("observation %s: %v", t.ID, err)
 	}
 }
@@ -89,7 +89,7 @@ func (t *Tenant) PurgeObservations(now time.Time) {
 		return
 	}
 	t.FlushObservations()
-	removed, err := t.observations.Purge(t.Log(), t.ID, now, now.AddDate(0, 0, -days))
+	removed, err := t.ObservationBuffer.Purge(t.Log(), t.ID, now, now.AddDate(0, 0, -days))
 	if err != nil {
 		log.Printf("purge observations %s: %v", t.ID, err)
 		return

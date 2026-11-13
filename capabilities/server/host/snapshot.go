@@ -98,7 +98,7 @@ func (t *Tenant) detachSnapshotRead() {
 }
 
 func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, actions.Endpoint]) (func(), error) {
-	s.Audit, s.Deliveries = t.audit.SnapshotState()
+	s.Audit, s.Deliveries = t.AuditLog.SnapshotState()
 	if facts := t.Claims.Facts.Records(t.ID); len(facts) > 0 {
 		var err error
 		s.Facts, err = platform.Protos(facts)
@@ -187,7 +187,7 @@ func (t *Tenant) restoreDefinitions(s *runtimekernel.TenantImage[automation.Task
 }
 
 func (t *Tenant) restoreServices(s *runtimekernel.TenantImage[automation.Task, actions.Endpoint]) error {
-	t.audit.Restore(s.Audit, s.Deliveries)
+	t.AuditLog.Restore(s.Audit, s.Deliveries)
 	image := platform.HostControlImage{Lifecycle: s.HostLifecycle, Support: s.Support, Migrations: s.Migrations, Requests: s.HostRequests, RuntimeSelection: s.RuntimeSelection, DisabledOwners: s.DisabledOwners}
 	if err := acceptedformat.ValidateHostImage(t.ID, image); err != nil {
 		return err

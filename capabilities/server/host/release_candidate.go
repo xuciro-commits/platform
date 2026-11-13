@@ -163,7 +163,7 @@ func (t *Tenant) releaseAcceptance() releaseowner.ReleaseAcceptance {
 		Answer:      func(key string) json.RawMessage { return t.Committed.Answer(key) },
 		SaveAnswer:  func(key string, raw json.RawMessage) { t.Committed.SaveAnswer(key, raw) },
 		Promoted: func(at time.Time, member, target string) {
-			t.audit.Remember(platform.AuditEntry{At: at, Member: member, App: controlowner.PlatformApp, Action: "host.promotion", Target: target})
+			t.AuditLog.Remember(platform.AuditEntry{At: at, Member: member, App: controlowner.PlatformApp, Action: "host.promotion", Target: target})
 		},
 		Enqueue:     t.enqueue,
 		Preview:     t.previewReleaseLocked,

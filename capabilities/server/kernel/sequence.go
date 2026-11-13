@@ -10,26 +10,28 @@ import (
 )
 
 type Sequence struct {
-	ID               string
-	Store            persistence.Store
-	memory           persistence.Memory
-	Lane             Lane
-	LastSlowHold     atomic.Pointer[LaneHold]
-	Committed        Committed
-	Projection       *records.Store
-	Claims           SourceClaims
-	Notices          NoticeBoard
-	Sequences        Sequences
-	ConnectorRoster  *ConnectorRoster
-	Works            *contract.Works
-	Fault            atomic.Pointer[Fault]
-	StateEpoch       atomic.Uint64
-	WorkEpoch        atomic.Uint64
-	DefinitionEpoch  atomic.Uint64
-	SnapshotPosition int64
-	RuntimePosition  func() int64
-	Record           func(persistence.Entry)
-	AcceptResult     func(persistence.Entry, string, string) ([]byte, error)
+	ID                string
+	Store             persistence.Store
+	memory            persistence.Memory
+	Lane              Lane
+	LastSlowHold      atomic.Pointer[LaneHold]
+	Committed         Committed
+	Projection        *records.Store
+	Claims            SourceClaims
+	Notices           NoticeBoard
+	Sequences         Sequences
+	ConnectorRoster   *ConnectorRoster
+	Works             *contract.Works
+	AuditLog          AuditLog
+	ObservationBuffer ObservationBuffer
+	Fault             atomic.Pointer[Fault]
+	StateEpoch        atomic.Uint64
+	WorkEpoch         atomic.Uint64
+	DefinitionEpoch   atomic.Uint64
+	SnapshotPosition  int64
+	RuntimePosition   func() int64
+	Record            func(persistence.Entry)
+	AcceptResult      func(persistence.Entry, string, string) ([]byte, error)
 }
 
 type LaneHold struct {

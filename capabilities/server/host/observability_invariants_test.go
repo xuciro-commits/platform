@@ -193,7 +193,7 @@ func TestInvariantObservationReadAudit(t *testing.T) {
 func TestInvariantAuditDoesNotDependOnMemoryRing(t *testing.T) {
 	live := newObservationTenant(t, "audit-persistent")
 	for index := 0; index < 1005; index++ {
-		live.audit.Remember(platform.AuditEntry{
+		live.AuditLog.Remember(platform.AuditEntry{
 			ID:     fmt.Sprintf("audit-%04d", index),
 			At:     invariantClock.Add(time.Duration(index) * time.Second),
 			Member: "builder", App: build.ID, Action: "build.object.create", Target: fmt.Sprintf("build.object/OBJ-%04d", index),
@@ -224,7 +224,7 @@ func TestInvariantAuditDoesNotDependOnMemoryRing(t *testing.T) {
 
 func TestInvariantAuditReadThroughHost(t *testing.T) {
 	live := newObservationTenant(t, "audit-http")
-	live.audit.Remember(platform.AuditEntry{ID: "accepted-a", At: invariantClock.Add(-time.Minute), Member: "builder", App: build.ID, Action: "build.object.create", Target: "build.object/OBJ1"})
+	live.AuditLog.Remember(platform.AuditEntry{ID: "accepted-a", At: invariantClock.Add(-time.Minute), Member: "builder", App: build.ID, Action: "build.object.create", Target: "build.object/OBJ1"})
 	_, handler := observationHost(live.Tenant)
 	response := observationRequest(t, handler, live.ID, observationToken(live.ID, "admin"), "/v1/audit", url.Values{"limit": {"10"}})
 	if response.Code != http.StatusOK {

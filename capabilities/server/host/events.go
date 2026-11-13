@@ -33,7 +33,7 @@ func (t *Tenant) publishAccepted(e platform.Event, plan platform.AcceptedEventPl
 	t.events = append(t.events, automation.QueuedEvent{Event: e, Hops: plan.Hops, Span: t.current(), Plan: &plan})
 }
 
-func (t *Tenant) Deliveries() []platform.Delivery { return t.audit.RecentDeliveries() }
+func (t *Tenant) Deliveries() []platform.Delivery { return t.AuditLog.RecentDeliveries() }
 
 func submitted(member string, a platform.App, s *pb.Submission, at time.Time) platform.AuditEntry {
 	return platform.AuditEntry{ID: "submit:" + a.Manifest().ID + ":" + s.GetIdempotencyKey(), At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),

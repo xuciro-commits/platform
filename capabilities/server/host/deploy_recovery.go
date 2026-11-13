@@ -16,7 +16,7 @@ import (
 func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
 	t.RuntimePosition = func() int64 { return journal.Position(t.ID) }
 	t.Store = journal
-	t.audit.Backfill()
+	t.AuditLog.Backfill()
 	id := t.ID
 	t.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
 		return journal.AppendAccepted(ctx, id, e, key, hash)

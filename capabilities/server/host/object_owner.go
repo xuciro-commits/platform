@@ -46,5 +46,5 @@ func (t *Tenant) objectFollows(m platform.Member, target string) bool {
 }
 
 func (t *Tenant) objectPersonalRead(read platform.PersonalRead) {
-	t.audit.ReadPersonal(read)
+	t.AuditLog.ReadPersonal(read)
 }

@@ -93,7 +93,7 @@ func (t *Tenant) recordDetail(m platform.Member, typ, id string, now time.Time, 
 	return t.objectOwner(t.Projection).RecordDetail(m, typ, id, now, sections...)
 }
 
-func (t *Tenant) PersonalReads() []platform.PersonalRead { return t.audit.PersonalReads() }
+func (t *Tenant) PersonalReads() []platform.PersonalRead { return t.AuditLog.PersonalReads() }
 
 func (t *Tenant) recordDeliveries(target string, now time.Time) []objects.RecordDelivery {
 	matched := t.outbound.Select(func(x actions.Queued) bool { return x.Target == target })

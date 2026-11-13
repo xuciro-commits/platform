@@ -52,7 +52,7 @@ func (t *Tenant) enqueue(now time.Time) {
 	}
 }
 
-func (t *Tenant) delivered(d platform.Delivery) { t.audit.Delivered(d) }
+func (t *Tenant) delivered(d platform.Delivery) { t.AuditLog.Delivered(d) }
 
 func (t *Tenant) automation(app string, replaying bool) platform.Caller {
 	return platform.NewCaller(runtime{t: t, scoped: true}, platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{}}, app, replaying, true)

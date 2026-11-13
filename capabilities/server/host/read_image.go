@@ -246,9 +246,9 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 			return transport.ManifestOf(app, view.definitionsFingerprint())
 		}, view.words.Clone, PlatformLanguages)
 	view.i18n.InstallApplications(view.definitions)
-	view.audit = t.audit.Fork()
-	view.audit.SetSink(view.readOrigin.audit.Remember, view.readOrigin.audit.ReadPersonal)
-	view.observations.CopyCounts(&t.observations)
+	view.AuditLog = t.AuditLog.Fork()
+	view.AuditLog.SetSink(view.readOrigin.AuditLog.Remember, view.readOrigin.AuditLog.ReadPersonal)
+	view.ObservationBuffer.CopyCounts(&t.ObservationBuffer)
 	view.LastSlowHold.Store(t.LastSlowHold.Load())
 	for _, app := range view.apps {
 		(hostView{t: view, app: app}).bindOwner(app)

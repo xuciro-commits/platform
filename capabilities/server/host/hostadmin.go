@@ -299,7 +299,7 @@ func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...accep
 }
 
 func (t *Tenant) hostControl() runtimekernel.HostControlOwner {
-	return runtimekernel.HostControlOwner{Image: t.console.Image, Restore: t.console.Restore, Audit: &t.audit}
+	return runtimekernel.HostControlOwner{Image: t.console.Image, Restore: t.console.Restore, Audit: &t.AuditLog}
 }
 
 func (t *Tenant) acceptHostControl(action, member string, request any, now time.Time, audit platform.AuditEntry, decide func(*platform.HostControlImage) (platform.SupportGrant, error), evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {

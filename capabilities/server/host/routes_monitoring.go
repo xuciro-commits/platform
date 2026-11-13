@@ -64,10 +64,10 @@ func observationReads(m platform.Member, t *Tenant, now time.Time) monitoring.Ob
 			return t.Log().SummarizeObservations(t.ID, member, from, to)
 		},
 		Remember: func(action, target string) {
-			t.audit.Remember(platform.AuditEntry{At: now, Member: m.ID, App: controlowner.PlatformApp, Action: action, Target: target})
+			t.AuditLog.Remember(platform.AuditEntry{At: now, Member: m.ID, App: controlowner.PlatformApp, Action: action, Target: target})
 		},
 		Flush:          func() { t.FlushObservations() },
-		Dropped:        func() int64 { return t.observations.Dropped() },
+		Dropped:        func() int64 { return t.ObservationBuffer.Dropped() },
 		RequestPercent: func() int { return t.logging().RequestPercent() },
 	}
 }

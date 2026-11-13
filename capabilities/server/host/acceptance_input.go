@@ -33,7 +33,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 
 func (t *Tenant) committedInput() runtimekernel.CommittedInput {
 	return runtimekernel.CommittedInput{Settlement: t.settlement(), Apply: t.applyAcceptedInput,
-		Remember: func(e platform.AuditEntry) { t.audit.Remember(e) }}
+		Remember: func(e platform.AuditEntry) { t.AuditLog.Remember(e) }}
 }
 
 func (t *Tenant) stage(candidate preparedAccepted) bool {

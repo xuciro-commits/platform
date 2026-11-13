@@ -226,7 +226,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 	}()
 	return t.FinishCommitted(a, m, hash, committed, runtimekernel.CommittedResult{Settlement: t.settlement(), App: t.App, ApplyBatch: t.applyAcceptedBatch, ApplyRecord: t.applyAcceptedResult,
 		Remember: func(member string, a platform.App, s *pb.Submission, at time.Time) {
-			t.audit.Remember(submitted(member, a, s, at))
+			t.AuditLog.Remember(submitted(member, a, s, at))
 		},
 		PublishBatch: t.publishAcceptedBatch, Publish: t.publishAccepted})
 }

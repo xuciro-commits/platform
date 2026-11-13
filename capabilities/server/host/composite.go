@@ -84,7 +84,7 @@ func (t *Tenant) finishCommittedComposite(m platform.Member, saved acceptedforma
 
 func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, error) {
 	return build.CompositeApply{
-		Tenant: t.ID, PriorDigest: t.Committed.Composite, Remember: t.audit.Remember, Enqueue: t.enqueue,
+		Tenant: t.ID, PriorDigest: t.Committed.Composite, Remember: t.AuditLog.Remember, Enqueue: t.enqueue,
 		ApplyBatch: func(changes []byte) error {
 			batch, _, _ := acceptedformat.DecodeBatch(changes)
 			if _, err := t.applyAcceptedBatch(t.App(build.ID).AcceptedLedger(), changes); err != nil {

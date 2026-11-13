@@ -72,7 +72,7 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 	if fault := operational.Fault.Load(); fault != nil {
 		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: monitoring.Started,
 			Built: monitoring.Built(), Apps: len(t.apps), Queues: []monitoring.QueueHealth{}, Breakers: []platform.Breaker{},
-			Observations: monitoring.ObservationHealth{Dropped: t.observations.Dropped()},
+			Observations: monitoring.ObservationHealth{Dropped: t.ObservationBuffer.Dropped()},
 			Readiness:    monitoring.Quarantined(fault.Reason)}
 	}
 	h := TenantHealth{Status: "ok", Started: monitoring.Started, Built: monitoring.Built(), Apps: len(t.apps), Queues: []monitoring.QueueHealth{}, Breakers: t.Breakers(now)}
@@ -94,7 +94,7 @@ func (t *Tenant) healthState(now time.Time) TenantHealth {
 	if t.console.Suspended() {
 		h.Status = "suspended"
 	}
-	counts := operational.observations.Counts()
+	counts := operational.ObservationBuffer.Counts()
 	h.Observations = monitoring.ObservationHealth{
 		Enabled: t.logging().RetentionDays() > 0, Pending: counts.Pending, Dropped: counts.Dropped, Written: counts.Written,
 		WriteFailures: counts.WriteFailures, Purged: counts.Purged, QuotaBytes: t.logging().QuotaBytes(),
