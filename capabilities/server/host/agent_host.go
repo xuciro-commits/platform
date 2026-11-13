@@ -9,6 +9,7 @@ import (
 	"platformserver/services/actions"
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
+	"platformserver/services/objects"
 	controlowner "platformserver/services/security/control"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -91,7 +92,7 @@ func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMe
 	invalid := func(message string) (platform.AgentObservation, *kernel.Error) {
 		return platform.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
 	}
-	var req ObjectSetRequest
+	var req objects.ObjectSetRequest
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || req.Offset < 0 || req.Limit < 0 || req.Set.Check() != nil {
@@ -108,7 +109,7 @@ func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMe
 			req.Limit = agentObjectRows
 		}
 		caller := platform.NewCaller(runtime{t: h.t}, reader, "", false, false)
-		page, object, err := h.t.loadObjectSet(h.t.Projection, caller, req.Set, objectWindow{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true}, now)
+		page, object, err := h.t.loadObjectSet(h.t.Projection, caller, req.Set, objects.Window{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true}, now)
 		if err != nil {
 			return out, err
 		}

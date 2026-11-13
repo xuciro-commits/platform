@@ -1,22 +1,18 @@
 package host
 
-import records "platformserver/kernel/records"
-
 import (
 	"context"
-	"encoding/json"
 	runtimekernel "platformserver/kernel"
-	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/services/actions"
 
 	"reflect"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/objects"
 )
 
 func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, binding *platform.SchemaVersion) *kernel.Error {
@@ -69,60 +65,8 @@ func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offse
 }
 
 func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefusalFact, at time.Time) platform.BusinessRefusalFact {
-	f = acceptedformat.CloneBusinessFact(f)
-	if f.Record != "" && !t.readable(m, f.Record, at) {
-		f.Record = ""
-	}
-	if f.Route != nil && f.Route.ID != "" && !t.readable(m, f.Route.Type+"/"+f.Route.ID, at) {
-		f.Route = nil
-	}
-	typ, id, _ := strings.Cut(f.Subject, "/")
-	var readable bool
-	var et *records.Type
-	func() {
-		t.Projection.Lock()
-		defer t.Projection.Unlock()
-		et = t.Projection.Type(typ)
-		readable = et != nil && et.Rows().Get(id) != nil && t.readableIn(t.Projection, m, f.Subject, at)
-	}()
-	if !readable {
-		f.Original = nil
-		f.Inputs = nil
-		return f
-	}
-	var original map[string]json.RawMessage
-	if json.Unmarshal(f.Original, &original) != nil {
-		f.Original = nil
-		return f
-	}
-	info := et.Info()
-	historical := reflect.New(info.Go).Elem()
-	if json.Unmarshal(f.Original, historical.Addr().Interface()) != nil {
-		f.Original = nil
-		return f
-	}
-	if info.HasReadSources() || len(info.VersionPins) > 0 {
-		narrowed, _ := t.narrower(m, at, true).Derive(et, historical)
-		var rawBefore, rawAfter map[string]json.RawMessage
-		_ = json.Unmarshal(platform.Raw(historical.Interface()), &rawBefore)
-		_ = json.Unmarshal(platform.Raw(narrowed.Interface()), &rawAfter)
-		for name := range original {
-			beforeHash, _ := platform.CanonicalDigest(rawBefore[name])
-			afterHash, _ := platform.CanonicalDigest(rawAfter[name])
-			if beforeHash != afterHash {
-				delete(original, name)
-			}
-		}
-	}
-	for name := range original {
-		field, ok := info.Field(name)
-		if name != "id" && (!ok || !field.ReadsAny(m.RolesIn(info.App))) {
-			delete(original, name)
-		}
-	}
-	f.Original = platform.Raw(original)
-	if m.ID != f.Member {
-		f.Inputs = nil
-	}
-	return f
+	return objects.ReadableBusinessFact(t.Projection, m, f,
+		func(ref string) bool { return t.readable(m, ref, at) },
+		func(ref string) bool { return t.readableIn(t.Projection, m, ref, at) },
+		func() *objects.Narrower { return t.narrower(m, at, true) })
 }

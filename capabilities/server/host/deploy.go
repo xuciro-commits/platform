@@ -612,7 +612,7 @@ func (d *Deployment) listen(ctx context.Context, host *Host, atExit func(context
 
 func (d *Deployment) createTenant(req platform.CreateTenantRequest, by string, files platform.FileStore, open, seed func(*Tenant) error) (*Tenant, error) {
 	now := Now()
-	spec, tpl, err := d.spec(req, by, now)
+	spec, tpl, err := controlowner.NewTenantSpec(d.Templates, req, by, now)
 	if err != nil {
 		return nil, err
 	}

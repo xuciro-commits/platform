@@ -7,8 +7,6 @@ import (
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/functions/authoring"
 	"platformserver/services/functions/runtime"
-	"slices"
-	"strconv"
 )
 
 func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor {
@@ -22,16 +20,7 @@ func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor
 		if len(definition.Provides) == 0 {
 			continue
 		}
-		var permission string
-		var roles []string
-		switch {
-		case definition.Action != nil:
-			permission, roles = definition.Ref.Name, definition.Action.Roles
-		case definition.Function != nil:
-			permission, roles = definition.Function.Name, definition.Function.Roles
-		case definition.Operation != nil:
-			permission, roles = definition.Operation.Name, definition.Operation.Roles
-		}
+		permission, roles := authoring.CapabilityPermission(definition)
 		if permission != "" {
 			caller := platform.NewCaller(runtime{t: t}, m, definition.Ref.App, false, false)
 			if !t.authorizeCapability(caller, definition.Ref.App, permission, roles, true, authorizationDetails{}).Allow {
@@ -75,12 +64,7 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 			return platform.CapabilityDescriptor{}, false
 		}
 		selected.Query, selected.QueryVersion = &query, source
-		for _, entity := range t.Entities(m) {
-			if entity.Type == query.Object {
-				selected.Entity = entity
-				break
-			}
-		}
+		selected.Entity = authoring.QueryEntity(t.Entities(m), query.Object)
 	case platform.AssetCompute:
 		operation, ordinal, ok := compute.OperationDefinition(app, ref.Name, version)
 		caller := platform.NewCaller(runtime{t: t}, m, ref.App, false, false)
@@ -94,13 +78,7 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 		if !ok || ordinal != version || !t.authorizeCapability(caller, ref.App, function.Name, function.Roles, true, authorizationDetails{}).Allow {
 			return platform.CapabilityDescriptor{}, false
 		}
-		readable := false
-		for _, entity := range t.Entities(m) {
-			if entity.Type == function.Object && !slices.ContainsFunc(function.Fields, func(name string) bool { _, exists := entity.Field(name); return !exists }) {
-				readable = true
-			}
-		}
-		if !readable {
+		if !authoring.FunctionReadable(function, t.Entities(m)) {
 			return platform.CapabilityDescriptor{}, false
 		}
 		selected.Function = &function
@@ -112,27 +90,8 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 
 func (t *Tenant) memberQueryVersion(m platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, string, bool) {
 	app := t.App(ref.App)
-	if app == nil || ref.Kind != platform.AssetQuery || version < 0 || version > 64 {
+	if app == nil {
 		return platform.NamedQuery{}, "", false
 	}
-	for _, d := range t.Definitions(m) {
-		if d.Ref != ref {
-			continue
-		}
-		if version == 0 {
-			if d.Source == "code" && d.Query != nil {
-				return *d.Query, d.Version, true
-			}
-			break
-		}
-		if d.Source != "tenant" {
-			break
-		}
-		source := app.Manifest().Version + ".query-" + strconv.Itoa(version)
-		if selected := d.QueryVersion(source); selected != nil {
-			return *selected.Query, source, true
-		}
-		break
-	}
-	return platform.NamedQuery{}, "", false
+	return authoring.MemberQueryVersion(t.Definitions(m), app.Manifest().Version, ref, version)
 }

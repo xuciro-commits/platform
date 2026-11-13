@@ -8,6 +8,7 @@ import (
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
+	kernelrecords "platformserver/kernel/records"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
@@ -52,7 +53,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 		if err != nil {
 			return saved, err
 		}
-		if err := draft.applyMediaVersionImages(saved.MediaVersions); err != nil {
+		if err := kernelrecords.ApplyMediaVersionImages(draft.Projection, saved.MediaVersions); err != nil {
 			return saved, err
 		}
 		if saved.Version >= 4 {
@@ -247,7 +248,7 @@ func (t *Tenant) ActiveRelease() string {
 func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedformat.Release) (string, error) {
 	candidateID := saved.CandidateID
 	if saved.Active {
-		snapshots, err := t.prepareMediaVersionImages(saved.Installations)
+		snapshots, err := kernelrecords.PrepareMediaVersionImages(t.Projection, saved.Installations)
 		if err != nil {
 			return "", err
 		}

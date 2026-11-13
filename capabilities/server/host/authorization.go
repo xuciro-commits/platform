@@ -12,6 +12,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/security"
 )
 
 func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Error {
@@ -19,45 +20,19 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 	if owner == nil || owner.Manifest().ID != build.ID {
 		return nil
 	}
-	if build.IsResourceSave(s) || s.GetSchema().GetName() == build.SchemaResourceMove || s.GetTarget().GetType() == build.WorkingStateType || s.GetTarget().GetType() == build.FolderType {
-		return nil
-	}
-	viaProject := false
-	var independent []string
-	for _, g := range m.Grants {
-		if g.App == build.ID {
-			if strings.HasPrefix(g.By, "project:") {
-				viaProject = true
-			} else {
-				independent = append(independent, g.Role)
-			}
-		}
-	}
-	if !viaProject || slices.Contains(independent, build.Builder) || owner.Manifest().Actions.PermitsAny(independent, s.GetSchema().GetName()) {
-		return nil
-	}
-	d, _ := t.App(controlowner.PlatformApp).(platform.ProjectAccess)
-	if build.IsResourceCreate(s) {
-		var payload struct {
-			Project string `json:"project"`
-		}
-		if d == nil || json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Project == "" {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the project that owns this resource")
-		}
-		if role := d.ProjectRole(m.ID, payload.Project); role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
-			return nil
-		}
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project roles cover only the resources of projects where you are an owner or editor; {action} on {target} is outside them", s.GetSchema().GetName(), runtimekernel.Target(s))
-	}
-	ref, ok := delegatedAsset(s)
-	names := []string{ref.Name}
-	if name := t.draftName(s); name != "" {
-		names = append(names, name)
-	}
-	if m.Agent || d == nil || !ok || !t.projectEdits(m.ID, d, ref.Kind, names) {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project roles cover only the resources of projects where you are an owner or editor; {action} on {target} is outside them", s.GetSchema().GetName(), runtimekernel.Target(s))
-	}
-	return nil
+	access, _ := t.App(controlowner.PlatformApp).(platform.ProjectAccess)
+	return security.ProjectDelegation{
+		App:     build.ID,
+		Builder: build.Builder,
+		Exempt: func(s *pb.Submission) bool {
+			return build.IsResourceSave(s) || s.GetSchema().GetName() == build.SchemaResourceMove || s.GetTarget().GetType() == build.WorkingStateType || s.GetTarget().GetType() == build.FolderType
+		},
+		Create:    build.IsResourceCreate,
+		Permits:   func(roles []string, action string) bool { return owner.Manifest().Actions.PermitsAny(roles, action) },
+		Target:    runtimekernel.Target,
+		DraftName: t.draftName,
+		Edits:     t.projectEdits,
+	}.Bound(m, s, access)
 }
 
 var projectRefKinds = map[string][]string{
@@ -109,28 +84,6 @@ func (t *Tenant) draftName(s *pb.Submission) string {
 		return ""
 	}
 	return row.Value.FieldByIndex(field.Index).String()
-}
-
-func delegatedAsset(s *pb.Submission) (platform.ProjectAsset, bool) {
-	typ, schema := s.GetTarget().GetType(), s.GetSchema().GetName()
-	if !strings.HasPrefix(typ, build.ID+".") || !strings.HasPrefix(schema, typ+".") {
-		return platform.ProjectAsset{}, false
-	}
-	verb := strings.TrimPrefix(schema, typ+".")
-	switch verb {
-	case "create", "edit", "save", "archive":
-	default:
-		return platform.ProjectAsset{}, false
-	}
-	id := s.GetTarget().GetId()
-	if id == "" {
-		return platform.ProjectAsset{}, false
-	}
-	var payload struct {
-		App string `json:"app"`
-	}
-	_ = json.Unmarshal(s.GetPayload(), &payload)
-	return platform.ProjectAsset{App: payload.App, Kind: strings.TrimPrefix(typ, build.ID+"."), Name: id}, true
 }
 
 func (t *Tenant) member(id string) (platform.Member, bool) {

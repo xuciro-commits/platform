@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -35,35 +34,8 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedformat.OperationClaim,
 		return saved, fmt.Errorf("operation claim predecessor differs")
 	}
 	works := t.forkWorkState()
-	var prior json.RawMessage
-	if old, err := works.Get(saved.Before.ID); err == nil {
-		prior, _ = protojson.Marshal(old)
-	}
-	priorHash, _ := platform.CanonicalDigest(prior)
-	savedHash, _ := platform.CanonicalDigest(saved.PriorWork)
-	if priorHash != savedHash {
-		return saved, fmt.Errorf("operation K9 predecessor differs")
-	}
-	if old, err := works.Get(saved.Before.ID); err == nil && old.GetState() == pb.WorkState_WORK_STATE_RUNNING {
-		if works.Cancel(saved.Before.ID) != nil {
-			return saved, fmt.Errorf("operation owner cannot be invalidated")
-		}
-	}
-	generation, _, refusal := works.Start(saved.Before.ID, "host-compute")
-	if refusal != nil || generation != saved.After.Generation || saved.Key != fmt.Sprintf("operation-claim:%s:%d", saved.Before.ID, generation) {
-		return saved, fmt.Errorf("operation generation differs")
-	}
-	after := saved.Before
-	after.Generation = generation
-	actual, _ := platform.CanonicalDigest(after)
-	frozen, _ := platform.CanonicalDigest(saved.After)
-	var work pb.Work
-	if actual != frozen || protojson.Unmarshal(saved.Work, &work) != nil {
-		return saved, fmt.Errorf("invalid operation claim transition")
-	}
-	check, _ := works.Get(saved.Before.ID)
-	if !proto.Equal(check, &work) {
-		return saved, fmt.Errorf("invalid operation claim work")
+	if err := compute.ReplayClaim(works, saved.Before, saved.After, saved.Key, saved.PriorWork, saved.Work); err != nil {
+		return saved, err
 	}
 	t.works = works
 	t.outbound.Update(saved.Before.ID, func(x *actions.Queued) { x.Effect, x.Sending = saved.After, true })
@@ -99,22 +71,10 @@ func (t *Tenant) prepareOperationClaim(id string, now time.Time) (platform.Effec
 		return platform.Effect{}, false
 	}
 	before := queued.Effect
-	works := t.forkWorkState()
-	var prior json.RawMessage
-	if work, err := works.Get(id); err == nil {
-		prior, _ = protojson.Marshal(work)
-		if work.GetState() == pb.WorkState_WORK_STATE_RUNNING {
-			if works.Cancel(id) != nil {
-				return platform.Effect{}, false
-			}
-		}
-	}
-	generation, _, refusal := works.Start(id, "host-compute")
-	if refusal != nil {
+	generation, prior, rawWork, ok := compute.StartClaim(t.forkWorkState(), id)
+	if !ok {
 		return platform.Effect{}, false
 	}
-	work, _ := works.Get(id)
-	rawWork, _ := protojson.Marshal(work)
 	after := before
 	after.Generation = generation
 	r := acceptedformat.OperationClaim{Version: 1, Kind: "operation-claim", Tenant: t.ID, App: controlowner.PlatformApp, At: now.UTC(), Key: fmt.Sprintf("operation-claim:%s:%d", id, generation), Before: before, After: after, PriorWork: prior, Work: rawWork}
@@ -152,21 +112,8 @@ func (t *Tenant) operationCurrent(id string, generation uint32) bool {
 	})
 }
 func (t *Tenant) operationDispatches(now time.Time) []func() {
-	operations := t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint })
-	ids := []string{}
-	active := 0
-	for _, x := range operations {
-		if x.Sending {
-			active++
-		}
-	}
-	for _, x := range operations {
-		if !x.Sending && !platform.EffectSettled(x.State) && !x.Due.After(now) && len(ids)+active < 4 {
-			ids = append(ids, x.ID)
-		}
-	}
 	var runs []func()
-	for _, id := range ids {
+	for _, id := range actions.RunnableIDs(t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint }), now, 4) {
 		if x, ok := t.claimOperation(id, now); ok {
 			runs = append(runs, func() { out := t.executeOperation(x, now); t.settleWithUsage(x.ID, out, nil, time.Now().UTC()) })
 		}
@@ -181,12 +128,9 @@ func (t *Tenant) prepareOperationFinish(before platform.Effect, out platform.Out
 		return nil, nil, nil, fmt.Errorf("stale operation completion")
 	}
 	works := t.forkWorkState()
-	prior, _ := works.Get(before.ID)
-	rawPrior, _ := protojson.Marshal(prior)
-	if err := works.Finish(before.ID, out.Generation, out.Result != "delivered"); err != nil {
+	rawPrior, rawWork, err := compute.FinishWork(works, before.ID, out.Generation, out.Result != "delivered")
+	if err != nil {
 		return nil, nil, nil, err
 	}
-	finished, _ := works.Get(before.ID)
-	rawWork, _ := protojson.Marshal(finished)
 	return works, rawPrior, rawWork, nil
 }

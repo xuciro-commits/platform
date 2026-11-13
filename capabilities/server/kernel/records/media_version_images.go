@@ -1,14 +1,13 @@
-package host
+package records
 
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
 )
 
-func (t *Tenant) prepareMediaVersionImages(installations []platform.ReleaseInstallation) ([]platform.MediaSetVersion, error) {
+func PrepareMediaVersionImages(store *Store, installations []platform.ReleaseInstallation) ([]platform.MediaSetVersion, error) {
 	var out []platform.MediaSetVersion
 	for _, installation := range installations {
 		if installation.Ref == nil || installation.Ref.Kind != platform.AssetMediaSet {
@@ -21,7 +20,7 @@ func (t *Tenant) prepareMediaVersionImages(installations []platform.ReleaseInsta
 		for _, snapshot := range platform.RetainedMediaVersions(set) {
 			snapshot.ID = platform.MediaSetVersionID(set.ID, snapshot.Version)
 			snapshot.MediaSet = set.ID
-			if entity := t.Projection.Type(platform.MediaSetVersionType); entity != nil {
+			if entity := store.Type(platform.MediaSetVersionType); entity != nil {
 				if existing := entity.Rows().Get(snapshot.ID); existing != nil {
 					prior := existing.Value.Interface().(platform.MediaSetVersion)
 					if !reflect.DeepEqual(prior.Items, snapshot.Items) {
@@ -36,11 +35,11 @@ func (t *Tenant) prepareMediaVersionImages(installations []platform.ReleaseInsta
 	return out, nil
 }
 
-func (t *Tenant) applyMediaVersionImages(snapshots []platform.MediaSetVersion) error {
+func ApplyMediaVersionImages(store *Store, snapshots []platform.MediaSetVersion) error {
 	if len(snapshots) == 0 {
 		return nil
 	}
-	versions := t.Projection.Type(platform.MediaSetVersionType)
+	versions := store.Type(platform.MediaSetVersionType)
 	for _, snapshot := range snapshots {
 		if existing := versions.Rows().Get(snapshot.ID); existing != nil {
 			prior := existing.Value.Interface().(platform.MediaSetVersion)
@@ -49,10 +48,10 @@ func (t *Tenant) applyMediaVersionImages(snapshots []platform.MediaSetVersion) e
 			}
 			continue
 		}
-		row := &records.Row{Value: reflect.ValueOf(&snapshot).Elem()}
+		row := &Row{Value: reflect.ValueOf(&snapshot).Elem()}
 		row.RetainOriginal(platform.Raw(snapshot))
 		versions.SetRow(snapshot.ID, row)
-		t.Projection.TrackWrite(platform.MediaSetVersionType + "/" + snapshot.ID)
+		store.TrackWrite(platform.MediaSetVersionType + "/" + snapshot.ID)
 	}
 	return nil
 }

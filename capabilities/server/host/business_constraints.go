@@ -1,68 +1,19 @@
 package host
 
 import (
-	"maps"
-	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	"platformkernel/kernel"
 
 	"platformserver/platform"
+	"platformserver/services/objects"
 )
 
 func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.FieldIssue, at time.Time) []platform.FieldIssue {
-	issues = slices.Clone(issues)
-	t.Projection.Lock()
-	defer t.Projection.Unlock()
-	for i, issue := range issues {
-		issues[i].Values = maps.Clone(issue.Values)
-		if issue.Code == "business_refusal" {
-			if !t.readableIn(t.Projection, member, issue.Record, at) {
-				issues[i].Values = nil
-				issues[i].Translations = nil
-				issues[i].Message = "The business record is no longer readable"
-			}
-			continue
-		}
-		if issue.Constraint == "" {
-			continue
-		}
-		typ, id, _ := strings.Cut(issue.Record, "/")
-		et := t.Projection.Type(typ)
-		if et == nil {
-			issues[i].Values = nil
-			continue
-		}
-		info := platform.ConstraintEntity(et.Info())
-		if et.Rows().Get(id) != nil && !t.readableIn(t.Projection, member, issue.Record, at) {
-			issues[i].Values = nil
-			continue
-		}
-		if current := et.Rows().Get(id); current != nil && et.Info().HasReadSources() {
-			narrowed, _ := t.narrowerIn(t.Projection, member, at, true).Derive(et, current.Value)
-			for _, derivation := range et.Info().Derived {
-				paths := derivation.Fields
-				if len(derivation.List) > 0 {
-					paths = [][]int{derivation.List}
-				}
-				for _, indices := range paths {
-					if reflect.DeepEqual(current.Value.FieldByIndex(indices).Interface(), narrowed.FieldByIndex(indices).Interface()) {
-						continue
-					}
-					delete(issues[i].Values, fieldName(et.Info().Go, indices))
-				}
-			}
-		}
-		for name := range issues[i].Values {
-			field, ok := info.Field(name)
-			if !ok || !field.ReadsAny(member.RolesIn(info.App)) {
-				delete(issues[i].Values, name)
-			}
-		}
-	}
-	return issues
+	return objects.ReadableFieldIssues(t.Projection, member, issues,
+		func(ref string) bool { return t.readableIn(t.Projection, member, ref, at) },
+		func() *objects.Narrower { return t.narrowerIn(t.Projection, member, at, true) })
 }
 
 func (t *Tenant) localizedFieldIssues(member platform.Member, issues []platform.FieldIssue, language string) []platform.FieldIssue {

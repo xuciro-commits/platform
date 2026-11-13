@@ -3,6 +3,7 @@ package host
 import records "platformserver/kernel/records"
 
 import (
+	"platformserver/services/objects"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -55,6 +56,6 @@ func (t *Tenant) runDeclaredQueryWindowFrom(store *records.Store, m platform.Mem
 	}
 	set := q.ObjectSet(of)
 	set.Search = window.Search
-	page, _, err := t.loadObjectSet(store, platform.NewCaller(runtime{t: t, scoped: true}, m, "", false, false), set, objectWindow{Sort: q.Sort, Offset: window.Offset, Limit: limit}, now, q)
+	page, _, err := t.loadObjectSet(store, platform.NewCaller(runtime{t: t, scoped: true}, m, "", false, false), set, objects.Window{Sort: q.Sort, Offset: window.Offset, Limit: limit}, now, q)
 	return page, err
 }

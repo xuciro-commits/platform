@@ -3,18 +3,17 @@ package host
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"slices"
-	"strings"
 	"time"
 
 	"platformserver/platform"
+	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
+	controlowner "platformserver/services/security/control"
 )
 
 type PromotionResult struct {
@@ -32,23 +31,17 @@ func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifac
 	if refusal != nil {
 		return platform.SealedArtifact{}, refusal
 	}
-	if raw == nil {
-		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not saved", id)
-	}
-	candidate, err := platform.ReadCandidate(id, raw)
+	artifact, err := releaseowner.SealArtifact(t.ID, id, raw, now)
 	if err != nil {
-		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s: %w", id, err)
+		return platform.SealedArtifact{}, err
 	}
-	sum := sha256.Sum256(raw)
-	artifact := platform.SealedArtifact{Tenant: t.ID, Candidate: candidate.ID, Key: "releases/" + t.ID + "/" + strings.ReplaceAll(strings.TrimPrefix(candidate.ID, "sha256-v1:"), ":", "-") + ".json",
-		Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: len(raw), Assets: len(candidate.Assets), SealedAt: now.UTC()}
 	if err := t.files().Put(context.Background(), artifact.Key, raw, "application/json"); err != nil {
 		return platform.SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
 	}
 	t.Lane.Lock()
 	defer t.Lane.Unlock()
-	if err := t.releases.Seal(candidate.ID, artifact); err != nil {
-		return platform.SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", candidate.ID)
+	if err := t.releases.Seal(artifact.Candidate, artifact); err != nil {
+		return platform.SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", artifact.Candidate)
 	}
 	t.StateEpoch.Add(1)
 	t.changedOwner(build.ID)
@@ -65,12 +58,7 @@ func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {
 			defer t.Lane.Unlock()
 		}
 	}
-	for _, artifact := range state.releases.Sealed() {
-		if artifact.Candidate == id {
-			return artifact, true
-		}
-	}
-	return platform.SealedArtifact{}, false
+	return releaseowner.FindSealed(state.releases.Sealed(), id)
 }
 
 func (t *Tenant) sealedBytes(id string) ([]byte, platform.SealedArtifact, error) {
@@ -87,12 +75,8 @@ func (t *Tenant) sealedBytes(id string) ([]byte, platform.SealedArtifact, error)
 	if _, err := buf.ReadFrom(reader); err != nil {
 		return nil, artifact, fmt.Errorf("sealed candidate %s: %w", id, err)
 	}
-	sum := sha256.Sum256(buf.Bytes())
-	if "sha256:"+hex.EncodeToString(sum[:]) != artifact.Digest {
-		return nil, artifact, fmt.Errorf("sealed candidate %s: bytes differ from the sealed digest", id)
-	}
-	if _, err := platform.ReadCandidate(id, buf.Bytes()); err != nil {
-		return nil, artifact, fmt.Errorf("sealed candidate %s: %w", id, err)
+	if err := releaseowner.VerifySealed(id, artifact, buf.Bytes()); err != nil {
+		return nil, artifact, err
 	}
 	return buf.Bytes(), artifact, nil
 }
@@ -123,12 +107,9 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	}
 	result := PromotionResult{From: from.ID, To: to.ID, Candidate: candidate.ID, Digest: artifact.Digest, Active: activate, Key: key, Assets: len(candidate.Assets)}
 	return decideWithError(to, "release:promote", func(to *Tenant) (PromotionResult, error) {
-		for _, asset := range candidate.Assets {
-			if to.App(asset.Ref.App) == nil {
-				return result, fmt.Errorf("%s does not host %s, which %s belongs to", to.ID, asset.Ref.App, asset.Ref.Name)
-			}
+		if err := releaseowner.MissingAssetHost(candidate, to.ID, func(app string) bool { return to.App(app) != nil }); err != nil {
+			return result, err
 		}
-
 		if to.quarantined() {
 			return result, fmt.Errorf("tenant %s is quarantined", to.ID)
 		}
@@ -173,41 +154,15 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 	if from == nil || to == nil || from.ID == to.ID {
 		return platform.MigrationResult{}, fmt.Errorf("migration needs two different environments")
 	}
-	if len(types) == 0 {
-		return platform.MigrationResult{}, fmt.Errorf("name at least one type to migrate")
-	}
-	sorted := slices.Clone(types)
-	slices.Sort(sorted)
-	sorted = slices.Compact(sorted)
-	hosted := to.hostedTypes()
-	for _, typ := range sorted {
-		if !hosted[typ] {
-			return platform.MigrationResult{}, fmt.Errorf("%s does not host %s", to.ID, typ)
-		}
-	}
-	sum := sha256.Sum256([]byte(from.ID + "\x00" + to.ID + "\x00" + strings.Join(sorted, ",")))
-	key := "migration:" + hex.EncodeToString(sum[:8])
-	result := platform.MigrationResult{From: from.ID, To: to.ID, Key: key, Types: []platform.MigrationType{}}
-	for _, typ := range sorted {
-		data, refusal := from.Export(context.Background(), source, typ, platform.Query{}, now)
-		if refusal != nil {
-			return result, fmt.Errorf("export %s from %s: %s", typ, from.ID, refusal.Code)
-		}
-		rows, refusal := to.Import(target, typ, data, false, now)
-		if refusal != nil {
-			return result, fmt.Errorf("import %s into %s: %s", typ, to.ID, refusal.Code)
-		}
-		part := platform.MigrationType{Type: typ, Rows: len(rows)}
-		for _, row := range rows {
-			if row.Outcome == "ok" {
-				part.Written++
-			} else {
-				part.Refused = append(part.Refused, row)
-			}
-		}
-		result.Types = append(result.Types, part)
-	}
-	return result, nil
+	return controlowner.MigrateRecords(from.ID, to.ID, types, controlowner.MigrationHooks{
+		Hosted: to.hostedTypes,
+		Export: func(typ string) ([]byte, *kernel.Error) {
+			return from.Export(context.Background(), source, typ, platform.Query{}, now)
+		},
+		Import: func(typ string, data []byte) ([]platform.ImportRow, *kernel.Error) {
+			return to.Import(target, typ, data, false, now)
+		},
+	})
 }
 
 func (t *Tenant) hostedTypes() map[string]bool {
@@ -228,8 +183,6 @@ func (t *Tenant) rememberMigration(result platform.MigrationResult, member strin
 		}, evidence...)
 	return err
 }
-
-func (t *Tenant) Migrations() []platform.MigrationManifest { return t.console.Migrations() }
 
 func (t *Tenant) grantUsable(id string, now time.Time) (platform.SupportGrant, error) {
 	return t.console.UsableSupport(t.ID, id, now)

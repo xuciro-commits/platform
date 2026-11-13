@@ -288,7 +288,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, provenance)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}/sections/{section}", Summary: "One independently authorized object view section: links, activity, files, work, history or comments", Answer: RecordSectionView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}/sections/{section}", Summary: "One independently authorized object view section: links, activity, files, work, history or comments", Answer: objects.RecordSectionView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		view, err := t.objectOwner(t.Projection).RecordSection(m, r.PathValue("type"), r.PathValue("id"), r.PathValue("section"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)
@@ -299,7 +299,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, view)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}", Summary: "One authorized record; its object view sections are read independently", Answer: RecordView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}", Summary: "One authorized record; its object view sections are read independently", Answer: objects.RecordView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		view, err := t.recordOf(m, r.PathValue("type"), r.PathValue("id"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)

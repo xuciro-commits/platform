@@ -55,24 +55,7 @@ func (t *Tenant) Texts(app string) []string {
 			parts = append(parts, et.Info())
 		}
 	}
-	if m.Actions != nil {
-		for _, a := range m.Actions.All() {
-			if a.Approval != nil {
-				for _, l := range a.Approval.Levels {
-					parts = append(parts, map[string]any{"title": l.Title})
-				}
-			}
-		}
-	}
-	for _, f := range m.Flows {
-		parts = append(parts, map[string]any{"title": f.Title})
-	}
-	for _, ag := range m.Agents {
-		parts = append(parts, map[string]any{"title": ag.Title, "description": ag.Description})
-	}
-	for _, f := range m.Functions {
-		parts = append(parts, map[string]any{"title": f.Title, "description": f.Description, "output": f.Output})
-	}
+	parts = append(parts, transport.DeclaredTexts(m)...)
 	return transport.Texts(parts)
 }
 

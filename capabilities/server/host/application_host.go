@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/services/functions/runtime"
+	"platformserver/services/objects"
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 
@@ -152,7 +153,7 @@ func (t *Tenant) scopedApplicationRecordDiagnostic(m platform.Member, ref platfo
 	}) {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record is outside this application")
 	}
-	view, refusal := t.recordDetail(m, typ, id, now, RecordSectionHistory)
+	view, refusal := t.recordDetail(m, typ, id, now, objects.RecordSectionHistory)
 	if refusal != nil {
 		return out, refusal
 	}

@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -54,18 +53,9 @@ func (t *Tenant) operationCancellation(id string) (acceptedformat.OperationCance
 	after.State, after.Error = "discarded", "Cancelled"
 	after.Output = nil
 	r := acceptedformat.OperationCancellation{Before: x, After: after}
-	works := t.forkWorkState()
-	if work, err := works.Get(id); err == nil {
-		r.PriorWork, _ = protojson.Marshal(work)
-		if work.GetState() == pb.WorkState_WORK_STATE_RUNNING {
-			if err := works.Cancel(id); err != nil {
-				return r, err
-			}
-		}
-		work, _ = works.Get(id)
-		r.Work, _ = protojson.Marshal(work)
-	}
-	return r, nil
+	var err error
+	r.PriorWork, r.Work, err = compute.CancelWork(t.forkWorkState(), id)
+	return r, err
 }
 func (d *stagedDecision) savedOperationCancellations() ([]acceptedformat.OperationCancellation, error) {
 	ids := []string{}
@@ -108,17 +98,9 @@ func (t *Tenant) validateOperationCancellations(saved []acceptedformat.Operation
 func (t *Tenant) applyOperationCancellations(saved []acceptedformat.OperationCancellation) error {
 	for _, r := range saved {
 		if len(r.Work) > 0 {
-			work := &pb.Work{}
-			if err := protojson.Unmarshal(r.Work, work); err != nil {
+			if err := compute.RestoreWork(t.works, r.Work); err != nil {
 				return err
 			}
-			all := t.works.All()
-			for i, prior := range all {
-				if prior.GetWorkId() == work.GetWorkId() {
-					all[i] = work
-				}
-			}
-			t.works.Restore(all)
 		}
 		t.outbound.Update(r.Before.ID, func(x *actions.Queued) { x.Effect, x.Sending = r.After, false })
 		t.cancels.Cancel(r.Before.ID)

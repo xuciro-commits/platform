@@ -28,7 +28,7 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 		return objects.ContextView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	m := *reader
-	view, err := t.recordDetail(m, typ, id, now, RecordSectionHistory, RecordSectionLinks)
+	view, err := t.recordDetail(m, typ, id, now, objects.RecordSectionHistory, objects.RecordSectionLinks)
 	if err != nil {
 		return objects.ContextView{}, err
 	}

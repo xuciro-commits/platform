@@ -5,6 +5,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/objects"
 	"reflect"
 	"time"
 )
@@ -31,7 +32,7 @@ func (r runtime) Find(c platform.Caller, t reflect.Type, q platform.Query) ([]an
 	if len(q.Sort) == 0 {
 		q.Sort = []string{"id"}
 	}
-	q = businessQuery(et.Info(), q, c.Member, time.Now())
+	q = objects.BusinessQuery(et.Info(), q, c.Member, time.Now())
 	page, total, err := s.Find(et, q, nil)
 	out := make([]any, len(page))
 	for i, v := range page {

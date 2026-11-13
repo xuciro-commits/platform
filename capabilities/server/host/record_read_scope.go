@@ -173,8 +173,8 @@ func lockedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) 
 func (t *Tenant) Records(ctx context.Context, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	return recordRead(t, ctx, func(t *Tenant) (RecordPage, *kernel.Error) { return t.recordsRead(m, typ, q, now) })
 }
-func (t *Tenant) RecordOf(ctx context.Context, m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (RecordView, *kernel.Error) { return t.recordOf(m, typ, id, now) })
+func (t *Tenant) RecordOf(ctx context.Context, m platform.Member, typ, id string, now time.Time) (objects.RecordView, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (objects.RecordView, *kernel.Error) { return t.recordOf(m, typ, id, now) })
 }
 
 func (t *Tenant) Context(ctx context.Context, reader *platform.Member, typ, id string, now time.Time) (objects.ContextView, *kernel.Error) {

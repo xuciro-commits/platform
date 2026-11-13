@@ -107,7 +107,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		ref := plan.Ref
 		media = append(media, platform.ReleaseInstallation{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Ref: &ref, Record: plan.Record})
 	}
-	mediaVersions, err := h.t.prepareMediaVersionImages(media)
+	mediaVersions, err := records.PrepareMediaVersionImages(h.t.Projection, media)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}

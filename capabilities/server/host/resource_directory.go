@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -145,117 +144,47 @@ func (t *Tenant) initializeResources(now time.Time) error {
 	if refusal := t.recordReadRefusal(); refusal != nil {
 		return refusal
 	}
-	directory := map[string]build.Resource{}
-	t.Projection.Lock()
-	for _, recordType := range t.Projection.Types() {
-		info := recordType.Info()
-		if !build.BranchDraftType(info.Type) {
-			continue
-		}
-		for id, row := range t.Projection.Type(info.Type).Rows().All() {
-			raw, _ := json.Marshal(row.Value.Interface())
-			var meta struct {
-				platform.Record
-				Name      string `json:"name"`
-				Title     string `json:"title"`
-				Published string `json:"published"`
-				Kind      string `json:"kind"`
-				Variant   string `json:"variant"`
+	return build.ResourceBootstrap{Tenant: t.ID, Definitions: t.definitions,
+		Drafts: func(match func(string) bool) []build.DraftRecord {
+			t.Projection.Lock()
+			defer t.Projection.Unlock()
+			var out []build.DraftRecord
+			for _, recordType := range t.Projection.Types() {
+				if typ := recordType.Info().Type; match(typ) {
+					for id, row := range recordType.Rows().All() {
+						out = append(out, build.DraftRecord{Type: typ, ID: id, Value: row.Value.Interface()})
+					}
+				}
 			}
-			if err := json.Unmarshal(raw, &meta); err != nil {
-				t.Projection.Unlock()
-				return err
+			return out
+		},
+		Exists: func(rid string) bool {
+			t.Projection.Lock()
+			defer t.Projection.Unlock()
+			existing := t.Projection.Type(build.ResourceType)
+			return existing != nil && existing.Rows().Get(rid) != nil
+		},
+		Snapshot: func() (apps []build.Application, resources []build.Resource) {
+			t.Projection.Lock()
+			defer t.Projection.Unlock()
+			if rows := t.Projection.Type(build.AppType); rows != nil {
+				for _, row := range rows.Rows().All() {
+					apps = append(apps, row.Value.Interface().(build.Application))
+				}
 			}
-			ref, err := build.BranchResource(info.Type, meta.Name)
-			if err != nil {
-				t.Projection.Unlock()
-				return err
+			if rows := t.Projection.Type(build.ResourceType); rows != nil {
+				for _, row := range rows.Rows().All() {
+					resources = append(resources, row.Value.Interface().(build.Resource))
+				}
 			}
-			if info.Type == build.TestPlanType && meta.Variant == "evaluation-set" {
-				ref.Kind = platform.AssetEvaluation
+			return apps, resources
+		},
+		Submit: func(s *pb.Submission) error {
+			if refusal := t.submitAutomated(owner, t.automation(build.ID, false), s, now); refusal != nil {
+				return refusal
 			}
-			rid := platform.ResourceID(t.ID, ref)
-			project := build.WorkspaceProject
-			if info.Type == build.AppType {
-				project = id
-			}
-			state := "active"
-			if meta.Archived {
-				state = "archived"
-			}
-			variant := meta.Kind
-			if info.Type == build.TestPlanType {
-				variant = meta.Variant
-			}
-			directory[rid] = build.Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: info.Type, Draft: id, Title: meta.Title, Variant: variant, Project: project, State: state, Version: meta.Revision}
-		}
-	}
-	if existing := t.Projection.Type(build.ResourceType); existing != nil {
-		for id := range existing.Rows().All() {
-			delete(directory, id)
-		}
-	}
-	t.Projection.Unlock()
-	for _, definition := range t.definitions {
-		rid := platform.ResourceID(t.ID, definition.Ref)
-		if _, exists := directory[rid]; exists {
-			continue
-		}
-		t.Projection.Lock()
-		existing := t.Projection.Type(build.ResourceType).Rows().Get(rid) != nil
-		t.Projection.Unlock()
-		if existing {
-			continue
-		}
-		directory[rid] = build.Resource{Record: platform.Record{ID: rid}, Ref: definition.Ref, Title: definition.Ref.Name, Project: build.WorkspaceProject, State: "active", Version: 1, ManagedBy: "platform"}
-	}
-	pending := []build.Resource{}
-	for _, rid := range slices.SortedFunc(maps.Keys(directory), strings.Compare) {
-		pending = append(pending, directory[rid])
-	}
-	if len(pending) > 0 {
-		digest, err := platform.CanonicalDigest(pending)
-		if err != nil {
-			return err
-		}
-		submission := &pb.Submission{TenantId: t.ID, Authority: build.ID, IdempotencyKey: "resource-directory-v1:" + digest, Schema: &pb.SchemaRef{Name: build.SchemaResourceRegister, Version: 1}, Target: &pb.EntityRef{Type: build.ResourceType, Id: "directory-v1"}, Payload: platform.Raw(map[string]any{"resources": pending})}
-		if refusal := t.submitAutomated(owner, t.automation(build.ID, false), submission, now); refusal != nil {
-			return refusal
-		}
-	}
-	return t.migrateLegacyResourceProjects(owner, now)
-}
-
-func (t *Tenant) migrateLegacyResourceProjects(owner platform.App, now time.Time) error {
-	var apps []build.Application
-	var resources []build.Resource
-	t.Projection.Lock()
-	if rows := t.Projection.Type(build.AppType); rows != nil {
-		for _, row := range rows.Rows().All() {
-			apps = append(apps, row.Value.Interface().(build.Application))
-		}
-	}
-	if rows := t.Projection.Type(build.ResourceType); rows != nil {
-		for _, row := range rows.Rows().All() {
-			resources = append(resources, row.Value.Interface().(build.Resource))
-		}
-	}
-	t.Projection.Unlock()
-	assignments := build.LegacyProjectAssignments(apps, resources)
-	if len(assignments) == 0 {
-		return nil
-	}
-	digest, err := platform.CanonicalDigest(assignments)
-	if err != nil {
-		return err
-	}
-	submission := &pb.Submission{TenantId: t.ID, Authority: build.ID, IdempotencyKey: "resource-projects-v1:" + digest,
-		Schema: &pb.SchemaRef{Name: build.SchemaResourceMigrateProjects, Version: 1}, Target: &pb.EntityRef{Type: build.ResourceType, Id: "migrate-projects-v1"},
-		Payload: platform.Raw(map[string]any{"assignments": assignments})}
-	if refusal := t.submitAutomated(owner, t.automation(build.ID, false), submission, now); refusal != nil {
-		return refusal
-	}
-	return nil
+			return nil
+		}}.Initialize()
 }
 
 type BranchReviewers struct {

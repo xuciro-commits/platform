@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"platformserver/services/objects"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -225,7 +226,7 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("published changes did not wake live readers")
 	}
-	retained, refusal, err := readImageState(live.Tenant, image.state, t.Context(), func(scope *Tenant) (RecordView, *kernel.Error) {
+	retained, refusal, err := readImageState(live.Tenant, image.state, t.Context(), func(scope *Tenant) (objects.RecordView, *kernel.Error) {
 		return scope.recordOf(member, "build.alpha", "A1", invariantClock)
 	})
 	if err != nil || refusal != nil || json.Unmarshal(platform.Raw(retained.Record), &record) != nil || record["note"] != "before" {

@@ -91,7 +91,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 					return refusal
 				}
 				ref := plan.Ref
-				images, err := view.prepareMediaVersionImages([]platform.ReleaseInstallation{{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Ref: &ref, Record: plan.Record}})
+				images, err := records.PrepareMediaVersionImages(view.Projection, []platform.ReleaseInstallation{{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Ref: &ref, Record: plan.Record}})
 				if err != nil {
 					return err
 				}

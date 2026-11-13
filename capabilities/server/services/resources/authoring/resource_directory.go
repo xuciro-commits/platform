@@ -1,10 +1,13 @@
 package build
 
 import (
+	"encoding/json"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
@@ -182,4 +185,96 @@ func appendUnique(values []string, value string) []string {
 		return values
 	}
 	return append(values, value)
+}
+
+type DraftRecord struct {
+	Type  string
+	ID    string
+	Value any
+}
+
+type ResourceBootstrap struct {
+	Tenant      string
+	Definitions []platform.Definition
+	Drafts      func(match func(typ string) bool) []DraftRecord
+	Exists      func(rid string) bool
+	Snapshot    func() ([]Application, []Resource)
+	Submit      func(*pb.Submission) error
+}
+
+func (h ResourceBootstrap) Initialize() error {
+	directory := map[string]Resource{}
+	for _, draft := range h.Drafts(BranchDraftType) {
+		raw, _ := json.Marshal(draft.Value)
+		var meta struct {
+			platform.Record
+			Name      string `json:"name"`
+			Title     string `json:"title"`
+			Published string `json:"published"`
+			Kind      string `json:"kind"`
+			Variant   string `json:"variant"`
+		}
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			return err
+		}
+		ref, err := BranchResource(draft.Type, meta.Name)
+		if err != nil {
+			return err
+		}
+		if draft.Type == TestPlanType && meta.Variant == "evaluation-set" {
+			ref.Kind = platform.AssetEvaluation
+		}
+		rid := platform.ResourceID(h.Tenant, ref)
+		project := WorkspaceProject
+		if draft.Type == AppType {
+			project = draft.ID
+		}
+		state := "active"
+		if meta.Archived {
+			state = "archived"
+		}
+		variant := meta.Kind
+		if draft.Type == TestPlanType {
+			variant = meta.Variant
+		}
+		directory[rid] = Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: draft.Type, Draft: draft.ID, Title: meta.Title, Variant: variant, Project: project, State: state, Version: meta.Revision}
+	}
+	for id := range directory {
+		if h.Exists(id) {
+			delete(directory, id)
+		}
+	}
+	for _, definition := range h.Definitions {
+		rid := platform.ResourceID(h.Tenant, definition.Ref)
+		if _, exists := directory[rid]; exists || h.Exists(rid) {
+			continue
+		}
+		directory[rid] = Resource{Record: platform.Record{ID: rid}, Ref: definition.Ref, Title: definition.Ref.Name, Project: WorkspaceProject, State: "active", Version: 1, ManagedBy: "platform"}
+	}
+	pending := []Resource{}
+	for _, rid := range slices.SortedFunc(maps.Keys(directory), strings.Compare) {
+		pending = append(pending, directory[rid])
+	}
+	if len(pending) > 0 {
+		digest, err := platform.CanonicalDigest(pending)
+		if err != nil {
+			return err
+		}
+		submission := &pb.Submission{TenantId: h.Tenant, Authority: ID, IdempotencyKey: "resource-directory-v1:" + digest, Schema: &pb.SchemaRef{Name: SchemaResourceRegister, Version: 1}, Target: &pb.EntityRef{Type: ResourceType, Id: "directory-v1"}, Payload: platform.Raw(map[string]any{"resources": pending})}
+		if err := h.Submit(submission); err != nil {
+			return err
+		}
+	}
+	apps, resources := h.Snapshot()
+	assignments := LegacyProjectAssignments(apps, resources)
+	if len(assignments) == 0 {
+		return nil
+	}
+	digest, err := platform.CanonicalDigest(assignments)
+	if err != nil {
+		return err
+	}
+	return h.Submit(&pb.Submission{TenantId: h.Tenant, Authority: ID, IdempotencyKey: "resource-projects-v1:" + digest,
+		Schema: &pb.SchemaRef{Name: SchemaResourceMigrateProjects, Version: 1}, Target: &pb.EntityRef{Type: ResourceType, Id: "migrate-projects-v1"},
+		Payload: platform.Raw(map[string]any{"assignments": assignments})})
 }

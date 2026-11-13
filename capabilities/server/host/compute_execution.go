@@ -35,17 +35,10 @@ func (h operationExecution) StillAuthorised(ctx context.Context, x platform.Effe
 
 func (h operationExecution) RulesRevoked(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *kernel.Error) {
 	return recordRead(h.t, ctx, func(t *Tenant) (string, *kernel.Error) {
-		for _, set := range rules.Reads.Collections {
-			query, _, ok := t.memberQueryVersion(member, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, set.Version)
-			if !ok || query.Object != set.Object {
-				return "Rule collection permission was revoked", nil
-			}
-			info, _ := t.Entity(set.Object)
-			if set.Policy == "complete" && info.Scope.LevelFor(member.RolesIn(info.App), t.services.Authorization) != platform.ScopeTenant {
-				return "Complete collection permission was revoked", nil
-			}
-		}
-		return "", nil
+		return compute.RulesRevoked(member, rules, func(ref platform.AssetRef, version int) (platform.NamedQuery, bool) {
+			query, _, ok := t.memberQueryVersion(member, ref, version)
+			return query, ok
+		}, t.Entity, t.services.Authorization), nil
 	})
 }
 

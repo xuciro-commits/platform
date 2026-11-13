@@ -2,8 +2,8 @@ package host
 
 import (
 	"encoding/json"
-	"net/url"
 	dataowner "platformserver/services/data"
+	"platformserver/services/devops/packages"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -50,12 +50,8 @@ func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (
 	if err != nil || fixed.Archived || fixed.State != "ready" || fixed.Kind != "http" {
 		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs a ready HTTP connection")
 	}
-	address, err := url.Parse(fixed.Address)
-	if err != nil || address.Host == "" || address.User != nil || address.RawQuery != "" || address.Fragment != "" || address.Scheme != "https" && !(address.Scheme == "http" && fixed.AllowPrivate) {
-		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an HTTP service root")
-	}
-	if fixed.Secret == "" || t.dataClient().Authorization(fixed) == "" {
-		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an available connection credential")
+	if refusal := packages.TenantSourceRefusal(fixed, func() string { return t.dataClient().Authorization(fixed) }); refusal != nil {
+		return dataowner.Connection{}, refusal
 	}
 	return fixed, nil
 }

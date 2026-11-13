@@ -9,6 +9,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/objects"
 )
 
 type ApplyEditsRequest struct {
@@ -17,50 +18,27 @@ type ApplyEditsRequest struct {
 }
 
 func (t *Tenant) readEditProposal(ctx context.Context, member platform.Member, engine, id, step string) (platform.EditProposal, *kernel.Error) {
-	var result platform.OperationResult
-	var refusal *kernel.Error
-	switch engine {
-	case "compute":
-		result, refusal = t.ReadOperation(ctx, member, id)
-	case "ai":
-		result, refusal = t.ReadCapabilityAI(ctx, member, id, Now())
-	case "flow":
+	source := objects.EditProposalSource{
+		Operation: func() (platform.OperationResult, *kernel.Error) { return t.ReadOperation(ctx, member, id) },
+		AI:        func() (platform.OperationResult, *kernel.Error) { return t.ReadCapabilityAI(ctx, member, id, Now()) },
+	}
+	if engine == "flow" {
 		return recordRead(t, ctx, func(t *Tenant) (platform.EditProposal, *kernel.Error) {
-			view, refusal := t.recordOf(member, platform.FlowInstanceType, id, Now())
-			if refusal != nil {
-				return platform.EditProposal{}, refusal
+			source.FlowRun = func() (platform.FlowInstance, *kernel.Error) {
+				view, refusal := t.recordOf(member, platform.FlowInstanceType, id, Now())
+				if refusal != nil {
+					return platform.FlowInstance{}, refusal
+				}
+				run, ok := view.Record.(platform.FlowInstance)
+				if !ok {
+					return platform.FlowInstance{}, nil
+				}
+				return run, nil
 			}
-			run, ok := view.Record.(platform.FlowInstance)
-			if !ok || run.State != "done" || step == "" {
-				return platform.EditProposal{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Choose an edit proposal from a completed flow step")
-			}
-			output := run.Outputs[step]
-			if platform.EditProposalSchema().Validate(output, 48<<10) != nil {
-				return platform.EditProposal{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "This flow step did not return an edit proposal")
-			}
-			var proposal platform.EditProposal
-			if err := json.Unmarshal(output, &proposal); err != nil {
-				return proposal, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-			}
-			return proposal, nil
+			return source.Read(engine, step)
 		})
-	default:
-		return platform.EditProposal{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a function call")
 	}
-	if refusal != nil {
-		return platform.EditProposal{}, refusal
-	}
-	if result.State != "completed" {
-		return platform.EditProposal{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Wait for the function to finish before reviewing edits")
-	}
-	if err := platform.EditProposalSchema().Validate(result.Output, 48<<10); err != nil {
-		return platform.EditProposal{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "This function did not return an edit proposal")
-	}
-	var proposal platform.EditProposal
-	if err := json.Unmarshal(result.Output, &proposal); err != nil {
-		return proposal, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	return proposal, nil
+	return source.Read(engine, step)
 }
 
 func (h *Host) routesEditProposals(rt *routes) {

@@ -92,25 +92,17 @@ func (t *Tenant) authorizeFrom(store *records.Store, c platform.Caller, q platfo
 		}()
 	}
 	if held || c.ReadScoped() {
-		return t.authorizeDepth(store, c, q, at, held, 0, newAuthorizationWalk())
+		return t.authorizeDepth(store, c, q, at, held, 0, security.NewTraversal())
 	}
 	decision, _ = recordRead(t, context.Background(), func(t *Tenant) (platform.AuthzDecision, *kernel.Error) {
 		c := platform.NewCaller(runtime{t: t}, c.Member, c.App, c.Replaying, c.Automation)
-		return t.authorizeDepth(t.Projection, c, q, at, false, 0, newAuthorizationWalk()), nil
+		return t.authorizeDepth(t.Projection, c, q, at, false, 0, security.NewTraversal()), nil
 	})
 	return decision
 }
 
-type authorizationWalk = security.Traversal
-
-func newAuthorizationWalk() *authorizationWalk { return security.NewTraversal() }
-
-func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool, depth int, walk *authorizationWalk) platform.AuthzDecision {
+func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool, depth int, walk *security.Traversal) platform.AuthzDecision {
 	return t.authorizer().Authorize(store, c, q, at, held, depth, walk)
-}
-
-func (t *Tenant) connectorInputGranted(m platform.Member, app, name string) bool {
-	return t.connectors.Granted(m.ID, app, name)
 }
 
 func (t *Tenant) visibleIn(store *records.Store, m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
@@ -126,7 +118,7 @@ func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et 
 	if c.Automation && c.App == et.Info().App {
 		return nil, nil
 	}
-	policy, err := t.authorizer().ScopePolicy(store, c, et.Info(), at, 0, newAuthorizationWalk())
+	policy, err := t.authorizer().ScopePolicy(store, c, et.Info(), at, 0, security.NewTraversal())
 	if err != nil {
 		return func(reflect.Value) bool { return false }, nil
 	}

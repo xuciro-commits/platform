@@ -6,8 +6,7 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/objects"
-	"reflect"
-	"strings"
+	"platformserver/services/security"
 	"time"
 )
 
@@ -19,43 +18,7 @@ func (t *Tenant) Admits(m platform.Member) *kernel.Error {
 }
 
 func (t *Tenant) mayReadIn(store *records.Store, m platform.Member, now time.Time, held bool) func(ref string) bool {
-	seen := map[string]bool{}
-	walk := newAuthorizationWalk()
-	return func(ref string) bool {
-		if ref == "" {
-			return true
-		}
-		if ok, known := seen[ref]; known {
-			return ok
-		}
-		if name, isRead := strings.CutPrefix(ref, "read:"); isRead {
-			ok := t.mayCallRead(m, name)
-			seen[ref] = ok
-			return ok
-		}
-		record, field, _ := strings.Cut(ref, "#")
-		typ, id, _ := strings.Cut(record, "/")
-		if !held {
-			store.Lock()
-		}
-		et := store.Type(typ)
-		if !held {
-			store.Unlock()
-		}
-		app := ""
-		if et != nil {
-			app = et.Info().App
-		}
-		c := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
-		fields := []string{}
-		if field != "" {
-			fields = append(fields, field)
-		}
-		decision := t.authorizeDepth(store, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "derive", Type: typ, Record: id, Fields: fields}, now, held, 0, walk)
-		ok := decision.Allow && len(decision.Withheld) == 0
-		seen[ref] = ok
-		return ok
-	}
+	return security.DerivationReach{CallRead: t.mayCallRead, Caller: t.objectCaller, Authorize: t.authorizeDepth}.MayRead(store, m, now, held)
 }
 
 func (t *Tenant) mayCallRead(m platform.Member, name string) bool {
@@ -65,10 +28,6 @@ func (t *Tenant) mayCallRead(m platform.Member, name string) bool {
 
 func (t *Tenant) narrowable(et *records.Type) []string {
 	return t.objectOwner(t.Projection).Narrowable(et)
-}
-
-func fieldName(typ reflect.Type, path []int) string {
-	return platform.FieldName(typ, path)
 }
 
 func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *objects.Narrower {

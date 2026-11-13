@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -37,57 +36,20 @@ func (t *Tenant) enqueue(now time.Time) {
 	for len(t.events) > 0 {
 		e := t.events[0]
 		t.events = t.events[1:]
-		s := e.Record.GetSubmission()
-		names := append([]string{s.GetSchema().GetName()}, t.router().Events(e.Event)...)
-		if e.Plan != nil {
-			for _, id := range e.Plan.Stopped {
-				t.delivered(platform.Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: runtimekernel.Target(s), Subscriber: id,
-					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", acceptedformat.MaxHops)})
-			}
-			names = e.Plan.Names
-		}
-		if e.Plan == nil || !e.Plan.Observed {
-			for _, o := range t.observers {
-				o.Observe(e.Event, names[1:])
-			}
-		}
-		if e.Plan != nil {
-			t.outbound.Add(t.current(), e.Plan.Effects...)
-			for _, id := range e.Plan.Subscribers {
-				if t.App(id) == nil {
-					panic(fmt.Errorf("accepted result requires missing subscriber %s", id))
+		automation.EventRoute{MaxHops: acceptedformat.MaxHops, Apps: t.apps, Listeners: t.listeners, Delivered: t.delivered, Emit: t.emit,
+			Names: func(e platform.Event) []string { return t.router().Events(e) },
+			Observe: func(e platform.Event, names []string) {
+				for _, o := range t.observers {
+					o.Observe(e, names)
 				}
-				t.deliver(id, e, now)
-			}
-			continue
-		}
-		t.emit(e.Event, names)
-		for _, a := range t.apps {
-			if !slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
-				continue
-			}
-			id := a.Manifest().ID
-			if e.Hops > acceptedformat.MaxHops {
-				t.delivered(platform.Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: runtimekernel.Target(s), Subscriber: id,
-					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", acceptedformat.MaxHops)})
-				continue
-			}
-			t.deliver(id, e, now)
-		}
-		for _, id := range t.listeners {
-			if id != e.App && t.App(id).(platform.Listener).Interested(names, e.Event) {
-				t.deliver(id, e, now)
-			}
-		}
+			},
+			Add:    func(effects ...platform.Effect) { t.outbound.Add(t.current(), effects...) },
+			Exists: func(id string) bool { return t.App(id) != nil },
+			Interested: func(id string, names []string, e platform.Event) bool {
+				return t.App(id).(platform.Listener).Interested(names, e)
+			},
+			Deliver: func(id string, e automation.QueuedEvent) { t.work.Deliver(id, e, now) }}.Route(e, now)
 	}
-}
-
-func (t *Tenant) deliver(subscriber string, e automation.QueuedEvent, now time.Time) {
-	s := e.Record.GetSubmission()
-	t.work.Lock()
-	defer t.work.Unlock()
-	t.work.Queue(subscriber, &automation.Task{ScheduledTask: platform.ScheduledTask{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
-		Title: s.GetSchema().GetName() + " " + runtimekernel.Target(s), State: "queued", Due: now.UTC()}, Event: &e})
 }
 
 func (t *Tenant) delivered(d platform.Delivery) { t.audit.Delivered(d) }
@@ -152,17 +114,7 @@ func (t *Tenant) step(now time.Time) (more bool) {
 				return progress{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 		}
-		value.scope.work.Lock()
-		rotation, jobs := value.scope.work.Rotation, slices.Clone(value.scope.work.Jobs)
-		value.scope.work.Unlock()
-		t.work.Lock()
-		t.work.Rotation = rotation
-		for _, job := range jobs {
-			if current := t.work.Job(job.ID); current != nil {
-				current.NextRun = job.NextRun
-			}
-		}
-		t.work.Unlock()
+		t.work.Adopt(&value.scope.work)
 		t.WorkEpoch.Add(1)
 		value.more = t.workLoop().Pending(now)
 		return value, refusal
@@ -174,51 +126,7 @@ func (t *Tenant) attempt(task *automation.Task, now time.Time, replaying bool) s
 	if !replaying {
 		return t.acceptWork(task, now)
 	}
-	generation, _, _ := t.works.Start(task.ID, "host")
-	t.hops = task.Event.Hops + 1
-	outcome := "ok"
-	end := func(string) {}
-	if !replaying {
-		end = t.begin("deliver "+task.Event.Record.GetSubmission().GetSchema().GetName()+" to "+task.App, task.Event.Span,
-			attribute.String("platform.app", task.App), attribute.String("platform.target", runtimekernel.Target(task.Event.Record.GetSubmission())))
-		defer func() { end(outcome); counted(t, "delivery", task.App, outcome) }()
-	}
-	var err *kernel.Error
-	if x, ok := t.App(task.App).(platform.Listener); ok {
-		names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, t.router().Events(task.Event.Event)...)
-		if task.Event.Plan != nil {
-			names = task.Event.Plan.Names
-		}
-		err = x.Listen(t.automation(task.App, replaying), task.Event.Event, names, now)
-	} else {
-		err = t.App(task.App).(platform.Subscriber).Handle(t.automation(task.App, replaying), task.Event.Event)
-	}
-	if err != nil {
-		outcome = err.Error()
-	}
-	t.hops = 0
-	t.works.Finish(task.ID, generation, outcome != "ok")
-	s := task.Event.Record.GetSubmission()
-	t.delivered(platform.Delivery{At: now, App: task.Event.App, Action: s.GetSchema().GetName(), Target: runtimekernel.Target(s), Subscriber: task.App,
-		Outcome: outcome, Attempt: int(generation)})
-	t.work.Lock()
-	task.ScheduledTask = task.Settle(int(generation), outcome, t.retryOf(task.App), now)
-	if task.State == "done" || task.State == "failed" {
-		t.work.Settled(task)
-	}
-	t.work.Unlock()
-	if task.State == "failed" {
-		t.failedWork("Delivery to "+task.App+" failed: "+task.Title, outcome, task.ID, now, replaying)
-	}
-	runStatus := "ok"
-	if outcome != "ok" {
-		runStatus = "failed"
-	}
-	t.observeOwnerRun(now, "run", task.Kind+":"+task.App+":"+task.ID, task.App, runtimekernel.Target(s), runStatus,
-		"Delivery to "+task.App, outcome)
-
-	t.enqueue(now)
-	return outcome
+	return t.replay(now, replaying).Attempt(task, now)
 }
 
 func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) string {
@@ -229,23 +137,24 @@ func (t *Tenant) run(task *automation.Task, now time.Time, replaying bool) strin
 		t.work.Unlock()
 		return outcome
 	}
-	generation, _, _ := t.works.Start(task.ID, "host")
-	outcome := "ok"
-	if err := t.App(task.App).(platform.Runner).Run(t.automation(task.App, replaying), task.Job.Name, now); err != nil {
-		outcome = err.Error()
-	}
-	t.works.Finish(task.ID, generation, outcome != "ok")
-	t.work.Lock()
-	task.ScheduledTask = task.Settle(int(generation), outcome, platform.Retry{}, now)
-	t.work.Unlock()
-	runStatus := "ok"
-	if outcome != "ok" {
-		runStatus = "failed"
-	}
-	t.observeOwnerRun(now, "worker", "job:"+task.App+":"+task.ID, task.App, task.ID, runStatus, "Scheduled job "+task.Title, outcome)
+	return t.replay(now, replaying).Run(task, now)
+}
 
-	t.enqueue(now)
-	return outcome
+func (t *Tenant) replay(now time.Time, replaying bool) automation.Replay {
+	return automation.Replay{Board: &t.work, App: t.App, Delivered: t.delivered, Enqueue: func() { t.enqueue(now) },
+		Caller: func(app string) platform.Caller { return t.automation(app, replaying) },
+		Names:  func(e platform.Event) []string { return t.router().Events(e) },
+		Retry:  t.retryOf,
+		Start: func(id string) uint32 {
+			generation, _, _ := t.works.Start(id, "host")
+			return generation
+		},
+		Finish:  func(id string, generation uint32, failed bool) { t.works.Finish(id, generation, failed) },
+		SetHops: func(n int) { t.hops = n },
+		Failed:  func(title, why, id string) { t.failedWork(title, why, id, now, replaying) },
+		Observe: func(source, runID, app, resource, status, title, detail string) {
+			t.observeOwnerRun(now, source, runID, app, resource, status, title, detail)
+		}}
 }
 
 func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool) {
@@ -256,17 +165,9 @@ func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool
 		Key: "failed:" + id}, now, platform.Recipient{AppRole: controlowner.Admin})
 }
 
-func (t *Tenant) Tasks() []automation.Task {
-	t.work.Lock()
-	defer t.work.Unlock()
-	return t.work.All(t.apps)
-}
+func (t *Tenant) Tasks() []automation.Task { return t.work.Tasks(t.apps) }
 
-func (t *Tenant) retry(id string, now time.Time) bool {
-	t.work.Lock()
-	defer t.work.Unlock()
-	return t.work.Retry(id, now)
-}
+func (t *Tenant) retry(id string, now time.Time) bool { return t.work.Retried(id, now) }
 
 func (t *Tenant) refused(member, input string, err *kernel.Error, now time.Time) {
 	t.connectors.Refused(member, input, err, now)
@@ -288,29 +189,19 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 }
 
 func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
-	var members []string
-	for _, r := range to {
-		if r.Member != "" && !slices.Contains(members, r.Member) {
-			members = append(members, r.Member)
-		}
-		if r.AppRole != "" {
+	return controlowner.Recipients(c.App, to, now.UTC().Format(time.DateOnly),
+		func(app, role string) []string {
 			if d, ok := t.App(controlowner.PlatformApp).(platform.IdentityDirectory); ok {
-				for _, m := range d.Holding(c.App, r.AppRole) {
-					if !slices.Contains(members, m) {
-						members = append(members, m)
-					}
-				}
+				return d.Holding(app, role)
 			}
-		}
-		if r.Unit != "" && t.directory != nil {
-			for _, m := range t.directory.Holders(r.Structure, r.Unit, r.Role, now.UTC().Format(time.DateOnly)) {
-				if !slices.Contains(members, m) {
-					members = append(members, m)
-				}
+			return nil
+		},
+		func(structure, unit, role, date string) []string {
+			if t.directory == nil {
+				return nil
 			}
-		}
-	}
-	return members
+			return t.directory.Holders(structure, unit, role, date)
+		})
 }
 
 func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Time, members []string, delivery map[string]platform.Reach) []string {

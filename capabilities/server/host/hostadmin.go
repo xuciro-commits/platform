@@ -3,11 +3,7 @@ package host
 import transport "platformserver/kernel/transport"
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"maps"
 	"net/http"
 	runtimekernel "platformserver/kernel"
@@ -67,13 +63,7 @@ type SupportAnswer struct {
 type hostAuthorizationKey struct{}
 
 func (h *Host) hostAuthorization(subject string, authenticated bool, permission, tenant string) platform.AuthzDecision {
-	pass := platform.AuthorizationGate{Allowed: true, Reason: "The explicit host management boundary"}
-	roles := []string{}
-	if h.HostAdmins[subject] {
-		roles = []string{"host-admin"}
-	}
-	definition, _ := platform.CanonicalDigest([]any{permission, tenant, "host-admin"})
-	return h.AuthorizationEngine.Decide(platform.AuthorizationInput{Kind: "action", Subject: platform.AuthorizationSubject{ID: "host:" + subject, App: "host", Roles: roles}, Permission: permission, Allowed: []string{"host-admin"}, Context: &platform.AuthorizationContext{Tenant: pass, Principal: platform.AuthorizationGate{Allowed: authenticated && subject != "", Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass, Definition: definition}})
+	return h.AuthorizationEngine.Decide(controlowner.HostAuthorizationInput(subject, authenticated, h.HostAdmins[subject], permission, tenant))
 }
 
 func hostRequestAuthorization(r *http.Request, tenant string) []acceptedformat.AuthorizationEvidence {
@@ -127,14 +117,13 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 			WriteJSON(w, http.StatusOK, map[string]any{"subject": subject, "tenants": tenants})
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/overview", Summary: "Host and tenant overview: health, quarantine, lifecycle, isolation and resource use (host administrators)", Answer: HostOverview{}},
-		func(w http.ResponseWriter, _ *http.Request, subject string, _ *Tenant) {
+		func(w http.ResponseWriter, _ *http.Request, _ string, _ *Tenant) {
 			out := HostOverview{Now: h.Now().UTC(), Tenants: []HostTenantView{}}
 			for _, t := range h.currentTenants() {
 				out.Tenants = append(out.Tenants, h.tenantView(t))
 			}
 			slices.SortFunc(out.Tenants, func(a, b HostTenantView) int { return strings.Compare(a.ID, b.ID) })
 			out.Admins = len(h.HostAdmins)
-			_ = subject
 			WriteJSON(w, http.StatusOK, out)
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}", Summary: "One tenant's console view (host administrators)", Answer: HostTenantView{}},
@@ -160,7 +149,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/support", Summary: "Support sessions opened for a tenant (host administrators)", Answer: []platform.SupportGrant{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
-			WriteJSON(w, http.StatusOK, t.supportGrants(h.Now()))
+			WriteJSON(w, http.StatusOK, t.supportGrants())
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/support", Summary: "Open an authorized support session for a tenant member, with a reason and an end (host administrators)", Answer: platform.SupportGrant{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
@@ -185,7 +174,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 			grant := r.PathValue("grant")
 			for _, t := range h.currentTenants() {
 				read, err := t.useSupport(grant, subject, h.Now(), hostRequestAuthorization(r, t.ID)...)
-				if err == errUnknownGrant {
+				if err == controlowner.ErrUnknownGrant {
 					continue
 				}
 				if err != nil {
@@ -226,7 +215,7 @@ func (h *Host) tenantView(t *Tenant) HostTenantView {
 	if fault := t.Fault.Load(); fault != nil {
 		view.Quarantined, view.Fault = true, fault.Reason
 	}
-	for _, g := range t.supportGrants(now) {
+	for _, g := range t.supportGrants() {
 		if g.Expires.After(now) {
 			view.Support++
 		}
@@ -320,7 +309,7 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/migrations", Summary: "What the host console moved in or out of this tenant (host administrators)", Answer: []platform.MigrationManifest{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
-			WriteJSON(w, http.StatusOK, t.Migrations())
+			WriteJSON(w, http.StatusOK, t.console.Migrations())
 		})
 }
 
@@ -338,33 +327,10 @@ func decodeBody(r *http.Request, into any) error {
 }
 
 func decodeBodyLimit(r *http.Request, into any, limit int64) error {
-	raw, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
-	if err != nil {
-		return err
-	}
-	if int64(len(raw)) > limit {
-		return &http.MaxBytesError{Limit: limit}
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(into); err != nil {
-		return err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return fmt.Errorf("one JSON request is required")
-	}
-	return nil
+	return transport.DecodeBodyLimit(r, into, limit)
 }
 
-type HostArtifactView struct {
-	Candidate string `json:"candidate"`
-	Active    bool   `json:"active,omitempty"`
-	Digest    string `json:"digest,omitempty"`
-	Size      int    `json:"size"`
-	Assets    int    `json:"assets"`
-	Verified  bool   `json:"verified"`
-	Note      string `json:"note,omitempty"`
-}
+type HostArtifactView = controlowner.HostArtifactView
 
 func (t *Tenant) hostArtifacts() []HostArtifactView {
 	state := t
@@ -374,35 +340,8 @@ func (t *Tenant) hostArtifacts() []HostArtifactView {
 		t.Lane.Lock()
 		defer t.Lane.Unlock()
 	}
-	ids := state.releases.Ids()
-	out := []HostArtifactView{}
-	for _, id := range ids {
-		raw := state.releases.Raw(id)
-		view := HostArtifactView{Candidate: id, Active: id == state.releases.Active(), Size: len(raw)}
-		if candidate, err := platform.ReadCandidate(id, raw); err == nil {
-			view.Digest, view.Assets, view.Verified = candidate.ID, len(candidate.Assets), true
-		} else {
-			view.Note = err.Error()
-		}
-		out = append(out, view)
-	}
-	slices.SortStableFunc(out, func(a, b HostArtifactView) int {
-		if a.Active != b.Active {
-			if a.Active {
-				return -1
-			}
-			return 1
-		}
-		return strings.Compare(a.Candidate, b.Candidate)
-	})
-	return out
+	return controlowner.HostArtifacts(state.releases.Ids(), state.releases.Active(), func(id string) []byte { return state.releases.Raw(id) })
 }
-
-var errUnknownGrant = errSupport("unknown support grant")
-
-type errSupport string
-
-func (e errSupport) Error() string { return string(e) }
 
 func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
 	if now.IsZero() {
@@ -410,30 +349,22 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time,
 	}
 	t.Lane.Lock()
 	defer t.Lane.Unlock()
-	if !slices.Contains([]string{"suspend", "decommission", "resume", "open"}, action) {
-		return errSupport("lifecycle action must be suspend, resume, decommission or open")
+	if err := controlowner.ValidLifecycleAction(action); err != nil {
+		return err
 	}
 	request := struct{ Action, Reason string }{action, reason}
 	_, err := t.acceptHostControl("lifecycle", "host:"+subject, request, now,
 		platform.AuditEntry{Action: "host.lifecycle." + action, Target: t.ID + ":" + reason}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
-			if t.quarantined() && action != "open" && action != "resume" {
-				return platform.SupportGrant{}, errSupport("a quarantined tenant is already stopped; repair it through recovery")
-			}
-			image.Lifecycle = ""
-			if (action == "resume" || action == "open") && (missingRuntime(t.desiredRuntime()) || !maps.Equal(t.desiredRuntime(), t.services.Selection()) || !slices.Equal(t.currentDisabledOwners(), t.desiredDisabledOwners()) || slices.Contains(t.desiredDisabledOwners(), controlowner.PlatformApp)) {
-				return platform.SupportGrant{}, errSupport("Activate the saved compatible implementation before resuming business access")
-			}
-			if action == "suspend" || action == "decommission" {
-				image.Lifecycle = action
-			}
-			return platform.SupportGrant{}, nil
+			return platform.SupportGrant{}, controlowner.ApplyLifecycle(image, action, t.quarantined(), func() bool {
+				return missingRuntime(t.desiredRuntime()) || !maps.Equal(t.desiredRuntime(), t.services.Selection()) || !slices.Equal(t.currentDisabledOwners(), t.desiredDisabledOwners()) || slices.Contains(t.desiredDisabledOwners(), controlowner.PlatformApp)
+			})
 		}, evidence...)
 	return err
 }
 
 func (t *Tenant) openSupport(member, reason, subject string, minutes int, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
-	if member == "" || reason == "" || subject == "" || now.IsZero() || minutes < 1 || minutes > 24*60 {
-		return platform.SupportGrant{}, errSupport("a support session needs a member, a reason and 1 to 1440 minutes")
+	if err := controlowner.ValidSupportSession(member, reason, subject, minutes, now); err != nil {
+		return platform.SupportGrant{}, err
 	}
 	t.Lane.Lock()
 	defer t.Lane.Unlock()
@@ -449,16 +380,13 @@ func (t *Tenant) openSupport(member, reason, subject string, minutes int, now ti
 	return t.acceptHostControl("support.open", "host:"+subject, request, now,
 		platform.AuditEntry{Action: "host.support.open", Target: member + ":" + reason}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
 			if _, ok := t.Member(member); !ok {
-				return platform.SupportGrant{}, errSupport("no such member in this tenant")
+				return platform.SupportGrant{}, controlowner.SupportError("no such member in this tenant")
 			}
-			grant := platform.SupportGrant{ID: id, Tenant: t.ID, Member: member, Reason: reason, Opened: subject, Expires: now.UTC().Add(time.Duration(minutes) * time.Minute)}
-			image.Support = append(image.Support, grant)
-			return grant, nil
+			return controlowner.OpenSupportGrant(image, id, t.ID, member, reason, subject, minutes, now), nil
 		}, evidence...)
 }
 
-func (t *Tenant) supportGrants(now time.Time) []platform.SupportGrant {
-	_ = now
+func (t *Tenant) supportGrants() []platform.SupportGrant {
 	return t.console.SupportGrants()
 }
 
@@ -466,29 +394,14 @@ func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...accep
 	t.Lane.Lock()
 	_, err := t.acceptHostControl("support.use", "host:"+subject, struct{ ID string }{id}, now,
 		platform.AuditEntry{Action: "host.support.use", Target: id}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
-			i := slices.IndexFunc(image.Support, func(g platform.SupportGrant) bool { return g.ID == id })
-			if i < 0 {
-				return platform.SupportGrant{}, errUnknownGrant
-			}
-			if !image.Support[i].Expires.After(now) {
-				return platform.SupportGrant{}, errSupport("the support session has ended")
-			}
-			image.Support[i].Uses++
-			return image.Support[i], nil
+			return controlowner.UseSupportGrant(image, id, now)
 		}, evidence...)
 	t.Lane.Unlock()
 	if err != nil {
 		return SupportRead{}, err
 	}
-	audit := tailAudit(t.Audit(), 20)
+	audit := controlowner.TailAudit(t.Audit(), 20)
 	return SupportRead{Tenant: t.ID, Grant: id, At: now.UTC(), Health: t.Health(now), Audit: audit}, nil
-}
-
-func tailAudit(entries []platform.AuditEntry, n int) []platform.AuditEntry {
-	if len(entries) > n {
-		entries = entries[len(entries)-n:]
-	}
-	return slices.Clone(entries)
 }
 
 func (t *Tenant) hostControl() runtimekernel.HostControlOwner {

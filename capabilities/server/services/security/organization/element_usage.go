@@ -2,7 +2,11 @@ package organization
 
 import (
 	"slices"
+	"strings"
+	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -78,4 +82,24 @@ func (m Model) Usage(id, until string, result EnterpriseUsage) (EnterpriseUsage,
 		}
 	}
 	return result, true
+}
+
+func (u *EnterpriseUsage) AddGrants(usages []platform.UnitGrantUsage, visible bool) {
+	for _, usage := range usages {
+		ref := "member:" + usage.Member
+		if strings.HasPrefix(usage.Member, "team:") {
+			ref = usage.Member
+		}
+		u.Add(EnterpriseUsageItem{Kind: "grant", Title: usage.Member, Ref: ref, Current: usage.Current}, visible)
+	}
+}
+
+func UsageUntil(until string, now time.Time) (string, *kernel.Error) {
+	if until == "" {
+		until = now.UTC().Format(time.DateOnly)
+	}
+	if _, err := time.Parse(time.DateOnly, until); err != nil {
+		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid effective period")
+	}
+	return until, nil
 }

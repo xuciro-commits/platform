@@ -1,9 +1,12 @@
 package transport
 
 import (
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -563,4 +566,23 @@ func ProfileRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /debug/pprof/profile", loopback(pprof.Profile))
 	mux.HandleFunc("GET /debug/pprof/symbol", loopback(pprof.Symbol))
 	mux.HandleFunc("GET /debug/pprof/trace", loopback(pprof.Trace))
+}
+
+func DecodeBodyLimit(r *http.Request, into any, limit int64) error {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(raw)) > limit {
+		return &http.MaxBytesError{Limit: limit}
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(into); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return fmt.Errorf("one JSON request is required")
+	}
+	return nil
 }

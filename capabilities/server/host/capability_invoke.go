@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"platformserver/services/apps/pages"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	functions "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 )
 
@@ -19,38 +19,24 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q plat
 	if refusal := t.Admits(m); refusal != nil {
 		return answer, refusal
 	}
-	bad := func(message string) (platform.CapabilityResult, *kernel.Error) {
-		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
+	if refusal := functions.CheckInvocation(q); refusal != nil {
+		return answer, refusal
 	}
-	if len(q.Key) == 0 || len(q.Key) > 200 || strings.ContainsAny(q.Key, "/\x00\r\n") || q.Version < 0 {
-		return bad("Choose a capability and bounded stable invocation key")
-	}
-	if _, err := platform.DecodeValue(q.Inputs, 64<<10); err != nil {
-		return bad(err.Error())
-	}
-	prepared, refusal := recordRead(t, ctx, func(t *Tenant) (capabilityPreparation, *kernel.Error) {
+	prepared, refusal := recordRead(t, ctx, func(t *Tenant) (functions.CapabilityPreparation, *kernel.Error) {
 		return t.prepareCapability(m, q, now)
 	})
 	if refusal != nil {
 		return answer, refusal
 	}
-	selected := prepared.descriptor
+	selected := prepared.Descriptor
 	switch selected.Kind {
 	case "query":
-		answer.State, answer.Result = "completed", prepared.query
+		answer.State, answer.Result = "completed", prepared.Query
 		return answer, nil
 	case "action":
-		payload := q.Inputs
-		if len(q.Bindings) > 0 || q.Record != "" {
-			bound := prepared.inputs
-			var inputs, values map[string]json.RawMessage
-			if json.Unmarshal(q.Inputs, &inputs) != nil || inputs == nil || json.Unmarshal(bound, &values) != nil {
-				return bad("Bound action inputs need an object payload")
-			}
-			for name, value := range values {
-				inputs[name] = value
-			}
-			payload, _ = json.Marshal(inputs)
+		payload, refusal := functions.BoundActionPayload(q, prepared.Inputs)
+		if refusal != nil {
+			return answer, refusal
 		}
 		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: q.Ref.App, IdempotencyKey: q.Key,
 			Target: &pb.EntityRef{Type: selected.Target, Id: q.Target}, Schema: &pb.SchemaRef{Name: q.Ref.Name, Version: 1}, Payload: payload, ExpectedRevision: q.ExpectedRevision}
@@ -70,75 +56,34 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q plat
 		}
 		return answer, nil
 	case "compute":
-		inputs, sources := prepared.inputs, prepared.sources
+		inputs, sources := prepared.Inputs, prepared.Sources
 		call, err := t.InvokeOperation(m, platform.OperationRequest{App: q.Ref.App, Name: q.Ref.Name, Version: q.Version, Key: q.Key, Inputs: inputs, Sources: sources}, now)
 		answer.State, answer.Call = "pending", call.ID
 		return answer, err
 	case "ai":
-		if q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
-			return bad("AI function takes a readable source record")
+		payload, refusal := functions.FunctionCallPayload(q)
+		if refusal != nil {
+			return answer, refusal
 		}
-		input := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"source": {Type: "string"}}, Required: []string{"source"}}
-		if err := input.Validate(q.Inputs, 64<<10); err != nil {
-			return bad(err.Error())
-		}
-		var values struct {
-			Source string `json:"source"`
-		}
-		_ = json.Unmarshal(q.Inputs, &values)
-		payload, _ := json.Marshal(map[string]any{"app": q.Ref.App, "name": q.Ref.Name, "source": values.Source, "version": q.Version})
 		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: q.Key,
 			Target: &pb.EntityRef{Type: build.FunctionCallType, Id: q.Key}, Schema: &pb.SchemaRef{Name: build.SchemaFunctionCall, Version: 1}, Payload: payload}
 		_, err := t.Submit(m, s, now)
 		answer.State, answer.Call = "pending", q.Key
 		return answer, err
 	default:
-		return bad("This descriptor is a design control, not a callable capability")
+		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "This descriptor is a design control, not a callable capability")
 	}
 }
 
-type capabilityPreparation struct {
-	descriptor platform.CapabilityDescriptor
-	inputs     json.RawMessage
-	sources    []string
-	query      json.RawMessage
-}
-
-func (t *Tenant) prepareCapability(m platform.Member, q platform.CapabilityInvocation, now time.Time) (capabilityPreparation, *kernel.Error) {
-	out := capabilityPreparation{}
-	selected := false
-	if q.Version > 0 {
-		out.descriptor, selected = t.retainedCapability(m, q.Ref, q.Version)
-	} else {
-		for _, descriptor := range t.capabilities(m) {
-			if descriptor.Ref == q.Ref {
-				out.descriptor, selected = descriptor, true
-				break
-			}
-		}
-	}
-	if !selected {
-		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Capability is unavailable to this member")
-	}
-	if out.descriptor.Kind == "query" {
-		if out.descriptor.Source == "tenant" && q.Version == 0 || q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
-			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Query takes only its declared inputs")
-		}
-		caller := platform.NewCaller(runtime{t: t}, m, q.Ref.App, false, false)
-		var refusal *kernel.Error
-		out.query, refusal = caller.ReadQueryVersion(q.Ref.App, q.Ref.Name, q.Version, q.Inputs, now)
-		return out, refusal
-	}
-	if out.descriptor.Kind == "action" && (q.Version != 0 || q.Target == "" || len(q.Sources) != 0) {
-		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Action requires its target and canonical payload")
-	}
-	if out.descriptor.Kind == "compute" && (q.Target != "" || q.ExpectedRevision != nil) {
-		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Compute takes typed inputs and protected source references")
-	}
-	if out.descriptor.Kind == "compute" || out.descriptor.Kind == "action" && (len(q.Bindings) > 0 || q.Record != "") {
-		var refusal *kernel.Error
-		out.inputs, out.sources, refusal = pages.BindCapabilityInputs(platform.NewCaller(runtime{t: t, scoped: true}, m, q.Ref.App, false, false), q, now)
-		return out, refusal
-	}
-	return out, nil
+func (t *Tenant) prepareCapability(m platform.Member, q platform.CapabilityInvocation, now time.Time) (functions.CapabilityPreparation, *kernel.Error) {
+	return functions.PrepareCapability(functions.CapabilityHooks{
+		Retained: func() (platform.CapabilityDescriptor, bool) { return t.retainedCapability(m, q.Ref, q.Version) },
+		Palette:  func() []platform.CapabilityDescriptor { return t.capabilities(m) },
+		ReadQuery: func() (json.RawMessage, *kernel.Error) {
+			return platform.NewCaller(runtime{t: t}, m, q.Ref.App, false, false).ReadQueryVersion(q.Ref.App, q.Ref.Name, q.Version, q.Inputs, now)
+		},
+		Bind: func() (json.RawMessage, []string, *kernel.Error) {
+			return pages.BindCapabilityInputs(platform.NewCaller(runtime{t: t, scoped: true}, m, q.Ref.App, false, false), q, now)
+		},
+	}, q)
 }

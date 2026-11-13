@@ -1,7 +1,6 @@
 package host
 
 import (
-	"strings"
 	"time"
 
 	"platformserver/kernel/records"
@@ -22,14 +21,13 @@ func (s authorizationSources) Engine() platform.AuthorizationEngine {
 func (s authorizationSources) LookupMember(id string) (platform.Member, bool) { return s.t.member(id) }
 
 func (s authorizationSources) DeclaredPrincipal(id string) bool {
-	declared := s.t.identity == nil || id == "host:maintenance"
-	if app, service := strings.CutPrefix(id, "app:"); service {
-		declared = s.t.App(app) != nil
-	}
-	if agent, generated := strings.CutPrefix(id, "agent:"); generated && s.t.agents != nil {
-		_, declared = s.t.agents.AgentDeclaration(agent)
-	}
-	return declared
+	return security.DeclaredPrincipal(id, s.t.identity == nil, func(app string) bool { return s.t.App(app) != nil }, func(agent string) (bool, bool) {
+		if s.t.agents == nil {
+			return false, false
+		}
+		_, declared := s.t.agents.AgentDeclaration(agent)
+		return declared, true
+	})
 }
 
 func (s authorizationSources) App(id string) platform.App { return s.t.App(id) }
@@ -49,7 +47,7 @@ func (s authorizationSources) NamedReadAllowed(m platform.Member, name string) b
 	return s.t.mayCallRead(m, name)
 }
 func (s authorizationSources) InputGranted(m platform.Member, app, name string) bool {
-	return s.t.connectorInputGranted(m, app, name)
+	return s.t.connectors.Granted(m.ID, app, name)
 }
 func (s authorizationSources) KnowledgeReadable(store *records.Store, m platform.Member, id, field string) bool {
 	return s.t.knowledgeSourceReadable(store, m, id, field)

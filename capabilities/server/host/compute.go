@@ -6,11 +6,7 @@ import "platformserver/services/functions/runtime"
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"io"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	controlowner "platformserver/services/security/control"
 
@@ -82,22 +78,9 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 }
 func (t *Tenant) operationResult(c platform.Caller, id string) (platform.OperationResult, *kernel.Error) {
 	if found, ok := t.outbound.Get(id); ok && found.Endpoint == acceptedformat.OperationEndpoint {
-		x := found.Effect
-		var b compute.OperationBinding
-		if json.Unmarshal([]byte(x.Body), &b) != nil {
-			return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation input is unavailable")
-		}
-		if c.Tenant != t.ID || !c.Automation && c.ID != b.Member || c.Automation && c.App != x.App && c.App != "flow" {
-			return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation is not readable")
-		}
-		member, ok := t.Member(b.Member)
-		if !ok {
-			return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation permission was revoked")
-		}
-		if refusal := authorizationRefusal(t.operationAuthorization(member, x.App, b, time.Now().UTC())); refusal != nil {
-			return platform.OperationResult{}, refusal
-		}
-		return compute.ResultOf(x), nil
+		return compute.ReadableBy(t.ID, c, found.Effect, t.Member, func(member platform.Member, app string, b compute.OperationBinding) *kernel.Error {
+			return authorizationRefusal(t.operationAuthorization(member, app, b, time.Now().UTC()))
+		})
 	}
 	return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation call was not found")
 }
@@ -133,32 +116,15 @@ func (t *Tenant) operationAuthorization(member platform.Member, owner string, bi
 }
 
 func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecord, key, target string, q platform.CodeBuildRequest) (platform.OperationCall, *kernel.Error) {
-	refuse := func(message string) (platform.OperationCall, *kernel.Error) {
-		err := platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
+	call, intent, err := compute.PlanCompilation(d.tenant.ID, c, r, key, target, q, d.tenant.queuedOperations(), d.Intents)
+	if err != nil {
 		if d.Failure == nil {
 			d.Failure = err
 		}
 		return platform.OperationCall{}, err
 	}
-	if c.App != "build" || c.Automation || r.GetSubmission().GetAuthority() != c.App || key == "" || len(q.Source) == 0 || len(q.Source) > 256<<10 || q.Language != "go" && q.Language != "tinygo" || q.Input.Check() != nil || q.Output.Check() != nil {
-		return refuse("Compilation needs a bounded Go/TinyGo code asset")
-	}
-	queued := d.tenant.queuedOperations()
-	for _, x := range d.Intents {
-		if x.Endpoint == acceptedformat.OperationEndpoint {
-			queued++
-		}
-	}
-	if queued >= 256 {
-		return refuse("Operation queue is at capacity")
-	}
-	hash, _ := platform.CanonicalDigest(q)
-	id := fmt.Sprintf("%s:build:operation:%s:%s", d.tenant.ID, key, acceptedformat.OperationEndpoint)
-	call := platform.OperationCall{ID: id, InputHash: hash, Definition: hash}
-	body, _ := json.Marshal(compute.OperationBinding{Build: &q, Call: call, Member: c.ID})
-	at := r.GetRecordedTime().AsTime()
 	if !d.ProbeOnly {
-		d.Intents = append(d.Intents, platform.Effect{ID: id, Endpoint: acceptedformat.OperationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)})
+		d.Intents = append(d.Intents, intent)
 	}
 	return call, nil
 }
@@ -170,31 +136,13 @@ func (t *Tenant) readArtifact(ctx context.Context, digest string) ([]byte, error
 		return nil, err
 	}
 	defer r.Close()
-	if n <= 0 || n > 16<<20 {
-		return nil, fmt.Errorf("module exceeds its byte bound")
-	}
-	raw, err := io.ReadAll(io.LimitReader(r, (16<<20)+1))
-	hash := sha256.Sum256(raw)
-	if err != nil || len(raw) > 16<<20 || hex.EncodeToString(hash[:]) != digest {
-		return nil, fmt.Errorf("module digest differs from its retained bytes")
-	}
-	return raw, nil
+	return compute.ReadArtifact(r, n, digest)
 }
 
 func (t *Tenant) buildCode(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error) {
-	result, module, err := compute.EnvironmentCompiler().Compile(ctx, q)
-	if err == nil {
-		err = compute.ValidateWasm(ctx, module, q.ABI)
-		if err == nil {
-			hash := sha256.Sum256(module)
-			result.Module = hex.EncodeToString(hash[:])
-			err = t.files().Put(ctx, artifactKey(t.ID, result.Module), module, "application/wasm")
-		}
-	}
-	if err != nil {
-		result.Diagnostics = err.Error()
-	}
-	return result, err
+	return compute.BuildCode(ctx, q, func(ctx context.Context, digest string, module []byte) error {
+		return t.files().Put(ctx, artifactKey(t.ID, digest), module, "application/wasm")
+	})
 }
 
 func (t *Tenant) artifactStored(ctx context.Context, digest string) bool {

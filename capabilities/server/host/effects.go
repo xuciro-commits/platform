@@ -1,15 +1,9 @@
 package host
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"net/http"
-	"os"
-	"path/filepath"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
@@ -18,8 +12,6 @@ import (
 	"platformserver/services/data/transform"
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
-	"slices"
-	"strings"
 	"time"
 )
 
@@ -50,50 +42,17 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 }
 
 func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *kernel.Error) {
-	a := t.App(c.App)
-	if a == nil || key == "" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	i := slices.IndexFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind })
-	if i < 0 {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	typ, _, _ := strings.Cut(entity, "/")
-	resource := platform.AssetRef{App: c.App, Kind: platform.AssetObject, Name: typ}
-	if typ == "" {
-		resource = platform.AssetRef{App: c.App, Kind: platform.AssetApp, Name: c.App}
-	}
-	applications, err := t.bindApplications(resource, t.releases.Active(), "")
-	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The effect application cannot be bound")
-	}
-	agent, run := "", ""
-	if c.Agent {
-		agent, run = c.ID, t.agentRun
-	}
-	body, err := json.Marshal(map[string]any{"type": c.App + "/" + kind, "timestamp": now, "data": data})
-	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	exists := func(id string) bool {
-		return t.outbound.Any(func(x actions.Queued) bool { return x.ID == id }) || slices.ContainsFunc(staged, func(x platform.Effect) bool { return x.ID == id })
-	}
-	planned := actions.AppEffects(t.endpoints.All(), platform.Effect{Applications: applications, App: c.App, Key: key, Target: entity, At: now, Agent: agent, Run: run, Due: now, Body: string(body)},
-		t.ID, kind, c.Agent && a.Manifest().Emits[i].Irreversible, c.Agent, exists)
-	return planned, nil
+	return actions.AppEffectPlan{Tenant: t.ID, App: t.App(c.App), Endpoints: t.endpoints.All(), Run: t.agentRun,
+		Bind: func(resource platform.AssetRef) ([]platform.AssetBinding, error) {
+			return t.bindApplications(resource, t.releases.Active(), "")
+		},
+		Exists: func(id string) bool { return t.outbound.Any(func(x actions.Queued) bool { return x.ID == id }) }}.Plan(c, kind, key, entity, data, now, staged)
 }
 
 func (t *Tenant) askHeldEffects(c platform.Caller, kind, entity string, planned []platform.Effect, now time.Time) {
-	a := t.App(c.App)
-	i := slices.IndexFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind })
 	console := t.automated(c, controlowner.PlatformApp)
-	for _, x := range planned {
-		if x.State != "held" {
-			continue
-		}
-		console.Notify(platform.Notification{Title: fmt.Sprintf("Approve %s for %s", a.Manifest().Emits[i].Title, entity),
-			Body: fmt.Sprintf("The AI agent %s caused it, and it cannot be recalled once sent. Approve or discard it in Settings → Integrations.", c.ID),
-			Ref:  controlowner.EffectType + "/" + x.ID, Key: "approve:" + x.ID}, now, platform.Recipient{AppRole: controlowner.Admin})
+	for _, n := range actions.HeldNotices(t.App(c.App), kind, entity, c.ID, planned, controlowner.EffectType) {
+		console.Notify(n, now, platform.Recipient{AppRole: controlowner.Admin})
 	}
 }
 
@@ -118,16 +77,7 @@ func (t *Tenant) Endpoints() []actions.EndpointView {
 }
 
 func (t *Tenant) secret(name string) ([]byte, bool) {
-	if t.Secrets != nil {
-		return t.Secrets(name)
-	}
-	if dir := os.Getenv("PLATFORM_SECRETS_DIR"); dir != "" {
-		if raw, err := os.ReadFile(filepath.Join(dir, filepath.Base(name))); err == nil {
-			return bytes.TrimSpace(raw), true
-		}
-	}
-	v, ok := os.LookupEnv("PLATFORM_SECRET_" + strings.ToUpper(strings.NewReplacer("-", "_", ".", "_").Replace(name)))
-	return []byte(v), ok && v != ""
+	return controlowner.LookupSecret(t.Secrets, name)
 }
 
 func (t *Tenant) Dispatch(now time.Time) { integrations.OnLane(t.dispatches(now)) }
@@ -136,42 +86,28 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	if t.businessStopped() {
 		return nil
 	}
-	type job struct {
-		effect   platform.Effect
-		endpoint actions.Endpoint
-		span     trace.SpanContext
-	}
-	var jobs []job
-	endpoints := append(t.endpoints.All(), t.connectionEndpoints()...)
-	for _, ep := range append(endpoints, actions.Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
-		if ep.Kind != acceptedformat.ModelEndpoint && !t.breakers.Allow("endpoint:"+ep.ID, now, true) {
-			continue
-		}
-		if x, ok := t.outbound.Claim(ep.ID, now); ok {
-			jobs = append(jobs, job{x.Effect, ep, x.Span})
-		}
-	}
 	var sends []func()
-	for _, j := range jobs {
+	for _, j := range actions.ClaimJobs(&t.outbound, append(t.endpoints.All(), t.connectionEndpoints()...), acceptedformat.ModelEndpoint,
+		func(id string) bool { return t.breakers.Allow("endpoint:"+id, now, true) }, now) {
 		sends = append(sends, func() {
 			if t.businessStopped() {
 				return
 			}
-			if !t.beginDispatchAttempt(j.effect, now) {
+			if !t.beginDispatchAttempt(j.Effect, now) {
 				return
 			}
-			span := outside(j.span, "send "+j.effect.Event+" to "+j.endpoint.ID, attribute.String("platform.tenant", t.ID),
-				attribute.String("platform.endpoint", j.endpoint.ID), attribute.String("platform.effect", j.effect.ID))
-			outcome, usage := t.sendWithUsage(j.endpoint, j.effect, now)
+			span := outside(j.Span, "send "+j.Effect.Event+" to "+j.Endpoint.ID, attribute.String("platform.tenant", t.ID),
+				attribute.String("platform.endpoint", j.Endpoint.ID), attribute.String("platform.effect", j.Effect.ID))
+			outcome, usage := t.sendWithUsage(j.Endpoint, j.Effect, now)
 			end(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
 			if t.quarantined() {
 				return
 			}
-			counted(t, "effect", j.effect.App, outcome.Result)
-			if j.endpoint.Kind != acceptedformat.ModelEndpoint {
-				t.breakers.Report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
+			counted(t, "effect", j.Effect.App, outcome.Result)
+			if j.Endpoint.Kind != acceptedformat.ModelEndpoint {
+				t.breakers.Report("endpoint:"+j.Endpoint.ID, outcome.Result != "retry", now)
 			}
-			t.settleWithUsage(j.effect.ID, outcome, usage, now)
+			t.settleWithUsage(j.Effect.ID, outcome, usage, now)
 		})
 	}
 	return append(sends, t.operationDispatches(now)...)
