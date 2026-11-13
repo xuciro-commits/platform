@@ -188,7 +188,7 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.
 		t.Projection.Lock()
 		et := t.Projection.Type(build.ObjectType)
 		t.Projection.Unlock()
-		_, hidden := viewOf(m, et)
+		_, hidden := objects.ViewOf(m, et)
 		return records.Mask(et.Info(), reflect.ValueOf(canonical), hidden)
 	})
 }

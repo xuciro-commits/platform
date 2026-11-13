@@ -18,7 +18,7 @@ type EffectAnswer struct {
 	Decide     func(c platform.Caller, a platform.App, s *pb.Submission, at time.Time) *kernel.Error
 	Operation  func(platform.Effect)
 	Completion func() platform.OperationCompletion
-	Answerer   func(app string) (platform.Answerer, bool)
+	Answerer   func(app string) platform.Answerer
 	Source     func(id string) (Queued, bool)
 	Origin     func(*platform.Effect, func() *kernel.Error) *kernel.Error
 	Agents     func(c platform.Caller, x platform.Effect, out platform.Outcome, at time.Time)
@@ -56,7 +56,7 @@ func (a EffectAnswer) Stage(x platform.Effect, out platform.Outcome, at time.Tim
 		}
 	}
 	c := caller(x.App)
-	if app, ok := a.Answerer(x.App); ok {
+	if app := a.Answerer(x.App); app != nil {
 		source, _ := a.Source(x.ID)
 		if source.ID == "" || source.App != x.App {
 			return fmt.Errorf("effect callback has no accepted source")

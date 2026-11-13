@@ -11,6 +11,7 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/objects"
 )
 
 func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.Transition, string, bool) {
@@ -96,7 +97,7 @@ func (t *Tenant) heldRecordJSON(c platform.Caller, typ, id string, at time.Time)
 	if row == nil || visible != nil && !visible(row.Value) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Record path record is unavailable")
 	}
-	_, hidden := viewOf(c.Member, entity)
+	_, hidden := objects.ViewOf(c.Member, entity)
 	record := records.Mask(entity.Info(), row.Value, hidden)
 	if entity.Info().HasReadSources() || len(entity.Info().VersionPins) > 0 {
 		narrowed, _ := t.narrowerIn(t.Projection, c.Member, at, true).Derive(entity, reflect.ValueOf(record))

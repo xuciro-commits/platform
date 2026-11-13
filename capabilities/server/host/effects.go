@@ -158,7 +158,7 @@ func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, repl
 	if x.Endpoint == acceptedformat.ModelEndpoint {
 		return
 	}
-	if a, ok := t.App(x.App).(platform.Answerer); ok && x.App != "" {
+	if a := t.answerers[x.App]; a != nil && x.App != "" {
 		a.Answer(t.automation(x.App, replaying), x, o, now)
 	}
 }

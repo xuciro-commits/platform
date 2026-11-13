@@ -26,10 +26,6 @@ func (t *Tenant) held(ref string) (any, bool) { return t.Projection.Held(ref) }
 
 func jsonOf(v any) json.RawMessage { raw, _ := json.Marshal(v); return raw }
 
-func viewOf(m platform.Member, et *records.Type) (*records.Type, []platform.FieldInfo) {
-	return objects.ViewOf(m, et)
-}
-
 func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	gen, key := t.definitionsFingerprint(), transport.Rights(m)
 	if out, ok := t.viewCache().Entities(gen, key); ok {
@@ -53,7 +49,7 @@ func (t *Tenant) entityView(m platform.Member) []platform.EntityInfo {
 			continue
 		}
 		if len(roles) > 0 || et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil {
-			view, _ := viewOf(m, et)
+			view, _ := objects.ViewOf(m, et)
 			out = append(out, view.Info())
 		}
 	}
@@ -101,12 +97,9 @@ func (t *Tenant) PersonalReads() []platform.PersonalRead { return t.audit.Person
 
 func (t *Tenant) recordDeliveries(target string, now time.Time) []objects.RecordDelivery {
 	matched := t.outbound.Select(func(x actions.Queued) bool { return x.Target == target })
-	var effects []platform.Effect
+	out := make([]objects.RecordDelivery, 0, len(matched))
 	for i := len(matched) - 1; i >= 0; i-- {
-		effects = append(effects, matched[i].Effect)
-	}
-	out := make([]objects.RecordDelivery, 0, len(effects))
-	for _, effect := range effects {
+		effect := matched[i].Effect
 		out = append(out, objects.RecordDelivery{ID: effect.ID, Event: effect.Event, State: effect.State, At: effect.At, Message: effect.PublicMessage})
 	}
 	return out
@@ -130,7 +123,7 @@ func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, off
 		if err != nil {
 			return nil, nil, false
 		}
-		_, hidden := viewOf(m, et)
+		_, hidden := objects.ViewOf(m, et)
 		return visible, hidden, true
 	}, m.RolesIn), nil
 }

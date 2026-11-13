@@ -21,7 +21,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 	if et == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	view, _ := viewOf(m, et)
+	view, _ := objects.ViewOf(m, et)
 	currency := t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)
 	file, lines, ok := objects.ParseImport(view.Info(), data, currency)
 	if !ok {
@@ -79,7 +79,7 @@ func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now
 	if err := authorizationRefusal(t.authorizeFrom(t.Projection, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "export", Type: typ}, now, false)); err != nil {
 		return nil, err
 	}
-	view, _ := viewOf(m, et)
+	view, _ := objects.ViewOf(m, et)
 	export := objects.NewExport(view.Info())
 	q.Offset, q.Limit = 0, 500
 	for {

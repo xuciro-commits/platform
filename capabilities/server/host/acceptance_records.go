@@ -35,7 +35,7 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 		Claims: t.claims.BatchPrepare(t.ID),
 		Rows: func(draft *records.Store, result acceptedformat.Batch) error {
 			return actions.CallbackRows{
-				Answerer: func(app string) bool { _, ok := t.App(app).(platform.Answerer); return ok },
+				Answerer: func(app string) bool { return t.answerers[app] != nil },
 				Pending:  func(id string) platform.Effect { queued, _ := t.outbound.Get(id); return queued.Effect },
 				Prepare:  t.prepareAcceptedDirectRows,
 			}.Apply(draft, result.DirectRows, result.At)

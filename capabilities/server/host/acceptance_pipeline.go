@@ -170,9 +170,11 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 			completion, _ := owner.(platform.OperationCompletion)
 			return completion
 		},
-		Answerer: func(app string) (platform.Answerer, bool) {
-			a, ok := draft.stateApp(t.App(app)).(platform.Answerer)
-			return a, ok
+		Answerer: func(app string) platform.Answerer {
+			if t.answerers[app] == nil {
+				return nil
+			}
+			return draft.stateApp(t.App(app)).(platform.Answerer)
 		},
 		Source: t.outbound.Get,
 		Origin: draft.AnswerWithOrigin,
