@@ -156,3 +156,24 @@ func BindPolicy(services *platform.RuntimeCapabilities) error {
 	services.AIInference = &policy
 	return nil
 }
+
+func (r Resolver) ResolveStaged(purpose, name string, override platform.ModelOptions, stage string) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
+	binding, provider, refusal := r.Resolve(purpose, name, override)
+	if refusal == nil {
+		binding, refusal = r.Stage(binding, provider, stage)
+	}
+	return binding, provider, refusal
+}
+
+func (r Resolver) Describe(purpose, name string, override platform.ModelOptions) (string, string, bool) {
+	binding, pv, err := r.Resolve(purpose, name, override)
+	if err != nil {
+		return "", "", false
+	}
+	model, _, _ := r.Registry.Model(binding.Model)
+	config := ""
+	if pinned, refusal := r.Stage(binding, pv, platform.AIStageDesign); refusal == nil {
+		config, _ = ConfigurationDigest(model, pv, &pinned)
+	}
+	return binding.Model, config, true
+}

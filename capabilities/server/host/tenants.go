@@ -77,8 +77,8 @@ func (h *Host) tenantRoutes(mux *http.ServeMux) {
 				return
 			}
 			var body platform.CreateTenantRequest
-			if err := decodeBody(r, &body); err != nil {
-				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil {
+				transport.AnswerOr(w, http.StatusBadRequest, nil, err)
 				return
 			}
 			if slices.ContainsFunc(h.currentTenants(), func(t *Tenant) bool { return t.ID == body.ID }) {
@@ -87,7 +87,7 @@ func (h *Host) tenantRoutes(mux *http.ServeMux) {
 			}
 			t, err := h.CreateTenant(body, subject)
 			if err != nil {
-				WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
+				transport.AnswerOr(w, http.StatusConflict, nil, err)
 				return
 			}
 			WriteJSON(w, http.StatusCreated, h.tenantView(t))

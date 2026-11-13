@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"platformserver/kernel/records"
+	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
 	enterprisemodel "platformserver/services/security/organization"
@@ -23,7 +24,7 @@ import (
 type recordReadScope struct {
 	ctx         context.Context
 	err         error
-	definitions *definitionPlanCache
+	definitions *releaseowner.DefinitionPlanCache
 }
 
 func (t *Tenant) readContext() context.Context {

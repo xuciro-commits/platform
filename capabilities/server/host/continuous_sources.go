@@ -35,12 +35,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	var before platform.FlowInstance
 	var current platform.Member
 	var plan platform.FlowBatchPreparation
-	var name, hash string
-	var intake *platform.StreamIntake
-	var budget int
-	var source dataowner.Source
-	var connection dataowner.Connection
-	var latestBootstrap bool
+	var start dataowner.StreamStart
 	_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
 		f, instance, member, refusal := t.continuousSnapshotLocked(m, id, now)
 		if refusal != nil {
@@ -51,12 +46,9 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		if refusal != nil {
 			return struct{}{}, refusal
 		}
-		name, intake, budget = plan.Intake()
-		source, connection, hash, refusal = t.streamSourceLocked(current, name, intake, now)
-		latestBootstrap = refusal == nil && intake.Offset == "latest" && (before.Batch == nil || before.Batch.Source == nil)
-		if refusal == nil {
-			source, refusal = source.Resume(before, hash, intake)
-		}
+		start, refusal = dataowner.BeginStream(plan, before, func(name string, intake *platform.StreamIntake) (dataowner.Source, dataowner.Connection, string, *kernel.Error) {
+			return t.streamSourceLocked(current, name, intake, now)
+		})
 		return struct{}{}, refusal
 	})
 	if refusal != nil {
@@ -64,16 +56,16 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	}
 	return dataowner.StreamConsumption{
 		Read: func(source dataowner.Source, columns []string) ([]map[string]any, string, *kernel.Error) {
-			return t.readContinuousSource(current, before, name, intake, source, connection, hash, latestBootstrap, columns, now)
+			return t.readContinuousSource(current, before, start, source, columns, now)
 		},
 		Tick: func() (platform.FlowBatch, bool, *kernel.Error) { return plan.WindowTick(now, t.frames()) },
 		Consume: func(batch platform.FlowBatch) (platform.FlowBatchOutcome, *kernel.Error) {
 			return t.ConsumeFlowBatch(current, id, batch, now)
 		},
-	}.Run(before, source, connection, hash, intake, budget, latestBootstrap)
+	}.Run(before, start)
 }
 
-func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowInstance, name string, intake *platform.StreamIntake, source dataowner.Source, connection dataowner.Connection, hash string, latestBootstrap bool, columns []string, now time.Time) ([]map[string]any, string, *kernel.Error) {
+func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowInstance, start dataowner.StreamStart, source dataowner.Source, columns []string, now time.Time) ([]map[string]any, string, *kernel.Error) {
 	checkOriginal := func() *kernel.Error {
 		_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
 			owner, latest, current, refusal := t.continuousSnapshotLocked(m, before.ID, now)
@@ -84,9 +76,9 @@ func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowIns
 				_, refusal = owner.PlanBatch(latest, t.automation(platform.FlowApp, false))
 			}
 			if refusal == nil {
-				freshSource, freshConnection, freshHash, err := t.streamSourceLocked(current, name, intake, now)
+				freshSource, freshConnection, freshHash, err := t.streamSourceLocked(current, start.Name, start.Intake, now)
 				refusal = err
-				if refusal == nil && (freshHash != hash || freshSource.DefinitionVersion != source.DefinitionVersion || freshSource.Published != source.Published || freshConnection.DefinitionVersion != connection.DefinitionVersion || freshConnection.Published != connection.Published) {
+				if refusal == nil && !start.Unchanged(freshSource, freshConnection, freshHash) {
 					refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source changed after this Flow began consuming it")
 				}
 			}
@@ -95,7 +87,7 @@ func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowIns
 		return refusal
 	}
 	client := t.dataClient()
-	return dataowner.StreamReader{Check: checkOriginal, Latest: client.LatestTableCursor, Read: client.ReadTable}.Rows(intake, source, connection, latestBootstrap, columns)
+	return dataowner.StreamReader{Check: checkOriginal, Latest: client.LatestTableCursor, Read: client.ReadTable}.Rows(start.Intake, source, start.Connection, start.Bootstrap, columns)
 }
 
 func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan platform.FlowBatchPreparation, x platform.FlowInstance, checkpoint platform.FlowSourceCheckpoint, tick bool, now time.Time) *kernel.Error {

@@ -21,29 +21,12 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		return nil, nil
 	}
 	d := h.decision
-	resources := []build.Resource{}
-	if directory := d.Records.Type(build.ResourceType); directory != nil {
-		for _, row := range directory.Rows().All() {
-			resources = append(resources, row.Value.Interface().(build.Resource))
-		}
-	}
-	managed := packages.Managed{Caller: platform.NewCaller(d, c.Member, build.ID, true, false), Descriptor: descriptor, Resources: resources, Rows: packages.ManagedRows{
+	managed := packages.Managed{Caller: platform.NewCaller(d, c.Member, build.ID, true, false), Descriptor: descriptor, Resources: resourceRows(d.Records), Rows: packages.ManagedRows{
 		Archived: func(resource build.Resource, archived bool) any {
-			et := d.Records.Type(resource.Type)
-			value := records.Copy(et.Info().Go, et.Rows().Get(resource.Draft).Value.Interface())
-			value.FieldByName("Archived").SetBool(archived)
-			return value.Interface()
+			return d.Records.ArchivedCopy(resource.Type, resource.Draft, archived)
 		},
-		Decode: func(typ string, image json.RawMessage) (any, error) {
-			value := reflect.New(d.Records.Type(typ).Info().Go)
-			err := json.Unmarshal(image, value.Interface())
-			return value.Elem().Interface(), err
-		},
-		Image: func(record string) json.RawMessage {
-			typ, id, _ := strings.Cut(record, "/")
-			image, _ := json.Marshal(d.Records.Type(typ).Rows().Get(id).Value.Interface())
-			return image
-		},
+		Decode: func(typ string, image json.RawMessage) (any, error) { return d.Records.DecodeRow(typ, image) },
+		Image:  func(record string) json.RawMessage { return d.Records.RowImage(record) },
 		Install: func(installation platform.ReleaseInstallation) {
 			d.Installations = append(d.Installations, installation)
 		},
@@ -126,22 +109,16 @@ func (t *Tenant) prepareBatchDefinitions(rows *records.Store, installations []pl
 		return nil, err
 	}
 	view.installingSet = true
-	for _, installation := range installations {
-		plan, err := releaseowner.InstallationPlan(registry, installation)
-		if err != nil {
-			return nil, err
-		}
-		typ, id, _ := strings.Cut(plan.Record, "/")
-		et := rows.Type(typ)
-		if et == nil || et.Rows().Get(id) == nil {
-			return nil, fmt.Errorf("installed resource %s has no accepted image", plan.Record)
-		}
-		if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{Private: true}); err != nil {
-			return nil, err
-		}
-		if err := view.registerInstalledAsset(plan); err != nil {
-			return nil, err
-		}
+	err = releaseowner.StageInstallations(registry, installations, platform.AssetApplyContext{Private: true},
+		func(plan platform.AssetInstallation, _ platform.ReleaseInstallation) error {
+			typ, id, _ := strings.Cut(plan.Record, "/")
+			if et := rows.Type(typ); et == nil || et.Rows().Get(id) == nil {
+				return fmt.Errorf("installed resource %s has no accepted image", plan.Record)
+			}
+			return nil
+		}, view.registerInstalledAsset)
+	if err != nil {
+		return nil, err
 	}
 	view.installingSet = false
 	if err := view.Projection.Anchor(t.Projection); err != nil {
@@ -184,4 +161,14 @@ func restoreReferencedDefinitions(rows *records.Store, installations []platform.
 		copy.Value = value
 		et.SetRow(resource.Draft, &copy)
 	}
+}
+
+func resourceRows(store *records.Store) []build.Resource {
+	var resources []build.Resource
+	if directory := store.Type(build.ResourceType); directory != nil {
+		for _, row := range directory.Rows().All() {
+			resources = append(resources, row.Value.Interface().(build.Resource))
+		}
+	}
+	return resources
 }

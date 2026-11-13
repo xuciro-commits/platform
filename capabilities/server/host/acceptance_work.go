@@ -11,6 +11,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	automation "platformserver/services/automate/runtime"
+	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"time"
@@ -102,7 +103,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	if task.Event != nil {
 		end := t.begin("deliver "+task.Event.Record.GetSubmission().GetSchema().GetName()+" to "+task.App, task.Event.Span,
 			attribute.String("platform.app", task.App), attribute.String("platform.target", runtimekernel.Target(task.Event.Record.GetSubmission())))
-		defer func() { end(outcome); counted(t, "delivery", task.App, outcome) }()
+		defer func() { end(outcome); monitoring.Counted(t.ID, "delivery", task.App, outcome) }()
 	}
 	defer func() {
 		if p := recover(); p != nil {

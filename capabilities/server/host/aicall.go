@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 
 	"encoding/json"
@@ -122,13 +123,13 @@ func (t *Tenant) gateway(mostTokens func() int) aigateway.Calls {
 func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform.Member, req platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
 	ceiling, _ := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) { return t.modelResolver().MostTokens(), nil })
 	gateway := t.gateway(func() int { return ceiling })
-	span := outside(trace.SpanContext{}, "chat "+model.Model, attribute.String("gen_ai.operation.name", "chat"), attribute.String("gen_ai.provider.name", pv.ID), attribute.String("gen_ai.request.model", model.Model), attribute.String("platform.tenant", t.ID))
+	span := monitoring.Outside(trace.SpanContext{}, "chat "+model.Model, attribute.String("gen_ai.operation.name", "chat"), attribute.String("gen_ai.provider.name", pv.ID), attribute.String("gen_ai.request.model", model.Model), attribute.String("platform.tenant", t.ID))
 	answer, failure := gateway.Call(pv, model, m, req, now)
 	span.SetAttributes(attribute.Int("gen_ai.usage.input_tokens", answer.Usage.Input), attribute.Int("gen_ai.usage.output_tokens", answer.Usage.Output))
 	if failure != nil {
-		end(span, failure.Detail)
+		monitoring.End(span, failure.Detail)
 	} else {
-		end(span, "ok")
+		monitoring.End(span, "ok")
 	}
 	return answer, failure
 }
@@ -193,11 +194,5 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 }
 
 func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, usage *platform.AIUsage) (platform.App, *pb.Submission) {
-	var ask aigateway.ModelAsk
-	json.Unmarshal([]byte(x.Body), &ask)
-	app := t.App(x.App)
-	if app == nil || ask.Reply == "" {
-		return nil, nil
-	}
-	return app, ask.Submission(t.ID, x, o, usage, t.AuthorityOf)
+	return aigateway.AnswerSubmission(t.ID, x, o, usage, t.App, t.AuthorityOf)
 }

@@ -1,7 +1,6 @@
 package host
 
 import (
-	"encoding/json"
 	"fmt"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/services/functions/runtime"
@@ -16,26 +15,9 @@ import (
 )
 
 func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, id string) *kernel.Error {
-	if r == nil || c.Tenant != d.tenant.ID || r.GetSubmission().GetAuthority() != c.App {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Cancellation needs its accepted owner decision")
-	}
-	queued, ok := d.tenant.outbound.Get(id)
-	if !ok || queued.Endpoint != acceptedformat.OperationEndpoint {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation call was not found")
-	}
-	x := queued.Effect
-	if platform.EffectSettled(x.State) {
-		return nil
-	}
-	var b compute.OperationBinding
-	_ = json.Unmarshal([]byte(x.Body), &b)
-	if c.Automation {
-		target := r.GetSubmission().GetTarget()
-		if c.App != "flow" || x.Target != target.GetType()+"/"+target.GetId() {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Flow can cancel only its own operation")
-		}
-	} else if c.ID != b.Member {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation belongs to another member")
+	record, refusal := compute.CheckCancel(d.tenant.ID, c, r, id, d.tenant.operationEffect)
+	if refusal != nil || !record {
+		return refusal
 	}
 	if d.OperationCancels == nil {
 		d.OperationCancels = map[string]bool{}
@@ -44,11 +26,10 @@ func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, 
 	return nil
 }
 func (t *Tenant) operationCancellation(id string) (acceptedformat.OperationCancellation, error) {
-	queued, ok := t.outbound.Get(id)
-	if !ok || queued.Endpoint != acceptedformat.OperationEndpoint {
+	x, ok := t.operationEffect(id)
+	if !ok || x.Endpoint != acceptedformat.OperationEndpoint {
 		return acceptedformat.OperationCancellation{}, fmt.Errorf("operation cancellation has no intent")
 	}
-	x := queued.Effect
 	after := x
 	after.State, after.Error = "discarded", "Cancelled"
 	after.Output = nil

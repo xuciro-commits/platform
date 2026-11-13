@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"maps"
+	"platformserver/services/resources/monitoring"
 	"slices"
 	"time"
 
@@ -109,7 +110,7 @@ func (t *Tenant) endLane() {
 }
 
 func (t *Tenant) countReadImage(ctx context.Context, outcome string) {
-	meters.readImages.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
+	monitoring.Meters.ReadImages.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
 }
 
 func readImageState[T any](t *Tenant, state *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {

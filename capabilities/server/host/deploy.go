@@ -16,6 +16,7 @@ import (
 	"platformserver/platform"
 	fileowner "platformserver/services/data/blobs"
 	"platformserver/services/devops/packages"
+	"platformserver/services/resources/monitoring"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	"platformserver/services/security/idp"
@@ -382,7 +383,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	if err := d.preparePackageIndex(tenants); err != nil {
 		return err
 	}
-	flush := exportTelemetry(ctx, filepath.Base(os.Args[0]))
+	flush := monitoring.ExportTelemetry(ctx, filepath.Base(os.Args[0]))
 	defer flush(context.Background())
 	var lightweightFiles platform.FileStore
 	var files platform.FileStore

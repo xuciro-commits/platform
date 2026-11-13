@@ -5,6 +5,7 @@ import records "platformserver/kernel/records"
 import (
 	"platformserver/services/actions"
 	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
 	"time"
 
@@ -28,7 +29,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		return value, err == nil
 	},
 		CheckQuery: func(q platform.NamedQuery, info platform.EntityInfo) error {
-			return checkNamedQuery(q, info, t.services.Rules)
+			return objects.CheckNamedQuery(q, info, t.services.Rules)
 		}}
 	caller := func(app string) platform.Caller {
 		return platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
@@ -56,7 +57,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		Readable:                func(ref string) bool { return t.readable(m, ref, time.Now()) },
 		ObservationSourceActive: func(id string) bool { return t.Projection.ObservationSourceActive(id) },
 		CheckQuery: func(q platform.NamedQuery, info platform.EntityInfo) error {
-			return checkNamedQuery(q, info, t.services.Rules)
+			return objects.CheckNamedQuery(q, info, t.services.Rules)
 		},
 		Page:                      pages.Page,
 		VisibleQuery:              pageowner.VisibleQuery,
@@ -72,26 +73,16 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 }
 
 func (t *Tenant) resourceRow(ref platform.AssetRef) (build.Resource, bool) {
-	t.Projection.Lock()
-	defer t.Projection.Unlock()
-	resources := t.Projection.Type(build.ResourceType)
-	if resources == nil {
+	row, ok := t.Projection.LockedRow(build.ResourceType, platform.ResourceID(t.ID, ref))
+	if !ok {
 		return build.Resource{}, false
 	}
-	row := resources.Rows().Get(platform.ResourceID(t.ID, ref))
-	if row == nil {
-		return build.Resource{}, false
-	}
-	return row.Value.Interface().(build.Resource), true
+	return row.(build.Resource), true
 }
 
 func (t *Tenant) projectTitle(project string) string {
-	t.Projection.Lock()
-	defer t.Projection.Unlock()
-	if apps := t.Projection.Type(build.AppType); apps != nil {
-		if row := apps.Rows().Get(project); row != nil {
-			return row.Value.Interface().(build.Application).Title
-		}
+	if row, ok := t.Projection.LockedRow(build.AppType, project); ok {
+		return row.(build.Application).Title
 	}
 	return ""
 }

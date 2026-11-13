@@ -20,16 +20,7 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 		if err != nil {
 			return nil, nil
 		}
-		var sources []dataowner.ScheduledObservation
-		for _, definition := range definitions {
-			if definition.Observation == nil || !definition.Observation.Scheduled || definition.OwnerRecord == "" || !t.Projection.ObservationSourceActive(definition.OwnerRecord) {
-				continue
-			}
-			if publisher, scopes, _ := t.Projection.ObservationPublisher(definition.OwnerRecord); publisher != "" {
-				sources = append(sources, dataowner.ScheduledObservation{Ref: definition.Ref, Version: definition.Version, Definition: *definition.Observation, Publisher: publisher, Scopes: scopes})
-			}
-		}
-		return sources, nil
+		return dataowner.ScheduledObservations(definitions, t.Projection.ObservationSourceActive, t.Projection.ObservationPublisher), nil
 	})
 	dataowner.ObservationSchedule{Member: t.Member, Windows: &t.schedules.Windows,
 		Records: func(m platform.Member, object string, q platform.Query, at time.Time) ([]any, int, *kernel.Error) {

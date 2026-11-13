@@ -36,7 +36,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	sandbox.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
 	err = environment.InstallCandidate(candidate, b, trialowner.CandidateSandbox{
 		PutModule: func(digest string, raw []byte) error {
-			return sandbox.files().Put(context.Background(), artifactKey(sandbox.ID, digest), raw, "application/wasm")
+			return sandbox.artifacts().Put(context.Background(), digest, raw)
 		},
 		RestoreRecords: func(rows map[string][]json.RawMessage) (bool, error) {
 			saved := make(map[string][]records.StoredState, len(rows))

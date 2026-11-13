@@ -196,23 +196,51 @@ func (source Source) Resume(before platform.FlowInstance, hash string, intake *p
 	return source, nil
 }
 
+type StreamStart struct {
+	Name       string
+	Intake     *platform.StreamIntake
+	Budget     int
+	Source     Source
+	Connection Connection
+	Hash       string
+	Bootstrap  bool
+}
+
+func BeginStream(plan platform.FlowBatchPreparation, before platform.FlowInstance, resolve func(string, *platform.StreamIntake) (Source, Connection, string, *kernel.Error)) (StreamStart, *kernel.Error) {
+	var s StreamStart
+	var refusal *kernel.Error
+	s.Name, s.Intake, s.Budget = plan.Intake()
+	s.Source, s.Connection, s.Hash, refusal = resolve(s.Name, s.Intake)
+	if refusal != nil {
+		return s, refusal
+	}
+	s.Bootstrap = s.Intake.Offset == "latest" && (before.Batch == nil || before.Batch.Source == nil)
+	s.Source, refusal = s.Source.Resume(before, s.Hash, s.Intake)
+	return s, refusal
+}
+
+func (s StreamStart) Unchanged(source Source, connection Connection, hash string) bool {
+	return hash == s.Hash && source.DefinitionVersion == s.Source.DefinitionVersion && source.Published == s.Source.Published && connection.DefinitionVersion == s.Connection.DefinitionVersion && connection.Published == s.Connection.Published
+}
+
 type StreamConsumption struct {
 	Read    func(source Source, columns []string) ([]map[string]any, string, *kernel.Error)
 	Tick    func() (platform.FlowBatch, bool, *kernel.Error)
 	Consume func(batch platform.FlowBatch) (platform.FlowBatchOutcome, *kernel.Error)
 }
 
-func (c StreamConsumption) Run(before platform.FlowInstance, source Source, connection Connection, hash string, intake *platform.StreamIntake, budget int, latestBootstrap bool) (platform.FlowBatchOutcome, *kernel.Error) {
-	rows, cursor, refusal := c.Read(source, StreamColumns(source, intake))
+func (c StreamConsumption) Run(before platform.FlowInstance, start StreamStart) (platform.FlowBatchOutcome, *kernel.Error) {
+	source := start.Source
+	rows, cursor, refusal := c.Read(source, StreamColumns(source, start.Intake))
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
 	source.Cursor = cursor
-	rows, refusal = TrimStreamRows(source, rows, budget)
+	rows, refusal = TrimStreamRows(source, rows, start.Budget)
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
-	if len(rows) == 0 && !latestBootstrap {
+	if len(rows) == 0 && !start.Bootstrap {
 		tick, due, tickErr := c.Tick()
 		if tickErr != nil {
 			return platform.FlowBatchOutcome{}, tickErr
@@ -222,7 +250,7 @@ func (c StreamConsumption) Run(before platform.FlowInstance, source Source, conn
 		}
 		return platform.FlowBatchOutcome{}, nil
 	}
-	batch, refusal := StreamBatch(before, source, connection, hash, intake, rows)
+	batch, refusal := StreamBatch(before, source, start.Connection, start.Hash, start.Intake, rows)
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}

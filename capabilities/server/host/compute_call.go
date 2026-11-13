@@ -3,10 +3,8 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
@@ -20,47 +18,21 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	}
 	q.Sources = slices.Clone(q.Sources)
 	var prepared *preparedOperationInput
-	type setup struct {
-		member    platform.Member
-		operation platform.Operation
-		version   int
-		id        string
-		seal      bool
-	}
-	initial, refusal := recordRead(t, context.Background(), func(t *Tenant) (setup, *kernel.Error) {
-		current, seated := t.Member(member.ID)
-		app := t.App(q.App)
-		var op platform.Operation
-		var version int
-		var declared bool
-		if app != nil {
-			op, version, declared = compute.OperationDefinition(app, q.Name, q.Version)
-		}
-		callID := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, q.App, q.Key, acceptedformat.OperationEndpoint)
-		if x, ok := t.outbound.Get(callID); ok {
-			if prior, priorVersion, sealed := compute.PriorSealedDefinition(x.Body); sealed {
-				op, version, declared = prior, priorVersion, true
-			}
-		}
-		seal := declared && op.Limits.DataInputBytes > 0
-		if seal {
-			if !seated || member.Tenant != t.ID || t.quarantined() {
-				return setup{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot prepare the operation input")
-			}
-			c := platform.NewCaller(runtime{t: t, scoped: true}, current, q.App, false, false)
-			if refusal := authorizationRefusal(t.authorizeCapability(c, q.App, op.Name, op.Roles, op.Check() == nil, authorizationDetails{At: now, Sources: q.Sources})); refusal != nil {
-				return setup{}, refusal
-			}
-			var frozen platform.Operation
-			_ = json.Unmarshal(platform.Raw(op), &frozen)
-			op = frozen
-		}
-		return setup{current, op, version, callID, seal}, nil
+	initial, refusal := recordRead(t, context.Background(), func(t *Tenant) (compute.CallPlan, *kernel.Error) {
+		return compute.CallSetup{Tenant: t.ID, Member: t.Member, App: t.App, Quarantined: t.quarantined,
+			Prior: func(callID string) (string, bool) {
+				x, ok := t.outbound.Get(callID)
+				return x.Body, ok
+			},
+			Authorize: func(current platform.Member, op platform.Operation) *kernel.Error {
+				c := platform.NewCaller(runtime{t: t, scoped: true}, current, q.App, false, false)
+				return authorizationRefusal(t.authorizeCapability(c, q.App, op.Name, op.Roles, op.Check() == nil, authorizationDetails{At: now, Sources: q.Sources}))
+			}}.Prepare(member, q)
 	})
 	if refusal != nil {
 		return platform.OperationCall{}, refusal
 	}
-	current, op, version, id, seal := initial.member, initial.operation, initial.version, initial.id, initial.seal
+	current, op, version, id, seal := initial.Member, initial.Operation, initial.Version, initial.ID, initial.Seal
 	if seal {
 		sealed, ref, requestHash, refusal := t.staged.SealCallInput(id, current.ID, q, op, version)
 		if refusal != nil {

@@ -100,11 +100,15 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/lifecycle", Summary: "Open, suspend, resume or decommission a tenant, with a reason recorded in its audit (host administrators)", Body: controlowner.LifecycleRequest{}, Answer: controlowner.HostTenantView{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
 			var body controlowner.LifecycleRequest
-			if !decodeOr400(w, r, &body) {
+			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil {
+				transport.AnswerOr(w, http.StatusBadRequest, nil, err)
 				return
 			}
-			err := t.setHostLifecycle(body.Action, body.Reason, subject, h.Now(), hostRequestAuthorization(r, t.ID)...)
-			answer(w, http.StatusOK, http.StatusConflict, err, func() any { return h.tenantView(t) })
+			if err := t.setHostLifecycle(body.Action, body.Reason, subject, h.Now(), hostRequestAuthorization(r, t.ID)...); err != nil {
+				transport.AnswerOr(w, http.StatusConflict, nil, err)
+				return
+			}
+			WriteJSON(w, http.StatusOK, h.tenantView(t))
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/artifacts", Summary: "The tenant's trusted releases and saved candidates with their compatibility (host administrators)", Answer: []controlowner.HostArtifactView{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
@@ -112,16 +116,17 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/support", Summary: "Support sessions opened for a tenant (host administrators)", Answer: []platform.SupportGrant{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
-			WriteJSON(w, http.StatusOK, t.supportGrants())
+			WriteJSON(w, http.StatusOK, t.console.SupportGrants())
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/support", Summary: "Open an authorized support session for a tenant member, with a reason and an end (host administrators)", Answer: platform.SupportGrant{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
 			var body controlowner.SupportOpenRequest
-			if !decodeOr400(w, r, &body) {
+			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil {
+				transport.AnswerOr(w, http.StatusBadRequest, nil, err)
 				return
 			}
 			grant, err := t.openSupport(body, subject, h.Now(), hostRequestAuthorization(r, t.ID)...)
-			answer(w, http.StatusOK, http.StatusConflict, err, func() any { return grant })
+			transport.AnswerOr(w, http.StatusConflict, grant, err)
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/support/{grant}", Summary: "Use an authorized support session: read the tenant's health and audit as its granted member; every use is recorded (host administrators)", Answer: SupportRead{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, _ *Tenant) {
@@ -131,7 +136,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 				if err == controlowner.ErrUnknownGrant {
 					continue
 				}
-				answer(w, http.StatusOK, http.StatusConflict, err, func() any { return read })
+				transport.AnswerOr(w, http.StatusConflict, read, err)
 				return
 			}
 			w.WriteHeader(http.StatusNotFound)
@@ -165,7 +170,7 @@ func (h *Host) tenantView(t *Tenant) controlowner.HostTenantView {
 	if fault := t.Fault.Load(); fault != nil {
 		view.Quarantined, view.Fault = true, fault.Reason
 	}
-	view.Support = controlowner.ActiveSupport(t.supportGrants(), now)
+	view.Support = controlowner.ActiveSupport(t.console.SupportGrants(), now)
 	return view
 }
 
@@ -173,7 +178,7 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/promotions", Summary: "Promote a sealed release candidate from another tenant into this one, optionally activating it (host administrators)", Answer: releaseowner.PromotionResult{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, to *Tenant) {
 			var body releaseowner.PromotionRequest
-			if err := decodeBody(r, &body); err != nil || !body.Complete() {
+			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil || !body.Complete() {
 				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "from, candidate, key and targetGrant are required"})
 				return
 			}
@@ -184,16 +189,16 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 			}
 			member, err := to.grantMember(body.TargetGrant, "the support session names no member", h.Now())
 			if err != nil {
-				answer(w, 0, http.StatusForbidden, err, nil)
+				transport.AnswerOr(w, http.StatusForbidden, nil, err)
 				return
 			}
 			result, err := PromoteCandidate(from, to, body.Candidate, body.Key, body.Activate, member, h.Now())
-			answer(w, http.StatusOK, http.StatusConflict, err, func() any { return result })
+			transport.AnswerOr(w, http.StatusConflict, result, err)
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/migrations", Summary: "Migrate real records from another tenant into this one through its generated actions (host administrators)", Answer: platform.MigrationResult{}},
 		func(w http.ResponseWriter, r *http.Request, _ string, to *Tenant) {
 			var body controlowner.MigrationRequest
-			if err := decodeBody(r, &body); err != nil || !body.Complete() {
+			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil || !body.Complete() {
 				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "from, types, sourceGrant and targetGrant are required"})
 				return
 			}
@@ -204,40 +209,24 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 			}
 			source, err := from.grantMember(body.SourceGrant, "the source support session names no member", h.Now())
 			if err != nil {
-				answer(w, 0, http.StatusForbidden, err, nil)
+				transport.AnswerOr(w, http.StatusForbidden, nil, err)
 				return
 			}
 			target, err := to.grantMember(body.TargetGrant, "the target support session names no member", h.Now())
 			if err != nil {
-				answer(w, 0, http.StatusForbidden, err, nil)
+				transport.AnswerOr(w, http.StatusForbidden, nil, err)
 				return
 			}
 			result, err := MigrateRecords(from, to, source, target, body.Types, h.Now())
 			if err == nil {
 				err = to.rememberMigration(result, target.ID, h.Now(), hostRequestAuthorization(r, to.ID)...)
 			}
-			answer(w, http.StatusOK, http.StatusConflict, err, func() any { return result })
+			transport.AnswerOr(w, http.StatusConflict, result, err)
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/migrations", Summary: "What the host console moved in or out of this tenant (host administrators)", Answer: []platform.MigrationManifest{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
 			WriteJSON(w, http.StatusOK, t.console.Migrations())
 		})
-}
-
-func answer(w http.ResponseWriter, ok, failure int, err error, v func() any) {
-	if err != nil {
-		WriteJSON(w, failure, map[string]any{"error": err.Error()})
-		return
-	}
-	WriteJSON(w, ok, v())
-}
-
-func decodeOr400(w http.ResponseWriter, r *http.Request, into any) bool {
-	if err := decodeBody(r, into); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-		return false
-	}
-	return true
 }
 
 func (h *Host) tenantByID(id string) *Tenant {
@@ -247,14 +236,6 @@ func (h *Host) tenantByID(id string) *Tenant {
 		}
 	}
 	return nil
-}
-
-func decodeBody(r *http.Request, into any) error {
-	return decodeBodyLimit(r, into, 1<<20)
-}
-
-func decodeBodyLimit(r *http.Request, into any, limit int64) error {
-	return transport.DecodeBodyLimit(r, into, limit)
 }
 
 func (t *Tenant) hostArtifacts() []controlowner.HostArtifactView {
@@ -302,10 +283,6 @@ func (t *Tenant) openSupport(request controlowner.SupportOpenRequest, subject st
 		}
 		return controlowner.OpenSupportGrant(image, id, t.ID, request.Member, request.Reason, subject, request.Minutes, now), nil
 	}, evidence...)
-}
-
-func (t *Tenant) supportGrants() []platform.SupportGrant {
-	return t.console.SupportGrants()
 }
 
 func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) (SupportRead, error) {

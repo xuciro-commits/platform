@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
@@ -240,4 +242,68 @@ func Inspect(ctx context.Context, tenant string, request platform.PackageInspect
 	}
 	return platform.PackagePreview{Descriptor: descriptor, Digest: digest, Origin: origin, Precheck: precheck}, nil
 
+}
+
+type PreparationOwner interface {
+	PreparationBlueprint(id, version string) (platform.PackageBlueprint, *platform.InstalledPackage, error)
+	PackagePrerequisites(id, version string) ([]platform.ReleaseAsset, error)
+}
+
+type PreparationHooks struct {
+	Authorize func() *kernel.Error
+	Source    func() (PreparationOwner, bool)
+	Drafts    func() (build.ConstructionDrafts, bool)
+	Records   func(typ string, q platform.Query) (int, []any, *kernel.Error)
+	App       func(string) platform.App
+	Model     func(string, string, platform.ModelOptions) (string, string)
+}
+
+func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (PackagePreparation, *kernel.Error) {
+	fail := func(err error) (PackagePreparation, *kernel.Error) {
+		return PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+	}
+	if refusal := hooks.Authorize(); refusal != nil {
+		return PackagePreparation{}, refusal
+	}
+	source, ok := hooks.Source()
+	if !ok {
+		return fail(fmt.Errorf("package owner is unavailable"))
+	}
+	blueprint, installed, err := source.PreparationBlueprint(id, version)
+	if err != nil {
+		return fail(err)
+	}
+	owner, ok := hooks.Drafts()
+	if !ok {
+		return fail(fmt.Errorf("Build is unavailable"))
+	}
+	code, err := source.PackagePrerequisites(id, version)
+	if err != nil {
+		return fail(err)
+	}
+	candidate, err := BlueprintCandidate(blueprint, owner, code)
+	if err != nil {
+		return fail(err)
+	}
+	find := func(typ, name string) (DraftState, error) {
+		total, found, refusal := hooks.Records(typ, platform.Query{Domain: platform.Raw([]any{[]any{"name", "=", name}}), Limit: 2})
+		if refusal != nil {
+			return DraftState{}, refusal
+		}
+		if total > 1 {
+			return DraftState{}, fmt.Errorf("draft %s/%s is ambiguous", typ, name)
+		}
+		var state DraftState
+		if len(found) > 0 {
+			if err := json.Unmarshal(platform.Raw(found[0]), &state); err != nil {
+				return state, err
+			}
+		}
+		return state, nil
+	}
+	answer, err := Preparation(id, version, blueprint, installed, candidate, m, PreparationSource{Find: find, App: hooks.App, Model: hooks.Model})
+	if err != nil {
+		return fail(err)
+	}
+	return answer, nil
 }

@@ -66,23 +66,24 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 			return authorizationRefusal(t.authorizeCapability(applicant, owner, op.Name, op.Roles, op.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition}))
 		},
 		Closure: func(owner string, op platform.Operation, version int, release *string) (string, string, error) {
-			closure, bound, err := t.operationClosure(owner, op, version, release)
+			closure, bound, err := t.closures().Operation(owner, op, version, release)
 			return closure.ID, bound, err
 		},
 		InputKey: func(input platform.OperationInputArtifact) error { _, err := t.staged.InputKey(input); return err },
 		Exists:   func(id string) bool { _, ok := t.outbound.Get(id); return ok },
-		Retained: func(module string) bool { return t.files().Exists(context.Background(), artifactKey(t.ID, module)) },
+		Retained: func(module string) bool { return t.artifacts().Exists(context.Background(), module) },
 		Bind: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 			return t.bindApplications(ref, release, dependencies)
 		}}.Plan(c, r, q, pending, input)
 }
+func (t *Tenant) operationEffect(id string) (platform.Effect, bool) {
+	queued, ok := t.outbound.Get(id)
+	return queued.Effect, ok
+}
 func (t *Tenant) operationResult(c platform.Caller, id string) (platform.OperationResult, *kernel.Error) {
-	if found, ok := t.outbound.Get(id); ok && found.Endpoint == acceptedformat.OperationEndpoint {
-		return compute.ReadableBy(t.ID, c, found.Effect, t.Member, func(member platform.Member, app string, b compute.OperationBinding) *kernel.Error {
-			return authorizationRefusal(t.operationAuthorization(member, app, b, time.Now().UTC()))
-		})
-	}
-	return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation call was not found")
+	return compute.ReadableBy(t.ID, c, id, t.operationEffect, t.Member, func(member platform.Member, app string, b compute.OperationBinding) *kernel.Error {
+		return authorizationRefusal(t.operationAuthorization(member, app, b, time.Now().UTC()))
+	})
 }
 func (r runtime) OperationResult(c platform.Caller, id string) (platform.OperationResult, *kernel.Error) {
 	return r.t.operationResult(c, id)
@@ -107,10 +108,7 @@ func (t *Tenant) operationAllowed(x platform.Effect, at time.Time) bool {
 }
 
 func (t *Tenant) operationAuthorization(member platform.Member, owner string, binding compute.OperationBinding, at time.Time) platform.AuthzDecision {
-	permission, allowed, declared := binding.Definition.Name, binding.Definition.Roles, binding.Definition.Check() == nil
-	if binding.Build != nil {
-		permission, allowed, declared = "build.code.compile", []string{"builder"}, binding.Build.Input.Check() == nil && binding.Build.Output.Check() == nil
-	}
+	permission, allowed, declared := binding.Permission()
 	c := platform.NewCaller(runtime{t: t, scoped: true}, member, owner, false, false)
 	return t.authorizeCapability(c, owner, permission, allowed, declared, authorizationDetails{At: at, Sources: binding.Call.Sources, Definition: binding.Call.Definition})
 }
@@ -129,29 +127,8 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 	return call, nil
 }
 
-func artifactKey(tenant, digest string) string { return tenant + "/artifacts/wasm/" + digest }
-func (t *Tenant) readArtifact(ctx context.Context, digest string) ([]byte, error) {
-	r, n, err := t.files().Get(ctx, artifactKey(t.ID, digest))
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	return compute.ReadArtifact(r, n, digest)
-}
-
-func (t *Tenant) buildCode(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error) {
-	return compute.BuildCode(ctx, q, func(ctx context.Context, digest string, module []byte) error {
-		return t.files().Put(ctx, artifactKey(t.ID, digest), module, "application/wasm")
-	})
-}
-
-func (t *Tenant) artifactStored(ctx context.Context, digest string) bool {
-	r, n, err := t.files().Get(ctx, artifactKey(t.ID, digest))
-	if err != nil {
-		return false
-	}
-	r.Close()
-	return n > 0 && n <= 16<<20
+func (t *Tenant) artifacts() compute.Artifacts {
+	return compute.Artifacts{Tenant: t.ID, Files: t.files()}
 }
 
 func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Outcome {
@@ -163,7 +140,48 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	defer cancel()
 	t.cancels.Add(x.ID, cancel)
 	defer t.cancels.Remove(x.ID)
-	return compute.Execute(ctx, operationExecution{t}, t.ID, x, b, now)
+	return compute.Execute(ctx, compute.ExecutionHost{
+		Authorised: func(ctx context.Context, x platform.Effect, b compute.OperationBinding, now time.Time) (platform.Member, *kernel.Error) {
+			return recordRead(t, ctx, func(t *Tenant) (platform.Member, *kernel.Error) {
+				member, ok := t.Member(b.Member)
+				if !ok || member.Tenant != t.ID {
+					return member, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation member is no longer authorised")
+				}
+				if !t.operationCurrent(x.ID, x.Generation) {
+					return member, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation was cancelled")
+				}
+				return member, authorizationRefusal(t.operationAuthorization(member, x.App, b, now))
+			})
+		},
+		StillAuthorised: func(ctx context.Context, x platform.Effect, b compute.OperationBinding, now time.Time) (bool, *kernel.Error) {
+			return recordRead(t, ctx, func(t *Tenant) (bool, *kernel.Error) {
+				latest, ok := t.Member(b.Member)
+				return ok && t.operationAuthorization(latest, x.App, b, now).Allow && t.operationCurrent(x.ID, x.Generation), nil
+			})
+		},
+		RulesRevoked: func(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *kernel.Error) {
+			return recordRead(t, ctx, func(t *Tenant) (string, *kernel.Error) {
+				return compute.RulesRevoked(member, rules, func(ref platform.AssetRef, version int) (platform.NamedQuery, bool) {
+					query, _, ok := t.memberQueryVersion(member, ref, version)
+					return query, ok
+				}, t.Entity, t.services.Authorization), nil
+			})
+		},
+		BuildCode: func(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error) {
+			return t.artifacts().Build(ctx, q)
+		},
+		ReadInput: func(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error) {
+			return t.staged.ReadInput(ctx, ref)
+		},
+		StageOutput: func(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error) {
+			return t.staged.Output(op, call, output)
+		},
+		App: t.App,
+		ReadArtifact: func(ctx context.Context, digest string) ([]byte, error) {
+			return t.artifacts().Read(ctx, digest)
+		},
+		Rules: func() platform.RuleEngine { return t.services.Rules },
+	}, t.ID, x, b, now)
 }
 
 func (t *Tenant) queuedOperations() int {

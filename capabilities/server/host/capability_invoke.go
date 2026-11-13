@@ -6,7 +6,6 @@ import (
 	"platformserver/services/apps/pages"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -45,16 +44,7 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q plat
 		if err != nil {
 			return answer, err
 		}
-		if record != nil {
-			answer.Result, _ = protojson.Marshal(record)
-			answer.State = "completed"
-			if record.GetSubmission().GetTarget().GetType() == "work.approval" && record.GetSubmission().GetSchema().GetName() == "work.approval.request" {
-				answer.State = "pending"
-			}
-		} else {
-			answer.State = "pending"
-		}
-		return answer, nil
+		return functions.ActionAnswer(answer, record), nil
 	case "compute":
 		inputs, sources := prepared.Inputs, prepared.Sources
 		call, err := t.InvokeOperation(m, platform.OperationRequest{App: q.Ref.App, Name: q.Ref.Name, Version: q.Version, Key: q.Key, Inputs: inputs, Sources: sources}, now)

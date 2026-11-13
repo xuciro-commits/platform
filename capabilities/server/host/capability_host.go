@@ -1,12 +1,10 @@
 package host
 
 import (
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/functions/authoring"
-	"platformserver/services/functions/runtime"
 )
 
 func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor {
@@ -14,78 +12,27 @@ func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor
 		return []platform.CapabilityDescriptor{}
 	}
 	m = t.authorizationMember(m)
-	definitions := t.Definitions(m)
-	visible := make([]platform.Definition, 0, len(definitions))
-	for _, definition := range definitions {
-		if len(definition.Provides) == 0 {
-			continue
-		}
-		permission, roles := authoring.CapabilityPermission(definition)
-		if permission != "" {
-			caller := platform.NewCaller(runtime{t: t}, m, definition.Ref.App, false, false)
-			if !t.authorizeCapability(caller, definition.Ref.App, permission, roles, true, authorizationDetails{}).Allow {
-				continue
-			}
-		}
-		visible = append(visible, definition)
-	}
-	return authoring.CapabilityPalette(visible, m.Holds("build", "builder"))
+	return authoring.VisibleCapabilities(t.Definitions(m), m.Holds("build", "builder"), func(d platform.Definition, permission string, roles []string) bool {
+		return t.authorizeCapability(platform.NewCaller(runtime{t: t}, m, d.Ref.App, false, false), d.Ref.App, permission, roles, true, authorizationDetails{}).Allow
+	})
 }
 
 func (t *Tenant) describeCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, *kernel.Error) {
 	if refusal := t.Admits(m); refusal != nil {
 		return platform.CapabilityDescriptor{}, refusal
 	}
-	if version > 0 {
-		if descriptor, ok := t.retainedCapability(m, ref, version); ok {
-			return descriptor, nil
-		}
-		return platform.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Retained capability is unavailable to this member")
-	}
-	for _, descriptor := range t.capabilities(m) {
-		if descriptor.Ref == ref {
-			return descriptor, nil
-		}
-	}
-	return platform.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Capability or retained version is unavailable to this member")
+	return authoring.DescribeCapability(ref, version, func() (platform.CapabilityDescriptor, bool) { return t.retainedCapability(m, ref, version) }, func() []platform.CapabilityDescriptor { return t.capabilities(m) })
 }
 
 func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, bool) {
 	m = t.authorizationMember(m)
-	app := t.App(ref.App)
-	if app == nil || version < 1 {
-		return platform.CapabilityDescriptor{}, false
-	}
-	selected := authoring.CapabilityVersion{Ref: ref, AppVersion: app.Manifest().Version, Revision: version}
-	switch ref.Kind {
-	case platform.AssetQuery:
-		query, source, ok := t.memberQueryVersion(m, ref, version)
-		if !ok {
-			return platform.CapabilityDescriptor{}, false
-		}
-		selected.Query, selected.QueryVersion = &query, source
-		selected.Entity = authoring.QueryEntity(t.Entities(m), query.Object)
-	case platform.AssetCompute:
-		operation, ordinal, ok := compute.OperationDefinition(app, ref.Name, version)
-		caller := platform.NewCaller(runtime{t: t}, m, ref.App, false, false)
-		if !ok || ordinal != version || !t.authorizeCapability(caller, ref.App, operation.Name, operation.Roles, true, authorizationDetails{}).Allow {
-			return platform.CapabilityDescriptor{}, false
-		}
-		selected.Operation = &operation
-	case platform.AssetFunction:
-		function, ordinal, ok := agentowner.FunctionDefinition(app, ref.Name, version)
-		caller := platform.NewCaller(runtime{t: t}, m, ref.App, false, false)
-		if !ok || ordinal != version || !t.authorizeCapability(caller, ref.App, function.Name, function.Roles, true, authorizationDetails{}).Allow {
-			return platform.CapabilityDescriptor{}, false
-		}
-		if !authoring.FunctionReadable(function, t.Entities(m)) {
-			return platform.CapabilityDescriptor{}, false
-		}
-		selected.Function = &function
-	default:
-		return platform.CapabilityDescriptor{}, false
-	}
-	return authoring.DescribeRetainedCapability(selected)
+	return authoring.RetainedCapability(t.App(ref.App), ref, version, authoring.RetainedHooks{
+		Query:    func() (platform.NamedQuery, string, bool) { return t.memberQueryVersion(m, ref, version) },
+		Entities: func() []platform.EntityInfo { return t.Entities(m) },
+		Function: agentowner.FunctionDefinition,
+		Allowed: func(name string, roles []string) bool {
+			return t.authorizeCapability(platform.NewCaller(runtime{t: t}, m, ref.App, false, false), ref.App, name, roles, true, authorizationDetails{}).Allow
+		}})
 }
 
 func (t *Tenant) memberQueryVersion(m platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, string, bool) {

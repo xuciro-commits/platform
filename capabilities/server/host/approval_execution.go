@@ -60,12 +60,9 @@ func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.Rel
 	if err != nil {
 		return platform.ReleaseCandidate{}, conflictRefusal(err)
 	}
-	root := platform.AssetRef{App: app, Kind: platform.AssetAction, Name: action}
-	if !slices.ContainsFunc(sealed.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }) {
-		root = platform.AssetRef{App: app, Kind: platform.AssetObject, Name: typ}
-		if !slices.ContainsFunc(sealed.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }) {
-			return platform.ReleaseCandidate{}, nil
-		}
+	root, found := releaseowner.ApprovalRoot(sealed.Assets, app, action, typ)
+	if !found {
+		return platform.ReleaseCandidate{}, nil
 	}
 	closed, err := sealed.Closure([]platform.AssetRef{root})
 	return closed, conflictRefusal(err)
@@ -79,11 +76,8 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 	if err != nil {
 		return nil, conflictRefusal(err)
 	}
-	root := platform.AssetRef{App: a.App, Kind: platform.AssetAction, Name: a.Action}
 	typ, _, _ := strings.Cut(a.Target, "/")
-	if !slices.ContainsFunc(sealed.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }) {
-		root = platform.AssetRef{App: a.App, Kind: platform.AssetObject, Name: typ}
-	}
+	root, _ := releaseowner.ApprovalRoot(sealed.Assets, a.App, a.Action, typ)
 	closed, err := sealed.Closure([]platform.AssetRef{root})
 	if err != nil {
 		return nil, conflictRefusal(err)

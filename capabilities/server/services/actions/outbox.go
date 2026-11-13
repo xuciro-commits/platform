@@ -2,6 +2,7 @@ package actions
 
 import (
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 )
 
 const effectsKept = 1000
+
+const bodyKept = 30 * 24 * time.Hour
 
 type Queued struct {
 	platform.Effect
@@ -117,4 +120,29 @@ func (o *Outbox) Claim(endpoint string, now time.Time) (Queued, bool) {
 	}
 	o.all[i].Sending = true
 	return *o.all[i], true
+}
+
+func ConnectionEndpoints(queued []Queued, prefix string) []Endpoint {
+	var out []Endpoint
+	for _, x := range queued {
+		if !strings.HasPrefix(x.Endpoint, prefix) || platform.EffectSettled(x.State) {
+			continue
+		}
+		if !slices.ContainsFunc(out, func(ep Endpoint) bool { return ep.ID == x.Endpoint }) {
+			out = append(out, Endpoint{ID: x.Endpoint, Kind: "connection"})
+		}
+	}
+	return out
+}
+
+func RedactedEffects(queued []Queued, now time.Time) []platform.Effect {
+	out := []platform.Effect{}
+	for i := len(queued) - 1; i >= 0; i-- {
+		x := queued[i].Effect
+		if now.Sub(x.At) > bodyKept && x.State != "unknown" {
+			x.Body = ""
+		}
+		out = append(out, x)
+	}
+	return out
 }

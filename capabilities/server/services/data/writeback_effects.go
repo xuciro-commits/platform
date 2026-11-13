@@ -3,6 +3,9 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -80,4 +83,49 @@ func (o *Owner) WritebackEffects(tenant string, c platform.Caller, e platform.Ev
 			State: "pending", Due: at, Body: string(body)})
 	}
 	return planned, nil
+}
+
+type IntegrationEffect struct {
+	ID       string    `json:"id"`
+	Endpoint string    `json:"endpoint"`
+	Event    string    `json:"event"`
+	State    string    `json:"state"`
+	Due      time.Time `json:"due"`
+	Last     time.Time `json:"last,omitzero"`
+	Error    string    `json:"error,omitempty"`
+}
+
+func IntegrationEffects(effects []platform.Effect) []IntegrationEffect {
+	out := []IntegrationEffect{}
+	for _, effect := range effects {
+		if effect.App != App || !strings.HasPrefix(effect.Endpoint, WritebackEndpoint) ||
+			!strings.HasPrefix(effect.Event, "writeback/") && !slices.Contains([]string{App + "/confirmation", App + "/dispatch", App + "/transaction"}, effect.Event) {
+			continue
+		}
+		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
+		if effect.Error != "" {
+			item.Error = "The last delivery attempt failed"
+			if effect.PublicMessage != "" {
+				item.Error = effect.PublicMessage
+			}
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func TxnWritebackEffect(c platform.Caller, receipt *pb.ChangeRecord, step string, target platform.TxnRef, raw json.RawMessage, at time.Time, private bool, credential func(WritebackRequest) *kernel.Error) (platform.Effect, *kernel.Error) {
+	if !private || !c.Staging() || c.App != App || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
+		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects require their original private owner")
+	}
+	var request WritebackRequest
+	if json.Unmarshal(raw, &request) != nil || request.Version != 1 || request.Connection == "" || request.Writeback == "" || request.Dispatch != "" || request.Confirmation != "" || target.Type == "" || target.ID == "" {
+		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction delivery has no frozen writeback request")
+	}
+	if refusal := credential(request); refusal != nil {
+		return platform.Effect{}, refusal
+	}
+	key := receipt.GetChangeId() + ":" + step
+	endpoint := WritebackEndpoint + request.Connection
+	return platform.Effect{ID: fmt.Sprintf("%s:%s:transaction:%s:%s", c.Tenant, c.App, key, endpoint), App: c.App, Endpoint: endpoint, Event: c.App + "/transaction", Key: key, Target: target.Type + "/" + target.ID, At: at, Due: at, State: "pending", Body: string(raw)}, nil
 }

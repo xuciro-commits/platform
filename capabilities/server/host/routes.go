@@ -32,13 +32,13 @@ func (rt *routes) handle(route transport.Route, f func(w http.ResponseWriter, r 
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		correlation := newRequestCorrelation(r)
-		r = withRequestCorrelation(r, correlation)
-		tracked := &statusWriter{ResponseWriter: w}
+		correlation := transport.NewRequestCorrelation(r)
+		r = transport.WithRequestCorrelation(r, correlation)
+		tracked := &transport.StatusWriter{ResponseWriter: w}
 		w = tracked
 		w.Header().Set("X-Request-Id", correlation.RequestID)
 		defer func() {
-			h.observeRequest(t, m, correlation, route.Pattern, tracked.statusCode(), time.Since(started))
+			h.observeRequest(t, m, correlation, route.Pattern, tracked.StatusCode(), time.Since(started))
 		}()
 		if t.quarantined() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health" && r.Pattern != "GET /v1/applications/{app}/{name}/runtime") &&
 			(r.Method != http.MethodPost || r.URL.Path != "/v1/recovery/retry") {

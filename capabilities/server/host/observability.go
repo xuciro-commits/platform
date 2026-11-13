@@ -1,7 +1,6 @@
 package host
 
 import (
-	"context"
 	"log"
 	mathrand "math/rand/v2"
 	"net/http"
@@ -16,14 +15,6 @@ import (
 	controlowner "platformserver/services/security/control"
 )
 
-type requestCorrelation struct {
-	RequestID string
-	TraceID   string
-	SpanID    string
-}
-
-type requestCorrelationKey struct{}
-
 func (t *Tenant) bindAuditStore() {
 	t.audit.SetSink(func(entry platform.AuditEntry) {
 		if err := t.Log().SaveAuditEntries(t.ID, []platform.AuditEntry{entry}); err != nil {
@@ -34,65 +25,6 @@ func (t *Tenant) bindAuditStore() {
 			log.Printf("personal read audit %s: %v", t.ID, err)
 		}
 	})
-}
-
-func newRequestCorrelation(r *http.Request) requestCorrelation {
-	correlation := requestCorrelation{RequestID: transport.RandomHex(16)}
-	if traceID, _ := transport.Traceparent(r.Header.Get("Traceparent")); traceID != "" {
-		correlation.TraceID, correlation.SpanID = traceID, transport.RandomHex(8)
-	} else {
-		correlation.TraceID, correlation.SpanID = transport.RandomHex(16), transport.RandomHex(8)
-	}
-	return correlation
-}
-
-func correlationOf(ctx context.Context) requestCorrelation {
-	correlation, _ := ctx.Value(requestCorrelationKey{}).(requestCorrelation)
-	return correlation
-}
-
-func withRequestCorrelation(r *http.Request, correlation requestCorrelation) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), requestCorrelationKey{}, correlation))
-}
-
-type statusWriter struct {
-	http.ResponseWriter
-	status int
-}
-
-func (w *statusWriter) WriteHeader(status int) {
-	if w.status != 0 {
-		return
-	}
-	w.status = status
-	w.ResponseWriter.WriteHeader(status)
-}
-
-func (w *statusWriter) Write(p []byte) (int, error) {
-	if w.status == 0 {
-		w.status = http.StatusOK
-	}
-	return w.ResponseWriter.Write(p)
-}
-
-func (w *statusWriter) Flush() {
-	if w.status == 0 {
-		w.status = http.StatusOK
-	}
-	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
-	}
-}
-
-func (w *statusWriter) Unwrap() http.ResponseWriter {
-	return w.ResponseWriter
-}
-
-func (w *statusWriter) statusCode() int {
-	if w.status == 0 {
-		return http.StatusOK
-	}
-	return w.status
 }
 
 func (t *Tenant) logging() controlowner.Logging {
@@ -139,7 +71,7 @@ func (t *Tenant) FlushObservations() {
 	}
 }
 
-func (h *Host) observeRequest(t *Tenant, m platform.Member, correlation requestCorrelation, route string, status int, duration time.Duration) {
+func (h *Host) observeRequest(t *Tenant, m platform.Member, correlation transport.RequestCorrelation, route string, status int, duration time.Duration) {
 	if status < http.StatusBadRequest && duration < time.Second && mathrand.IntN(100) >= t.logging().RequestPercent() {
 		return
 	}
@@ -147,7 +79,7 @@ func (h *Host) observeRequest(t *Tenant, m platform.Member, correlation requestC
 }
 
 func (t *Tenant) observeSubmission(r *http.Request, m platform.Member, sub *pb.Submission, record *pb.ChangeRecord, refusal *kernel.Error, at time.Time) {
-	correlation := correlationOf(r.Context())
+	correlation := transport.CorrelationOf(r.Context())
 	t.recordObservation(monitoring.SubmissionObservation(at, m.ID, correlation.RequestID, correlation.TraceID, correlation.SpanID, sub, record, refusal))
 }
 

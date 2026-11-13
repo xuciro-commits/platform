@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"slices"
+	"strings"
 
 	"platformserver/platform"
+	build "platformserver/services/resources/authoring"
 )
 
 func FreezeVersion(raw []byte, request platform.ProductVersionRequest, views func() []platform.PackageView) (platform.FrozenProductVersion, error) {
@@ -71,4 +73,18 @@ func productDescriptor(candidate platform.ReleaseCandidate, request platform.Pro
 		return platform.PackageDescriptor{}, err
 	}
 	return product, nil
+}
+
+func ProductVersionViews(rows []build.ProductVersion) []platform.ProductVersionView {
+	out := []platform.ProductVersionView{}
+	for _, version := range rows {
+		out = append(out, platform.ProductVersionView{Product: version.Product, Version: version.Version, Candidate: version.Candidate, Descriptor: version.Descriptor})
+	}
+	slices.SortFunc(out, func(a, b platform.ProductVersionView) int {
+		if a.Product != b.Product {
+			return strings.Compare(a.Product, b.Product)
+		}
+		return platform.ComparePackageVersions(a.Version, b.Version)
+	})
+	return out
 }

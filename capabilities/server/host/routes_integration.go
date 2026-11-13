@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
 	"slices"
 	"strconv"
@@ -137,7 +138,7 @@ func (h *Host) routesIntegration(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/integration-effects", Summary: "Build writeback delivery status for builders and integrators, excluding payloads", Answer: []IntegrationEffect{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "GET /v1/integration-effects", Summary: "Build writeback delivery status for builders and integrators, excluding payloads", Answer: []dataowner.IntegrationEffect{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, err := t.integrationEffects(m, h.Now())
 		if err != nil {
 			Reply(w, nil, err)

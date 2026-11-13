@@ -8,9 +8,6 @@ import (
 	"platformserver/platform"
 )
 
-type DecisionDefinition = platform.DecisionDefinition
-type definitionPlanCache = releaseowner.DefinitionPlanCache
-
 func (t *Tenant) decisionDefinition(app string, request *pb.Submission, release string, retained ...[]platform.ReleaseAsset) (*platform.DecisionDefinition, error) {
 	if len(retained) > 0 || t.readScope == nil || t.readScope.definitions == nil {
 		return t.buildDecisionDefinition(app, request, release, retained...)

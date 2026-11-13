@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"platformserver/services/resources/monitoring"
 	"slices"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -20,7 +21,7 @@ type preparedAccepted struct {
 }
 
 func (t *Tenant) countDecision(ctx context.Context, outcome string) {
-	meters.decisions.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
+	monitoring.Meters.Decisions.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
 }
 
 func (t *Tenant) matchesReadImage(image *tenantReadImage) bool {

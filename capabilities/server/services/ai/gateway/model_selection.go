@@ -81,3 +81,10 @@ func (r Resolver) Selection(m platform.Member, purpose string, apps []platform.A
 	}
 	return out, nil
 }
+
+func (s *ModelSelection) Localize(say func(string) string) {
+	s.DefaultProblem = say(s.DefaultProblem)
+	for i := range s.Models {
+		s.Models[i].Problem = say(s.Models[i].Problem)
+	}
+}

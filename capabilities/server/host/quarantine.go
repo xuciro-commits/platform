@@ -26,30 +26,24 @@ func (t *Tenant) quarantined() bool {
 	return t.Fault.Load() != nil
 }
 
-func (t *Tenant) recoverSnapshot(state []byte, seq int64) (err error) {
+func (t *Tenant) guarded(stage string, run func() error) (err error) {
 	defer func() {
 		if failure := recover(); failure != nil {
-			err = fmt.Errorf("restore snapshot %d panicked: %v", seq, failure)
+			err = fmt.Errorf("%s panicked: %v", stage, failure)
 			t.quarantine(err)
 		}
 	}()
-	if err := t.Restore(state); err != nil {
-		t.quarantine(fmt.Errorf("restore snapshot %d: %w", seq, err))
+	if err := run(); err != nil {
+		t.quarantine(fmt.Errorf("%s: %w", stage, err))
 		return err
 	}
 	return nil
 }
 
-func (t *Tenant) recoverEntries(entries []Entry) (err error) {
-	defer func() {
-		if failure := recover(); failure != nil {
-			err = fmt.Errorf("replay panicked: %v", failure)
-			t.quarantine(err)
-		}
-	}()
-	if err := t.Replay(entries); err != nil {
-		t.quarantine(fmt.Errorf("replay: %w", err))
-		return err
-	}
-	return nil
+func (t *Tenant) recoverSnapshot(state []byte, seq int64) error {
+	return t.guarded(fmt.Sprintf("restore snapshot %d", seq), func() error { return t.Restore(state) })
+}
+
+func (t *Tenant) recoverEntries(entries []Entry) error {
+	return t.guarded("replay", func() error { return t.Replay(entries) })
 }

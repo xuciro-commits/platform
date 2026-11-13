@@ -58,7 +58,7 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 	providers := h.RuntimeProviders
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/packages/inspect", Summary: "Inspect package contents during tenant maintenance without installing or granting access", Body: platform.PackageInspectRequest{}, Answer: platform.PackagePreview{}}, func(w http.ResponseWriter, r *http.Request, _ string, t *Tenant) {
 		var body platform.PackageInspectRequest
-		if err := decodeBodyLimit(r, &body, packages.MaxPackageImportBytes+4096); err != nil {
+		if err := transport.DecodeBodyLimit(r, &body, packages.MaxPackageImportBytes+4096); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
@@ -74,7 +74,7 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 	})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/composition", Summary: "Save a checked provider selection and stop business access until supported restart and recovery", Body: acceptedformat.CompositionRequest{}, Answer: HostComposition{}}, func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
 		var body acceptedformat.CompositionRequest
-		if err := decodeBody(r, &body); err != nil {
+		if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}

@@ -2,13 +2,11 @@ package host
 
 import (
 	"context"
-	"crypto/hmac"
-	dataowner "platformserver/services/data"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
 )
 
@@ -18,29 +16,7 @@ func (t *Tenant) listenerInput(ctx context.Context, m platform.Member, path, sec
 		if refusal != nil {
 			return "", refusal
 		}
-		owner := t.DataOwner()
-		var matches []dataowner.Listener
-		for _, live := range rows {
-			if !live.Enabled || live.State != "published" {
-				continue
-			}
-			listener, err := owner.ExecutionListener(live)
-			if err != nil {
-				return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-			}
-			if listener.Path == path {
-				matches = append(matches, listener)
-			}
-		}
-		if len(matches) != 1 {
-			return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-		}
-		listener := matches[0]
-		value, ok := t.CredentialValue(listener.Secret, "listener/"+listener.ID, origin)
-		if !ok || len(value) == 0 || secret == "" || !hmac.Equal(value, []byte(secret)) {
-			return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
-		}
-		return listener.Connector, nil
+		return t.DataOwner().AuthorizeListener(rows, path, secret, origin, t.CredentialValue)
 	})
 	if refusal != nil {
 		return nil, refusal

@@ -4,15 +4,14 @@ import records "platformserver/kernel/records"
 
 import (
 	"encoding/json"
-	"fmt"
 	dataowner "platformserver/services/data"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/services/actions"
 	"platformserver/services/resources/authoring"
 
 	"platformserver/platform"
@@ -53,25 +52,7 @@ func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *
 }
 
 func (h hostView) CheckTxnCall(call platform.TxnCall) error {
-	if call.Ref.Check() != nil || call.Ref.Kind != platform.AssetQuery || call.Version < 0 || !slices.Contains([]string{"", "snapshot", "current"}, call.View) {
-		return fmt.Errorf("Transaction calls need a synchronous pure query with snapshot or current reads")
-	}
-	owner := h.t.App(call.Ref.App)
-	if owner == nil {
-		return fmt.Errorf("Transaction query owner is unavailable")
-	}
-	for _, definition := range h.t.definitions {
-		if definition.Ref != call.Ref || definition.Query == nil {
-			continue
-		}
-		if call.Version == 0 && definition.Source == "code" {
-			return nil
-		}
-		if call.Version > 0 && definition.Source == "tenant" && definition.QueryVersion(owner.Manifest().Version+".query-"+strconv.Itoa(call.Version)) != nil {
-			return nil
-		}
-	}
-	return fmt.Errorf("Transaction query needs its declared retained version")
+	return actions.CheckTxnCall(call, h.t.definitions, h.t.App)
 }
 
 func (q *txnCalls) Call(call platform.TxnCall, inputs json.RawMessage, at time.Time) (json.RawMessage, *kernel.Error) {
@@ -87,23 +68,10 @@ func (q *txnCalls) Call(call platform.TxnCall, inputs json.RawMessage, at time.T
 }
 
 func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, step string, target platform.TxnRef, raw json.RawMessage, at time.Time) *kernel.Error {
-	if h.decision == nil || !c.Staging() || c.App != build.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects require their original private owner")
-	}
-	var request dataowner.WritebackRequest
-	if json.Unmarshal(raw, &request) != nil || request.Version != 1 || request.Connection == "" || request.Writeback == "" || request.Dispatch != "" || request.Confirmation != "" || target.Type == "" || target.ID == "" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction delivery has no frozen writeback request")
-	}
-	if refusal := h.t.checkWritebackCredential(request); refusal != nil {
+	effect, refusal := dataowner.TxnWritebackEffect(c, receipt, step, target, raw, at, h.decision != nil, h.t.checkWritebackCredential)
+	if refusal != nil {
 		return refusal
 	}
-	key := receipt.GetChangeId() + ":" + step
-	endpoint := dataowner.WritebackEndpoint + request.Connection
-	x := platform.Effect{ID: fmt.Sprintf("%s:%s:transaction:%s:%s", c.Tenant, c.App, key, endpoint), App: c.App, Endpoint: endpoint, Event: c.App + "/transaction", Key: key, Target: target.Type + "/" + target.ID, At: at, Due: at, State: "pending", Body: string(raw)}
-	return h.queueTxnIntent(c, receipt, x)
-}
-
-func (h hostView) queueTxnIntent(c platform.Caller, receipt *pb.ChangeRecord, effect platform.Effect) *kernel.Error {
 	typ := receipt.GetSubmission().GetTarget().GetType()
 	applications, err := h.t.bindApplications(platform.AssetRef{App: c.App, Kind: platform.AssetObject, Name: typ}, h.t.releases.Active(), "")
 	if err != nil {

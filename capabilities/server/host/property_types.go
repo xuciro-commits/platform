@@ -1,11 +1,33 @@
 package host
 
 import (
-	"fmt"
 	"platformserver/platform"
-	releaseowner "platformserver/services/devops/releases"
-	"strconv"
+	"platformserver/services/objects"
+	"platformserver/services/ontology"
 )
+
+func (h hostView) definitionInstall() ontology.DefinitionInstall {
+	return ontology.DefinitionInstall{
+		Manifest:    func() platform.Manifest { return h.app.Manifest() },
+		Definitions: func() []platform.Definition { return h.t.definitions },
+		Describe:    func(d platform.Definition) (platform.Definition, error) { return h.t.describer().DescribeDefinition(d) },
+		Store:       h.t.storeDefinition,
+		Entity:      h.t.Entity,
+		Types: func() []platform.EntityInfo {
+			var types []platform.EntityInfo
+			for _, et := range h.t.Projection.SortedTypes() {
+				types = append(types, et.Info())
+			}
+			return types
+		},
+		Bind: func(q platform.NamedQuery) (platform.NamedQuery, error) { return h.t.bindInterfaceQuery(q) },
+		Query: func(q platform.NamedQuery, info platform.EntityInfo) error {
+			return objects.CheckNamedQuery(q, info, h.t.services.Rules)
+		},
+		Link:      func(l platform.LinkType) error { return h.t.Projection.CheckLinkInstall(l) },
+		Constrain: func(l platform.LinkType) error { return h.t.Projection.InstallLinkConstraint(l) },
+	}
+}
 
 func (h hostView) ResolvePropertyType(binding platform.AssetBinding) (platform.PropertyType, bool) {
 	if binding.Ref.Kind != platform.AssetPropertyType || binding.SourceVersion == "" {
@@ -21,46 +43,17 @@ func (h hostView) ResolvePropertyType(binding platform.AssetBinding) (platform.P
 	}
 	return platform.PropertyType{}, false
 }
+
 func (h hostView) ValidateInstallPropertyType(p platform.PropertyType) error { return p.Check() }
+
 func (h hostView) InstallPropertyType(c platform.Caller, p platform.PropertyType, version int) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
 	}
-	if err := p.Check(); err != nil {
-		return err
-	}
-	if version < 1 || version > 64 {
-		return fmt.Errorf("property type needs a retained version")
-	}
-	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetPropertyType, Name: p.Name}
-	d := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".property-" + strconv.Itoa(version), ContractVersion: 1, PropertyType: &p, PropertyVersions: map[string]platform.PropertyType{}}
-	d, err := h.t.describer().DescribeDefinition(d)
-	if err != nil {
-		return err
-	}
-	i, versions, err := releaseowner.RetainVersion(h.t.definitions, ref, "property type is owned by code", "property version bytes cannot change", d.Version, p, func(old platform.Definition) (map[string]platform.PropertyType, *platform.PropertyType) {
-		return old.PropertyVersions, old.PropertyType
-	})
-	if err != nil {
-		return err
-	}
-	d.PropertyVersions = versions
-	h.t.storeDefinition(i, d)
-	return nil
+	return h.definitionInstall().PropertyType(p, version)
 }
 
 func (t *Tenant) checkObjectProperties(info platform.EntityInfo) error {
-	for _, f := range info.Fields {
-		if f.Property == nil {
-			continue
-		}
-		p, ok := (hostView{t: t}).ResolvePropertyType(*f.Property)
-		if !ok {
-			return fmt.Errorf("field %s has an unavailable property version", f.Name)
-		}
-		if err := p.CheckField(f); err != nil {
-			return err
-		}
-	}
-	return t.checkObjectValueTypes(info)
+	view := hostView{t: t}
+	return ontology.CheckObjectBindings(info, view.ResolvePropertyType, view.ResolveValueType)
 }

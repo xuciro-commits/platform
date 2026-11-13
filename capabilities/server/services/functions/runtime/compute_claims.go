@@ -107,7 +107,36 @@ func RestoreWork(works *kernel.Works, raw json.RawMessage) error {
 	return nil
 }
 
-func ReadArtifact(r io.Reader, n int64, digest string) ([]byte, error) {
+type Artifacts struct {
+	Tenant string
+	Files  platform.FileStore
+}
+
+func (a Artifacts) Key(digest string) string { return a.Tenant + "/artifacts/wasm/" + digest }
+
+func (a Artifacts) Exists(ctx context.Context, digest string) bool {
+	return a.Files.Exists(ctx, a.Key(digest))
+}
+
+func (a Artifacts) Put(ctx context.Context, digest string, module []byte) error {
+	return a.Files.Put(ctx, a.Key(digest), module, "application/wasm")
+}
+
+func (a Artifacts) Stored(ctx context.Context, digest string) bool {
+	r, n, err := a.Files.Get(ctx, a.Key(digest))
+	if err != nil {
+		return false
+	}
+	r.Close()
+	return n > 0 && n <= 16<<20
+}
+
+func (a Artifacts) Read(ctx context.Context, digest string) ([]byte, error) {
+	r, n, err := a.Files.Get(ctx, a.Key(digest))
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
 	if n <= 0 || n > 16<<20 {
 		return nil, fmt.Errorf("module exceeds its byte bound")
 	}
@@ -119,14 +148,14 @@ func ReadArtifact(r io.Reader, n int64, digest string) ([]byte, error) {
 	return raw, nil
 }
 
-func BuildCode(ctx context.Context, q platform.CodeBuildRequest, put func(ctx context.Context, digest string, module []byte) error) (platform.CodeBuildResult, error) {
+func (a Artifacts) Build(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error) {
 	result, module, err := EnvironmentCompiler().Compile(ctx, q)
 	if err == nil {
 		err = ValidateWasm(ctx, module, q.ABI)
 		if err == nil {
 			hash := sha256.Sum256(module)
 			result.Module = hex.EncodeToString(hash[:])
-			err = put(ctx, result.Module, module)
+			err = a.Put(ctx, result.Module, module)
 		}
 	}
 	if err != nil {
@@ -155,7 +184,11 @@ func PlanCompilation(tenant string, c platform.Caller, r *pb.ChangeRecord, key, 
 	return call, platform.Effect{ID: id, Endpoint: operationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
 }
 
-func ReadableBy(tenant string, c platform.Caller, x platform.Effect, member func(string) (platform.Member, bool), authorize func(platform.Member, string, OperationBinding) *kernel.Error) (platform.OperationResult, *kernel.Error) {
+func ReadableBy(tenant string, c platform.Caller, id string, lookup func(string) (platform.Effect, bool), member func(string) (platform.Member, bool), authorize func(platform.Member, string, OperationBinding) *kernel.Error) (platform.OperationResult, *kernel.Error) {
+	x, found := lookup(id)
+	if !found || x.Endpoint != operationEndpoint {
+		return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation call was not found")
+	}
 	var b OperationBinding
 	if json.Unmarshal([]byte(x.Body), &b) != nil {
 		return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation input is unavailable")
@@ -171,6 +204,30 @@ func ReadableBy(tenant string, c platform.Caller, x platform.Effect, member func
 		return platform.OperationResult{}, refusal
 	}
 	return ResultOf(x), nil
+}
+
+func CheckCancel(tenant string, c platform.Caller, r *pb.ChangeRecord, id string, lookup func(string) (platform.Effect, bool)) (bool, *kernel.Error) {
+	if r == nil || c.Tenant != tenant || r.GetSubmission().GetAuthority() != c.App {
+		return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Cancellation needs its accepted owner decision")
+	}
+	x, ok := lookup(id)
+	if !ok || x.Endpoint != operationEndpoint {
+		return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation call was not found")
+	}
+	if platform.EffectSettled(x.State) {
+		return false, nil
+	}
+	var b OperationBinding
+	_ = json.Unmarshal([]byte(x.Body), &b)
+	if c.Automation {
+		target := r.GetSubmission().GetTarget()
+		if c.App != "flow" || x.Target != target.GetType()+"/"+target.GetId() {
+			return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Flow can cancel only its own operation")
+		}
+	} else if c.ID != b.Member {
+		return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation belongs to another member")
+	}
+	return true, nil
 }
 
 func RulesRevoked(member platform.Member, rules platform.RuleTablePlan, query func(platform.AssetRef, int) (platform.NamedQuery, bool), entity func(string) (platform.EntityInfo, bool), authz platform.AuthorizationEngine) string {

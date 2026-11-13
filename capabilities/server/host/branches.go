@@ -69,7 +69,7 @@ func (t *Tenant) branchWorkspace() branches.Workspace {
 		Project: func(id string) (build.Application, bool) {
 			return records.LockedRow[build.Application](t.Projection, build.AppType, id)
 		},
-		Stored: func(module string) bool { return t.artifactStored(context.Background(), module) },
+		Stored: func(module string) bool { return t.artifacts().Stored(context.Background(), module) },
 	}
 }
 

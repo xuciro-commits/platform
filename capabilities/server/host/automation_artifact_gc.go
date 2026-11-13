@@ -27,39 +27,11 @@ func (t *Tenant) collectUnacceptedFlowArtifacts(ctx context.Context, now time.Ti
 	return t.flowArtifacts.Collect(ctx, t.frames(), now, t.quarantined, func() (map[string]bool, error) {
 		return readWithError(t, ctx, func(t *Tenant) (map[string]bool, error) {
 			return t.frames().References(func(visit func(json.RawMessage) error) error {
-				t.Projection.Lock()
-				defer t.Projection.Unlock()
-				entity := t.Projection.Type(platform.FlowInstanceType)
-				if entity == nil {
+				found, err := t.Projection.VisitImages(platform.FlowInstanceType, visit)
+				if !found {
 					return fmt.Errorf("Flow artifact references have no installed record owner")
 				}
-				for _, row := range entity.Rows().All() {
-					image, err := row.Image()
-					if err != nil {
-						return err
-					}
-					if err := visit(image); err != nil {
-						return err
-					}
-					current, err := json.Marshal(row.Value.Interface())
-					if err != nil {
-						return err
-					}
-					if err := visit(current); err != nil {
-						return err
-					}
-					for _, change := range row.RecordHistory() {
-						for _, field := range change.Fields {
-							if err := visit(field.Before); err != nil {
-								return err
-							}
-							if err := visit(field.After); err != nil {
-								return err
-							}
-						}
-					}
-				}
-				return nil
+				return err
 			})
 		})
 	})

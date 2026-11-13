@@ -61,28 +61,22 @@ func (t *Tenant) storeDefinition(index int, def platform.Definition) {
 }
 
 func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) error {
-	var describeErr error
-	put := func(def platform.Definition) {
-		if describeErr != nil {
-			return
-		}
-		def, describeErr = t.describer().DescribeDefinition(def)
-		if describeErr != nil {
-			return
+	var err error
+	for _, definition := range releaseowner.ObjectDefinitions(app, info, actions, pages, protocols...) {
+		var def platform.Definition
+		if def, err = t.describer().DescribeDefinition(definition); err != nil {
+			break
 		}
 		if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
 			next := slices.Clone(t.definitions)
 			next[i] = def
 			t.setDefinitions(next)
-			return
+			continue
 		}
 		t.setDefinitions(append(t.definitions, def))
 	}
-	for _, definition := range releaseowner.ObjectDefinitions(app, info, actions, pages, protocols...) {
-		put(definition)
-	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
-	return describeErr
+	return err
 }
 
 func (t *Tenant) reinstall() error {

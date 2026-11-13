@@ -19,9 +19,5 @@ func (t *Tenant) ownedMetadataKind(ref platform.AssetRef) bool {
 }
 
 func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.Definition, error) {
-	return t.ownedAssetDefinitionsWithArchived(base, t.includeArchivedDefinitions)
-}
-
-func (t *Tenant) ownedAssetDefinitionsWithArchived(base []platform.Definition, includeArchived bool) ([]platform.Definition, error) {
-	return t.Projection.OwnedDefinitions(base, t.definitionOwners(includeArchived))
+	return t.Projection.OwnedDefinitions(base, t.definitionOwners(t.includeArchivedDefinitions))
 }

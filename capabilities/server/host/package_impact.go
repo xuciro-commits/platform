@@ -7,7 +7,6 @@ import (
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	build "platformserver/services/resources/authoring"
 )
 
 func (h hostView) PackageLifecycleImpact(c platform.Caller, id string, after []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error) {
@@ -15,10 +14,7 @@ func (h hostView) PackageLifecycleImpact(c platform.Caller, id string, after []p
 }
 
 func (t *Tenant) packageLifecycleImpact(m platform.Member, id string, after []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error) {
-	var resources []build.Resource
-	for _, row := range t.Projection.Type(build.ResourceType).Rows().All() {
-		resources = append(resources, row.Value.Interface().(build.Resource))
-	}
+	resources := resourceRows(t.Projection)
 	ctx := t.applicationContext()
 	return packages.Impact{Resources: resources,
 		Records: func(typ string) (int, bool) {
@@ -46,11 +42,7 @@ func (t *Tenant) packageLifecycleImpact(m platform.Member, id string, after []pl
 			return platform.PackageImpactConnection{Configured: connection.Address != "" && (!definition.Credential || connection.Secret != ""), Credential: definition.Credential}, true, nil
 		},
 		Removals: func(removed, replaced map[platform.AssetRef]bool) []platform.PackageImpactReference {
-			var out []platform.PackageImpactReference
-			for _, impact := range t.packageRemovalImpacts(removed, replaced) {
-				out = append(out, platform.PackageImpactReference(impact))
-			}
-			return out
+			return packages.RemovalImpacts(resources, t.definitions, t.OwnerActive, removed, replaced)
 		},
 		Extensions: t.releaseExtensionReview,
 		Runs: func(ref platform.AssetRef, offset int) (platform.ApplicationRunPage, *kernel.Error) {

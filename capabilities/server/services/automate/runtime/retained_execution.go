@@ -215,3 +215,40 @@ func (s RetainedRows[R]) convert(row R) R {
 	}
 	return value
 }
+
+func PlanRetainedPut(shape, old, current platform.EntityInfo, entity, prior any, stored json.RawMessage, hasStored bool) (result, input map[string]json.RawMessage, fields []string, err error) {
+	raw, _ := json.Marshal(entity)
+	if json.Unmarshal(raw, &input) != nil {
+		return nil, nil, nil, fmt.Errorf("retained action wrote an invalid record")
+	}
+	var before, saved map[string]json.RawMessage
+	if prior != nil {
+		image, _ := json.Marshal(prior)
+		_ = json.Unmarshal(image, &before)
+	}
+	if hasStored {
+		_ = json.Unmarshal(stored, &saved)
+	}
+	result, fields, err = RetainedWrite(shape, old, current, before, input, saved, hasStored)
+	return result, input, fields, err
+}
+
+func RetainedRecord(info platform.EntityInfo, result, input map[string]json.RawMessage) (any, error) {
+	result["id"], result["archived"] = input["id"], input["archived"]
+	decoded := reflect.New(info.Go)
+	raw, _ := json.Marshal(result)
+	if json.Unmarshal(raw, decoded.Interface()) != nil {
+		return nil, fmt.Errorf("retained action result does not match current storage")
+	}
+	return decoded.Elem().Interface(), nil
+}
+
+func NativeFlowCandidate(flows []platform.Flow, asset platform.ReleaseAsset, load func(name string, version int) (platform.ReleaseAsset, error)) (platform.ReleaseAsset, bool) {
+	for _, flow := range flows {
+		candidate, err := load(flow.Name, flow.Version)
+		if err == nil && candidate.SourceVersion == asset.SourceVersion && candidate.Ref == asset.Ref {
+			return candidate, true
+		}
+	}
+	return platform.ReleaseAsset{}, false
+}

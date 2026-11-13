@@ -2,14 +2,12 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"platformkernel/kernel"
 	"platformserver/platform"
 	aigateway "platformserver/services/ai/gateway"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
-	"reflect"
 	"time"
 )
 
@@ -89,9 +87,4 @@ func (t *Tenant) evaluationModelConfig(name string, definition platform.AIFuncti
 		return "", fmt.Errorf("model stage: %s", refusal.Message)
 	}
 	return aigateway.ConfigurationDigest(model, provider, &binding)
-}
-
-func evalEqualRaw(a, b []byte) bool {
-	var left, right any
-	return json.Unmarshal(a, &left) == nil && json.Unmarshal(b, &right) == nil && reflect.DeepEqual(left, right)
 }

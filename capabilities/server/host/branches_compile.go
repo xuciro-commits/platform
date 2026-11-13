@@ -26,7 +26,7 @@ func (t *Tenant) BranchCompile(m platform.Member, id, typ, draft string, now tim
 			})
 			return base.draft, base.project, refusal
 		},
-		Build:  t.buildCode,
+		Build:  t.artifacts().Build,
 		Append: t.appendBranchSave,
 	}.Compile(m, id, typ, draft, now)
 }

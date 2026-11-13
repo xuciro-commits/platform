@@ -9,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
@@ -24,6 +25,13 @@ type OperationBinding struct {
 	Build       *platform.CodeBuildRequest       `json:"build,omitempty"`
 }
 
+func (b OperationBinding) Permission() (string, []string, bool) {
+	if b.Build != nil {
+		return "build.code.compile", []string{"builder"}, b.Build.Input.Check() == nil && b.Build.Output.Check() == nil
+	}
+	return b.Definition.Name, b.Definition.Roles, b.Definition.Check() == nil
+}
+
 func (b OperationBinding) Timeout() time.Duration {
 	if b.Build != nil {
 		return 180 * time.Second
@@ -31,16 +39,16 @@ func (b OperationBinding) Timeout() time.Duration {
 	return time.Duration(b.Definition.Limits.TimeoutMillis) * time.Millisecond
 }
 
-type ExecutionHost interface {
-	Authorised(ctx context.Context, x platform.Effect, b OperationBinding, now time.Time) (platform.Member, *kernel.Error)
-	StillAuthorised(ctx context.Context, x platform.Effect, b OperationBinding, now time.Time) (bool, *kernel.Error)
-	RulesRevoked(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *kernel.Error)
-	BuildCode(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error)
-	ReadInput(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error)
-	StageOutput(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error)
-	App(id string) platform.App
-	ReadArtifact(ctx context.Context, digest string) ([]byte, error)
-	Rules() platform.RuleEngine
+type ExecutionHost struct {
+	Authorised      func(ctx context.Context, x platform.Effect, b OperationBinding, now time.Time) (platform.Member, *kernel.Error)
+	StillAuthorised func(ctx context.Context, x platform.Effect, b OperationBinding, now time.Time) (bool, *kernel.Error)
+	RulesRevoked    func(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *kernel.Error)
+	BuildCode       func(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error)
+	ReadInput       func(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error)
+	StageOutput     func(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error)
+	App             func(id string) platform.App
+	ReadArtifact    func(ctx context.Context, digest string) ([]byte, error)
+	Rules           func() platform.RuleEngine
 }
 
 func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.Effect, b OperationBinding, now time.Time) platform.Outcome {
@@ -195,4 +203,51 @@ func ResultOf(x platform.Effect) platform.OperationResult {
 		r.State = "running"
 	}
 	return r
+}
+
+type CallSetup struct {
+	Tenant      string
+	Member      func(id string) (platform.Member, bool)
+	App         func(id string) platform.App
+	Prior       func(callID string) (string, bool)
+	Quarantined func() bool
+	Authorize   func(current platform.Member, op platform.Operation) *kernel.Error
+}
+
+type CallPlan struct {
+	Member    platform.Member
+	Operation platform.Operation
+	Version   int
+	ID        string
+	Seal      bool
+}
+
+func (h CallSetup) Prepare(member platform.Member, q platform.OperationRequest) (CallPlan, *kernel.Error) {
+	current, seated := h.Member(member.ID)
+	app := h.App(q.App)
+	var op platform.Operation
+	var version int
+	var declared bool
+	if app != nil {
+		op, version, declared = OperationDefinition(app, q.Name, q.Version)
+	}
+	callID := fmt.Sprintf("%s:%s:operation:%s:%s", h.Tenant, q.App, q.Key, operationEndpoint)
+	if body, ok := h.Prior(callID); ok {
+		if prior, priorVersion, sealed := PriorSealedDefinition(body); sealed {
+			op, version, declared = prior, priorVersion, true
+		}
+	}
+	seal := declared && op.Limits.DataInputBytes > 0
+	if seal {
+		if !seated || member.Tenant != h.Tenant || h.Quarantined() {
+			return CallPlan{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot prepare the operation input")
+		}
+		if refusal := h.Authorize(current, op); refusal != nil {
+			return CallPlan{}, refusal
+		}
+		var frozen platform.Operation
+		_ = json.Unmarshal(platform.Raw(op), &frozen)
+		op = frozen
+	}
+	return CallPlan{current, op, version, callID, seal}, nil
 }

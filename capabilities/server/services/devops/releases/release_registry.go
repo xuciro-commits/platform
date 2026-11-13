@@ -2,9 +2,7 @@ package releases
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"maps"
 
 	"platformserver/platform"
 
@@ -86,38 +84,6 @@ func UniqueRefs(refs []platform.AssetRef) []platform.AssetRef {
 	}
 	slices.SortFunc(out, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
 	return out
-}
-
-func RetainedDefinitionVersions[T any](history map[string]T, previousVersion string, previous *T, version string, current T) (map[string]T, bool) {
-	versions := maps.Clone(history)
-	if versions == nil {
-		versions = map[string]T{}
-	}
-	if previous != nil {
-		versions[previousVersion] = *previous
-	}
-	if prior, ok := versions[version]; ok && string(platform.Raw(prior)) != string(platform.Raw(current)) {
-		return nil, false
-	}
-	return versions, true
-}
-
-func RetainVersion[T any](definitions []platform.Definition, ref platform.AssetRef, owned, changed, version string, current T, history func(platform.Definition) (map[string]T, *T)) (int, map[string]T, error) {
-	i := slices.IndexFunc(definitions, func(d platform.Definition) bool { return d.Ref == ref })
-	versions := map[string]T{}
-	if i >= 0 {
-		old := definitions[i]
-		if old.Source != "tenant" {
-			return i, nil, errors.New(owned)
-		}
-		past, previous := history(old)
-		var ok bool
-		if versions, ok = RetainedDefinitionVersions(past, old.Version, previous, version, current); !ok {
-			return i, nil, errors.New(changed)
-		}
-	}
-	versions[version] = current
-	return i, versions, nil
 }
 
 func CheckApplicationExtension(ref platform.AssetRef, a platform.Application, definitions []platform.Definition) error {

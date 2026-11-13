@@ -7,6 +7,7 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
+	"platformserver/services/objects"
 	controlowner "platformserver/services/security/control"
 
 	"platformserver/kernel/transport"
@@ -95,6 +96,6 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 		reflect.TypeFor[platform.Schedule](), reflect.TypeFor[platform.MediaSet](), reflect.TypeFor[platform.MediaSetVersion](), reflect.TypeFor[platform.Attachment](),
 		reflect.TypeFor[dataowner.Source](), reflect.TypeFor[dataowner.Connection](), reflect.TypeFor[dataowner.Listener](),
 		reflect.TypeFor[platform.BusinessTxn](), reflect.TypeFor[platform.ConfirmationRun](),
-		reflect.TypeFor[platform.DispatchRun](), reflect.TypeFor[InterfaceRecordPage](),
+		reflect.TypeFor[platform.DispatchRun](), reflect.TypeFor[objects.InterfaceRecordPage](),
 	}, reflect.TypeFor[SubmissionAnswer](), entities, actions)
 }

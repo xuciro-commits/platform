@@ -52,7 +52,7 @@ func (h *Host) routesEditProposals(rt *routes) {
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/capabilities/calls/{engine}/{id}/edits", Summary: "Explicitly apply the original edit proposal through the normal authorized action engine", Body: ApplyEditsRequest{}, Answer: platform.CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ApplyEditsRequest
-		if err := decodeBodyLimit(r, &request, 4096); err != nil {
+		if err := transport.DecodeBodyLimit(r, &request, 4096); err != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a stable request key"))
 			return
 		}

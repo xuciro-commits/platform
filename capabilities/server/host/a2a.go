@@ -38,24 +38,12 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	}
 	WriteJSON(w, http.StatusOK, actions.A2AServe(r.Body, r.Header.Get("A2A-Version"), agent, m.ID, actions.A2AHooks{
 		Published: t.published,
-		Run: func(id string) (platform.AgentRunRecord, string, bool) {
-			type answer struct {
-				run      platform.AgentRunRecord
-				question string
-				known    bool
-			}
-			value, refusal := recordRead(t, r.Context(), func(t *Tenant) (answer, *kernel.Error) {
+		Run: func(id string) (platform.AgentRunRecord, bool) {
+			value, refusal := recordRead(t, r.Context(), func(t *Tenant) (pair[platform.AgentRunRecord, bool], *kernel.Error) {
 				x, ok := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
-				if !ok || x.OnBehalf != m.ID || x.Agent != agent {
-					return answer{}, nil
-				}
-				question := ""
-				if x.State == "waiting" && len(x.Steps) > 0 {
-					question = strings.TrimPrefix(x.Steps[len(x.Steps)-1].Outcome, "asked: ")
-				}
-				return answer{x, question, true}, nil
+				return pair[platform.AgentRunRecord, bool]{x, ok}, nil
 			})
-			return value.run, value.question, value.known && refusal == nil
+			return value.first, value.second && refusal == nil
 		},
 		Decide: func(app, schema, typ, id, key string, payload any) error {
 			raw, _ := json.Marshal(payload)

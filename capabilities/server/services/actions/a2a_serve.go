@@ -16,7 +16,7 @@ const a2aWait = 60 * time.Second
 
 type A2AHooks struct {
 	Published func(agent string) bool
-	Run       func(id string) (platform.AgentRunRecord, string, bool)
+	Run       func(id string) (platform.AgentRunRecord, bool)
 	Decide    func(app, schema, typ, id, key string, payload any) error
 }
 
@@ -75,6 +75,17 @@ func A2AServe(body io.Reader, version, agent, member string, h A2AHooks) map[str
 	if !h.Published(agent) {
 		return reply(nil, -32001, "no published agent "+agent)
 	}
+	run := func(id string) (platform.AgentRunRecord, string, bool) {
+		x, ok := h.Run(id)
+		if !ok || x.OnBehalf != member || x.Agent != agent {
+			return platform.AgentRunRecord{}, "", false
+		}
+		question := ""
+		if x.State == "waiting" && len(x.Steps) > 0 {
+			question = strings.TrimPrefix(x.Steps[len(x.Steps)-1].Outcome, "asked: ")
+		}
+		return x, question, true
+	}
 	decide := func(schema, typ, id, key string, payload any) error {
 		app := platform.AgentApp
 		if typ == platform.WorkTaskType {
@@ -95,7 +106,7 @@ func A2AServe(body io.Reader, version, agent, member string, h A2AHooks) map[str
 		}
 		id := p.Message.TaskID
 		if id != "" {
-			x, _, ok := h.Run(id)
+			x, _, ok := run(id)
 			if !ok {
 				return reply(nil, -32001, "task not found")
 			}
@@ -114,16 +125,16 @@ func A2AServe(body io.Reader, version, agent, member string, h A2AHooks) map[str
 			}
 		}
 		for end := time.Now().Add(a2aWait); !p.Configuration.ReturnImmediately && time.Now().Before(end); time.Sleep(250 * time.Millisecond) {
-			if x, _, _ := h.Run(id); x.State != "running" {
+			if x, _, _ := run(id); x.State != "running" {
 				break
 			}
 		}
-		x, question, _ := h.Run(id)
+		x, question, _ := run(id)
 		return reply(map[string]any{"task": TaskOf(x, question)}, 0, "")
 	case "GetTask":
 		var p struct{ ID string }
 		json.Unmarshal(req.Params, &p)
-		x, question, ok := h.Run(p.ID)
+		x, question, ok := run(p.ID)
 		if !ok {
 			return reply(nil, -32001, "task not found")
 		}
@@ -131,7 +142,7 @@ func A2AServe(body io.Reader, version, agent, member string, h A2AHooks) map[str
 	case "CancelTask":
 		var p struct{ ID string }
 		json.Unmarshal(req.Params, &p)
-		x, _, ok := h.Run(p.ID)
+		x, _, ok := run(p.ID)
 		if !ok {
 			return reply(nil, -32001, "task not found")
 		}
@@ -141,7 +152,7 @@ func A2AServe(body io.Reader, version, agent, member string, h A2AHooks) map[str
 		if err := decide(platform.SchemaRunCancel, platform.RunType, x.ID, "a2a-cancel:"+x.ID, map[string]any{}); err != nil {
 			return reply(nil, -32603, err.Error())
 		}
-		x, question, _ := h.Run(p.ID)
+		x, question, _ := run(p.ID)
 		return reply(TaskOf(x, question), 0, "")
 	}
 	return reply(nil, -32601, "method not found: "+req.Method)

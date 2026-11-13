@@ -169,10 +169,7 @@ func (h hostView) ScopeAgentRun(run string) func() {
 
 func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, stage string) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
 	value, refusal := readAgentHost(h, func(t *Tenant) (pair[platform.AIModelBinding, platform.AIProvider], *kernel.Error) {
-		binding, provider, refusal := t.modelResolver().Resolve("agent", name, options)
-		if refusal == nil {
-			binding, refusal = t.modelResolver().Stage(binding, provider, stage)
-		}
+		binding, provider, refusal := t.modelResolver().ResolveStaged("agent", name, options, stage)
 		return pair[platform.AIModelBinding, platform.AIProvider]{binding, provider}, refusal
 	})
 	return value.first, value.second, refusal
@@ -280,15 +277,14 @@ func (t *Tenant) agentTurns() agentowner.Turns {
 		Allowed: func(run platform.AgentRunRecord) (bool, *kernel.Error) {
 			return recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) { return t.agents.AllowsAgentRun(run), nil })
 		},
-		Running: t.stillRunning, Call: t.call, Meter: t.meter, Step: t.applyAgentStep, Wake: wakeWork}
-}
-
-func (t *Tenant) stillRunning(id string) bool {
-	running, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
-		run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
-		return known && run.State == "running", nil
-	})
-	return running && refusal == nil
+		Running: func(id string) bool {
+			running, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
+				run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
+				return known && run.State == "running", nil
+			})
+			return running && refusal == nil
+		},
+		Call: t.call, Meter: t.meter, Step: t.applyAgentStep, Wake: wakeWork}
 }
 
 func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool {

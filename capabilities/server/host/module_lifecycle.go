@@ -3,9 +3,9 @@ package host
 import (
 	"fmt"
 	"slices"
-	"strings"
 
 	"platformserver/platform"
+	"platformserver/services/devops/packages"
 )
 
 func (t *Tenant) OwnerActive(id string) bool { return !t.disabledOwners[id] }
@@ -33,34 +33,19 @@ func (t *Tenant) desiredDisabledOwners() []string {
 }
 
 func (t *Tenant) checkOwnerRemoval(disabled []string) error {
-	removed := map[string]bool{}
-	for _, id := range disabled {
-		if removed[id] || t.App(id) == nil {
-			return fmt.Errorf("Unknown or repeated platform module %s", id)
+	return packages.CheckOwnerRemoval(disabled, func(id string) bool { return t.App(id) != nil }, t.baseModules(), func(removed map[string]bool) error {
+		for _, task := range t.Tasks() {
+			if removed[task.App] && task.Kind != "job" && !slices.Contains([]string{"done", "cancelled"}, task.State) {
+				return fmt.Errorf("Finish or resolve work %s before removing %s", task.ID, task.App)
+			}
 		}
-		removed[id] = true
-	}
-	var modules []platform.CapabilityModule
-	for _, module := range t.baseModules() {
-		if id, owner := strings.CutPrefix(module.ID, "platform.owner."); owner && removed[id] {
-			continue
+		for _, effect := range t.outbound.Select(nil) {
+			if removed[effect.App] && !platform.EffectSettled(effect.State) {
+				return fmt.Errorf("Resolve external attempt %s before removing %s", effect.ID, effect.App)
+			}
 		}
-		modules = append(modules, module)
-	}
-	if _, err := platform.ResolveComposition(modules, nil); err != nil {
-		return err
-	}
-	for _, task := range t.Tasks() {
-		if removed[task.App] && task.Kind != "job" && !slices.Contains([]string{"done", "cancelled"}, task.State) {
-			return fmt.Errorf("Finish or resolve work %s before removing %s", task.ID, task.App)
-		}
-	}
-	for _, effect := range t.outbound.Select(nil) {
-		if removed[effect.App] && !platform.EffectSettled(effect.State) {
-			return fmt.Errorf("Resolve external attempt %s before removing %s", effect.ID, effect.App)
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (t *Tenant) deactivateOwners(disabled []string) error {

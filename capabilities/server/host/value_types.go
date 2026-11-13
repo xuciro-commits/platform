@@ -1,11 +1,8 @@
 package host
 
 import (
-	"fmt"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	releaseowner "platformserver/services/devops/releases"
-	"strconv"
 )
 
 func (h hostView) ResolveValueType(binding platform.AssetBinding) (platform.ValueType, bool) {
@@ -42,41 +39,5 @@ func (h hostView) InstallValueType(c platform.Caller, v platform.ValueType, vers
 	if c.Staging() {
 		unsupportedStagedEffect()
 	}
-	if err := v.Check(); err != nil {
-		return err
-	}
-	if version < 1 || version > 64 {
-		return fmt.Errorf("value type needs a retained version")
-	}
-	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetValueType, Name: v.Name}
-	d := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".value-" + strconv.Itoa(version), ContractVersion: 1, ValueType: &v, ValueVersions: map[string]platform.ValueType{}}
-	d, err := h.t.describer().DescribeDefinition(d)
-	if err != nil {
-		return err
-	}
-	i, versions, err := releaseowner.RetainVersion(h.t.definitions, ref, "value type is owned by code", "value type version bytes cannot change", d.Version, v, func(old platform.Definition) (map[string]platform.ValueType, *platform.ValueType) {
-		return old.ValueVersions, old.ValueType
-	})
-	if err != nil {
-		return err
-	}
-	d.ValueVersions = versions
-	h.t.storeDefinition(i, d)
-	return nil
-}
-
-func (t *Tenant) checkObjectValueTypes(info platform.EntityInfo) error {
-	for _, f := range info.Fields {
-		if f.ValueType == nil {
-			continue
-		}
-		v, ok := (hostView{t: t}).ResolveValueType(*f.ValueType)
-		if !ok {
-			return fmt.Errorf("field %s has an unavailable value type version", f.Name)
-		}
-		if err := v.CheckField(f); err != nil {
-			return err
-		}
-	}
-	return nil
+	return h.definitionInstall().ValueType(v, version)
 }

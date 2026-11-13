@@ -91,3 +91,16 @@ func VisibleObservationEvidence(evidence *platform.ObservationDecisionEvidence, 
 	}
 	return &copy
 }
+
+func ScheduledObservations(definitions []platform.Definition, active func(record string) bool, publisher func(record string) (string, []string, bool)) []ScheduledObservation {
+	var sources []ScheduledObservation
+	for _, definition := range definitions {
+		if definition.Observation == nil || !definition.Observation.Scheduled || definition.OwnerRecord == "" || !active(definition.OwnerRecord) {
+			continue
+		}
+		if name, scopes, _ := publisher(definition.OwnerRecord); name != "" {
+			sources = append(sources, ScheduledObservation{Ref: definition.Ref, Version: definition.Version, Definition: *definition.Observation, Publisher: name, Scopes: scopes})
+		}
+	}
+	return sources
+}

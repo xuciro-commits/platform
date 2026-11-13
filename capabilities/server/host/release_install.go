@@ -20,25 +20,22 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []platform.Release
 		return nil, err
 	}
 	draft.installingSet = true
-	for _, installation := range installations {
-		plan, err := releaseowner.InstallationPlan(registry, installation)
-		if err != nil {
-			return nil, err
-		}
-		before, err := draft.Projection.RowDigest(plan.Record)
-		if err != nil || before != installation.Before {
-			return nil, fmt.Errorf("release metadata predecessor differs for %s: %v", plan.Record, err)
-		}
-		if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{Validate: validate, Upgrade: len(upgrade) > 0 && upgrade[0], Private: true}); err != nil {
-			return nil, err
-		}
-		if err := draft.Projection.InstallImage(plan.Record, plan.Image); err != nil {
-			return nil, err
-		}
-		if err := draft.registerInstalledAsset(plan); err != nil {
-			return nil, err
-		}
-
+	err = releaseowner.StageInstallations(registry, installations, platform.AssetApplyContext{Validate: validate, Upgrade: len(upgrade) > 0 && upgrade[0], Private: true},
+		func(plan platform.AssetInstallation, installation platform.ReleaseInstallation) error {
+			before, err := draft.Projection.RowDigest(plan.Record)
+			if err != nil || before != installation.Before {
+				return fmt.Errorf("release metadata predecessor differs for %s: %v", plan.Record, err)
+			}
+			return nil
+		},
+		func(plan platform.AssetInstallation) error {
+			if err := draft.Projection.InstallImage(plan.Record, plan.Image); err != nil {
+				return err
+			}
+			return draft.registerInstalledAsset(plan)
+		})
+	if err != nil {
+		return nil, err
 	}
 	draft.installingSet = false
 	var engines []platform.RuleEngine

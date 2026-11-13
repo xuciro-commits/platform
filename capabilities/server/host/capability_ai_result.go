@@ -2,13 +2,13 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	agentowner "platformserver/services/ai/runtime"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	functions "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 )
 
@@ -47,12 +47,5 @@ func (t *Tenant) readCapabilityAI(m platform.Member, id string, now time.Time) (
 	if refusal := authorizationRefusal(t.authorizeCapability(caller, owner, contract.Name, contract.Roles, true, authorizationDetails{At: now, Sources: run.Sources})); refusal != nil {
 		return answer, refusal
 	}
-	answer.State = "pending"
-	if run.State == "ready" {
-		answer.State, answer.Output = "completed", json.RawMessage(run.Output)
-	}
-	if run.State == "rejected" {
-		answer.State, answer.Error = "failed", run.Reason
-	}
-	return answer, nil
+	return functions.AIAnswer(id, run.State, run.Output, run.Reason), nil
 }

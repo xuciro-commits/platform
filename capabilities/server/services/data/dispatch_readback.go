@@ -1,12 +1,15 @@
 package data
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
@@ -136,4 +139,77 @@ func (d DispatchReadback) Read(run platform.DispatchRun, at time.Time) platform.
 		reading.Reason = reading.Reason[:4096]
 	}
 	return reading
+}
+
+type DispatchReadPlan struct {
+	Run   platform.DispatchRun
+	Stamp string
+	Valid bool
+}
+
+type DispatchPoll struct {
+	Schedule *StatusReads
+	Pending  func() ([]platform.DispatchRun, *kernel.Error)
+	Plan     func(id string) (DispatchReadPlan, *kernel.Error)
+	Read     func(run platform.DispatchRun) platform.DispatchReading
+	Answer   func(plan DispatchReadPlan, reading platform.DispatchReading)
+}
+
+func (d DispatchPoll) Run(at time.Time) {
+	runs, refusal := d.Pending()
+	if refusal != nil {
+		return
+	}
+	active := make(map[string]bool, len(runs))
+	for _, run := range runs {
+		active[run.Intent] = true
+	}
+	d.Schedule.Retain(active)
+	due := func(run platform.DispatchRun) time.Time {
+		return d.Schedule.Next(run.Intent, run.ReadDue)
+	}
+	slices.SortStableFunc(runs, func(a, b platform.DispatchRun) int { return due(a).Compare(due(b)) })
+	reads := 0
+	for _, saved := range runs {
+		if saved.ReadDue.After(at) {
+			continue
+		}
+		plan, refusal := d.Plan(saved.ID)
+		if refusal != nil || !plan.Valid {
+			continue
+		}
+		run := plan.Run
+		if reads >= StatusReadLimit {
+			return
+		}
+		if !d.Schedule.Start(run.Intent, run.ReadDue, at, &reads) {
+			continue
+		}
+		reading := d.Read(run)
+		d.Schedule.Finished(run.Intent, at.Add(time.Duration(run.Definition.Readback.EverySeconds)*time.Second))
+		d.Answer(plan, reading)
+	}
+}
+
+func DispatchAnswerSubmission(tenant, authority string, caller platform.Member, run, current platform.DispatchRun, reading platform.DispatchReading, at time.Time) *pb.Submission {
+	if n := len(current.Readback); n > 0 {
+		last := current.Readback[n-1]
+		state := reading.State
+		if !at.Before(current.Deadline) && state != "unknown" && state != "failed" && state != "completed" {
+			state = "stuck"
+		}
+		started := current.StartedAt
+		for _, attempt := range current.Attempts {
+			if attempt.Intent == current.Intent {
+				started = attempt.At
+			}
+		}
+		if current.ReadDue.After(started) && !last.At.Before(started) && current.State == state && last.State == reading.State && last.Value == reading.Value && last.Reason == reading.Reason && bytes.Equal(last.Observed, reading.Observed) {
+			return nil
+		}
+	}
+	return &pb.Submission{TenantId: tenant, PrincipalId: caller.ID, Authority: authority,
+		IdempotencyKey: fmt.Sprintf("dispatch-read:%s:%d:%s", run.ID, run.Revision, at.UTC().Format(time.RFC3339Nano)),
+		Target:         &pb.EntityRef{Type: platform.DispatchType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.DispatchAnswerSchema, Version: 1},
+		Payload: platform.Raw(map[string]any{"revision": run.Revision, "intent": run.Intent, "outcome": reading.State, "reason": reading.Reason, "reading": reading, "answer": reading.Observed})}
 }

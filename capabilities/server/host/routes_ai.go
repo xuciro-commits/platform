@@ -4,7 +4,6 @@ import transport "platformserver/kernel/transport"
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"platformserver/services/ai/gateway"
 
@@ -47,10 +46,7 @@ func (h *Host) routesAI(rt *routes) {
 		if err != nil {
 			Reply(w, nil, err)
 		} else {
-			selection.DefaultProblem = t.i18n.Say(t.Language(m, r), selection.DefaultProblem)
-			for i := range selection.Models {
-				selection.Models[i].Problem = t.i18n.Say(t.Language(m, r), selection.Models[i].Problem)
-			}
+			selection.Localize(func(s string) string { return t.i18n.Say(t.Language(m, r), s) })
 			WriteJSON(w, http.StatusOK, selection)
 		}
 	})
@@ -63,58 +59,14 @@ func (h *Host) routesAI(rt *routes) {
 			if endpoint.design {
 				chat = t.DesignChat
 			}
-			var req platform.ChatRequest
-			if json.NewDecoder(http.MaxBytesReader(w, r.Body, chatMaxBytes)).Decode(&req) != nil {
-				Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-				return
-			}
-			if req.Stream {
-				flusher, _ := w.(http.Flusher)
-				started := false
-				event := func(name string, v any) {
-					if !started {
-						w.Header().Set("Content-Type", "text/event-stream")
-						w.Header().Set("Cache-Control", "no-cache")
-						w.WriteHeader(http.StatusOK)
-						started = true
-					}
-					raw, _ := json.Marshal(v)
-					fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, raw)
-					if flusher != nil {
-						flusher.Flush()
-					}
-				}
-				req.OnStream = func(piece platform.ChatStreamEvent) {
-					if piece.ToolCall != nil {
-						event("tool_delta", piece.ToolCall)
-					}
-				}
-				answer, err, failure := chat(m, req, h.Now(), func(piece string) { event("delta", map[string]string{"content": piece}) })
-				switch {
-				case err != nil && !started:
-					Reply(w, nil, t.i18n.Said(err, t.Language(m, r)))
-				case err != nil:
-					event("error", map[string]any{"code": err.Code.String(), "detail": t.i18n.Say(t.Language(m, r), err.Message)})
-				case failure != nil && failure.Quota && !started:
-					WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
-				case failure != nil:
-					event("error", map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": t.i18n.Say(t.Language(m, r), failure.Detail), "usage": answer.Usage})
-				default:
-					event("done", map[string]any{"usage": answer.Usage, "toolCalls": answer.ToolCalls})
-				}
-				return
-			}
-			answer, err, failure := chat(m, req, h.Now())
-			switch {
-			case err != nil:
-				Reply(w, nil, t.i18n.Said(err, t.Language(m, r)))
-			case failure != nil && failure.Quota:
-				WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
-			case failure != nil:
-				WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}, "usage": answer.Usage})
-			default:
-				WriteJSON(w, http.StatusOK, answer)
-			}
+			aigateway.ChatEndpoint{MaxBytes: chatMaxBytes, Say: func(s string) string { return t.i18n.Say(t.Language(m, r), s) },
+				Chat: func(req platform.ChatRequest, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
+					return chat(m, req, h.Now(), delta...)
+				},
+				Said:  func(err *kernel.Error) *kernel.Error { return t.i18n.Said(err, t.Language(m, r)) },
+				Reply: func(w http.ResponseWriter, err *kernel.Error) { Reply(w, nil, err) },
+				JSON:  WriteJSON,
+			}.Serve(w, r)
 		})
 	}
 	rt.handle(transport.Route{Pattern: "GET /v1/ai/providers/{id}/models", Summary: "A provider's catalog of models", Answer: []platform.CatalogModel{}, Query: []transport.Param{{Name: "refresh", Description: "true reads the catalog from the provider again"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

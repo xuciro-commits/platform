@@ -3,7 +3,6 @@ package host
 import (
 	"encoding/json"
 	"fmt"
-	persistence "platformserver/kernel/store"
 	automation "platformserver/services/automate/runtime"
 
 	"reflect"
@@ -24,19 +23,11 @@ type flowExecution struct {
 
 type flowExecutionRuntime struct {
 	*stagedDecision
-	view        *Tenant
-	release     string
-	shapes      map[string]platform.EntityInfo
-	assets      []platform.ReleaseAsset
-	readStore   *records.Store
-	readSource  *records.Store
-	readOrigins map[string]retainedReadOrigin
-	readSQLView persistence.StateReadView
-}
-
-type retainedReadOrigin struct {
-	typ  *records.Type
-	rows records.Rows
+	view    *Tenant
+	release string
+	shapes  map[string]platform.EntityInfo
+	assets  []platform.ReleaseAsset
+	reads   records.ForkCache
 }
 
 func (h hostView) FlowExecution(c platform.Caller, app, name string, version int, binding platform.FlowBinding) (platform.FlowHost, error) {
@@ -73,13 +64,9 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 				return nil, err
 			}
 			err = automation.RetainedCompatible(selected, current, func(asset platform.ReleaseAsset) (platform.ReleaseAsset, bool) {
-				for _, flow := range owner.Manifest().Flows {
-					candidate, err := h.t.nativeFlowAsset(owner, flow.Name, flow.Version)
-					if err == nil && candidate.SourceVersion == asset.SourceVersion && candidate.Ref == asset.Ref {
-						return candidate, true
-					}
-				}
-				return platform.ReleaseAsset{}, false
+				return automation.NativeFlowCandidate(owner.Manifest().Flows, asset, func(name string, version int) (platform.ReleaseAsset, error) {
+					return h.t.nativeFlowAsset(owner, name, version)
+				})
 			})
 			if err != nil {
 				return nil, err
@@ -125,7 +112,7 @@ func (h flowExecution) ActiveRelease() string { return h.rt.release }
 
 func (h flowExecution) Attempt(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
-		owner := h.rt.view.App(h.rt.view.owner["action:"+s.GetSchema().GetName()])
+		owner := h.rt.actionOwner(s.GetSchema().GetName())
 		if owner == nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The held action has no retained owner")
 		}
@@ -133,7 +120,7 @@ func (h flowExecution) Attempt(c platform.Caller, s *pb.Submission, at time.Time
 	})
 }
 func (h flowExecution) Action(schema string) (string, platform.Action, bool) {
-	owner := h.rt.view.App(h.rt.view.owner["action:"+schema])
+	owner := h.rt.actionOwner(schema)
 	if owner == nil {
 		return "", platform.Action{}, false
 	}
@@ -141,7 +128,7 @@ func (h flowExecution) Action(schema string) (string, platform.Action, bool) {
 	return owner.Manifest().ID, a, ok
 }
 func (h flowExecution) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	owner := h.rt.view.App(h.rt.view.owner["action:"+s.GetSchema().GetName()])
+	owner := h.rt.actionOwner(s.GetSchema().GetName())
 	if owner == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
@@ -149,6 +136,10 @@ func (h flowExecution) Submit(c platform.Caller, s *pb.Submission, at time.Time)
 		return c.RequestApproval(owner.Manifest().ID, s, at)
 	}
 	return platform.Decide(c, owner, s, at)
+}
+
+func (r *flowExecutionRuntime) actionOwner(schema string) platform.App {
+	return r.view.App(r.view.owner["action:"+schema])
 }
 
 func (r *flowExecutionRuntime) StagedDecision() platform.StagedDecision { return r }
@@ -200,43 +191,26 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 }
 
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
-	r.Records.Lock()
-	valid := r.readSource == r.Records && r.readStore != nil && r.readSQLView == r.Records.Current().View()
-	for typ, et := range r.Records.Types() {
-		origin, exists := r.readOrigins[typ]
-		if !exists || origin.typ != et || origin.rows != et.Rows() {
-			valid = false
-			break
-		}
-	}
-	valid = valid && len(r.readOrigins) == r.Records.TypeCount()
-	store := r.readStore
-	var origins map[string]retainedReadOrigin
-	if !valid {
-		store = r.Records.ForkRecordsLocked()
-		origins = map[string]retainedReadOrigin{}
-		for typ, et := range r.Records.Types() {
-			origins[typ] = retainedReadOrigin{typ: et, rows: et.Rows()}
-		}
-	}
-	r.Records.Unlock()
-	if !valid {
+	store, err := r.reads.Fork(r.Records, func(store *records.Store, original func(string) records.Rows) error {
 		for typ, info := range r.shapes {
 			current := store.Type(typ)
 			if current == nil {
-				return nil, conflictRefusal(fmt.Errorf("retained object %s has no current storage", typ))
+				return fmt.Errorf("retained object %s has no current storage", typ)
 			}
-			stored, original := current.Info(), origins[typ].rows
+			stored, rows := current.Info(), original(typ)
 			store.ReplaceReadType(info, records.SourceRows(automation.RetainedRows[*records.Row]{
-				List:  func(after string, limit int) []string { return original.IDs(after, limit) },
-				Fetch: func(id string) *records.Row { return original.Get(id) },
-				Batch: func(ids []string) map[string]*records.Row { return original.GetBatch(ids) },
+				List:  func(after string, limit int) []string { return rows.IDs(after, limit) },
+				Fetch: func(id string) *records.Row { return rows.Get(id) },
+				Batch: func(ids []string) map[string]*records.Row { return rows.GetBatch(ids) },
 				Convert: func(row *records.Row) (*records.Row, *kernel.Error) {
 					return r.retainedRow(stored, info, row)
 				},
 			}), true)
 		}
-		r.readSource, r.readStore, r.readOrigins, r.readSQLView = r.Records, store, origins, store.Current().View()
+		return nil
+	})
+	if err != nil {
+		return nil, conflictRefusal(err)
 	}
 	return (hostView{t: r.view}).installationView(store), nil
 }
@@ -385,19 +359,16 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	}
 	current := r.Records.Type(old.Info().Type)
 	id := records.Header(records.Copy(old.Info().Go, entity)).ID
-	var input, before, stored map[string]json.RawMessage
-	if json.Unmarshal(jsonOf(entity), &input) != nil {
-		return conflictRefusal(fmt.Errorf("retained action wrote an invalid record"))
-	}
-	if prior := old.Rows().Get(id); prior != nil {
-		_ = json.Unmarshal(jsonOf(prior.Value.Interface()), &before)
+	var priorValue any
+	if row := old.Rows().Get(id); row != nil {
+		priorValue = row.Value.Interface()
 	}
 	prior := current.Rows().Get(id)
+	var stored json.RawMessage
 	if prior != nil {
-		raw, _ := prior.Image()
-		_ = json.Unmarshal(raw, &stored)
+		stored, _ = prior.Image()
 	}
-	result, fields, writeErr := automation.RetainedWrite(r.shapes[old.Info().Type], old.Info(), current.Info(), before, input, stored, prior != nil)
+	result, input, fields, writeErr := automation.PlanRetainedPut(r.shapes[old.Info().Type], old.Info(), current.Info(), entity, priorValue, stored, prior != nil)
 	if writeErr != nil {
 		return conflictRefusal(writeErr)
 	}
@@ -410,16 +381,14 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if refusal := authorizationRefusal(grant); refusal != nil {
 		return refusal
 	}
-	result["id"], result["archived"] = input["id"], input["archived"]
-	decoded := reflect.New(current.Info().Go)
-	raw, _ := json.Marshal(result)
-	if json.Unmarshal(raw, decoded.Interface()) != nil {
-		return conflictRefusal(fmt.Errorf("retained action result does not match current storage"))
+	decoded, decodeErr := automation.RetainedRecord(current.Info(), result, input)
+	if decodeErr != nil {
+		return conflictRefusal(decodeErr)
 	}
-	if refusal := r.stagedDecision.Check(c, decoded.Elem().Interface()); refusal != nil {
+	if refusal := r.stagedDecision.Check(c, decoded); refusal != nil {
 		return refusal
 	}
-	if refusal := r.stagedDecision.Put(c, receipt, decoded.Elem().Interface()); refusal != nil {
+	if refusal := r.stagedDecision.Put(c, receipt, decoded); refusal != nil {
 		return refusal
 	}
 	updated := *current.Rows().Get(id)

@@ -33,7 +33,7 @@ func (h *Host) routesBuild(rt *routes) {
 	h.routesPackages(rt)
 	rt.handle(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: pageowner.ActionCheckRequest{}, Answer: pageowner.ActionCheckResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request pageowner.ActionCheckRequest
-		if decodeBodyLimit(r, &request, 64<<10) != nil || request.Target.Object == "" || request.Target.ID == "" {
+		if transport.DecodeBodyLimit(r, &request, 64<<10) != nil || request.Target.Object == "" || request.Target.ID == "" {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an action target and optional inputs"))
 			return
 		}
@@ -225,7 +225,7 @@ func (h *Host) routesBuild(rt *routes) {
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/pipelines/preview", Summary: "Try the current pipeline draft on authorized dataset samples without publishing or writing output", Body: dataowner.PipelinePreviewRequest{}, Answer: dataowner.PipelinePreview{}}, build.ID, []string{build.Builder, build.Integrator}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request dataowner.PipelinePreviewRequest
-		if err := decodeBodyLimit(r, &request, 1<<20); err != nil {
+		if err := transport.DecodeBodyLimit(r, &request, 1<<20); err != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The pipeline trial must be a valid bounded JSON object"))
 			return
 		}
@@ -246,7 +246,7 @@ func (h *Host) routesBuild(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test an application draft closure or retained candidate with synthetic samples, controlled members and original executor traces",
 		Body: trialowner.CandidateSimulationRequest{}, Answer: trialowner.CandidateSimulation{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request trialowner.CandidateSimulationRequest
-		if decodeBodyLimit(r, &request, 1<<20) != nil {
+		if transport.DecodeBodyLimit(r, &request, 1<<20) != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The test plan must be a valid bounded JSON object"))
 			return
 		}

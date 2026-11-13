@@ -9,13 +9,13 @@ import (
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	dataowner "platformserver/services/data"
 	"platformserver/services/data/transform"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 	"time"
 )
-
-const bodyKept = 30 * 24 * time.Hour
 
 func (t *Tenant) emit(e platform.Event, names []string) {
 	planned, _ := t.eventEffects(e, names, false)
@@ -57,16 +57,7 @@ func (t *Tenant) askHeldEffects(c platform.Caller, kind, entity string, planned 
 }
 
 func (t *Tenant) Effects(now time.Time) []platform.Effect {
-	all := t.outbound.Select(nil)
-	out := []platform.Effect{}
-	for i := len(all) - 1; i >= 0; i-- {
-		x := all[i].Effect
-		if now.Sub(x.At) > bodyKept && x.State != "unknown" {
-			x.Body = ""
-		}
-		out = append(out, x)
-	}
-	return out
+	return actions.RedactedEffects(t.outbound.Select(nil), now)
 }
 
 func (t *Tenant) Endpoints() []actions.EndpointView {
@@ -87,7 +78,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		return nil
 	}
 	var sends []func()
-	for _, j := range actions.ClaimJobs(&t.outbound, append(t.endpoints.All(), t.connectionEndpoints()...), acceptedformat.ModelEndpoint,
+	for _, j := range actions.ClaimJobs(&t.outbound, append(t.endpoints.All(), actions.ConnectionEndpoints(t.outbound.Select(nil), dataowner.WritebackEndpoint)...), acceptedformat.ModelEndpoint,
 		func(id string) bool { return t.breakers.Allow("endpoint:"+id, now, true) }, now) {
 		sends = append(sends, func() {
 			if t.businessStopped() {
@@ -96,14 +87,14 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 			if !t.beginDispatchAttempt(j.Effect, now) {
 				return
 			}
-			span := outside(j.Span, "send "+j.Effect.Event+" to "+j.Endpoint.ID, attribute.String("platform.tenant", t.ID),
+			span := monitoring.Outside(j.Span, "send "+j.Effect.Event+" to "+j.Endpoint.ID, attribute.String("platform.tenant", t.ID),
 				attribute.String("platform.endpoint", j.Endpoint.ID), attribute.String("platform.effect", j.Effect.ID))
 			outcome, usage := t.sendWithUsage(j.Endpoint, j.Effect, now)
-			end(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
+			monitoring.End(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
 			if t.quarantined() {
 				return
 			}
-			counted(t, "effect", j.Effect.App, outcome.Result)
+			monitoring.Counted(t.ID, "effect", j.Effect.App, outcome.Result)
 			if j.Endpoint.Kind != acceptedformat.ModelEndpoint {
 				t.breakers.Report("endpoint:"+j.Endpoint.ID, outcome.Result != "retry", now)
 			}

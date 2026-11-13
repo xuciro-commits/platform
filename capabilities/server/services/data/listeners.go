@@ -1,6 +1,7 @@
 package data
 
 import (
+	"crypto/hmac"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -93,4 +94,29 @@ func (o *Owner) ExecutionListener(live Listener) (Listener, error) {
 	listener.Record, listener.State, listener.Enabled = live.Record, live.State, live.Enabled
 	listener.DefinitionVersion, listener.Published, listener.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return listener, nil
+}
+
+func (o *Owner) AuthorizeListener(live []Listener, path, secret, origin string, credential func(name, consumer, address string) ([]byte, bool)) (string, *kernel.Error) {
+	var matches []Listener
+	for _, row := range live {
+		if !row.Enabled || row.State != "published" {
+			continue
+		}
+		listener, err := o.ExecutionListener(row)
+		if err != nil {
+			return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		if listener.Path == path {
+			matches = append(matches, listener)
+		}
+	}
+	if len(matches) != 1 {
+		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	listener := matches[0]
+	value, ok := credential(listener.Secret, "listener/"+listener.ID, origin)
+	if !ok || len(value) == 0 || secret == "" || !hmac.Equal(value, []byte(secret)) {
+		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	return listener.Connector, nil
 }

@@ -2,13 +2,16 @@ package authoring
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/functions/runtime"
 )
 
 type CapabilityPreparation struct {
@@ -159,4 +162,147 @@ func MemberQueryVersion(definitions []platform.Definition, appVersion string, re
 		break
 	}
 	return platform.NamedQuery{}, "", false
+}
+
+func VisibleCapabilities(definitions []platform.Definition, builder bool, allowed func(d platform.Definition, permission string, roles []string) bool) []platform.CapabilityDescriptor {
+	visible := make([]platform.Definition, 0, len(definitions))
+	for _, definition := range definitions {
+		if len(definition.Provides) == 0 {
+			continue
+		}
+		permission, roles := CapabilityPermission(definition)
+		if permission != "" && !allowed(definition, permission, roles) {
+			continue
+		}
+		visible = append(visible, definition)
+	}
+	return CapabilityPalette(visible, builder)
+}
+
+func DescribeCapability(ref platform.AssetRef, version int, retained func() (platform.CapabilityDescriptor, bool), palette func() []platform.CapabilityDescriptor) (platform.CapabilityDescriptor, *kernel.Error) {
+	if version > 0 {
+		if descriptor, ok := retained(); ok {
+			return descriptor, nil
+		}
+		return platform.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Retained capability is unavailable to this member")
+	}
+	for _, descriptor := range palette() {
+		if descriptor.Ref == ref {
+			return descriptor, nil
+		}
+	}
+	return platform.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Capability or retained version is unavailable to this member")
+}
+
+type RetainedHooks struct {
+	Query    func() (platform.NamedQuery, string, bool)
+	Entities func() []platform.EntityInfo
+	Function func(app platform.App, name string, version int) (platform.AIFunction, int, bool)
+	Allowed  func(name string, roles []string) bool
+}
+
+func RetainedCapability(app platform.App, ref platform.AssetRef, version int, h RetainedHooks) (platform.CapabilityDescriptor, bool) {
+	if app == nil || version < 1 {
+		return platform.CapabilityDescriptor{}, false
+	}
+	selected := CapabilityVersion{Ref: ref, AppVersion: app.Manifest().Version, Revision: version}
+	switch ref.Kind {
+	case platform.AssetQuery:
+		query, source, ok := h.Query()
+		if !ok {
+			return platform.CapabilityDescriptor{}, false
+		}
+		selected.Query, selected.QueryVersion = &query, source
+		selected.Entity = QueryEntity(h.Entities(), query.Object)
+	case platform.AssetCompute:
+		operation, ordinal, ok := compute.OperationDefinition(app, ref.Name, version)
+		if !ok || ordinal != version || !h.Allowed(operation.Name, operation.Roles) {
+			return platform.CapabilityDescriptor{}, false
+		}
+		selected.Operation = &operation
+	case platform.AssetFunction:
+		function, ordinal, ok := h.Function(app, ref.Name, version)
+		if !ok || ordinal != version || !h.Allowed(function.Name, function.Roles) || !FunctionReadable(function, h.Entities()) {
+			return platform.CapabilityDescriptor{}, false
+		}
+		selected.Function = &function
+	default:
+		return platform.CapabilityDescriptor{}, false
+	}
+	return DescribeRetainedCapability(selected)
+}
+
+func ActionAnswer(answer platform.CapabilityResult, record *pb.ChangeRecord) platform.CapabilityResult {
+	if record == nil {
+		answer.State = "pending"
+		return answer
+	}
+	answer.Result, _ = protojson.Marshal(record)
+	answer.State = "completed"
+	if record.GetSubmission().GetTarget().GetType() == "work.approval" && record.GetSubmission().GetSchema().GetName() == "work.approval.request" {
+		answer.State = "pending"
+	}
+	return answer
+}
+
+func AIAnswer(id, state, output, reason string) platform.OperationResult {
+	answer := platform.OperationResult{ID: id, State: "pending"}
+	if state == "ready" {
+		answer.State, answer.Output = "completed", json.RawMessage(output)
+	}
+	if state == "rejected" {
+		answer.State, answer.Error = "failed", reason
+	}
+	return answer
+}
+
+type Closures struct {
+	Assets   func() ([]platform.ReleaseAsset, error)
+	Describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error)
+	Retain   func(candidate platform.ReleaseCandidate, ref platform.AssetRef, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error)
+	Version  func(app string) string
+}
+
+func (c Closures) capability(ref platform.AssetRef, body json.RawMessage, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error) {
+	available, err := c.Assets()
+	if err != nil {
+		return platform.ReleaseCandidate{}, "", err
+	}
+	i := slices.IndexFunc(available, func(a platform.ReleaseAsset) bool { return a.Ref == ref })
+	if i < 0 {
+		return platform.ReleaseCandidate{}, "", fmt.Errorf("capability %s has no release owner", ref)
+	}
+	available[i].Body = body
+	if sourceVersion != "" {
+		available[i].SourceVersion = sourceVersion
+	}
+	available[i], err = c.Describe(available[i])
+	if err != nil {
+		return platform.ReleaseCandidate{}, "", err
+	}
+	candidate, err := platform.Candidate([]platform.AssetRef{ref}, available)
+	if err != nil {
+		return platform.ReleaseCandidate{}, "", err
+	}
+	return c.Retain(candidate, ref, sourceVersion, retained)
+}
+
+func (c Closures) closure(app string, kind platform.AssetKind, name, suffix string, definition any, version int, retained *string) (platform.ReleaseCandidate, string, error) {
+	body, err := json.Marshal(definition)
+	if err != nil {
+		return platform.ReleaseCandidate{}, "", err
+	}
+	sourceVersion := ""
+	if version > 0 {
+		sourceVersion = c.Version(app) + suffix + strconv.Itoa(version)
+	}
+	return c.capability(platform.AssetRef{App: app, Kind: kind, Name: name}, body, sourceVersion, retained)
+}
+
+func (c Closures) Operation(app string, op platform.Operation, version int, retained *string) (platform.ReleaseCandidate, string, error) {
+	return c.closure(app, platform.AssetCompute, op.Name, ".compute-", op, version, retained)
+}
+
+func (c Closures) Function(app string, f platform.AIFunction, version int, retained *string) (platform.ReleaseCandidate, string, error) {
+	return c.closure(app, platform.AssetFunction, f.Name, ".function-", f, version, retained)
 }

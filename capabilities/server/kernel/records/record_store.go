@@ -444,3 +444,36 @@ type StoredState struct {
 }
 
 func (s *Store) Rules() platform.RuleEngine { return s.rules }
+
+func (s *Store) ArchivedCopy(typ, id string, archived bool) any {
+	et := s.Type(typ)
+	value := Copy(et.Info().Go, et.Rows().Get(id).Value.Interface())
+	value.FieldByName("Archived").SetBool(archived)
+	return value.Interface()
+}
+
+func (s *Store) DecodeRow(typ string, image json.RawMessage) (any, error) {
+	value := reflect.New(s.Type(typ).Info().Go)
+	err := json.Unmarshal(image, value.Interface())
+	return value.Elem().Interface(), err
+}
+
+func (s *Store) RowImage(record string) json.RawMessage {
+	typ, id, _ := strings.Cut(record, "/")
+	image, _ := json.Marshal(s.Type(typ).Rows().Get(id).Value.Interface())
+	return image
+}
+
+func (s *Store) LockedRow(typ, id string) (any, bool) {
+	s.Lock()
+	defer s.Unlock()
+	et := s.Type(typ)
+	if et == nil {
+		return nil, false
+	}
+	row := et.Rows().Get(id)
+	if row == nil {
+		return nil, false
+	}
+	return row.Value.Interface(), true
+}

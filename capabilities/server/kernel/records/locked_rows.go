@@ -1,6 +1,12 @@
 package records
 
-import "platformserver/platform"
+import (
+	"encoding/json"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/platform"
+)
 
 func LockedRows[T any](s *Store, typ string) []T {
 	s.Lock()
@@ -33,4 +39,42 @@ func LockedFields(s *Store, typ string) ([]platform.FieldInfo, bool) {
 		return et.Info().Fields, true
 	}
 	return nil, false
+}
+
+func LockedActive(s *Store, typ, id string) (platform.EntityInfo, bool) {
+	s.Lock()
+	defer s.Unlock()
+	et := s.Type(typ)
+	if et == nil {
+		return platform.EntityInfo{}, false
+	}
+	row := et.Rows().Get(id)
+	return et.Info(), row != nil && !Header(row.Value).Archived
+}
+
+func LockedAISource(s *Store, f platform.AIFunction, id string, readable func() bool, prepare func(input map[string]any)) (uint32, map[string]json.RawMessage, *kernel.Error) {
+	s.Lock()
+	defer s.Unlock()
+	et := s.Type(f.Object)
+	if et == nil {
+		return 0, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function source is not readable")
+	}
+	row := et.Rows().Get(id)
+	if row == nil || Header(row.Value).Archived || !readable() {
+		return 0, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
+	}
+	input := map[string]any{}
+	for _, name := range f.Fields {
+		field, found := et.Info().Field(name)
+		if !found || field.AIInput != nil && !*field.AIInput {
+			return 0, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
+		}
+		input[name] = row.Value.FieldByIndex(field.Index).Interface()
+	}
+	values := map[string]json.RawMessage{}
+	for field, value := range input {
+		values[field] = platform.Raw(value)
+	}
+	prepare(input)
+	return Header(row.Value).Revision, values, nil
 }

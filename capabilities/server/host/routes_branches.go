@@ -31,7 +31,7 @@ func (h *Host) routesBranches(rt *routes) {
 		return &branchFailure{Error: platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)}
 	}
 	body := func(r *http.Request, into any) *branchFailure {
-		if err := decodeBodyLimit(r, into, build.BranchMaxSpec+4096); err != nil {
+		if err := transport.DecodeBodyLimit(r, into, build.BranchMaxSpec+4096); err != nil {
 			return invalid("The request must be one valid bounded JSON object")
 		}
 		return nil

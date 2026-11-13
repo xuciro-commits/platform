@@ -9,8 +9,6 @@ import (
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 
-	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -39,43 +37,15 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			return authorizationRefusal(t.authorizeCapability(c, owner, f.Name, f.Roles, f.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition}))
 		},
 		Source: func(member platform.Member, request platform.FunctionRequest, f platform.AIFunction, owner, sourceRef, definition string, version int) (agentowner.FunctionSource, *kernel.Error) {
-			source := strings.TrimPrefix(sourceRef, f.Object+"/")
-			at := r.GetRecordedTime().AsTime()
-			var err error
-			var sourceRevision uint32
-			var sourceValues map[string]json.RawMessage
 			var raw []byte
 			var historySources []string
-			var conversationErr error
-			if refusal := func() *kernel.Error {
-				store.Lock()
-				defer store.Unlock()
-				et := store.Type(f.Object)
-				if et == nil {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function source is not readable")
-				}
-				row := et.Rows().Get(source)
-				if row == nil || records.Header(row.Value).Archived || !t.readableIn(store, member, sourceRef, at) {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
-				}
-				input := map[string]any{}
-				for _, name := range f.Fields {
-					field, found := et.Info().Field(name)
-					if !found || field.AIInput != nil && !*field.AIInput {
-						return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
-					}
-					input[name] = row.Value.FieldByIndex(field.Index).Interface()
-				}
-				sourceRevision = records.Header(row.Value).Revision
-				sourceValues = map[string]json.RawMessage{}
-				for field, value := range input {
-					sourceValues[field] = platform.Raw(value)
-				}
+			var conversationErr, err error
+			revision, values, refusal := records.LockedAISource(store, f, strings.TrimPrefix(sourceRef, f.Object+"/"), func() bool { return t.readableIn(store, member, sourceRef, r.GetRecordedTime().AsTime()) }, func(input map[string]any) {
 				payload, preparedSources, preparedErr := agentowner.FunctionConversation(request, f, owner, sourceRef, definition, version, input, func(id string) (agentowner.FunctionHistory, error) { return t.functionHistory(store, member, id) })
 				historySources, conversationErr = preparedSources, preparedErr
 				raw, err = json.Marshal(payload)
-				return nil
-			}(); refusal != nil {
+			})
+			if refusal != nil {
 				return agentowner.FunctionSource{}, refusal
 			}
 			if conversationErr != nil {
@@ -84,11 +54,11 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			if err != nil {
 				return agentowner.FunctionSource{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The AI function input exceeds its byte budget")
 			}
-			return agentowner.FunctionSource{Revision: sourceRevision, Values: sourceValues, Raw: raw, HistorySources: historySources}, nil
+			return agentowner.FunctionSource{Revision: revision, Values: values, Raw: raw, HistorySources: historySources}, nil
 		},
 		Readable: func(m platform.Member, ref string, at time.Time) bool {
 			return t.mayReadIn(t.Projection, m, at, false)(ref)
-		}, Closure: t.functionClosure, BindApplications: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
+		}, Closure: t.closures().Function, BindApplications: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 			return t.bindApplications(ref, release, dependencies)
 		},
 		Model: func(c platform.Caller, r *pb.ChangeRecord, q platform.Request, pending []platform.Effect, options platform.ModelOptions) (agentowner.FunctionDispatch, *kernel.Error) {
@@ -128,23 +98,12 @@ func (t *Tenant) functionAllowed(app string, ask aigateway.ModelAsk, at time.Tim
 			c := platform.NewCaller(runtime{t: t, scoped: true}, member, owner, false, false)
 			return t.authorizeCapability(c, owner, f.Name, f.Roles, true, authorizationDetails{At: at, Sources: sources, Definition: definition}).Allow
 		},
-		Source: func(typ, id string) (platform.EntityInfo, bool) {
-			t.Projection.Lock()
-			defer t.Projection.Unlock()
-			et := t.Projection.Type(typ)
-			if et == nil {
-				return platform.EntityInfo{}, false
-			}
-			row := et.Rows().Get(id)
-			return et.Info(), row != nil && !records.Header(row.Value).Archived
-		},
+		Source: func(typ, id string) (platform.EntityInfo, bool) { return records.LockedActive(t.Projection, typ, id) },
 	}
 	return agentowner.FunctionAllowed(ctx, app, ask.Function, ask.Model, ask.Record, ask.Call, ask.Prompt, at)
 }
 
-func (h hostView) ValidateInstallFunction(f platform.AIFunction) error {
-	h.t.Projection.Lock()
-	defer h.t.Projection.Unlock()
+func (h hostView) functionInstall() functionauthoring.FunctionInstall {
 	return functionauthoring.FunctionInstall{Manifest: h.app.Manifest(),
 		Source: func(object string) (platform.EntityInfo, bool) {
 			et := h.t.Projection.Type(object)
@@ -154,56 +113,32 @@ func (h hostView) ValidateInstallFunction(f platform.AIFunction) error {
 			return et.Info(), true
 		},
 		Narrowable: func(object string) []string { return h.t.narrowable(h.t.Projection.Type(object)) },
-	}.Validate(f)
+		Check:      h.ValidateInstallFunction,
+		Describe: func(def platform.Definition) (platform.Definition, error) {
+			return h.t.describer().DescribeDefinition(def)
+		},
+		Definitions: func() []platform.Definition { return h.t.definitions },
+		Store:       h.t.storeDefinition,
+	}
+}
+
+func (h hostView) ValidateInstallFunction(f platform.AIFunction) error {
+	h.t.Projection.Lock()
+	defer h.t.Projection.Unlock()
+	return h.functionInstall().Validate(f)
 }
 
 func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, version int) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
 	}
-	if version < 1 {
-		return fmt.Errorf("function %s needs a published version", f.Name)
-	}
-	if err := h.ValidateInstallFunction(f); err != nil {
-		return err
-	}
-	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetFunction, Name: f.Name}
-	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".function-" + strconv.Itoa(version), ContractVersion: 1, Function: &f}
-	def, err := h.t.describer().DescribeDefinition(def)
-	if err != nil {
-		return err
-	}
-	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
-	if i >= 0 && h.t.definitions[i].Source != "tenant" {
-		return fmt.Errorf("function %s is owned by code", ref)
-	}
-	for i := range h.t.definitions {
-		d := &h.t.definitions[i]
-		if d.Ref.App == ref.App && d.Source == "code" && d.Action != nil {
-			if action, ok := h.app.Manifest().Actions.Action(d.Ref.Name); ok {
-				d.Action = &action
-			}
-		}
-	}
-	h.t.storeDefinition(i, def)
-	return nil
+	return h.functionInstall().Install(f, version)
 }
 
 func (h hostView) Function(app, name string, version int) (platform.AIFunction, int, bool) {
 	return agentowner.FunctionDefinition(h.t.App(app), name, version)
 }
 
-func (t *Tenant) functionClosure(app string, f platform.AIFunction, version int, retained *string) (platform.ReleaseCandidate, string, error) {
-	body, err := json.Marshal(f)
-	if err != nil {
-		return platform.ReleaseCandidate{}, "", err
-	}
-	sourceVersion := ""
-	if version > 0 {
-		sourceVersion = t.App(app).Manifest().Version + ".function-" + strconv.Itoa(version)
-	}
-	return t.capabilityClosure(platform.AssetRef{App: app, Kind: platform.AssetFunction, Name: f.Name}, body, sourceVersion, retained)
-}
 func (t *Tenant) functionHistory(store *records.Store, member platform.Member, id string) (agentowner.FunctionHistory, error) {
 	et := store.Type(build.FunctionCallType)
 	if et == nil {

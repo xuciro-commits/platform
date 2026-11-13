@@ -4,9 +4,9 @@ import (
 	"strconv"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/ai/gateway"
 )
 
 var purgeAll = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
@@ -43,26 +43,8 @@ func (t *Tenant) PurgeTranscripts(now time.Time) {
 }
 
 func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now time.Time) ([]Transcript, *kernel.Error) {
-	if err := t.Admits(m); err != nil {
-		return nil, err
-	}
-	if m.Roles[platform.AgentApp] != platform.AgentAdmin && m.Roles[platform.AIApp] != platform.AIAdmin {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: "only an administrator of the agent or AI app reads transcripts"}
-	}
-	found := t.Transcripts(run, limit)
-	if run == "" {
-		return found, nil
-	}
-	out := []Transcript{}
-	for _, x := range found {
-		if !t.withheld(m, x.Run, now) {
-			out = append(out, x)
-		}
-	}
-	if run != "" && len(out) == 0 && len(found) > 0 {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: "this run read records you may not read"}
-	}
-	return out, nil
+	return aigateway.TranscriptReader[Transcript]{Admits: t.Admits, Find: t.Transcripts, Run: func(x Transcript) string { return x.Run },
+		Withheld: func(run string) bool { return t.withheld(m, run, now) }}.Read(m, run, limit)
 }
 
 func (t *Tenant) withheld(m platform.Member, run string, now time.Time) bool {

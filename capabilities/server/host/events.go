@@ -7,7 +7,6 @@ import (
 	"platformkernel/kernel"
 
 	"platformserver/platform"
-	"slices"
 	"time"
 )
 
@@ -18,25 +17,15 @@ func (t *Tenant) publish(e platform.Event) {
 }
 
 func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan, *kernel.Error) {
-	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.router().Events(e)...)
-	effects, refusal := t.eventEffects(e, names, true)
-	if refusal != nil {
-		return platform.AcceptedEventPlan{}, refusal
-	}
-	plan := platform.AcceptedEventPlan{App: e.App, Changed: slices.Clone(e.Changed), Names: names,
-		Effects: effects}
-	for _, a := range t.LiveApps() {
-		if slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
-			plan.Subscribers = append(plan.Subscribers, a.Manifest().ID)
-		}
-	}
-	for _, id := range t.listeners {
-		if id != e.App && t.App(id).(platform.Listener).Interested(names, e) &&
-			!slices.Contains(plan.Subscribers, id) {
-			plan.Subscribers = append(plan.Subscribers, id)
-		}
-	}
-	return plan, nil
+	return automation.AcceptedEventPlanner{
+		Routed: t.router().Events,
+		Effects: func(e platform.Event, names []string) ([]platform.Effect, *kernel.Error) {
+			return t.eventEffects(e, names, true)
+		},
+		Apps:      t.LiveApps,
+		Listeners: t.listeners,
+		Listener:  func(id string) platform.Listener { return t.App(id).(platform.Listener) },
+	}.Plan(e)
 }
 
 func (t *Tenant) publishAccepted(e platform.Event, plan platform.AcceptedEventPlan) {

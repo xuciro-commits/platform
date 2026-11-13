@@ -441,3 +441,22 @@ type ValidationContext struct {
 	PageQueries func(platform.Page) error
 	Navigation  func(platform.Page, string) error
 }
+
+func StageInstallations(registry *platform.AssetRegistry, installations []platform.ReleaseInstallation, apply platform.AssetApplyContext, check func(platform.AssetInstallation, platform.ReleaseInstallation) error, record func(platform.AssetInstallation) error) error {
+	for _, installation := range installations {
+		plan, err := InstallationPlan(registry, installation)
+		if err != nil {
+			return err
+		}
+		if err := check(plan, installation); err != nil {
+			return err
+		}
+		if err := registry.ApplyInstallation(plan, apply); err != nil {
+			return err
+		}
+		if err := record(plan); err != nil {
+			return err
+		}
+	}
+	return nil
+}

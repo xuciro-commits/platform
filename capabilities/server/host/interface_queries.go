@@ -5,9 +5,6 @@ import (
 	"platformserver/services/objects"
 )
 
-type InterfaceRecord = objects.InterfaceRecord
-type InterfaceRecordPage = objects.InterfaceRecordPage
-
 func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.EntityInfo) (platform.NamedQuery, error) {
 	var types []platform.EntityInfo
 	if q.InterfaceShape == nil {

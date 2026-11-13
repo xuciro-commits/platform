@@ -1,56 +1,28 @@
 package host
 
-import transport "platformserver/kernel/transport"
-
 import (
 	"net/http"
+	"platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/devops/packages"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"strings"
 )
 
 func (t *Tenant) baseModules() []platform.CapabilityModule {
-	modules := []platform.CapabilityModule{t.services.RuleModule, t.services.AuthModule, t.services.KernelModule, t.services.StorageModule}
-	for _, app := range t.apps {
-		m := app.Manifest()
-		module := platform.CapabilityModule{ID: "platform.owner." + m.ID, Title: m.Title, Version: m.Version, Scope: "tenant", Replacement: "restart", Provides: []platform.CapabilityContract{{ID: "platform.owner." + m.ID, Version: "1", Semantics: "1"}}}
-		module.StateFormat = app.SnapshotFormat()
-		for _, provider := range modules[:4] {
-			module.Requires = append(module.Requires, provider.Provides...)
-		}
-		needs := map[string]bool{}
-		for _, need := range m.Consumes {
-			if provider, found := t.bindings.All()[need.Protocol]; found && !need.Optional {
-				needs[provider] = true
+	return packages.Composition{
+		Base:     []platform.CapabilityModule{t.services.RuleModule, t.services.AuthModule, t.services.KernelModule, t.services.StorageModule},
+		Apps:     t.apps,
+		Bindings: func() map[string]string { return t.bindings.All() },
+		Entity: func(typ string) (platform.EntityInfo, bool) {
+			if et := t.Projection.Type(typ); et != nil {
+				return et.Info(), true
 			}
-		}
-		for _, entity := range m.Entities {
-			if declared := t.Projection.Type(entity.Type); declared != nil {
-				for _, field := range declared.Info().Fields {
-					if referenced := t.Projection.Type(field.Ref); referenced != nil {
-						needs[referenced.Info().App] = true
-					}
-				}
-			}
-		}
-		if m.ID == controlowner.PlatformApp {
-			for _, app := range t.apps {
-				if _, ok := app.(platform.Directory); ok {
-					needs[app.Manifest().ID] = true
-				}
-			}
-		}
-		for id := range needs {
-			if id != m.ID {
-				module.Requires = append(module.Requires, platform.CapabilityContract{ID: "platform.owner." + id, Version: "1", Semantics: "1"})
-			}
-		}
-		slices.SortFunc(module.Requires, func(a, b platform.CapabilityContract) int { return strings.Compare(a.ID, b.ID) })
-		modules = append(modules, module)
-	}
-	slices.SortFunc(modules, func(a, b platform.CapabilityModule) int { return strings.Compare(a.ID, b.ID) })
-	return modules
+			return platform.EntityInfo{}, false
+		},
+		PlatformApp: controlowner.PlatformApp,
+	}.Modules()
 }
 
 func (h *Host) routesComposition(rt *routes) {

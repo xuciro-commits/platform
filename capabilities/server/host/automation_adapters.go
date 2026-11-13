@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"platformserver/platform"
 	automation "platformserver/services/automate/runtime"
-	"slices"
 )
 
 func (h hostView) flowBindings() automation.FlowBindingContext {
@@ -23,13 +22,7 @@ func (t *Tenant) nativeFlowAsset(owner platform.App, name string, version int) (
 		return platform.ReleaseAsset{}, fmt.Errorf("native flow has no original descriptor owner")
 	}
 	manifest := owner.Manifest()
-	refs := []platform.AssetRef{}
-	for _, definition := range t.definitions {
-		if definition.Source == "code" && definition.Ref.App == manifest.ID && !slices.Contains([]platform.AssetKind{platform.AssetApp, platform.AssetFlow, platform.AssetProtocol, platform.AssetInterface}, definition.Ref.Kind) {
-			refs = append(refs, definition.Ref)
-		}
-	}
-	return provider.NativeFlowAsset(manifest, name, version, releaseowner.UniqueRefs(refs))
+	return provider.NativeFlowAsset(manifest, name, version, releaseowner.NativeFlowRefs(t.definitions, manifest.ID))
 }
 func (t *Tenant) flowReleaseAsset(app, name string, version int) (platform.ReleaseAsset, error) {
 	owner := t.App(app)

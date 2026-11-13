@@ -3,6 +3,7 @@ package compute
 import (
 	"fmt"
 	"slices"
+	"strconv"
 
 	"platformserver/platform"
 )
@@ -51,5 +52,46 @@ func ValidateOperation(o platform.Operation, app platform.App, engine platform.R
 			return fmt.Errorf("operation %s has no native executor", o.Name)
 		}
 	}
+	return nil
+}
+
+type OperationInstall struct {
+	App         platform.App
+	Rules       platform.RuleEngine
+	RuleQuery   func(app, name string, version int) (platform.NamedQuery, int, bool)
+	Entity      func(string) (platform.EntityInfo, bool)
+	Retained    func(module string) bool
+	Describe    func(platform.Definition) (platform.Definition, error)
+	Definitions func() []platform.Definition
+	Store       func(index int, def platform.Definition)
+}
+
+func (i OperationInstall) Validate(c platform.Caller, o platform.Operation) error {
+	var engine platform.RuleEngine = i.Rules
+	if c.Replaying {
+		engine = platform.NativeRules{}
+	}
+	return ValidateOperation(o, i.App, engine, i.RuleQuery, i.Entity, i.Retained)
+}
+
+func (i OperationInstall) Install(c platform.Caller, o platform.Operation, version int) error {
+	if version < 1 {
+		return fmt.Errorf("operation requires a published owner version")
+	}
+	if err := i.Validate(c, o); err != nil {
+		return err
+	}
+	ref := platform.AssetRef{App: i.App.Manifest().ID, Kind: platform.AssetCompute, Name: o.Name}
+	def := platform.Definition{Ref: ref, Source: "tenant", Version: i.App.Manifest().Version + ".compute-" + strconv.Itoa(version), ContractVersion: 1, Operation: &o}
+	def, err := i.Describe(def)
+	if err != nil {
+		return err
+	}
+	definitions := i.Definitions()
+	at := slices.IndexFunc(definitions, func(d platform.Definition) bool { return d.Ref == ref })
+	if at >= 0 && definitions[at].Source != "tenant" {
+		return fmt.Errorf("operation %s is owned by code", o.Name)
+	}
+	i.Store(at, def)
 	return nil
 }

@@ -69,7 +69,6 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 			return platform.FlowBatchOutcome{}, refusal
 		}
 	}
-	current := m
 	store := t.frames()
 	prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedBatch, *kernel.Error) {
 		f, latest, _, refusal := t.continuousSnapshotLocked(m, id, now)
@@ -85,49 +84,31 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
+	keep := automation.Retention{Artifacts: prepared.Artifacts(), Discard: store.Discard, DiscardInput: t.staged.DiscardInput}
+	defer keep.Release()
 	var preparedInput *preparedOperationInput
 	if request, ok := prepared.OperationRequest(); ok {
-		preparedInput, refusal = t.prepareContinuousOperationInput(current, id, request)
+		preparedInput, refusal = t.prepareContinuousOperationInput(m, id, request)
 		if refusal != nil {
-			for _, artifact := range prepared.Artifacts() {
-				_ = store.Discard(artifact)
-			}
 			return platform.FlowBatchOutcome{}, refusal
 		}
+		keep.Input = preparedInput.artifact()
 	}
-	retained, inputRetained := false, false
-	defer func() {
-		if !retained {
-			for _, artifact := range prepared.Artifacts() {
-				_ = store.Discard(artifact)
-			}
-		}
-		if preparedInput != nil && !inputRetained {
-			t.staged.DiscardInput(preparedInput.ref)
-		}
-	}()
 	member := platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}
 	_, refusal = decideOnImage(t, context.Background(), "flow:batch", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
 		f, latest, current, refusal := t.continuousSnapshotLocked(m, id, now)
 		if refusal != nil {
 			return nil, refusal
 		}
-		if !prepared.Matches(latest) {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
-		}
-		if batch.Source != nil {
-			plan, refusal := f.PlanBatch(latest, t.automation(platform.FlowApp, false))
-			if refusal != nil {
-				return nil, refusal
-			}
-			if refusal := t.checkStreamSourceLocked(current, plan, latest, *batch.Source, batch.Tick, now); refusal != nil {
-				return nil, refusal
-			}
+		if refusal := automation.GuardPrepared(prepared, f, t.automation(platform.FlowApp, false), latest, "The Flow changed while its source batch was prepared", batch.Source, func(plan platform.FlowBatchPreparation, checkpoint platform.FlowSourceCheckpoint) *kernel.Error {
+			return t.checkStreamSourceLocked(current, plan, latest, checkpoint, batch.Tick, now)
+		}); refusal != nil {
+			return nil, refusal
 		}
 		return t.accept(prepared.Decision(f), member, prepared.Submission(t.ID), now, acceptOptions{automation: true, inputs: []*preparedOperationInput{preparedInput}})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		if len(candidate.entry.Body) != 0 {
-			retained, inputRetained = true, true
+			keep.KeepArtifacts, keep.KeepInput = true, true
 		}
 		return t.finishPreparedSubmission(member, candidate, record, refusal)
 	})
@@ -144,8 +125,7 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
-	retained = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket
-	inputRetained = preparedInput != nil
+	keep.KeepArtifacts, keep.KeepInput = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket, true
 	return platform.FlowBatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
 }
 
@@ -223,49 +203,34 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 	if err != nil {
 		return nil, err, true
 	}
+	keep := automation.Retention{Artifacts: prepared.Artifacts(), Discard: store.Discard, DiscardInput: t.staged.DiscardInput}
+	defer keep.Release()
 	var preparedInput *preparedOperationInput
-	retained, inputRetained := false, false
-	defer func() {
-		if !retained {
-			for _, artifact := range prepared.Artifacts() {
-				_ = store.Discard(artifact)
-			}
-		}
-		if preparedInput != nil && !inputRetained {
-			t.staged.DiscardInput(preparedInput.ref)
-		}
-	}()
 	if request, ok := prepared.OperationRequest(); ok {
 		preparedInput, err = t.prepareContinuousOperationInput(preparedContext.Member, preparedContext.Instance.ID, request)
 		if err != nil {
 			return nil, err, true
 		}
+		keep.Input = preparedInput.artifact()
 	}
 	record, err := decideOnImage(t, context.Background(), "flow:replay", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
 		f, latest, current, refusal := t.continuousSnapshotLocked(preparedContext.Member, preparedContext.Instance.ID, now)
 		if refusal != nil {
 			return nil, refusal
 		}
-		if !prepared.Matches(latest) {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original Flow changed while dead-letter replay was prepared")
-		}
-		if latest.Batch.Source != nil {
-			plan, refusal := f.PlanBatch(latest, t.automation(platform.FlowApp, false))
-			if refusal != nil {
-				return nil, refusal
-			}
-			if refusal := t.checkStreamSourceLocked(current, plan, latest, *latest.Batch.Source, true, now); refusal != nil {
-				return nil, refusal
-			}
+		if refusal := automation.GuardPrepared(prepared, f, t.automation(platform.FlowApp, false), latest, "The original Flow changed while dead-letter replay was prepared", latest.Batch.Source, func(plan platform.FlowBatchPreparation, checkpoint platform.FlowSourceCheckpoint) *kernel.Error {
+			return t.checkStreamSourceLocked(current, plan, latest, checkpoint, true, now)
+		}); refusal != nil {
+			return nil, refusal
 		}
 		return t.accept(prepared.Decision(f), current, sub, now, acceptOptions{binding: first.Binding, inputs: []*preparedOperationInput{preparedInput}})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		if len(candidate.entry.Body) > 0 {
-			retained, inputRetained = true, preparedInput != nil
+			keep.KeepArtifacts, keep.KeepInput = true, true
 		}
 		record, refusal = t.finishPreparedSubmission(preparedContext.Member, candidate, record, refusal)
 		if _, rejected := t.Committed.Refusal(platform.FlowApp + "/" + sub.GetIdempotencyKey()); rejected {
-			retained, inputRetained = false, false
+			keep.KeepArtifacts, keep.KeepInput = false, false
 		}
 		return record, refusal
 	})
@@ -317,12 +282,8 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.Fl
 		log.Printf("continuous Compute retry %s input refused: %s", instance, refusal.Code)
 		return
 	}
-	inputRetained := false
-	defer func() {
-		if preparedInput != nil && !inputRetained {
-			t.staged.DiscardInput(preparedInput.ref)
-		}
-	}()
+	keep := automation.Retention{Input: preparedInput.artifact(), DiscardInput: t.staged.DiscardInput}
+	defer keep.Release()
 	actor := platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}
 	_, refusal = decideOnImage(t, context.Background(), "flow:retry", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
 		f, latest, _, refusal := t.continuousSnapshotLocked(member, instance, now)
@@ -335,7 +296,7 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.Fl
 		return t.accept(prepared.Decision(f), actor, prepared.Submission(t.ID), now, acceptOptions{automation: true, inputs: []*preparedOperationInput{preparedInput}})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		if len(candidate.entry.Body) != 0 {
-			inputRetained = true
+			keep.KeepInput = true
 		}
 		return t.finishPreparedSubmission(actor, candidate, record, refusal)
 	})
@@ -343,7 +304,7 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.Fl
 		log.Printf("continuous Compute retry %s refused: %s", instance, refusal.Code)
 		return
 	}
-	inputRetained = preparedInput != nil
+	keep.KeepInput = true
 }
 
 func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instance string, request platform.OperationRequest) (*preparedOperationInput, *kernel.Error) {
@@ -377,4 +338,11 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 		return nil, refusal
 	}
 	return &preparedOperationInput{ref: ref, requestHash: requestHash}, nil
+}
+
+func (p *preparedOperationInput) artifact() *platform.OperationInputArtifact {
+	if p == nil {
+		return nil
+	}
+	return &p.ref
 }

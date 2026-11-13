@@ -2,7 +2,6 @@ package host
 
 import (
 	"platformserver/platform"
-	"platformserver/services/ai/gateway"
 	"platformserver/services/resources/authoring"
 
 	"platformkernel/kernel"
@@ -15,16 +14,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 		agents = &caller
 	}
 	return build.ApplicationAI{Agents: agents, Evaluations: t.automation(build.ID, false), Model: func(kind, name string, options platform.ModelOptions) (string, string, bool) {
-		binding, pv, err := t.modelResolver().Resolve(kind, name, options)
-		if err != nil {
-			return "", "", false
-		}
-		model, _, _ := t.ai.Model(binding.Model)
-		config := ""
-		if pinned, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageDesign); refusal == nil {
-			config, _ = aigateway.ConfigurationDigest(model, pv, &pinned)
-		}
-		return binding.Model, config, true
+		return t.modelResolver().Describe(kind, name, options)
 	}}.List(m, assets, visible)
 }
 

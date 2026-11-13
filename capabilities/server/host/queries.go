@@ -1,10 +1,10 @@
 package host
 
-import records "platformserver/kernel/records"
-
 import (
-	"platformserver/services/objects"
 	"time"
+
+	records "platformserver/kernel/records"
+	"platformserver/services/objects"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -12,27 +12,14 @@ import (
 )
 
 func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
-	for _, d := range t.definitions {
-		if d.Ref == (platform.AssetRef{App: app, Kind: platform.AssetQuery, Name: name}) && d.Query != nil {
-			return *d.Query, true
-		}
+	if q := objects.DeclaredQuery(t.definitions, app, name, ""); q != nil {
+		return *q, true
 	}
 	return platform.NamedQuery{}, false
 }
 
 func (t *Tenant) queryWindowRead(m platform.Member, app, name, of, version string, window platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	var declared *platform.NamedQuery
-	for _, d := range t.Definitions(m) {
-		if d.Ref != (platform.AssetRef{App: app, Kind: platform.AssetQuery, Name: name}) {
-			continue
-		}
-		if version == "" {
-			declared = d.Query
-		} else if bound := d.QueryVersion(version); bound != nil {
-			declared = bound.Query
-		}
-		break
-	}
+	declared := objects.DeclaredQuery(t.Definitions(m), app, name, version)
 	if declared == nil {
 		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
@@ -44,18 +31,10 @@ func (t *Tenant) runDeclaredQueryFrom(store *records.Store, m platform.Member, q
 }
 
 func (t *Tenant) runDeclaredQueryWindowFrom(store *records.Store, m platform.Member, q platform.NamedQuery, of string, window platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	if q.By != "" && of == "" {
-		return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{query} needs the record it is run for", q.Title)
+	set, bounds, refusal := objects.DeclaredWindow(q, of, window)
+	if refusal != nil {
+		return RecordPage{}, refusal
 	}
-	limit := q.Limit
-	if limit <= 0 || limit > 200 {
-		limit = 200
-	}
-	if window.Limit > 0 {
-		limit = min(window.Limit, limit)
-	}
-	set := q.ObjectSet(of)
-	set.Search = window.Search
-	page, _, err := t.loadObjectSet(store, platform.NewCaller(runtime{t: t, scoped: true}, m, "", false, false), set, objects.Window{Sort: q.Sort, Offset: window.Offset, Limit: limit}, now, q)
+	page, _, err := t.loadObjectSet(store, platform.NewCaller(runtime{t: t, scoped: true}, m, "", false, false), set, bounds, now, q)
 	return page, err
 }

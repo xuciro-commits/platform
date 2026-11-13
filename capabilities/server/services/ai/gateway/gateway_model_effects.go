@@ -104,3 +104,13 @@ func (ask ModelAsk) EvaluationDrift(model platform.AIModel, provider platform.AI
 	}
 	return ""
 }
+
+func AnswerSubmission(tenant string, x platform.Effect, o platform.Outcome, usage *platform.AIUsage, app func(string) platform.App, authority func(string) string) (platform.App, *pb.Submission) {
+	var ask ModelAsk
+	json.Unmarshal([]byte(x.Body), &ask)
+	owner := app(x.App)
+	if owner == nil || ask.Reply == "" {
+		return nil, nil
+	}
+	return owner, ask.Submission(tenant, x, o, usage, authority)
+}

@@ -1,10 +1,13 @@
 package data
 
 import (
+	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"slices"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
@@ -87,4 +90,43 @@ func (m DatasetMerge) Project(object, dataset string, ds Dataset, data []map[str
 		}
 	}
 	return result
+}
+
+type DatasetPreparation struct {
+	Dataset  Dataset
+	Previous DatasetProjection
+	Known    bool
+	Data     []map[string]any
+	Version  int
+	Marking  string
+	Member   platform.Member
+	Err      error
+}
+
+func (o *Owner) PrepareProjection(c platform.Caller, authority, builder, object, dataset string) DatasetPreparation {
+	ds, ok := platform.Get[Dataset](c, dataset)
+	previous, known := ds.Projection(object)
+	if !ok || ds.Version == 0 || known && previous.Version == ds.Version && previous.Paused == "" && previous.MergeVersion == 1 {
+		return DatasetPreparation{}
+	}
+	data, version, err := DatasetRows(c, dataset, ds.Version)
+	marking := ds.Marking
+	if fixed, refused := o.ExecutionDataset(ds); refused == nil {
+		marking = fixed.Marking
+	}
+	member := c.Member
+	member.Roles = map[string]string{authority: builder}
+	return DatasetPreparation{Dataset: ds, Previous: previous, Known: known, Data: data, Version: version, Marking: marking, Member: member, Err: err}
+}
+
+func ProjectionSubmission(tenant, authority string, member platform.Member, dataset string, previous DatasetProjection, known bool, result DatasetProjection) *pb.Submission {
+	if known && previous.MergeVersion == result.MergeVersion && previous.Deleted == result.Deleted && slices.Equal(previous.Objects, result.Objects) && previous.Version == result.Version && previous.Paused == result.Paused && previous.Written == result.Written && previous.Refused == result.Refused && slices.Equal(previous.Problems, result.Problems) {
+		return nil
+	}
+	payload, _ := json.Marshal(map[string]any{"projection": result})
+	digest := fnv.New64a()
+	_, _ = digest.Write(payload)
+	key := fmt.Sprintf("projection:%s:%s@%d:%x", result.Object, dataset, result.Version, digest.Sum64())
+	return &pb.Submission{TenantId: tenant, PrincipalId: member.ID, Authority: authority, IdempotencyKey: key,
+		Target: &pb.EntityRef{Type: DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: SchemaDatasetProjected, Version: 1}, Payload: payload}
 }

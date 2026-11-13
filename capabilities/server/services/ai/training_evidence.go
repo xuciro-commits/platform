@@ -15,9 +15,24 @@ type TrainingWorld struct {
 	App      func(string) platform.App
 	Entity   func(string) (platform.EntityInfo, bool)
 	Provider func(string) (platform.App, string, bool)
+	Live     func() []platform.App
+	Caller   func(app string) platform.Caller
+	Image    func(ref, change string) (json.RawMessage, bool)
 }
 
-func (w TrainingWorld) Evidence(out platform.AITrainingEvidence, event platform.Event, images map[string]json.RawMessage) platform.AITrainingEvidence {
+func (w TrainingWorld) Evidence(event platform.Event) platform.AITrainingEvidence {
+	out := platform.AITrainingEvidence{}
+	images := map[string]json.RawMessage{}
+	for _, ref := range event.Changed {
+		if image, ok := w.Image(ref, event.Record.GetChangeId()); ok {
+			images[ref] = image
+		}
+	}
+	for _, app := range w.Live() {
+		if owner, ok := app.(platform.TrainingEvidenceOwner); ok {
+			out.Candidates = append(out.Candidates, owner.TrainingCandidates(w.Caller(app.Manifest().ID), event, images)...)
+		}
+	}
 	for i := range out.Candidates {
 		candidate := &out.Candidates[i]
 		for _, effect := range w.Models {
@@ -107,6 +122,9 @@ func (w TrainingWorld) Evidence(out platform.AITrainingEvidence, event platform.
 }
 
 func (w TrainingWorld) Readable(c platform.Caller, candidate platform.AITrainingCandidate, now time.Time) string {
+	if candidate.Tenant != w.Tenant {
+		return "The training candidate belongs to another tenant"
+	}
 	if candidate.ActionDefinition != "" {
 		owner := w.App(candidate.App)
 		if owner == nil {

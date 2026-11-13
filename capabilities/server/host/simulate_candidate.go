@@ -73,7 +73,7 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 		if err != nil {
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 		}
-		if refusal := trialowner.CandidateModules(candidate, environment.Modules, func(module string) ([]byte, error) { return t.readArtifact(context.Background(), module) }); refusal != nil {
+		if refusal := trialowner.CandidateModules(candidate, environment.Modules, func(module string) ([]byte, error) { return t.artifacts().Read(context.Background(), module) }); refusal != nil {
 			return empty, refusal
 		}
 		out, problem := runCandidateSimulation(request, candidate, environment, m, members, functionName)

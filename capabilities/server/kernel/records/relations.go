@@ -138,3 +138,27 @@ func OwnedRelationRefs(store *Store, link platform.LinkType, direction, source s
 	}
 	return refs
 }
+
+func (s *Store) CheckLinkInstall(l platform.LinkType) error {
+	s.Lock()
+	defer s.Unlock()
+	if l.Storage == "edge" {
+		violations, err := RelationViolations(s, l)
+		if err != nil {
+			return err
+		}
+		if len(violations) > 0 {
+			return fmt.Errorf("owned relationship %s violates %s", l.Name, violations[0].Reason)
+		}
+		return nil
+	}
+	if l.Cardinality == "one-to-one" {
+		if err := s.ValidateUniqueLinkLocked(l); err != nil {
+			return err
+		}
+	}
+	if l.DeletePolicy == "restrict-active" {
+		return s.ValidateArchiveLinkLocked(l)
+	}
+	return nil
+}
