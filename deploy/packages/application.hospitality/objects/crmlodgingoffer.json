@@ -1,0 +1,101 @@
+{
+  "name": "crmlodgingoffer",
+  "title": "Lodging offer",
+  "fields": [
+    {
+      "name": "providerid",
+      "title": "Provider room type",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "unit",
+      "title": "Booking unit",
+      "type": "choice",
+      "choices": "day,hour",
+      "required": true
+    },
+    {
+      "name": "active",
+      "title": "Active",
+      "type": "boolean"
+    }
+  ],
+  "access": [
+    {
+      "role": "sales",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "salesmanager",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "integrator",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "active",
+      "title": "Active"
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.crmlodgingoffer",
+    "steps": [
+      {
+        "name": "active",
+        "kind": "update",
+        "target": {
+          "type": "build.crmlodgingoffer",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "state",
+            "expr": {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "active"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "constraints": [
+    {
+      "name": "offeridentity",
+      "kind": "immutable",
+      "fields": [
+        "providerid",
+        "unit"
+      ],
+      "message": "A provider offer keeps its original identity and booking unit."
+    }
+  ],
+  "type": "build.crmlodgingoffer"
+}

@@ -1,0 +1,338 @@
+{
+  "name": "circuit",
+  "type": "build.circuit",
+  "title": "Heating circuit",
+  "plural": "Heating circuits",
+  "description": "An approval authorizes one absolute setting. RPC acceptance is only delivery evidence. A fresh Observation must match the requested opening before the circuit becomes stable and Dispatch can complete.",
+  "fields": [
+    {
+      "name": "building",
+      "title": "Building",
+      "type": "reference",
+      "ref": "build.building",
+      "required": true
+    },
+    {
+      "name": "zone",
+      "title": "Heating zone",
+      "type": "reference",
+      "ref": "build.zone",
+      "required": true
+    },
+    {
+      "name": "device",
+      "title": "Controller",
+      "type": "reference",
+      "ref": "build.device",
+      "required": true
+    },
+    {
+      "name": "code",
+      "title": "Circuit code",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "name",
+      "title": "Circuit name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "devicekey",
+      "title": "Protocol device ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "requestedopening",
+      "title": "Requested valve opening (%)",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "actualopening",
+      "title": "Accepted valve opening (%)",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "latesttemp",
+      "title": "Accepted supply temperature (C)",
+      "type": "decimal"
+    },
+    {
+      "name": "requestedat",
+      "title": "Command requested at",
+      "type": "datetime"
+    },
+    {
+      "name": "observedat",
+      "title": "Accepted position sampled at",
+      "type": "datetime"
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "dispatchCommands": [
+    {
+      "name": "setvalve",
+      "title": "Set absolute valve opening",
+      "endpointKind": "controller",
+      "writeback": "heatingsetvalve",
+      "idempotent": true
+    }
+  ],
+  "states": [
+    {
+      "name": "steady",
+      "title": "Stable",
+      "tone": "success"
+    },
+    {
+      "name": "review",
+      "title": "Awaiting approval",
+      "tone": "warning"
+    },
+    {
+      "name": "adjusting",
+      "title": "Awaiting position evidence",
+      "tone": "info"
+    }
+  ],
+  "actions": [
+    {
+      "name": "setvalve",
+      "title": "Request valve opening",
+      "from": [
+        "steady"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.circuit",
+        "steps": [
+          {
+            "name": "requested",
+            "kind": "update",
+            "target": {
+              "type": "build.circuit",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "requestedopening",
+                "expr": {
+                  "kind": "integer",
+                  "ref": "input.opening"
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "adjusting"
+                  }
+                }
+              },
+              {
+                "field": "requestedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          }
+        ],
+        "dispatch": {
+          "command": "setvalve",
+          "target": "heatingfield",
+          "key": "$subject",
+          "payload": [
+            {
+              "field": "value",
+              "expr": {
+                "kind": "integer",
+                "ref": "input.opening"
+              }
+            }
+          ],
+          "deadlineSeconds": 120,
+          "readback": {
+            "name": "verifiedposition",
+            "record": "build.circuit",
+            "keyField": "id",
+            "resultField": "state",
+            "states": {
+              "adjusting": "unknown",
+              "steady": "completed"
+            },
+            "everySeconds": 2
+          },
+          "onStuck": "manual",
+          "onFail": "manual",
+          "reviewerRole": "user"
+        }
+      },
+      "approval": {
+        "pending": "review",
+        "rejected": "steady",
+        "levels": [
+          {
+            "title": "Approve absolute valve setting",
+            "role": "user"
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "opening",
+          "title": "Requested valve opening (%)",
+          "type": "integer",
+          "required": true,
+          "constraints": {
+            "min": 0,
+            "max": 100
+          }
+        }
+      ]
+    },
+    {
+      "name": "confirmposition",
+      "title": "Record observed valve position",
+      "from": [
+        "adjusting"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.circuit",
+        "steps": [
+          {
+            "name": "confirmed",
+            "kind": "update",
+            "target": {
+              "type": "build.circuit",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "actualopening",
+                "expr": {
+                  "kind": "integer",
+                  "ref": "input.opening"
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "steady"
+                  }
+                }
+              },
+              {
+                "field": "observedat",
+                "expr": {
+                  "kind": "datetime",
+                  "ref": "input.observedat"
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "kind": "integer",
+                  "ref": "input.opening"
+                },
+                {
+                  "kind": "integer",
+                  "ref": "requestedopening"
+                }
+              ]
+            },
+            {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "kind": "datetime",
+                  "ref": "input.observedat"
+                },
+                {
+                  "kind": "datetime",
+                  "ref": "requestedat"
+                }
+              ]
+            },
+            {
+              "op": "<=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "kind": "datetime",
+                  "ref": "input.observedat"
+                },
+                {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "The observed opening must match the request, with an actual sample after the command request and no later than now."
+      },
+      "inputs": [
+        {
+          "name": "opening",
+          "title": "Observed valve opening (%)",
+          "type": "integer",
+          "required": true,
+          "constraints": {
+            "min": 0,
+            "max": 100
+          }
+        },
+        {
+          "name": "evidence",
+          "title": "Readback evidence",
+          "type": "text",
+          "required": true,
+          "constraints": {
+            "minLength": 1
+          }
+        },
+        {
+          "name": "observedat",
+          "title": "Actual sample time",
+          "type": "datetime",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

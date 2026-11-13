@@ -1,0 +1,172 @@
+{
+  "name": "build.pmsarrivals",
+  "subject": {
+    "app": "",
+    "kind": "",
+    "name": ""
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.pmsreservation.notifyarrival"
+    }
+  ],
+  "definition": {
+    "name": "pmsarrivals",
+    "title": "Notify confirmed arrivals without truncating the inventory",
+    "every": "1h",
+    "steps": [
+      {
+        "name": "bookings",
+        "kind": "query",
+        "app": "build",
+        "query": "pmsarrivals",
+        "queryVersion": 1,
+        "next": "complete"
+      },
+      {
+        "name": "complete",
+        "kind": "branch",
+        "condition": {
+          "op": "<=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "json",
+              "ref": "step.bookings.total"
+            },
+            {
+              "op": "",
+              "kind": "json",
+              "lit": {
+                "value": 200
+              }
+            }
+          ]
+        },
+        "cases": {
+          "true": "each",
+          "false": "review"
+        }
+      },
+      {
+        "name": "each",
+        "kind": "foreach",
+        "collection": {
+          "source": "step",
+          "step": "bookings",
+          "path": [
+            "records"
+          ]
+        },
+        "body": "window",
+        "maxIterations": 200,
+        "concurrency": 1,
+        "next": "done"
+      },
+      {
+        "name": "window",
+        "kind": "branch",
+        "condition": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": ">=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "json",
+                  "ref": "input.period"
+                },
+                {
+                  "op": "",
+                  "kind": "json",
+                  "ref": "item.arrivalnoticeat"
+                }
+              ]
+            },
+            {
+              "op": "<",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "json",
+                  "ref": "input.period"
+                },
+                {
+                  "op": "",
+                  "kind": "json",
+                  "ref": "item.begins"
+                }
+              ]
+            }
+          ]
+        },
+        "cases": {
+          "true": "notify",
+          "false": "return"
+        }
+      },
+      {
+        "name": "notify",
+        "kind": "action",
+        "act": "build.pmsreservation.notifyarrival",
+        "target": {
+          "source": "item",
+          "path": [
+            "id"
+          ]
+        },
+        "next": "return",
+        "error": "reviewitem"
+      },
+      {
+        "name": "reviewitem",
+        "kind": "ask",
+        "ask": "hotelmanager",
+        "title": "Review the arrival notification refusal",
+        "answers": [
+          "reviewed"
+        ],
+        "cases": {
+          "reviewed": "return"
+        }
+      },
+      {
+        "name": "return",
+        "kind": "end"
+      },
+      {
+        "name": "review",
+        "kind": "ask",
+        "ask": "hotelmanager",
+        "title": "Arrival inventory exceeds its declared notification budget; review the complete schedule",
+        "answers": [
+          "reviewed"
+        ],
+        "cases": {
+          "reviewed": "done"
+        }
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  },
+  "queries": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "pmsarrivals"
+      },
+      "sourceVersion": "1.query-1"
+    }
+  ]
+}

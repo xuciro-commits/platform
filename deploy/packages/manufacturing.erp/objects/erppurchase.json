@@ -1,0 +1,2554 @@
+{
+  "name": "erppurchase",
+  "title": "Purchase order",
+  "fields": [
+    {
+      "name": "number",
+      "title": "Purchase order reference",
+      "type": "text"
+    },
+    {
+      "name": "supplier",
+      "title": "Supplier",
+      "type": "reference",
+      "ref": "build.erppartner",
+      "required": true
+    },
+    {
+      "name": "policy",
+      "title": "Purchasing policy",
+      "type": "reference",
+      "ref": "build.erppolicy",
+      "required": true
+    },
+    {
+      "name": "date",
+      "title": "Order date",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "currency",
+      "title": "Currency code",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "invoice",
+      "title": "Supplier invoice",
+      "type": "text"
+    }
+  ],
+  "access": [
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "lines",
+      "from": "lines",
+      "direction": "inverse",
+      "object": "build.erppurchaseline",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "receipts",
+      "from": "receipts",
+      "direction": "inverse",
+      "object": "build.erpreceipt",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "awaiting",
+      "title": "Awaiting"
+    },
+    {
+      "name": "ordered",
+      "title": "Ordered"
+    },
+    {
+      "name": "received",
+      "title": "Received"
+    },
+    {
+      "name": "billed",
+      "title": "Billed"
+    },
+    {
+      "name": "canceled",
+      "title": "Canceled"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "receiptcount",
+      "kind": "expression",
+      "fields": [
+        "state"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "or",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "or",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "draft"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "awaiting"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "ordered"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "canceled"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "count",
+                    "kind": "integer",
+                    "agg": {
+                      "source": "receipts"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "or",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "received"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "billed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "count",
+                    "kind": "integer",
+                    "agg": {
+                      "source": "receipts"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "A received order has exactly one original stock receipt.",
+      "reads": {
+        "collections": {
+          "lines": {
+            "app": "build",
+            "object": "build.erppurchaseline",
+            "set": "lines",
+            "policy": "complete"
+          },
+          "receipts": {
+            "app": "build",
+            "object": "build.erpreceipt",
+            "set": "receipts",
+            "policy": "complete"
+          }
+        }
+      }
+    }
+  ],
+  "actions": [
+    {
+      "name": "order",
+      "title": "Place order below approval limit",
+      "from": [
+        "draft"
+      ],
+      "roles": [
+        "buyer",
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.erppurchase",
+        "steps": [
+          {
+            "name": "number",
+            "kind": "sequence",
+            "sequence": {
+              "Name": "erppurchases",
+              "Pattern": "PO-{year}-{n:6}",
+              "Yearly": true
+            }
+          },
+          {
+            "name": "ordered",
+            "kind": "update",
+            "target": {
+              "type": "build.erppurchase",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "number",
+                "from": "step.number"
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "ordered"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": ">",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "count",
+                          "kind": "integer",
+                          "agg": {
+                            "source": "lines"
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "<=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "count",
+                          "kind": "integer",
+                          "agg": {
+                            "source": "lines"
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 64
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "all",
+                      "kind": "boolean",
+                      "agg": {
+                        "source": "lines"
+                      },
+                      "in": {
+                        "op": "and",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "path",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "item.product"
+                              }
+                            ],
+                            "path": [
+                              "active"
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "item.product"
+                                  }
+                                ],
+                                "path": [
+                                  "currency"
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "text",
+                                "ref": "currency"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "supplier"
+                            }
+                          ],
+                          "path": [
+                            "kind"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "supplier"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "supplier"
+                            }
+                          ],
+                          "path": [
+                            "kind"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "both"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "<",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "sum",
+                  "kind": "decimal",
+                  "agg": {
+                    "source": "lines"
+                  },
+                  "in": {
+                    "op": "*",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.quantity"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.price"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "op": "path",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "policy"
+                    }
+                  ],
+                  "path": [
+                    "limit"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "message": "Choose a supplier, complete valid lines and the applicable approval route.",
+        "reads": {
+          "collections": {
+            "lines": {
+              "app": "build",
+              "object": "build.erppurchaseline",
+              "set": "lines",
+              "policy": "complete"
+            },
+            "receipts": {
+              "app": "build",
+              "object": "build.erpreceipt",
+              "set": "receipts",
+              "policy": "complete"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "request",
+      "title": "Request controller approval",
+      "from": [
+        "draft"
+      ],
+      "roles": [
+        "buyer",
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.erppurchase",
+        "steps": [
+          {
+            "name": "number",
+            "kind": "sequence",
+            "sequence": {
+              "Name": "erppurchases",
+              "Pattern": "PO-{year}-{n:6}",
+              "Yearly": true
+            }
+          },
+          {
+            "name": "ordered",
+            "kind": "update",
+            "target": {
+              "type": "build.erppurchase",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "number",
+                "from": "step.number"
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "ordered"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": ">",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "count",
+                          "kind": "integer",
+                          "agg": {
+                            "source": "lines"
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "<=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "count",
+                          "kind": "integer",
+                          "agg": {
+                            "source": "lines"
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 64
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "all",
+                      "kind": "boolean",
+                      "agg": {
+                        "source": "lines"
+                      },
+                      "in": {
+                        "op": "and",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "path",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "item.product"
+                              }
+                            ],
+                            "path": [
+                              "active"
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "item.product"
+                                  }
+                                ],
+                                "path": [
+                                  "currency"
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "text",
+                                "ref": "currency"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "supplier"
+                            }
+                          ],
+                          "path": [
+                            "kind"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "supplier"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "supplier"
+                            }
+                          ],
+                          "path": [
+                            "kind"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "both"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": ">=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "sum",
+                  "kind": "decimal",
+                  "agg": {
+                    "source": "lines"
+                  },
+                  "in": {
+                    "op": "*",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.quantity"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.price"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "op": "path",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "policy"
+                    }
+                  ],
+                  "path": [
+                    "limit"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "message": "Choose a supplier, complete valid lines and the applicable approval route.",
+        "reads": {
+          "collections": {
+            "lines": {
+              "app": "build",
+              "object": "build.erppurchaseline",
+              "set": "lines",
+              "policy": "complete"
+            },
+            "receipts": {
+              "app": "build",
+              "object": "build.erpreceipt",
+              "set": "receipts",
+              "policy": "complete"
+            }
+          }
+        }
+      },
+      "approval": {
+        "pending": "awaiting",
+        "rejected": "draft",
+        "levels": [
+          {
+            "title": "Controller",
+            "role": "controller"
+          }
+        ]
+      }
+    },
+    {
+      "name": "receive",
+      "title": "Receive the whole purchase",
+      "from": [
+        "ordered"
+      ],
+      "roles": [
+        "buyer",
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.erppurchase",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "create",
+            "target": {
+              "type": "build.erpreceipt"
+            },
+            "changes": [
+              {
+                "field": "purchase",
+                "from": "$subject"
+              },
+              {
+                "field": "date",
+                "expr": {
+                  "op": "$today",
+                  "kind": "date"
+                }
+              }
+            ]
+          },
+          {
+            "name": "balances",
+            "kind": "for-each",
+            "forEach": {
+              "set": "lines",
+              "steps": [
+                {
+                  "name": "quantity",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.erpstock"
+                  },
+                  "when": {
+                    "op": "not",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "any",
+                        "kind": "boolean",
+                        "agg": {
+                          "source": "lines"
+                        },
+                        "in": {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "item.product"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "row.product"
+                                }
+                              ]
+                            },
+                            {
+                              "op": "<",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "text",
+                                  "ref": "item.number"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "text",
+                                  "ref": "row.number"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "product",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "row.product"
+                        }
+                      },
+                      {
+                        "field": "bucket",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "quantity"
+                          }
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "path",
+                          "kind": "text",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.product"
+                            }
+                          ],
+                          "path": [
+                            "unit"
+                          ]
+                        }
+                      }
+                    ],
+                    "field": "amount",
+                    "amount": {
+                      "op": "sum",
+                      "kind": "decimal",
+                      "agg": {
+                        "source": "lines"
+                      },
+                      "in": {
+                        "op": "if",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "item.product"
+                              },
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "row.product"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "item.quantity"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "lit": {
+                              "value": 0
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "value",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.erpstock"
+                  },
+                  "when": {
+                    "op": "not",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "any",
+                        "kind": "boolean",
+                        "agg": {
+                          "source": "lines"
+                        },
+                        "in": {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "item.product"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "row.product"
+                                }
+                              ]
+                            },
+                            {
+                              "op": "<",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "text",
+                                  "ref": "item.number"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "text",
+                                  "ref": "row.number"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "product",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "row.product"
+                        }
+                      },
+                      {
+                        "field": "bucket",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "value"
+                          }
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "currency"
+                        }
+                      }
+                    ],
+                    "field": "amount",
+                    "amount": {
+                      "op": "*",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "sum",
+                          "kind": "decimal",
+                          "agg": {
+                            "source": "lines"
+                          },
+                          "in": {
+                            "op": "if",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "=",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "item.product"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.product"
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "item.quantity"
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "lit": {
+                                  "value": 0
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "op": "path",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.product"
+                            }
+                          ],
+                          "path": [
+                            "cost"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "moves",
+            "kind": "for-each",
+            "forEach": {
+              "set": "lines",
+              "steps": [
+                {
+                  "name": "quantitybalance",
+                  "kind": "call",
+                  "call": {
+                    "ref": {
+                      "app": "build",
+                      "kind": "query",
+                      "name": "erpstockquantity"
+                    },
+                    "version": 1,
+                    "view": "current",
+                    "inputs": [
+                      {
+                        "field": "for",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "row.product"
+                        }
+                      }
+                    ],
+                    "resultPath": [
+                      "records",
+                      "0",
+                      "id"
+                    ],
+                    "resultType": {
+                      "kind": "reference",
+                      "object": "build.erpstock"
+                    }
+                  }
+                },
+                {
+                  "name": "valuebalance",
+                  "kind": "call",
+                  "call": {
+                    "ref": {
+                      "app": "build",
+                      "kind": "query",
+                      "name": "erpstockvalue"
+                    },
+                    "version": 1,
+                    "view": "current",
+                    "inputs": [
+                      {
+                        "field": "for",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "row.product"
+                        }
+                      }
+                    ],
+                    "resultPath": [
+                      "records",
+                      "0",
+                      "id"
+                    ],
+                    "resultType": {
+                      "kind": "reference",
+                      "object": "build.erpstock"
+                    }
+                  }
+                },
+                {
+                  "name": "movement",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpmove"
+                  },
+                  "changes": [
+                    {
+                      "field": "receipt",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.receipt"
+                      }
+                    },
+                    {
+                      "field": "line",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "row.$subject"
+                      }
+                    },
+                    {
+                      "field": "product",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "row.product"
+                      }
+                    },
+                    {
+                      "field": "quantitybalance",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.quantitybalance"
+                      }
+                    },
+                    {
+                      "field": "valuebalance",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.valuebalance"
+                      }
+                    },
+                    {
+                      "field": "date",
+                      "expr": {
+                        "op": "$today",
+                        "kind": "date"
+                      }
+                    },
+                    {
+                      "field": "quantity",
+                      "expr": {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "row.quantity"
+                      }
+                    },
+                    {
+                      "field": "unitcost",
+                      "expr": {
+                        "op": "path",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "row.product"
+                          }
+                        ],
+                        "path": [
+                          "cost"
+                        ]
+                      }
+                    },
+                    {
+                      "field": "value",
+                      "expr": {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "path",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "row.product"
+                              }
+                            ],
+                            "path": [
+                              "cost"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "journalentry",
+            "kind": "create",
+            "target": {
+              "type": "build.erpentry"
+            },
+            "changes": [
+              {
+                "field": "date",
+                "expr": {
+                  "op": "$today",
+                  "kind": "date"
+                }
+              },
+              {
+                "field": "currency",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "currency"
+                }
+              },
+              {
+                "field": "reference",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "number"
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "submitted"
+                  }
+                }
+              }
+            ],
+            "when": {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "sum",
+                  "kind": "decimal",
+                  "agg": {
+                    "source": "lines"
+                  },
+                  "in": {
+                    "op": "*",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.quantity"
+                      },
+                      {
+                        "op": "+",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "item.price"
+                          },
+                          {
+                            "op": "path",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "item.product"
+                              }
+                            ],
+                            "path": [
+                              "cost"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "journallines",
+            "kind": "for-each",
+            "forEach": {
+              "set": "lines",
+              "steps": [
+                {
+                  "name": "journallinesline0",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpline"
+                  },
+                  "changes": [
+                    {
+                      "field": "document",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.journalentry"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "path",
+                        "kind": "text",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "row.product"
+                          }
+                        ],
+                        "path": [
+                          "account",
+                          "code"
+                        ]
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "debit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "path",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "row.product"
+                              }
+                            ],
+                            "path": [
+                              "cost"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "when": {
+                    "op": ">",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "path",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "row.product"
+                              }
+                            ],
+                            "path": [
+                              "cost"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "journallinesline1",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpline"
+                  },
+                  "changes": [
+                    {
+                      "field": "document",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.journalentry"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "path",
+                        "kind": "text",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "policy"
+                          }
+                        ],
+                        "path": [
+                          "clearing",
+                          "code"
+                        ]
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "credit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.price"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "when": {
+                    "op": ">",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.price"
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "journallinesline2",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpline"
+                  },
+                  "changes": [
+                    {
+                      "field": "document",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.journalentry"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "path",
+                        "kind": "text",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "policy"
+                          }
+                        ],
+                        "path": [
+                          "variance",
+                          "code"
+                        ]
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "debit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "-",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "row.price"
+                              },
+                              {
+                                "op": "path",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.product"
+                                  }
+                                ],
+                                "path": [
+                                  "cost"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "when": {
+                    "op": ">",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "row.price"
+                      },
+                      {
+                        "op": "path",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "row.product"
+                          }
+                        ],
+                        "path": [
+                          "cost"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "journallinesline3",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpline"
+                  },
+                  "changes": [
+                    {
+                      "field": "document",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.journalentry"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "path",
+                        "kind": "text",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "policy"
+                          }
+                        ],
+                        "path": [
+                          "variance",
+                          "code"
+                        ]
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "credit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "-",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "path",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.product"
+                                  }
+                                ],
+                                "path": [
+                                  "cost"
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "row.price"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "when": {
+                    "op": "<",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "row.price"
+                      },
+                      {
+                        "op": "path",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "row.product"
+                          }
+                        ],
+                        "path": [
+                          "cost"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "when": {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "sum",
+                  "kind": "decimal",
+                  "agg": {
+                    "source": "lines"
+                  },
+                  "in": {
+                    "op": "*",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.quantity"
+                      },
+                      {
+                        "op": "+",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "item.price"
+                          },
+                          {
+                            "op": "path",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "item.product"
+                              }
+                            ],
+                            "path": [
+                              "cost"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "received",
+            "kind": "update",
+            "target": {
+              "type": "build.erppurchase",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "received"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "count",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "lines"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            },
+            {
+              "op": "<=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "count",
+                  "kind": "integer",
+                  "agg": {
+                    "source": "lines"
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 64
+                  }
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "kind": "boolean",
+              "agg": {
+                "source": "lines"
+              },
+              "in": {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "path",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "item.product"
+                      }
+                    ],
+                    "path": [
+                      "active"
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "path",
+                        "kind": "text",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "item.product"
+                          }
+                        ],
+                        "path": [
+                          "currency"
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "currency"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "A receipt needs the complete unchanged ordered lines.",
+        "reads": {
+          "collections": {
+            "lines": {
+              "app": "build",
+              "object": "build.erppurchaseline",
+              "set": "lines",
+              "policy": "complete"
+            },
+            "receipts": {
+              "app": "build",
+              "object": "build.erpreceipt",
+              "set": "receipts",
+              "policy": "complete"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "bill",
+      "title": "Book supplier invoice",
+      "from": [
+        "received"
+      ],
+      "roles": [
+        "accountant",
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.erppurchase",
+        "steps": [
+          {
+            "name": "journalentry",
+            "kind": "create",
+            "target": {
+              "type": "build.erpentry"
+            },
+            "changes": [
+              {
+                "field": "date",
+                "expr": {
+                  "op": "$today",
+                  "kind": "date"
+                }
+              },
+              {
+                "field": "currency",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "currency"
+                }
+              },
+              {
+                "field": "reference",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.invoice"
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "submitted"
+                  }
+                }
+              }
+            ],
+            "when": {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "sum",
+                  "kind": "decimal",
+                  "agg": {
+                    "source": "lines"
+                  },
+                  "in": {
+                    "op": "*",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.quantity"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.price"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "journallines",
+            "kind": "for-each",
+            "forEach": {
+              "set": "lines",
+              "steps": [
+                {
+                  "name": "journallinesline0",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpline"
+                  },
+                  "changes": [
+                    {
+                      "field": "document",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.journalentry"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "path",
+                        "kind": "text",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "policy"
+                          }
+                        ],
+                        "path": [
+                          "clearing",
+                          "code"
+                        ]
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "debit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.price"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "when": {
+                    "op": ">",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.price"
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "journallinesline1",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpline"
+                  },
+                  "changes": [
+                    {
+                      "field": "document",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.journalentry"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "path",
+                        "kind": "text",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "policy"
+                          }
+                        ],
+                        "path": [
+                          "payables",
+                          "code"
+                        ]
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "credit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.price"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "when": {
+                    "op": ">",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "*",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.quantity"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.price"
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "when": {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "sum",
+                  "kind": "decimal",
+                  "agg": {
+                    "source": "lines"
+                  },
+                  "in": {
+                    "op": "*",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.quantity"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "item.price"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "billed",
+            "kind": "update",
+            "target": {
+              "type": "build.erppurchase",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "invoice",
+                "from": "invoice"
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "billed"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "reads": {
+          "collections": {
+            "lines": {
+              "app": "build",
+              "object": "build.erppurchaseline",
+              "set": "lines",
+              "policy": "complete"
+            },
+            "receipts": {
+              "app": "build",
+              "object": "build.erpreceipt",
+              "set": "receipts",
+              "policy": "complete"
+            }
+          }
+        }
+      },
+      "inputs": [
+        {
+          "name": "invoice",
+          "title": "Supplier invoice",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "cancel",
+      "title": "Cancel purchase order",
+      "from": [
+        "draft",
+        "ordered"
+      ],
+      "roles": [
+        "buyer",
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.erppurchase",
+        "steps": [
+          {
+            "name": "canceled",
+            "kind": "update",
+            "target": {
+              "type": "build.erppurchase",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "canceled"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "type": "build.erppurchase"
+}

@@ -1,0 +1,618 @@
+{
+  "name": "pmsslot",
+  "title": "Availability slot",
+  "fields": [
+    {
+      "name": "roomtype",
+      "title": "Room type",
+      "type": "reference",
+      "ref": "build.pmsroomtype",
+      "inverse": "slots",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Unit",
+      "type": "choice",
+      "choices": "day,hour",
+      "required": true
+    },
+    {
+      "name": "start",
+      "title": "Start",
+      "type": "datetime",
+      "required": true
+    },
+    {
+      "name": "end",
+      "title": "End",
+      "type": "datetime",
+      "required": true
+    },
+    {
+      "name": "used",
+      "title": "Used",
+      "type": "integer"
+    }
+  ],
+  "access": [
+    {
+      "role": "desk",
+      "read": "all",
+      "create": false,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "channel",
+      "read": "all",
+      "create": false,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "hotelmanager",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "occupancies",
+      "from": "occupancies",
+      "direction": "inverse",
+      "object": "build.pmsoccupancy",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [
+    {
+      "name": "actualoccupancy",
+      "kind": "expression",
+      "fields": [
+        "used"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "integer",
+            "ref": "used"
+          },
+          {
+            "op": "count",
+            "kind": "integer",
+            "agg": {
+              "source": "occupancies"
+            }
+          }
+        ]
+      },
+      "message": "Used capacity must equal its occupied reservations.",
+      "reads": {
+        "collections": {
+          "occupancies": {
+            "app": "build",
+            "object": "build.pmsoccupancy",
+            "set": "occupancies",
+            "policy": "complete"
+          }
+        }
+      }
+    },
+    {
+      "name": "capacity",
+      "kind": "expression",
+      "fields": [
+        "used",
+        "roomtype"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": ">=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "integer",
+                "ref": "used"
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": "or",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "<=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "ref": "used"
+                  },
+                  {
+                    "op": "path",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "roomtype"
+                      }
+                    ],
+                    "path": [
+                      "capacity"
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "path",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "roomtype"
+                      }
+                    ],
+                    "path": [
+                      "oversell"
+                    ]
+                  },
+                  {
+                    "op": "<=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "used"
+                      },
+                      {
+                        "op": "+",
+                        "kind": "integer",
+                        "args": [
+                          {
+                            "op": "path",
+                            "kind": "integer",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "roomtype"
+                              }
+                            ],
+                            "path": [
+                              "capacity"
+                            ]
+                          },
+                          {
+                            "op": "path",
+                            "kind": "integer",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "roomtype"
+                              }
+                            ],
+                            "path": [
+                              "allowance"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "The room capacity is exhausted."
+    },
+    {
+      "name": "slotbounds",
+      "kind": "expression",
+      "fields": [
+        "start",
+        "end",
+        "unit"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "or",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "unit"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "day"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "datetime",
+                    "ref": "start"
+                  },
+                  {
+                    "op": "start-of-day",
+                    "kind": "datetime",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "datetime",
+                        "ref": "start"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "datetime",
+                    "ref": "end"
+                  },
+                  {
+                    "op": "add-days",
+                    "kind": "datetime",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "datetime",
+                        "ref": "start"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "unit"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "hour"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "datetime",
+                    "ref": "start"
+                  },
+                  {
+                    "op": "start-of-hour",
+                    "kind": "datetime",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "datetime",
+                        "ref": "start"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "datetime",
+                    "ref": "end"
+                  },
+                  {
+                    "op": "add-hours",
+                    "kind": "datetime",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "datetime",
+                        "ref": "start"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Capacity slots must follow their declared day or hour boundaries."
+    },
+    {
+      "name": "validoccupancies",
+      "kind": "expression",
+      "fields": [
+        "used"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "all",
+        "kind": "boolean",
+        "agg": {
+          "source": "occupancies"
+        },
+        "in": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "or",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "item.reservation"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "held"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "item.reservation"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "booked"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "item.reservation"
+                    }
+                  ],
+                  "path": [
+                    "roomtype"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "roomtype"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "item.reservation"
+                    }
+                  ],
+                  "path": [
+                    "unit"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "unit"
+                }
+              ]
+            },
+            {
+              "op": ">=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "start"
+                },
+                {
+                  "op": "path",
+                  "kind": "datetime",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "item.reservation"
+                    }
+                  ],
+                  "path": [
+                    "begins"
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "<=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "end"
+                },
+                {
+                  "op": "path",
+                  "kind": "datetime",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "item.reservation"
+                    }
+                  ],
+                  "path": [
+                    "ends"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "message": "Occupied slots must agree with their active reservation.",
+      "reads": {
+        "collections": {
+          "occupancies": {
+            "app": "build",
+            "object": "build.pmsoccupancy",
+            "set": "occupancies",
+            "policy": "complete"
+          }
+        }
+      }
+    },
+    {
+      "name": "oneslot",
+      "kind": "unique",
+      "fields": [
+        "roomtype",
+        "unit",
+        "start"
+      ],
+      "message": "A room type has one capacity row for this time slot."
+    }
+  ],
+  "type": "build.pmsslot"
+}

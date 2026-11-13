@@ -1,0 +1,286 @@
+{
+  "name": "pmschannelmessage",
+  "title": "Channel message",
+  "fields": [
+    {
+      "name": "channel",
+      "title": "Channel",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "externalid",
+      "title": "External message ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "reservation",
+      "title": "Booking ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "kind",
+      "title": "Requested change",
+      "type": "choice",
+      "choices": "reserve,hold,change,confirm,cancel,release",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Message unit",
+      "type": "choice",
+      "choices": "day,hour,command",
+      "required": true
+    },
+    {
+      "name": "guest",
+      "title": "Guest or group",
+      "type": "text",
+      "when": "kind=reserve,hold",
+      "required": true
+    },
+    {
+      "name": "roomtype",
+      "title": "Room type",
+      "type": "reference",
+      "ref": "build.pmsroomtype",
+      "when": "kind=reserve,hold,change",
+      "required": true
+    },
+    {
+      "name": "dayfrom",
+      "title": "Arrival date",
+      "type": "date",
+      "when": "unit=day",
+      "required": true
+    },
+    {
+      "name": "dayuntil",
+      "title": "Departure date",
+      "type": "date",
+      "when": "unit=day",
+      "required": true
+    },
+    {
+      "name": "fromat",
+      "title": "Start time",
+      "type": "datetime",
+      "when": "unit=hour",
+      "required": true
+    },
+    {
+      "name": "untilat",
+      "title": "End time",
+      "type": "datetime",
+      "when": "unit=hour",
+      "required": true
+    },
+    {
+      "name": "expires",
+      "title": "Hold expires",
+      "type": "datetime",
+      "when": "kind=hold",
+      "required": true
+    },
+    {
+      "name": "booking",
+      "title": "Accepted reservation",
+      "type": "reference",
+      "ref": "build.pmsreservation"
+    }
+  ],
+  "access": [
+    {
+      "role": "channel",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "hotelmanager",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "desk",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "pending",
+      "title": "Pending"
+    },
+    {
+      "name": "processed",
+      "title": "Processed"
+    },
+    {
+      "name": "failed",
+      "title": "Failed"
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.pmschannelmessage",
+    "steps": [
+      {
+        "name": "receive",
+        "kind": "update",
+        "target": {
+          "type": "build.pmschannelmessage",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "state",
+            "expr": {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "pending"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "constraints": [
+    {
+      "name": "originalmessage",
+      "kind": "immutable",
+      "fields": [
+        "channel",
+        "externalid",
+        "reservation",
+        "kind",
+        "unit",
+        "guest",
+        "roomtype",
+        "dayfrom",
+        "dayuntil",
+        "fromat",
+        "untilat",
+        "expires"
+      ],
+      "message": "An accepted channel message cannot be rewritten; send a new correction message."
+    },
+    {
+      "name": "externalmessage",
+      "kind": "unique",
+      "fields": [
+        "channel",
+        "externalid"
+      ],
+      "message": "The channel message identity has already been received."
+    }
+  ],
+  "actions": [
+    {
+      "name": "complete",
+      "title": "Keep channel booking receipt",
+      "from": [
+        "pending"
+      ],
+      "roles": [
+        "channel",
+        "hotelmanager"
+      ],
+      "transaction": {
+        "subject": "build.pmschannelmessage",
+        "steps": [
+          {
+            "name": "processed",
+            "kind": "update",
+            "target": {
+              "type": "build.pmschannelmessage",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "processed"
+                  }
+                }
+              },
+              {
+                "field": "booking",
+                "from": "booking"
+              }
+            ]
+          },
+          {
+            "name": "notification",
+            "kind": "work",
+            "work": {
+              "title": "Review the channel booking change",
+              "role": "desk"
+            }
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "booking",
+          "title": "Accepted reservation",
+          "type": "reference",
+          "ref": "build.pmsreservation",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "fail",
+      "title": "Mark channel change for review",
+      "from": [
+        "pending"
+      ],
+      "roles": [
+        "channel",
+        "hotelmanager"
+      ],
+      "transaction": {
+        "subject": "build.pmschannelmessage",
+        "steps": [
+          {
+            "name": "failed",
+            "kind": "update",
+            "target": {
+              "type": "build.pmschannelmessage",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "failed"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "type": "build.pmschannelmessage"
+}

@@ -1,0 +1,17 @@
+{
+  "name": "pmsarrivals",
+  "title": "Confirmed arrival candidates",
+  "description": "A bounded inventory checked for completeness before any notification is sent.",
+  "object": "build.pmsreservation",
+  "domain": [
+    [
+      "state",
+      "=",
+      "booked"
+    ]
+  ],
+  "sort": [
+    "id"
+  ],
+  "limit": 200
+}

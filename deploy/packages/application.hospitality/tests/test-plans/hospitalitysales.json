@@ -1,0 +1,47 @@
+{
+  "name": "hospitalitysales",
+  "title": "Customer and opportunity states / 客户与商机状态",
+  "roots": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmcustomer"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmopportunity"
+    }
+  ],
+  "at": "2026-10-21T09:00:00Z",
+  "steps": [
+    {
+      "type": "build.crmcustomer",
+      "id": "testcustomer",
+      "action": "build.crmcustomer.create",
+      "payload": "{\"name\":\"Scenario company\",\"kind\":\"company\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.crmopportunity",
+      "id": "testsale",
+      "action": "build.crmopportunity.create",
+      "payload": "{\"customer\":\"testcustomer\",\"title\":\"Scenario opportunity\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.crmopportunity",
+      "id": "testsale",
+      "action": "build.crmopportunity.lose",
+      "payload": "{}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.crmopportunity",
+      "id": "testsale",
+      "action": "build.crmopportunity.win",
+      "payload": "{}",
+      "expect": "refused"
+    }
+  ]
+}

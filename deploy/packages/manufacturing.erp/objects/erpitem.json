@@ -1,0 +1,239 @@
+{
+  "name": "erpitem",
+  "title": "Item",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "kind",
+      "title": "Item kind",
+      "type": "choice",
+      "choices": "material,finished",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Stock unit",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "currency",
+      "title": "Cost currency",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "cost",
+      "title": "Standard unit cost",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "account",
+      "title": "Stock account",
+      "type": "reference",
+      "ref": "build.erpaccount",
+      "required": true
+    },
+    {
+      "name": "active",
+      "title": "Active",
+      "type": "boolean"
+    }
+  ],
+  "access": [
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "components",
+      "from": "components",
+      "direction": "inverse",
+      "object": "build.erpcomponent",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [
+    {
+      "name": "validcost",
+      "kind": "expression",
+      "fields": [
+        "cost"
+      ],
+      "level": "record",
+      "expr": {
+        "op": ">=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "decimal",
+            "ref": "cost"
+          },
+          {
+            "op": "",
+            "kind": "decimal",
+            "lit": {
+              "value": 0
+            }
+          }
+        ]
+      },
+      "message": "Standard cost cannot be negative."
+    }
+  ],
+  "states": [
+    {
+      "name": "active",
+      "title": "Active"
+    }
+  ],
+  "actions": [
+    {
+      "name": "describe",
+      "title": "Change item description",
+      "from": [
+        "active"
+      ],
+      "roles": [
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.erpitem",
+        "steps": [
+          {
+            "name": "describe",
+            "kind": "update",
+            "target": {
+              "type": "build.erpitem",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "name",
+                "from": "name"
+              },
+              {
+                "field": "active",
+                "from": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "active",
+          "title": "Active",
+          "type": "boolean",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "recost",
+      "title": "Set standard cost for new work",
+      "from": [
+        "active"
+      ],
+      "roles": [
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.erpitem",
+        "steps": [
+          {
+            "name": "cost",
+            "kind": "update",
+            "target": {
+              "type": "build.erpitem",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "cost",
+                "from": "cost"
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": ">=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "decimal",
+              "ref": "input.cost"
+            },
+            {
+              "op": "",
+              "kind": "decimal",
+              "lit": {
+                "value": 0
+              }
+            }
+          ]
+        },
+        "message": "Standard cost cannot be negative."
+      },
+      "inputs": [
+        {
+          "name": "cost",
+          "title": "Standard unit cost",
+          "type": "decimal",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "type": "build.erpitem"
+}

@@ -1,0 +1,339 @@
+{
+  "name": "erpreceipt",
+  "title": "Stock receipt",
+  "fields": [
+    {
+      "name": "purchase",
+      "title": "Purchase order",
+      "type": "reference",
+      "ref": "build.erppurchase",
+      "inverse": "receipts"
+    },
+    {
+      "name": "date",
+      "title": "Receipt date",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "production",
+      "title": "Production order",
+      "type": "reference",
+      "ref": "build.productionorder",
+      "inverse": "receipts"
+    },
+    {
+      "name": "batch",
+      "title": "Production batch identity",
+      "type": "text"
+    }
+  ],
+  "access": [
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "moves",
+      "from": "moves",
+      "direction": "inverse",
+      "object": "build.erpmove",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "recorded",
+      "title": "Recorded"
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.erpreceipt",
+    "steps": [
+      {
+        "name": "recorded",
+        "kind": "update",
+        "target": {
+          "type": "build.erpreceipt",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "state",
+            "expr": {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "recorded"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "or",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "empty",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "coalesce",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "production"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "lit": {
+                        "value": ""
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "purchase"
+                        },
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "purchase"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "ordered"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "empty",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "coalesce",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "purchase"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "lit": {
+                        "value": ""
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "production"
+                        },
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "batch"
+                        },
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "production"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "running"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "message": "A stock receipt belongs to exactly one ordered purchase or running production batch."
+  },
+  "constraints": [
+    {
+      "name": "frozenreceipt",
+      "kind": "immutable",
+      "fields": [
+        "purchase",
+        "date",
+        "production",
+        "batch"
+      ],
+      "message": "A stock receipt retains its accepted original order and date."
+    }
+  ],
+  "type": "build.erpreceipt"
+}

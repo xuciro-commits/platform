@@ -1,0 +1,436 @@
+{
+  "roots": [
+    {
+      "app": "build",
+      "kind": "app",
+      "name": "erpapp"
+    }
+  ],
+  "assets": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpentry"
+      },
+      "path": "objects/erpentry.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpline"
+      },
+      "path": "objects/erpline.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpentry"
+      },
+      "path": "pages/erpentry.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpline"
+      },
+      "path": "pages/erpline.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpaccount"
+      },
+      "path": "objects/erpaccount.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpaccounts"
+      },
+      "path": "pages/erpaccounts.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpjournals"
+      },
+      "path": "pages/erpjournals.json",
+      "contractVersion": 1,
+      "sourceVersion": "2"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "erpstockquantity"
+      },
+      "path": "queries/erpstockquantity.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "productionorderupstream"
+      },
+      "path": "queries/productionorderupstream.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "productionbatchupstream"
+      },
+      "path": "queries/productionbatchupstream.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "erpstockvalue"
+      },
+      "path": "queries/erpstockvalue.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erppartner"
+      },
+      "path": "objects/erppartner.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erppolicy"
+      },
+      "path": "objects/erppolicy.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpitem"
+      },
+      "path": "objects/erpitem.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpcomponent"
+      },
+      "path": "objects/erpcomponent.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpstock"
+      },
+      "path": "objects/erpstock.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erppurchase"
+      },
+      "path": "objects/erppurchase.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erppurchaseline"
+      },
+      "path": "objects/erppurchaseline.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpreceipt"
+      },
+      "path": "objects/erpreceipt.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpmove"
+      },
+      "path": "objects/erpmove.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpitem"
+      },
+      "path": "pages/erpitem.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpcomponent"
+      },
+      "path": "pages/erpcomponent.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erppartner"
+      },
+      "path": "pages/erppartner.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erppolicy"
+      },
+      "path": "pages/erppolicy.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erppurchase"
+      },
+      "path": "pages/erppurchase.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erppurchaseline"
+      },
+      "path": "pages/erppurchaseline.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpreceipt"
+      },
+      "path": "pages/erpreceipt.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpstock"
+      },
+      "path": "pages/erpstock.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpmove"
+      },
+      "path": "pages/erpmove.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "erpcomponentsbyproduct"
+      },
+      "path": "queries/erpcomponentsbyproduct.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpproductionpolicy"
+      },
+      "path": "objects/erpproductionpolicy.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpproductioncomponent"
+      },
+      "path": "objects/erpproductioncomponent.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.productionbatch"
+      },
+      "path": "objects/productionbatch.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpproductionposting"
+      },
+      "path": "objects/erpproductionposting.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.productionorder"
+      },
+      "path": "objects/productionorder.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpproductionpolicy"
+      },
+      "path": "pages/erpproductionpolicy.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "productionorder"
+      },
+      "path": "pages/productionorder.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpproductioncomponent"
+      },
+      "path": "pages/erpproductioncomponent.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "productionbatch"
+      },
+      "path": "pages/productionbatch.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "erpproductionposting"
+      },
+      "path": "pages/erpproductionposting.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "app",
+        "name": "erpapp"
+      },
+      "path": "applications/erpapp.json",
+      "contractVersion": 1,
+      "sourceVersion": "2"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "test-plan",
+        "name": "manufacturingaccounting"
+      },
+      "path": "tests/test-plans/manufacturingaccounting.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    }
+  ],
+  "guide": "docs/guide.md",
+  "setup": {
+    "steps": "setup.json",
+    "roles": "roles/requirements.json"
+  }
+}

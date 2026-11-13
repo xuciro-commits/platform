@@ -1,0 +1,356 @@
+{
+  "name": "accesspoint",
+  "type": "build.accesspoint",
+  "title": "Physical access point",
+  "plural": "Physical access points",
+  "description": "Physical access permissions are business records, not platform authorization scopes. This action checks a permission only; it neither opens a door nor claims that a door opened.",
+  "fields": [
+    {
+      "name": "building",
+      "title": "Building",
+      "type": "reference",
+      "ref": "build.building",
+      "required": true
+    },
+    {
+      "name": "zone",
+      "title": "Heating zone",
+      "type": "reference",
+      "ref": "build.zone",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Access point name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "devicekey",
+      "title": "Protocol device ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "lastpass",
+      "title": "Last checked permission",
+      "type": "reference",
+      "ref": "build.accesspass"
+    },
+    {
+      "name": "lastcheckedat",
+      "title": "Last successful permission check",
+      "type": "datetime"
+    },
+    {
+      "name": "lastresult",
+      "title": "Last permission result",
+      "type": "choice",
+      "choices": "allowed"
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "active",
+      "title": "Active",
+      "tone": "success"
+    },
+    {
+      "name": "disabled",
+      "title": "Disabled",
+      "tone": "danger"
+    }
+  ],
+  "actions": [
+    {
+      "name": "checkpass",
+      "title": "Check physical access permission",
+      "from": [
+        "active"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.accesspoint",
+        "steps": [
+          {
+            "name": "checked",
+            "kind": "update",
+            "target": {
+              "type": "build.accesspoint",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "lastpass",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "input.pass"
+                }
+              },
+              {
+                "field": "lastcheckedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              },
+              {
+                "field": "lastresult",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "allowed"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "kind": "reference",
+                      "ref": "input.pass"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "active"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "kind": "reference",
+                      "ref": "input.pass"
+                    }
+                  ],
+                  "path": [
+                    "accesspoint"
+                  ]
+                },
+                {
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "kind": "reference",
+                      "ref": "input.pass"
+                    }
+                  ],
+                  "path": [
+                    "building"
+                  ]
+                },
+                {
+                  "kind": "reference",
+                  "ref": "building"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "text",
+                  "args": [
+                    {
+                      "kind": "reference",
+                      "ref": "input.pass"
+                    }
+                  ],
+                  "path": [
+                    "holder"
+                  ]
+                },
+                {
+                  "kind": "text",
+                  "ref": "input.holder"
+                }
+              ]
+            },
+            {
+              "op": "<=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "datetime",
+                  "args": [
+                    {
+                      "kind": "reference",
+                      "ref": "input.pass"
+                    }
+                  ],
+                  "path": [
+                    "validfrom"
+                  ]
+                },
+                {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              ]
+            },
+            {
+              "op": ">=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "datetime",
+                  "args": [
+                    {
+                      "kind": "reference",
+                      "ref": "input.pass"
+                    }
+                  ],
+                  "path": [
+                    "validuntil"
+                  ]
+                },
+                {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "The permission must be active, valid now, and match the person, building and access point."
+      },
+      "inputs": [
+        {
+          "name": "pass",
+          "title": "Access permission",
+          "type": "reference",
+          "required": true,
+          "ref": "build.accesspass"
+        },
+        {
+          "name": "holder",
+          "title": "Person identifier",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "disable",
+      "title": "Disable access checks",
+      "from": [
+        "active"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.accesspoint",
+        "steps": [
+          {
+            "name": "disabled",
+            "kind": "update",
+            "target": {
+              "type": "build.accesspoint",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "disabled"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "enable",
+      "title": "Enable access checks",
+      "from": [
+        "disabled"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.accesspoint",
+        "steps": [
+          {
+            "name": "enabled",
+            "kind": "update",
+            "target": {
+              "type": "build.accesspoint",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "active"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

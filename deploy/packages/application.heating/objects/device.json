@@ -1,0 +1,868 @@
+{
+  "name": "device",
+  "type": "build.device",
+  "title": "Heating device",
+  "plural": "Heating devices",
+  "description": "Only accepted business summaries are stored here. Raw protocol measurements remain in the external observation store. A repeated temperature observation while already warning does not create another alarm.",
+  "fields": [
+    {
+      "name": "building",
+      "title": "Building",
+      "type": "reference",
+      "ref": "build.building",
+      "required": true
+    },
+    {
+      "name": "zone",
+      "title": "Heating zone",
+      "type": "reference",
+      "ref": "build.zone",
+      "required": true
+    },
+    {
+      "name": "code",
+      "title": "Device code",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "name",
+      "title": "Device name",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "devicekey",
+      "title": "Protocol device ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "kind",
+      "title": "Device kind",
+      "type": "choice",
+      "choices": "controller,valve,pump,sensor",
+      "required": true
+    },
+    {
+      "name": "latesttemp",
+      "title": "Accepted supply temperature (C)",
+      "type": "decimal"
+    },
+    {
+      "name": "healthscore",
+      "title": "Accepted health score",
+      "type": "integer"
+    },
+    {
+      "name": "checkedat",
+      "title": "Last accepted assessment",
+      "type": "datetime"
+    },
+    {
+      "name": "warnlimit",
+      "title": "Supply temperature warning limit (C)",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "healthmin",
+      "title": "Minimum healthy score",
+      "type": "integer",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "healthy",
+      "title": "Healthy",
+      "tone": "success"
+    },
+    {
+      "name": "warning",
+      "title": "Needs inspection",
+      "tone": "warning"
+    },
+    {
+      "name": "offline",
+      "title": "Offline",
+      "tone": "danger"
+    }
+  ],
+  "actions": [
+    {
+      "name": "warn",
+      "title": "Open temperature alarm",
+      "from": [
+        "healthy"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.device",
+        "steps": [
+          {
+            "name": "mark",
+            "kind": "update",
+            "target": {
+              "type": "build.device",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "warning"
+                  }
+                }
+              },
+              {
+                "field": "checkedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              },
+              {
+                "field": "latesttemp",
+                "expr": {
+                  "kind": "decimal",
+                  "ref": "input.reading"
+                }
+              }
+            ]
+          },
+          {
+            "name": "alarm",
+            "kind": "create",
+            "target": {
+              "type": "build.alarm"
+            },
+            "changes": [
+              {
+                "field": "building",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "building"
+                }
+              },
+              {
+                "field": "device",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "summary",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.summary"
+                }
+              },
+              {
+                "field": "severity",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "warning"
+                  }
+                }
+              },
+              {
+                "field": "metric",
+                "expr": {
+                  "kind": "text",
+                  "lit": {
+                    "value": "temperature"
+                  }
+                }
+              },
+              {
+                "field": "observed",
+                "expr": {
+                  "kind": "decimal",
+                  "ref": "input.reading"
+                }
+              },
+              {
+                "field": "threshold",
+                "expr": {
+                  "kind": "decimal",
+                  "ref": "warnlimit"
+                }
+              },
+              {
+                "field": "openedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          },
+          {
+            "name": "workorder",
+            "kind": "create",
+            "target": {
+              "type": "build.workorder"
+            },
+            "changes": [
+              {
+                "field": "building",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "building"
+                }
+              },
+              {
+                "field": "device",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "alarm",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "step.alarm"
+                }
+              },
+              {
+                "field": "name",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.summary"
+                }
+              },
+              {
+                "field": "description",
+                "expr": {
+                  "kind": "text",
+                  "lit": {
+                    "value": "Inspect the source evidence, check the device locally, and confirm the repair. The platform does not replace PLC interlocks."
+                  }
+                }
+              },
+              {
+                "field": "openedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": ">=",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "decimal",
+              "ref": "input.reading"
+            },
+            {
+              "kind": "decimal",
+              "ref": "warnlimit"
+            }
+          ]
+        },
+        "message": "The observed temperature must reach the declared warning limit."
+      },
+      "inputs": [
+        {
+          "name": "reading",
+          "title": "Observed supply temperature (C)",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "summary",
+          "title": "Alarm summary",
+          "type": "text",
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 240
+          }
+        }
+      ]
+    },
+    {
+      "name": "markoffline",
+      "title": "Report device offline",
+      "from": [
+        "healthy",
+        "warning"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.device",
+        "steps": [
+          {
+            "name": "mark",
+            "kind": "update",
+            "target": {
+              "type": "build.device",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "offline"
+                  }
+                }
+              },
+              {
+                "field": "checkedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          },
+          {
+            "name": "alarm",
+            "kind": "create",
+            "target": {
+              "type": "build.alarm"
+            },
+            "changes": [
+              {
+                "field": "building",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "building"
+                }
+              },
+              {
+                "field": "device",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "summary",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.summary"
+                }
+              },
+              {
+                "field": "severity",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "critical"
+                  }
+                }
+              },
+              {
+                "field": "metric",
+                "expr": {
+                  "kind": "text",
+                  "lit": {
+                    "value": "availability"
+                  }
+                }
+              },
+              {
+                "field": "observed",
+                "expr": {
+                  "kind": "decimal",
+                  "lit": {
+                    "value": "0"
+                  }
+                }
+              },
+              {
+                "field": "threshold",
+                "expr": {
+                  "kind": "decimal",
+                  "lit": {
+                    "value": "1"
+                  }
+                }
+              },
+              {
+                "field": "openedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          },
+          {
+            "name": "workorder",
+            "kind": "create",
+            "target": {
+              "type": "build.workorder"
+            },
+            "changes": [
+              {
+                "field": "building",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "building"
+                }
+              },
+              {
+                "field": "device",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "alarm",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "step.alarm"
+                }
+              },
+              {
+                "field": "name",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.summary"
+                }
+              },
+              {
+                "field": "description",
+                "expr": {
+                  "kind": "text",
+                  "lit": {
+                    "value": "Inspect the source evidence, check the device locally, and confirm the repair. The platform does not replace PLC interlocks."
+                  }
+                }
+              },
+              {
+                "field": "openedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "summary",
+          "title": "Offline evidence",
+          "type": "text",
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 240
+          }
+        }
+      ]
+    },
+    {
+      "name": "assesshealth",
+      "title": "Open low health alarm",
+      "from": [
+        "healthy"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.device",
+        "steps": [
+          {
+            "name": "mark",
+            "kind": "update",
+            "target": {
+              "type": "build.device",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "warning"
+                  }
+                }
+              },
+              {
+                "field": "checkedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              },
+              {
+                "field": "healthscore",
+                "expr": {
+                  "kind": "integer",
+                  "ref": "input.score"
+                }
+              }
+            ]
+          },
+          {
+            "name": "alarm",
+            "kind": "create",
+            "target": {
+              "type": "build.alarm"
+            },
+            "changes": [
+              {
+                "field": "building",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "building"
+                }
+              },
+              {
+                "field": "device",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "summary",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.summary"
+                }
+              },
+              {
+                "field": "severity",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "warning"
+                  }
+                }
+              },
+              {
+                "field": "metric",
+                "expr": {
+                  "kind": "text",
+                  "lit": {
+                    "value": "health"
+                  }
+                }
+              },
+              {
+                "field": "observed",
+                "expr": {
+                  "kind": "integer",
+                  "ref": "input.score"
+                }
+              },
+              {
+                "field": "threshold",
+                "expr": {
+                  "kind": "integer",
+                  "ref": "healthmin"
+                }
+              },
+              {
+                "field": "openedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          },
+          {
+            "name": "workorder",
+            "kind": "create",
+            "target": {
+              "type": "build.workorder"
+            },
+            "changes": [
+              {
+                "field": "building",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "building"
+                }
+              },
+              {
+                "field": "device",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "alarm",
+                "expr": {
+                  "kind": "reference",
+                  "ref": "step.alarm"
+                }
+              },
+              {
+                "field": "name",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.summary"
+                }
+              },
+              {
+                "field": "description",
+                "expr": {
+                  "kind": "text",
+                  "lit": {
+                    "value": "Inspect the source evidence, check the device locally, and confirm the repair. The platform does not replace PLC interlocks."
+                  }
+                }
+              },
+              {
+                "field": "openedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "<",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "integer",
+              "ref": "input.score"
+            },
+            {
+              "kind": "integer",
+              "ref": "healthmin"
+            }
+          ]
+        },
+        "message": "The health score must be below the configured minimum."
+      },
+      "inputs": [
+        {
+          "name": "score",
+          "title": "Observed health score",
+          "type": "integer",
+          "required": true,
+          "constraints": {
+            "min": 0,
+            "max": 100
+          }
+        },
+        {
+          "name": "summary",
+          "title": "Health alarm summary",
+          "type": "text",
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 240
+          }
+        }
+      ]
+    },
+    {
+      "name": "restore",
+      "title": "Confirm healthy after inspection",
+      "from": [
+        "warning",
+        "offline"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.device",
+        "steps": [
+          {
+            "name": "restored",
+            "kind": "update",
+            "target": {
+              "type": "build.device",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "healthy"
+                  }
+                }
+              },
+              {
+                "field": "healthscore",
+                "expr": {
+                  "kind": "integer",
+                  "ref": "input.score"
+                }
+              },
+              {
+                "field": "latesttemp",
+                "expr": {
+                  "kind": "decimal",
+                  "ref": "input.temperature"
+                }
+              },
+              {
+                "field": "checkedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": ">=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "kind": "integer",
+                  "ref": "input.score"
+                },
+                {
+                  "kind": "integer",
+                  "ref": "healthmin"
+                }
+              ]
+            },
+            {
+              "op": "<",
+              "kind": "boolean",
+              "args": [
+                {
+                  "kind": "decimal",
+                  "ref": "input.temperature"
+                },
+                {
+                  "kind": "decimal",
+                  "ref": "warnlimit"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "Confirm a healthy score and a temperature below the warning limit."
+      },
+      "inputs": [
+        {
+          "name": "score",
+          "title": "Verified health score",
+          "type": "integer",
+          "required": true,
+          "constraints": {
+            "min": 0,
+            "max": 100
+          }
+        },
+        {
+          "name": "temperature",
+          "title": "Verified supply temperature (C)",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "evidence",
+          "title": "Inspection evidence",
+          "type": "text",
+          "required": true,
+          "constraints": {
+            "minLength": 1
+          }
+        }
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "name": "healthminimum",
+      "kind": "range",
+      "fields": [
+        "healthmin"
+      ],
+      "message": "The health threshold must be between 0 and 100.",
+      "translations": {
+        "zh-CN": "健康阈值必须在0到100之间。"
+      },
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": ">=",
+            "kind": "boolean",
+            "args": [
+              {
+                "kind": "integer",
+                "ref": "healthmin"
+              },
+              {
+                "kind": "integer",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": "<=",
+            "kind": "boolean",
+            "args": [
+              {
+                "kind": "integer",
+                "ref": "healthmin"
+              },
+              {
+                "kind": "integer",
+                "lit": {
+                  "value": 100
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

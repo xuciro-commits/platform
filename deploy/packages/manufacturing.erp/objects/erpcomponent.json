@@ -1,0 +1,126 @@
+{
+  "name": "erpcomponent",
+  "title": "Item component",
+  "fields": [
+    {
+      "name": "parent",
+      "title": "Finished item",
+      "type": "reference",
+      "ref": "build.erpitem",
+      "inverse": "components",
+      "required": true
+    },
+    {
+      "name": "material",
+      "title": "Component item",
+      "type": "reference",
+      "ref": "build.erpitem",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Quantity per finished unit",
+      "type": "decimal",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "onecomponent",
+      "kind": "unique",
+      "fields": [
+        "parent",
+        "material"
+      ],
+      "message": "A component occurs once in an item structure."
+    },
+    {
+      "name": "validcomponent",
+      "kind": "expression",
+      "fields": [
+        "parent",
+        "material",
+        "quantity"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "parent"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "material"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": ">",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "decimal",
+                "ref": "quantity"
+              },
+              {
+                "op": "",
+                "kind": "decimal",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "message": "A component is a different item with a positive quantity."
+    }
+  ],
+  "type": "build.erpcomponent"
+}

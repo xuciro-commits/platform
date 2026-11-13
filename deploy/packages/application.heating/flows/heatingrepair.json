@@ -1,0 +1,66 @@
+{
+  "name": "build.heatingrepair",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.workorder"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.workorder.complete"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.workorder.start"
+    }
+  ],
+  "definition": {
+    "name": "heatingrepair",
+    "title": "Inspect and confirm heating repair",
+    "kind": "flow",
+    "object": "build.workorder",
+    "when": "open",
+    "steps": [
+      {
+        "name": "start",
+        "title": "Start inspection",
+        "kind": "action",
+        "act": "build.workorder.start",
+        "next": "confirm"
+      },
+      {
+        "name": "confirm",
+        "title": "Confirm the device was inspected and repaired",
+        "kind": "ask",
+        "ask": "user",
+        "answers": [
+          "Repair confirmed"
+        ],
+        "cases": {
+          "Repair confirmed": "complete"
+        }
+      },
+      {
+        "name": "complete",
+        "title": "Complete the work order",
+        "kind": "action",
+        "act": "build.workorder.complete",
+        "inputs": {
+          "note": {
+            "source": "literal",
+            "value": "Operator confirmed inspection and repair in the retained workflow"
+          }
+        },
+        "next": "done"
+      },
+      {
+        "name": "done",
+        "title": "Repair recorded",
+        "kind": "end"
+      }
+    ]
+  }
+}

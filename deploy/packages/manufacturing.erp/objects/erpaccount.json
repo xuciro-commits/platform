@@ -1,0 +1,67 @@
+{
+  "name": "erpaccount",
+  "title": "Ledger account",
+  "fields": [
+    {
+      "name": "code",
+      "title": "Account code",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Account name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "kind",
+      "title": "Account type",
+      "type": "choice",
+      "choices": "asset,liability,equity,revenue,expense",
+      "required": true
+    },
+    {
+      "name": "parent",
+      "title": "Summary account",
+      "type": "text"
+    },
+    {
+      "name": "posting",
+      "title": "Postable",
+      "type": "boolean"
+    },
+    {
+      "name": "active",
+      "title": "Active",
+      "type": "boolean"
+    }
+  ],
+  "access": [
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    }
+  ],
+  "constraints": [
+    {
+      "name": "uniquecode",
+      "kind": "unique",
+      "fields": [
+        "code"
+      ],
+      "message": "An account code is unique."
+    }
+  ],
+  "type": "build.erpaccount"
+}

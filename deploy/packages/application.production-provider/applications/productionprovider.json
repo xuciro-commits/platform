@@ -1,0 +1,17 @@
+{
+  "name": "productionprovider",
+  "title": "Production order provider",
+  "pages": [
+    "batchproviderorder",
+    "batchproviderbatch",
+    "finishedstock",
+    "stockreceipt"
+  ],
+  "resources": [
+    {
+      "app": "build",
+      "kind": "test-plan",
+      "name": "productionbatches"
+    }
+  ]
+}

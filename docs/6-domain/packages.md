@@ -112,10 +112,11 @@ Marketplace 的精确产品版本提供“Transfer existing resources…”：�
 ## 6.27 作者态包源
 
 - `deploy/packages/*.json` 是运行层消费的不可变制品，不由手编辑；每个产品版本的作者态源位于 `deploy/packages/<id>/`。
-- 源目录的 `package.json` 只保存包级字段；`blueprint.json` 只保存 roots、asset 路径、guide 与 setup 路径；一个 asset 一个文件，asset body 不进入 blueprint。
+- 源目录的 `package.json` 保存包级字段和生成制品文件名 `artifact`；`blueprint.json` 只保存 roots、asset 路径、guide 与 setup 路径；一个 asset 一个文件，asset body 不进入 blueprint。
 - 资源按类型进入固定目录：对象、动作、查询、页面、应用、流程、函数、Agent、集成、测试和文档分开；没有内容的目录不预建。
 - `package.lock.json` 由 `scripts/package-source.mjs pack` 生成，记录依赖、制品摘要和各 asset 摘要；`make check` 校验制品和 lock 没有过期。
 - `pack` 只改变作者态和打包路径，不改变 `PackageDescriptor`、安装、升级和运行语义。
+- 当前七个产品包都已采用该布局；顶层 `deploy/packages/*.json` 仍是运行层生成制品，不手改。
 
 ## 6.28 现存差距
 

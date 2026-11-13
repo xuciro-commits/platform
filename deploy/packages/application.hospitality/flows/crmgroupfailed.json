@@ -1,0 +1,40 @@
+{
+  "name": "build.crmgroupfailed",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.crmgroup"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmopportunity.reopen"
+    }
+  ],
+  "definition": {
+    "name": "crmgroupfailed",
+    "title": "Keep the group sale failed",
+    "object": "build.crmgroup",
+    "when": "failed",
+    "steps": [
+      {
+        "name": "opportunity",
+        "kind": "action",
+        "act": "build.crmopportunity.reopen",
+        "target": {
+          "source": "subject",
+          "path": [
+            "opportunity"
+          ]
+        },
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "lodgingrelease",
+  "title": "Release original provider room",
+  "connection": "lodgingupstream",
+  "object": "build.crmroom",
+  "on": "confirmation",
+  "method": "POST",
+  "path": "/v1/protocols/lodging.stays/2/release/{bookingkey}",
+  "objectBindings": {
+    "build.crmroom": {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmroom"
+    }
+  }
+}

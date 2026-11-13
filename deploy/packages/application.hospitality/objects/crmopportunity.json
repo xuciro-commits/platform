@@ -1,0 +1,613 @@
+{
+  "name": "crmopportunity",
+  "title": "Opportunity",
+  "fields": [
+    {
+      "name": "customer",
+      "title": "Customer",
+      "type": "reference",
+      "ref": "build.crmcustomer",
+      "required": true
+    },
+    {
+      "name": "title",
+      "title": "Title",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "margin",
+      "title": "Expected margin",
+      "type": "decimal",
+      "read": [
+        "salesmanager"
+      ],
+      "write": [
+        "salesmanager"
+      ]
+    },
+    {
+      "name": "advice",
+      "title": "Adopted review advice",
+      "type": "longtext",
+      "sourceType": "generated",
+      "readOnly": true
+    },
+    {
+      "name": "advicecategory",
+      "title": "Advice category",
+      "type": "choice",
+      "choices": "routine,review",
+      "sourceType": "generated",
+      "readOnly": true
+    },
+    {
+      "name": "advicereview",
+      "title": "Needs review",
+      "type": "boolean",
+      "sourceType": "generated",
+      "readOnly": true
+    }
+  ],
+  "access": [
+    {
+      "role": "sales",
+      "read": "own",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "salesmanager",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "open",
+      "title": "Open"
+    },
+    {
+      "name": "closing",
+      "title": "Closing"
+    },
+    {
+      "name": "won",
+      "title": "Won"
+    },
+    {
+      "name": "lost",
+      "title": "Lost"
+    }
+  ],
+  "actions": [
+    {
+      "name": "win",
+      "title": "Win opportunity",
+      "from": [
+        "open"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmopportunity",
+        "steps": [
+          {
+            "name": "attempt",
+            "kind": "create",
+            "target": {
+              "type": "build.crmclosing"
+            },
+            "changes": [
+              {
+                "field": "opportunity",
+                "from": "$subject"
+              }
+            ]
+          },
+          {
+            "name": "close",
+            "kind": "update",
+            "target": {
+              "type": "build.crmopportunity",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "closing"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "reads": {
+          "collections": {
+            "groups": {
+              "app": "build",
+              "object": "build.crmgroup",
+              "set": "groups",
+              "policy": "complete"
+            }
+          }
+        },
+        "guard": {
+          "op": "all",
+          "kind": "boolean",
+          "agg": {
+            "source": "groups"
+          },
+          "in": {
+            "op": "or",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "item.state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "held"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "item.state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "failed"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "item.state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "released"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "message": "Every existing group must be held before confirming the opportunity."
+      }
+    },
+    {
+      "name": "lose",
+      "title": "Lose opportunity",
+      "from": [
+        "open",
+        "closing"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmopportunity",
+        "steps": [
+          {
+            "name": "close",
+            "kind": "update",
+            "target": {
+              "type": "build.crmopportunity",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "lost"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "finishwin",
+      "title": "Keep confirmed group win",
+      "from": [
+        "closing"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmopportunity",
+        "steps": [
+          {
+            "name": "won",
+            "kind": "update",
+            "target": {
+              "type": "build.crmopportunity",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "won"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "all",
+          "kind": "boolean",
+          "agg": {
+            "source": "groups"
+          },
+          "in": {
+            "op": "or",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "item.state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "won"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "item.state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "failed"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "item.state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "released"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "message": "Every group must have original confirmed room receipts.",
+        "reads": {
+          "collections": {
+            "groups": {
+              "app": "build",
+              "object": "build.crmgroup",
+              "set": "groups",
+              "policy": "complete"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "reopen",
+      "title": "Return an unsuccessful group sale to open",
+      "from": [
+        "closing"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmopportunity",
+        "steps": [
+          {
+            "name": "open",
+            "kind": "update",
+            "target": {
+              "type": "build.crmopportunity",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "open"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "all",
+          "kind": "boolean",
+          "agg": {
+            "source": "groups"
+          },
+          "in": {
+            "op": "or",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "item.state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "failed"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "item.state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "released"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "message": "Rooms must be resolved before reopening the opportunity.",
+        "reads": {
+          "collections": {
+            "groups": {
+              "app": "build",
+              "object": "build.crmgroup",
+              "set": "groups",
+              "policy": "complete"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "adoptadvice",
+      "title": "Adopt review advice",
+      "from": [
+        "open",
+        "closing",
+        "won",
+        "lost"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "inputs": [
+        {
+          "name": "proposal",
+          "title": "Proposal",
+          "type": "reference",
+          "ref": "build.function-call",
+          "required": true
+        },
+        {
+          "name": "summary",
+          "title": "Review advice",
+          "type": "longtext",
+          "required": true
+        },
+        {
+          "name": "category",
+          "title": "Advice category",
+          "type": "choice",
+          "choices": "routine,review",
+          "required": true
+        },
+        {
+          "name": "review",
+          "title": "Needs review",
+          "type": "boolean",
+          "required": true
+        }
+      ],
+      "adoption": {
+        "function": {
+          "app": "build",
+          "name": "crmreview"
+        },
+        "input": "proposal",
+        "mapping": [
+          {
+            "output": "summary",
+            "input": "summary"
+          },
+          {
+            "output": "category",
+            "input": "category"
+          },
+          {
+            "output": "review",
+            "input": "review"
+          }
+        ]
+      },
+      "transaction": {
+        "subject": "build.crmopportunity",
+        "steps": [
+          {
+            "name": "adopt",
+            "kind": "update",
+            "target": {
+              "type": "build.crmopportunity",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "advice",
+                "from": "summary"
+              },
+              {
+                "field": "advicecategory",
+                "from": "category"
+              },
+              {
+                "field": "advicereview",
+                "from": "review"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "type": "build.crmopportunity",
+  "sets": [
+    {
+      "name": "groups",
+      "from": "groups",
+      "direction": "inverse",
+      "object": "build.crmgroup",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [
+    {
+      "name": "boundedgroups",
+      "kind": "expression",
+      "fields": [
+        "state"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "<=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "count",
+            "kind": "integer",
+            "agg": {
+              "source": "groups"
+            }
+          },
+          {
+            "op": "",
+            "kind": "integer",
+            "lit": {
+              "value": 20
+            }
+          }
+        ]
+      },
+      "message": "An opportunity has at most twenty complete group plans.",
+      "reads": {
+        "collections": {
+          "groups": {
+            "app": "build",
+            "object": "build.crmgroup",
+            "set": "groups",
+            "policy": "complete"
+          }
+        }
+      }
+    }
+  ]
+}

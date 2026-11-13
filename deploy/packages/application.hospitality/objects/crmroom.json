@@ -1,0 +1,1347 @@
+{
+  "name": "crmroom",
+  "title": "Group room request",
+  "fields": [
+    {
+      "name": "plan",
+      "title": "Group reservation",
+      "type": "reference",
+      "ref": "build.crmgroup",
+      "inverse": "rooms",
+      "required": true
+    },
+    {
+      "name": "bookingkey",
+      "title": "Provider booking reference",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "ordinal",
+      "title": "Room number",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "guest",
+      "title": "Guest or group",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "roomtype",
+      "title": "Provider room type",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Booking unit",
+      "type": "choice",
+      "choices": "day,hour",
+      "required": true
+    },
+    {
+      "name": "dayfrom",
+      "title": "Arrival date",
+      "type": "date",
+      "when": "unit=day",
+      "required": true
+    },
+    {
+      "name": "dayuntil",
+      "title": "Departure date",
+      "type": "date",
+      "when": "unit=day",
+      "required": true
+    },
+    {
+      "name": "fromat",
+      "title": "Start time",
+      "type": "datetime",
+      "when": "unit=hour",
+      "required": true
+    },
+    {
+      "name": "untilat",
+      "title": "End time",
+      "type": "datetime",
+      "when": "unit=hour",
+      "required": true
+    },
+    {
+      "name": "expires",
+      "title": "Group hold cutoff",
+      "type": "datetime",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "sales",
+      "read": "own",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "salesmanager",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "holding",
+      "title": "Holding"
+    },
+    {
+      "name": "held",
+      "title": "Held"
+    },
+    {
+      "name": "confirming",
+      "title": "Confirming"
+    },
+    {
+      "name": "booked",
+      "title": "Booked"
+    },
+    {
+      "name": "releasing",
+      "title": "Releasing"
+    },
+    {
+      "name": "released",
+      "title": "Released"
+    },
+    {
+      "name": "canceling",
+      "title": "Canceling"
+    },
+    {
+      "name": "canceled",
+      "title": "Canceled"
+    },
+    {
+      "name": "holdrefused",
+      "title": "Holdrefused"
+    },
+    {
+      "name": "confirmrefused",
+      "title": "Confirmrefused"
+    },
+    {
+      "name": "releaserefused",
+      "title": "Releaserefused"
+    },
+    {
+      "name": "cancelrefused",
+      "title": "Cancelrefused"
+    }
+  ],
+  "actions": [
+    {
+      "name": "holdday",
+      "title": "Request the group room hold",
+      "from": [
+        "draft"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "holding",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "holding"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.bookingkey"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "bookingkey"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.guest"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "guest"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.roomtype"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "roomtype"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "input.unit"
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "unit"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "date",
+                  "ref": "input.dayfrom"
+                },
+                {
+                  "op": "",
+                  "kind": "date",
+                  "ref": "dayfrom"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "date",
+                  "ref": "input.dayuntil"
+                },
+                {
+                  "op": "",
+                  "kind": "date",
+                  "ref": "dayuntil"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "input.expires"
+                },
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "expires"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "unit"
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "day"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "or",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "plan"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "holding"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "plan"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "held"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "message": "The room request must match its original group stay.",
+        "confirmation": {
+          "parties": [
+            {
+              "name": "lodging",
+              "title": "Lodging provider",
+              "writeback": "lodgingholdday",
+              "reconcile": {
+                "source": "lodgingreceipts",
+                "keyField": "id",
+                "keyInput": "bookingkey",
+                "resultField": "state",
+                "expected": "held",
+                "everySeconds": 1
+              }
+            }
+          ],
+          "deadlineSeconds": 3600,
+          "onPartial": "reject",
+          "onExpire": "escalate",
+          "onComplete": "held",
+          "onPartialAction": "holdrefused",
+          "reviewerRole": "salesmanager"
+        }
+      },
+      "inputs": [
+        {
+          "name": "bookingkey",
+          "title": "Provider booking reference",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "guest",
+          "title": "Guest or group",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "roomtype",
+          "title": "Provider room type",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "unit",
+          "title": "Booking unit",
+          "type": "choice",
+          "choices": "day,hour",
+          "required": true
+        },
+        {
+          "name": "dayfrom",
+          "title": "Arrival date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "dayuntil",
+          "title": "Departure date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "expires",
+          "title": "Group hold cutoff",
+          "type": "datetime",
+          "required": true
+        },
+        {
+          "name": "mode",
+          "title": "Hold mode",
+          "type": "choice",
+          "choices": "held",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "holdhour",
+      "title": "Request the group room hold",
+      "from": [
+        "draft"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "holding",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "holding"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.bookingkey"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "bookingkey"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.guest"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "guest"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.roomtype"
+                },
+                {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "roomtype"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "input.unit"
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "unit"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "input.fromat"
+                },
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "fromat"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "input.untilat"
+                },
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "untilat"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "input.expires"
+                },
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "expires"
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "unit"
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "hour"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "or",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "plan"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "holding"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "plan"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "held"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "message": "The room request must match its original group stay.",
+        "confirmation": {
+          "parties": [
+            {
+              "name": "lodging",
+              "title": "Lodging provider",
+              "writeback": "lodgingholdhour",
+              "reconcile": {
+                "source": "lodgingreceipts",
+                "keyField": "id",
+                "keyInput": "bookingkey",
+                "resultField": "state",
+                "expected": "held",
+                "everySeconds": 1
+              }
+            }
+          ],
+          "deadlineSeconds": 3600,
+          "onPartial": "reject",
+          "onExpire": "escalate",
+          "onComplete": "held",
+          "onPartialAction": "holdrefused",
+          "reviewerRole": "salesmanager"
+        }
+      },
+      "inputs": [
+        {
+          "name": "bookingkey",
+          "title": "Provider booking reference",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "guest",
+          "title": "Guest or group",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "roomtype",
+          "title": "Provider room type",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "unit",
+          "title": "Booking unit",
+          "type": "choice",
+          "choices": "day,hour",
+          "required": true
+        },
+        {
+          "name": "fromat",
+          "title": "Start time",
+          "type": "datetime",
+          "required": true
+        },
+        {
+          "name": "untilat",
+          "title": "End time",
+          "type": "datetime",
+          "required": true
+        },
+        {
+          "name": "expires",
+          "title": "Group hold cutoff",
+          "type": "datetime",
+          "required": true
+        },
+        {
+          "name": "mode",
+          "title": "Hold mode",
+          "type": "choice",
+          "choices": "held",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "confirm",
+      "title": "Confirm the original group room",
+      "from": [
+        "held"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "pending",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "confirming"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "input.bookingkey"
+            },
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "bookingkey"
+            }
+          ]
+        },
+        "message": "Use the original provider booking reference.",
+        "confirmation": {
+          "parties": [
+            {
+              "name": "lodging",
+              "title": "Lodging provider",
+              "writeback": "lodgingconfirm",
+              "reconcile": {
+                "source": "lodgingreceipts",
+                "keyField": "id",
+                "keyInput": "bookingkey",
+                "resultField": "state",
+                "expected": "booked",
+                "everySeconds": 1
+              }
+            }
+          ],
+          "deadlineSeconds": 3600,
+          "onPartial": "reject",
+          "onExpire": "escalate",
+          "onComplete": "booked",
+          "onPartialAction": "confirmrefused",
+          "reviewerRole": "salesmanager"
+        }
+      },
+      "inputs": [
+        {
+          "name": "bookingkey",
+          "title": "Provider booking reference",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "title": "Release the original group room",
+      "from": [
+        "held",
+        "confirmrefused",
+        "releaserefused"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "pending",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "releasing"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "input.bookingkey"
+            },
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "bookingkey"
+            }
+          ]
+        },
+        "message": "Use the original provider booking reference.",
+        "confirmation": {
+          "parties": [
+            {
+              "name": "lodging",
+              "title": "Lodging provider",
+              "writeback": "lodgingrelease",
+              "reconcile": {
+                "source": "lodgingreceipts",
+                "keyField": "id",
+                "keyInput": "bookingkey",
+                "resultField": "state",
+                "expected": "released",
+                "everySeconds": 1
+              }
+            }
+          ],
+          "deadlineSeconds": 3600,
+          "onPartial": "reject",
+          "onExpire": "escalate",
+          "onComplete": "released",
+          "onPartialAction": "releaserefused",
+          "reviewerRole": "salesmanager"
+        }
+      },
+      "inputs": [
+        {
+          "name": "bookingkey",
+          "title": "Provider booking reference",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "cancel",
+      "title": "Cancel the original group room",
+      "from": [
+        "booked",
+        "cancelrefused"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "pending",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "canceling"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "input.bookingkey"
+            },
+            {
+              "op": "",
+              "kind": "text",
+              "ref": "bookingkey"
+            }
+          ]
+        },
+        "message": "Use the original provider booking reference.",
+        "confirmation": {
+          "parties": [
+            {
+              "name": "lodging",
+              "title": "Lodging provider",
+              "writeback": "lodgingcancel",
+              "reconcile": {
+                "source": "lodgingreceipts",
+                "keyField": "id",
+                "keyInput": "bookingkey",
+                "resultField": "state",
+                "expected": "canceled",
+                "everySeconds": 1
+              }
+            }
+          ],
+          "deadlineSeconds": 3600,
+          "onPartial": "reject",
+          "onExpire": "escalate",
+          "onComplete": "canceled",
+          "onPartialAction": "cancelrefused",
+          "reviewerRole": "salesmanager"
+        }
+      },
+      "inputs": [
+        {
+          "name": "bookingkey",
+          "title": "Provider booking reference",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "held",
+      "title": "Keep the original held receipt",
+      "from": [
+        "holding"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "held"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    },
+    {
+      "name": "holdrefused",
+      "title": "Keep the original holdrefused receipt",
+      "from": [
+        "holding"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "holdrefused"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    },
+    {
+      "name": "booked",
+      "title": "Keep the original booked receipt",
+      "from": [
+        "confirming"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "booked"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    },
+    {
+      "name": "confirmrefused",
+      "title": "Keep the original confirmrefused receipt",
+      "from": [
+        "confirming"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "confirmrefused"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    },
+    {
+      "name": "released",
+      "title": "Keep the original released receipt",
+      "from": [
+        "releasing"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "released"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    },
+    {
+      "name": "releaserefused",
+      "title": "Keep the original releaserefused receipt",
+      "from": [
+        "releasing"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "releaserefused"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    },
+    {
+      "name": "canceled",
+      "title": "Keep the original canceled receipt",
+      "from": [
+        "canceling"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "canceled"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    },
+    {
+      "name": "cancelrefused",
+      "title": "Keep the original cancelrefused receipt",
+      "from": [
+        "canceling"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmroom",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "update",
+            "target": {
+              "type": "build.crmroom",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "cancelrefused"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "confirmationOnly": true
+    }
+  ],
+  "constraints": [
+    {
+      "name": "bookingkey",
+      "kind": "unique",
+      "fields": [
+        "bookingkey"
+      ],
+      "message": "Provider booking references are unique."
+    },
+    {
+      "name": "frozenrequest",
+      "kind": "immutable",
+      "fields": [
+        "plan",
+        "bookingkey",
+        "ordinal",
+        "guest",
+        "roomtype",
+        "unit",
+        "dayfrom",
+        "dayuntil",
+        "fromat",
+        "untilat",
+        "expires"
+      ],
+      "message": "A group room retains its original stay and request identity."
+    }
+  ],
+  "type": "build.crmroom"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "application.heating",
+  "version": "0.1.1",
+  "title": "Heating operations teaching package",
+  "namespace": "application.heating",
+  "description": "Original Build definitions for a fictional teaching site. Install and publish independently, then configure the gateway, property endpoint and intended model before using those features. Synthetic samples run only in isolated trials; ordinary business actions create any demonstration records. Values and city configurations are examples, not engineering standards or proof of equipment compatibility.",
+  "artifact": "heating.json"
+}

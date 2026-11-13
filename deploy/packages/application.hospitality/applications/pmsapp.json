@@ -1,0 +1,67 @@
+{
+  "name": "pmsapp",
+  "title": "Reservations",
+  "icon": "hotel",
+  "pages": [
+    "pmsreservation",
+    "pmsroomtype",
+    "pmschannelmessage"
+  ],
+  "resources": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.pmsroomtype"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.pmsslot"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.pmsreservation"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.pmsoccupancy"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.pmschannelmessage"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.pmsexpiry"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.pmschannel"
+    },
+    {
+      "app": "build",
+      "kind": "source",
+      "name": "hotelchannelinput"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.pmsarrivals"
+    },
+    {
+      "app": "build",
+      "kind": "test-plan",
+      "name": "hospitalitycapacity"
+    },
+    {
+      "app": "build",
+      "kind": "sample-set",
+      "name": "hospitalityexample"
+    }
+  ]
+}

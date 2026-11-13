@@ -1,0 +1,661 @@
+{
+  "roots": [
+    {
+      "app": "build",
+      "kind": "app",
+      "name": "pmsapp"
+    },
+    {
+      "app": "build",
+      "kind": "app",
+      "name": "crmapp"
+    }
+  ],
+  "assets": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.pmsroomtype"
+      },
+      "path": "objects/pmsroomtype.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.pmsslot"
+      },
+      "path": "objects/pmsslot.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.pmsreservation"
+      },
+      "path": "objects/pmsreservation.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.pmsoccupancy"
+      },
+      "path": "objects/pmsoccupancy.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.pmsexpiry"
+      },
+      "path": "flows/pmsexpiry.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.pmschannelmessage"
+      },
+      "path": "objects/pmschannelmessage.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.pmschannel"
+      },
+      "path": "flows/pmschannel.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "connection",
+        "name": "hotelchannel"
+      },
+      "path": "integrations/connections/hotelchannel.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "source",
+        "name": "hotelchannelinput"
+      },
+      "path": "integrations/sources/hotelchannelinput.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "pmschannelmessage"
+      },
+      "path": "pages/pmschannelmessage.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "pmsarrivals"
+      },
+      "path": "queries/pmsarrivals.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.pmsarrivals"
+      },
+      "path": "flows/pmsarrivals.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "app",
+        "name": "pmsapp"
+      },
+      "path": "applications/pmsapp.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "sample-set",
+        "name": "hospitalityexample"
+      },
+      "path": "tests/sample-sets/hospitalityexample.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.samples-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "pmsreservation"
+      },
+      "path": "pages/pmsreservation.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "pmsroomtype"
+      },
+      "path": "pages/pmsroomtype.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.crmcustomer"
+      },
+      "path": "objects/crmcustomer.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.crmopportunity"
+      },
+      "path": "objects/crmopportunity.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crmcustomer"
+      },
+      "path": "pages/crmcustomer.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crmopportunity"
+      },
+      "path": "pages/crmopportunity.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.crmlodgingoffer"
+      },
+      "path": "objects/crmlodgingoffer.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "connection",
+        "name": "lodgingupstream"
+      },
+      "path": "integrations/connections/lodgingupstream.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "source",
+        "name": "lodgingoffers"
+      },
+      "path": "integrations/sources/lodgingoffers.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "dataset",
+        "name": "lodgingreceipts"
+      },
+      "path": "integrations/datasets/lodgingreceipts.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.dataset-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "source",
+        "name": "lodgingreceipts"
+      },
+      "path": "integrations/sources/lodgingreceipts.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "lodgingholdday"
+      },
+      "path": "integrations/writebacks/lodgingholdday.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "lodgingholdhour"
+      },
+      "path": "integrations/writebacks/lodgingholdhour.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "lodgingconfirm"
+      },
+      "path": "integrations/writebacks/lodgingconfirm.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "lodgingrelease"
+      },
+      "path": "integrations/writebacks/lodgingrelease.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "lodgingcancel"
+      },
+      "path": "integrations/writebacks/lodgingcancel.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.crmgroup"
+      },
+      "path": "objects/crmgroup.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.crmroom"
+      },
+      "path": "objects/crmroom.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "crmrooms"
+      },
+      "path": "queries/crmrooms.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "crmgroups"
+      },
+      "path": "queries/crmgroups.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmhold"
+      },
+      "path": "flows/crmhold.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmheld"
+      },
+      "path": "flows/crmheld.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmbooked"
+      },
+      "path": "flows/crmbooked.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmholdrefused"
+      },
+      "path": "flows/crmholdrefused.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmconfirmrefused"
+      },
+      "path": "flows/crmconfirmrefused.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmreleased"
+      },
+      "path": "flows/crmreleased.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmcanceled"
+      },
+      "path": "flows/crmcanceled.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmreleaserefused"
+      },
+      "path": "flows/crmreleaserefused.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmcancelrefused"
+      },
+      "path": "flows/crmcancelrefused.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmgroupconfirming"
+      },
+      "path": "flows/crmgroupconfirming.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmgroupcompensating"
+      },
+      "path": "flows/crmgroupcompensating.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmgroupreleasing"
+      },
+      "path": "flows/crmgroupreleasing.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmgroupneedsreview"
+      },
+      "path": "flows/crmgroupneedsreview.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmgroupwon"
+      },
+      "path": "flows/crmgroupwon.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmgroupfailed"
+      },
+      "path": "flows/crmgroupfailed.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmgroupreleased"
+      },
+      "path": "flows/crmgroupreleased.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.crmclosing"
+      },
+      "path": "objects/crmclosing.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmopportunityclosing"
+      },
+      "path": "flows/crmopportunityclosing.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmopportunitylost"
+      },
+      "path": "flows/crmopportunitylost.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.crmgroupexpiry"
+      },
+      "path": "flows/crmgroupexpiry.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crmlodgingoffer"
+      },
+      "path": "pages/crmlodgingoffer.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crmgroup"
+      },
+      "path": "pages/crmgroup.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crmroom"
+      },
+      "path": "pages/crmroom.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "app",
+        "name": "crmapp"
+      },
+      "path": "applications/crmapp.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "test-plan",
+        "name": "hospitalitycapacity"
+      },
+      "path": "tests/test-plans/hospitalitycapacity.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "test-plan",
+        "name": "hospitalitysales"
+      },
+      "path": "tests/test-plans/hospitalitysales.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "function",
+        "name": "crmreview"
+      },
+      "path": "functions/crmreview.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.function-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "evaluation-set",
+        "name": "crmreviewquality"
+      },
+      "path": "tests/evaluations/crmreviewquality.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.evaluation-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "crmopenopportunities"
+      },
+      "path": "queries/crmopenopportunities.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "agent",
+        "name": "salesassistant"
+      },
+      "path": "agents/salesassistant.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.agent-1"
+    }
+  ],
+  "guide": "docs/guide.md",
+  "setup": {
+    "steps": "setup.json",
+    "roles": "roles/requirements.json"
+  }
+}

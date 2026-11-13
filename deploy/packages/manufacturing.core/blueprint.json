@@ -1,0 +1,72 @@
+{
+  "roots": [
+    {
+      "app": "build",
+      "kind": "app",
+      "name": "manufacturingfoundation"
+    }
+  ],
+  "assets": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.mesleadtime"
+      },
+      "path": "objects/mesleadtime.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "connection",
+        "name": "supplieragent"
+      },
+      "path": "integrations/connections/supplieragent.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "supplierinquiry"
+      },
+      "path": "integrations/writebacks/supplierinquiry.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "supplieranswers"
+      },
+      "path": "queries/supplieranswers.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "mesleadtime"
+      },
+      "path": "pages/mesleadtime.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "app",
+        "name": "manufacturingfoundation"
+      },
+      "path": "applications/manufacturingfoundation.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    }
+  ],
+  "guide": "docs/guide.md"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "heatingsetvalve",
+  "title": "Set absolute valve opening",
+  "connection": "heatingfield",
+  "object": "build.circuit",
+  "on": "dispatch",
+  "method": "POST",
+  "path": "execute",
+  "objectBindings": {
+    "build.circuit": {
+      "app": "build",
+      "kind": "object",
+      "name": "build.circuit"
+    }
+  }
+}

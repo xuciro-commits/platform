@@ -1,0 +1,335 @@
+{
+  "name": "erpentry",
+  "title": "Accounting document",
+  "fields": [
+    {
+      "name": "date",
+      "title": "Business date",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "currency",
+      "title": "Currency code",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "reference",
+      "title": "Business reference",
+      "type": "text",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "submitted",
+      "title": "Submitted"
+    }
+  ],
+  "sets": [
+    {
+      "name": "lines",
+      "from": "lines",
+      "direction": "inverse",
+      "object": "build.erpline",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [],
+  "actions": [
+    {
+      "name": "post",
+      "title": "Submit to the general ledger",
+      "from": [
+        "draft"
+      ],
+      "roles": [
+        "accountant",
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.erpentry",
+        "steps": [
+          {
+            "name": "submitted",
+            "kind": "update",
+            "target": {
+              "type": "build.erpentry",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "submitted"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": ">=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "count",
+                      "kind": "integer",
+                      "agg": {
+                        "source": "lines"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 2
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "<=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "count",
+                      "kind": "integer",
+                      "agg": {
+                        "source": "lines"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 128
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "sum",
+                  "kind": "decimal",
+                  "agg": {
+                    "source": "lines"
+                  },
+                  "in": {
+                    "op": "if",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "row.side"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "debit"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "row.amount"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "op": "sum",
+                  "kind": "decimal",
+                  "agg": {
+                    "source": "lines"
+                  },
+                  "in": {
+                    "op": "if",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "row.side"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "credit"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "row.amount"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "message": "Choose at least two balanced accounting lines.",
+        "reads": {
+          "collections": {
+            "lines": {
+              "app": "build",
+              "object": "build.erpline",
+              "set": "lines",
+              "policy": "complete"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "amend",
+      "title": "Amend accounting draft",
+      "from": [
+        "draft"
+      ],
+      "roles": [
+        "accountant",
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.erpentry",
+        "steps": [
+          {
+            "name": "amend",
+            "kind": "update",
+            "target": {
+              "type": "build.erpentry",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "date",
+                "from": "date"
+              },
+              {
+                "field": "currency",
+                "from": "currency"
+              },
+              {
+                "field": "reference",
+                "from": "reference"
+              }
+            ]
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "date",
+          "title": "Business date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "currency",
+          "title": "Currency code",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "reference",
+          "title": "Business reference",
+          "type": "text",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "type": "build.erpentry"
+}

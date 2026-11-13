@@ -1,0 +1,83 @@
+{
+  "name": "heatingtemperature",
+  "title": "Supply temperature warning",
+  "description": "Synthetic teaching rules only. An incomplete, stale, uncertain or offline window cannot authorize a business decision. Raw samples remain external.",
+  "connection": {
+    "app": "build",
+    "kind": "connection",
+    "name": "heatingfield"
+  },
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.device"
+  },
+  "deviceField": "devicekey",
+  "signal": "temperature",
+  "unit": "C",
+  "path": "/observation",
+  "windowSeconds": 60,
+  "expectedRetentionSeconds": 3600,
+  "expectedGranularitySeconds": 1,
+  "roles": [
+    "user",
+    "builder"
+  ],
+  "scheduled": true,
+  "requireComplete": true,
+  "decision": {
+    "when": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "choice",
+              "ref": "record.state"
+            },
+            {
+              "kind": "choice",
+              "lit": {
+                "value": "healthy"
+              }
+            }
+          ]
+        },
+        {
+          "op": ">=",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "decimal",
+              "ref": "observation.latest"
+            },
+            {
+              "kind": "decimal",
+              "ref": "record.warnlimit"
+            }
+          ]
+        }
+      ]
+    },
+    "action": {
+      "app": "build",
+      "kind": "action",
+      "name": "build.device.warn"
+    },
+    "inputs": {
+      "reading": {
+        "kind": "decimal",
+        "ref": "observation.latest"
+      },
+      "summary": {
+        "kind": "text",
+        "lit": {
+          "value": "Supply temperature exceeds the configured warning limit"
+        }
+      }
+    }
+  }
+}

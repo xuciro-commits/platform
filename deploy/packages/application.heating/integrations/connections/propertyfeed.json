@@ -1,0 +1,6 @@
+{
+  "name": "propertyfeed",
+  "title": "Property notification endpoint",
+  "kind": "http",
+  "credential": true
+}

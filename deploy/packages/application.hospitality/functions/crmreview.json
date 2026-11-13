@@ -1,0 +1,55 @@
+{
+  "name": "crmreview",
+  "title": "Opportunity review advice",
+  "description": "Suggest useful next steps from readable record facts; a person reviews and adopts the result.",
+  "object": "build.crmopportunity",
+  "fields": [
+    "title",
+    "state"
+  ],
+  "instructions": "Review only the supplied record facts. Explain concrete next steps and missing information. Do not invent inventory, availability, routing capacity, supplier answers, identities or authorization. When the record does not establish the facts needed for a consequential change, category must be review and review must be true. Otherwise category may be routine and review false. Return the declared JSON with a useful summary and confidence between zero and one. This is a proposal; do not claim any action has been executed.",
+  "output": [
+    {
+      "name": "summary",
+      "type": "string",
+      "required": true,
+      "description": "Explain useful next steps using only the supplied facts."
+    },
+    {
+      "name": "category",
+      "type": "string",
+      "required": true,
+      "description": "Whether the record can be treated as routine or needs review.",
+      "choices": [
+        "routine",
+        "review"
+      ]
+    },
+    {
+      "name": "review",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether a person must resolve missing facts or uncertainty."
+    },
+    {
+      "name": "confidence",
+      "type": "decimal",
+      "required": true,
+      "description": "Confidence from zero to one; it does not authorize business changes."
+    }
+  ],
+  "maxInputBytes": 4096,
+  "maxOutputBytes": 2048,
+  "maxTokens": 512,
+  "roles": [
+    "builder",
+    "sales",
+    "salesmanager"
+  ],
+  "proposal": {
+    "handoffRole": "salesmanager",
+    "confidenceField": "confidence",
+    "minimumConfidence": 0.7,
+    "expiresAfterSeconds": 3600
+  }
+}

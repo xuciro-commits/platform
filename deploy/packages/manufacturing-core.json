@@ -322,6 +322,8 @@
           "kind": "app",
           "name": "manufacturingfoundation"
         },
+        "contractVersion": 1,
+        "sourceVersion": "1",
         "body": {
           "name": "manufacturingfoundation",
           "title": "Manufacturing Foundation",
@@ -351,9 +353,7 @@
               "name": "supplieranswers"
             }
           ]
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1"
+        }
       }
     ],
     "guide": "Configure supplieragent after installation. Installation grants no roles and creates no business data."

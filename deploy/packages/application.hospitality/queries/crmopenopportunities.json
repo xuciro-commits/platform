@@ -1,0 +1,17 @@
+{
+  "name": "crmopenopportunities",
+  "title": "Open sales opportunities",
+  "description": "Current readable open opportunities; permissions and ownership remain with the original object.",
+  "object": "build.crmopportunity",
+  "domain": [
+    [
+      "state",
+      "=",
+      "open"
+    ]
+  ],
+  "sort": [
+    "id"
+  ],
+  "limit": 50
+}

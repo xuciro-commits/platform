@@ -1,0 +1,16 @@
+{
+  "name": "lodgingconfirm",
+  "title": "Confirm original provider room",
+  "connection": "lodgingupstream",
+  "object": "build.crmroom",
+  "on": "confirmation",
+  "method": "POST",
+  "path": "/v1/protocols/lodging.stays/2/confirm/{bookingkey}",
+  "objectBindings": {
+    "build.crmroom": {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmroom"
+    }
+  }
+}

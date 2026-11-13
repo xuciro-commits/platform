@@ -1,0 +1,35 @@
+{
+  "name": "heatingadvice",
+  "title": "Explain device health",
+  "description": "Read-only analysis of accepted device evidence. A person checks the suggested next steps; this function does not control equipment.",
+  "object": "build.device",
+  "fields": [
+    "name",
+    "state",
+    "latesttemp",
+    "healthscore"
+  ],
+  "model": "",
+  "roles": [
+    "user",
+    "builder"
+  ],
+  "instructions": "Describe only the supplied accepted business evidence. Separate observations from uncertainty. Suggest a short inspection sequence for the property operator; missing or old evidence requires a new observation. Do not invent current measurements, claim a repair is complete, grant access, or send equipment commands. Return a concise summary and inspection steps.",
+  "maxInputBytes": 4096,
+  "maxOutputBytes": 2048,
+  "maxTokens": 512,
+  "output": [
+    {
+      "name": "summary",
+      "type": "string",
+      "required": true,
+      "description": "What the supplied device evidence shows"
+    },
+    {
+      "name": "nextsteps",
+      "type": "string",
+      "required": true,
+      "description": "Inspection steps for a person to review"
+    }
+  ]
+}

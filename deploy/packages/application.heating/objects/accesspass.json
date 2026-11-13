@@ -1,0 +1,224 @@
+{
+  "name": "accesspass",
+  "type": "build.accesspass",
+  "title": "Physical access permission",
+  "plural": "Physical access permissions",
+  "description": "Person, place, validity period and revocation are business facts. They grant no platform role and do not widen record access.",
+  "fields": [
+    {
+      "name": "building",
+      "title": "Building",
+      "type": "reference",
+      "ref": "build.building",
+      "required": true
+    },
+    {
+      "name": "accesspoint",
+      "title": "Access point",
+      "type": "reference",
+      "ref": "build.accesspoint",
+      "required": true
+    },
+    {
+      "name": "holder",
+      "title": "Person identifier",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "validfrom",
+      "title": "Valid from",
+      "type": "datetime",
+      "required": true
+    },
+    {
+      "name": "validuntil",
+      "title": "Valid until",
+      "type": "datetime",
+      "required": true
+    },
+    {
+      "name": "purpose",
+      "title": "Visit purpose",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "revokedat",
+      "title": "Revoked at",
+      "type": "datetime"
+    },
+    {
+      "name": "revokereason",
+      "title": "Revocation reason",
+      "type": "longtext"
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft",
+      "tone": "neutral"
+    },
+    {
+      "name": "active",
+      "title": "Active",
+      "tone": "success"
+    },
+    {
+      "name": "revoked",
+      "title": "Revoked",
+      "tone": "danger"
+    }
+  ],
+  "actions": [
+    {
+      "name": "grant",
+      "title": "Activate access permission",
+      "from": [
+        "draft"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.accesspass",
+        "steps": [
+          {
+            "name": "granted",
+            "kind": "update",
+            "target": {
+              "type": "build.accesspass",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "active"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": ">",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "datetime",
+              "ref": "validuntil"
+            },
+            {
+              "op": "$now",
+              "kind": "datetime"
+            }
+          ]
+        },
+        "message": "A permission must not already be expired when activated."
+      }
+    },
+    {
+      "name": "revoke",
+      "title": "Revoke access permission",
+      "from": [
+        "active"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.accesspass",
+        "steps": [
+          {
+            "name": "revoked",
+            "kind": "update",
+            "target": {
+              "type": "build.accesspass",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "revoked"
+                  }
+                }
+              },
+              {
+                "field": "revokedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              },
+              {
+                "field": "revokereason",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.reason"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "reason",
+          "title": "Revocation reason",
+          "type": "text",
+          "required": true,
+          "constraints": {
+            "minLength": 1
+          }
+        }
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "name": "passperiod",
+      "kind": "temporal",
+      "fields": [
+        "validfrom",
+        "validuntil"
+      ],
+      "message": "Valid until must be later than valid from.",
+      "translations": {
+        "zh-CN": "结束时间必须晚于开始时间。"
+      },
+      "expr": {
+        "op": "<",
+        "kind": "boolean",
+        "args": [
+          {
+            "kind": "datetime",
+            "ref": "validfrom"
+          },
+          {
+            "kind": "datetime",
+            "ref": "validuntil"
+          }
+        ]
+      }
+    }
+  ]
+}

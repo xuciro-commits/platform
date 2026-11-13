@@ -1,0 +1,10 @@
+{
+  "name": "supplieranswers",
+  "title": "Supplier inquiry answers",
+  "description": "Current readable inquiries and original supplier answers, without invented delivery dates.",
+  "object": "build.mesleadtime",
+  "sort": [
+    "id"
+  ],
+  "limit": 50
+}

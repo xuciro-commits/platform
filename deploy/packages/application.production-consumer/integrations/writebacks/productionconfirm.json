@@ -1,0 +1,31 @@
+{
+  "name": "productionconfirm",
+  "title": "Production confirm",
+  "object": "build.shoporder",
+  "on": "confirmation",
+  "connection": "batchconsumerupstream",
+  "method": "POST",
+  "path": "/v1/protocols/production.batchorders/2/confirm/{order}",
+  "mapping": [
+    {
+      "from": "id",
+      "to": "shoporder"
+    },
+    {
+      "from": "batch",
+      "to": "batch"
+    },
+    {
+      "from": "yield",
+      "to": "yield"
+    },
+    {
+      "from": "scrap",
+      "to": "scrap"
+    },
+    {
+      "from": "final",
+      "to": "final"
+    }
+  ]
+}

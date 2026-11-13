@@ -1,0 +1,220 @@
+{
+  "format": 4,
+  "name": "pmsroomtype",
+  "title": "Room types",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.pmsroomtype"
+  },
+  "dataBindings": [
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.pmsroomtype"
+      },
+      "model": {
+        "type": "build.pmsroomtype",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "unit"
+          },
+          {
+            "name": "capacity"
+          },
+          {
+            "name": "minunits"
+          },
+          {
+            "name": "allowance"
+          },
+          {
+            "name": "oversell"
+          },
+          {
+            "name": "active"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "unit"
+        },
+        {
+          "name": "capacity"
+        },
+        {
+          "name": "minunits"
+        },
+        {
+          "name": "allowance"
+        },
+        {
+          "name": "oversell"
+        },
+        {
+          "name": "active"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.pmsroomtype"
+      },
+      "model": {
+        "type": "build.pmsroomtype",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "unit"
+          },
+          {
+            "name": "capacity"
+          },
+          {
+            "name": "minunits"
+          },
+          {
+            "name": "allowance"
+          },
+          {
+            "name": "oversell"
+          },
+          {
+            "name": "active"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "unit"
+        },
+        {
+          "name": "capacity"
+        },
+        {
+          "name": "minunits"
+        },
+        {
+          "name": "allowance"
+        },
+        {
+          "name": "oversell"
+        },
+        {
+          "name": "active"
+        }
+      ],
+      "ports": {
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.pmsroomtype.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.pmsroomtype.edit"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.pmsroomtype.prepare"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "binding": "list"
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "binding": "detail"
+    }
+  ],
+  "inputSchema": {},
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "page",
+        "kind": "page"
+      },
+      {
+        "id": "binding:list",
+        "parent": "page",
+        "kind": "page",
+        "binding": "list"
+      },
+      {
+        "id": "binding:detail",
+        "parent": "page",
+        "kind": "page",
+        "binding": "detail"
+      }
+    ],
+    "owners": {
+      "detail": "binding:detail",
+      "list": "binding:list"
+    },
+    "root": "page"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": null,
+      "sections": [
+        {
+          "binding": "list",
+          "id": "list",
+          "triggers": [
+            "list"
+          ]
+        },
+        {
+          "binding": "detail",
+          "id": "detail",
+          "triggers": [
+            "detail"
+          ]
+        }
+      ]
+    }
+  }
+}

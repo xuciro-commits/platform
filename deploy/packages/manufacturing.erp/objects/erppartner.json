@@ -1,0 +1,56 @@
+{
+  "name": "erppartner",
+  "title": "Business partner",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "kind",
+      "title": "Partner kind",
+      "type": "choice",
+      "choices": "supplier,customer,both",
+      "required": true
+    },
+    {
+      "name": "email",
+      "title": "Email",
+      "type": "text"
+    }
+  ],
+  "access": [
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "type": "build.erppartner"
+}

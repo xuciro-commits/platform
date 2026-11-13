@@ -1,0 +1,40 @@
+{
+  "name": "build.crmgroupreleased",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.crmgroup"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmopportunity.reopen"
+    }
+  ],
+  "definition": {
+    "name": "crmgroupreleased",
+    "title": "Keep the group sale released",
+    "object": "build.crmgroup",
+    "when": "released",
+    "steps": [
+      {
+        "name": "opportunity",
+        "kind": "action",
+        "act": "build.crmopportunity.reopen",
+        "target": {
+          "source": "subject",
+          "path": [
+            "opportunity"
+          ]
+        },
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

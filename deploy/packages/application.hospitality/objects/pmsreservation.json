@@ -1,0 +1,4274 @@
+{
+  "name": "pmsreservation",
+  "title": "Reservation",
+  "fields": [
+    {
+      "name": "guest",
+      "title": "Guest or group",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "roomtype",
+      "title": "Room type",
+      "type": "reference",
+      "ref": "build.pmsroomtype",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Booking unit",
+      "type": "choice",
+      "choices": "day,hour",
+      "required": true
+    },
+    {
+      "name": "mode",
+      "title": "Initial booking status",
+      "type": "choice",
+      "choices": "held,booked",
+      "required": true
+    },
+    {
+      "name": "dayfrom",
+      "title": "Arrival date",
+      "type": "date",
+      "required": true,
+      "when": "unit=day"
+    },
+    {
+      "name": "dayuntil",
+      "title": "Departure date",
+      "type": "date",
+      "required": true,
+      "when": "unit=day"
+    },
+    {
+      "name": "fromat",
+      "title": "Start time",
+      "type": "datetime",
+      "required": true,
+      "when": "unit=hour"
+    },
+    {
+      "name": "untilat",
+      "title": "End time",
+      "type": "datetime",
+      "required": true,
+      "when": "unit=hour"
+    },
+    {
+      "name": "expires",
+      "title": "Hold expires",
+      "type": "datetime",
+      "required": true,
+      "when": "mode=held"
+    },
+    {
+      "name": "begins",
+      "title": "Occupied from",
+      "type": "datetime",
+      "formulaExpr": {
+        "op": "if",
+        "kind": "datetime",
+        "args": [
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "choice",
+                "ref": "unit"
+              },
+              {
+                "op": "",
+                "kind": "choice",
+                "lit": {
+                  "value": "day"
+                }
+              }
+            ]
+          },
+          {
+            "op": "start-of-day",
+            "kind": "datetime",
+            "args": [
+              {
+                "op": "",
+                "kind": "date",
+                "ref": "dayfrom"
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "datetime",
+            "ref": "fromat"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ends",
+      "title": "Occupied until",
+      "type": "datetime",
+      "formulaExpr": {
+        "op": "if",
+        "kind": "datetime",
+        "args": [
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "choice",
+                "ref": "unit"
+              },
+              {
+                "op": "",
+                "kind": "choice",
+                "lit": {
+                  "value": "day"
+                }
+              }
+            ]
+          },
+          {
+            "op": "start-of-day",
+            "kind": "datetime",
+            "args": [
+              {
+                "op": "",
+                "kind": "date",
+                "ref": "dayuntil"
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "datetime",
+            "ref": "untilat"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arrivalnoticeat",
+      "title": "Arrival review from",
+      "type": "datetime",
+      "formulaExpr": {
+        "op": "add-days",
+        "kind": "datetime",
+        "args": [
+          {
+            "op": "",
+            "kind": "datetime",
+            "ref": "begins"
+          },
+          {
+            "op": "",
+            "kind": "integer",
+            "lit": {
+              "value": -1
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "access": [
+    {
+      "role": "desk",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "hotelmanager",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "channel",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "held",
+      "title": "Held"
+    },
+    {
+      "name": "booked",
+      "title": "Booked"
+    },
+    {
+      "name": "canceled",
+      "title": "Canceled"
+    },
+    {
+      "name": "released",
+      "title": "Released"
+    }
+  ],
+  "sets": [
+    {
+      "name": "occupancies",
+      "from": "occupancies",
+      "direction": "inverse",
+      "object": "build.pmsoccupancy",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [
+    {
+      "name": "exactoccupancy",
+      "kind": "expression",
+      "fields": [
+        "roomtype",
+        "unit",
+        "dayfrom",
+        "dayuntil",
+        "fromat",
+        "untilat",
+        "state",
+        "begins",
+        "ends"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "or",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "or",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "held"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "state"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "booked"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "and",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "unit"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "day"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "datetime",
+                            "ref": "begins"
+                          },
+                          {
+                            "op": "start-of-day",
+                            "kind": "datetime",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "date",
+                                "ref": "dayfrom"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "datetime",
+                            "ref": "ends"
+                          },
+                          {
+                            "op": "start-of-day",
+                            "kind": "datetime",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "date",
+                                "ref": "dayuntil"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "and",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "unit"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "hour"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "datetime",
+                            "ref": "begins"
+                          },
+                          {
+                            "op": "",
+                            "kind": "datetime",
+                            "ref": "fromat"
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "datetime",
+                            "ref": "ends"
+                          },
+                          {
+                            "op": "",
+                            "kind": "datetime",
+                            "ref": "untilat"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "and",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "unit"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "day"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "count",
+                            "kind": "integer",
+                            "agg": {
+                              "source": "occupancies"
+                            }
+                          },
+                          {
+                            "op": "diff-days",
+                            "kind": "integer",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "ends"
+                              },
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "begins"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "and",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "unit"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "hour"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "count",
+                            "kind": "integer",
+                            "agg": {
+                              "source": "occupancies"
+                            }
+                          },
+                          {
+                            "op": "diff-hours",
+                            "kind": "integer",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "ends"
+                              },
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "begins"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "all",
+                "kind": "boolean",
+                "agg": {
+                  "source": "occupancies"
+                },
+                "in": {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "item.slot"
+                            }
+                          ],
+                          "path": [
+                            "roomtype"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "roomtype"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "item.slot"
+                            }
+                          ],
+                          "path": [
+                            "unit"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "unit"
+                        }
+                      ]
+                    },
+                    {
+                      "op": ">=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "item.slot"
+                            }
+                          ],
+                          "path": [
+                            "start"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "begins"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "<=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "item.slot"
+                            }
+                          ],
+                          "path": [
+                            "end"
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "ends"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "not",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "or",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "state"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "held"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "state"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "booked"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "count",
+                    "kind": "integer",
+                    "agg": {
+                      "source": "occupancies"
+                    }
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "The reservation and its exact occupied interval must agree.",
+      "reads": {
+        "collections": {
+          "occupancies": {
+            "app": "build",
+            "object": "build.pmsoccupancy",
+            "set": "occupancies",
+            "policy": "complete"
+          }
+        }
+      }
+    },
+    {
+      "name": "initialmode",
+      "kind": "immutable",
+      "fields": [
+        "mode"
+      ],
+      "message": "The original booking or hold mode is retained."
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.pmsreservation",
+    "steps": [
+      {
+        "name": "reserveday",
+        "kind": "for-each",
+        "forEach": {
+          "range": {
+            "from": {
+              "op": "",
+              "kind": "date",
+              "ref": "dayfrom"
+            },
+            "until": {
+              "op": "",
+              "kind": "date",
+              "ref": "dayuntil"
+            },
+            "unit": "day",
+            "step": 1,
+            "limit": 366
+          },
+          "steps": [
+            {
+              "name": "occupyday",
+              "kind": "post",
+              "target": {
+                "type": "build.pmsslot"
+              },
+              "post": {
+                "match": [
+                  {
+                    "field": "roomtype",
+                    "expr": {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "roomtype"
+                    }
+                  },
+                  {
+                    "field": "unit",
+                    "expr": {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "day"
+                      }
+                    }
+                  },
+                  {
+                    "field": "start",
+                    "expr": {
+                      "op": "start-of-day",
+                      "kind": "datetime",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "date",
+                          "ref": "row.start"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field": "end",
+                    "expr": {
+                      "op": "start-of-day",
+                      "kind": "datetime",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "date",
+                          "ref": "row.end"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "field": "used",
+                "amount": {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 1
+                  }
+                },
+                "subtract": false,
+                "floor": true
+              }
+            },
+            {
+              "name": "occupiedday",
+              "kind": "create",
+              "target": {
+                "type": "build.pmsoccupancy"
+              },
+              "changes": [
+                {
+                  "field": "reservation",
+                  "from": "$subject"
+                },
+                {
+                  "field": "slot",
+                  "from": "step.occupyday"
+                }
+              ]
+            }
+          ]
+        },
+        "when": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "choice",
+              "ref": "unit"
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "day"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "reservehour",
+        "kind": "for-each",
+        "forEach": {
+          "range": {
+            "from": {
+              "op": "",
+              "kind": "datetime",
+              "ref": "fromat"
+            },
+            "until": {
+              "op": "",
+              "kind": "datetime",
+              "ref": "untilat"
+            },
+            "unit": "hour",
+            "step": 1,
+            "limit": 1000
+          },
+          "steps": [
+            {
+              "name": "occupyhour",
+              "kind": "post",
+              "target": {
+                "type": "build.pmsslot"
+              },
+              "post": {
+                "match": [
+                  {
+                    "field": "roomtype",
+                    "expr": {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "roomtype"
+                    }
+                  },
+                  {
+                    "field": "unit",
+                    "expr": {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "hour"
+                      }
+                    }
+                  },
+                  {
+                    "field": "start",
+                    "expr": {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "row.start"
+                    }
+                  },
+                  {
+                    "field": "end",
+                    "expr": {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "row.end"
+                    }
+                  }
+                ],
+                "field": "used",
+                "amount": {
+                  "op": "",
+                  "kind": "integer",
+                  "lit": {
+                    "value": 1
+                  }
+                },
+                "subtract": false,
+                "floor": true
+              }
+            },
+            {
+              "name": "occupiedhour",
+              "kind": "create",
+              "target": {
+                "type": "build.pmsoccupancy"
+              },
+              "changes": [
+                {
+                  "field": "reservation",
+                  "from": "$subject"
+                },
+                {
+                  "field": "slot",
+                  "from": "step.occupyhour"
+                }
+              ]
+            }
+          ]
+        },
+        "when": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "choice",
+              "ref": "unit"
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "hour"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "stateday",
+        "kind": "update",
+        "target": {
+          "type": "build.pmsreservation",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "state",
+            "from": "mode"
+          }
+        ],
+        "when": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "choice",
+              "ref": "unit"
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "day"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "statehour",
+        "kind": "update",
+        "target": {
+          "type": "build.pmsreservation",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "state",
+            "from": "mode"
+          }
+        ],
+        "when": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "choice",
+              "ref": "unit"
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "hour"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "oversold",
+        "kind": "work",
+        "when": {
+          "op": "any",
+          "kind": "boolean",
+          "agg": {
+            "source": "occupancies"
+          },
+          "in": {
+            "op": ">",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "path",
+                "kind": "integer",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "item.slot"
+                  }
+                ],
+                "path": [
+                  "used"
+                ]
+              },
+              {
+                "op": "path",
+                "kind": "integer",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "item.slot"
+                  }
+                ],
+                "path": [
+                  "roomtype",
+                  "capacity"
+                ]
+              }
+            ]
+          }
+        },
+        "work": {
+          "title": "Review overbooked room capacity",
+          "role": "hotelmanager"
+        }
+      }
+    ],
+    "guard": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "path",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "roomtype"
+            }
+          ],
+          "path": [
+            "active"
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "choice",
+              "ref": "unit"
+            },
+            {
+              "op": "path",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "roomtype"
+                }
+              ],
+              "path": [
+                "unit"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "or",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "day"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "<",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "date",
+                      "ref": "dayfrom"
+                    },
+                    {
+                      "op": "",
+                      "kind": "date",
+                      "ref": "dayuntil"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "hour"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "<",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "fromat"
+                    },
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "untilat"
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "fromat"
+                    },
+                    {
+                      "op": "start-of-hour",
+                      "kind": "datetime",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "fromat"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "untilat"
+                    },
+                    {
+                      "op": "start-of-hour",
+                      "kind": "datetime",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "untilat"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "or",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "mode"
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "booked"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": ">",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "expires"
+                    },
+                    {
+                      "op": "$now",
+                      "kind": "datetime"
+                    }
+                  ]
+                },
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "and",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "ref": "unit"
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "day"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "<",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "expires"
+                            },
+                            {
+                              "op": "start-of-day",
+                              "kind": "datetime",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "date",
+                                  "ref": "dayfrom"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "and",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "ref": "unit"
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "hour"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "<",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "expires"
+                            },
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "fromat"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "or",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "day"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": ">=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "diff-days",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "date",
+                          "ref": "dayuntil"
+                        },
+                        {
+                          "op": "",
+                          "kind": "date",
+                          "ref": "dayfrom"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "path",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "roomtype"
+                        }
+                      ],
+                      "path": [
+                        "minunits"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "hour"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": ">=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "diff-hours",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "untilat"
+                        },
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "fromat"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "path",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "roomtype"
+                        }
+                      ],
+                      "path": [
+                        "minunits"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "message": "The room type, booking interval or hold deadline is invalid.",
+    "reads": {
+      "collections": {
+        "occupancies": {
+          "app": "build",
+          "object": "build.pmsoccupancy",
+          "set": "occupancies",
+          "policy": "complete"
+        }
+      }
+    }
+  },
+  "actions": [
+    {
+      "name": "cancel",
+      "title": "Cancel",
+      "from": [
+        "held",
+        "booked"
+      ],
+      "roles": [
+        "desk",
+        "hotelmanager",
+        "channel"
+      ],
+      "transaction": {
+        "subject": "build.pmsreservation",
+        "steps": [
+          {
+            "name": "state",
+            "kind": "update",
+            "target": {
+              "type": "build.pmsreservation",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "canceled"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "free",
+            "kind": "for-each",
+            "forEach": {
+              "set": "occupancies",
+              "steps": [
+                {
+                  "name": "freebalance",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.pmsslot"
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "roomtype",
+                        "expr": {
+                          "op": "path",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "roomtype"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "unit"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "start",
+                        "expr": {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "start"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "end",
+                        "expr": {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "end"
+                          ]
+                        }
+                      }
+                    ],
+                    "field": "used",
+                    "amount": {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    },
+                    "subtract": true,
+                    "floor": true
+                  }
+                },
+                {
+                  "name": "freeoccupied",
+                  "kind": "archive",
+                  "target": {
+                    "type": "build.pmsoccupancy",
+                    "id": "$item"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "arrivals",
+            "kind": "work",
+            "work": {
+              "close": true
+            }
+          },
+          {
+            "name": "oversold",
+            "kind": "work",
+            "work": {
+              "close": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "release",
+      "title": "Release",
+      "from": [
+        "held",
+        "released"
+      ],
+      "roles": [
+        "desk",
+        "hotelmanager",
+        "channel"
+      ],
+      "transaction": {
+        "subject": "build.pmsreservation",
+        "steps": [
+          {
+            "name": "state",
+            "kind": "update",
+            "target": {
+              "type": "build.pmsreservation",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "released"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "free",
+            "kind": "for-each",
+            "forEach": {
+              "set": "occupancies",
+              "steps": [
+                {
+                  "name": "freebalance",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.pmsslot"
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "roomtype",
+                        "expr": {
+                          "op": "path",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "roomtype"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "unit"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "start",
+                        "expr": {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "start"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "end",
+                        "expr": {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "end"
+                          ]
+                        }
+                      }
+                    ],
+                    "field": "used",
+                    "amount": {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    },
+                    "subtract": true,
+                    "floor": true
+                  }
+                },
+                {
+                  "name": "freeoccupied",
+                  "kind": "archive",
+                  "target": {
+                    "type": "build.pmsoccupancy",
+                    "id": "$item"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "arrivals",
+            "kind": "work",
+            "work": {
+              "close": true
+            }
+          },
+          {
+            "name": "oversold",
+            "kind": "work",
+            "work": {
+              "close": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirm",
+      "title": "Confirm hold",
+      "from": [
+        "held"
+      ],
+      "roles": [
+        "desk",
+        "hotelmanager",
+        "channel"
+      ],
+      "transaction": {
+        "subject": "build.pmsreservation",
+        "steps": [
+          {
+            "name": "state",
+            "kind": "update",
+            "target": {
+              "type": "build.pmsreservation",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "booked"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": ">",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "datetime",
+              "ref": "expires"
+            },
+            {
+              "op": "$now",
+              "kind": "datetime"
+            }
+          ]
+        },
+        "message": "An expired hold cannot be confirmed."
+      }
+    },
+    {
+      "name": "modify",
+      "title": "Change reservation",
+      "from": [
+        "held",
+        "booked"
+      ],
+      "roles": [
+        "desk",
+        "hotelmanager",
+        "channel"
+      ],
+      "transaction": {
+        "subject": "build.pmsreservation",
+        "steps": [
+          {
+            "name": "oldonly",
+            "kind": "for-each",
+            "forEach": {
+              "set": "occupancies",
+              "steps": [
+                {
+                  "name": "oldonlybalance",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.pmsslot"
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "roomtype",
+                        "expr": {
+                          "op": "path",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "roomtype"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "unit"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "start",
+                        "expr": {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "start"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "end",
+                        "expr": {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "end"
+                          ]
+                        }
+                      }
+                    ],
+                    "field": "used",
+                    "amount": {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    },
+                    "subtract": true,
+                    "floor": true
+                  },
+                  "when": {
+                    "op": "not",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "and",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "path",
+                                "kind": "reference",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.slot"
+                                  }
+                                ],
+                                "path": [
+                                  "roomtype"
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "input.roomtype"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "path",
+                                "kind": "choice",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.slot"
+                                  }
+                                ],
+                                "path": [
+                                  "unit"
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "input.unit"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "or",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "and",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "input.unit"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "day"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": ">=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "path",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.slot"
+                                          }
+                                        ],
+                                        "path": [
+                                          "start"
+                                        ]
+                                      },
+                                      {
+                                        "op": "start-of-day",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "date",
+                                            "ref": "input.dayfrom"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "<=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "path",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.slot"
+                                          }
+                                        ],
+                                        "path": [
+                                          "end"
+                                        ]
+                                      },
+                                      {
+                                        "op": "start-of-day",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "date",
+                                            "ref": "input.dayuntil"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "and",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "input.unit"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "hour"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": ">=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "path",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.slot"
+                                          }
+                                        ],
+                                        "path": [
+                                          "start"
+                                        ]
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "datetime",
+                                        "ref": "input.fromat"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "<=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "path",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.slot"
+                                          }
+                                        ],
+                                        "path": [
+                                          "end"
+                                        ]
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "datetime",
+                                        "ref": "input.untilat"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "oldonlyoccupied",
+                  "kind": "archive",
+                  "target": {
+                    "type": "build.pmsoccupancy",
+                    "id": "$item"
+                  },
+                  "when": {
+                    "op": "not",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "and",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "path",
+                                "kind": "reference",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.slot"
+                                  }
+                                ],
+                                "path": [
+                                  "roomtype"
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "input.roomtype"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "path",
+                                "kind": "choice",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "row.slot"
+                                  }
+                                ],
+                                "path": [
+                                  "unit"
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "input.unit"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "or",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "and",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "input.unit"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "day"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": ">=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "path",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.slot"
+                                          }
+                                        ],
+                                        "path": [
+                                          "start"
+                                        ]
+                                      },
+                                      {
+                                        "op": "start-of-day",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "date",
+                                            "ref": "input.dayfrom"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "<=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "path",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.slot"
+                                          }
+                                        ],
+                                        "path": [
+                                          "end"
+                                        ]
+                                      },
+                                      {
+                                        "op": "start-of-day",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "date",
+                                            "ref": "input.dayuntil"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "and",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "input.unit"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "hour"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": ">=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "path",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.slot"
+                                          }
+                                        ],
+                                        "path": [
+                                          "start"
+                                        ]
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "datetime",
+                                        "ref": "input.fromat"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "<=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "path",
+                                        "kind": "datetime",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "reference",
+                                            "ref": "row.slot"
+                                          }
+                                        ],
+                                        "path": [
+                                          "end"
+                                        ]
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "datetime",
+                                        "ref": "input.untilat"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "newonlyday",
+            "kind": "for-each",
+            "forEach": {
+              "range": {
+                "from": {
+                  "op": "",
+                  "kind": "date",
+                  "ref": "input.dayfrom"
+                },
+                "until": {
+                  "op": "",
+                  "kind": "date",
+                  "ref": "input.dayuntil"
+                },
+                "unit": "day",
+                "step": 1,
+                "limit": 366
+              },
+              "steps": [
+                {
+                  "name": "newday",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.pmsslot"
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "roomtype",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.roomtype"
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "day"
+                          }
+                        }
+                      },
+                      {
+                        "field": "start",
+                        "expr": {
+                          "op": "start-of-day",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "date",
+                              "ref": "row.start"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "field": "end",
+                        "expr": {
+                          "op": "start-of-day",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "date",
+                              "ref": "row.end"
+                            }
+                          ]
+                        }
+                      }
+                    ],
+                    "field": "used",
+                    "amount": {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    },
+                    "subtract": false,
+                    "floor": true
+                  },
+                  "when": {
+                    "op": "not",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "and",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "input.roomtype"
+                              },
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "roomtype"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "input.unit"
+                              },
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "unit"
+                              }
+                            ]
+                          },
+                          {
+                            "op": ">=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "start-of-day",
+                                "kind": "datetime",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "date",
+                                    "ref": "row.start"
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "start-of-day",
+                                "kind": "datetime",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "date",
+                                    "ref": "dayfrom"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "op": "<=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "start-of-day",
+                                "kind": "datetime",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "date",
+                                    "ref": "row.end"
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "start-of-day",
+                                "kind": "datetime",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "date",
+                                    "ref": "dayuntil"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "newoccupiedday",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.pmsoccupancy"
+                  },
+                  "when": {
+                    "op": "not",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "and",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "input.roomtype"
+                              },
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "roomtype"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "input.unit"
+                              },
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "unit"
+                              }
+                            ]
+                          },
+                          {
+                            "op": ">=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "start-of-day",
+                                "kind": "datetime",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "date",
+                                    "ref": "row.start"
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "start-of-day",
+                                "kind": "datetime",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "date",
+                                    "ref": "dayfrom"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "op": "<=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "start-of-day",
+                                "kind": "datetime",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "date",
+                                    "ref": "row.end"
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "start-of-day",
+                                "kind": "datetime",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "date",
+                                    "ref": "dayuntil"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "changes": [
+                    {
+                      "field": "reservation",
+                      "from": "$subject"
+                    },
+                    {
+                      "field": "slot",
+                      "from": "step.newday"
+                    }
+                  ]
+                }
+              ]
+            },
+            "when": {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "input.unit"
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "day"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "newonlyhour",
+            "kind": "for-each",
+            "forEach": {
+              "range": {
+                "from": {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "input.fromat"
+                },
+                "until": {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "input.untilat"
+                },
+                "unit": "hour",
+                "step": 1,
+                "limit": 1000
+              },
+              "steps": [
+                {
+                  "name": "newhour",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.pmsslot"
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "roomtype",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.roomtype"
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "hour"
+                          }
+                        }
+                      },
+                      {
+                        "field": "start",
+                        "expr": {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "row.start"
+                        }
+                      },
+                      {
+                        "field": "end",
+                        "expr": {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "row.end"
+                        }
+                      }
+                    ],
+                    "field": "used",
+                    "amount": {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    },
+                    "subtract": false,
+                    "floor": true
+                  },
+                  "when": {
+                    "op": "not",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "and",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "input.roomtype"
+                              },
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "roomtype"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "input.unit"
+                              },
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "unit"
+                              }
+                            ]
+                          },
+                          {
+                            "op": ">=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "row.start"
+                              },
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "fromat"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "<=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "row.end"
+                              },
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "untilat"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "newoccupiedhour",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.pmsoccupancy"
+                  },
+                  "when": {
+                    "op": "not",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "and",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "input.roomtype"
+                              },
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "roomtype"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "input.unit"
+                              },
+                              {
+                                "op": "",
+                                "kind": "choice",
+                                "ref": "unit"
+                              }
+                            ]
+                          },
+                          {
+                            "op": ">=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "row.start"
+                              },
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "fromat"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "<=",
+                            "kind": "boolean",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "row.end"
+                              },
+                              {
+                                "op": "",
+                                "kind": "datetime",
+                                "ref": "untilat"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "changes": [
+                    {
+                      "field": "reservation",
+                      "from": "$subject"
+                    },
+                    {
+                      "field": "slot",
+                      "from": "step.newhour"
+                    }
+                  ]
+                }
+              ]
+            },
+            "when": {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "input.unit"
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "hour"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "amenddayheld",
+            "kind": "update",
+            "target": {
+              "type": "build.pmsreservation",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "roomtype",
+                "from": "roomtype"
+              },
+              {
+                "field": "unit",
+                "from": "unit"
+              },
+              {
+                "field": "dayfrom",
+                "from": "dayfrom"
+              },
+              {
+                "field": "dayuntil",
+                "from": "dayuntil"
+              },
+              {
+                "field": "fromat",
+                "expr": {
+                  "op": "",
+                  "kind": "datetime",
+                  "lit": {
+                    "value": null
+                  }
+                }
+              },
+              {
+                "field": "untilat",
+                "expr": {
+                  "op": "",
+                  "kind": "datetime",
+                  "lit": {
+                    "value": null
+                  }
+                }
+              }
+            ],
+            "when": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "input.unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "day"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "state"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "held"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "amenddaybooked",
+            "kind": "update",
+            "target": {
+              "type": "build.pmsreservation",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "roomtype",
+                "from": "roomtype"
+              },
+              {
+                "field": "unit",
+                "from": "unit"
+              },
+              {
+                "field": "dayfrom",
+                "from": "dayfrom"
+              },
+              {
+                "field": "dayuntil",
+                "from": "dayuntil"
+              },
+              {
+                "field": "fromat",
+                "expr": {
+                  "op": "",
+                  "kind": "datetime",
+                  "lit": {
+                    "value": null
+                  }
+                }
+              },
+              {
+                "field": "untilat",
+                "expr": {
+                  "op": "",
+                  "kind": "datetime",
+                  "lit": {
+                    "value": null
+                  }
+                }
+              }
+            ],
+            "when": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "input.unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "day"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "state"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "booked"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "amendhourheld",
+            "kind": "update",
+            "target": {
+              "type": "build.pmsreservation",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "roomtype",
+                "from": "roomtype"
+              },
+              {
+                "field": "unit",
+                "from": "unit"
+              },
+              {
+                "field": "fromat",
+                "from": "fromat"
+              },
+              {
+                "field": "untilat",
+                "from": "untilat"
+              },
+              {
+                "field": "dayfrom",
+                "expr": {
+                  "op": "",
+                  "kind": "date",
+                  "lit": {
+                    "value": null
+                  }
+                }
+              },
+              {
+                "field": "dayuntil",
+                "expr": {
+                  "op": "",
+                  "kind": "date",
+                  "lit": {
+                    "value": null
+                  }
+                }
+              }
+            ],
+            "when": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "input.unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "hour"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "state"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "held"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "amendhourbooked",
+            "kind": "update",
+            "target": {
+              "type": "build.pmsreservation",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "roomtype",
+                "from": "roomtype"
+              },
+              {
+                "field": "unit",
+                "from": "unit"
+              },
+              {
+                "field": "fromat",
+                "from": "fromat"
+              },
+              {
+                "field": "untilat",
+                "from": "untilat"
+              },
+              {
+                "field": "dayfrom",
+                "expr": {
+                  "op": "",
+                  "kind": "date",
+                  "lit": {
+                    "value": null
+                  }
+                }
+              },
+              {
+                "field": "dayuntil",
+                "expr": {
+                  "op": "",
+                  "kind": "date",
+                  "lit": {
+                    "value": null
+                  }
+                }
+              }
+            ],
+            "when": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "input.unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "hour"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "state"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "booked"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "oversold",
+            "kind": "work",
+            "when": {
+              "op": "any",
+              "kind": "boolean",
+              "agg": {
+                "source": "occupancies"
+              },
+              "in": {
+                "op": ">",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "path",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "item.slot"
+                      }
+                    ],
+                    "path": [
+                      "used"
+                    ]
+                  },
+                  {
+                    "op": "path",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "item.slot"
+                      }
+                    ],
+                    "path": [
+                      "roomtype",
+                      "capacity"
+                    ]
+                  }
+                ]
+              }
+            },
+            "work": {
+              "title": "Review overbooked room capacity",
+              "role": "hotelmanager"
+            }
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.roomtype"
+                }
+              ],
+              "path": [
+                "active"
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "input.unit"
+                },
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.roomtype"
+                    }
+                  ],
+                  "path": [
+                    "unit"
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "or",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "input.unit"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "day"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "<",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "date",
+                          "ref": "input.dayfrom"
+                        },
+                        {
+                          "op": "",
+                          "kind": "date",
+                          "ref": "input.dayuntil"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "input.unit"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "hour"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "<",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "input.fromat"
+                        },
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "input.untilat"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "input.fromat"
+                        },
+                        {
+                          "op": "start-of-hour",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "input.fromat"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "input.untilat"
+                        },
+                        {
+                          "op": "start-of-hour",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "input.untilat"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "or",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "state"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "booked"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": ">",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "datetime",
+                          "ref": "expires"
+                        },
+                        {
+                          "op": "$now",
+                          "kind": "datetime"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "or",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "ref": "input.unit"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "day"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "<",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "datetime",
+                                  "ref": "expires"
+                                },
+                                {
+                                  "op": "start-of-day",
+                                  "kind": "datetime",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "date",
+                                      "ref": "input.dayfrom"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "ref": "input.unit"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "hour"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "<",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "datetime",
+                                  "ref": "expires"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "datetime",
+                                  "ref": "input.fromat"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "or",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "input.unit"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "day"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": ">=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "diff-days",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "date",
+                              "ref": "input.dayuntil"
+                            },
+                            {
+                              "op": "",
+                              "kind": "date",
+                              "ref": "input.dayfrom"
+                            }
+                          ]
+                        },
+                        {
+                          "op": "path",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "input.roomtype"
+                            }
+                          ],
+                          "path": [
+                            "minunits"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "and",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "input.unit"
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "hour"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": ">=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "diff-hours",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "input.untilat"
+                            },
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "input.fromat"
+                            }
+                          ]
+                        },
+                        {
+                          "op": "path",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "input.roomtype"
+                            }
+                          ],
+                          "path": [
+                            "minunits"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "message": "The new room type, interval or hold deadline is invalid.",
+        "reads": {
+          "collections": {
+            "occupancies": {
+              "app": "build",
+              "object": "build.pmsoccupancy",
+              "set": "occupancies",
+              "policy": "complete"
+            }
+          }
+        }
+      },
+      "inputs": [
+        {
+          "name": "roomtype",
+          "title": "Room type",
+          "type": "reference",
+          "ref": "build.pmsroomtype",
+          "required": true
+        },
+        {
+          "name": "unit",
+          "title": "Booking unit",
+          "type": "choice",
+          "choices": "day,hour",
+          "required": true
+        },
+        {
+          "name": "dayfrom",
+          "title": "Arrival date",
+          "type": "date",
+          "required": false
+        },
+        {
+          "name": "dayuntil",
+          "title": "Departure date",
+          "type": "date",
+          "required": false
+        },
+        {
+          "name": "fromat",
+          "title": "Start time",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "name": "untilat",
+          "title": "End time",
+          "type": "datetime",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "expire",
+      "title": "Release expired hold",
+      "from": [
+        "held",
+        "released"
+      ],
+      "roles": [
+        "desk",
+        "hotelmanager",
+        "channel"
+      ],
+      "transaction": {
+        "subject": "build.pmsreservation",
+        "steps": [
+          {
+            "name": "state",
+            "kind": "update",
+            "target": {
+              "type": "build.pmsreservation",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "released"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "free",
+            "kind": "for-each",
+            "forEach": {
+              "set": "occupancies",
+              "steps": [
+                {
+                  "name": "freebalance",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.pmsslot"
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "roomtype",
+                        "expr": {
+                          "op": "path",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "roomtype"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "path",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "unit"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "start",
+                        "expr": {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "start"
+                          ]
+                        }
+                      },
+                      {
+                        "field": "end",
+                        "expr": {
+                          "op": "path",
+                          "kind": "datetime",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "row.slot"
+                            }
+                          ],
+                          "path": [
+                            "end"
+                          ]
+                        }
+                      }
+                    ],
+                    "field": "used",
+                    "amount": {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 1
+                      }
+                    },
+                    "subtract": true,
+                    "floor": true
+                  }
+                },
+                {
+                  "name": "freeoccupied",
+                  "kind": "archive",
+                  "target": {
+                    "type": "build.pmsoccupancy",
+                    "id": "$item"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "arrivals",
+            "kind": "work",
+            "work": {
+              "close": true
+            }
+          },
+          {
+            "name": "oversold",
+            "kind": "work",
+            "work": {
+              "close": true
+            }
+          },
+          {
+            "name": "expirednotice",
+            "kind": "work",
+            "work": {
+              "title": "Review the hold released at its cutoff",
+              "role": "desk"
+            }
+          }
+        ],
+        "guard": {
+          "op": "<=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "datetime",
+              "ref": "expires"
+            },
+            {
+              "op": "$now",
+              "kind": "datetime"
+            }
+          ]
+        },
+        "message": "The hold has not reached its declared cutoff."
+      }
+    },
+    {
+      "name": "notifyarrival",
+      "title": "Notify the front desk of an arrival",
+      "from": [
+        "booked"
+      ],
+      "roles": [
+        "desk",
+        "hotelmanager",
+        "channel"
+      ],
+      "transaction": {
+        "subject": "build.pmsreservation",
+        "steps": [
+          {
+            "name": "arrivals",
+            "kind": "work",
+            "work": {
+              "title": "Review the upcoming guest arrival",
+              "role": "desk",
+              "body": {
+                "op": "",
+                "kind": "text",
+                "ref": "guest"
+              }
+            }
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": ">=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "$now",
+                  "kind": "datetime"
+                },
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "arrivalnoticeat"
+                }
+              ]
+            },
+            {
+              "op": "<",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "$now",
+                  "kind": "datetime"
+                },
+                {
+                  "op": "",
+                  "kind": "datetime",
+                  "ref": "begins"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "This booking is outside its declared arrival notification window."
+      }
+    }
+  ],
+  "protocols": [
+    {
+      "name": "lodging.stays",
+      "version": 2,
+      "actions": {
+        "reserve": "create",
+        "cancel": "cancel",
+        "confirm": "confirm",
+        "release": "release",
+        "change": "modify"
+      },
+      "reads": [
+        "bookings"
+      ],
+      "events": {
+        "canceled": "cancel",
+        "confirmed": "confirm",
+        "released": "release"
+      }
+    }
+  ],
+  "type": "build.pmsreservation"
+}

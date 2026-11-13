@@ -4,6 +4,7 @@
   "namespace": "manufacturing.mes",
   "title": "MES",
   "description": "Shop-floor execution, quality, equipment and upstream production coordination.",
+  "artifact": "manufacturing-mes.json",
   "requires": [
     "manufacturing.core@1.0.0"
   ]

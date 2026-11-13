@@ -1,8 +1,9 @@
 # Product package sources
 
-Each directory here is an authoring source for one product version. The top-level
-`*.json` files are generated `PackageDescriptor` artifacts consumed by
-`PLATFORM_PACKAGES_DIR`; do not edit them by hand.
+Each directory here is an authoring source for one product version. All seven
+current products use this layout. The top-level `*.json` files are generated
+`PackageDescriptor` artifacts consumed by `PLATFORM_PACKAGES_DIR`; do not edit
+them by hand.
 
 ```text
 manufacturing.mes/
@@ -28,10 +29,10 @@ manufacturing.mes/
 Only directories that contain assets are created. Optional `migrations/` and
 `assets/` directories appear when a package first needs them.
 
-`package.json` holds the descriptor fields. `blueprint.json` holds roots and an
-asset index with a path per asset. `setup.json` holds setup steps, and
-`roles/requirements.json` holds role requirements. The packer combines them
-into the runtime artifact.
+`package.json` holds the descriptor fields plus `artifact`, the generated
+runtime file name. `blueprint.json` holds roots and an asset index with a path
+per asset. `setup.json` holds setup steps, and `roles/requirements.json` holds
+role requirements. The packer combines them into the runtime artifact.
 
 ```bash
 make packages

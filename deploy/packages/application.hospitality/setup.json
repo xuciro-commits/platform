@@ -1,0 +1,64 @@
+{
+  "steps": [
+    {
+      "name": "configure1",
+      "app": "enterprise",
+      "schema": "enterprise.kind.add",
+      "target": {
+        "type": "enterprise.model",
+        "id": "site"
+      },
+      "payload": "{\"name\":\"Sites\",\"kind\":\"site\"}"
+    },
+    {
+      "name": "configure2",
+      "app": "enterprise",
+      "schema": "enterprise.element.add",
+      "target": {
+        "type": "enterprise.element",
+        "id": "samplehotel"
+      },
+      "payload": "{\"stereotype\":\"ActualOrganization\",\"name\":\"Example hotel\",\"kind\":\"hotel\"}"
+    },
+    {
+      "name": "configure3",
+      "app": "enterprise",
+      "schema": "enterprise.element.add",
+      "target": {
+        "type": "enterprise.element",
+        "id": "samplefrontdesk"
+      },
+      "payload": "{\"stereotype\":\"ActualOrganization\",\"name\":\"Example front desk\",\"kind\":\"department\"}"
+    },
+    {
+      "name": "configure4",
+      "app": "enterprise",
+      "schema": "enterprise.relationship.add",
+      "target": {
+        "type": "enterprise.relationship",
+        "id": "samplefrontdesksite"
+      },
+      "payload": "{\"stereotype\":\"ActualResourceRelationship\",\"source\":\"samplefrontdesk\",\"target\":\"samplehotel\",\"kind\":\"site\"}"
+    },
+    {
+      "name": "configure5",
+      "app": "build",
+      "schema": "build.pmsroomtype.create",
+      "target": {
+        "type": "build.pmsroomtype",
+        "id": "sampledaily"
+      },
+      "payload": "{\"name\":\"Example daily rooms\",\"unit\":\"day\",\"capacity\":3,\"minunits\":1,\"allowance\":1,\"oversell\":true,\"active\":true}"
+    },
+    {
+      "name": "configure6",
+      "app": "build",
+      "schema": "build.pmsroomtype.create",
+      "target": {
+        "type": "build.pmsroomtype",
+        "id": "samplehourly"
+      },
+      "payload": "{\"name\":\"Example hourly room\",\"unit\":\"hour\",\"capacity\":1,\"minunits\":1,\"allowance\":0,\"oversell\":false,\"active\":true}"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "name": "crmclosing",
+  "title": "Sale closing attempt",
+  "fields": [
+    {
+      "name": "opportunity",
+      "title": "Opportunity",
+      "type": "reference",
+      "ref": "build.crmopportunity",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "sales",
+      "read": "own",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "salesmanager",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "originalsale",
+      "kind": "immutable",
+      "fields": [
+        "opportunity"
+      ],
+      "message": "A closing attempt retains its original sale."
+    }
+  ],
+  "type": "build.crmclosing"
+}

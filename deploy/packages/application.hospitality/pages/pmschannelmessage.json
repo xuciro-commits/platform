@@ -1,0 +1,261 @@
+{
+  "format": 4,
+  "name": "pmschannelmessage",
+  "title": "Channel messages",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.pmschannelmessage"
+  },
+  "dataBindings": [
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.pmschannelmessage"
+      },
+      "model": {
+        "type": "build.pmschannelmessage",
+        "fields": [
+          {
+            "name": "channel"
+          },
+          {
+            "name": "externalid"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "reservation"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "booking"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "channel"
+        },
+        {
+          "name": "externalid"
+        },
+        {
+          "name": "kind"
+        },
+        {
+          "name": "reservation"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "booking"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.pmschannelmessage"
+      },
+      "model": {
+        "type": "build.pmschannelmessage",
+        "fields": [
+          {
+            "name": "channel"
+          },
+          {
+            "name": "externalid"
+          },
+          {
+            "name": "reservation"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "unit"
+          },
+          {
+            "name": "guest"
+          },
+          {
+            "name": "roomtype"
+          },
+          {
+            "name": "dayfrom"
+          },
+          {
+            "name": "dayuntil"
+          },
+          {
+            "name": "fromat"
+          },
+          {
+            "name": "untilat"
+          },
+          {
+            "name": "expires"
+          },
+          {
+            "name": "booking"
+          },
+          {
+            "name": "state"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "channel"
+        },
+        {
+          "name": "externalid"
+        },
+        {
+          "name": "reservation"
+        },
+        {
+          "name": "kind"
+        },
+        {
+          "name": "unit"
+        },
+        {
+          "name": "guest"
+        },
+        {
+          "name": "roomtype"
+        },
+        {
+          "name": "dayfrom"
+        },
+        {
+          "name": "dayuntil"
+        },
+        {
+          "name": "fromat"
+        },
+        {
+          "name": "untilat"
+        },
+        {
+          "name": "expires"
+        },
+        {
+          "name": "booking"
+        },
+        {
+          "name": "state"
+        }
+      ],
+      "ports": {
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.pmschannelmessage.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.pmschannelmessage.edit"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.pmschannelmessage.complete"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.pmschannelmessage.fail"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "binding": "list"
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "binding": "detail"
+    }
+  ],
+  "inputSchema": {},
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "page",
+        "kind": "page"
+      },
+      {
+        "id": "binding:list",
+        "parent": "page",
+        "kind": "page",
+        "binding": "list"
+      },
+      {
+        "id": "binding:detail",
+        "parent": "page",
+        "kind": "page",
+        "binding": "detail"
+      }
+    ],
+    "owners": {
+      "detail": "binding:detail",
+      "list": "binding:list"
+    },
+    "root": "page"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": null,
+      "sections": [
+        {
+          "binding": "list",
+          "id": "list",
+          "triggers": [
+            "list"
+          ]
+        },
+        {
+          "binding": "detail",
+          "id": "detail",
+          "triggers": [
+            "detail"
+          ]
+        }
+      ]
+    }
+  }
+}

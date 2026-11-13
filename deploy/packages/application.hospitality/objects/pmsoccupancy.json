@@ -1,0 +1,57 @@
+{
+  "name": "pmsoccupancy",
+  "title": "Occupied slot",
+  "fields": [
+    {
+      "name": "reservation",
+      "title": "Reservation",
+      "type": "reference",
+      "ref": "build.pmsreservation",
+      "inverse": "occupancies",
+      "required": true
+    },
+    {
+      "name": "slot",
+      "title": "Availability slot",
+      "type": "reference",
+      "ref": "build.pmsslot",
+      "inverse": "occupancies",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "desk",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "hotelmanager",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "channel",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    }
+  ],
+  "constraints": [
+    {
+      "name": "oneslotperstay",
+      "kind": "unique",
+      "fields": [
+        "reservation",
+        "slot"
+      ],
+      "message": "A reservation occupies a slot once."
+    }
+  ],
+  "type": "build.pmsoccupancy"
+}

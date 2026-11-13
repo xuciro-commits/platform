@@ -1,0 +1,79 @@
+{
+  "name": "batchproviderbatch",
+  "type": "build.batchproviderbatch",
+  "title": "Production batch",
+  "plural": "Production batchs",
+  "fields": [
+    {
+      "name": "order",
+      "title": "Order",
+      "type": "reference",
+      "ref": "build.batchproviderorder",
+      "required": true
+    },
+    {
+      "name": "shoporder",
+      "title": "Shop order",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "batch",
+      "title": "Batch identity",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "yield",
+      "title": "Good units",
+      "type": "decimal"
+    },
+    {
+      "name": "scrap",
+      "title": "Scrapped units",
+      "type": "decimal"
+    },
+    {
+      "name": "final",
+      "title": "Final batch",
+      "type": "boolean"
+    },
+    {
+      "name": "status",
+      "title": "Acceptance status",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "receipt",
+      "title": "Stock receipt",
+      "type": "reference",
+      "ref": "build.stockreceipt",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "batchidentity",
+      "kind": "unique",
+      "fields": [
+        "order",
+        "shoporder",
+        "batch"
+      ],
+      "message": "Batch identity has already been accepted.",
+      "translations": {
+        "zh-CN": "该批次标识已被接受。"
+      }
+    }
+  ]
+}

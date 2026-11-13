@@ -1,0 +1,102 @@
+{
+  "name": "build.crmopportunitylost",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.crmopportunity"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmgroup.lose"
+    }
+  ],
+  "definition": {
+    "name": "crmopportunitylost",
+    "title": "Coordinate opportunity lost",
+    "object": "build.crmopportunity",
+    "when": "lost",
+    "steps": [
+      {
+        "name": "groups",
+        "kind": "query",
+        "app": "build",
+        "query": "crmgroups",
+        "queryVersion": 1,
+        "inputs": {
+          "for": {
+            "source": "subject",
+            "path": [
+              "id"
+            ]
+          }
+        },
+        "next": "each"
+      },
+      {
+        "name": "each",
+        "kind": "foreach",
+        "collection": {
+          "source": "step",
+          "step": "groups",
+          "path": [
+            "records"
+          ]
+        },
+        "body": "state",
+        "maxIterations": 20,
+        "concurrency": 1,
+        "next": "finish"
+      },
+      {
+        "name": "state",
+        "kind": "switch",
+        "value": {
+          "source": "item",
+          "path": [
+            "state"
+          ]
+        },
+        "cases": {
+          "holding": "act",
+          "held": "act",
+          "confirming": "act",
+          "won": "act"
+        },
+        "next": "return"
+      },
+      {
+        "name": "act",
+        "kind": "action",
+        "act": "build.crmgroup.lose",
+        "target": {
+          "source": "item",
+          "path": [
+            "id"
+          ]
+        },
+        "next": "return",
+        "retryAttempts": 1
+      },
+      {
+        "name": "return",
+        "kind": "end"
+      },
+      {
+        "name": "finish",
+        "kind": "end"
+      }
+    ]
+  },
+  "queries": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "crmgroups"
+      },
+      "sourceVersion": "1.query-1"
+    }
+  ]
+}

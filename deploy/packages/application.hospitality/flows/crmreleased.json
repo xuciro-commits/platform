@@ -1,0 +1,164 @@
+{
+  "name": "build.crmreleased",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.crmroom"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmgroup.assess"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmroom.cancel"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmroom.release"
+    }
+  ],
+  "definition": {
+    "name": "crmreleased",
+    "title": "Assess original released room receipt",
+    "object": "build.crmroom",
+    "when": "released",
+    "steps": [
+      {
+        "name": "assess",
+        "kind": "action",
+        "act": "build.crmgroup.assess",
+        "target": {
+          "source": "subject",
+          "path": [
+            "plan"
+          ]
+        },
+        "next": "closing",
+        "retryAttempts": 1
+      },
+      {
+        "name": "closing",
+        "kind": "branch",
+        "condition": {
+          "op": "or",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "json",
+                  "ref": "subject.plan.state"
+                },
+                {
+                  "op": "",
+                  "kind": "json",
+                  "lit": {
+                    "value": "compensating"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "json",
+                  "ref": "subject.plan.state"
+                },
+                {
+                  "op": "",
+                  "kind": "json",
+                  "lit": {
+                    "value": "releasing"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "json",
+                  "ref": "subject.plan.state"
+                },
+                {
+                  "op": "",
+                  "kind": "json",
+                  "lit": {
+                    "value": "needsreview"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "cases": {
+          "true": "state",
+          "false": "done"
+        }
+      },
+      {
+        "name": "state",
+        "kind": "switch",
+        "value": {
+          "source": "subject",
+          "path": [
+            "state"
+          ]
+        },
+        "cases": {
+          "held": "release",
+          "confirmrefused": "release",
+          "booked": "cancel"
+        },
+        "next": "done"
+      },
+      {
+        "name": "release",
+        "kind": "action",
+        "act": "release",
+        "inputs": {
+          "bookingkey": {
+            "source": "subject",
+            "path": [
+              "bookingkey"
+            ]
+          }
+        },
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "cancel",
+        "kind": "action",
+        "act": "cancel",
+        "inputs": {
+          "bookingkey": {
+            "source": "subject",
+            "path": [
+              "bookingkey"
+            ]
+          }
+        },
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

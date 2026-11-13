@@ -1,0 +1,157 @@
+{
+  "name": "build.crmhold",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.crmroom"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmroom.holdday"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmroom.holdhour"
+    }
+  ],
+  "definition": {
+    "name": "crmhold",
+    "title": "Request the declared group room hold",
+    "object": "build.crmroom",
+    "when": "draft",
+    "steps": [
+      {
+        "name": "unit",
+        "kind": "switch",
+        "value": {
+          "source": "subject",
+          "path": [
+            "unit"
+          ]
+        },
+        "cases": {
+          "day": "day",
+          "hour": "hour"
+        },
+        "next": "done"
+      },
+      {
+        "name": "day",
+        "kind": "action",
+        "act": "holdday",
+        "inputs": {
+          "bookingkey": {
+            "source": "subject",
+            "path": [
+              "bookingkey"
+            ]
+          },
+          "guest": {
+            "source": "subject",
+            "path": [
+              "guest"
+            ]
+          },
+          "roomtype": {
+            "source": "subject",
+            "path": [
+              "roomtype"
+            ]
+          },
+          "unit": {
+            "source": "subject",
+            "path": [
+              "unit"
+            ]
+          },
+          "expires": {
+            "source": "subject",
+            "path": [
+              "expires"
+            ]
+          },
+          "dayfrom": {
+            "source": "subject",
+            "path": [
+              "dayfrom"
+            ]
+          },
+          "dayuntil": {
+            "source": "subject",
+            "path": [
+              "dayuntil"
+            ]
+          },
+          "mode": {
+            "source": "literal",
+            "value": "held"
+          }
+        },
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "hour",
+        "kind": "action",
+        "act": "holdhour",
+        "inputs": {
+          "bookingkey": {
+            "source": "subject",
+            "path": [
+              "bookingkey"
+            ]
+          },
+          "guest": {
+            "source": "subject",
+            "path": [
+              "guest"
+            ]
+          },
+          "roomtype": {
+            "source": "subject",
+            "path": [
+              "roomtype"
+            ]
+          },
+          "unit": {
+            "source": "subject",
+            "path": [
+              "unit"
+            ]
+          },
+          "expires": {
+            "source": "subject",
+            "path": [
+              "expires"
+            ]
+          },
+          "fromat": {
+            "source": "subject",
+            "path": [
+              "fromat"
+            ]
+          },
+          "untilat": {
+            "source": "subject",
+            "path": [
+              "untilat"
+            ]
+          },
+          "mode": {
+            "source": "literal",
+            "value": "held"
+          }
+        },
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

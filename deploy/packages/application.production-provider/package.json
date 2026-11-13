@@ -1,0 +1,8 @@
+{
+  "id": "application.production-provider",
+  "version": "0.1.4",
+  "namespace": "application.production-provider",
+  "title": "Production batch provider",
+  "description": "Independent declarative production batch example. Install and publish using platform capabilities; configure external cooperation after installation. Quantities are local facts, and cross-system receipts remain independent.",
+  "artifact": "production-provider.json"
+}

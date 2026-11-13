@@ -1,0 +1,33 @@
+{
+  "name": "hospitalityexample",
+  "title": "Synthetic hospitality setup",
+  "samples": [
+    {
+      "type": "build.pmsroomtype",
+      "records": [
+        {
+          "id": "daily",
+          "name": "Daily rooms",
+          "unit": "day",
+          "capacity": 3,
+          "minunits": 1,
+          "allowance": 1,
+          "oversell": true,
+          "active": true,
+          "state": "active"
+        },
+        {
+          "id": "hourly",
+          "name": "Hourly room",
+          "unit": "hour",
+          "capacity": 1,
+          "minunits": 1,
+          "allowance": 0,
+          "oversell": false,
+          "active": true,
+          "state": "active"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "roots": [
+    {
+      "app": "build",
+      "kind": "app",
+      "name": "productionconsumer"
+    }
+  ],
+  "assets": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.shoporder"
+      },
+      "path": "objects/shoporder.json",
+      "contractVersion": 1,
+      "sourceVersion": "2"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.shopbatch"
+      },
+      "path": "objects/shopbatch.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "connection",
+        "name": "batchconsumerupstream"
+      },
+      "path": "integrations/connections/batchconsumerupstream.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "productionstart"
+      },
+      "path": "integrations/writebacks/productionstart.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "productionconfirm"
+      },
+      "path": "integrations/writebacks/productionconfirm.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "source",
+        "name": "productionreceiptsource"
+      },
+      "path": "integrations/sources/productionreceiptsource.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "dataset",
+        "name": "productionreceipts"
+      },
+      "path": "integrations/datasets/productionreceipts.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.dataset-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "app",
+        "name": "productionconsumer"
+      },
+      "path": "applications/productionconsumer.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    }
+  ],
+  "guide": "docs/guide.md"
+}

@@ -1,0 +1,124 @@
+{
+  "name": "erpproductioncomponent",
+  "title": "Frozen production component",
+  "fields": [
+    {
+      "name": "order",
+      "title": "Production order",
+      "type": "reference",
+      "ref": "build.productionorder",
+      "inverse": "components",
+      "required": true
+    },
+    {
+      "name": "source",
+      "title": "Original component",
+      "type": "reference",
+      "ref": "build.erpcomponent",
+      "required": true
+    },
+    {
+      "name": "material",
+      "title": "Material item",
+      "type": "reference",
+      "ref": "build.erpitem",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Quantity per finished unit",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "cost",
+      "title": "Frozen material unit cost",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Frozen material unit",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "currency",
+      "title": "Frozen material currency",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "account",
+      "title": "Frozen material stock account",
+      "type": "reference",
+      "ref": "build.erpaccount",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "onecomponent",
+      "kind": "unique",
+      "fields": [
+        "order",
+        "material"
+      ],
+      "message": "Each material occurs once in the frozen production structure."
+    },
+    {
+      "name": "acceptedfacts",
+      "kind": "immutable",
+      "fields": [
+        "order",
+        "source",
+        "material",
+        "quantity",
+        "cost",
+        "unit",
+        "currency",
+        "account",
+        "archived"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    }
+  ],
+  "type": "build.erpproductioncomponent"
+}

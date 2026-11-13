@@ -1,0 +1,72 @@
+{
+  "roots": [
+    {
+      "app": "build",
+      "kind": "app",
+      "name": "productionprovider"
+    }
+  ],
+  "assets": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.batchproviderorder"
+      },
+      "path": "objects/batchproviderorder.json",
+      "contractVersion": 1,
+      "sourceVersion": "2"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.batchproviderbatch"
+      },
+      "path": "objects/batchproviderbatch.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.finishedstock"
+      },
+      "path": "objects/finishedstock.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.stockreceipt"
+      },
+      "path": "objects/stockreceipt.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "test-plan",
+        "name": "productionbatches"
+      },
+      "path": "tests/test-plans/productionbatches.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "app",
+        "name": "productionprovider"
+      },
+      "path": "applications/productionprovider.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    }
+  ],
+  "guide": "docs/guide.md"
+}

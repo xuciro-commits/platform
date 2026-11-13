@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "package": "application.production-provider",
+  "version": "0.1.4",
+  "requires": [],
+  "artifact": "sha256:355862d775ce14b732a6087479797e675966e8970ae44088cd9dee68026f00d2",
+  "assets": {
+    "app/productionprovider": "sha256:c80b7690890c9b0a13f5435f41761cd10cee603a1a7971003d5a501e1dffe0a2",
+    "object/build.batchproviderbatch": "sha256:13ba692c657c6810331c0ee34216ae1b1377f0a080d934d1a6244d85687d78d8",
+    "object/build.batchproviderorder": "sha256:5fb36d3744d667c54165061d721cfbc2a052ac691db44a425a3b4596fa70f9e2",
+    "object/build.finishedstock": "sha256:8dbd89a9b5fe1d6ca06aac4ced25addf5c01d4ee850d3bb19a49443b85974836",
+    "object/build.stockreceipt": "sha256:3891857808217c0785f9000b2a66799b063b897d97c0f36c1b0164ab2d994932",
+    "test-plan/productionbatches": "sha256:2dbe5e0526a7efe0848fb91b3671a0c709a03dfbfd506e430acab7b606d503d8"
+  }
+}

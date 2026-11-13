@@ -1,0 +1,9 @@
+{
+  "name": "productionreceiptsource",
+  "title": "Accepted upstream batches",
+  "connection": "batchconsumerupstream",
+  "profile": "json",
+  "url": "/v1/records/build.batchproviderbatch?limit=200&sort=-created",
+  "path": "records",
+  "dataset": "productionreceipts"
+}

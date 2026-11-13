@@ -1,0 +1,50 @@
+{
+  "name": "salesassistant",
+  "title": "Sales assistant",
+  "description": "Help the salesperson understand customers and opportunities, prepare a group stay and propose a won or lost outcome. Read the current opportunity and confirmed provider offer before planning rooms. A group stay needs the real offer, quantity, dates, booking unit and hold expiry.",
+  "instructions": "Help the salesperson understand customers and opportunities, prepare a group stay and propose a won or lost outcome. Read the current opportunity and confirmed provider offer before planning rooms. A group stay needs the real offer, quantity, dates, booking unit and hold expiry. Use only permitted current sources. Never invent an ID or quantity. Changes and external inquiries use the declared checkpoint tools and remain subject to the original server rules. When required facts or a confirmed target are missing, ask the person. Do not claim a pending or unknown request has succeeded.",
+  "tools": [
+    "query:crmopenopportunities",
+    "build.crmopportunity.create",
+    "build.crmopportunity.win",
+    "build.crmopportunity.lose",
+    "build.crmgroup.create"
+  ],
+  "budget": {
+    "Steps": 8,
+    "Tokens": 8000,
+    "Actions": 3,
+    "Cost": 0.1
+  },
+  "checkpoints": [
+    "build.crmopportunity.create",
+    "build.crmopportunity.win",
+    "build.crmopportunity.lose",
+    "build.crmgroup.create"
+  ],
+  "handoffRole": "salesmanager",
+  "cases": [
+    {
+      "name": "missingtarget",
+      "goal": "A person requests a business change but has supplied no confirmed target identity. Ask the person to identify the target before proposing a change.",
+      "asks": true,
+      "avoids": [
+        "build.crmopportunity.create",
+        "build.crmopportunity.win",
+        "build.crmopportunity.lose",
+        "build.crmgroup.create"
+      ]
+    },
+    {
+      "name": "missingfacts",
+      "goal": "The person has not provided the business facts required for the requested change. Ask which facts and confirmed record to use; do not invent them.",
+      "asks": true,
+      "avoids": [
+        "build.crmopportunity.create",
+        "build.crmopportunity.win",
+        "build.crmopportunity.lose",
+        "build.crmgroup.create"
+      ]
+    }
+  ]
+}

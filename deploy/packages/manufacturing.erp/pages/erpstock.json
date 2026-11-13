@@ -1,0 +1,179 @@
+{
+  "format": 4,
+  "name": "erpstock",
+  "title": "Inventory balances",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.erpstock"
+  },
+  "dataBindings": [
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpstock"
+      },
+      "model": {
+        "type": "build.erpstock",
+        "fields": [
+          {
+            "name": "product"
+          },
+          {
+            "name": "bucket"
+          },
+          {
+            "name": "unit"
+          },
+          {
+            "name": "amount"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "product"
+        },
+        {
+          "name": "bucket"
+        },
+        {
+          "name": "unit"
+        },
+        {
+          "name": "amount"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erpstock"
+      },
+      "model": {
+        "type": "build.erpstock",
+        "fields": [
+          {
+            "name": "product"
+          },
+          {
+            "name": "bucket"
+          },
+          {
+            "name": "unit"
+          },
+          {
+            "name": "amount"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "product"
+        },
+        {
+          "name": "bucket"
+        },
+        {
+          "name": "unit"
+        },
+        {
+          "name": "amount"
+        }
+      ],
+      "ports": {
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erpstock.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erpstock.edit"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "binding": "list"
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "binding": "detail"
+    }
+  ],
+  "inputSchema": {},
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "page",
+        "kind": "page"
+      },
+      {
+        "id": "binding:list",
+        "parent": "page",
+        "kind": "page",
+        "binding": "list"
+      },
+      {
+        "id": "binding:detail",
+        "parent": "page",
+        "kind": "page",
+        "binding": "detail"
+      }
+    ],
+    "owners": {
+      "detail": "binding:detail",
+      "list": "binding:list"
+    },
+    "root": "page"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": null,
+      "sections": [
+        {
+          "binding": "list",
+          "id": "list",
+          "triggers": [
+            "list"
+          ]
+        },
+        {
+          "binding": "detail",
+          "id": "detail",
+          "triggers": [
+            "detail"
+          ]
+        }
+      ]
+    }
+  }
+}

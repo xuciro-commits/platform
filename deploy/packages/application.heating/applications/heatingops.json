@@ -1,0 +1,152 @@
+{
+  "name": "heatingops",
+  "title": "Heating operations",
+  "description": "Declarative heating operations for a fictional teaching site: buildings and zones, accepted device health, exception handling, approved valve requests and time-limited physical access permissions. Thresholds and city data are examples, not engineering standards.",
+  "icon": "thermometer",
+  "pages": [
+    "heatingoverview",
+    "heatingdevices",
+    "heatingalarms",
+    "heatingaccess",
+    "heatinghealth"
+  ],
+  "groups": [
+    {
+      "title": "Operations",
+      "pages": [
+        "heatingoverview",
+        "heatingdevices",
+        "heatingalarms"
+      ]
+    },
+    {
+      "title": "Site checks",
+      "pages": [
+        "heatingaccess",
+        "heatinghealth"
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.building"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.floor"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.zone"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.device"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.point"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.circuit"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.accesspoint"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.alarm"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.workorder"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.accesspass"
+    },
+    {
+      "app": "build",
+      "kind": "connection",
+      "name": "heatingfield"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "heatingsetvalve"
+    },
+    {
+      "app": "build",
+      "kind": "observation",
+      "name": "heatingtemperature"
+    },
+    {
+      "app": "build",
+      "kind": "observation",
+      "name": "heatinghealth"
+    },
+    {
+      "app": "build",
+      "kind": "observation",
+      "name": "heatingposition"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.heatingrepair"
+    },
+    {
+      "app": "build",
+      "kind": "sample-set",
+      "name": "heatingdemo"
+    },
+    {
+      "app": "build",
+      "kind": "test-plan",
+      "name": "heatingalarmonce"
+    },
+    {
+      "app": "build",
+      "kind": "test-plan",
+      "name": "heatingaccess"
+    },
+    {
+      "app": "build",
+      "kind": "test-plan",
+      "name": "heatingvalvebounds"
+    },
+    {
+      "app": "build",
+      "kind": "function",
+      "name": "heatingadvice"
+    },
+    {
+      "app": "build",
+      "kind": "connection",
+      "name": "propertyfeed"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "heatingnotice"
+    },
+    {
+      "app": "build",
+      "kind": "evaluation-set",
+      "name": "heatingadvicequality"
+    }
+  ]
+}

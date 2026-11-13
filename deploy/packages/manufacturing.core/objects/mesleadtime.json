@@ -1,0 +1,50 @@
+{
+  "name": "mesleadtime",
+  "type": "build.mesleadtime",
+  "title": "Supplier inquiry",
+  "plural": "Supplier inquiries",
+  "description": "An authorized supplier inquiry and the original external answer; delivery alone is not a promised lead time.",
+  "fields": [
+    {
+      "name": "product",
+      "title": "Product or material",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "question",
+      "title": "Question",
+      "type": "longtext",
+      "required": true
+    },
+    {
+      "name": "answer",
+      "title": "Supplier answer",
+      "type": "longtext",
+      "sourceType": "external-input",
+      "write": [
+        "integrator"
+      ]
+    }
+  ],
+  "access": [
+    {
+      "role": "supervisor",
+      "read": "own",
+      "create": true,
+      "edit": false
+    },
+    {
+      "role": "buyer",
+      "read": "own",
+      "create": true,
+      "edit": false
+    },
+    {
+      "role": "integrator",
+      "read": "all",
+      "create": false,
+      "edit": true
+    }
+  ]
+}

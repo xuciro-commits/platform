@@ -1,0 +1,141 @@
+{
+  "name": "productionbatch",
+  "title": "Accepted production batch",
+  "fields": [
+    {
+      "name": "order",
+      "title": "Production order",
+      "type": "reference",
+      "ref": "build.productionorder",
+      "inverse": "batches",
+      "required": true
+    },
+    {
+      "name": "shoporder",
+      "title": "Shop order",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "batch",
+      "title": "Batch identity",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "yield",
+      "title": "Good quantity",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "scrap",
+      "title": "Scrap quantity",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "final",
+      "title": "Close upstream order",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "name": "status",
+      "title": "Acceptance status",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "receipt",
+      "title": "Inventory receipt",
+      "type": "reference",
+      "ref": "build.erpreceipt",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "moves",
+      "from": "moves",
+      "direction": "inverse",
+      "object": "build.erpmove",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [
+    {
+      "name": "batchidentity",
+      "kind": "unique",
+      "fields": [
+        "order",
+        "shoporder",
+        "batch"
+      ],
+      "message": "This production batch identity has already been accepted."
+    },
+    {
+      "name": "acceptedfacts",
+      "kind": "immutable",
+      "fields": [
+        "order",
+        "shoporder",
+        "batch",
+        "yield",
+        "scrap",
+        "final",
+        "status",
+        "receipt",
+        "archived"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    }
+  ],
+  "type": "build.productionbatch"
+}

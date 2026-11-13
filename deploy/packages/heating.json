@@ -3025,9 +3025,9 @@
                   "id": "zonedemo",
                   "floor": "floordemo",
                   "name": "North teaching zone",
-                  "targettemp": 21.0,
-                  "lowerlimit": 18.0,
-                  "upperlimit": 24.0
+                  "targettemp": 21,
+                  "lowerlimit": 18,
+                  "upperlimit": 24
                 }
               ]
             },
@@ -3042,10 +3042,10 @@
                   "name": "Heating controller",
                   "devicekey": "plant",
                   "kind": "controller",
-                  "latesttemp": 48.0,
+                  "latesttemp": 48,
                   "healthscore": 96,
                   "checkedat": "2026-10-15T09:00:00Z",
-                  "warnlimit": 65.0,
+                  "warnlimit": 65,
                   "healthmin": 60,
                   "state": "healthy"
                 }
@@ -3096,7 +3096,7 @@
                   "devicekey": "plant",
                   "requestedopening": 35,
                   "actualopening": 35,
-                  "latesttemp": 48.0,
+                  "latesttemp": 48,
                   "state": "steady",
                   "observedat": "2026-10-15T09:00:00Z"
                 }
@@ -3204,9 +3204,9 @@
                   "id": "zonedemo",
                   "floor": "floordemo",
                   "name": "North teaching zone",
-                  "targettemp": 21.0,
-                  "lowerlimit": 18.0,
-                  "upperlimit": 24.0
+                  "targettemp": 21,
+                  "lowerlimit": 18,
+                  "upperlimit": 24
                 }
               ]
             },
@@ -3221,10 +3221,10 @@
                   "name": "Heating controller",
                   "devicekey": "plant",
                   "kind": "controller",
-                  "latesttemp": 48.0,
+                  "latesttemp": 48,
                   "healthscore": 96,
                   "checkedat": "2026-10-15T09:00:00Z",
-                  "warnlimit": 65.0,
+                  "warnlimit": 65,
                   "healthmin": 60,
                   "state": "healthy"
                 }
@@ -3275,7 +3275,7 @@
                   "devicekey": "plant",
                   "requestedopening": 35,
                   "actualopening": 35,
-                  "latesttemp": 48.0,
+                  "latesttemp": 48,
                   "state": "steady"
                 }
               ]
@@ -3400,9 +3400,9 @@
                   "id": "zonedemo",
                   "floor": "floordemo",
                   "name": "North teaching zone",
-                  "targettemp": 21.0,
-                  "lowerlimit": 18.0,
-                  "upperlimit": 24.0
+                  "targettemp": 21,
+                  "lowerlimit": 18,
+                  "upperlimit": 24
                 }
               ]
             },
@@ -3417,10 +3417,10 @@
                   "name": "Heating controller",
                   "devicekey": "plant",
                   "kind": "controller",
-                  "latesttemp": 48.0,
+                  "latesttemp": 48,
                   "healthscore": 96,
                   "checkedat": "2026-10-15T09:00:00Z",
-                  "warnlimit": 65.0,
+                  "warnlimit": 65,
                   "healthmin": 60,
                   "state": "healthy"
                 }
@@ -3471,7 +3471,7 @@
                   "devicekey": "plant",
                   "requestedopening": 35,
                   "actualopening": 35,
-                  "latesttemp": 48.0,
+                  "latesttemp": 48,
                   "state": "steady"
                 }
               ]
@@ -3598,9 +3598,9 @@
                   "id": "zonedemo",
                   "floor": "floordemo",
                   "name": "North teaching zone",
-                  "targettemp": 21.0,
-                  "lowerlimit": 18.0,
-                  "upperlimit": 24.0
+                  "targettemp": 21,
+                  "lowerlimit": 18,
+                  "upperlimit": 24
                 }
               ]
             },
@@ -3615,10 +3615,10 @@
                   "name": "Heating controller",
                   "devicekey": "plant",
                   "kind": "controller",
-                  "latesttemp": 48.0,
+                  "latesttemp": 48,
                   "healthscore": 96,
                   "checkedat": "2026-10-15T09:00:00Z",
-                  "warnlimit": 65.0,
+                  "warnlimit": 65,
                   "healthmin": 60,
                   "state": "healthy"
                 }
@@ -3669,7 +3669,7 @@
                   "devicekey": "plant",
                   "requestedopening": 35,
                   "actualopening": 35,
-                  "latesttemp": 48.0,
+                  "latesttemp": 48,
                   "state": "steady"
                 }
               ]

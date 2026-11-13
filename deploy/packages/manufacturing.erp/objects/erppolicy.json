@@ -1,0 +1,99 @@
+{
+  "name": "erppolicy",
+  "title": "Purchasing policy",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "limit",
+      "title": "Approval limit in currency units",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "clearing",
+      "title": "Goods received clearing account",
+      "type": "reference",
+      "ref": "build.erpaccount",
+      "required": true
+    },
+    {
+      "name": "payables",
+      "title": "Payables account",
+      "type": "reference",
+      "ref": "build.erpaccount",
+      "required": true
+    },
+    {
+      "name": "variance",
+      "title": "Price variance account",
+      "type": "reference",
+      "ref": "build.erpaccount",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "validlimit",
+      "kind": "expression",
+      "fields": [
+        "limit"
+      ],
+      "level": "record",
+      "expr": {
+        "op": ">=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "decimal",
+            "ref": "limit"
+          },
+          {
+            "op": "",
+            "kind": "decimal",
+            "lit": {
+              "value": 0
+            }
+          }
+        ]
+      },
+      "message": "An approval limit cannot be negative."
+    }
+  ],
+  "type": "build.erppolicy"
+}

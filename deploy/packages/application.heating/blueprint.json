@@ -1,0 +1,312 @@
+{
+  "roots": [
+    {
+      "app": "build",
+      "kind": "app",
+      "name": "heatingops"
+    }
+  ],
+  "assets": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.building"
+      },
+      "path": "objects/building.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.floor"
+      },
+      "path": "objects/floor.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.zone"
+      },
+      "path": "objects/zone.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "path": "objects/device.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.point"
+      },
+      "path": "objects/point.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.circuit"
+      },
+      "path": "objects/circuit.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.accesspoint"
+      },
+      "path": "objects/accesspoint.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.alarm"
+      },
+      "path": "objects/alarm.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.workorder"
+      },
+      "path": "objects/workorder.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.accesspass"
+      },
+      "path": "objects/accesspass.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "connection",
+        "name": "heatingfield"
+      },
+      "path": "integrations/connections/heatingfield.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "heatingsetvalve"
+      },
+      "path": "integrations/writebacks/heatingsetvalve.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "observation",
+        "name": "heatingtemperature"
+      },
+      "path": "integrations/observations/heatingtemperature.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.observation-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "observation",
+        "name": "heatinghealth"
+      },
+      "path": "integrations/observations/heatinghealth.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.observation-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "observation",
+        "name": "heatingposition"
+      },
+      "path": "integrations/observations/heatingposition.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.observation-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.heatingrepair"
+      },
+      "path": "flows/heatingrepair.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "sample-set",
+        "name": "heatingdemo"
+      },
+      "path": "tests/sample-sets/heatingdemo.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.samples-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "test-plan",
+        "name": "heatingalarmonce"
+      },
+      "path": "tests/test-plans/heatingalarmonce.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "test-plan",
+        "name": "heatingaccess"
+      },
+      "path": "tests/test-plans/heatingaccess.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "test-plan",
+        "name": "heatingvalvebounds"
+      },
+      "path": "tests/test-plans/heatingvalvebounds.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "heatingoverview"
+      },
+      "path": "pages/heatingoverview.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "heatingdevices"
+      },
+      "path": "pages/heatingdevices.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "heatingalarms"
+      },
+      "path": "pages/heatingalarms.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "heatingaccess"
+      },
+      "path": "pages/heatingaccess.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "heatinghealth"
+      },
+      "path": "pages/heatinghealth.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "app",
+        "name": "heatingops"
+      },
+      "path": "applications/heatingops.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "function",
+        "name": "heatingadvice"
+      },
+      "path": "functions/heatingadvice.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.function-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "connection",
+        "name": "propertyfeed"
+      },
+      "path": "integrations/connections/propertyfeed.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "writeback",
+        "name": "heatingnotice"
+      },
+      "path": "integrations/writebacks/heatingnotice.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "evaluation-set",
+        "name": "heatingadvicequality"
+      },
+      "path": "tests/evaluations/heatingadvicequality.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.evaluation-1"
+    }
+  ],
+  "guide": "docs/guide.md"
+}

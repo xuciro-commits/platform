@@ -1,0 +1,114 @@
+{
+  "steps": [
+    {
+      "name": "configureassetssummary",
+      "app": "build",
+      "schema": "build.erpaccount.create",
+      "target": {
+        "type": "build.erpaccount",
+        "id": "sampleassetsaccount"
+      },
+      "payload": "{\"code\":\"SAMPLE-1000\",\"name\":\"Example assets\",\"kind\":\"asset\",\"parent\":\"\",\"posting\":false,\"active\":true}"
+    },
+    {
+      "name": "configureexpensessummary",
+      "app": "build",
+      "schema": "build.erpaccount.create",
+      "target": {
+        "type": "build.erpaccount",
+        "id": "sampleexpensesaccount"
+      },
+      "payload": "{\"code\":\"SAMPLE-6400\",\"name\":\"Example expenses\",\"kind\":\"expense\",\"parent\":\"\",\"posting\":false,\"active\":true}"
+    },
+    {
+      "name": "configurematerialsaccount",
+      "app": "build",
+      "schema": "build.erpaccount.create",
+      "target": {
+        "type": "build.erpaccount",
+        "id": "samplematerialsaccount"
+      },
+      "payload": "{\"code\":\"SAMPLE-1403\",\"name\":\"Example raw materials\",\"kind\":\"asset\",\"parent\":\"SAMPLE-1000\",\"posting\":true,\"active\":true}"
+    },
+    {
+      "name": "configurefinishedaccount",
+      "app": "build",
+      "schema": "build.erpaccount.create",
+      "target": {
+        "type": "build.erpaccount",
+        "id": "samplefinishedaccount"
+      },
+      "payload": "{\"code\":\"SAMPLE-1405\",\"name\":\"Example finished goods\",\"kind\":\"asset\",\"parent\":\"SAMPLE-1000\",\"posting\":true,\"active\":true}"
+    },
+    {
+      "name": "configure7",
+      "app": "build",
+      "schema": "build.erpaccount.create",
+      "target": {
+        "type": "build.erpaccount",
+        "id": "samplewipaccount"
+      },
+      "payload": "{\"code\":\"SAMPLE-5001\",\"name\":\"Work in progress\",\"kind\":\"asset\",\"parent\":\"SAMPLE-1000\",\"posting\":true,\"active\":true}"
+    },
+    {
+      "name": "configure8",
+      "app": "build",
+      "schema": "build.erpaccount.create",
+      "target": {
+        "type": "build.erpaccount",
+        "id": "samplescrapaccount"
+      },
+      "payload": "{\"code\":\"SAMPLE-6711\",\"name\":\"Production scrap\",\"kind\":\"expense\",\"parent\":\"SAMPLE-6400\",\"posting\":true,\"active\":true}"
+    },
+    {
+      "name": "configure9",
+      "app": "build",
+      "schema": "build.erpaccount.create",
+      "target": {
+        "type": "build.erpaccount",
+        "id": "samplevarianceaccount"
+      },
+      "payload": "{\"code\":\"SAMPLE-6404\",\"name\":\"Production variance\",\"kind\":\"expense\",\"parent\":\"SAMPLE-6400\",\"posting\":true,\"active\":true}"
+    },
+    {
+      "name": "configure10",
+      "app": "build",
+      "schema": "build.erpitem.create",
+      "target": {
+        "type": "build.erpitem",
+        "id": "samplesteel"
+      },
+      "payload": "{\"name\":\"Example steel\",\"kind\":\"material\",\"unit\":\"kg\",\"cost\":5,\"currency\":\"CNY\",\"account\":\"samplematerialsaccount\",\"active\":true}"
+    },
+    {
+      "name": "configure11",
+      "app": "build",
+      "schema": "build.erpitem.create",
+      "target": {
+        "type": "build.erpitem",
+        "id": "samplepump"
+      },
+      "payload": "{\"name\":\"Example pump housing\",\"kind\":\"finished\",\"unit\":\"piece\",\"cost\":12,\"currency\":\"CNY\",\"account\":\"samplefinishedaccount\",\"active\":true}"
+    },
+    {
+      "name": "configure12",
+      "app": "build",
+      "schema": "build.erpcomponent.create",
+      "target": {
+        "type": "build.erpcomponent",
+        "id": "samplesteelpart"
+      },
+      "payload": "{\"parent\":\"samplepump\",\"material\":\"samplesteel\",\"quantity\":2}"
+    },
+    {
+      "name": "configure13",
+      "app": "build",
+      "schema": "build.erpproductionpolicy.create",
+      "target": {
+        "type": "build.erpproductionpolicy",
+        "id": "samplestandard"
+      },
+      "payload": "{\"name\":\"Example standard cost accounting\",\"wip\":\"samplewipaccount\",\"scrap\":\"samplescrapaccount\",\"variance\":\"samplevarianceaccount\"}"
+    }
+  ]
+}

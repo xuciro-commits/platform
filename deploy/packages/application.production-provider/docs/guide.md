@@ -1,0 +1,1 @@
+Install and publish independently. This example owns batchproviderorder and batchproviderbatch and provides production.batchorders/2; it does not require the manufacturing application. Configure a consumer in its own environment only when testing cooperation. / 独立安装并发布；本示例使用 batchproviderorder、batchproviderbatch 和 production.batchorders/2，不依赖制造应用。仅在需要协同时配置消费方环境。

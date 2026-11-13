@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "package": "manufacturing.core",
+  "version": "1.0.0",
+  "requires": [],
+  "artifact": "sha256:f331da7defb1fc13aae261f408146b17dbde1d6f9a33e28deb14e43fce7ed2fb",
+  "assets": {
+    "app/manufacturingfoundation": "sha256:f19cdca39d70e3319d84eda7a9fb2af1f7ce92bc94cc5cc5026dcc087b45397d",
+    "connection/supplieragent": "sha256:3aa1cdcca90992b18621c823ab27b36c87e4d29dcf61c7f986d7d1737a36f1c6",
+    "object/build.mesleadtime": "sha256:9cb9303859aaa3f890a6e5b32dc6b22ea6600fca1d0bc4319747a9bc97276d27",
+    "page/mesleadtime": "sha256:7b103cd4b116a627a280af52b3c850c4f8575b393d1cb7c5470672aaa8817074",
+    "query/supplieranswers": "sha256:dcf4dfe23434dd842fe764b2a402555d45c2cc6fe7ce0aedeb9b895f379d6cdd",
+    "writeback/supplierinquiry": "sha256:841fc659172b85edb6dd87a1b5a37e398863ac7f1f99c451add0968b7936320b"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "lodgingreceipts",
+  "title": "Original provider room status",
+  "connection": "lodgingupstream",
+  "profile": "json",
+  "url": "/v1/records/build.pmsreservation?limit=200&sort=-created",
+  "path": "records",
+  "dataset": "lodgingreceipts"
+}

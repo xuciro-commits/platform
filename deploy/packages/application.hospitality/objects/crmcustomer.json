@@ -1,0 +1,47 @@
+{
+  "name": "crmcustomer",
+  "title": "Customer",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "kind",
+      "title": "Customer kind",
+      "type": "choice",
+      "choices": "company,person",
+      "required": true
+    },
+    {
+      "name": "contact",
+      "title": "Contact",
+      "type": "text"
+    },
+    {
+      "name": "phone",
+      "title": "Phone",
+      "type": "text"
+    }
+  ],
+  "access": [
+    {
+      "role": "sales",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "salesmanager",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "type": "build.crmcustomer"
+}

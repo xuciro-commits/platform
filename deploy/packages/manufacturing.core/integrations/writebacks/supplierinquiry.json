@@ -1,0 +1,30 @@
+{
+  "name": "supplierinquiry",
+  "title": "Ask the supplier agent",
+  "connection": "supplieragent",
+  "object": "build.mesleadtime",
+  "on": "create",
+  "transport": "a2a",
+  "method": "POST",
+  "path": "rpc",
+  "mapping": [
+    {
+      "from": "product",
+      "to": "product"
+    },
+    {
+      "from": "question",
+      "to": "message"
+    }
+  ],
+  "result": [
+    {
+      "from": "artifacts.0.parts.0.text",
+      "to": "answer"
+    },
+    {
+      "from": "parts.0.text",
+      "to": "answer"
+    }
+  ]
+}

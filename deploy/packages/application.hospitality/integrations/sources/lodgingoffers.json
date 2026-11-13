@@ -1,0 +1,35 @@
+{
+  "name": "lodgingoffers",
+  "title": "Provider room type directory",
+  "connection": "lodgingupstream",
+  "profile": "json",
+  "url": "/v1/records/build.pmsroomtype?limit=200",
+  "path": "records",
+  "object": "build.crmlodgingoffer",
+  "objectBindings": {
+    "build.crmlodgingoffer": {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmlodgingoffer"
+    }
+  },
+  "key": "id",
+  "mapping": [
+    {
+      "from": "id",
+      "to": "providerid"
+    },
+    {
+      "from": "name",
+      "to": "name"
+    },
+    {
+      "from": "unit",
+      "to": "unit"
+    },
+    {
+      "from": "active",
+      "to": "active"
+    }
+  ]
+}

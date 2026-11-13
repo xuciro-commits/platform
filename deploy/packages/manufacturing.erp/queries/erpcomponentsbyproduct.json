@@ -1,0 +1,11 @@
+{
+  "name": "erpcomponentsbyproduct",
+  "title": "Complete item structure",
+  "description": "Complete components of the selected item.",
+  "object": "build.erpcomponent",
+  "by": "parent",
+  "sort": [
+    "id"
+  ],
+  "limit": 200
+}

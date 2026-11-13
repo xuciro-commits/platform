@@ -1,0 +1,15 @@
+{
+  "name": "productionstart",
+  "title": "Production start",
+  "object": "build.shoporder",
+  "on": "confirmation",
+  "connection": "batchconsumerupstream",
+  "method": "POST",
+  "path": "/v1/protocols/production.batchorders/2/start/{order}",
+  "mapping": [
+    {
+      "from": "id",
+      "to": "shoporder"
+    }
+  ]
+}

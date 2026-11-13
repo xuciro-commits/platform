@@ -1,0 +1,720 @@
+{
+  "format": 4,
+  "name": "heatingoverview",
+  "title": "Building overview",
+  "description": "Choose a building to inspect its floors, zones and devices.",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.building"
+  },
+  "dataBindings": [
+    {
+      "id": "overview-note",
+      "owner": "overview-note",
+      "kind": "presentation",
+      "object": {
+        "app": "",
+        "kind": "",
+        "name": ""
+      },
+      "ports": {
+        "widget": "text"
+      }
+    },
+    {
+      "id": "building-count",
+      "owner": "building-count",
+      "kind": "presentation",
+      "object": {
+        "app": "",
+        "kind": "",
+        "name": ""
+      },
+      "ports": {
+        "measure": "count",
+        "parentable": "true",
+        "widget": "metric"
+      }
+    },
+    {
+      "id": "managed-device-count",
+      "owner": "managed-device-count",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device"
+      },
+      "ports": {
+        "measure": "count",
+        "parentable": "true",
+        "widget": "metric"
+      }
+    },
+    {
+      "id": "buildings-by-city",
+      "owner": "buildings-by-city",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.building"
+      },
+      "model": {
+        "type": "build.building"
+      },
+      "fieldSlots": {
+        "group": [
+          {
+            "name": "city"
+          }
+        ]
+      },
+      "ports": {
+        "measure": "count",
+        "parentable": "true",
+        "widget": "chart"
+      }
+    },
+    {
+      "id": "building-list",
+      "owner": "building-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.building"
+      },
+      "model": {
+        "type": "build.building",
+        "fields": [
+          {
+            "name": "code"
+          },
+          {
+            "name": "name"
+          },
+          {
+            "name": "city"
+          },
+          {
+            "name": "address"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "code"
+        },
+        {
+          "name": "name"
+        },
+        {
+          "name": "city"
+        },
+        {
+          "name": "address"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "building-detail",
+      "owner": "building-detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.building"
+      },
+      "model": {
+        "type": "build.building",
+        "fields": [
+          {
+            "name": "code"
+          },
+          {
+            "name": "name"
+          },
+          {
+            "name": "city"
+          },
+          {
+            "name": "address"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "code"
+        },
+        {
+          "name": "name"
+        },
+        {
+          "name": "city"
+        },
+        {
+          "name": "address"
+        }
+      ],
+      "ports": {
+        "recordVariable": "building",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    },
+    {
+      "id": "floor-list",
+      "owner": "floor-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.floor"
+      },
+      "model": {
+        "type": "build.floor",
+        "fields": [
+          {
+            "name": "code"
+          },
+          {
+            "name": "name"
+          },
+          {
+            "name": "level"
+          }
+        ],
+        "relation": {
+          "parentType": "build.building",
+          "field": "building"
+        }
+      },
+      "ports": {
+        "parentable": "true",
+        "selection": "floor",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "zone-list",
+      "owner": "zone-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.zone"
+      },
+      "model": {
+        "type": "build.zone",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "targettemp"
+          },
+          {
+            "name": "lowerlimit"
+          },
+          {
+            "name": "upperlimit"
+          }
+        ],
+        "relation": {
+          "parentType": "build.floor",
+          "parentSelection": "floor",
+          "field": "floor"
+        }
+      },
+      "ports": {
+        "parentable": "true",
+        "selection": "zone",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "building-device-list",
+      "owner": "building-device-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device",
+        "fields": [
+          {
+            "name": "code"
+          },
+          {
+            "name": "name"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "latesttemp"
+          },
+          {
+            "name": "healthscore"
+          },
+          {
+            "name": "checkedat"
+          }
+        ],
+        "relation": {
+          "parentType": "build.building",
+          "field": "building"
+        }
+      },
+      "ports": {
+        "parentable": "true",
+        "selection": "overview-device",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": []
+    },
+    {
+      "id": "overview-note",
+      "owner": "overview-note",
+      "binding": "overview-note"
+    },
+    {
+      "id": "building-count",
+      "owner": "building-count",
+      "binding": "building-count"
+    },
+    {
+      "id": "managed-device-count",
+      "owner": "managed-device-count",
+      "binding": "managed-device-count"
+    },
+    {
+      "id": "buildings-by-city",
+      "owner": "buildings-by-city",
+      "binding": "buildings-by-city"
+    },
+    {
+      "id": "building-list",
+      "owner": "building-list",
+      "binding": "building-list"
+    },
+    {
+      "id": "building-detail",
+      "owner": "building-detail",
+      "binding": "building-detail"
+    },
+    {
+      "id": "floor-list",
+      "owner": "floor-list",
+      "binding": "floor-list"
+    },
+    {
+      "id": "zone-list",
+      "owner": "zone-list",
+      "binding": "zone-list"
+    },
+    {
+      "id": "building-device-list",
+      "owner": "building-device-list",
+      "binding": "building-device-list"
+    }
+  ],
+  "inputSchema": {
+    "variables": {
+      "building": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "building-list"
+        }
+      }
+    },
+    "selections": [
+      {
+        "name": "floor",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.floor"
+        }
+      },
+      {
+        "name": "zone",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.zone"
+        }
+      },
+      {
+        "name": "overview-device",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.device"
+        }
+      }
+    ]
+  },
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "building-count",
+        "parent": "row-2",
+        "kind": "page",
+        "binding": "building-count",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "building-detail",
+        "parent": "root",
+        "kind": "page",
+        "binding": "building-detail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "building-device-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "building-device-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "building-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "building-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "buildings-by-city",
+        "parent": "root",
+        "kind": "page",
+        "binding": "buildings-by-city",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "floor-list",
+        "parent": "row-6",
+        "kind": "page",
+        "binding": "floor-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "managed-device-count",
+        "parent": "row-2",
+        "kind": "page",
+        "binding": "managed-device-count",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "overview-note",
+        "parent": "root",
+        "kind": "page",
+        "binding": "overview-note",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-2",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-6",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "zone-list",
+        "parent": "row-6",
+        "kind": "page",
+        "binding": "zone-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      }
+    ],
+    "owners": {
+      "building-count": "building-count",
+      "building-detail": "building-detail",
+      "building-device-list": "building-device-list",
+      "building-list": "building-list",
+      "buildings-by-city": "buildings-by-city",
+      "floor-list": "floor-list",
+      "managed-device-count": "managed-device-count",
+      "overview-note": "overview-note",
+      "zone-list": "zone-list"
+    },
+    "root": "root"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": {
+        "formatVersion": 2,
+        "nodes": {
+          "building-count": {
+            "kind": "widget",
+            "section": "building-count",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "building-detail": {
+            "kind": "widget",
+            "section": "building-detail"
+          },
+          "building-device-list": {
+            "kind": "widget",
+            "section": "building-device-list"
+          },
+          "building-list": {
+            "kind": "widget",
+            "section": "building-list"
+          },
+          "buildings-by-city": {
+            "kind": "widget",
+            "section": "buildings-by-city"
+          },
+          "floor-list": {
+            "kind": "widget",
+            "section": "floor-list",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "managed-device-count": {
+            "kind": "widget",
+            "section": "managed-device-count",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "overview-note": {
+            "kind": "widget",
+            "section": "overview-note"
+          },
+          "root": {
+            "children": [
+              "overview-note",
+              "row-2",
+              "buildings-by-city",
+              "building-list",
+              "building-detail",
+              "row-6",
+              "building-device-list"
+            ],
+            "kind": "rows"
+          },
+          "row-2": {
+            "children": [
+              "building-count",
+              "managed-device-count"
+            ],
+            "kind": "columns"
+          },
+          "row-6": {
+            "children": [
+              "floor-list",
+              "zone-list"
+            ],
+            "kind": "columns"
+          },
+          "zone-list": {
+            "kind": "widget",
+            "section": "zone-list",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          }
+        },
+        "root": "root",
+        "uiProfile": "platform.page.v2.111"
+      },
+      "sections": [
+        {
+          "binding": "overview-note",
+          "configVersion": 1,
+          "id": "overview-note",
+          "text": "Latest values are recorded business summaries; raw samples remain in the external observation store. Control loops stay in the device, gateway or PLC.",
+          "title": "Operating context",
+          "triggers": [
+            "overview-note"
+          ]
+        },
+        {
+          "binding": "building-count",
+          "configVersion": 1,
+          "id": "building-count",
+          "title": "Buildings",
+          "triggers": [
+            "building-count"
+          ]
+        },
+        {
+          "binding": "managed-device-count",
+          "configVersion": 1,
+          "id": "managed-device-count",
+          "title": "All managed devices",
+          "triggers": [
+            "managed-device-count"
+          ]
+        },
+        {
+          "binding": "buildings-by-city",
+          "configVersion": 1,
+          "id": "buildings-by-city",
+          "mark": "bar",
+          "title": "Buildings by city",
+          "triggers": [
+            "buildings-by-city"
+          ]
+        },
+        {
+          "binding": "building-list",
+          "configVersion": 1,
+          "id": "building-list",
+          "showSearch": true,
+          "title": "Buildings",
+          "triggers": [
+            "building-list"
+          ]
+        },
+        {
+          "binding": "building-detail",
+          "configVersion": 1,
+          "id": "building-detail",
+          "title": "Selected building",
+          "triggers": [
+            "building-detail"
+          ]
+        },
+        {
+          "binding": "floor-list",
+          "configVersion": 1,
+          "id": "floor-list",
+          "showSearch": true,
+          "title": "Floors in the selected building",
+          "triggers": [
+            "floor-list"
+          ]
+        },
+        {
+          "binding": "zone-list",
+          "configVersion": 1,
+          "id": "zone-list",
+          "showSearch": true,
+          "title": "Zones on the selected floor",
+          "triggers": [
+            "zone-list"
+          ]
+        },
+        {
+          "binding": "building-device-list",
+          "configVersion": 1,
+          "id": "building-device-list",
+          "showSearch": true,
+          "title": "Devices in the selected building",
+          "triggers": [
+            "building-device-list"
+          ]
+        }
+      ]
+    }
+  }
+}

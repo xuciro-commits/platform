@@ -1,0 +1,119 @@
+{
+  "name": "build.crmgroupconfirming",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.crmgroup"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmgroup.assess"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmroom.confirm"
+    }
+  ],
+  "definition": {
+    "name": "crmgroupconfirming",
+    "title": "Coordinate group confirming",
+    "object": "build.crmgroup",
+    "when": "confirming",
+    "steps": [
+      {
+        "name": "rooms",
+        "kind": "query",
+        "app": "build",
+        "query": "crmrooms",
+        "queryVersion": 1,
+        "inputs": {
+          "for": {
+            "source": "subject",
+            "path": [
+              "id"
+            ]
+          }
+        },
+        "next": "each"
+      },
+      {
+        "name": "each",
+        "kind": "foreach",
+        "collection": {
+          "source": "step",
+          "step": "rooms",
+          "path": [
+            "records"
+          ]
+        },
+        "body": "state",
+        "maxIterations": 20,
+        "concurrency": 1,
+        "next": "assess"
+      },
+      {
+        "name": "state",
+        "kind": "switch",
+        "value": {
+          "source": "item",
+          "path": [
+            "state"
+          ]
+        },
+        "cases": {
+          "held": "confirm"
+        },
+        "next": "return"
+      },
+      {
+        "name": "confirm",
+        "kind": "action",
+        "act": "build.crmroom.confirm",
+        "target": {
+          "source": "item",
+          "path": [
+            "id"
+          ]
+        },
+        "inputs": {
+          "bookingkey": {
+            "source": "item",
+            "path": [
+              "bookingkey"
+            ]
+          }
+        },
+        "next": "return",
+        "retryAttempts": 1
+      },
+      {
+        "name": "return",
+        "kind": "end"
+      },
+      {
+        "name": "assess",
+        "kind": "action",
+        "act": "assess",
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  },
+  "queries": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "crmrooms"
+      },
+      "sourceVersion": "1.query-1"
+    }
+  ]
+}

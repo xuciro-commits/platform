@@ -8,7 +8,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const packagesDir = join(root, "deploy/packages");
@@ -78,8 +78,11 @@ function sourceDirectories(args) {
     );
 }
 
-function artifactPath(sourceDir, descriptor) {
-  return join(dirname(sourceDir), `${descriptor.id.replaceAll(".", "-")}.json`);
+function artifactPath(sourceDir, name) {
+  if (!name || name.includes("/") || name.includes("\\") || name === "." || name === "..") {
+    throw new Error(`${sourceDir}: artifact must be a JSON file name`);
+  }
+  return join(dirname(sourceDir), name);
 }
 
 function assetDirectory(kind) {
@@ -117,6 +120,11 @@ function packSource(sourceDir) {
   if ("blueprint" in fields || "artifactDigest" in fields) {
     throw new Error(`${descriptorFile}: blueprint and artifactDigest are generated fields`);
   }
+  const artifactName = fields.artifact ?? `${fields.id.replaceAll(".", "-")}.json`;
+  if (!artifactName.endsWith(".json")) {
+    throw new Error(`${descriptorFile}: artifact must end in .json`);
+  }
+  delete fields.artifact;
   const sourceBlueprint = readJson(blueprintFile);
   if (!Array.isArray(sourceBlueprint.roots) || !Array.isArray(sourceBlueprint.assets)) {
     throw new Error(`${blueprintFile}: roots and assets must be arrays`);
@@ -188,7 +196,7 @@ function packSource(sourceDir) {
         .sort(([left], [right]) => left.localeCompare(right)),
     ),
   };
-  return { descriptor, artifact, lock };
+  return { descriptor, artifact, lock, artifactName };
 }
 
 function splitArtifact(file, sourceDir, force) {
@@ -208,6 +216,7 @@ function splitArtifact(file, sourceDir, force) {
   const fields = { ...descriptor };
   delete fields.blueprint;
   delete fields.artifactDigest;
+  fields.artifact = basename(file);
 
   const used = new Set();
   const entries = [];
@@ -249,19 +258,19 @@ function splitArtifact(file, sourceDir, force) {
   writeJson(join(sourceDir, "blueprint.json"), blueprint);
   const packed = packSource(sourceDir);
   writeJson(join(sourceDir, "package.lock.json"), packed.lock);
-  return { sourceDir, descriptor: packed.descriptor, assets: entries.length };
+  return { sourceDir, descriptor: packed.descriptor, assets: entries.length, artifactName: packed.artifactName };
 }
 
 function writePackage(sourceDir) {
   const packed = packSource(sourceDir);
-  writeFileSync(artifactPath(sourceDir, packed.descriptor), packed.artifact);
+  writeFileSync(artifactPath(sourceDir, packed.artifactName), packed.artifact);
   writeJson(join(sourceDir, "package.lock.json"), packed.lock);
   return packed;
 }
 
 function checkPackage(sourceDir) {
   const packed = packSource(sourceDir);
-  const file = artifactPath(sourceDir, packed.descriptor);
+  const file = artifactPath(sourceDir, packed.artifactName);
   if (!existsSync(file)) throw new Error(`${file}: missing generated artifact`);
   if (readText(file) !== packed.artifact) {
     throw new Error(`${file}: generated artifact is stale; run make packages`);
@@ -293,7 +302,7 @@ if (command === "split") {
   for (const directory of directories) {
     const packed = writePackage(directory);
     console.log(
-      `packed ${packed.descriptor.id}@${packed.descriptor.version} -> ${relative(root, artifactPath(directory, packed.descriptor))}`,
+      `packed ${packed.descriptor.id}@${packed.descriptor.version} -> ${relative(root, artifactPath(directory, packed.artifactName))}`,
     );
   }
 } else if (command === "check") {

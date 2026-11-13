@@ -1,0 +1,755 @@
+{
+  "format": 4,
+  "name": "heatingaccess",
+  "title": "Access management",
+  "description": "Review access points and time-limited physical access passes.",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.accesspoint"
+  },
+  "dataBindings": [
+    {
+      "id": "access-note",
+      "owner": "access-note",
+      "kind": "presentation",
+      "object": {
+        "app": "",
+        "kind": "",
+        "name": ""
+      },
+      "ports": {
+        "widget": "text"
+      }
+    },
+    {
+      "id": "access-filter",
+      "owner": "access-filter",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.accesspoint"
+      },
+      "model": {
+        "type": "build.accesspoint",
+        "fields": [
+          {
+            "name": "building"
+          },
+          {
+            "name": "state"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "building"
+        },
+        {
+          "name": "state"
+        }
+      ],
+      "ports": {
+        "widget": "filter"
+      }
+    },
+    {
+      "id": "access-list",
+      "owner": "access-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.accesspoint"
+      },
+      "model": {
+        "type": "build.accesspoint",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "zone"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "lastcheckedat"
+          },
+          {
+            "name": "lastresult"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "zone"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "lastcheckedat"
+        },
+        {
+          "name": "lastresult"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "access-detail",
+      "owner": "access-detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.accesspoint"
+      },
+      "model": {
+        "type": "build.accesspoint",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "zone"
+          },
+          {
+            "name": "devicekey"
+          },
+          {
+            "name": "lastpass"
+          },
+          {
+            "name": "lastcheckedat"
+          },
+          {
+            "name": "lastresult"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "zone"
+        },
+        {
+          "name": "devicekey"
+        },
+        {
+          "name": "lastpass"
+        },
+        {
+          "name": "lastcheckedat"
+        },
+        {
+          "name": "lastresult"
+        }
+      ],
+      "ports": {
+        "recordVariable": "accesspoint",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    },
+    {
+      "id": "access-actions",
+      "owner": "access-actions",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.accesspoint"
+      },
+      "model": {
+        "type": "build.accesspoint"
+      },
+      "ports": {
+        "recordVariable": "accesspoint",
+        "selectionMode": "read",
+        "widget": "actions"
+      }
+    },
+    {
+      "id": "pass-list",
+      "owner": "pass-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.accesspass"
+      },
+      "model": {
+        "type": "build.accesspass",
+        "fields": [
+          {
+            "name": "holder"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "validfrom"
+          },
+          {
+            "name": "validuntil"
+          },
+          {
+            "name": "purpose"
+          }
+        ],
+        "relation": {
+          "parentType": "build.accesspoint",
+          "field": "accesspoint"
+        }
+      },
+      "ports": {
+        "parentable": "true",
+        "selection": "accesspass",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "pass-detail",
+      "owner": "pass-detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.accesspass"
+      },
+      "model": {
+        "type": "build.accesspass",
+        "fields": [
+          {
+            "name": "holder"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "accesspoint"
+          },
+          {
+            "name": "validfrom"
+          },
+          {
+            "name": "validuntil"
+          },
+          {
+            "name": "purpose"
+          },
+          {
+            "name": "revokedat"
+          },
+          {
+            "name": "revokereason"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "holder"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "accesspoint"
+        },
+        {
+          "name": "validfrom"
+        },
+        {
+          "name": "validuntil"
+        },
+        {
+          "name": "purpose"
+        },
+        {
+          "name": "revokedat"
+        },
+        {
+          "name": "revokereason"
+        }
+      ],
+      "ports": {
+        "recordVariable": "accesspass",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    },
+    {
+      "id": "pass-actions",
+      "owner": "pass-actions",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.accesspass"
+      },
+      "model": {
+        "type": "build.accesspass"
+      },
+      "ports": {
+        "recordVariable": "accesspass",
+        "selectionMode": "read",
+        "widget": "actions"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.accesspoint.checkpass"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.accesspoint.disable"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.accesspoint.enable"
+        }
+      ]
+    },
+    {
+      "id": "access-note",
+      "owner": "access-note",
+      "binding": "access-note"
+    },
+    {
+      "id": "access-filter",
+      "owner": "access-filter",
+      "binding": "access-filter"
+    },
+    {
+      "id": "access-list",
+      "owner": "access-list",
+      "binding": "access-list"
+    },
+    {
+      "id": "access-detail",
+      "owner": "access-detail",
+      "binding": "access-detail"
+    },
+    {
+      "id": "access-actions",
+      "owner": "access-actions",
+      "binding": "access-actions",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.accesspoint.checkpass"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.accesspoint.disable"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.accesspoint.enable"
+        }
+      ]
+    },
+    {
+      "id": "pass-list",
+      "owner": "pass-list",
+      "binding": "pass-list"
+    },
+    {
+      "id": "pass-detail",
+      "owner": "pass-detail",
+      "binding": "pass-detail"
+    },
+    {
+      "id": "pass-actions",
+      "owner": "pass-actions",
+      "binding": "pass-actions",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.accesspass.grant"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.accesspass.revoke"
+        }
+      ]
+    }
+  ],
+  "inputSchema": {
+    "variables": {
+      "accesspass": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "pass-list"
+        }
+      },
+      "accesspoint": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "access-list"
+        }
+      }
+    },
+    "selections": [
+      {
+        "name": "accesspass",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.accesspass"
+        }
+      }
+    ]
+  },
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "access-actions",
+        "parent": "row-3",
+        "kind": "page",
+        "binding": "access-actions",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "access-detail",
+        "parent": "row-3",
+        "kind": "page",
+        "binding": "access-detail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "access-filter",
+        "parent": "root",
+        "kind": "page",
+        "binding": "access-filter",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "access-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "access-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "access-note",
+        "parent": "root",
+        "kind": "page",
+        "binding": "access-note",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "pass-actions",
+        "parent": "row-5",
+        "kind": "page",
+        "binding": "pass-actions",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "pass-detail",
+        "parent": "row-5",
+        "kind": "page",
+        "binding": "pass-detail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "pass-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "pass-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-3",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-5",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      }
+    ],
+    "owners": {
+      "access-actions": "access-actions",
+      "access-detail": "access-detail",
+      "access-filter": "access-filter",
+      "access-list": "access-list",
+      "access-note": "access-note",
+      "pass-actions": "pass-actions",
+      "pass-detail": "pass-detail",
+      "pass-list": "pass-list"
+    },
+    "root": "root"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": {
+        "formatVersion": 2,
+        "nodes": {
+          "access-actions": {
+            "kind": "widget",
+            "section": "access-actions",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "access-detail": {
+            "kind": "widget",
+            "section": "access-detail",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "access-filter": {
+            "kind": "widget",
+            "section": "access-filter"
+          },
+          "access-list": {
+            "kind": "widget",
+            "section": "access-list"
+          },
+          "access-note": {
+            "kind": "widget",
+            "section": "access-note"
+          },
+          "pass-actions": {
+            "kind": "widget",
+            "section": "pass-actions",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "pass-detail": {
+            "kind": "widget",
+            "section": "pass-detail",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "pass-list": {
+            "kind": "widget",
+            "section": "pass-list"
+          },
+          "root": {
+            "children": [
+              "access-note",
+              "access-filter",
+              "access-list",
+              "row-3",
+              "pass-list",
+              "row-5"
+            ],
+            "kind": "rows"
+          },
+          "row-3": {
+            "children": [
+              "access-detail",
+              "access-actions"
+            ],
+            "kind": "columns"
+          },
+          "row-5": {
+            "children": [
+              "pass-detail",
+              "pass-actions"
+            ],
+            "kind": "columns"
+          }
+        },
+        "root": "root",
+        "uiProfile": "platform.page.v2.111"
+      },
+      "sections": [
+        {
+          "binding": "access-note",
+          "configVersion": 1,
+          "id": "access-note",
+          "text": "Passes authorize physical entry to a building or access point. They do not grant permission to read platform records. Check pass records a business decision; it does not claim that a physical door opened.",
+          "title": "Physical access and platform access",
+          "triggers": [
+            "access-note"
+          ]
+        },
+        {
+          "binding": "access-filter",
+          "configVersion": 1,
+          "id": "access-filter",
+          "title": "Find access points",
+          "triggers": [
+            "access-filter"
+          ]
+        },
+        {
+          "binding": "access-list",
+          "configVersion": 1,
+          "id": "access-list",
+          "showSearch": true,
+          "title": "Access points",
+          "triggers": [
+            "access-list"
+          ]
+        },
+        {
+          "binding": "access-detail",
+          "configVersion": 1,
+          "id": "access-detail",
+          "title": "Selected access point",
+          "triggers": [
+            "access-detail"
+          ]
+        },
+        {
+          "binding": "access-actions",
+          "configVersion": 1,
+          "id": "access-actions",
+          "title": "Access point actions",
+          "triggers": [
+            "access-actions"
+          ]
+        },
+        {
+          "binding": "pass-list",
+          "configVersion": 1,
+          "id": "pass-list",
+          "showSearch": true,
+          "title": "Passes for the selected access point",
+          "triggers": [
+            "pass-list"
+          ]
+        },
+        {
+          "binding": "pass-detail",
+          "configVersion": 1,
+          "id": "pass-detail",
+          "title": "Selected access pass",
+          "triggers": [
+            "pass-detail"
+          ]
+        },
+        {
+          "binding": "pass-actions",
+          "configVersion": 1,
+          "id": "pass-actions",
+          "title": "Access pass actions",
+          "triggers": [
+            "pass-actions"
+          ]
+        }
+      ]
+    }
+  }
+}

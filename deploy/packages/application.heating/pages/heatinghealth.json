@@ -1,0 +1,736 @@
+{
+  "format": 4,
+  "name": "heatinghealth",
+  "title": "Health dashboard",
+  "description": "Compare recorded health assessments and inspect their timestamps.",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.device"
+  },
+  "dataBindings": [
+    {
+      "id": "health-note",
+      "owner": "health-note",
+      "kind": "presentation",
+      "object": {
+        "app": "",
+        "kind": "",
+        "name": ""
+      },
+      "ports": {
+        "widget": "text"
+      }
+    },
+    {
+      "id": "health-filter",
+      "owner": "health-filter",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device",
+        "fields": [
+          {
+            "name": "building"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "state"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "building"
+        },
+        {
+          "name": "kind"
+        },
+        {
+          "name": "state"
+        }
+      ],
+      "ports": {
+        "widget": "filter"
+      }
+    },
+    {
+      "id": "health-device-count",
+      "owner": "health-device-count",
+      "kind": "presentation",
+      "object": {
+        "app": "",
+        "kind": "",
+        "name": ""
+      },
+      "ports": {
+        "measure": "count",
+        "parentable": "true",
+        "widget": "metric"
+      }
+    },
+    {
+      "id": "health-score-average",
+      "owner": "health-score-average",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device"
+      },
+      "fieldSlots": {
+        "measure": [
+          {
+            "name": "healthscore",
+            "transform": "avg"
+          }
+        ]
+      },
+      "ports": {
+        "measure": "avg:healthscore",
+        "parentable": "true",
+        "widget": "metric"
+      }
+    },
+    {
+      "id": "health-state-chart",
+      "owner": "health-state-chart",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device"
+      },
+      "fieldSlots": {
+        "group": [
+          {
+            "name": "state"
+          }
+        ]
+      },
+      "ports": {
+        "measure": "count",
+        "parentable": "true",
+        "widget": "chart"
+      }
+    },
+    {
+      "id": "health-list",
+      "owner": "health-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "healthscore"
+          },
+          {
+            "name": "latesttemp"
+          },
+          {
+            "name": "checkedat"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "healthscore"
+        },
+        {
+          "name": "latesttemp"
+        },
+        {
+          "name": "checkedat"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "health-detail",
+      "owner": "health-detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "healthscore"
+          },
+          {
+            "name": "latesttemp"
+          },
+          {
+            "name": "checkedat"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "kind"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "healthscore"
+        },
+        {
+          "name": "latesttemp"
+        },
+        {
+          "name": "checkedat"
+        }
+      ],
+      "ports": {
+        "recordVariable": "device",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    },
+    {
+      "id": "health-actions",
+      "owner": "health-actions",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device"
+      },
+      "ports": {
+        "recordVariable": "device",
+        "selectionMode": "read",
+        "widget": "actions"
+      }
+    },
+    {
+      "id": "health-advice",
+      "owner": "health-advice",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device"
+      },
+      "ports": {
+        "recordVariable": "device",
+        "widget": "ai-assistant"
+      },
+      "resources": [
+        {
+          "id": "ai",
+          "kind": "ai",
+          "outputs": {
+            "question": ""
+          },
+          "source": "analyst"
+        }
+      ]
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.assesshealth"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.restore"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.markoffline"
+        }
+      ]
+    },
+    {
+      "id": "health-note",
+      "owner": "health-note",
+      "binding": "health-note"
+    },
+    {
+      "id": "health-filter",
+      "owner": "health-filter",
+      "binding": "health-filter"
+    },
+    {
+      "id": "health-device-count",
+      "owner": "health-device-count",
+      "binding": "health-device-count"
+    },
+    {
+      "id": "health-score-average",
+      "owner": "health-score-average",
+      "binding": "health-score-average"
+    },
+    {
+      "id": "health-state-chart",
+      "owner": "health-state-chart",
+      "binding": "health-state-chart"
+    },
+    {
+      "id": "health-list",
+      "owner": "health-list",
+      "binding": "health-list"
+    },
+    {
+      "id": "health-detail",
+      "owner": "health-detail",
+      "binding": "health-detail"
+    },
+    {
+      "id": "health-actions",
+      "owner": "health-actions",
+      "binding": "health-actions",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.assesshealth"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.restore"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.markoffline"
+        }
+      ]
+    },
+    {
+      "id": "health-advice",
+      "owner": "health-advice",
+      "binding": "health-advice",
+      "function": {
+        "ref": {
+          "app": "build",
+          "kind": "function",
+          "name": "heatingadvice"
+        },
+        "sourceVersion": "1.function-1"
+      }
+    }
+  ],
+  "inputSchema": {
+    "variables": {
+      "device": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "health-list"
+        }
+      }
+    }
+  },
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "health-actions",
+        "parent": "row-5",
+        "kind": "page",
+        "binding": "health-actions",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "health-advice",
+        "parent": "root",
+        "kind": "page",
+        "binding": "health-advice",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "health-detail",
+        "parent": "row-5",
+        "kind": "page",
+        "binding": "health-detail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "health-device-count",
+        "parent": "row-2",
+        "kind": "page",
+        "binding": "health-device-count",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "health-filter",
+        "parent": "root",
+        "kind": "page",
+        "binding": "health-filter",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "health-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "health-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "health-note",
+        "parent": "root",
+        "kind": "page",
+        "binding": "health-note",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "health-score-average",
+        "parent": "row-2",
+        "kind": "page",
+        "binding": "health-score-average",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "health-state-chart",
+        "parent": "root",
+        "kind": "page",
+        "binding": "health-state-chart",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-2",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-5",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      }
+    ],
+    "owners": {
+      "health-actions": "health-actions",
+      "health-advice": "health-advice",
+      "health-detail": "health-detail",
+      "health-device-count": "health-device-count",
+      "health-filter": "health-filter",
+      "health-list": "health-list",
+      "health-note": "health-note",
+      "health-score-average": "health-score-average",
+      "health-state-chart": "health-state-chart"
+    },
+    "root": "root"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": {
+        "formatVersion": 2,
+        "nodes": {
+          "health-actions": {
+            "kind": "widget",
+            "section": "health-actions",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "health-advice": {
+            "kind": "widget",
+            "section": "health-advice"
+          },
+          "health-detail": {
+            "kind": "widget",
+            "section": "health-detail",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "health-device-count": {
+            "kind": "widget",
+            "section": "health-device-count",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "health-filter": {
+            "kind": "widget",
+            "section": "health-filter"
+          },
+          "health-list": {
+            "kind": "widget",
+            "section": "health-list"
+          },
+          "health-note": {
+            "kind": "widget",
+            "section": "health-note"
+          },
+          "health-score-average": {
+            "kind": "widget",
+            "section": "health-score-average",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "health-state-chart": {
+            "kind": "widget",
+            "section": "health-state-chart"
+          },
+          "root": {
+            "children": [
+              "health-note",
+              "health-filter",
+              "row-2",
+              "health-state-chart",
+              "health-list",
+              "row-5",
+              "health-advice"
+            ],
+            "kind": "rows"
+          },
+          "row-2": {
+            "children": [
+              "health-device-count",
+              "health-score-average"
+            ],
+            "kind": "columns"
+          },
+          "row-5": {
+            "children": [
+              "health-detail",
+              "health-actions"
+            ],
+            "kind": "columns"
+          }
+        },
+        "root": "root",
+        "uiProfile": "platform.page.v2.111"
+      },
+      "sections": [
+        {
+          "binding": "health-note",
+          "configVersion": 1,
+          "id": "health-note",
+          "text": "Health scores and status come from declared business rules and authorized assessments. Check the assessment time before acting; this dashboard does not infer equipment health from an unanswered request.",
+          "title": "Health evidence",
+          "triggers": [
+            "health-note"
+          ]
+        },
+        {
+          "binding": "health-filter",
+          "configVersion": 1,
+          "id": "health-filter",
+          "title": "Find health records",
+          "triggers": [
+            "health-filter"
+          ]
+        },
+        {
+          "binding": "health-device-count",
+          "configVersion": 1,
+          "id": "health-device-count",
+          "title": "Devices in this view",
+          "triggers": [
+            "health-device-count"
+          ]
+        },
+        {
+          "binding": "health-score-average",
+          "configVersion": 1,
+          "id": "health-score-average",
+          "title": "Average assessed health",
+          "triggers": [
+            "health-score-average"
+          ]
+        },
+        {
+          "binding": "health-state-chart",
+          "configVersion": 1,
+          "id": "health-state-chart",
+          "mark": "bar",
+          "title": "Device status distribution",
+          "triggers": [
+            "health-state-chart"
+          ]
+        },
+        {
+          "binding": "health-list",
+          "configVersion": 1,
+          "id": "health-list",
+          "showSearch": true,
+          "title": "Device health",
+          "triggers": [
+            "health-list"
+          ]
+        },
+        {
+          "binding": "health-detail",
+          "configVersion": 1,
+          "id": "health-detail",
+          "title": "Selected health evidence",
+          "triggers": [
+            "health-detail"
+          ]
+        },
+        {
+          "binding": "health-actions",
+          "configVersion": 1,
+          "id": "health-actions",
+          "title": "Assessment actions",
+          "triggers": [
+            "health-actions"
+          ]
+        },
+        {
+          "ai": {},
+          "binding": "health-advice",
+          "configVersion": 1,
+          "id": "health-advice",
+          "title": "Health advice",
+          "triggers": [
+            "health-advice"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,1715 @@
+{
+  "name": "erpmove",
+  "title": "Inventory movement",
+  "fields": [
+    {
+      "name": "receipt",
+      "title": "Stock receipt",
+      "type": "reference",
+      "ref": "build.erpreceipt",
+      "inverse": "moves",
+      "required": true
+    },
+    {
+      "name": "line",
+      "title": "Purchase line",
+      "type": "reference",
+      "ref": "build.erppurchaseline",
+      "inverse": "moves"
+    },
+    {
+      "name": "product",
+      "title": "Item",
+      "type": "reference",
+      "ref": "build.erpitem",
+      "required": true
+    },
+    {
+      "name": "quantitybalance",
+      "title": "Quantity balance",
+      "type": "reference",
+      "ref": "build.erpstock",
+      "inverse": "quantitymoves",
+      "required": true
+    },
+    {
+      "name": "valuebalance",
+      "title": "Value balance",
+      "type": "reference",
+      "ref": "build.erpstock",
+      "inverse": "valuemoves",
+      "required": true
+    },
+    {
+      "name": "date",
+      "title": "Movement date",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Quantity",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "unitcost",
+      "title": "Frozen standard cost",
+      "type": "decimal"
+    },
+    {
+      "name": "value",
+      "title": "Inventory value",
+      "type": "decimal"
+    },
+    {
+      "name": "productionbatch",
+      "title": "Production batch",
+      "type": "reference",
+      "ref": "build.productionbatch",
+      "inverse": "moves"
+    },
+    {
+      "name": "component",
+      "title": "Frozen component",
+      "type": "reference",
+      "ref": "build.erpproductioncomponent"
+    },
+    {
+      "name": "reason",
+      "title": "Movement reason",
+      "type": "choice",
+      "choices": "receipt,issue,output"
+    }
+  ],
+  "access": [
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "posted",
+      "title": "Posted"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "onepurchasemove",
+      "kind": "unique",
+      "fields": [
+        "line"
+      ],
+      "message": "A purchase line has one original receipt movement."
+    },
+    {
+      "name": "frozenmove",
+      "kind": "immutable",
+      "fields": [
+        "receipt",
+        "line",
+        "product",
+        "quantitybalance",
+        "valuebalance",
+        "date",
+        "quantity",
+        "unitcost",
+        "value",
+        "productionbatch",
+        "component",
+        "reason",
+        "archived"
+      ],
+      "message": "Posted inventory movements are corrected by new business movements."
+    },
+    {
+      "name": "actualvalue",
+      "kind": "expression",
+      "fields": [
+        "quantity",
+        "unitcost",
+        "value"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "coalesce",
+            "kind": "decimal",
+            "args": [
+              {
+                "op": "",
+                "kind": "decimal",
+                "ref": "value"
+              },
+              {
+                "op": "",
+                "kind": "decimal",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": "if",
+            "kind": "decimal",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "*",
+                "kind": "decimal",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "decimal",
+                    "ref": "quantity"
+                  },
+                  {
+                    "op": "coalesce",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "unitcost"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "round",
+                "kind": "decimal",
+                "args": [
+                  {
+                    "op": "*",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "quantity"
+                      },
+                      {
+                        "op": "coalesce",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "unitcost"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "lit": {
+                              "value": 0
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 2
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Inventory value equals quantity at its frozen standard cost."
+    },
+    {
+      "name": "oneproductionmove",
+      "kind": "unique",
+      "fields": [
+        "productionbatch",
+        "product"
+      ],
+      "message": "An accepted production batch has one movement for each item."
+    },
+    {
+      "name": "sourcefacts1",
+      "kind": "expression",
+      "fields": [
+        "receipt",
+        "line",
+        "product",
+        "productionbatch",
+        "component",
+        "quantity",
+        "unitcost",
+        "quantitybalance",
+        "valuebalance"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "empty",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "coalesce",
+                "kind": "reference",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "line"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": ""
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "boolean",
+            "lit": {
+              "value": true
+            }
+          }
+        ]
+      },
+      "message": "Inventory movement facts match their original purchase line or frozen production batch."
+    },
+    {
+      "name": "sourcefacts2",
+      "kind": "expression",
+      "fields": [
+        "receipt",
+        "line",
+        "product",
+        "productionbatch",
+        "component",
+        "quantity",
+        "unitcost",
+        "quantitybalance",
+        "valuebalance"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "boolean",
+            "lit": {
+              "value": true
+            }
+          }
+        ]
+      },
+      "message": "Inventory movement facts match their original purchase line or frozen production batch."
+    },
+    {
+      "name": "sourcefacts3",
+      "kind": "expression",
+      "fields": [
+        "receipt",
+        "line",
+        "product",
+        "productionbatch",
+        "component",
+        "quantity",
+        "unitcost",
+        "quantitybalance",
+        "valuebalance"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "path",
+                "kind": "reference",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "productionbatch"
+                  }
+                ],
+                "path": [
+                  "receipt"
+                ]
+              },
+              {
+                "op": "",
+                "kind": "reference",
+                "ref": "receipt"
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "boolean",
+            "lit": {
+              "value": true
+            }
+          }
+        ]
+      },
+      "message": "Inventory movement facts match their original purchase line or frozen production batch."
+    },
+    {
+      "name": "sourcefacts4",
+      "kind": "expression",
+      "fields": [
+        "receipt",
+        "line",
+        "product",
+        "productionbatch",
+        "component",
+        "quantity",
+        "unitcost",
+        "quantitybalance",
+        "valuebalance"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "path",
+                "kind": "reference",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "quantitybalance"
+                  }
+                ],
+                "path": [
+                  "product"
+                ]
+              },
+              {
+                "op": "",
+                "kind": "reference",
+                "ref": "product"
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "boolean",
+            "lit": {
+              "value": true
+            }
+          }
+        ]
+      },
+      "message": "Inventory movement facts match their original purchase line or frozen production batch."
+    },
+    {
+      "name": "sourcefacts5",
+      "kind": "expression",
+      "fields": [
+        "receipt",
+        "line",
+        "product",
+        "productionbatch",
+        "component",
+        "quantity",
+        "unitcost",
+        "quantitybalance",
+        "valuebalance"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "path",
+                "kind": "reference",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "valuebalance"
+                  }
+                ],
+                "path": [
+                  "product"
+                ]
+              },
+              {
+                "op": "",
+                "kind": "reference",
+                "ref": "product"
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "boolean",
+            "lit": {
+              "value": true
+            }
+          }
+        ]
+      },
+      "message": "Inventory movement facts match their original purchase line or frozen production batch."
+    },
+    {
+      "name": "sourcefacts6",
+      "kind": "expression",
+      "fields": [
+        "receipt",
+        "line",
+        "product",
+        "productionbatch",
+        "component",
+        "quantity",
+        "unitcost",
+        "quantitybalance",
+        "valuebalance"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "path",
+                "kind": "choice",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "quantitybalance"
+                  }
+                ],
+                "path": [
+                  "bucket"
+                ]
+              },
+              {
+                "op": "",
+                "kind": "choice",
+                "lit": {
+                  "value": "quantity"
+                }
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "boolean",
+            "lit": {
+              "value": true
+            }
+          }
+        ]
+      },
+      "message": "Inventory movement facts match their original purchase line or frozen production batch."
+    },
+    {
+      "name": "sourcefacts7",
+      "kind": "expression",
+      "fields": [
+        "receipt",
+        "line",
+        "product",
+        "productionbatch",
+        "component",
+        "quantity",
+        "unitcost",
+        "quantitybalance",
+        "valuebalance"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "path",
+                "kind": "choice",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "valuebalance"
+                  }
+                ],
+                "path": [
+                  "bucket"
+                ]
+              },
+              {
+                "op": "",
+                "kind": "choice",
+                "lit": {
+                  "value": "value"
+                }
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "boolean",
+            "lit": {
+              "value": true
+            }
+          }
+        ]
+      },
+      "message": "Inventory movement facts match their original purchase line or frozen production batch."
+    },
+    {
+      "name": "sourcefacts8",
+      "kind": "expression",
+      "fields": [
+        "receipt",
+        "line",
+        "product",
+        "productionbatch",
+        "component",
+        "quantity",
+        "unitcost",
+        "quantitybalance",
+        "valuebalance"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "if",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "not",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "empty",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "productionbatch"
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "lit": {
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "or",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "reason"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "issue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "not",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "empty",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "coalesce",
+                            "kind": "reference",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "ref": "component"
+                              },
+                              {
+                                "op": "",
+                                "kind": "reference",
+                                "lit": {
+                                  "value": ""
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "path",
+                        "kind": "reference",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "component"
+                          }
+                        ],
+                        "path": [
+                          "order"
+                        ]
+                      },
+                      {
+                        "op": "path",
+                        "kind": "reference",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "productionbatch"
+                          }
+                        ],
+                        "path": [
+                          "order"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "path",
+                        "kind": "reference",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "component"
+                          }
+                        ],
+                        "path": [
+                          "material"
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "product"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "unitcost"
+                      },
+                      {
+                        "op": "path",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "component"
+                          }
+                        ],
+                        "path": [
+                          "cost"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "quantity"
+                      },
+                      {
+                        "op": "negate",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "*",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "path",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "component"
+                                  }
+                                ],
+                                "path": [
+                                  "quantity"
+                                ]
+                              },
+                              {
+                                "op": "+",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "path",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "reference",
+                                        "ref": "productionbatch"
+                                      }
+                                    ],
+                                    "path": [
+                                      "yield"
+                                    ]
+                                  },
+                                  {
+                                    "op": "path",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "reference",
+                                        "ref": "productionbatch"
+                                      }
+                                    ],
+                                    "path": [
+                                      "scrap"
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "and",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "ref": "reason"
+                      },
+                      {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "output"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "empty",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "coalesce",
+                        "kind": "reference",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "component"
+                          },
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "lit": {
+                              "value": ""
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "product"
+                      },
+                      {
+                        "op": "path",
+                        "kind": "reference",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "productionbatch"
+                          }
+                        ],
+                        "path": [
+                          "order",
+                          "product"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "quantity"
+                      },
+                      {
+                        "op": "path",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "productionbatch"
+                          }
+                        ],
+                        "path": [
+                          "yield"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "=",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "unitcost"
+                      },
+                      {
+                        "op": "path",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "productionbatch"
+                          }
+                        ],
+                        "path": [
+                          "order",
+                          "unitcost"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "",
+            "kind": "boolean",
+            "lit": {
+              "value": true
+            }
+          }
+        ]
+      },
+      "message": "Inventory movement facts match their original purchase line or frozen production batch."
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.erpmove",
+    "steps": [
+      {
+        "name": "posted",
+        "kind": "update",
+        "target": {
+          "type": "build.erpmove",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "state",
+            "expr": {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "posted"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "or",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "empty",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "coalesce",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "productionbatch"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "lit": {
+                        "value": ""
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "line"
+                        },
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "product"
+                    },
+                    {
+                      "op": "path",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "line"
+                        }
+                      ],
+                      "path": [
+                        "product"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "quantity"
+                    },
+                    {
+                      "op": "path",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "line"
+                        }
+                      ],
+                      "path": [
+                        "quantity"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "unitcost"
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "path",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "product"
+                        }
+                      ],
+                      "path": [
+                        "cost"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "receipt"
+                        }
+                      ],
+                      "path": [
+                        "purchase"
+                      ]
+                    },
+                    {
+                      "op": "path",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "line"
+                        }
+                      ],
+                      "path": [
+                        "purchase"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "quantitybalance"
+                        }
+                      ],
+                      "path": [
+                        "product"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "product"
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "valuebalance"
+                        }
+                      ],
+                      "path": [
+                        "product"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "product"
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "quantitybalance"
+                        }
+                      ],
+                      "path": [
+                        "bucket"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "quantity"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "valuebalance"
+                        }
+                      ],
+                      "path": [
+                        "bucket"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "value"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "path",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "receipt"
+                        }
+                      ],
+                      "path": [
+                        "state"
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "recorded"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "empty",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "coalesce",
+                  "kind": "reference",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "line"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "lit": {
+                        "value": ""
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "productionbatch"
+                        },
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "lit": {
+                            "value": ""
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "message": "A movement has exactly one purchase or production origin."
+  },
+  "type": "build.erpmove"
+}

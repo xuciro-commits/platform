@@ -1,0 +1,46 @@
+{
+  "name": "lodgingholdday",
+  "title": "Hold group room at provider",
+  "connection": "lodgingupstream",
+  "object": "build.crmroom",
+  "on": "confirmation",
+  "method": "POST",
+  "path": "/v1/protocols/lodging.stays/2/reserve/{bookingkey}",
+  "mapping": [
+    {
+      "from": "guest",
+      "to": "guest"
+    },
+    {
+      "from": "roomtype",
+      "to": "roomtype"
+    },
+    {
+      "from": "unit",
+      "to": "unit"
+    },
+    {
+      "from": "mode",
+      "to": "mode"
+    },
+    {
+      "from": "expires",
+      "to": "expires"
+    },
+    {
+      "from": "dayfrom",
+      "to": "dayfrom"
+    },
+    {
+      "from": "dayuntil",
+      "to": "dayuntil"
+    }
+  ],
+  "objectBindings": {
+    "build.crmroom": {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmroom"
+    }
+  }
+}

@@ -1,0 +1,2777 @@
+{
+  "name": "crmgroup",
+  "title": "Group reservation",
+  "fields": [
+    {
+      "name": "opportunity",
+      "title": "Opportunity",
+      "type": "reference",
+      "ref": "build.crmopportunity",
+      "inverse": "groups",
+      "required": true
+    },
+    {
+      "name": "offer",
+      "title": "Provider lodging offer",
+      "type": "reference",
+      "ref": "build.crmlodgingoffer",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Number of rooms",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Booking unit",
+      "type": "choice",
+      "choices": "day,hour",
+      "required": true
+    },
+    {
+      "name": "dayfrom",
+      "title": "Arrival date",
+      "type": "date",
+      "when": "unit=day",
+      "required": true
+    },
+    {
+      "name": "dayuntil",
+      "title": "Departure date",
+      "type": "date",
+      "when": "unit=day",
+      "required": true
+    },
+    {
+      "name": "fromat",
+      "title": "Start time",
+      "type": "datetime",
+      "when": "unit=hour",
+      "required": true
+    },
+    {
+      "name": "untilat",
+      "title": "End time",
+      "type": "datetime",
+      "when": "unit=hour",
+      "required": true
+    },
+    {
+      "name": "expires",
+      "title": "Group hold cutoff",
+      "type": "datetime",
+      "required": true
+    },
+    {
+      "name": "closing",
+      "title": "Closing intent",
+      "type": "choice",
+      "choices": "pending,lost,failure"
+    }
+  ],
+  "access": [
+    {
+      "role": "sales",
+      "read": "own",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "salesmanager",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "rooms",
+      "from": "rooms",
+      "direction": "inverse",
+      "object": "build.crmroom",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [
+    {
+      "name": "declaredrooms",
+      "kind": "expression",
+      "fields": [
+        "opportunity",
+        "offer",
+        "quantity",
+        "unit",
+        "dayfrom",
+        "dayuntil",
+        "fromat",
+        "untilat",
+        "expires"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "count",
+                "kind": "integer",
+                "agg": {
+                  "source": "rooms"
+                }
+              },
+              {
+                "op": "",
+                "kind": "integer",
+                "ref": "quantity"
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "kind": "boolean",
+            "agg": {
+              "source": "rooms"
+            },
+            "in": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "item.roomtype"
+                    },
+                    {
+                      "op": "path",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "offer"
+                        }
+                      ],
+                      "path": [
+                        "providerid"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "item.unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "unit"
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "item.expires"
+                    },
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "expires"
+                    }
+                  ]
+                },
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "and",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "ref": "unit"
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "day"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "date",
+                              "ref": "item.dayfrom"
+                            },
+                            {
+                              "op": "",
+                              "kind": "date",
+                              "ref": "dayfrom"
+                            }
+                          ]
+                        },
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "date",
+                              "ref": "item.dayuntil"
+                            },
+                            {
+                              "op": "",
+                              "kind": "date",
+                              "ref": "dayuntil"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "and",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "ref": "unit"
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "hour"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "item.fromat"
+                            },
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "fromat"
+                            }
+                          ]
+                        },
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "item.untilat"
+                            },
+                            {
+                              "op": "",
+                              "kind": "datetime",
+                              "ref": "untilat"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "message": "The group and its exact room requests must agree.",
+      "reads": {
+        "collections": {
+          "rooms": {
+            "app": "build",
+            "object": "build.crmroom",
+            "set": "rooms",
+            "policy": "complete"
+          }
+        }
+      }
+    }
+  ],
+  "states": [
+    {
+      "name": "draft",
+      "title": "Draft"
+    },
+    {
+      "name": "holding",
+      "title": "Holding"
+    },
+    {
+      "name": "held",
+      "title": "Held"
+    },
+    {
+      "name": "confirming",
+      "title": "Confirming"
+    },
+    {
+      "name": "won",
+      "title": "Won"
+    },
+    {
+      "name": "compensating",
+      "title": "Compensating"
+    },
+    {
+      "name": "releasing",
+      "title": "Releasing"
+    },
+    {
+      "name": "needsreview",
+      "title": "Needsreview"
+    },
+    {
+      "name": "released",
+      "title": "Released"
+    },
+    {
+      "name": "failed",
+      "title": "Failed"
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.crmgroup",
+    "steps": [
+      {
+        "name": "roomsday",
+        "kind": "for-each",
+        "forEach": {
+          "range": {
+            "from": {
+              "op": "",
+              "kind": "integer",
+              "lit": {
+                "value": 0
+              }
+            },
+            "until": {
+              "op": "",
+              "kind": "integer",
+              "ref": "quantity"
+            },
+            "unit": "item",
+            "step": 1,
+            "limit": 20
+          },
+          "steps": [
+            {
+              "name": "roomnumberday",
+              "kind": "sequence",
+              "sequence": {
+                "Name": "crmrooms",
+                "Pattern": "GR-{year}-{n:6}",
+                "Yearly": true
+              }
+            },
+            {
+              "name": "roomday",
+              "kind": "create",
+              "target": {
+                "type": "build.crmroom"
+              },
+              "changes": [
+                {
+                  "field": "plan",
+                  "from": "$subject"
+                },
+                {
+                  "field": "bookingkey",
+                  "expr": {
+                    "op": "concat",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "caller.tenant"
+                      },
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "lit": {
+                          "value": "-"
+                        }
+                      },
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "step.roomnumberday"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "field": "ordinal",
+                  "expr": {
+                    "op": "+",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "row.start"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "field": "guest",
+                  "expr": {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "opportunity"
+                      }
+                    ],
+                    "path": [
+                      "title"
+                    ]
+                  }
+                },
+                {
+                  "field": "roomtype",
+                  "expr": {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "offer"
+                      }
+                    ],
+                    "path": [
+                      "providerid"
+                    ]
+                  }
+                },
+                {
+                  "field": "unit",
+                  "expr": {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "unit"
+                  }
+                },
+                {
+                  "field": "expires",
+                  "expr": {
+                    "op": "",
+                    "kind": "datetime",
+                    "ref": "expires"
+                  }
+                },
+                {
+                  "field": "dayfrom",
+                  "expr": {
+                    "op": "",
+                    "kind": "date",
+                    "ref": "dayfrom"
+                  }
+                },
+                {
+                  "field": "dayuntil",
+                  "expr": {
+                    "op": "",
+                    "kind": "date",
+                    "ref": "dayuntil"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "when": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "choice",
+              "ref": "unit"
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "day"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "roomshour",
+        "kind": "for-each",
+        "forEach": {
+          "range": {
+            "from": {
+              "op": "",
+              "kind": "integer",
+              "lit": {
+                "value": 0
+              }
+            },
+            "until": {
+              "op": "",
+              "kind": "integer",
+              "ref": "quantity"
+            },
+            "unit": "item",
+            "step": 1,
+            "limit": 20
+          },
+          "steps": [
+            {
+              "name": "roomnumberhour",
+              "kind": "sequence",
+              "sequence": {
+                "Name": "crmrooms",
+                "Pattern": "GR-{year}-{n:6}",
+                "Yearly": true
+              }
+            },
+            {
+              "name": "roomhour",
+              "kind": "create",
+              "target": {
+                "type": "build.crmroom"
+              },
+              "changes": [
+                {
+                  "field": "plan",
+                  "from": "$subject"
+                },
+                {
+                  "field": "bookingkey",
+                  "expr": {
+                    "op": "concat",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "caller.tenant"
+                      },
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "lit": {
+                          "value": "-"
+                        }
+                      },
+                      {
+                        "op": "",
+                        "kind": "text",
+                        "ref": "step.roomnumberhour"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "field": "ordinal",
+                  "expr": {
+                    "op": "+",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "ref": "row.start"
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "field": "guest",
+                  "expr": {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "opportunity"
+                      }
+                    ],
+                    "path": [
+                      "title"
+                    ]
+                  }
+                },
+                {
+                  "field": "roomtype",
+                  "expr": {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "offer"
+                      }
+                    ],
+                    "path": [
+                      "providerid"
+                    ]
+                  }
+                },
+                {
+                  "field": "unit",
+                  "expr": {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "unit"
+                  }
+                },
+                {
+                  "field": "expires",
+                  "expr": {
+                    "op": "",
+                    "kind": "datetime",
+                    "ref": "expires"
+                  }
+                },
+                {
+                  "field": "fromat",
+                  "expr": {
+                    "op": "",
+                    "kind": "datetime",
+                    "ref": "fromat"
+                  }
+                },
+                {
+                  "field": "untilat",
+                  "expr": {
+                    "op": "",
+                    "kind": "datetime",
+                    "ref": "untilat"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "when": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "choice",
+              "ref": "unit"
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "hour"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "holding",
+        "kind": "update",
+        "target": {
+          "type": "build.crmgroup",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "state",
+            "expr": {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "holding"
+              }
+            }
+          },
+          {
+            "field": "closing",
+            "expr": {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "pending"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "opportunity"
+                }
+              ],
+              "path": [
+                "state"
+              ]
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "open"
+              }
+            }
+          ]
+        },
+        {
+          "op": "path",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "offer"
+            }
+          ],
+          "path": [
+            "active"
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "choice",
+              "ref": "unit"
+            },
+            {
+              "op": "path",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "offer"
+                }
+              ],
+              "path": [
+                "unit"
+              ]
+            }
+          ]
+        },
+        {
+          "op": ">",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "integer",
+              "ref": "quantity"
+            },
+            {
+              "op": "",
+              "kind": "integer",
+              "lit": {
+                "value": 0
+              }
+            }
+          ]
+        },
+        {
+          "op": "<=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "integer",
+              "ref": "quantity"
+            },
+            {
+              "op": "",
+              "kind": "integer",
+              "lit": {
+                "value": 20
+              }
+            }
+          ]
+        },
+        {
+          "op": ">",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "datetime",
+              "ref": "expires"
+            },
+            {
+              "op": "$now",
+              "kind": "datetime"
+            }
+          ]
+        },
+        {
+          "op": "or",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "day"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "<",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "date",
+                      "ref": "dayfrom"
+                    },
+                    {
+                      "op": "",
+                      "kind": "date",
+                      "ref": "dayuntil"
+                    }
+                  ]
+                },
+                {
+                  "op": "<",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "expires"
+                    },
+                    {
+                      "op": "start-of-day",
+                      "kind": "datetime",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "date",
+                          "ref": "dayfrom"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "unit"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "hour"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "<",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "fromat"
+                    },
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "untilat"
+                    }
+                  ]
+                },
+                {
+                  "op": "<",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "expires"
+                    },
+                    {
+                      "op": "",
+                      "kind": "datetime",
+                      "ref": "fromat"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "message": "Choose an open owned opportunity, active offer, bounded room count, valid stay and future cutoff."
+  },
+  "actions": [
+    {
+      "name": "assess",
+      "title": "Assess original room receipts",
+      "from": [
+        "holding",
+        "held",
+        "confirming",
+        "won",
+        "compensating",
+        "releasing",
+        "needsreview",
+        "released",
+        "failed"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmgroup",
+        "steps": [
+          {
+            "name": "receipts",
+            "kind": "update",
+            "target": {
+              "type": "build.crmgroup",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "coalesce",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "if",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "or",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "and",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "holding"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "any",
+                                  "kind": "boolean",
+                                  "agg": {
+                                    "source": "rooms"
+                                  },
+                                  "in": {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "holdrefused"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "and",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "confirming"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "any",
+                                  "kind": "boolean",
+                                  "agg": {
+                                    "source": "rooms"
+                                  },
+                                  "in": {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "confirmrefused"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "if",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "all",
+                              "kind": "boolean",
+                              "agg": {
+                                "source": "rooms"
+                              },
+                              "in": {
+                                "op": "or",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "released"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "canceled"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "holdrefused"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "failed"
+                              }
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "compensating"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": null
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "if",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "ref": "state"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "holding"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "all",
+                              "kind": "boolean",
+                              "agg": {
+                                "source": "rooms"
+                              },
+                              "in": {
+                                "op": "=",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "ref": "item.state"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "lit": {
+                                      "value": "held"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "held"
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": null
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "if",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "ref": "state"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "confirming"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "all",
+                              "kind": "boolean",
+                              "agg": {
+                                "source": "rooms"
+                              },
+                              "in": {
+                                "op": "=",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "ref": "item.state"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "lit": {
+                                      "value": "booked"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "won"
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": null
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "if",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "or",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "compensating"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "releasing"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "needsreview"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "op": "all",
+                              "kind": "boolean",
+                              "agg": {
+                                "source": "rooms"
+                              },
+                              "in": {
+                                "op": "or",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "released"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "canceled"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "holdrefused"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "if",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "ref": "closing"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "failure"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "failed"
+                              }
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "released"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": null
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "if",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "or",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "compensating"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "releasing"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "needsreview"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "op": "any",
+                              "kind": "boolean",
+                              "agg": {
+                                "source": "rooms"
+                              },
+                              "in": {
+                                "op": "or",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "releaserefused"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "cancelrefused"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "needsreview"
+                          }
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": null
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "state"
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "closing",
+                "expr": {
+                  "op": "if",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "or",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "ref": "state"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "holding"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "any",
+                              "kind": "boolean",
+                              "agg": {
+                                "source": "rooms"
+                              },
+                              "in": {
+                                "op": "=",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "ref": "item.state"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "lit": {
+                                      "value": "holdrefused"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "and",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "ref": "state"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "confirming"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "any",
+                              "kind": "boolean",
+                              "agg": {
+                                "source": "rooms"
+                              },
+                              "in": {
+                                "op": "=",
+                                "kind": "boolean",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "ref": "item.state"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "choice",
+                                    "lit": {
+                                      "value": "confirmrefused"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "failure"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "closing"
+                    }
+                  ]
+                }
+              }
+            ],
+            "when": {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "state"
+                    },
+                    {
+                      "op": "coalesce",
+                      "kind": "choice",
+                      "args": [
+                        {
+                          "op": "if",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "or",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "and",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "ref": "state"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "holding"
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "any",
+                                      "kind": "boolean",
+                                      "agg": {
+                                        "source": "rooms"
+                                      },
+                                      "in": {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "holdrefused"
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "and",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "ref": "state"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "confirming"
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "any",
+                                      "kind": "boolean",
+                                      "agg": {
+                                        "source": "rooms"
+                                      },
+                                      "in": {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "confirmrefused"
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "op": "if",
+                              "kind": "choice",
+                              "args": [
+                                {
+                                  "op": "all",
+                                  "kind": "boolean",
+                                  "agg": {
+                                    "source": "rooms"
+                                  },
+                                  "in": {
+                                    "op": "or",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "released"
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "canceled"
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "holdrefused"
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "failed"
+                                  }
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "compensating"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": null
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "if",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "and",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "holding"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "all",
+                                  "kind": "boolean",
+                                  "agg": {
+                                    "source": "rooms"
+                                  },
+                                  "in": {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "held"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "held"
+                              }
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": null
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "if",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "and",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "state"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "confirming"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "all",
+                                  "kind": "boolean",
+                                  "agg": {
+                                    "source": "rooms"
+                                  },
+                                  "in": {
+                                    "op": "=",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "ref": "item.state"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "choice",
+                                        "lit": {
+                                          "value": "booked"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "won"
+                              }
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": null
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "if",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "and",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "or",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "ref": "state"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "compensating"
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "ref": "state"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "releasing"
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "ref": "state"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "needsreview"
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "all",
+                                  "kind": "boolean",
+                                  "agg": {
+                                    "source": "rooms"
+                                  },
+                                  "in": {
+                                    "op": "or",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "released"
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "canceled"
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "holdrefused"
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "if",
+                              "kind": "choice",
+                              "args": [
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "ref": "closing"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "failure"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "failed"
+                                  }
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "released"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": null
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "if",
+                          "kind": "choice",
+                          "args": [
+                            {
+                              "op": "and",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "op": "or",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "ref": "state"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "compensating"
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "ref": "state"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "releasing"
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "ref": "state"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "needsreview"
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "any",
+                                  "kind": "boolean",
+                                  "agg": {
+                                    "source": "rooms"
+                                  },
+                                  "in": {
+                                    "op": "or",
+                                    "kind": "boolean",
+                                    "args": [
+                                      {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "releaserefused"
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "=",
+                                        "kind": "boolean",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "ref": "item.state"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "choice",
+                                            "lit": {
+                                              "value": "cancelrefused"
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": "needsreview"
+                              }
+                            },
+                            {
+                              "op": "",
+                              "kind": "choice",
+                              "lit": {
+                                "value": null
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "state"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "reads": {
+          "collections": {
+            "rooms": {
+              "app": "build",
+              "object": "build.crmroom",
+              "set": "rooms",
+              "policy": "complete"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "win",
+      "title": "Confirm the held group",
+      "from": [
+        "held"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmgroup",
+        "steps": [
+          {
+            "name": "confirming",
+            "kind": "update",
+            "target": {
+              "type": "build.crmgroup",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "confirming"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "opportunity"
+                }
+              ],
+              "path": [
+                "state"
+              ]
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "closing"
+              }
+            }
+          ]
+        },
+        "message": "The opportunity must be awaiting its original group confirmation."
+      }
+    },
+    {
+      "name": "lose",
+      "title": "Release group rooms",
+      "from": [
+        "holding",
+        "held",
+        "confirming",
+        "won"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmgroup",
+        "steps": [
+          {
+            "name": "release",
+            "kind": "update",
+            "target": {
+              "type": "build.crmgroup",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "releasing"
+                  }
+                }
+              },
+              {
+                "field": "closing",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "lost"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "not",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "path",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "opportunity"
+                    }
+                  ],
+                  "path": [
+                    "state"
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "won"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "message": "A completed won opportunity cannot be silently canceled."
+      }
+    },
+    {
+      "name": "expire",
+      "title": "Release an expired group hold",
+      "from": [
+        "holding",
+        "held",
+        "confirming"
+      ],
+      "roles": [
+        "sales",
+        "salesmanager"
+      ],
+      "transaction": {
+        "subject": "build.crmgroup",
+        "steps": [
+          {
+            "name": "release",
+            "kind": "update",
+            "target": {
+              "type": "build.crmgroup",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "releasing"
+                  }
+                }
+              },
+              {
+                "field": "closing",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "lost"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "guard": {
+          "op": "<=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "datetime",
+              "ref": "expires"
+            },
+            {
+              "op": "$now",
+              "kind": "datetime"
+            }
+          ]
+        },
+        "message": "The original group cutoff has not been reached."
+      }
+    }
+  ],
+  "type": "build.crmgroup"
+}

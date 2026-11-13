@@ -1,0 +1,10 @@
+{
+  "name": "productionbatchupstream",
+  "title": "Accepted upstream batches",
+  "description": "Published production batches visible to the calling member.",
+  "object": "build.productionbatch",
+  "sort": [
+    "id"
+  ],
+  "limit": 200
+}

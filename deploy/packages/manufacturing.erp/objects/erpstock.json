@@ -1,0 +1,326 @@
+{
+  "name": "erpstock",
+  "title": "Inventory balance",
+  "fields": [
+    {
+      "name": "product",
+      "title": "Item",
+      "type": "reference",
+      "ref": "build.erpitem",
+      "inverse": "balances",
+      "required": true
+    },
+    {
+      "name": "bucket",
+      "title": "Balance kind",
+      "type": "choice",
+      "choices": "quantity,value",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Stock unit or currency",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "amount",
+      "title": "Balance",
+      "type": "decimal"
+    }
+  ],
+  "access": [
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "quantitymoves",
+      "from": "quantitymoves",
+      "direction": "inverse",
+      "object": "build.erpmove",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "valuemoves",
+      "from": "valuemoves",
+      "direction": "inverse",
+      "object": "build.erpmove",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [
+    {
+      "name": "onebalance",
+      "kind": "unique",
+      "fields": [
+        "product",
+        "bucket"
+      ],
+      "message": "An item has one balance for each quantity or value bucket."
+    },
+    {
+      "name": "actualmoves",
+      "kind": "expression",
+      "fields": [
+        "product",
+        "bucket",
+        "unit",
+        "amount"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "coalesce",
+            "kind": "decimal",
+            "args": [
+              {
+                "op": "",
+                "kind": "decimal",
+                "ref": "amount"
+              },
+              {
+                "op": "",
+                "kind": "decimal",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": "if",
+            "kind": "decimal",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "bucket"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "quantity"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "sum",
+                "kind": "decimal",
+                "agg": {
+                  "source": "quantitymoves"
+                },
+                "in": {
+                  "op": "coalesce",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "item.quantity"
+                    },
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "op": "sum",
+                "kind": "decimal",
+                "agg": {
+                  "source": "valuemoves"
+                },
+                "in": {
+                  "op": "coalesce",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "item.value"
+                    },
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "message": "A balance equals its complete accepted inventory movements.",
+      "reads": {
+        "collections": {
+          "quantitymoves": {
+            "app": "build",
+            "object": "build.erpmove",
+            "set": "quantitymoves",
+            "policy": "complete"
+          },
+          "valuemoves": {
+            "app": "build",
+            "object": "build.erpmove",
+            "set": "valuemoves",
+            "policy": "complete"
+          }
+        }
+      }
+    },
+    {
+      "name": "balanceidentity",
+      "kind": "immutable",
+      "fields": [
+        "product",
+        "bucket",
+        "unit",
+        "archived"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "balanceunit",
+      "kind": "expression",
+      "fields": [
+        "product",
+        "bucket",
+        "unit"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "text",
+            "ref": "unit"
+          },
+          {
+            "op": "if",
+            "kind": "text",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "bucket"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "quantity"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "path",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "product"
+                  }
+                ],
+                "path": [
+                  "unit"
+                ]
+              },
+              {
+                "op": "path",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "product"
+                  }
+                ],
+                "path": [
+                  "currency"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "A balance uses its item stock unit or cost currency."
+    }
+  ],
+  "type": "build.erpstock"
+}

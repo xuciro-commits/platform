@@ -1,0 +1,1085 @@
+{
+  "format": 4,
+  "name": "heatingdevices",
+  "title": "Device details",
+  "description": "Inspect a device, its measurement points and its heating circuits.",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.device"
+  },
+  "dataBindings": [
+    {
+      "id": "device-note",
+      "owner": "device-note",
+      "kind": "presentation",
+      "object": {
+        "app": "",
+        "kind": "",
+        "name": ""
+      },
+      "ports": {
+        "widget": "text"
+      }
+    },
+    {
+      "id": "device-filter",
+      "owner": "device-filter",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device",
+        "fields": [
+          {
+            "name": "building"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "state"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "building"
+        },
+        {
+          "name": "kind"
+        },
+        {
+          "name": "state"
+        }
+      ],
+      "ports": {
+        "widget": "filter"
+      }
+    },
+    {
+      "id": "device-count",
+      "owner": "device-count",
+      "kind": "presentation",
+      "object": {
+        "app": "",
+        "kind": "",
+        "name": ""
+      },
+      "ports": {
+        "measure": "count",
+        "parentable": "true",
+        "widget": "metric"
+      }
+    },
+    {
+      "id": "health-average",
+      "owner": "health-average",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device"
+      },
+      "fieldSlots": {
+        "measure": [
+          {
+            "name": "healthscore",
+            "transform": "avg"
+          }
+        ]
+      },
+      "ports": {
+        "measure": "avg:healthscore",
+        "parentable": "true",
+        "widget": "metric"
+      }
+    },
+    {
+      "id": "device-list",
+      "owner": "device-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device",
+        "fields": [
+          {
+            "name": "code"
+          },
+          {
+            "name": "name"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "latesttemp"
+          },
+          {
+            "name": "healthscore"
+          },
+          {
+            "name": "checkedat"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "code"
+        },
+        {
+          "name": "name"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "kind"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "latesttemp"
+        },
+        {
+          "name": "healthscore"
+        },
+        {
+          "name": "checkedat"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "device-status",
+      "owner": "device-status",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device"
+      },
+      "fieldSlots": {
+        "statusTracker.field": [
+          {
+            "name": "state"
+          }
+        ]
+      },
+      "ports": {
+        "recordVariable": "device",
+        "selectionMode": "read",
+        "widget": "status-tracker"
+      }
+    },
+    {
+      "id": "device-detail",
+      "owner": "device-detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device",
+        "fields": [
+          {
+            "name": "code"
+          },
+          {
+            "name": "name"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "zone"
+          },
+          {
+            "name": "devicekey"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "latesttemp"
+          },
+          {
+            "name": "healthscore"
+          },
+          {
+            "name": "checkedat"
+          },
+          {
+            "name": "warnlimit"
+          },
+          {
+            "name": "healthmin"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "code"
+        },
+        {
+          "name": "name"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "zone"
+        },
+        {
+          "name": "devicekey"
+        },
+        {
+          "name": "kind"
+        },
+        {
+          "name": "latesttemp"
+        },
+        {
+          "name": "healthscore"
+        },
+        {
+          "name": "checkedat"
+        },
+        {
+          "name": "warnlimit"
+        },
+        {
+          "name": "healthmin"
+        }
+      ],
+      "ports": {
+        "recordVariable": "device",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    },
+    {
+      "id": "device-actions",
+      "owner": "device-actions",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.device"
+      },
+      "model": {
+        "type": "build.device"
+      },
+      "ports": {
+        "recordVariable": "device",
+        "selectionMode": "read",
+        "widget": "actions"
+      }
+    },
+    {
+      "id": "point-list",
+      "owner": "point-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.point"
+      },
+      "model": {
+        "type": "build.point",
+        "fields": [
+          {
+            "name": "signal"
+          },
+          {
+            "name": "name"
+          },
+          {
+            "name": "unit"
+          },
+          {
+            "name": "datatype"
+          },
+          {
+            "name": "purpose"
+          }
+        ],
+        "relation": {
+          "parentType": "build.device",
+          "field": "device"
+        }
+      },
+      "ports": {
+        "parentable": "true",
+        "selection": "point",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "circuit-list",
+      "owner": "circuit-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.circuit"
+      },
+      "model": {
+        "type": "build.circuit",
+        "fields": [
+          {
+            "name": "code"
+          },
+          {
+            "name": "name"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "latesttemp"
+          },
+          {
+            "name": "requestedopening"
+          },
+          {
+            "name": "actualopening"
+          }
+        ],
+        "relation": {
+          "parentType": "build.device",
+          "field": "device"
+        }
+      },
+      "ports": {
+        "parentable": "true",
+        "selection": "circuit",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "circuit-detail",
+      "owner": "circuit-detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.circuit"
+      },
+      "model": {
+        "type": "build.circuit",
+        "fields": [
+          {
+            "name": "code"
+          },
+          {
+            "name": "name"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "zone"
+          },
+          {
+            "name": "devicekey"
+          },
+          {
+            "name": "requestedopening"
+          },
+          {
+            "name": "actualopening"
+          },
+          {
+            "name": "latesttemp"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "code"
+        },
+        {
+          "name": "name"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "zone"
+        },
+        {
+          "name": "devicekey"
+        },
+        {
+          "name": "requestedopening"
+        },
+        {
+          "name": "actualopening"
+        },
+        {
+          "name": "latesttemp"
+        }
+      ],
+      "ports": {
+        "recordVariable": "circuit",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    },
+    {
+      "id": "circuit-actions",
+      "owner": "circuit-actions",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.circuit"
+      },
+      "model": {
+        "type": "build.circuit"
+      },
+      "ports": {
+        "recordVariable": "circuit",
+        "selectionMode": "read",
+        "widget": "actions"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.warn"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.markoffline"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.assesshealth"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.restore"
+        }
+      ]
+    },
+    {
+      "id": "device-note",
+      "owner": "device-note",
+      "binding": "device-note"
+    },
+    {
+      "id": "device-filter",
+      "owner": "device-filter",
+      "binding": "device-filter"
+    },
+    {
+      "id": "device-count",
+      "owner": "device-count",
+      "binding": "device-count"
+    },
+    {
+      "id": "health-average",
+      "owner": "health-average",
+      "binding": "health-average"
+    },
+    {
+      "id": "device-list",
+      "owner": "device-list",
+      "binding": "device-list"
+    },
+    {
+      "id": "device-status",
+      "owner": "device-status",
+      "binding": "device-status"
+    },
+    {
+      "id": "device-detail",
+      "owner": "device-detail",
+      "binding": "device-detail"
+    },
+    {
+      "id": "device-actions",
+      "owner": "device-actions",
+      "binding": "device-actions",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.warn"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.markoffline"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.assesshealth"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.device.restore"
+        }
+      ]
+    },
+    {
+      "id": "point-list",
+      "owner": "point-list",
+      "binding": "point-list"
+    },
+    {
+      "id": "circuit-list",
+      "owner": "circuit-list",
+      "binding": "circuit-list"
+    },
+    {
+      "id": "circuit-detail",
+      "owner": "circuit-detail",
+      "binding": "circuit-detail"
+    },
+    {
+      "id": "circuit-actions",
+      "owner": "circuit-actions",
+      "binding": "circuit-actions",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.circuit.setvalve"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.circuit.confirmposition"
+        }
+      ]
+    }
+  ],
+  "inputSchema": {
+    "variables": {
+      "circuit": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "circuit-list"
+        }
+      },
+      "device": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "device-list"
+        }
+      }
+    },
+    "selections": [
+      {
+        "name": "point",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.point"
+        }
+      },
+      {
+        "name": "circuit",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.circuit"
+        }
+      }
+    ]
+  },
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "circuit-actions",
+        "parent": "row-8",
+        "kind": "page",
+        "binding": "circuit-actions",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "circuit-detail",
+        "parent": "row-8",
+        "kind": "page",
+        "binding": "circuit-detail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "circuit-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "circuit-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "device-actions",
+        "parent": "row-5",
+        "kind": "page",
+        "binding": "device-actions",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "device-count",
+        "parent": "row-2",
+        "kind": "page",
+        "binding": "device-count",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "device-detail",
+        "parent": "row-5",
+        "kind": "page",
+        "binding": "device-detail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "device-filter",
+        "parent": "root",
+        "kind": "page",
+        "binding": "device-filter",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "device-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "device-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "device-note",
+        "parent": "root",
+        "kind": "page",
+        "binding": "device-note",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "device-status",
+        "parent": "root",
+        "kind": "page",
+        "binding": "device-status",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "health-average",
+        "parent": "row-2",
+        "kind": "page",
+        "binding": "health-average",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "point-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "point-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-2",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-5",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-8",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      }
+    ],
+    "owners": {
+      "circuit-actions": "circuit-actions",
+      "circuit-detail": "circuit-detail",
+      "circuit-list": "circuit-list",
+      "device-actions": "device-actions",
+      "device-count": "device-count",
+      "device-detail": "device-detail",
+      "device-filter": "device-filter",
+      "device-list": "device-list",
+      "device-note": "device-note",
+      "device-status": "device-status",
+      "health-average": "health-average",
+      "point-list": "point-list"
+    },
+    "root": "root"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": {
+        "formatVersion": 2,
+        "nodes": {
+          "circuit-actions": {
+            "kind": "widget",
+            "section": "circuit-actions",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "circuit-detail": {
+            "kind": "widget",
+            "section": "circuit-detail",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "circuit-list": {
+            "kind": "widget",
+            "section": "circuit-list"
+          },
+          "device-actions": {
+            "kind": "widget",
+            "section": "device-actions",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "device-count": {
+            "kind": "widget",
+            "section": "device-count",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "device-detail": {
+            "kind": "widget",
+            "section": "device-detail",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "device-filter": {
+            "kind": "widget",
+            "section": "device-filter"
+          },
+          "device-list": {
+            "kind": "widget",
+            "section": "device-list"
+          },
+          "device-note": {
+            "kind": "widget",
+            "section": "device-note"
+          },
+          "device-status": {
+            "kind": "widget",
+            "section": "device-status"
+          },
+          "health-average": {
+            "kind": "widget",
+            "section": "health-average",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "point-list": {
+            "kind": "widget",
+            "section": "point-list"
+          },
+          "root": {
+            "children": [
+              "device-note",
+              "device-filter",
+              "row-2",
+              "device-list",
+              "device-status",
+              "row-5",
+              "point-list",
+              "circuit-list",
+              "row-8"
+            ],
+            "kind": "rows"
+          },
+          "row-2": {
+            "children": [
+              "device-count",
+              "health-average"
+            ],
+            "kind": "columns"
+          },
+          "row-5": {
+            "children": [
+              "device-detail",
+              "device-actions"
+            ],
+            "kind": "columns"
+          },
+          "row-8": {
+            "children": [
+              "circuit-detail",
+              "circuit-actions"
+            ],
+            "kind": "columns"
+          }
+        },
+        "root": "root",
+        "uiProfile": "platform.page.v2.111"
+      },
+      "sections": [
+        {
+          "binding": "device-note",
+          "configVersion": 1,
+          "id": "device-note",
+          "text": "Latest temperature and health score are recorded business summaries. Valve changes use declared Dispatch commands and status readback; a sent request does not prove completion.",
+          "title": "Readings and commands",
+          "triggers": [
+            "device-note"
+          ]
+        },
+        {
+          "binding": "device-filter",
+          "configVersion": 1,
+          "id": "device-filter",
+          "title": "Find devices",
+          "triggers": [
+            "device-filter"
+          ]
+        },
+        {
+          "binding": "device-count",
+          "configVersion": 1,
+          "id": "device-count",
+          "title": "Devices",
+          "triggers": [
+            "device-count"
+          ]
+        },
+        {
+          "binding": "health-average",
+          "configVersion": 1,
+          "id": "health-average",
+          "title": "Average health score",
+          "triggers": [
+            "health-average"
+          ]
+        },
+        {
+          "binding": "device-list",
+          "configVersion": 1,
+          "id": "device-list",
+          "showSearch": true,
+          "title": "Devices",
+          "triggers": [
+            "device-list"
+          ]
+        },
+        {
+          "binding": "device-status",
+          "configVersion": 1,
+          "id": "device-status",
+          "statusTracker": {
+            "stages": [
+              "healthy",
+              "warning",
+              "offline"
+            ]
+          },
+          "title": "Device status",
+          "triggers": [
+            "device-status"
+          ]
+        },
+        {
+          "binding": "device-detail",
+          "configVersion": 1,
+          "id": "device-detail",
+          "title": "Selected device",
+          "triggers": [
+            "device-detail"
+          ]
+        },
+        {
+          "binding": "device-actions",
+          "configVersion": 1,
+          "id": "device-actions",
+          "title": "Device actions",
+          "triggers": [
+            "device-actions"
+          ]
+        },
+        {
+          "binding": "point-list",
+          "configVersion": 1,
+          "id": "point-list",
+          "showSearch": true,
+          "title": "Declared measurement points",
+          "triggers": [
+            "point-list"
+          ]
+        },
+        {
+          "binding": "circuit-list",
+          "configVersion": 1,
+          "id": "circuit-list",
+          "showSearch": true,
+          "title": "Heating circuits for the selected device",
+          "triggers": [
+            "circuit-list"
+          ]
+        },
+        {
+          "binding": "circuit-detail",
+          "configVersion": 1,
+          "id": "circuit-detail",
+          "title": "Selected heating circuit",
+          "triggers": [
+            "circuit-detail"
+          ]
+        },
+        {
+          "binding": "circuit-actions",
+          "configVersion": 1,
+          "id": "circuit-actions",
+          "title": "Circuit actions",
+          "triggers": [
+            "circuit-actions"
+          ]
+        }
+      ]
+    }
+  }
+}

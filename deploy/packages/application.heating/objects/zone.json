@@ -1,0 +1,98 @@
+{
+  "name": "zone",
+  "type": "build.zone",
+  "title": "Heating zone",
+  "plural": "Heating zones",
+  "description": "Room comfort targets for the example site. Supply-water warning limits belong to each device.",
+  "fields": [
+    {
+      "name": "floor",
+      "title": "Floor",
+      "type": "reference",
+      "ref": "build.floor",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Zone name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "targettemp",
+      "title": "Target room temperature (C)",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "lowerlimit",
+      "title": "Lower room temperature (C)",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "upperlimit",
+      "title": "Upper room temperature (C)",
+      "type": "decimal",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "zonetemperatures",
+      "kind": "expression",
+      "fields": [
+        "lowerlimit",
+        "targettemp",
+        "upperlimit"
+      ],
+      "message": "Room temperature limits must contain the target.",
+      "translations": {
+        "zh-CN": "室温上下限必须包含目标温度。"
+      },
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "<=",
+            "kind": "boolean",
+            "args": [
+              {
+                "kind": "decimal",
+                "ref": "lowerlimit"
+              },
+              {
+                "kind": "decimal",
+                "ref": "targettemp"
+              }
+            ]
+          },
+          {
+            "op": "<=",
+            "kind": "boolean",
+            "args": [
+              {
+                "kind": "decimal",
+                "ref": "targettemp"
+              },
+              {
+                "kind": "decimal",
+                "ref": "upperlimit"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

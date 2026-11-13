@@ -1,0 +1,50 @@
+{
+  "name": "crmreviewquality",
+  "title": "Opportunity review advice evaluation",
+  "function": {
+    "ref": {
+      "app": "build",
+      "kind": "function",
+      "name": "crmreview"
+    },
+    "sourceVersion": "1.function-1"
+  },
+  "model": "",
+  "policy": {
+    "compareFields": [
+      "category",
+      "review"
+    ],
+    "minQuality": 1,
+    "maxCostUsd": 0.1,
+    "maxLatencyMillis": 30000,
+    "cases": [
+      {
+        "name": "missingfacts1",
+        "input": {
+          "title": "Conference group with no dates or room availability supplied",
+          "state": "open"
+        },
+        "expected": {
+          "summary": "Human reference: check the missing business facts before a consequential change.",
+          "category": "review",
+          "review": true,
+          "confidence": 0.9
+        }
+      },
+      {
+        "name": "missingfacts2",
+        "input": {
+          "title": "A request to win a group sale before capacity is confirmed",
+          "state": "open"
+        },
+        "expected": {
+          "summary": "Human reference: check the missing business facts before a consequential change.",
+          "category": "review",
+          "review": true,
+          "confidence": 0.9
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "id": "manufacturing.core",
+  "version": "1.0.0",
+  "namespace": "manufacturing.core",
+  "title": "Manufacturing Foundation",
+  "description": "Shared manufacturing contracts and supplier inquiry service.",
+  "artifact": "manufacturing-core.json"
+}

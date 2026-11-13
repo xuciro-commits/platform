@@ -1,0 +1,117 @@
+{
+  "name": "heatingposition",
+  "title": "Verified absolute valve position",
+  "description": "Synthetic teaching rules only. An incomplete, stale, uncertain or offline window cannot authorize a business decision. Raw samples remain external.",
+  "connection": {
+    "app": "build",
+    "kind": "connection",
+    "name": "heatingfield"
+  },
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.circuit"
+  },
+  "deviceField": "devicekey",
+  "signal": "position",
+  "unit": "%",
+  "path": "/observation",
+  "windowSeconds": 60,
+  "expectedRetentionSeconds": 3600,
+  "expectedGranularitySeconds": 1,
+  "roles": [
+    "user",
+    "builder"
+  ],
+  "scheduled": true,
+  "requireComplete": true,
+  "decision": {
+    "when": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "choice",
+              "ref": "record.state"
+            },
+            {
+              "kind": "choice",
+              "lit": {
+                "value": "adjusting"
+              }
+            }
+          ]
+        },
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "decimal",
+              "ref": "observation.latest"
+            },
+            {
+              "kind": "integer",
+              "ref": "record.requestedopening"
+            }
+          ]
+        },
+        {
+          "op": ">",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "datetime",
+              "ref": "observation.lastat"
+            },
+            {
+              "op": "coalesce",
+              "kind": "datetime",
+              "args": [
+                {
+                  "kind": "datetime",
+                  "ref": "record.requestedat"
+                },
+                {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "action": {
+      "app": "build",
+      "kind": "action",
+      "name": "build.circuit.confirmposition"
+    },
+    "inputs": {
+      "opening": {
+        "op": "round",
+        "kind": "integer",
+        "args": [
+          {
+            "kind": "decimal",
+            "ref": "observation.latest"
+          }
+        ]
+      },
+      "evidence": {
+        "kind": "text",
+        "lit": {
+          "value": "Fresh complete position observation matched the requested absolute opening"
+        }
+      },
+      "observedat": {
+        "kind": "datetime",
+        "ref": "observation.lastat"
+      }
+    }
+  }
+}

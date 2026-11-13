@@ -1,0 +1,228 @@
+{
+  "format": 4,
+  "name": "erppurchase",
+  "title": "Purchase orders",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.erppurchase"
+  },
+  "dataBindings": [
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erppurchase"
+      },
+      "model": {
+        "type": "build.erppurchase",
+        "fields": [
+          {
+            "name": "number"
+          },
+          {
+            "name": "supplier"
+          },
+          {
+            "name": "date"
+          },
+          {
+            "name": "currency"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "invoice"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "number"
+        },
+        {
+          "name": "supplier"
+        },
+        {
+          "name": "date"
+        },
+        {
+          "name": "currency"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "invoice"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erppurchase"
+      },
+      "model": {
+        "type": "build.erppurchase",
+        "fields": [
+          {
+            "name": "number"
+          },
+          {
+            "name": "supplier"
+          },
+          {
+            "name": "date"
+          },
+          {
+            "name": "currency"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "invoice"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "number"
+        },
+        {
+          "name": "supplier"
+        },
+        {
+          "name": "date"
+        },
+        {
+          "name": "currency"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "invoice"
+        }
+      ],
+      "ports": {
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erppurchase.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erppurchase.edit"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erppurchase.order"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erppurchase.request"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erppurchase.receive"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erppurchase.bill"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erppurchase.cancel"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "binding": "list"
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "binding": "detail"
+    }
+  ],
+  "inputSchema": {},
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "page",
+        "kind": "page"
+      },
+      {
+        "id": "binding:list",
+        "parent": "page",
+        "kind": "page",
+        "binding": "list"
+      },
+      {
+        "id": "binding:detail",
+        "parent": "page",
+        "kind": "page",
+        "binding": "detail"
+      }
+    ],
+    "owners": {
+      "detail": "binding:detail",
+      "list": "binding:list"
+    },
+    "root": "page"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": null,
+      "sections": [
+        {
+          "binding": "list",
+          "id": "list",
+          "triggers": [
+            "list"
+          ]
+        },
+        {
+          "binding": "detail",
+          "id": "detail",
+          "triggers": [
+            "detail"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "package": "application.production-consumer",
+  "version": "0.1.3",
+  "requires": [],
+  "artifact": "sha256:bc1525ab26281334d4889ff8124bec7a46fe940559940e47609bed5d2c95367f",
+  "assets": {
+    "app/productionconsumer": "sha256:9e5ccfd8995314d69a4bc34c3b44b388ec848bd5131931902ea87e85afebaf6a",
+    "connection/batchconsumerupstream": "sha256:815d9edc66b720c5b4b8913cbe7a6f6243f925e80315028d8cc219324ee50736",
+    "dataset/productionreceipts": "sha256:1e1953790526e49860d33c2cd97dc74eb5cc09eca8a10b3b34ffc9e08122cc6e",
+    "object/build.shopbatch": "sha256:86507d04dadd8385a735bf8f52866efb08896c9d28dbeeb8a44d46a97632bf4a",
+    "object/build.shoporder": "sha256:ac568835db9a362eafeb608324f5cb0c3f1f24cf2746c5357d324c5a031305a4",
+    "source/productionreceiptsource": "sha256:e5951ae79d88d7a750f8c0d6041f6e7b329930a140c2597436aaf342767eae96",
+    "writeback/productionconfirm": "sha256:1d831adeb1ff69e82a87e8d8341ffb4651569642de39c13cdea40fdde7921a87",
+    "writeback/productionstart": "sha256:764eee3ea27ad946f4cededd452e182bf76e88488a5a9ac1a14c415c93534dba"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "heatingfield",
+  "title": "Heating field gateway",
+  "kind": "http",
+  "credential": true
+}

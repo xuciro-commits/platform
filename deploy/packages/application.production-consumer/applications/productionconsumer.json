@@ -1,0 +1,35 @@
+{
+  "name": "productionconsumer",
+  "title": "Production batch execution",
+  "pages": [
+    "shoporder",
+    "shopbatch"
+  ],
+  "resources": [
+    {
+      "app": "build",
+      "kind": "connection",
+      "name": "batchconsumerupstream"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "productionstart"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "productionconfirm"
+    },
+    {
+      "app": "build",
+      "kind": "source",
+      "name": "productionreceiptsource"
+    },
+    {
+      "app": "build",
+      "kind": "dataset",
+      "name": "productionreceipts"
+    }
+  ]
+}

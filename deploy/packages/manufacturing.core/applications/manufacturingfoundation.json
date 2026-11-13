@@ -1,0 +1,30 @@
+{
+  "name": "manufacturingfoundation",
+  "title": "Manufacturing Foundation",
+  "icon": "boxes",
+  "pages": [
+    "mesleadtime"
+  ],
+  "resources": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.mesleadtime"
+    },
+    {
+      "app": "build",
+      "kind": "connection",
+      "name": "supplieragent"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "supplierinquiry"
+    },
+    {
+      "app": "build",
+      "kind": "query",
+      "name": "supplieranswers"
+    }
+  ]
+}

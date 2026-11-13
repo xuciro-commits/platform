@@ -1,0 +1,167 @@
+{
+  "format": 4,
+  "name": "erppartner",
+  "title": "Business partners",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.erppartner"
+  },
+  "dataBindings": [
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erppartner"
+      },
+      "model": {
+        "type": "build.erppartner",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "email"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "kind"
+        },
+        {
+          "name": "email"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.erppartner"
+      },
+      "model": {
+        "type": "build.erppartner",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "kind"
+          },
+          {
+            "name": "email"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "kind"
+        },
+        {
+          "name": "email"
+        }
+      ],
+      "ports": {
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erppartner.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.erppartner.edit"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "owner": "binding:list",
+      "binding": "list"
+    },
+    {
+      "id": "detail",
+      "owner": "binding:detail",
+      "binding": "detail"
+    }
+  ],
+  "inputSchema": {},
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "page",
+        "kind": "page"
+      },
+      {
+        "id": "binding:list",
+        "parent": "page",
+        "kind": "page",
+        "binding": "list"
+      },
+      {
+        "id": "binding:detail",
+        "parent": "page",
+        "kind": "page",
+        "binding": "detail"
+      }
+    ],
+    "owners": {
+      "detail": "binding:detail",
+      "list": "binding:list"
+    },
+    "root": "page"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": null,
+      "sections": [
+        {
+          "binding": "list",
+          "id": "list",
+          "triggers": [
+            "list"
+          ]
+        },
+        {
+          "binding": "detail",
+          "id": "detail",
+          "triggers": [
+            "detail"
+          ]
+        }
+      ]
+    }
+  }
+}

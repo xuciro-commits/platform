@@ -1,0 +1,72 @@
+{
+  "name": "productionbatches",
+  "title": "Partial production and cumulative limits",
+  "roots": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.batchproviderorder"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.batchproviderbatch"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.finishedstock"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.stockreceipt"
+    }
+  ],
+  "at": "2026-10-17T12:00:00Z",
+  "samples": [],
+  "steps": [
+    {
+      "type": "build.batchproviderorder",
+      "id": "P1",
+      "action": "build.batchproviderorder.create",
+      "payload": "{\"number\":\"PO-100\",\"product\":\"P-1\",\"quantity\":10,\"unitcost\":10,\"scrap\":0,\"yield\":0}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.batchproviderorder",
+      "id": "P1",
+      "action": "build.batchproviderorder.start",
+      "payload": "{\"shoporder\":\"W1\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.batchproviderorder",
+      "id": "P1",
+      "action": "build.batchproviderorder.confirm",
+      "payload": "{\"shoporder\":\"W1\",\"batch\":\"A\",\"scrap\":1,\"final\":false,\"yield\":3}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.batchproviderorder",
+      "id": "P1",
+      "action": "build.batchproviderorder.confirm",
+      "payload": "{\"shoporder\":\"W2\",\"batch\":\"B\",\"scrap\":0,\"final\":false,\"yield\":7}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.batchproviderorder",
+      "id": "P1",
+      "action": "build.batchproviderorder.confirm",
+      "payload": "{\"shoporder\":\"W2\",\"batch\":\"B\",\"scrap\":1,\"final\":false,\"yield\":5}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.batchproviderorder",
+      "id": "P1",
+      "action": "build.batchproviderorder.confirm",
+      "payload": "{\"shoporder\":\"W2\",\"batch\":\"C\",\"scrap\":0,\"final\":false,\"yield\":1}",
+      "expect": "refused"
+    }
+  ]
+}

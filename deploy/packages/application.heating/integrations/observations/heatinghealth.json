@@ -1,0 +1,105 @@
+{
+  "name": "heatinghealth",
+  "title": "Device health assessment",
+  "description": "Synthetic teaching rules only. An incomplete, stale, uncertain or offline window cannot authorize a business decision. Raw samples remain external.",
+  "connection": {
+    "app": "build",
+    "kind": "connection",
+    "name": "heatingfield"
+  },
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.device"
+  },
+  "deviceField": "devicekey",
+  "signal": "health",
+  "unit": "score",
+  "path": "/observation",
+  "windowSeconds": 60,
+  "expectedRetentionSeconds": 3600,
+  "expectedGranularitySeconds": 1,
+  "roles": [
+    "user",
+    "builder"
+  ],
+  "scheduled": true,
+  "requireComplete": true,
+  "decision": {
+    "when": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "choice",
+              "ref": "record.state"
+            },
+            {
+              "kind": "choice",
+              "lit": {
+                "value": "healthy"
+              }
+            }
+          ]
+        },
+        {
+          "op": ">=",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "decimal",
+              "ref": "observation.latest"
+            },
+            {
+              "kind": "decimal",
+              "lit": {
+                "value": "0"
+              }
+            }
+          ]
+        },
+        {
+          "op": "<",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "decimal",
+              "ref": "observation.latest"
+            },
+            {
+              "kind": "integer",
+              "ref": "record.healthmin"
+            }
+          ]
+        }
+      ]
+    },
+    "action": {
+      "app": "build",
+      "kind": "action",
+      "name": "build.device.assesshealth"
+    },
+    "inputs": {
+      "score": {
+        "op": "round",
+        "kind": "integer",
+        "args": [
+          {
+            "kind": "decimal",
+            "ref": "observation.latest"
+          }
+        ]
+      },
+      "summary": {
+        "kind": "text",
+        "lit": {
+          "value": "Health score is below the configured minimum"
+        }
+      }
+    }
+  }
+}

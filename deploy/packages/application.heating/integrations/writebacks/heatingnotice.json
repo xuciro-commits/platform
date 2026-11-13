@@ -1,0 +1,23 @@
+{
+  "name": "heatingnotice",
+  "title": "Send accepted temperature alarm",
+  "connection": "propertyfeed",
+  "object": "build.device",
+  "on": "warn",
+  "method": "POST",
+  "path": "alarms",
+  "mapping": [
+    {
+      "from": "id",
+      "to": "device"
+    },
+    {
+      "from": "summary",
+      "to": "summary"
+    },
+    {
+      "from": "reading",
+      "to": "acceptedTemperature"
+    }
+  ]
+}

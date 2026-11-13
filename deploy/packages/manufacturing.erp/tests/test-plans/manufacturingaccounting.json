@@ -1,0 +1,75 @@
+{
+  "name": "manufacturingaccounting",
+  "title": "Complete decimal journal and frozen lines",
+  "roots": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.erpentry"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.erpline"
+    }
+  ],
+  "at": "2026-10-21T09:00:00Z",
+  "steps": [
+    {
+      "type": "build.erpentry",
+      "id": "portablejournal",
+      "action": "build.erpentry.create",
+      "payload": "{\"date\":\"2026-10-12\",\"currency\":\"USD\",\"reference\":\"Portable decimal journal\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.erpline",
+      "id": "portabledebit1",
+      "action": "build.erpline.create",
+      "payload": "{\"document\":\"portablejournal\",\"account\":\"acc-1403\",\"side\":\"debit\",\"amount\":0.1}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.erpline",
+      "id": "portabledebit2",
+      "action": "build.erpline.create",
+      "payload": "{\"document\":\"portablejournal\",\"account\":\"acc-1403\",\"side\":\"debit\",\"amount\":0.2}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.erpline",
+      "id": "portablecredit",
+      "action": "build.erpline.create",
+      "payload": "{\"document\":\"portablejournal\",\"account\":\"acc-2290\",\"side\":\"credit\",\"amount\":0.2}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.erpentry",
+      "id": "portablejournal",
+      "action": "build.erpentry.post",
+      "payload": "{}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.erpline",
+      "id": "portablecredit",
+      "action": "build.erpline.edit",
+      "payload": "{\"amount\":0.3}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.erpentry",
+      "id": "portablejournal",
+      "action": "build.erpentry.post",
+      "payload": "{}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.erpline",
+      "id": "portabledebit1",
+      "action": "build.erpline.edit",
+      "payload": "{\"amount\":1}",
+      "expect": "refused"
+    }
+  ]
+}

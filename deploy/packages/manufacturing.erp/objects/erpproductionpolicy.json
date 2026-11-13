@@ -1,0 +1,50 @@
+{
+  "name": "erpproductionpolicy",
+  "title": "Production accounting policy",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "wip",
+      "title": "Work in progress account",
+      "type": "reference",
+      "ref": "build.erpaccount",
+      "required": true
+    },
+    {
+      "name": "scrap",
+      "title": "Scrap expense account",
+      "type": "reference",
+      "ref": "build.erpaccount",
+      "required": true
+    },
+    {
+      "name": "variance",
+      "title": "Production variance account",
+      "type": "reference",
+      "ref": "build.erpaccount",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "type": "build.erpproductionpolicy"
+}

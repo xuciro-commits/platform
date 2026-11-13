@@ -1,0 +1,118 @@
+{
+  "name": "build.crmopportunityclosing",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.crmclosing"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmgroup.win"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmopportunity.finishwin"
+    }
+  ],
+  "definition": {
+    "name": "crmopportunityclosing",
+    "title": "Coordinate opportunity closing",
+    "object": "build.crmclosing",
+    "when": "draft",
+    "steps": [
+      {
+        "name": "groups",
+        "kind": "query",
+        "app": "build",
+        "query": "crmgroups",
+        "queryVersion": 1,
+        "inputs": {
+          "for": {
+            "source": "subject",
+            "path": [
+              "opportunity"
+            ]
+          }
+        },
+        "next": "each"
+      },
+      {
+        "name": "each",
+        "kind": "foreach",
+        "collection": {
+          "source": "step",
+          "step": "groups",
+          "path": [
+            "records"
+          ]
+        },
+        "body": "state",
+        "maxIterations": 20,
+        "concurrency": 1,
+        "next": "finish"
+      },
+      {
+        "name": "state",
+        "kind": "switch",
+        "value": {
+          "source": "item",
+          "path": [
+            "state"
+          ]
+        },
+        "cases": {
+          "held": "act"
+        },
+        "next": "return"
+      },
+      {
+        "name": "act",
+        "kind": "action",
+        "act": "build.crmgroup.win",
+        "target": {
+          "source": "item",
+          "path": [
+            "id"
+          ]
+        },
+        "next": "return",
+        "retryAttempts": 1
+      },
+      {
+        "name": "return",
+        "kind": "end"
+      },
+      {
+        "name": "finish",
+        "kind": "action",
+        "act": "build.crmopportunity.finishwin",
+        "target": {
+          "source": "subject",
+          "path": [
+            "opportunity"
+          ]
+        },
+        "error": "done",
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  },
+  "queries": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "query",
+        "name": "crmgroups"
+      },
+      "sourceVersion": "1.query-1"
+    }
+  ]
+}

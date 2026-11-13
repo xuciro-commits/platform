@@ -1,0 +1,1007 @@
+{
+  "format": 4,
+  "name": "heatingalarms",
+  "title": "Alarm handling",
+  "description": "Review alarms, record decisions and handle the associated work.",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.alarm"
+  },
+  "dataBindings": [
+    {
+      "id": "alarm-note",
+      "owner": "alarm-note",
+      "kind": "presentation",
+      "object": {
+        "app": "",
+        "kind": "",
+        "name": ""
+      },
+      "ports": {
+        "widget": "text"
+      }
+    },
+    {
+      "id": "alarm-filter",
+      "owner": "alarm-filter",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.alarm"
+      },
+      "model": {
+        "type": "build.alarm",
+        "fields": [
+          {
+            "name": "building"
+          },
+          {
+            "name": "severity"
+          },
+          {
+            "name": "state"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "building"
+        },
+        {
+          "name": "severity"
+        },
+        {
+          "name": "state"
+        }
+      ],
+      "ports": {
+        "widget": "filter"
+      }
+    },
+    {
+      "id": "alarm-count",
+      "owner": "alarm-count",
+      "kind": "presentation",
+      "object": {
+        "app": "",
+        "kind": "",
+        "name": ""
+      },
+      "ports": {
+        "measure": "count",
+        "parentable": "true",
+        "widget": "metric"
+      }
+    },
+    {
+      "id": "alarms-by-state",
+      "owner": "alarms-by-state",
+      "kind": "records",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.alarm"
+      },
+      "model": {
+        "type": "build.alarm"
+      },
+      "fieldSlots": {
+        "group": [
+          {
+            "name": "state"
+          }
+        ]
+      },
+      "ports": {
+        "measure": "count",
+        "parentable": "true",
+        "widget": "chart"
+      }
+    },
+    {
+      "id": "alarm-list",
+      "owner": "alarm-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.alarm"
+      },
+      "model": {
+        "type": "build.alarm",
+        "fields": [
+          {
+            "name": "summary"
+          },
+          {
+            "name": "severity"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "device"
+          },
+          {
+            "name": "openedat"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "summary"
+        },
+        {
+          "name": "severity"
+        },
+        {
+          "name": "state"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "device"
+        },
+        {
+          "name": "openedat"
+        }
+      ],
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "alarm-status",
+      "owner": "alarm-status",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.alarm"
+      },
+      "model": {
+        "type": "build.alarm"
+      },
+      "fieldSlots": {
+        "statusTracker.field": [
+          {
+            "name": "state"
+          }
+        ]
+      },
+      "ports": {
+        "recordVariable": "alarm",
+        "selectionMode": "read",
+        "widget": "status-tracker"
+      }
+    },
+    {
+      "id": "alarm-detail",
+      "owner": "alarm-detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.alarm"
+      },
+      "model": {
+        "type": "build.alarm",
+        "fields": [
+          {
+            "name": "summary"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "device"
+          },
+          {
+            "name": "severity"
+          },
+          {
+            "name": "metric"
+          },
+          {
+            "name": "observed"
+          },
+          {
+            "name": "threshold"
+          },
+          {
+            "name": "openedat"
+          },
+          {
+            "name": "note"
+          },
+          {
+            "name": "resolvedat"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "summary"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "device"
+        },
+        {
+          "name": "severity"
+        },
+        {
+          "name": "metric"
+        },
+        {
+          "name": "observed"
+        },
+        {
+          "name": "threshold"
+        },
+        {
+          "name": "openedat"
+        },
+        {
+          "name": "note"
+        },
+        {
+          "name": "resolvedat"
+        }
+      ],
+      "ports": {
+        "recordVariable": "alarm",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    },
+    {
+      "id": "alarm-actions",
+      "owner": "alarm-actions",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.alarm"
+      },
+      "model": {
+        "type": "build.alarm"
+      },
+      "ports": {
+        "recordVariable": "alarm",
+        "selectionMode": "read",
+        "widget": "actions"
+      }
+    },
+    {
+      "id": "alarm-tasks",
+      "owner": "alarm-tasks",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.alarm"
+      },
+      "model": {
+        "type": "build.alarm"
+      },
+      "ports": {
+        "recordVariable": "alarm",
+        "selectionMode": "read",
+        "widget": "tasks"
+      }
+    },
+    {
+      "id": "workorder-list",
+      "owner": "workorder-list",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.workorder"
+      },
+      "model": {
+        "type": "build.workorder",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "state"
+          },
+          {
+            "name": "device"
+          },
+          {
+            "name": "openedat"
+          },
+          {
+            "name": "completedat"
+          }
+        ],
+        "relation": {
+          "parentType": "build.alarm",
+          "field": "alarm"
+        }
+      },
+      "ports": {
+        "parentable": "true",
+        "selection": "workorder",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "id": "workorder-detail",
+      "owner": "workorder-detail",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.workorder"
+      },
+      "model": {
+        "type": "build.workorder",
+        "fields": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "building"
+          },
+          {
+            "name": "device"
+          },
+          {
+            "name": "description"
+          },
+          {
+            "name": "note"
+          },
+          {
+            "name": "openedat"
+          },
+          {
+            "name": "completedat"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "building"
+        },
+        {
+          "name": "device"
+        },
+        {
+          "name": "description"
+        },
+        {
+          "name": "note"
+        },
+        {
+          "name": "openedat"
+        },
+        {
+          "name": "completedat"
+        }
+      ],
+      "ports": {
+        "recordVariable": "workorder",
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    },
+    {
+      "id": "workorder-actions",
+      "owner": "workorder-actions",
+      "kind": "record",
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.workorder"
+      },
+      "model": {
+        "type": "build.workorder"
+      },
+      "ports": {
+        "recordVariable": "workorder",
+        "selectionMode": "read",
+        "widget": "actions"
+      }
+    }
+  ],
+  "actionTriggers": [
+    {
+      "id": "page",
+      "binding": "page",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.alarm.acknowledge"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.alarm.resolve"
+        }
+      ]
+    },
+    {
+      "id": "alarm-note",
+      "owner": "alarm-note",
+      "binding": "alarm-note"
+    },
+    {
+      "id": "alarm-filter",
+      "owner": "alarm-filter",
+      "binding": "alarm-filter"
+    },
+    {
+      "id": "alarm-count",
+      "owner": "alarm-count",
+      "binding": "alarm-count"
+    },
+    {
+      "id": "alarms-by-state",
+      "owner": "alarms-by-state",
+      "binding": "alarms-by-state"
+    },
+    {
+      "id": "alarm-list",
+      "owner": "alarm-list",
+      "binding": "alarm-list"
+    },
+    {
+      "id": "alarm-status",
+      "owner": "alarm-status",
+      "binding": "alarm-status"
+    },
+    {
+      "id": "alarm-detail",
+      "owner": "alarm-detail",
+      "binding": "alarm-detail"
+    },
+    {
+      "id": "alarm-actions",
+      "owner": "alarm-actions",
+      "binding": "alarm-actions",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.alarm.acknowledge"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.alarm.resolve"
+        }
+      ]
+    },
+    {
+      "id": "alarm-tasks",
+      "owner": "alarm-tasks",
+      "binding": "alarm-tasks"
+    },
+    {
+      "id": "workorder-list",
+      "owner": "workorder-list",
+      "binding": "workorder-list"
+    },
+    {
+      "id": "workorder-detail",
+      "owner": "workorder-detail",
+      "binding": "workorder-detail"
+    },
+    {
+      "id": "workorder-actions",
+      "owner": "workorder-actions",
+      "binding": "workorder-actions",
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.workorder.start"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.workorder.complete"
+        }
+      ]
+    }
+  ],
+  "inputSchema": {
+    "variables": {
+      "alarm": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "alarm-list"
+        }
+      },
+      "workorder": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "workorder-list"
+        }
+      }
+    },
+    "selections": [
+      {
+        "name": "workorder",
+        "object": {
+          "app": "build",
+          "kind": "object",
+          "name": "build.workorder"
+        }
+      }
+    ]
+  },
+  "scopeVisibility": {
+    "scopes": [
+      {
+        "id": "alarm-actions",
+        "parent": "row-5",
+        "kind": "page",
+        "binding": "alarm-actions",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "alarm-count",
+        "parent": "row-2",
+        "kind": "page",
+        "binding": "alarm-count",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "alarm-detail",
+        "parent": "row-5",
+        "kind": "page",
+        "binding": "alarm-detail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "alarm-filter",
+        "parent": "root",
+        "kind": "page",
+        "binding": "alarm-filter",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "alarm-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "alarm-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "alarm-note",
+        "parent": "root",
+        "kind": "page",
+        "binding": "alarm-note",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "alarm-status",
+        "parent": "root",
+        "kind": "page",
+        "binding": "alarm-status",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "alarm-tasks",
+        "parent": "root",
+        "kind": "page",
+        "binding": "alarm-tasks",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "alarms-by-state",
+        "parent": "row-2",
+        "kind": "page",
+        "binding": "alarms-by-state",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-2",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-5",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "row-8",
+        "parent": "root",
+        "kind": "page",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "workorder-actions",
+        "parent": "row-8",
+        "kind": "page",
+        "binding": "workorder-actions",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "workorder-detail",
+        "parent": "row-8",
+        "kind": "page",
+        "binding": "workorder-detail",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      },
+      {
+        "id": "workorder-list",
+        "parent": "root",
+        "kind": "page",
+        "binding": "workorder-list",
+        "bindings": {
+          "activeVariable": "",
+          "enabledWhen": "",
+          "valueVariable": "",
+          "visibleWhen": ""
+        }
+      }
+    ],
+    "owners": {
+      "alarm-actions": "alarm-actions",
+      "alarm-count": "alarm-count",
+      "alarm-detail": "alarm-detail",
+      "alarm-filter": "alarm-filter",
+      "alarm-list": "alarm-list",
+      "alarm-note": "alarm-note",
+      "alarm-status": "alarm-status",
+      "alarm-tasks": "alarm-tasks",
+      "alarms-by-state": "alarms-by-state",
+      "workorder-actions": "workorder-actions",
+      "workorder-detail": "workorder-detail",
+      "workorder-list": "workorder-list"
+    },
+    "root": "root"
+  },
+  "widgetSpec": {
+    "format": "platform.page.web.v1",
+    "body": {
+      "document": {
+        "formatVersion": 2,
+        "nodes": {
+          "alarm-actions": {
+            "kind": "widget",
+            "section": "alarm-actions",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "alarm-count": {
+            "kind": "widget",
+            "section": "alarm-count",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "alarm-detail": {
+            "kind": "widget",
+            "section": "alarm-detail",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "alarm-filter": {
+            "kind": "widget",
+            "section": "alarm-filter"
+          },
+          "alarm-list": {
+            "kind": "widget",
+            "section": "alarm-list"
+          },
+          "alarm-note": {
+            "kind": "widget",
+            "section": "alarm-note"
+          },
+          "alarm-status": {
+            "kind": "widget",
+            "section": "alarm-status"
+          },
+          "alarm-tasks": {
+            "kind": "widget",
+            "section": "alarm-tasks"
+          },
+          "alarms-by-state": {
+            "kind": "widget",
+            "section": "alarms-by-state",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "root": {
+            "children": [
+              "alarm-note",
+              "alarm-filter",
+              "row-2",
+              "alarm-list",
+              "alarm-status",
+              "row-5",
+              "alarm-tasks",
+              "workorder-list",
+              "row-8"
+            ],
+            "kind": "rows"
+          },
+          "row-2": {
+            "children": [
+              "alarm-count",
+              "alarms-by-state"
+            ],
+            "kind": "columns"
+          },
+          "row-5": {
+            "children": [
+              "alarm-detail",
+              "alarm-actions"
+            ],
+            "kind": "columns"
+          },
+          "row-8": {
+            "children": [
+              "workorder-detail",
+              "workorder-actions"
+            ],
+            "kind": "columns"
+          },
+          "workorder-actions": {
+            "kind": "widget",
+            "section": "workorder-actions",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "workorder-detail": {
+            "kind": "widget",
+            "section": "workorder-detail",
+            "size": {
+              "minWidth": 260,
+              "weight": 1
+            }
+          },
+          "workorder-list": {
+            "kind": "widget",
+            "section": "workorder-list"
+          }
+        },
+        "root": "root",
+        "uiProfile": "platform.page.v2.111"
+      },
+      "sections": [
+        {
+          "binding": "alarm-note",
+          "configVersion": 1,
+          "id": "alarm-note",
+          "text": "Select an alarm, acknowledge it and record the resolution through the original business actions. Linked work orders and tasks retain their own status and history.",
+          "title": "Alarm handling",
+          "triggers": [
+            "alarm-note"
+          ]
+        },
+        {
+          "binding": "alarm-filter",
+          "configVersion": 1,
+          "id": "alarm-filter",
+          "title": "Find alarms",
+          "triggers": [
+            "alarm-filter"
+          ]
+        },
+        {
+          "binding": "alarm-count",
+          "configVersion": 1,
+          "id": "alarm-count",
+          "title": "Matching alarms",
+          "triggers": [
+            "alarm-count"
+          ]
+        },
+        {
+          "binding": "alarms-by-state",
+          "configVersion": 1,
+          "id": "alarms-by-state",
+          "mark": "bar",
+          "title": "Alarms by status",
+          "triggers": [
+            "alarms-by-state"
+          ]
+        },
+        {
+          "binding": "alarm-list",
+          "configVersion": 1,
+          "id": "alarm-list",
+          "showSearch": true,
+          "title": "Alarm queue",
+          "triggers": [
+            "alarm-list"
+          ]
+        },
+        {
+          "binding": "alarm-status",
+          "configVersion": 1,
+          "id": "alarm-status",
+          "statusTracker": {
+            "stages": [
+              "open",
+              "acknowledged",
+              "closed"
+            ]
+          },
+          "title": "Alarm status",
+          "triggers": [
+            "alarm-status"
+          ]
+        },
+        {
+          "binding": "alarm-detail",
+          "configVersion": 1,
+          "id": "alarm-detail",
+          "title": "Selected alarm",
+          "triggers": [
+            "alarm-detail"
+          ]
+        },
+        {
+          "binding": "alarm-actions",
+          "configVersion": 1,
+          "id": "alarm-actions",
+          "title": "Alarm actions",
+          "triggers": [
+            "alarm-actions"
+          ]
+        },
+        {
+          "binding": "alarm-tasks",
+          "configVersion": 1,
+          "id": "alarm-tasks",
+          "title": "Tasks for the selected alarm",
+          "triggers": [
+            "alarm-tasks"
+          ]
+        },
+        {
+          "binding": "workorder-list",
+          "configVersion": 1,
+          "id": "workorder-list",
+          "showSearch": true,
+          "title": "Linked work orders",
+          "triggers": [
+            "workorder-list"
+          ]
+        },
+        {
+          "binding": "workorder-detail",
+          "configVersion": 1,
+          "id": "workorder-detail",
+          "title": "Selected work order",
+          "triggers": [
+            "workorder-detail"
+          ]
+        },
+        {
+          "binding": "workorder-actions",
+          "configVersion": 1,
+          "id": "workorder-actions",
+          "title": "Work order actions",
+          "triggers": [
+            "workorder-actions"
+          ]
+        }
+      ]
+    }
+  }
+}

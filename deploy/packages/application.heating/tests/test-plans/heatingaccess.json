@@ -1,0 +1,194 @@
+{
+  "name": "heatingaccess",
+  "title": "Access permissions are checked as business data",
+  "roots": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.accesspoint"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.accesspass"
+    }
+  ],
+  "at": "2026-10-15T09:00:00Z",
+  "samples": [
+    {
+      "type": "build.building",
+      "records": [
+        {
+          "id": "buildingdemo",
+          "code": "DEMO",
+          "name": "Example heating site",
+          "city": "Example city",
+          "address": "Fictional demonstration site"
+        }
+      ]
+    },
+    {
+      "type": "build.floor",
+      "records": [
+        {
+          "id": "floordemo",
+          "building": "buildingdemo",
+          "code": "F1",
+          "name": "Ground floor",
+          "level": 1
+        }
+      ]
+    },
+    {
+      "type": "build.zone",
+      "records": [
+        {
+          "id": "zonedemo",
+          "floor": "floordemo",
+          "name": "North teaching zone",
+          "targettemp": 21,
+          "lowerlimit": 18,
+          "upperlimit": 24
+        }
+      ]
+    },
+    {
+      "type": "build.device",
+      "records": [
+        {
+          "id": "devicedemo",
+          "building": "buildingdemo",
+          "zone": "zonedemo",
+          "code": "CTRL1",
+          "name": "Heating controller",
+          "devicekey": "plant",
+          "kind": "controller",
+          "latesttemp": 48,
+          "healthscore": 96,
+          "checkedat": "2026-10-15T09:00:00Z",
+          "warnlimit": 65,
+          "healthmin": 60,
+          "state": "healthy"
+        }
+      ]
+    },
+    {
+      "type": "build.point",
+      "records": [
+        {
+          "id": "pointtemperature",
+          "device": "devicedemo",
+          "signal": "temperature",
+          "name": "Supply temperature",
+          "unit": "C",
+          "datatype": "decimal",
+          "purpose": "Accepted warning decisions"
+        },
+        {
+          "id": "pointposition",
+          "device": "devicedemo",
+          "signal": "position",
+          "name": "Valve opening",
+          "unit": "%",
+          "datatype": "integer",
+          "purpose": "Compare fresh readback with the requested opening"
+        },
+        {
+          "id": "pointhealth",
+          "device": "devicedemo",
+          "signal": "health",
+          "name": "Health score",
+          "unit": "score",
+          "datatype": "integer",
+          "purpose": "Accepted health assessment"
+        }
+      ]
+    },
+    {
+      "type": "build.circuit",
+      "records": [
+        {
+          "id": "circuitdemo",
+          "building": "buildingdemo",
+          "zone": "zonedemo",
+          "device": "devicedemo",
+          "code": "LOOP1",
+          "name": "Teaching heating loop",
+          "devicekey": "plant",
+          "requestedopening": 35,
+          "actualopening": 35,
+          "latesttemp": 48,
+          "state": "steady"
+        }
+      ]
+    },
+    {
+      "type": "build.accesspoint",
+      "records": [
+        {
+          "id": "accesspointdemo",
+          "building": "buildingdemo",
+          "zone": "zonedemo",
+          "name": "Plant room entrance",
+          "devicekey": "plant",
+          "state": "active"
+        }
+      ]
+    },
+    {
+      "type": "build.accesspass",
+      "records": [
+        {
+          "id": "passvalid",
+          "building": "buildingdemo",
+          "accesspoint": "accesspointdemo",
+          "holder": "operator-demo",
+          "validfrom": "2020-01-01T00:00:00Z",
+          "validuntil": "2099-01-01T00:00:00Z",
+          "purpose": "Synthetic authorized maintenance visit",
+          "state": "active"
+        },
+        {
+          "id": "passexpired",
+          "building": "buildingdemo",
+          "accesspoint": "accesspointdemo",
+          "holder": "operator-demo",
+          "validfrom": "2019-01-01T00:00:00Z",
+          "validuntil": "2020-01-01T00:00:00Z",
+          "purpose": "Synthetic expired visit",
+          "state": "active"
+        }
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "type": "build.accesspoint",
+      "id": "accesspointdemo",
+      "action": "build.accesspoint.checkpass",
+      "payload": "{\"pass\":\"passvalid\",\"holder\":\"operator-demo\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.accesspoint",
+      "id": "accesspointdemo",
+      "action": "build.accesspoint.checkpass",
+      "payload": "{\"pass\":\"passexpired\",\"holder\":\"operator-demo\"}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.accesspass",
+      "id": "passvalid",
+      "action": "build.accesspass.revoke",
+      "payload": "{\"reason\":\"Synthetic maintenance visit cancelled\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.accesspoint",
+      "id": "accesspointdemo",
+      "action": "build.accesspoint.checkpass",
+      "payload": "{\"pass\":\"passvalid\",\"holder\":\"operator-demo\"}",
+      "expect": "refused"
+    }
+  ]
+}

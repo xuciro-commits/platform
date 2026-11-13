@@ -1,0 +1,61 @@
+{
+  "name": "build.crmgroupexpiry",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.crmgroup"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmgroup.expire"
+    }
+  ],
+  "definition": {
+    "name": "crmgroupexpiry",
+    "title": "Release the group at its original cutoff",
+    "object": "build.crmgroup",
+    "when": "holding",
+    "steps": [
+      {
+        "name": "cutoff",
+        "kind": "wait",
+        "waitUntil": {
+          "source": "subject",
+          "path": [
+            "expires"
+          ]
+        },
+        "next": "state"
+      },
+      {
+        "name": "state",
+        "kind": "switch",
+        "value": {
+          "source": "subject",
+          "path": [
+            "state"
+          ]
+        },
+        "cases": {
+          "holding": "expire",
+          "held": "expire",
+          "confirming": "expire"
+        },
+        "next": "done"
+      },
+      {
+        "name": "expire",
+        "kind": "action",
+        "act": "expire",
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

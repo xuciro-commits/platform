@@ -1,0 +1,87 @@
+{
+  "name": "erpproductionposting",
+  "title": "Production financial line",
+  "fields": [
+    {
+      "name": "order",
+      "title": "Production order",
+      "type": "reference",
+      "ref": "build.productionorder",
+      "inverse": "posting",
+      "required": true
+    },
+    {
+      "name": "batch",
+      "title": "Batch identity",
+      "type": "reference",
+      "ref": "build.productionbatch",
+      "required": true
+    },
+    {
+      "name": "account",
+      "title": "Account",
+      "type": "reference",
+      "ref": "build.erpaccount",
+      "required": true
+    },
+    {
+      "name": "side",
+      "title": "Posting side",
+      "type": "choice",
+      "choices": "debit,credit",
+      "required": true
+    },
+    {
+      "name": "amount",
+      "title": "Amount",
+      "type": "decimal",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "acceptedfacts",
+      "kind": "immutable",
+      "fields": [
+        "order",
+        "batch",
+        "account",
+        "side",
+        "amount",
+        "archived"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    }
+  ],
+  "type": "build.erpproductionposting"
+}

@@ -1,0 +1,258 @@
+{
+  "name": "erppurchaseline",
+  "title": "Purchase line",
+  "fields": [
+    {
+      "name": "purchase",
+      "title": "Purchase order",
+      "type": "reference",
+      "ref": "build.erppurchase",
+      "inverse": "lines",
+      "required": true
+    },
+    {
+      "name": "number",
+      "title": "Line reference",
+      "type": "text"
+    },
+    {
+      "name": "product",
+      "title": "Item",
+      "type": "reference",
+      "ref": "build.erpitem",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Quantity",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "price",
+      "title": "Purchase unit price",
+      "type": "decimal",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "sets": [
+    {
+      "name": "moves",
+      "from": "moves",
+      "direction": "inverse",
+      "object": "build.erpmove",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    }
+  ],
+  "constraints": [
+    {
+      "name": "originalorder",
+      "kind": "immutable",
+      "fields": [
+        "purchase"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "orderedvalues",
+      "kind": "immutable",
+      "fields": [
+        "purchase",
+        "number",
+        "product",
+        "quantity",
+        "price",
+        "archived"
+      ],
+      "expr": {
+        "op": "not",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "path",
+                "kind": "choice",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "purchase"
+                  }
+                ],
+                "path": [
+                  "state"
+                ]
+              },
+              {
+                "op": "",
+                "kind": "choice",
+                "lit": {
+                  "value": "draft"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "validline",
+      "kind": "expression",
+      "fields": [
+        "quantity",
+        "price"
+      ],
+      "level": "record",
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": ">",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "decimal",
+                "ref": "quantity"
+              },
+              {
+                "op": "",
+                "kind": "decimal",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          },
+          {
+            "op": ">=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "decimal",
+                "ref": "price"
+              },
+              {
+                "op": "",
+                "kind": "decimal",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Purchase quantity is positive and its price is nonnegative."
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.erppurchaseline",
+    "steps": [
+      {
+        "name": "number",
+        "kind": "sequence",
+        "sequence": {
+          "Name": "erppurchaselines",
+          "Pattern": "PL-{year}-{n:6}",
+          "Yearly": true
+        }
+      },
+      {
+        "name": "reference",
+        "kind": "update",
+        "target": {
+          "type": "build.erppurchaseline",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "number",
+            "from": "step.number"
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "=",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "path",
+          "kind": "choice",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "purchase"
+            }
+          ],
+          "path": [
+            "state"
+          ]
+        },
+        {
+          "op": "",
+          "kind": "choice",
+          "lit": {
+            "value": "draft"
+          }
+        }
+      ]
+    },
+    "message": "Only draft purchase orders accept new lines."
+  },
+  "type": "build.erppurchaseline"
+}

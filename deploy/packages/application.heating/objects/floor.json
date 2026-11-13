@@ -1,0 +1,43 @@
+{
+  "name": "floor",
+  "type": "build.floor",
+  "title": "Floor",
+  "plural": "Floors",
+  "description": "",
+  "fields": [
+    {
+      "name": "building",
+      "title": "Building",
+      "type": "reference",
+      "ref": "build.building",
+      "required": true
+    },
+    {
+      "name": "code",
+      "title": "Floor code",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Floor name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "level",
+      "title": "Level",
+      "type": "integer",
+      "required": true
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ]
+}

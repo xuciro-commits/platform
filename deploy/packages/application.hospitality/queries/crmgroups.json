@@ -1,0 +1,11 @@
+{
+  "name": "crmgroups",
+  "title": "Groups of one opportunity",
+  "description": "Group plans retain the opportunity reference and requester scope.",
+  "object": "build.crmgroup",
+  "by": "opportunity",
+  "sort": [
+    "id"
+  ],
+  "limit": 20
+}

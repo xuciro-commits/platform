@@ -1,0 +1,204 @@
+{
+  "name": "crmapp",
+  "title": "Sales",
+  "icon": "users",
+  "pages": [
+    "crmcustomer",
+    "crmopportunity",
+    "crmgroup",
+    "crmroom",
+    "crmlodgingoffer"
+  ],
+  "resources": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmcustomer"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmopportunity"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmlodgingoffer"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmgroup"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmroom"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.crmclosing"
+    },
+    {
+      "app": "build",
+      "kind": "source",
+      "name": "lodgingoffers"
+    },
+    {
+      "app": "build",
+      "kind": "dataset",
+      "name": "lodgingreceipts"
+    },
+    {
+      "app": "build",
+      "kind": "source",
+      "name": "lodgingreceipts"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "lodgingholdday"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "lodgingholdhour"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "lodgingconfirm"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "lodgingrelease"
+    },
+    {
+      "app": "build",
+      "kind": "writeback",
+      "name": "lodgingcancel"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmhold"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmheld"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmbooked"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmholdrefused"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmconfirmrefused"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmreleased"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmcanceled"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmreleaserefused"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmcancelrefused"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmgroupconfirming"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmgroupcompensating"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmgroupreleasing"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmgroupneedsreview"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmgroupwon"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmgroupfailed"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmgroupreleased"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmopportunityclosing"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmopportunitylost"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.crmgroupexpiry"
+    },
+    {
+      "app": "build",
+      "kind": "test-plan",
+      "name": "hospitalitysales"
+    },
+    {
+      "app": "build",
+      "kind": "function",
+      "name": "crmreview"
+    },
+    {
+      "app": "build",
+      "kind": "evaluation-set",
+      "name": "crmreviewquality"
+    },
+    {
+      "app": "build",
+      "kind": "query",
+      "name": "crmopenopportunities"
+    },
+    {
+      "app": "build",
+      "kind": "agent",
+      "name": "salesassistant"
+    }
+  ]
+}

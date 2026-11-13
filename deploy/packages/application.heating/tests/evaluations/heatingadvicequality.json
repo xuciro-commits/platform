@@ -1,0 +1,33 @@
+{
+  "name": "heatingadvicequality",
+  "title": "Device advice synthetic acceptance",
+  "function": {
+    "ref": {
+      "app": "build",
+      "kind": "function",
+      "name": "heatingadvice"
+    },
+    "sourceVersion": "1.function-1"
+  },
+  "model": "",
+  "policy": {
+    "minQuality": 1,
+    "maxCostUsd": 0.05,
+    "maxLatencyMillis": 30000,
+    "cases": [
+      {
+        "name": "acceptedwarning",
+        "input": {
+          "name": "Teaching controller",
+          "state": "warning",
+          "latesttemp": "91.2",
+          "healthscore": 45
+        },
+        "expected": {
+          "summary": "The accepted device evidence needs inspection.",
+          "nextsteps": "Check the latest observation and inspect the controller locally."
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "name": "workorder",
+  "type": "build.workorder",
+  "title": "Heating work order",
+  "plural": "Heating work orders",
+  "description": "The retained heatingrepair workflow asks an operator to confirm repair, then invokes the original complete action. Publishing a changed workflow does not rewrite an already waiting run.",
+  "fields": [
+    {
+      "name": "building",
+      "title": "Building",
+      "type": "reference",
+      "ref": "build.building",
+      "required": true
+    },
+    {
+      "name": "device",
+      "title": "Device",
+      "type": "reference",
+      "ref": "build.device",
+      "required": true
+    },
+    {
+      "name": "alarm",
+      "title": "Related alarm",
+      "type": "reference",
+      "ref": "build.alarm",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Work order name",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "description",
+      "title": "Inspection instructions",
+      "type": "longtext"
+    },
+    {
+      "name": "note",
+      "title": "Completion evidence",
+      "type": "longtext"
+    },
+    {
+      "name": "openedat",
+      "title": "Opened at",
+      "type": "datetime",
+      "required": true
+    },
+    {
+      "name": "completedat",
+      "title": "Completed at",
+      "type": "datetime"
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "open",
+      "title": "Open",
+      "tone": "warning"
+    },
+    {
+      "name": "working",
+      "title": "Under inspection",
+      "tone": "info"
+    },
+    {
+      "name": "done",
+      "title": "Completed",
+      "tone": "success"
+    }
+  ],
+  "actions": [
+    {
+      "name": "start",
+      "title": "Start inspection",
+      "from": [
+        "open"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.workorder",
+        "steps": [
+          {
+            "name": "started",
+            "kind": "update",
+            "target": {
+              "type": "build.workorder",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "working"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "complete",
+      "title": "Complete inspection",
+      "from": [
+        "working"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.workorder",
+        "steps": [
+          {
+            "name": "completed",
+            "kind": "update",
+            "target": {
+              "type": "build.workorder",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "done"
+                  }
+                }
+              },
+              {
+                "field": "note",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.note"
+                }
+              },
+              {
+                "field": "completedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "note",
+          "title": "Completion evidence",
+          "type": "text",
+          "required": true,
+          "constraints": {
+            "minLength": 1
+          }
+        }
+      ]
+    }
+  ]
+}

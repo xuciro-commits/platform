@@ -1,0 +1,57 @@
+{
+  "name": "building",
+  "type": "build.building",
+  "title": "Building",
+  "plural": "Buildings",
+  "description": "Buildings served by the heating operation. The sample site is fictional; thresholds are teaching values, not engineering standards.",
+  "fields": [
+    {
+      "name": "code",
+      "title": "Building code",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "name",
+      "title": "Building name",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "city",
+      "title": "City",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "address",
+      "title": "Address",
+      "type": "text"
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "buildingcode",
+      "kind": "unique",
+      "fields": [
+        "code"
+      ],
+      "message": "Building code already exists.",
+      "translations": {
+        "zh-CN": "建筑编号已存在。"
+      }
+    }
+  ]
+}

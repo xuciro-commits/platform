@@ -1,0 +1,46 @@
+{
+  "name": "stockreceipt",
+  "type": "build.stockreceipt",
+  "title": "Stock receipt",
+  "plural": "Stock receipts",
+  "fields": [
+    {
+      "name": "order",
+      "title": "Production order",
+      "type": "reference",
+      "ref": "build.batchproviderorder",
+      "required": true
+    },
+    {
+      "name": "batch",
+      "title": "Batch identity",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "product",
+      "title": "Product",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Received quantity",
+      "type": "decimal"
+    },
+    {
+      "name": "value",
+      "title": "Production value",
+      "type": "decimal"
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ]
+}

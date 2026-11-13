@@ -1,0 +1,12 @@
+{
+  "name": "crmrooms",
+  "title": "Rooms of one group",
+  "description": "The complete bounded room plan; callers retain their own row scope.",
+  "object": "build.crmroom",
+  "by": "plan",
+  "sort": [
+    "ordinal",
+    "id"
+  ],
+  "limit": 20
+}

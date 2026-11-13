@@ -1,0 +1,159 @@
+{
+  "name": "erpline",
+  "title": "Accounting line",
+  "fields": [
+    {
+      "name": "document",
+      "title": "Accounting document",
+      "type": "reference",
+      "ref": "build.erpentry",
+      "inverse": "lines",
+      "required": true
+    },
+    {
+      "name": "account",
+      "title": "Ledger account",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "side",
+      "title": "Posting side",
+      "type": "choice",
+      "choices": "debit,credit",
+      "required": true
+    },
+    {
+      "name": "amount",
+      "title": "Amount in currency units",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "memo",
+      "title": "Line text",
+      "type": "text"
+    }
+  ],
+  "access": [
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": true
+    },
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "originaldocument",
+      "kind": "immutable",
+      "fields": [
+        "document"
+      ],
+      "expr": {
+        "op": "",
+        "kind": "boolean",
+        "lit": {
+          "value": true
+        }
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "submittedvalues",
+      "kind": "immutable",
+      "fields": [
+        "document",
+        "account",
+        "side",
+        "amount",
+        "memo",
+        "archived"
+      ],
+      "expr": {
+        "op": "not",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "path",
+                "kind": "choice",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "document"
+                  }
+                ],
+                "path": [
+                  "state"
+                ]
+              },
+              {
+                "op": "",
+                "kind": "choice",
+                "lit": {
+                  "value": "draft"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "positive",
+      "kind": "expression",
+      "fields": [
+        "amount"
+      ],
+      "level": "record",
+      "expr": {
+        "op": ">",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "decimal",
+            "ref": "amount"
+          },
+          {
+            "op": "",
+            "kind": "decimal",
+            "lit": {
+              "value": 0
+            }
+          }
+        ]
+      },
+      "message": "An accounting line has a positive amount on exactly one side."
+    }
+  ],
+  "type": "build.erpline"
+}

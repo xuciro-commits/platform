@@ -1,0 +1,67 @@
+{
+  "name": "hotelchannelinput",
+  "title": "Hotel channel messages",
+  "connection": "hotelchannel",
+  "profile": "json",
+  "url": "/messages",
+  "path": "messages",
+  "object": "build.pmschannelmessage",
+  "objectBindings": {
+    "build.pmschannelmessage": {
+      "app": "build",
+      "kind": "object",
+      "name": "build.pmschannelmessage"
+    }
+  },
+  "key": "key",
+  "mapping": [
+    {
+      "from": "channel",
+      "to": "channel"
+    },
+    {
+      "from": "externalid",
+      "to": "externalid"
+    },
+    {
+      "from": "reservation",
+      "to": "reservation"
+    },
+    {
+      "from": "kind",
+      "to": "kind"
+    },
+    {
+      "from": "unit",
+      "to": "unit"
+    },
+    {
+      "from": "guest",
+      "to": "guest"
+    },
+    {
+      "from": "roomtype",
+      "to": "roomtype"
+    },
+    {
+      "from": "dayfrom",
+      "to": "dayfrom"
+    },
+    {
+      "from": "dayuntil",
+      "to": "dayuntil"
+    },
+    {
+      "from": "fromat",
+      "to": "fromat"
+    },
+    {
+      "from": "untilat",
+      "to": "untilat"
+    },
+    {
+      "from": "expires",
+      "to": "expires"
+    }
+  ]
+}

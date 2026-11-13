@@ -1,0 +1,55 @@
+{
+  "name": "point",
+  "type": "build.point",
+  "title": "Point definition",
+  "plural": "Point definitions",
+  "description": "Point metadata connects a business device to a protocol signal. It deliberately contains no measurement value or raw sample history.",
+  "fields": [
+    {
+      "name": "device",
+      "title": "Device",
+      "type": "reference",
+      "ref": "build.device",
+      "required": true
+    },
+    {
+      "name": "signal",
+      "title": "Protocol signal ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "name",
+      "title": "Point name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "title": "Unit",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "datatype",
+      "title": "Value type",
+      "type": "choice",
+      "choices": "decimal,integer,boolean",
+      "required": true
+    },
+    {
+      "name": "purpose",
+      "title": "Business use",
+      "type": "text"
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ]
+}

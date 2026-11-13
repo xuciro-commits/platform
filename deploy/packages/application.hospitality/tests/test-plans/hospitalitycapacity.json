@@ -1,0 +1,61 @@
+{
+  "name": "hospitalitycapacity",
+  "title": "Whole-interval capacity and cancellation / 完整区间容量与取消",
+  "roots": [
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.pmsroomtype"
+    },
+    {
+      "app": "build",
+      "kind": "object",
+      "name": "build.pmsreservation"
+    }
+  ],
+  "at": "2026-10-21T09:00:00Z",
+  "steps": [
+    {
+      "type": "build.pmsroomtype",
+      "id": "testdaily",
+      "action": "build.pmsroomtype.create",
+      "payload": "{\"name\":\"Scenario daily room\",\"unit\":\"day\",\"capacity\":1,\"minunits\":1,\"allowance\":0,\"oversell\":false,\"active\":true}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.pmsreservation",
+      "id": "stayone",
+      "action": "build.pmsreservation.create",
+      "payload": "{\"guest\":\"Scenario guest\",\"roomtype\":\"testdaily\",\"unit\":\"day\",\"mode\":\"booked\",\"dayfrom\":\"2026-10-22\",\"dayuntil\":\"2026-10-24\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.pmsreservation",
+      "id": "staytwo",
+      "action": "build.pmsreservation.create",
+      "payload": "{\"guest\":\"Scenario guest\",\"roomtype\":\"testdaily\",\"unit\":\"day\",\"mode\":\"booked\",\"dayfrom\":\"2026-10-22\",\"dayuntil\":\"2026-10-24\"}",
+      "expect": "refused"
+    },
+    {
+      "type": "build.pmsreservation",
+      "id": "stayone",
+      "action": "build.pmsreservation.cancel",
+      "payload": "{}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.pmsreservation",
+      "id": "staytwo",
+      "action": "build.pmsreservation.create",
+      "payload": "{\"guest\":\"Scenario guest\",\"roomtype\":\"testdaily\",\"unit\":\"day\",\"mode\":\"booked\",\"dayfrom\":\"2026-10-22\",\"dayuntil\":\"2026-10-24\"}",
+      "expect": "accepted"
+    },
+    {
+      "type": "build.pmsreservation",
+      "id": "staytwo",
+      "action": "build.pmsreservation.confirm",
+      "payload": "{}",
+      "expect": "refused"
+    }
+  ]
+}

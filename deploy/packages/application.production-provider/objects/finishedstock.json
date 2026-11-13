@@ -1,0 +1,41 @@
+{
+  "name": "finishedstock",
+  "type": "build.finishedstock",
+  "title": "Finished stock",
+  "plural": "Finished stocks",
+  "fields": [
+    {
+      "name": "product",
+      "title": "Product",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "On hand",
+      "type": "decimal"
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": true,
+      "archive": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "productidentity",
+      "kind": "unique",
+      "fields": [
+        "product"
+      ],
+      "message": "One stock balance per product.",
+      "translations": {
+        "zh-CN": "每个产品只允许一个库存余额。"
+      }
+    }
+  ]
+}

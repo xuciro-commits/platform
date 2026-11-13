@@ -1,0 +1,4108 @@
+{
+  "name": "productionorder",
+  "title": "Production order",
+  "fields": [
+    {
+      "name": "number",
+      "title": "Production order reference",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "product",
+      "title": "Finished item",
+      "type": "reference",
+      "ref": "build.erpitem",
+      "required": true
+    },
+    {
+      "name": "policy",
+      "title": "Production accounting policy",
+      "type": "reference",
+      "ref": "build.erpproductionpolicy",
+      "required": true
+    },
+    {
+      "name": "quantity",
+      "title": "Ordered quantity",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "currency",
+      "title": "Frozen cost currency",
+      "type": "text"
+    },
+    {
+      "name": "unit",
+      "title": "Frozen stock unit",
+      "type": "text"
+    },
+    {
+      "name": "unitcost",
+      "title": "Frozen finished unit cost",
+      "type": "decimal"
+    },
+    {
+      "name": "account",
+      "title": "Frozen finished stock account",
+      "type": "reference",
+      "ref": "build.erpaccount"
+    },
+    {
+      "name": "wip",
+      "title": "Frozen work in progress account",
+      "type": "reference",
+      "ref": "build.erpaccount"
+    },
+    {
+      "name": "scrapaccount",
+      "title": "Frozen scrap expense account",
+      "type": "reference",
+      "ref": "build.erpaccount"
+    },
+    {
+      "name": "variance",
+      "title": "Frozen production variance account",
+      "type": "reference",
+      "ref": "build.erpaccount"
+    },
+    {
+      "name": "componentcount",
+      "title": "Frozen component count",
+      "type": "integer"
+    },
+    {
+      "name": "yield",
+      "title": "Accepted good quantity",
+      "type": "decimal"
+    },
+    {
+      "name": "scrap",
+      "title": "Accepted scrap quantity",
+      "type": "decimal"
+    },
+    {
+      "name": "remaining",
+      "title": "Remaining quantity",
+      "type": "decimal",
+      "formulaExpr": {
+        "op": "-",
+        "kind": "decimal",
+        "args": [
+          {
+            "op": "-",
+            "kind": "decimal",
+            "args": [
+              {
+                "op": "",
+                "kind": "decimal",
+                "ref": "quantity"
+              },
+              {
+                "op": "coalesce",
+                "kind": "decimal",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "decimal",
+                    "ref": "yield"
+                  },
+                  {
+                    "op": "",
+                    "kind": "decimal",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "coalesce",
+            "kind": "decimal",
+            "args": [
+              {
+                "op": "",
+                "kind": "decimal",
+                "ref": "scrap"
+              },
+              {
+                "op": "",
+                "kind": "decimal",
+                "lit": {
+                  "value": 0
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "readOnly": true
+    },
+    {
+      "name": "firstshop",
+      "title": "First shop order",
+      "type": "text"
+    },
+    {
+      "name": "currentbatch",
+      "title": "Current accepted batch",
+      "type": "reference",
+      "ref": "build.productionbatch"
+    }
+  ],
+  "access": [
+    {
+      "role": "production",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "controller",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "buyer",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    },
+    {
+      "role": "accountant",
+      "read": "all",
+      "create": false,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "released",
+      "title": "Released"
+    },
+    {
+      "name": "running",
+      "title": "Running"
+    },
+    {
+      "name": "closed",
+      "title": "Closed"
+    }
+  ],
+  "sets": [
+    {
+      "name": "components",
+      "from": "components",
+      "direction": "inverse",
+      "object": "build.erpproductioncomponent",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "batches",
+      "from": "batches",
+      "direction": "inverse",
+      "object": "build.productionbatch",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "posting",
+      "from": "posting",
+      "direction": "inverse",
+      "object": "build.erpproductionposting",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "receipts",
+      "from": "receipts",
+      "direction": "inverse",
+      "object": "build.erpreceipt",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000
+    },
+    {
+      "name": "currentposting",
+      "from": "posting",
+      "direction": "inverse",
+      "object": "build.erpproductionposting",
+      "order": [
+        {
+          "expr": {
+            "op": "",
+            "kind": "text",
+            "ref": "id"
+          }
+        }
+      ],
+      "limit": 10000,
+      "where": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "batch"
+            },
+            {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "order"
+                }
+              ],
+              "path": [
+                "currentbatch"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "name": "start",
+      "title": "Start upstream production",
+      "from": [
+        "released",
+        "running"
+      ],
+      "roles": [
+        "production",
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.productionorder",
+        "steps": [
+          {
+            "name": "first",
+            "kind": "update",
+            "target": {
+              "type": "build.productionorder",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "firstshop",
+                "from": "shoporder"
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "running"
+                  }
+                }
+              }
+            ],
+            "when": {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "ref": "state"
+                },
+                {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "released"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "shoporder",
+          "title": "Shop order",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "confirm",
+      "title": "Accept production batch",
+      "from": [
+        "running"
+      ],
+      "roles": [
+        "production",
+        "controller"
+      ],
+      "transaction": {
+        "subject": "build.productionorder",
+        "steps": [
+          {
+            "name": "receipt",
+            "kind": "create",
+            "target": {
+              "type": "build.erpreceipt"
+            },
+            "changes": [
+              {
+                "field": "production",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.batch"
+                }
+              },
+              {
+                "field": "date",
+                "expr": {
+                  "op": "$today",
+                  "kind": "date"
+                }
+              }
+            ]
+          },
+          {
+            "name": "batch",
+            "kind": "create",
+            "target": {
+              "type": "build.productionbatch"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "shoporder",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.shoporder"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.batch"
+                }
+              },
+              {
+                "field": "yield",
+                "expr": {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.yield"
+                }
+              },
+              {
+                "field": "scrap",
+                "expr": {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.scrap"
+                }
+              },
+              {
+                "field": "final",
+                "expr": {
+                  "op": "",
+                  "kind": "boolean",
+                  "ref": "input.final"
+                }
+              },
+              {
+                "field": "status",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "lit": {
+                    "value": "accepted"
+                  }
+                }
+              },
+              {
+                "field": "receipt",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.receipt"
+                }
+              }
+            ]
+          },
+          {
+            "name": "cumulative",
+            "kind": "update",
+            "target": {
+              "type": "build.productionorder",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "yield",
+                "expr": {
+                  "op": "+",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "yield"
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "input.yield"
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "scrap",
+                "expr": {
+                  "op": "+",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "scrap"
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "input.scrap"
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "currentbatch",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.batch"
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "if",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": "or",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "boolean",
+                          "ref": "input.final"
+                        },
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "+",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "+",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "coalesce",
+                                      "kind": "decimal",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "yield"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "lit": {
+                                            "value": 0
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "coalesce",
+                                      "kind": "decimal",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "scrap"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "lit": {
+                                            "value": 0
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "+",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "input.yield"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "input.scrap"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "decimal",
+                              "ref": "quantity"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "closed"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "running"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "issuecomponents",
+            "kind": "for-each",
+            "forEach": {
+              "set": "components",
+              "steps": [
+                {
+                  "name": "issuequantity",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.erpstock"
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "product",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "row.material"
+                        }
+                      },
+                      {
+                        "field": "bucket",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "quantity"
+                          }
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "row.unit"
+                        }
+                      }
+                    ],
+                    "field": "amount",
+                    "amount": {
+                      "op": "*",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "row.quantity"
+                        },
+                        {
+                          "op": "+",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "decimal",
+                              "ref": "input.yield"
+                            },
+                            {
+                              "op": "",
+                              "kind": "decimal",
+                              "ref": "input.scrap"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "subtract": true
+                  }
+                },
+                {
+                  "name": "issuevalue",
+                  "kind": "post",
+                  "target": {
+                    "type": "build.erpstock"
+                  },
+                  "post": {
+                    "match": [
+                      {
+                        "field": "product",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "row.material"
+                        }
+                      },
+                      {
+                        "field": "bucket",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "lit": {
+                            "value": "value"
+                          }
+                        }
+                      },
+                      {
+                        "field": "unit",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "row.currency"
+                        }
+                      }
+                    ],
+                    "field": "amount",
+                    "amount": {
+                      "op": "round",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "*",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "*",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "row.quantity"
+                                },
+                                {
+                                  "op": "+",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "input.yield"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "input.scrap"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "decimal",
+                              "ref": "row.cost"
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "integer",
+                          "lit": {
+                            "value": 2
+                          }
+                        }
+                      ]
+                    },
+                    "subtract": true
+                  }
+                },
+                {
+                  "name": "issued",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpmove"
+                  },
+                  "changes": [
+                    {
+                      "field": "receipt",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.receipt"
+                      }
+                    },
+                    {
+                      "field": "productionbatch",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.batch"
+                      }
+                    },
+                    {
+                      "field": "component",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "row.$subject"
+                      }
+                    },
+                    {
+                      "field": "reason",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "issue"
+                        }
+                      }
+                    },
+                    {
+                      "field": "product",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "row.material"
+                      }
+                    },
+                    {
+                      "field": "quantitybalance",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.issuequantity"
+                      }
+                    },
+                    {
+                      "field": "valuebalance",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.issuevalue"
+                      }
+                    },
+                    {
+                      "field": "date",
+                      "expr": {
+                        "op": "$today",
+                        "kind": "date"
+                      }
+                    },
+                    {
+                      "field": "quantity",
+                      "expr": {
+                        "op": "negate",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "*",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "row.quantity"
+                              },
+                              {
+                                "op": "+",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "input.yield"
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "input.scrap"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "field": "unitcost",
+                      "expr": {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "row.cost"
+                      }
+                    },
+                    {
+                      "field": "value",
+                      "expr": {
+                        "op": "negate",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "round",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "*",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "row.quantity"
+                                      },
+                                      {
+                                        "op": "+",
+                                        "kind": "decimal",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "decimal",
+                                            "ref": "input.yield"
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "decimal",
+                                            "ref": "input.scrap"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.cost"
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "integer",
+                                "lit": {
+                                  "value": 2
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "wipdebit",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpproductionposting"
+                  },
+                  "changes": [
+                    {
+                      "field": "order",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "input.$subject"
+                      }
+                    },
+                    {
+                      "field": "batch",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.batch"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "wip"
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "debit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "round",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "*",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.quantity"
+                                  },
+                                  {
+                                    "op": "+",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "input.yield"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "input.scrap"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "row.cost"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 2
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "stockcredit",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpproductionposting"
+                  },
+                  "changes": [
+                    {
+                      "field": "order",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "input.$subject"
+                      }
+                    },
+                    {
+                      "field": "batch",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.batch"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "row.account"
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "credit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "round",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "*",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "row.quantity"
+                                  },
+                                  {
+                                    "op": "+",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "input.yield"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "input.scrap"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "row.cost"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 2
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "outputquantity",
+            "kind": "post",
+            "target": {
+              "type": "build.erpstock"
+            },
+            "post": {
+              "match": [
+                {
+                  "field": "product",
+                  "expr": {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "product"
+                  }
+                },
+                {
+                  "field": "bucket",
+                  "expr": {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "quantity"
+                    }
+                  }
+                },
+                {
+                  "field": "unit",
+                  "expr": {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "unit"
+                  }
+                }
+              ],
+              "field": "amount",
+              "amount": {
+                "op": "",
+                "kind": "decimal",
+                "ref": "input.yield"
+              },
+              "subtract": false
+            },
+            "when": {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.yield"
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "outputvalue",
+            "kind": "post",
+            "target": {
+              "type": "build.erpstock"
+            },
+            "post": {
+              "match": [
+                {
+                  "field": "product",
+                  "expr": {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "product"
+                  }
+                },
+                {
+                  "field": "bucket",
+                  "expr": {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "value"
+                    }
+                  }
+                },
+                {
+                  "field": "unit",
+                  "expr": {
+                    "op": "",
+                    "kind": "text",
+                    "ref": "currency"
+                  }
+                }
+              ],
+              "field": "amount",
+              "amount": {
+                "op": "round",
+                "kind": "decimal",
+                "args": [
+                  {
+                    "op": "*",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "input.yield"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "unitcost"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "",
+                    "kind": "integer",
+                    "lit": {
+                      "value": 2
+                    }
+                  }
+                ]
+              },
+              "subtract": false
+            },
+            "when": {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.yield"
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "outputmove",
+            "kind": "create",
+            "target": {
+              "type": "build.erpmove"
+            },
+            "changes": [
+              {
+                "field": "receipt",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.receipt"
+                }
+              },
+              {
+                "field": "productionbatch",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.batch"
+                }
+              },
+              {
+                "field": "reason",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "output"
+                  }
+                }
+              },
+              {
+                "field": "product",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "product"
+                }
+              },
+              {
+                "field": "quantitybalance",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.outputquantity"
+                }
+              },
+              {
+                "field": "valuebalance",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.outputvalue"
+                }
+              },
+              {
+                "field": "date",
+                "expr": {
+                  "op": "$today",
+                  "kind": "date"
+                }
+              },
+              {
+                "field": "quantity",
+                "expr": {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.yield"
+                }
+              },
+              {
+                "field": "unitcost",
+                "expr": {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "unitcost"
+                }
+              },
+              {
+                "field": "value",
+                "expr": {
+                  "op": "round",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "*",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "input.yield"
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "unitcost"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 2
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "when": {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.yield"
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "finisheddebit",
+            "kind": "create",
+            "target": {
+              "type": "build.erpproductionposting"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.batch"
+                }
+              },
+              {
+                "field": "account",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "account"
+                }
+              },
+              {
+                "field": "side",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "debit"
+                  }
+                }
+              },
+              {
+                "field": "amount",
+                "expr": {
+                  "op": "round",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "*",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "input.yield"
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "unitcost"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 2
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "outputwip",
+            "kind": "create",
+            "target": {
+              "type": "build.erpproductionposting"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.batch"
+                }
+              },
+              {
+                "field": "account",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "wip"
+                }
+              },
+              {
+                "field": "side",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "credit"
+                  }
+                }
+              },
+              {
+                "field": "amount",
+                "expr": {
+                  "op": "round",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "*",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "input.yield"
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "unitcost"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 2
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "scrapdebit",
+            "kind": "create",
+            "target": {
+              "type": "build.erpproductionposting"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.batch"
+                }
+              },
+              {
+                "field": "account",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "scrapaccount"
+                }
+              },
+              {
+                "field": "side",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "debit"
+                  }
+                }
+              },
+              {
+                "field": "amount",
+                "expr": {
+                  "op": "round",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "*",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "input.scrap"
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "unitcost"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 2
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "scrapwip",
+            "kind": "create",
+            "target": {
+              "type": "build.erpproductionposting"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.batch"
+                }
+              },
+              {
+                "field": "account",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "wip"
+                }
+              },
+              {
+                "field": "side",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "credit"
+                  }
+                }
+              },
+              {
+                "field": "amount",
+                "expr": {
+                  "op": "round",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "*",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "input.scrap"
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "ref": "unitcost"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 2
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "varianceline",
+            "kind": "create",
+            "target": {
+              "type": "build.erpproductionposting"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.batch"
+                }
+              },
+              {
+                "field": "account",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "variance"
+                }
+              },
+              {
+                "field": "side",
+                "expr": {
+                  "op": "if",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": ">=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "-",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "-",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "sum",
+                                  "kind": "decimal",
+                                  "agg": {
+                                    "source": "components"
+                                  },
+                                  "in": {
+                                    "op": "round",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "*",
+                                        "kind": "decimal",
+                                        "args": [
+                                          {
+                                            "op": "*",
+                                            "kind": "decimal",
+                                            "args": [
+                                              {
+                                                "op": "",
+                                                "kind": "decimal",
+                                                "ref": "item.quantity"
+                                              },
+                                              {
+                                                "op": "+",
+                                                "kind": "decimal",
+                                                "args": [
+                                                  {
+                                                    "op": "",
+                                                    "kind": "decimal",
+                                                    "ref": "input.yield"
+                                                  },
+                                                  {
+                                                    "op": "",
+                                                    "kind": "decimal",
+                                                    "ref": "input.scrap"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "decimal",
+                                            "ref": "item.cost"
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "integer",
+                                        "lit": {
+                                          "value": 2
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "op": "round",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "*",
+                                      "kind": "decimal",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "input.yield"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "unitcost"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 2
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "op": "round",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "*",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "input.scrap"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "unitcost"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "integer",
+                                  "lit": {
+                                    "value": 2
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "debit"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "credit"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "amount",
+                "expr": {
+                  "op": "abs",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "-",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "-",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "sum",
+                              "kind": "decimal",
+                              "agg": {
+                                "source": "components"
+                              },
+                              "in": {
+                                "op": "round",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "*",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "*",
+                                        "kind": "decimal",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "decimal",
+                                            "ref": "item.quantity"
+                                          },
+                                          {
+                                            "op": "+",
+                                            "kind": "decimal",
+                                            "args": [
+                                              {
+                                                "op": "",
+                                                "kind": "decimal",
+                                                "ref": "input.yield"
+                                              },
+                                              {
+                                                "op": "",
+                                                "kind": "decimal",
+                                                "ref": "input.scrap"
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "item.cost"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "integer",
+                                    "lit": {
+                                      "value": 2
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "op": "round",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "*",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "input.yield"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "unitcost"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "integer",
+                                  "lit": {
+                                    "value": 2
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "round",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "*",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "input.scrap"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "unitcost"
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 2
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "variancewip",
+            "kind": "create",
+            "target": {
+              "type": "build.erpproductionposting"
+            },
+            "changes": [
+              {
+                "field": "order",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.$subject"
+                }
+              },
+              {
+                "field": "batch",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "step.batch"
+                }
+              },
+              {
+                "field": "account",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "wip"
+                }
+              },
+              {
+                "field": "side",
+                "expr": {
+                  "op": "if",
+                  "kind": "choice",
+                  "args": [
+                    {
+                      "op": ">=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "-",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "-",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "sum",
+                                  "kind": "decimal",
+                                  "agg": {
+                                    "source": "components"
+                                  },
+                                  "in": {
+                                    "op": "round",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "*",
+                                        "kind": "decimal",
+                                        "args": [
+                                          {
+                                            "op": "*",
+                                            "kind": "decimal",
+                                            "args": [
+                                              {
+                                                "op": "",
+                                                "kind": "decimal",
+                                                "ref": "item.quantity"
+                                              },
+                                              {
+                                                "op": "+",
+                                                "kind": "decimal",
+                                                "args": [
+                                                  {
+                                                    "op": "",
+                                                    "kind": "decimal",
+                                                    "ref": "input.yield"
+                                                  },
+                                                  {
+                                                    "op": "",
+                                                    "kind": "decimal",
+                                                    "ref": "input.scrap"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "op": "",
+                                            "kind": "decimal",
+                                            "ref": "item.cost"
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "integer",
+                                        "lit": {
+                                          "value": 2
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "op": "round",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "*",
+                                      "kind": "decimal",
+                                      "args": [
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "input.yield"
+                                        },
+                                        {
+                                          "op": "",
+                                          "kind": "decimal",
+                                          "ref": "unitcost"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 2
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "op": "round",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "*",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "input.scrap"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "unitcost"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "integer",
+                                  "lit": {
+                                    "value": 2
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "",
+                          "kind": "decimal",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "credit"
+                      }
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "debit"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "field": "amount",
+                "expr": {
+                  "op": "abs",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "-",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "-",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "sum",
+                              "kind": "decimal",
+                              "agg": {
+                                "source": "components"
+                              },
+                              "in": {
+                                "op": "round",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "*",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "*",
+                                        "kind": "decimal",
+                                        "args": [
+                                          {
+                                            "op": "",
+                                            "kind": "decimal",
+                                            "ref": "item.quantity"
+                                          },
+                                          {
+                                            "op": "+",
+                                            "kind": "decimal",
+                                            "args": [
+                                              {
+                                                "op": "",
+                                                "kind": "decimal",
+                                                "ref": "input.yield"
+                                              },
+                                              {
+                                                "op": "",
+                                                "kind": "decimal",
+                                                "ref": "input.scrap"
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "item.cost"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "op": "",
+                                    "kind": "integer",
+                                    "lit": {
+                                      "value": 2
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "op": "round",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "*",
+                                  "kind": "decimal",
+                                  "args": [
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "input.yield"
+                                    },
+                                    {
+                                      "op": "",
+                                      "kind": "decimal",
+                                      "ref": "unitcost"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "integer",
+                                  "lit": {
+                                    "value": 2
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "round",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "*",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "input.scrap"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "unitcost"
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 2
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "journalentry",
+            "kind": "create",
+            "target": {
+              "type": "build.erpentry"
+            },
+            "changes": [
+              {
+                "field": "date",
+                "expr": {
+                  "op": "$today",
+                  "kind": "date"
+                }
+              },
+              {
+                "field": "currency",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "currency"
+                }
+              },
+              {
+                "field": "reference",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.batch"
+                }
+              },
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "submitted"
+                  }
+                }
+              }
+            ],
+            "when": {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "+",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "sum",
+                      "kind": "decimal",
+                      "agg": {
+                        "source": "components"
+                      },
+                      "in": {
+                        "op": "round",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "*",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "item.quantity"
+                                  },
+                                  {
+                                    "op": "+",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "input.yield"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "input.scrap"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "item.cost"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 2
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "op": "+",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "round",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "*",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "input.yield"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "unitcost"
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 2
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "round",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "*",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "input.scrap"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "unitcost"
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 2
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "journallines",
+            "kind": "for-each",
+            "forEach": {
+              "set": "currentposting",
+              "steps": [
+                {
+                  "name": "journallinesline0",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpline"
+                  },
+                  "changes": [
+                    {
+                      "field": "document",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.journalentry"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "path",
+                        "kind": "text",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "row.account"
+                          }
+                        ],
+                        "path": [
+                          "code"
+                        ]
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "debit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "row.amount"
+                      }
+                    }
+                  ],
+                  "when": {
+                    "op": "and",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": ">",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.amount"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "lit": {
+                              "value": 0
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "row.side"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "debit"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "journallinesline1",
+                  "kind": "create",
+                  "target": {
+                    "type": "build.erpline"
+                  },
+                  "changes": [
+                    {
+                      "field": "document",
+                      "expr": {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "step.journalentry"
+                      }
+                    },
+                    {
+                      "field": "account",
+                      "expr": {
+                        "op": "path",
+                        "kind": "text",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "reference",
+                            "ref": "row.account"
+                          }
+                        ],
+                        "path": [
+                          "code"
+                        ]
+                      }
+                    },
+                    {
+                      "field": "side",
+                      "expr": {
+                        "op": "",
+                        "kind": "choice",
+                        "lit": {
+                          "value": "credit"
+                        }
+                      }
+                    },
+                    {
+                      "field": "amount",
+                      "expr": {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "row.amount"
+                      }
+                    }
+                  ],
+                  "when": {
+                    "op": "and",
+                    "kind": "boolean",
+                    "args": [
+                      {
+                        "op": ">",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "ref": "row.amount"
+                          },
+                          {
+                            "op": "",
+                            "kind": "decimal",
+                            "lit": {
+                              "value": 0
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "=",
+                        "kind": "boolean",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "ref": "row.side"
+                          },
+                          {
+                            "op": "",
+                            "kind": "choice",
+                            "lit": {
+                              "value": "credit"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "when": {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "+",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "sum",
+                      "kind": "decimal",
+                      "agg": {
+                        "source": "components"
+                      },
+                      "in": {
+                        "op": "round",
+                        "kind": "decimal",
+                        "args": [
+                          {
+                            "op": "*",
+                            "kind": "decimal",
+                            "args": [
+                              {
+                                "op": "*",
+                                "kind": "decimal",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "decimal",
+                                    "ref": "item.quantity"
+                                  },
+                                  {
+                                    "op": "+",
+                                    "kind": "decimal",
+                                    "args": [
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "input.yield"
+                                      },
+                                      {
+                                        "op": "",
+                                        "kind": "decimal",
+                                        "ref": "input.scrap"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "op": "",
+                                "kind": "decimal",
+                                "ref": "item.cost"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 2
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "op": "+",
+                      "kind": "decimal",
+                      "args": [
+                        {
+                          "op": "round",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "*",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "input.yield"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "unitcost"
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 2
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "round",
+                          "kind": "decimal",
+                          "args": [
+                            {
+                              "op": "*",
+                              "kind": "decimal",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "input.scrap"
+                                },
+                                {
+                                  "op": "",
+                                  "kind": "decimal",
+                                  "ref": "unitcost"
+                                }
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "integer",
+                              "lit": {
+                                "value": 2
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "guard": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": ">=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.yield"
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            },
+            {
+              "op": ">=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "input.scrap"
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            },
+            {
+              "op": ">",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "+",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "input.yield"
+                    },
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "input.scrap"
+                    }
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "lit": {
+                    "value": 0
+                  }
+                }
+              ]
+            },
+            {
+              "op": "<=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "+",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "input.yield"
+                    },
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "input.scrap"
+                    }
+                  ]
+                },
+                {
+                  "op": "",
+                  "kind": "decimal",
+                  "ref": "remaining"
+                }
+              ]
+            }
+          ]
+        },
+        "message": "Batch quantities must be positive and cannot exceed the remaining production allowance.",
+        "reads": {
+          "collections": {
+            "components": {
+              "app": "build",
+              "object": "build.erpproductioncomponent",
+              "set": "components",
+              "policy": "complete"
+            },
+            "batches": {
+              "app": "build",
+              "object": "build.productionbatch",
+              "set": "batches",
+              "policy": "complete"
+            },
+            "posting": {
+              "app": "build",
+              "object": "build.erpproductionposting",
+              "set": "posting",
+              "policy": "complete"
+            },
+            "currentposting": {
+              "app": "build",
+              "object": "build.erpproductionposting",
+              "set": "currentposting",
+              "policy": "complete"
+            },
+            "receipts": {
+              "app": "build",
+              "object": "build.erpreceipt",
+              "set": "receipts",
+              "policy": "complete"
+            }
+          }
+        }
+      },
+      "inputs": [
+        {
+          "name": "shoporder",
+          "title": "Shop order",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "batch",
+          "title": "Batch identity",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "yield",
+          "title": "Good quantity",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "scrap",
+          "title": "Scrap quantity",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "final",
+          "title": "Close upstream order",
+          "type": "boolean",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "name": "originalplan",
+      "kind": "immutable",
+      "fields": [
+        "number",
+        "product",
+        "policy",
+        "quantity",
+        "currency",
+        "unit",
+        "unitcost",
+        "account",
+        "wip",
+        "scrapaccount",
+        "variance",
+        "componentcount",
+        "archived"
+      ],
+      "expr": {
+        "op": ">",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "",
+            "kind": "integer",
+            "ref": "componentcount"
+          },
+          {
+            "op": "",
+            "kind": "integer",
+            "lit": {
+              "value": 0
+            }
+          }
+        ]
+      },
+      "message": "Submitted document values and their original parent stay fixed."
+    },
+    {
+      "name": "frozencomponents",
+      "kind": "expression",
+      "fields": [
+        "componentcount"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "=",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "count",
+            "kind": "integer",
+            "agg": {
+              "source": "components"
+            }
+          },
+          {
+            "op": "",
+            "kind": "integer",
+            "ref": "componentcount"
+          }
+        ]
+      },
+      "message": "A production order keeps its complete original component snapshots.",
+      "reads": {
+        "collections": {
+          "components": {
+            "app": "build",
+            "object": "build.erpproductioncomponent",
+            "set": "components",
+            "policy": "complete"
+          },
+          "batches": {
+            "app": "build",
+            "object": "build.productionbatch",
+            "set": "batches",
+            "policy": "complete"
+          },
+          "posting": {
+            "app": "build",
+            "object": "build.erpproductionposting",
+            "set": "posting",
+            "policy": "complete"
+          },
+          "currentposting": {
+            "app": "build",
+            "object": "build.erpproductionposting",
+            "set": "currentposting",
+            "policy": "complete"
+          },
+          "receipts": {
+            "app": "build",
+            "object": "build.erpreceipt",
+            "set": "receipts",
+            "policy": "complete"
+          }
+        }
+      }
+    },
+    {
+      "name": "acceptedbatches",
+      "kind": "expression",
+      "fields": [
+        "yield",
+        "scrap",
+        "state"
+      ],
+      "level": "txn",
+      "expr": {
+        "op": "and",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "coalesce",
+                "kind": "decimal",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "decimal",
+                    "ref": "yield"
+                  },
+                  {
+                    "op": "",
+                    "kind": "decimal",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "sum",
+                "kind": "decimal",
+                "agg": {
+                  "source": "batches"
+                },
+                "in": {
+                  "op": "coalesce",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "item.yield"
+                    },
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "coalesce",
+                "kind": "decimal",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "decimal",
+                    "ref": "scrap"
+                  },
+                  {
+                    "op": "",
+                    "kind": "decimal",
+                    "lit": {
+                      "value": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "sum",
+                "kind": "decimal",
+                "agg": {
+                  "source": "batches"
+                },
+                "in": {
+                  "op": "coalesce",
+                  "kind": "decimal",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "ref": "item.scrap"
+                    },
+                    {
+                      "op": "",
+                      "kind": "decimal",
+                      "lit": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "op": "<=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "+",
+                "kind": "decimal",
+                "args": [
+                  {
+                    "op": "coalesce",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "yield"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "op": "coalesce",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "ref": "scrap"
+                      },
+                      {
+                        "op": "",
+                        "kind": "decimal",
+                        "lit": {
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "",
+                "kind": "decimal",
+                "ref": "quantity"
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "count",
+                "kind": "integer",
+                "agg": {
+                  "source": "receipts"
+                }
+              },
+              {
+                "op": "count",
+                "kind": "integer",
+                "agg": {
+                  "source": "batches"
+                }
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "count",
+                "kind": "integer",
+                "agg": {
+                  "source": "posting"
+                }
+              },
+              {
+                "op": "*",
+                "kind": "integer",
+                "args": [
+                  {
+                    "op": "count",
+                    "kind": "integer",
+                    "agg": {
+                      "source": "batches"
+                    }
+                  },
+                  {
+                    "op": "+",
+                    "kind": "integer",
+                    "args": [
+                      {
+                        "op": "*",
+                        "kind": "integer",
+                        "args": [
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "ref": "componentcount"
+                          },
+                          {
+                            "op": "",
+                            "kind": "integer",
+                            "lit": {
+                              "value": 2
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "op": "",
+                        "kind": "integer",
+                        "lit": {
+                          "value": 6
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Cumulative production, receipts and financial lines equal the accepted batches.",
+      "reads": {
+        "collections": {
+          "components": {
+            "app": "build",
+            "object": "build.erpproductioncomponent",
+            "set": "components",
+            "policy": "complete"
+          },
+          "batches": {
+            "app": "build",
+            "object": "build.productionbatch",
+            "set": "batches",
+            "policy": "complete"
+          },
+          "posting": {
+            "app": "build",
+            "object": "build.erpproductionposting",
+            "set": "posting",
+            "policy": "complete"
+          },
+          "currentposting": {
+            "app": "build",
+            "object": "build.erpproductionposting",
+            "set": "currentposting",
+            "policy": "complete"
+          },
+          "receipts": {
+            "app": "build",
+            "object": "build.erpreceipt",
+            "set": "receipts",
+            "policy": "complete"
+          }
+        }
+      }
+    }
+  ],
+  "createTransaction": {
+    "subject": "build.productionorder",
+    "steps": [
+      {
+        "name": "freezecomponents",
+        "kind": "for-each",
+        "forEach": {
+          "of": "product",
+          "set": "components",
+          "steps": [
+            {
+              "name": "component",
+              "kind": "create",
+              "target": {
+                "type": "build.erpproductioncomponent"
+              },
+              "changes": [
+                {
+                  "field": "order",
+                  "expr": {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "input.$subject"
+                  }
+                },
+                {
+                  "field": "source",
+                  "expr": {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "row.$subject"
+                  }
+                },
+                {
+                  "field": "material",
+                  "expr": {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "row.material"
+                  }
+                },
+                {
+                  "field": "quantity",
+                  "expr": {
+                    "op": "",
+                    "kind": "decimal",
+                    "ref": "row.quantity"
+                  }
+                },
+                {
+                  "field": "cost",
+                  "expr": {
+                    "op": "path",
+                    "kind": "decimal",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "row.material"
+                      }
+                    ],
+                    "path": [
+                      "cost"
+                    ]
+                  }
+                },
+                {
+                  "field": "unit",
+                  "expr": {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "row.material"
+                      }
+                    ],
+                    "path": [
+                      "unit"
+                    ]
+                  }
+                },
+                {
+                  "field": "currency",
+                  "expr": {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "row.material"
+                      }
+                    ],
+                    "path": [
+                      "currency"
+                    ]
+                  }
+                },
+                {
+                  "field": "account",
+                  "expr": {
+                    "op": "path",
+                    "kind": "reference",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "row.material"
+                      }
+                    ],
+                    "path": [
+                      "account"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "freeze",
+        "kind": "update",
+        "target": {
+          "type": "build.productionorder",
+          "id": "$subject"
+        },
+        "changes": [
+          {
+            "field": "currency",
+            "expr": {
+              "op": "path",
+              "kind": "text",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "product"
+                }
+              ],
+              "path": [
+                "currency"
+              ]
+            }
+          },
+          {
+            "field": "unit",
+            "expr": {
+              "op": "path",
+              "kind": "text",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "product"
+                }
+              ],
+              "path": [
+                "unit"
+              ]
+            }
+          },
+          {
+            "field": "unitcost",
+            "expr": {
+              "op": "path",
+              "kind": "decimal",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "product"
+                }
+              ],
+              "path": [
+                "cost"
+              ]
+            }
+          },
+          {
+            "field": "account",
+            "expr": {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "product"
+                }
+              ],
+              "path": [
+                "account"
+              ]
+            }
+          },
+          {
+            "field": "wip",
+            "expr": {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "policy"
+                }
+              ],
+              "path": [
+                "wip"
+              ]
+            }
+          },
+          {
+            "field": "scrapaccount",
+            "expr": {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "policy"
+                }
+              ],
+              "path": [
+                "scrap"
+              ]
+            }
+          },
+          {
+            "field": "variance",
+            "expr": {
+              "op": "path",
+              "kind": "reference",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "policy"
+                }
+              ],
+              "path": [
+                "variance"
+              ]
+            }
+          },
+          {
+            "field": "componentcount",
+            "expr": {
+              "op": "count",
+              "kind": "integer",
+              "agg": {
+                "source": "sourcecomponents"
+              }
+            }
+          },
+          {
+            "field": "yield",
+            "expr": {
+              "op": "",
+              "kind": "decimal",
+              "lit": {
+                "value": 0
+              }
+            }
+          },
+          {
+            "field": "scrap",
+            "expr": {
+              "op": "",
+              "kind": "decimal",
+              "lit": {
+                "value": 0
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "guard": {
+      "op": "and",
+      "kind": "boolean",
+      "args": [
+        {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "path",
+              "kind": "choice",
+              "args": [
+                {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "product"
+                }
+              ],
+              "path": [
+                "kind"
+              ]
+            },
+            {
+              "op": "",
+              "kind": "choice",
+              "lit": {
+                "value": "finished"
+              }
+            }
+          ]
+        },
+        {
+          "op": "path",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "reference",
+              "ref": "product"
+            }
+          ],
+          "path": [
+            "active"
+          ]
+        },
+        {
+          "op": ">",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "decimal",
+              "ref": "quantity"
+            },
+            {
+              "op": "",
+              "kind": "decimal",
+              "lit": {
+                "value": 0
+              }
+            }
+          ]
+        },
+        {
+          "op": ">",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "count",
+              "kind": "integer",
+              "agg": {
+                "source": "sourcecomponents"
+              }
+            },
+            {
+              "op": "",
+              "kind": "integer",
+              "lit": {
+                "value": 0
+              }
+            }
+          ]
+        },
+        {
+          "op": "<=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "count",
+              "kind": "integer",
+              "agg": {
+                "source": "sourcecomponents"
+              }
+            },
+            {
+              "op": "",
+              "kind": "integer",
+              "lit": {
+                "value": 64
+              }
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "kind": "boolean",
+          "agg": {
+            "source": "sourcecomponents"
+          },
+          "in": {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "path",
+                    "kind": "choice",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "item.material"
+                      }
+                    ],
+                    "path": [
+                      "kind"
+                    ]
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "material"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "path",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "item.material"
+                  }
+                ],
+                "path": [
+                  "active"
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "item.material"
+                      }
+                    ],
+                    "path": [
+                      "currency"
+                    ]
+                  },
+                  {
+                    "op": "path",
+                    "kind": "text",
+                    "args": [
+                      {
+                        "op": "",
+                        "kind": "reference",
+                        "ref": "product"
+                      }
+                    ],
+                    "path": [
+                      "currency"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "message": "Production requires an active finished item with a complete bounded material structure in one currency.",
+    "reads": {
+      "collections": {
+        "sourcecomponents": {
+          "app": "build",
+          "object": "build.erpcomponent",
+          "query": "erpcomponentsbyproduct",
+          "version": 1,
+          "of": "product",
+          "policy": "complete"
+        }
+      }
+    }
+  },
+  "protocols": [
+    {
+      "name": "production.orders",
+      "version": 2,
+      "actions": {
+        "start": "start",
+        "confirm": "confirm"
+      },
+      "reads": [
+        "orders"
+      ],
+      "events": {
+        "released": "create"
+      },
+      "contract": {
+        "Name": "production.orders",
+        "Version": 2,
+        "Reads": [
+          "orders"
+        ],
+        "Events": [
+          {
+            "name": "released",
+            "title": "Production order released"
+          }
+        ],
+        "Actions": [
+          {
+            "schema": "start",
+            "title": "Start upstream production",
+            "description": "Start upstream production",
+            "payload": [
+              {
+                "name": "shoporder",
+                "type": "string",
+                "required": true
+              }
+            ]
+          },
+          {
+            "schema": "confirm",
+            "title": "Accept production batch",
+            "description": "Accept production batch",
+            "payload": [
+              {
+                "name": "shoporder",
+                "type": "string",
+                "required": true
+              },
+              {
+                "name": "batch",
+                "type": "string",
+                "required": true
+              },
+              {
+                "name": "yield",
+                "type": "number",
+                "required": true
+              },
+              {
+                "name": "scrap",
+                "type": "number",
+                "required": true
+              },
+              {
+                "name": "final",
+                "type": "boolean",
+                "required": true
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "type": "build.productionorder"
+}

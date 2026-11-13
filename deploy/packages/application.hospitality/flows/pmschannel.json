@@ -1,0 +1,489 @@
+{
+  "name": "build.pmschannel",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.pmschannelmessage"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.pmschannelmessage.complete"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.pmschannelmessage.fail"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.pmsreservation.cancel"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.pmsreservation.confirm"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.pmsreservation.create"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.pmsreservation.modify"
+    },
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.pmsreservation.release"
+    }
+  ],
+  "definition": {
+    "name": "pmschannel",
+    "title": "Apply a frozen channel message",
+    "object": "build.pmschannelmessage",
+    "when": "pending",
+    "steps": [
+      {
+        "name": "kind",
+        "kind": "switch",
+        "value": {
+          "source": "subject",
+          "path": [
+            "kind"
+          ]
+        },
+        "cases": {
+          "reserve": "reserveunit",
+          "hold": "holdunit",
+          "change": "changeunit",
+          "confirm": "confirm",
+          "cancel": "cancel",
+          "release": "release"
+        },
+        "next": "failed"
+      },
+      {
+        "name": "reserveunit",
+        "kind": "switch",
+        "value": {
+          "source": "subject",
+          "path": [
+            "unit"
+          ]
+        },
+        "cases": {
+          "day": "reserveday",
+          "hour": "reservehour"
+        },
+        "next": "failed"
+      },
+      {
+        "name": "reserveday",
+        "kind": "action",
+        "act": "build.pmsreservation.create",
+        "target": {
+          "source": "subject",
+          "path": [
+            "reservation"
+          ]
+        },
+        "inputs": {
+          "roomtype": {
+            "source": "subject",
+            "path": [
+              "roomtype"
+            ]
+          },
+          "unit": {
+            "source": "subject",
+            "path": [
+              "unit"
+            ]
+          },
+          "dayfrom": {
+            "source": "subject",
+            "path": [
+              "dayfrom"
+            ]
+          },
+          "dayuntil": {
+            "source": "subject",
+            "path": [
+              "dayuntil"
+            ]
+          },
+          "guest": {
+            "source": "subject",
+            "path": [
+              "guest"
+            ]
+          },
+          "mode": {
+            "source": "literal",
+            "value": "booked"
+          }
+        },
+        "next": "complete",
+        "error": "failed",
+        "retryAttempts": 1
+      },
+      {
+        "name": "reservehour",
+        "kind": "action",
+        "act": "build.pmsreservation.create",
+        "target": {
+          "source": "subject",
+          "path": [
+            "reservation"
+          ]
+        },
+        "inputs": {
+          "roomtype": {
+            "source": "subject",
+            "path": [
+              "roomtype"
+            ]
+          },
+          "unit": {
+            "source": "subject",
+            "path": [
+              "unit"
+            ]
+          },
+          "fromat": {
+            "source": "subject",
+            "path": [
+              "fromat"
+            ]
+          },
+          "untilat": {
+            "source": "subject",
+            "path": [
+              "untilat"
+            ]
+          },
+          "guest": {
+            "source": "subject",
+            "path": [
+              "guest"
+            ]
+          },
+          "mode": {
+            "source": "literal",
+            "value": "booked"
+          }
+        },
+        "next": "complete",
+        "error": "failed",
+        "retryAttempts": 1
+      },
+      {
+        "name": "holdunit",
+        "kind": "switch",
+        "value": {
+          "source": "subject",
+          "path": [
+            "unit"
+          ]
+        },
+        "cases": {
+          "day": "holdday",
+          "hour": "holdhour"
+        },
+        "next": "failed"
+      },
+      {
+        "name": "holdday",
+        "kind": "action",
+        "act": "build.pmsreservation.create",
+        "target": {
+          "source": "subject",
+          "path": [
+            "reservation"
+          ]
+        },
+        "inputs": {
+          "roomtype": {
+            "source": "subject",
+            "path": [
+              "roomtype"
+            ]
+          },
+          "unit": {
+            "source": "subject",
+            "path": [
+              "unit"
+            ]
+          },
+          "dayfrom": {
+            "source": "subject",
+            "path": [
+              "dayfrom"
+            ]
+          },
+          "dayuntil": {
+            "source": "subject",
+            "path": [
+              "dayuntil"
+            ]
+          },
+          "guest": {
+            "source": "subject",
+            "path": [
+              "guest"
+            ]
+          },
+          "expires": {
+            "source": "subject",
+            "path": [
+              "expires"
+            ]
+          },
+          "mode": {
+            "source": "literal",
+            "value": "held"
+          }
+        },
+        "next": "complete",
+        "error": "failed",
+        "retryAttempts": 1
+      },
+      {
+        "name": "holdhour",
+        "kind": "action",
+        "act": "build.pmsreservation.create",
+        "target": {
+          "source": "subject",
+          "path": [
+            "reservation"
+          ]
+        },
+        "inputs": {
+          "roomtype": {
+            "source": "subject",
+            "path": [
+              "roomtype"
+            ]
+          },
+          "unit": {
+            "source": "subject",
+            "path": [
+              "unit"
+            ]
+          },
+          "fromat": {
+            "source": "subject",
+            "path": [
+              "fromat"
+            ]
+          },
+          "untilat": {
+            "source": "subject",
+            "path": [
+              "untilat"
+            ]
+          },
+          "guest": {
+            "source": "subject",
+            "path": [
+              "guest"
+            ]
+          },
+          "expires": {
+            "source": "subject",
+            "path": [
+              "expires"
+            ]
+          },
+          "mode": {
+            "source": "literal",
+            "value": "held"
+          }
+        },
+        "next": "complete",
+        "error": "failed",
+        "retryAttempts": 1
+      },
+      {
+        "name": "changeunit",
+        "kind": "switch",
+        "value": {
+          "source": "subject",
+          "path": [
+            "unit"
+          ]
+        },
+        "cases": {
+          "day": "changeday",
+          "hour": "changehour"
+        },
+        "next": "failed"
+      },
+      {
+        "name": "changeday",
+        "kind": "action",
+        "act": "build.pmsreservation.modify",
+        "target": {
+          "source": "subject",
+          "path": [
+            "reservation"
+          ]
+        },
+        "inputs": {
+          "roomtype": {
+            "source": "subject",
+            "path": [
+              "roomtype"
+            ]
+          },
+          "unit": {
+            "source": "subject",
+            "path": [
+              "unit"
+            ]
+          },
+          "dayfrom": {
+            "source": "subject",
+            "path": [
+              "dayfrom"
+            ]
+          },
+          "dayuntil": {
+            "source": "subject",
+            "path": [
+              "dayuntil"
+            ]
+          }
+        },
+        "next": "complete",
+        "error": "failed",
+        "retryAttempts": 1
+      },
+      {
+        "name": "changehour",
+        "kind": "action",
+        "act": "build.pmsreservation.modify",
+        "target": {
+          "source": "subject",
+          "path": [
+            "reservation"
+          ]
+        },
+        "inputs": {
+          "roomtype": {
+            "source": "subject",
+            "path": [
+              "roomtype"
+            ]
+          },
+          "unit": {
+            "source": "subject",
+            "path": [
+              "unit"
+            ]
+          },
+          "fromat": {
+            "source": "subject",
+            "path": [
+              "fromat"
+            ]
+          },
+          "untilat": {
+            "source": "subject",
+            "path": [
+              "untilat"
+            ]
+          }
+        },
+        "next": "complete",
+        "error": "failed",
+        "retryAttempts": 1
+      },
+      {
+        "name": "confirm",
+        "kind": "action",
+        "act": "build.pmsreservation.confirm",
+        "target": {
+          "source": "subject",
+          "path": [
+            "reservation"
+          ]
+        },
+        "next": "complete",
+        "error": "failed",
+        "retryAttempts": 1
+      },
+      {
+        "name": "cancel",
+        "kind": "action",
+        "act": "build.pmsreservation.cancel",
+        "target": {
+          "source": "subject",
+          "path": [
+            "reservation"
+          ]
+        },
+        "next": "complete",
+        "error": "failed",
+        "retryAttempts": 1
+      },
+      {
+        "name": "release",
+        "kind": "action",
+        "act": "build.pmsreservation.release",
+        "target": {
+          "source": "subject",
+          "path": [
+            "reservation"
+          ]
+        },
+        "next": "complete",
+        "error": "failed",
+        "retryAttempts": 1
+      },
+      {
+        "name": "complete",
+        "kind": "action",
+        "act": "complete",
+        "inputs": {
+          "booking": {
+            "source": "subject",
+            "path": [
+              "reservation"
+            ]
+          }
+        },
+        "next": "done",
+        "error": "review"
+      },
+      {
+        "name": "failed",
+        "kind": "action",
+        "act": "fail",
+        "next": "review",
+        "error": "review"
+      },
+      {
+        "name": "review",
+        "kind": "ask",
+        "ask": "hotelmanager",
+        "title": "Review the rejected channel change and send a new correction when needed",
+        "answers": [
+          "reviewed"
+        ],
+        "cases": {
+          "reviewed": "done"
+        }
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "build.crmgroupwon",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.crmgroup"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.crmopportunity.finishwin"
+    }
+  ],
+  "definition": {
+    "name": "crmgroupwon",
+    "title": "Keep the group sale won",
+    "object": "build.crmgroup",
+    "when": "won",
+    "steps": [
+      {
+        "name": "opportunity",
+        "kind": "action",
+        "act": "build.crmopportunity.finishwin",
+        "target": {
+          "source": "subject",
+          "path": [
+            "opportunity"
+          ]
+        },
+        "next": "done",
+        "retryAttempts": 1
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

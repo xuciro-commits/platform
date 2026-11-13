@@ -1,0 +1,85 @@
+{
+  "name": "build.pmsexpiry",
+  "subject": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.pmsreservation"
+  },
+  "actions": [
+    {
+      "app": "build",
+      "kind": "action",
+      "name": "build.pmsreservation.expire"
+    }
+  ],
+  "definition": {
+    "name": "pmsexpiry",
+    "title": "Release expired reservation holds",
+    "object": "build.pmsreservation",
+    "when": "held",
+    "steps": [
+      {
+        "name": "cutoff",
+        "kind": "wait",
+        "waitUntil": {
+          "source": "subject",
+          "path": [
+            "expires"
+          ]
+        },
+        "next": "held",
+        "error": "review"
+      },
+      {
+        "name": "held",
+        "kind": "branch",
+        "condition": {
+          "op": "=",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "",
+              "kind": "json",
+              "ref": "subject.state"
+            },
+            {
+              "op": "",
+              "kind": "json",
+              "lit": {
+                "value": "held"
+              }
+            }
+          ]
+        },
+        "cases": {
+          "true": "release",
+          "false": "done"
+        },
+        "error": "review"
+      },
+      {
+        "name": "release",
+        "kind": "action",
+        "act": "expire",
+        "next": "done",
+        "error": "review"
+      },
+      {
+        "name": "review",
+        "kind": "ask",
+        "ask": "hotelmanager",
+        "title": "Review a hold that could not be released",
+        "answers": [
+          "resolved"
+        ],
+        "cases": {
+          "resolved": "done"
+        }
+      },
+      {
+        "name": "done",
+        "kind": "end"
+      }
+    ]
+  }
+}

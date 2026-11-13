@@ -1,0 +1,212 @@
+{
+  "name": "alarm",
+  "type": "build.alarm",
+  "title": "Heating alarm",
+  "plural": "Heating alarms",
+  "description": "An alarm contains the accepted exception result and its threshold. It does not copy the original measurement window.",
+  "fields": [
+    {
+      "name": "building",
+      "title": "Building",
+      "type": "reference",
+      "ref": "build.building",
+      "required": true
+    },
+    {
+      "name": "device",
+      "title": "Device",
+      "type": "reference",
+      "ref": "build.device",
+      "required": true
+    },
+    {
+      "name": "summary",
+      "title": "Alarm summary",
+      "type": "text",
+      "required": true,
+      "search": true
+    },
+    {
+      "name": "severity",
+      "title": "Severity",
+      "type": "choice",
+      "choices": "warning,critical",
+      "required": true
+    },
+    {
+      "name": "metric",
+      "title": "Observed signal",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "observed",
+      "title": "Accepted observed result",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "threshold",
+      "title": "Decision threshold",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "openedat",
+      "title": "Opened at",
+      "type": "datetime",
+      "required": true
+    },
+    {
+      "name": "note",
+      "title": "Operator note",
+      "type": "longtext"
+    },
+    {
+      "name": "resolvedat",
+      "title": "Resolved at",
+      "type": "datetime"
+    }
+  ],
+  "access": [
+    {
+      "role": "user",
+      "read": "all",
+      "create": true,
+      "edit": false,
+      "archive": false
+    }
+  ],
+  "states": [
+    {
+      "name": "open",
+      "title": "Open",
+      "tone": "danger"
+    },
+    {
+      "name": "acknowledged",
+      "title": "Acknowledged",
+      "tone": "warning"
+    },
+    {
+      "name": "closed",
+      "title": "Resolved",
+      "tone": "success"
+    }
+  ],
+  "actions": [
+    {
+      "name": "acknowledge",
+      "title": "Acknowledge alarm",
+      "from": [
+        "open"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.alarm",
+        "steps": [
+          {
+            "name": "acknowledged",
+            "kind": "update",
+            "target": {
+              "type": "build.alarm",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "acknowledged"
+                  }
+                }
+              },
+              {
+                "field": "note",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.note"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "note",
+          "title": "Acknowledgement note",
+          "type": "text",
+          "required": true,
+          "constraints": {
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "resolve",
+      "title": "Resolve alarm",
+      "from": [
+        "acknowledged"
+      ],
+      "roles": [
+        "user",
+        "builder"
+      ],
+      "transaction": {
+        "subject": "build.alarm",
+        "steps": [
+          {
+            "name": "resolved",
+            "kind": "update",
+            "target": {
+              "type": "build.alarm",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "kind": "choice",
+                  "lit": {
+                    "value": "closed"
+                  }
+                }
+              },
+              {
+                "field": "note",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.note"
+                }
+              },
+              {
+                "field": "resolvedat",
+                "expr": {
+                  "op": "$now",
+                  "kind": "datetime"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "inputs": [
+        {
+          "name": "note",
+          "title": "Resolution evidence",
+          "type": "text",
+          "required": true,
+          "constraints": {
+            "minLength": 1
+          }
+        }
+      ]
+    }
+  ]
+}
