@@ -108,3 +108,33 @@ func RelationViolations(s *Store, link platform.LinkType) ([]RelationViolation, 
 	}
 	return violations, nil
 }
+
+func OwnedRelationRefs(store *Store, link platform.LinkType, direction, source string) []string {
+	refs := []string{}
+	store.Lock()
+	defer store.Unlock()
+	et := store.Type(platform.OwnedRelationType(link.Child.App))
+	if et != nil {
+		for _, row := range et.Rows().All() {
+			if Header(row.Value).Archived {
+				continue
+			}
+			var value struct {
+				Binding, Parent, Child string
+				Migration              bool
+			}
+			_ = json.Unmarshal(platform.Raw(row.Value.Interface()), &value)
+			if value.Migration || value.Binding != link.Name {
+				continue
+			}
+			from, to := value.Parent, value.Child
+			if direction == "reverse" {
+				from, to = to, from
+			}
+			if from == source {
+				refs = append(refs, to)
+			}
+		}
+	}
+	return refs
+}

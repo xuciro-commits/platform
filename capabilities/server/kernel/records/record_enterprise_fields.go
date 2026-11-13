@@ -405,3 +405,86 @@ func MaskHistory(h []RecordChange, hidden []platform.FieldInfo) []RecordChange {
 	}
 	return out
 }
+
+type EnterpriseReference struct {
+	Type       string `json:"type"`
+	Field      string `json:"field"`
+	FieldTitle string `json:"fieldTitle"`
+	Stereotype string `json:"stereotype,omitempty"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+}
+
+type EnterpriseReferenceGroup struct {
+	Type       string                `json:"type"`
+	Title      string                `json:"title"`
+	Field      string                `json:"field"`
+	FieldTitle string                `json:"fieldTitle"`
+	Stereotype string                `json:"stereotype,omitempty"`
+	Total      int                   `json:"total"`
+	Records    []EnterpriseReference `json:"records"`
+}
+
+func EnterpriseReferences(s *Store, element string, offset, limit int, view func(*Type) (func(reflect.Value) bool, []platform.FieldInfo, bool), roles func(app string) []string) []EnterpriseReferenceGroup {
+	s.Lock()
+	types := make([]*Type, 0, s.TypeCount())
+	for _, et := range s.Types() {
+		types = append(types, et)
+	}
+	s.Unlock()
+	slices.SortFunc(types, func(a, b *Type) int { return strings.Compare(a.Info().Type, b.Info().Type) })
+	groups := []EnterpriseReferenceGroup{}
+	for _, et := range types {
+		if !DeclaresEnterpriseRef(et.Info().Fields) {
+			continue
+		}
+		visible, hidden, ok := view(et)
+		if !ok {
+			continue
+		}
+		var rows []reflect.Value
+		func() {
+			s.Lock()
+			defer s.Unlock()
+			rows = make([]reflect.Value, 0, et.Rows().Len())
+			for _, r := range et.Rows().All() {
+				if visible == nil || visible(r.Value) {
+					rows = append(rows, r.Value)
+				}
+			}
+
+		}()
+		slices.SortFunc(rows, func(a, b reflect.Value) int { return strings.Compare(Header(a).ID, Header(b).ID) })
+		byPath := map[string]*EnterpriseReferenceGroup{}
+		var order []string
+		for _, r := range rows {
+			id := Header(r).ID
+			name := ""
+			readable := Mask(et.Info(), r, hidden)
+			seen := map[string]bool{}
+			for _, f := range MatchingRefs(et.Info().Fields, "", reflect.ValueOf(readable), element, roles(et.Info().App)) {
+				if seen[f.Path] {
+					continue
+				}
+				seen[f.Path] = true
+				g, ok := byPath[f.Path]
+				if !ok {
+					g = &EnterpriseReferenceGroup{Type: et.Info().Type, Title: et.Info().Plural, Field: f.Path, FieldTitle: f.Title, Stereotype: f.Stereotype, Records: []EnterpriseReference{}}
+					byPath[f.Path] = g
+					order = append(order, f.Path)
+				}
+				g.Total++
+				if g.Total > offset && len(g.Records) < limit {
+					if name == "" {
+						name = RecordLabel(et.Info(), readable, id)
+					}
+					g.Records = append(g.Records, EnterpriseReference{Type: et.Info().Type, Field: f.Path, FieldTitle: f.Title, Stereotype: f.Stereotype, ID: id, Name: name})
+				}
+			}
+		}
+		for _, path := range order {
+			groups = append(groups, *byPath[path])
+		}
+	}
+	return groups
+}

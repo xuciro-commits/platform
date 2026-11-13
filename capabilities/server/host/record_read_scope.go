@@ -188,8 +188,8 @@ func (t *Tenant) Export(ctx context.Context, m platform.Member, typ string, q pl
 	return recordRead(t, ctx, func(t *Tenant) ([]byte, *kernel.Error) { return t.exportRead(m, typ, q, now) })
 }
 
-func (t *Tenant) EnterpriseReferences(ctx context.Context, m platform.Member, element string, offset, limit int, now time.Time) ([]EnterpriseReferenceGroup, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) ([]EnterpriseReferenceGroup, *kernel.Error) {
+func (t *Tenant) EnterpriseReferences(ctx context.Context, m platform.Member, element string, offset, limit int, now time.Time) ([]records.EnterpriseReferenceGroup, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) ([]records.EnterpriseReferenceGroup, *kernel.Error) {
 		return t.enterpriseReferencesRead(m, element, offset, limit, now)
 	})
 }

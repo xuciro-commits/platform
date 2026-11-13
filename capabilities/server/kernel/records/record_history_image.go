@@ -418,4 +418,36 @@ func PruneImage(info platform.EntityInfo, raw json.RawMessage) (json.RawMessage,
 	return json.Marshal(object)
 }
 
+func (r *Row) ImageAt(change string) (json.RawMessage, bool) {
+	raw, err := r.Image()
+	if err != nil {
+		return nil, false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return nil, false
+	}
+	history := r.RecordHistory()
+	found := false
+	for i := len(history) - 1; i >= 0; i-- {
+		item := history[i]
+		if item.Change == change {
+			found = true
+			break
+		}
+		for _, field := range item.Fields {
+			if len(field.Before) == 0 {
+				delete(fields, field.Field)
+			} else {
+				fields[field.Field] = field.Before
+			}
+		}
+	}
+	if !found {
+		return nil, false
+	}
+	raw, err = json.Marshal(fields)
+	return raw, err == nil
+}
+
 func rowJSON(value any) json.RawMessage { raw, _ := json.Marshal(value); return raw }

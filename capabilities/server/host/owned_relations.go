@@ -1,7 +1,6 @@
 package host
 
 import (
-	"encoding/json"
 	"platformserver/kernel/records"
 	"slices"
 	"strings"
@@ -77,34 +76,7 @@ func (t *Tenant) ownedRelationTargets(store *records.Store, c platform.Caller, l
 	if _, err := t.readRecordFrom(store, c, object, id, at); err != nil {
 		return nil, false, err
 	}
-	refs := []string{}
-	func() {
-		store.Lock()
-		defer store.Unlock()
-		et := store.Type(platform.OwnedRelationType(link.Child.App))
-		if et != nil {
-			for _, row := range et.Rows().All() {
-				if records.Header(row.Value).Archived {
-					continue
-				}
-				var value struct {
-					Binding, Parent, Child string
-					Migration              bool
-				}
-				_ = json.Unmarshal(platform.Raw(row.Value.Interface()), &value)
-				if value.Migration || value.Binding != link.Name {
-					continue
-				}
-				from, to := value.Parent, value.Child
-				if direction == "reverse" {
-					from, to = to, from
-				}
-				if from == object+"/"+id {
-					refs = append(refs, to)
-				}
-			}
-		}
-	}()
+	refs := records.OwnedRelationRefs(store, link, direction, object+"/"+id)
 	ids, partial := []string{}, false
 	for _, ref := range refs {
 		typ, id, ok := strings.Cut(ref, "/")

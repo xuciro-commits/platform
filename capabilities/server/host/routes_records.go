@@ -199,7 +199,7 @@ func (h *Host) routesRecords(rt *routes) {
 		WriteJSON(w, http.StatusOK, answer)
 	})
 
-	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-references", Summary: "Records that name an enterprise element, at any nesting depth, by entity type and page", Answer: []EnterpriseReferenceGroup{}, Query: []transport.Param{{Name: "element", Description: "The element's id"}, {Name: "offset", Description: "Records to skip, by column"}, {Name: "limit", Description: "Records per column (default 50, at most 200)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-references", Summary: "Records that name an enterprise element, at any nesting depth, by entity type and page", Answer: []records.EnterpriseReferenceGroup{}, Query: []transport.Param{{Name: "element", Description: "The element's id"}, {Name: "offset", Description: "Records to skip, by column"}, {Name: "limit", Description: "Records per column (default 50, at most 200)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := pageBounds(r, 0, 50)
 		if offset < 0 || limit < 0 {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "offset and limit are numbers"))
