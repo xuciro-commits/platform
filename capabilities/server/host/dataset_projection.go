@@ -23,8 +23,6 @@ func (t *Tenant) datasetMerge() dataowner.DatasetMerge {
 		Tenant: t.ID, Authority: build.ID,
 		Targets: func() ([]dataowner.DatasetTarget, *kernel.Error) {
 			return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.DatasetTarget, *kernel.Error) {
-				t.Projection.Lock()
-				defer t.Projection.Unlock()
 				var targets []dataowner.DatasetTarget
 				for _, entity := range t.Projection.SortedTypes() {
 					info := entity.Info()
