@@ -1387,4 +1387,6 @@ register("zh-CN", {
   "Publisher": "发布者",
   "Access request sent to the project owners.": "访问申请已发送给项目 Owner。",
   "Access request sent to the platform administrators.": "访问申请已发送给平台管理员。",
+  "Grant this role to me": "直接授予我这个角色",
+  "Role granted.": "角色已授予。",
 });

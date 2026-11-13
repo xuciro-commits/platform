@@ -16,7 +16,7 @@ const projectRoles = ["viewer", "editor", "discoverer"];
 const roleTitles: Record<string, string> = { viewer: "Viewer", editor: "Editor", discoverer: "Discoverer", builder: "Builder", publisher: "Publisher" };
 
 export function RequestAccessDialog({ project, app, role: initialRole, open, onOpenChange, onRequested }: RequestAccessProps) {
-  const { decide } = useHost();
+  const { decide, me } = useHost();
   const apps = useReadQuery<Api.AppInfo[]>("/v1/apps", undefined, open && !project);
   const appRoles = apps.data?.find(item => item.id === app)?.roles ?? [];
   const roles = project ? projectRoles : appRoles.filter(item => item !== "admin");
@@ -26,6 +26,7 @@ export function RequestAccessDialog({ project, app, role: initialRole, open, onO
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const chosen = roles.includes(role) ? role : roles[0] ?? "";
+  const admin = me.apps.some(item => item.id === "platform" && item.role === "admin") && !project;
   const close = (next: boolean) => {
     if (!next) {
       setReason("");
@@ -44,6 +45,19 @@ export function RequestAccessDialog({ project, app, role: initialRole, open, onO
     setBusy(false);
     if (!accepted) return;
     notify.success(t(project ? "Access request sent to the project owners." : "Access request sent to the platform administrators."));
+    close(false);
+    onRequested?.();
+  };
+  const grant = async () => {
+    if (!chosen || !app) return;
+    setBusy(true);
+    setError("");
+    const accepted = await decide("platform.member.grant", { type: "platform.member", id: me.principalId }, {
+      app, role: chosen, until, reason: reason.trim(),
+    }, { quiet: true, onRefused: setError });
+    setBusy(false);
+    if (!accepted) return;
+    notify.success(t("Role granted."));
     close(false);
     onRequested?.();
   };
@@ -67,6 +81,7 @@ export function RequestAccessDialog({ project, app, role: initialRole, open, onO
       {error && <p role="alert" className="text-danger">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button onClick={() => close(false)}>{t("Cancel")}</Button>
+        {admin && <Button disabled={busy || !chosen || !reason.trim()} onClick={() => void grant()}>{t("Grant this role to me")}</Button>}
         <Button variant="primary" disabled={busy || !chosen || !reason.trim()} onClick={() => void submit()}>{t("Send request")}</Button>
       </div>
     </div>
