@@ -174,8 +174,8 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 }
 
 func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
-	return t.ApplyWorkResult(raw, runtimekernel.WorkApply{Changes: t.changeApply(), Works: t.works, App: t.App, Published: t.publishAcceptedChanges,
+	return t.ApplyWorkResult(raw, runtimekernel.WorkApply{Changes: t.changeApply(), Works: t.Works, App: t.App, Published: t.publishAcceptedChanges,
 		Task: t.work.Restorer(t.delivered)})
 }
 
-func (t *Tenant) forkWorkState() *kernel.Works { return runtimekernel.ForkWorks(t.works) }
+func (t *Tenant) forkWorkState() *kernel.Works { return runtimekernel.ForkWorks(t.Works) }

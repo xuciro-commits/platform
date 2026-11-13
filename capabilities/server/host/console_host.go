@@ -70,7 +70,7 @@ func (h hostView) ConnectorHeartbeat(c platform.Caller, now time.Time) *kernel.E
 	if source := t.scopeSource(); source != nil {
 		t = source
 	}
-	return t.connectors.Heartbeat(c.Tenant, c.ID, now)
+	return t.ConnectorRoster.Heartbeat(c.Tenant, c.ID, now)
 }
 
 func (h hostView) PutPackageArtifact(key string, raw []byte) error {

@@ -65,7 +65,7 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, e
 		Settle: func(id string, after acceptedformat.EffectState, finished *pb.Work) {
 			t.outbound.Settled(id, after)
 			if finished != nil {
-				runtimekernel.InstallWork(t.works, finished)
+				runtimekernel.InstallWork(t.Works, finished)
 			}
 		}}
 	if t.ai != nil {

@@ -51,7 +51,7 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 			Publication: t.installPublicationLinkConstraint}.Install,
 		Installed: t.Claims.BatchInstalled(t.ID),
 	}
-	return runtimekernel.BatchState{App: t.App, States: t.states, Notices: &t.Notices, Sequences: &t.sequences,
+	return runtimekernel.BatchState{App: t.App, States: t.states, Notices: &t.Notices, Sequences: &t.Sequences,
 		CheckControl: t.validateAcceptedControl, ApplyControl: t.applyAcceptedControl, CheckIntents: t.validateAcceptedIntents, InstallIntents: t.installAcceptedIntents,
 		ApplyNotices: t.applyAcceptedNotices, CheckOperations: t.operationCancellations().Validate, ApplyOperations: t.operationCancellations().Apply}.Hooks(h)
 }

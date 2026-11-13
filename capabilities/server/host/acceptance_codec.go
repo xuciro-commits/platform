@@ -76,7 +76,7 @@ func (t *Tenant) changeApply() runtimekernel.ChangeApply {
 			if err := runtimekernel.CheckStates(t.states, plan.States); err != nil {
 				return err
 			}
-			return t.sequences.Check(plan.SequenceBases, plan.Sequences)
+			return t.Sequences.Check(plan.SequenceBases, plan.Sequences)
 		},
 		Apply: func(plan acceptedformat.ChangePlan) error {
 			if err := t.applyAcceptedControl(plan.Control); err != nil {
@@ -87,7 +87,7 @@ func (t *Tenant) changeApply() runtimekernel.ChangeApply {
 			}
 			t.applyAcceptedNotices(plan.Notices)
 			t.installAcceptedIntents(plan.Intents)
-			t.sequences.Set(plan.Sequences)
+			t.Sequences.Set(plan.Sequences)
 			return nil
 		}}
 }

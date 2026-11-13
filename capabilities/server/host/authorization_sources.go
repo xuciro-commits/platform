@@ -47,7 +47,7 @@ func (s authorizationSources) NamedReadAllowed(m platform.Member, name string) b
 	return s.t.mayCallRead(m, name)
 }
 func (s authorizationSources) InputGranted(m platform.Member, app, name string) bool {
-	return s.t.connectors.Granted(m.ID, app, name)
+	return s.t.ConnectorRoster.Granted(m.ID, app, name)
 }
 func (s authorizationSources) KnowledgeReadable(store *records.Store, m platform.Member, id, field string) bool {
 	return s.t.knowledgeSourceReadable(store, m, id, field)

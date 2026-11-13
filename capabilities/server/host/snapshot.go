@@ -116,7 +116,7 @@ func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, a
 	s.Acted, s.Failed = t.acted, []string{}
 	maps.Copy(s.Bindings, t.bindings.All())
 	var err error
-	if s.Works, err = platform.Protos(t.works.All()); err != nil {
+	if s.Works, err = platform.Protos(t.Works.All()); err != nil {
 		t.opsMu.Unlock()
 		return nil, err
 	}
@@ -131,16 +131,16 @@ func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, a
 		t.opsMu.Unlock()
 		return nil, workErr
 	}
-	descriptors, marks := t.connectors.State()
+	descriptors, marks := t.ConnectorRoster.State()
 	if s.Connectors, err = platform.Protos(descriptors); err != nil {
 		t.opsMu.Unlock()
 		return nil, err
 	}
 	s.Marks = marks
-	s.LastError = t.connectors.LastErrors()
+	s.LastError = t.ConnectorRoster.LastErrors()
 	s.Notices, s.NoticeSeq = t.Notices.State()
 	s.Settings, s.Endpoints, s.Words = t.settings.Snapshot(), t.endpoints.Saved(), t.words.Clone()
-	s.Sequences = t.sequences.Clone()
+	s.Sequences = t.Sequences.Clone()
 	for _, x := range t.outbound.Select(nil) {
 		s.Outbound = append(s.Outbound, acceptedformat.EffectState{Effect: x.Effect, Since: x.Since})
 	}
@@ -227,20 +227,20 @@ func (t *Tenant) restoreOperations(s *runtimekernel.TenantImage[automation.Task,
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	t.acted = s.Acted
-	t.works.Restore(works)
+	t.Works.Restore(works)
 	t.work.Lock()
 	err = t.work.Restore(t.ID, automation.WorkState{Queues: s.Queues, Failed: s.Failed, Tasks: s.Tasks, Jobs: s.Jobs})
 	t.work.Unlock()
 	if err != nil {
 		return err
 	}
-	t.connectors.Restore(descriptors, s.Marks, s.LastError)
+	t.ConnectorRoster.Restore(descriptors, s.Marks, s.LastError)
 	t.Notices.Restore(s.Notices, s.NoticeSeq)
 	t.settings.Restore(s.Settings)
 	t.words.Restore(s.Words)
 	t.i18n.Reset()
 	t.endpoints.Restore(s.Endpoints)
-	t.sequences.Restore(s.Sequences)
+	t.Sequences.Restore(s.Sequences)
 	effects := make([]actions.Queued, 0, len(s.Outbound))
 	for _, x := range s.Outbound {
 		effects = append(effects, actions.Queued{Effect: x.Effect, Since: x.Since})

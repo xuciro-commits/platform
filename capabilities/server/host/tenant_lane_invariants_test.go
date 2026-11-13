@@ -244,7 +244,7 @@ func TestInvariantK13SQLReadsRetryWithoutMixingPositions(t *testing.T) {
 	state.position.Store(1)
 	live.Lane.Lock()
 	live.Projection.Current().Configure(state, live.ID, 1, state.position.Load)
-	live.sequences.Set(map[string]int{"position": 1})
+	live.Sequences.Set(map[string]int{"position": 1})
 	live.enableCurrentReadScopes()
 	live.Lane.Unlock()
 	live.Lane.Lock()
@@ -257,7 +257,7 @@ func TestInvariantK13SQLReadsRetryWithoutMixingPositions(t *testing.T) {
 	answered := make(chan result, 1)
 	go func() {
 		value, refusal := coordinatedRecordRead(live.Tenant, t.Context(), func(scope *Tenant) (result, *kernel.Error) {
-			return result{position: scope.Projection.Current().Applied(), sequence: scope.sequences.Clone()["position"]}, nil
+			return result{position: scope.Projection.Current().Applied(), sequence: scope.Sequences.Clone()["position"]}, nil
 		})
 		value.refusal = refusal
 		answered <- value
@@ -271,7 +271,7 @@ func TestInvariantK13SQLReadsRetryWithoutMixingPositions(t *testing.T) {
 		live.Lane.Unlock()
 		t.Fatal("the reader waited on the lane instead of checking its image position")
 	}
-	live.sequences.Set(map[string]int{"position": 2})
+	live.Sequences.Set(map[string]int{"position": 2})
 	live.acceptedResultApplied()
 	live.Lane.Unlock()
 	select {

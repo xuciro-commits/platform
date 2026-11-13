@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	contract "platformkernel/kernel"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 )
@@ -18,6 +19,9 @@ type Sequence struct {
 	Projection       *records.Store
 	Claims           SourceClaims
 	Notices          NoticeBoard
+	Sequences        Sequences
+	ConnectorRoster  *ConnectorRoster
+	Works            *contract.Works
 	Fault            atomic.Pointer[Fault]
 	StateEpoch       atomic.Uint64
 	WorkEpoch        atomic.Uint64

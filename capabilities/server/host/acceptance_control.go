@@ -24,7 +24,7 @@ type controlDecision struct {
 func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	connectors, err := t.connectors.Image()
+	connectors, err := t.ConnectorRoster.Image()
 	if err != nil {
 		return nil, err
 	}
@@ -45,15 +45,15 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 
 func (t *Tenant) newControlFork() *Tenant {
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), identity: t.identity, ownerSet: t.ownerSet, definitions: t.definitions, Projection: t.Projection, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
-		bindings: t.bindings.Clone(), connectors: runtimekernel.NewConnectorRoster(t.ID), work: automation.NewWorkBoard(), works: t.forkWorkState()}
+		bindings: t.bindings.Clone(), ConnectorRoster: runtimekernel.NewConnectorRoster(t.ID), work: automation.NewWorkBoard(), Works: t.forkWorkState()}
 	t.work.CopyJobs(&view.work)
 	return view
 }
 
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
 	view := t.newControlFork()
-	_, marks := t.connectors.State()
-	view.connectors.RestoreMarks(marks)
+	_, marks := t.ConnectorRoster.State()
+	view.ConnectorRoster.RestoreMarks(marks)
 	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps }, nil, view.words.Clone, PlatformLanguages)
 	view.i18n.InstallApplications(view.definitions)
 	for _, kind := range []string{"connectors", "settings", "bindings", "work", "endpoints", "effects", "words"} {
@@ -67,7 +67,7 @@ func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error)
 func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 	switch kind {
 	case "connectors":
-		return t.connectors.InstallImage(raw)
+		return t.ConnectorRoster.InstallImage(raw)
 	case "settings":
 		return t.settings.InstallImage(raw)
 	case "bindings":
@@ -112,7 +112,7 @@ func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tena
 		unsupportedStagedEffect()
 	}
 	view.Projection = d.Records
-	view.connectors.Use(d.Connectors)
+	view.ConnectorRoster.Use(d.Connectors)
 	view.controlAnswer = func(x platform.Effect, out platform.Outcome, at time.Time) *kernel.Error {
 		d.answerControlEffect(x, out, at)
 		return d.Failure

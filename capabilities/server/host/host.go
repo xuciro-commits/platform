@@ -67,14 +67,11 @@ type Tenant struct {
 	change        changes
 	hops          int
 	acted         int
-	works         *kernel.Works
 	opsMu         sync.Mutex
 	work          automation.WorkBoard
 	breakers      integrations.Breakers
-	connectors    *runtimekernel.ConnectorRoster
 	settings      controlowner.Settings
 	words         controlowner.Words
-	sequences     runtimekernel.Sequences
 	endpoints     actions.Endpoints
 	outbound      actions.Outbox
 	tenantPorts
@@ -101,8 +98,8 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if err != nil {
 		return nil, fmt.Errorf("tenant %s: %w", id, err)
 	}
-	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), works: kernel.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
-		connectors: runtimekernel.NewConnectorRoster(id), Projection: records.NewStore()}
+	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), Works: kernel.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
+		ConnectorRoster: runtimekernel.NewConnectorRoster(id), Projection: records.NewStore()}
 	t.bindAuditStore()
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)
 	t.observeLane()

@@ -68,7 +68,7 @@ func (t *Tenant) stageViewLocked(stage branches.Stage[*stagedDecision], now time
 	if err != nil {
 		return nil, fmt.Errorf("The staged definition graph could not be assembled: %s", err)
 	}
-	view.connectors = t.connectors.Fork()
+	view.ConnectorRoster = t.ConnectorRoster.Fork()
 	return view, nil
 }
 

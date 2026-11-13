@@ -146,10 +146,10 @@ func (t *Tenant) replay(now time.Time, replaying bool) automation.Replay {
 		Names:  func(e platform.Event) []string { return t.router().Events(e) },
 		Retry:  t.retryOf,
 		Start: func(id string) uint32 {
-			generation, _, _ := t.works.Start(id, "host")
+			generation, _, _ := t.Works.Start(id, "host")
 			return generation
 		},
-		Finish:  func(id string, generation uint32, failed bool) { t.works.Finish(id, generation, failed) },
+		Finish:  func(id string, generation uint32, failed bool) { t.Works.Finish(id, generation, failed) },
 		SetHops: func(n int) { t.hops = n },
 		Failed: func(title, why, id string) {
 			t.failedWork(func() platform.Caller { return t.automation(controlowner.PlatformApp, replaying) }, title, why, id, now)
@@ -170,11 +170,11 @@ func (t *Tenant) failedWork(caller func() platform.Caller, title, why, id string
 func (t *Tenant) Tasks() []automation.Task { return t.work.Tasks(t.apps) }
 
 func (t *Tenant) refused(member, input string, err *kernel.Error, now time.Time) {
-	t.connectors.Refused(member, input, err, now)
+	t.ConnectorRoster.Refused(member, input, err, now)
 }
 
 func (t *Tenant) Connectors(now time.Time) []runtimekernel.ConnectorView {
-	return t.connectors.Views(now)
+	return t.ConnectorRoster.Views(now)
 }
 
 func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
@@ -232,11 +232,11 @@ func (t *Tenant) Settings() []controlowner.AppSettings {
 
 func (t *Tenant) decideConnector(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
-	if !t.connectors.Known(id) {
+	if !t.ConnectorRoster.Known(id) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	off := s.GetSchema().GetName() == controlowner.SchemaConnectorOff
-	return func(*pb.ChangeRecord) { t.connectors.SetDisabled(id, off) }, nil
+	return func(*pb.ChangeRecord) { t.ConnectorRoster.SetDisabled(id, off) }, nil
 }
 
 func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {

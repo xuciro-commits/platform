@@ -9,7 +9,7 @@ import (
 )
 
 func (t *Tenant) runtimeOwners() runtimekernel.RuntimeOwners {
-	return runtimekernel.RuntimeOwners{Apps: t.apps, Sequences: t.sequences.Clone, Ready: t.enableCurrentReadScopes,
+	return runtimekernel.RuntimeOwners{Apps: t.apps, Sequences: t.Sequences.Clone, Ready: t.enableCurrentReadScopes,
 		States: func(app string) platform.AcceptedStateApp { return t.states[app] }}
 }
 

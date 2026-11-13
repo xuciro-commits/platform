@@ -28,7 +28,7 @@ func (t *Tenant) operationClaims() compute.OperationClaims {
 				return x.ID == id && x.Generation == generation && !platform.EffectSettled(x.State)
 			})
 		},
-		Works: func() *kernel.Works { return t.works }, Fork: t.forkWorkState, Install: func(w *kernel.Works) { t.works = w },
+		Works: func() *kernel.Works { return t.Works }, Fork: t.forkWorkState, Install: func(w *kernel.Works) { t.Works = w },
 		Quarantine: t.quarantine, Applied: t.acceptedResultApplied}
 }
 
@@ -37,7 +37,7 @@ func (t *Tenant) operationCancellations() compute.OperationCancellations {
 		Discard: func(id string, after platform.Effect) {
 			t.outbound.Update(id, func(x *actions.Queued) { x.Effect, x.Sending = after, false })
 		},
-		Works: func() *kernel.Works { return t.works }, Fork: t.forkWorkState, Cancel: func(id string) { t.cancels.Cancel(id) }}
+		Works: func() *kernel.Works { return t.Works }, Fork: t.forkWorkState, Cancel: func(id string) { t.cancels.Cancel(id) }}
 }
 
 func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool) {
