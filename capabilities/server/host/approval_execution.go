@@ -1,10 +1,7 @@
 package host
 
 import (
-	"maps"
-	acceptedformat "platformserver/kernel/acceptedformat"
 	releaseowner "platformserver/services/devops/releases"
-	"slices"
 	"strings"
 	"time"
 
@@ -15,33 +12,10 @@ import (
 )
 
 func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Error) {
-	activated := map[string]bool{}
-	for key, raw := range h.t.Committed.AllAnswers("active") {
-		if !strings.HasPrefix(key, "release:") {
-			continue
-		}
-		result, err := acceptedformat.DecodeRelease(raw)
-		if err == nil && result.Active {
-			activated[result.CandidateID] = true
-		}
-	}
-	if release := h.ActiveRelease(); release != "" {
-		activated[release] = true
-	}
-	for _, release := range slices.Sorted(maps.Keys(activated)) {
-		closed, refusal := h.t.approvalClosure(release, app, action, typ)
-		if refusal != nil {
-			return "", refusal
-		}
-		if closed.ID == "" {
-			continue
-		}
-		running, err := h.t.runningReleaseLocked(closed)
-		if err == nil && releaseowner.SameRetainedCapability(running, closed) {
-			return release, nil
-		}
-	}
-	return "", nil
+	release, err := releaseowner.ApprovedRelease(
+		releaseowner.ActivatedReleases(h.t.Committed.AllAnswers("active"), h.ActiveRelease()),
+		app, action, typ, h.t.releases.Candidate, h.t.runningReleaseLocked)
+	return release, conflictRefusal(err)
 }
 
 func (h flowExecution) ApprovalRelease(app, action, typ string) (string, *kernel.Error) {
@@ -60,11 +34,7 @@ func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.Rel
 	if err != nil {
 		return platform.ReleaseCandidate{}, conflictRefusal(err)
 	}
-	root, found := releaseowner.ApprovalRoot(sealed.Assets, app, action, typ)
-	if !found {
-		return platform.ReleaseCandidate{}, nil
-	}
-	closed, err := sealed.Closure([]platform.AssetRef{root})
+	closed, err := releaseowner.ApprovalClosure(sealed, app, action, typ)
 	return closed, conflictRefusal(err)
 }
 

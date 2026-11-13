@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -35,6 +37,81 @@ func RetainedFields(current, info platform.EntityInfo, raw []byte, source Retain
 		}
 	}
 	return json.Marshal(fields)
+}
+
+func RetainedView(reads *records.ForkCache, base *records.Store, release string, shapes map[string]platform.EntityInfo) (*records.Store, error) {
+	return reads.Fork(base, func(store *records.Store, original func(string) records.Rows) error {
+		for typ, info := range shapes {
+			current := store.Type(typ)
+			if current == nil {
+				return fmt.Errorf("retained object %s has no current storage", typ)
+			}
+			stored, rows := current.Info(), original(typ)
+			store.ReplaceReadType(info, records.SourceRows(RetainedRows[*records.Row]{
+				List:  func(after string, limit int) []string { return rows.IDs(after, limit) },
+				Fetch: func(id string) *records.Row { return rows.Get(id) },
+				Batch: func(ids []string) map[string]*records.Row { return rows.GetBatch(ids) },
+				Convert: func(row *records.Row) (*records.Row, *kernel.Error) {
+					converted, err := RetainedRow(stored, info, release, row)
+					if err != nil {
+						return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+					}
+					return converted, nil
+				},
+			}), true)
+		}
+		return nil
+	})
+}
+
+func RetainedRow(current, info platform.EntityInfo, release string, value *records.Row) (*records.Row, error) {
+	raw, err := value.Image()
+	if err != nil {
+		return nil, err
+	}
+	fields, err := RetainedFields(current, info, raw, func() (string, json.RawMessage, bool) {
+		source := records.ProjectionFor(value.Projection, release)
+		if source == nil {
+			return "", nil, false
+		}
+		return source.Shape, source.Value, true
+	})
+	if err != nil {
+		return nil, err
+	}
+	decoded := reflect.New(info.Go)
+	if err := json.Unmarshal(fields, decoded.Interface()); err != nil {
+		return nil, err
+	}
+	return &records.Row{Value: decoded.Elem(), Format: value.Format, HistoryHead: value.HistoryHead, HistoryParent: value.HistoryParent, History: value.History, LoadHistory: value.LoadHistory, HistoryCount: value.HistoryCount}, nil
+}
+
+func RetainedGet(base *records.Store, shapes map[string]platform.EntityInfo, release string, c platform.Caller, typ reflect.Type, id string) (any, bool, error) {
+	for name, info := range shapes {
+		if info.Go != typ || info.App != c.App {
+			continue
+		}
+		var value *records.Row
+		var stored platform.EntityInfo
+		func() {
+			base.Lock()
+			defer base.Unlock()
+			current := base.Type(name)
+			if current != nil {
+				value, stored = current.Rows().Get(id), current.Info()
+			}
+		}()
+		if value == nil {
+			return nil, false, nil
+		}
+		decoded, err := RetainedRow(stored, info, release, value)
+		if err != nil {
+			return nil, false, err
+		}
+		return decoded.Value.Interface(), true, nil
+	}
+	out, ok := base.Get(c, typ, id)
+	return out, ok, nil
 }
 
 func RetainedWrite(shape, old, current platform.EntityInfo, before, input, stored map[string]json.RawMessage, hasStored bool) (map[string]json.RawMessage, []string, error) {

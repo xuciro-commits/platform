@@ -39,14 +39,14 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			return platform.OperationCall{}, refusal
 		}
 		q = sealed
-		prepared = &preparedOperationInput{ref: ref, requestHash: requestHash}
+		prepared = &preparedOperationInput{Artifact: ref, RequestHash: requestHash}
 	} else if len(q.Inputs) > 1<<20 {
 		return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The input exceeds the operation inline budget")
 	}
 	retained := false
 	defer func() {
 		if prepared != nil && !retained {
-			t.staged.DiscardInput(prepared.ref)
+			t.staged.DiscardInput(prepared.Artifact)
 		}
 	}()
 	payload, err := json.Marshal(q)
@@ -86,7 +86,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	if x, ok := t.outbound.Get(id); ok {
 		ticket := ""
 		if prepared != nil {
-			ticket = prepared.ref.Ticket
+			ticket = prepared.Artifact.Ticket
 		}
 		if call, keep, decoded := compute.AcceptedCall(x.Body, ticket, prepared != nil); decoded {
 			if prepared != nil {

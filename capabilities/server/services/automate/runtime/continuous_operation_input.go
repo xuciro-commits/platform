@@ -13,16 +13,28 @@ type OperationInputSealer struct {
 	Discard   func(platform.OperationInputArtifact)
 }
 
-func (s OperationInputSealer) Prepare(member platform.Member, instance string, request platform.OperationRequest) (platform.OperationInputArtifact, string, bool, *kernel.Error) {
-	refuse := func(code pb.ErrorCode, message string) (platform.OperationInputArtifact, string, bool, *kernel.Error) {
-		return platform.OperationInputArtifact{}, "", false, platform.Refuse(code, message)
+type OperationInput struct {
+	Artifact    platform.OperationInputArtifact
+	RequestHash string
+}
+
+func (i *OperationInput) ArtifactPointer() *platform.OperationInputArtifact {
+	if i == nil {
+		return nil
+	}
+	return &i.Artifact
+}
+
+func (s OperationInputSealer) Prepare(member platform.Member, instance string, request platform.OperationRequest) (*OperationInput, *kernel.Error) {
+	refuse := func(code pb.ErrorCode, message string) (*OperationInput, *kernel.Error) {
+		return nil, platform.Refuse(code, message)
 	}
 	if request.App == "" || request.Name == "" || request.Key == "" || request.OnBehalf != member.ID || request.Target != platform.FlowInstanceType+"/"+instance {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window names an invalid Compute operation")
 	}
 	op, version, refusal := s.Operation(request)
 	if refusal != nil {
-		return platform.OperationInputArtifact{}, "", false, refusal
+		return nil, refusal
 	}
 	definition, err := platform.CanonicalDigest([]any{request.App, op, version})
 	if err != nil {
@@ -30,7 +42,7 @@ func (s OperationInputSealer) Prepare(member platform.Member, instance string, r
 	}
 	budget := op.Limits.DataInputBytes
 	if budget == 0 {
-		return platform.OperationInputArtifact{}, "", false, nil
+		return nil, nil
 	}
 	if err := op.Input.Validate(request.Inputs, budget); err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The window does not satisfy its Compute input: "+err.Error())
@@ -49,5 +61,5 @@ func (s OperationInputSealer) Prepare(member platform.Member, instance string, r
 		s.Discard(ref)
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute request cannot be bound")
 	}
-	return ref, requestHash, true, nil
+	return &OperationInput{Artifact: ref, RequestHash: requestHash}, nil
 }

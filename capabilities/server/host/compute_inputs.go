@@ -1,8 +1,5 @@
 package host
 
-import "platformserver/platform"
+import automation "platformserver/services/automate/runtime"
 
-type preparedOperationInput struct {
-	ref         platform.OperationInputArtifact
-	requestHash string
-}
+type preparedOperationInput = automation.OperationInput

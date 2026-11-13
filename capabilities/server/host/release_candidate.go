@@ -136,7 +136,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 func (t *Tenant) releasePlannerLocked() releaseowner.Planner {
 	return releaseowner.Planner{Definitions: t.definitions, Registry: t.assetRegistryLocked, Drafts: t.builders[build.ID],
 		Validate: func(candidate platform.ReleaseCandidate, member platform.Member, at time.Time) error {
-			_, _, err := t.prepareReleaseInstallationLocked(candidate, member, at, true, false)
+			_, _, err := releaseowner.PrepareInstallation(releaseInstallationRuntime{t}, candidate, member, at, true, false)
 			return err
 		}}
 }
@@ -255,15 +255,12 @@ func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform
 }
 
 func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
-	return releaseowner.PendingWorkFits(candidateID, raw, releaseowner.PendingWork{
-		Hosted: func() bool { return t.App(platform.WorkApp) != nil },
-		Approvals: func() []platform.ApprovalRequest {
-			pending, _, _ := platform.Find[platform.ApprovalRequest](t.automation(platform.WorkApp, false),
-				platform.Query{Domain: json.RawMessage(`[["state","=","pending"]]`), Sort: []string{"id"}})
-			return pending
-		},
-		Saved: func(id string) []byte { return t.releases.Raw(id) },
-	})
+	var caller *platform.Caller
+	if t.App(platform.WorkApp) != nil {
+		c := t.automation(platform.WorkApp, false)
+		caller = &c
+	}
+	return releaseowner.PendingWorkFits(candidateID, raw, caller, t.releases.Raw)
 }
 
 func (t *Tenant) ActiveRelease() string {

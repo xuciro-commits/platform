@@ -167,7 +167,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 		draft.operationInputs = make(map[string][]*preparedOperationInput, len(opts.inputs))
 		for _, prepared := range opts.inputs {
 			if prepared != nil {
-				draft.operationInputs[prepared.requestHash] = append(draft.operationInputs[prepared.requestHash], prepared)
+				draft.operationInputs[prepared.RequestHash] = append(draft.operationInputs[prepared.RequestHash], prepared)
 			}
 		}
 	}

@@ -32,6 +32,43 @@ type PromotionResult struct {
 	Assets    int    `json:"assets"`
 }
 
+type PromotionSnapshot struct {
+	Tenant  string
+	Active  string
+	Origins map[string]platform.ReleaseOrigin
+}
+
+func (s *Store) PromotionSnapshot(tenant string) PromotionSnapshot {
+	snapshot := PromotionSnapshot{Tenant: tenant, Active: s.Active(), Origins: map[string]platform.ReleaseOrigin{}}
+	for _, id := range s.Ids() {
+		if origin, ok := s.Origin(id); ok {
+			snapshot.Origins[id] = origin
+		}
+	}
+	return snapshot
+}
+
+func PromotionTargets(source, candidate string, snapshots []PromotionSnapshot) []PromotionTarget {
+	var out []PromotionTarget
+	for _, snapshot := range snapshots {
+		if snapshot.Tenant == source {
+			continue
+		}
+		origin, ok := snapshot.Origins[candidate]
+		if ok && origin.From == source {
+			out = append(out, PromotionTarget{Tenant: snapshot.Tenant, Member: origin.Member, At: origin.At, Active: snapshot.Active == candidate})
+		}
+	}
+	return out
+}
+
+func WithPromotions(page ReleasePage, source string, snapshots []PromotionSnapshot) ReleasePage {
+	for i := range page.Candidates {
+		page.Candidates[i].PromotedTo = PromotionTargets(source, page.Candidates[i].ID, snapshots)
+	}
+	return page
+}
+
 type PromotionDestination struct {
 	ID          string
 	Quarantined bool

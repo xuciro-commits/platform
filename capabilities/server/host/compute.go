@@ -31,13 +31,13 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 	hash, _ := platform.CanonicalDigest(q)
 	if pending := d.operationInputs[hash]; len(pending) > 0 {
 		prepared := pending[0]
-		platformOwner := c.App == controlowner.PlatformApp && c.ID == prepared.ref.Member
-		flowOwner := c.Automation && c.App == "flow" && c.ID == "app:flow" && q.OnBehalf == prepared.ref.Member
-		if !platformOwner && !flowOwner || hash != prepared.requestHash {
+		platformOwner := c.App == controlowner.PlatformApp && c.ID == prepared.Artifact.Member
+		flowOwner := c.Automation && c.App == "flow" && c.ID == "app:flow" && q.OnBehalf == prepared.Artifact.Member
+		if !platformOwner && !flowOwner || hash != prepared.RequestHash {
 			d.Failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared input belongs to another operation request")
 			return platform.OperationCall{}, d.Failure
 		}
-		input = &prepared.ref
+		input = &prepared.Artifact
 		if len(pending) == 1 {
 			delete(d.operationInputs, hash)
 		} else {

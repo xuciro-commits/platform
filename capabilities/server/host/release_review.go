@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-func (h *Host) promotionsOf(source, candidate string) []releaseowner.PromotionTarget {
-	var out []releaseowner.PromotionTarget
+func (h *Host) promotionSnapshots(source string) []releaseowner.PromotionSnapshot {
+	snapshots := []releaseowner.PromotionSnapshot{}
 	for _, other := range h.currentTenants() {
 		if other.ID == source {
 			continue
@@ -22,23 +22,20 @@ func (h *Host) promotionsOf(source, candidate string) []releaseowner.PromotionTa
 		} else {
 			other.Lane.Lock()
 		}
-		origin, ok := state.releases.Origin(candidate)
-		active := state.releases.Active() == candidate
+		snapshots = append(snapshots, state.releases.PromotionSnapshot(other.ID))
 		if image == nil {
 			other.Lane.Unlock()
 		}
-		if ok && origin.From == source {
-			out = append(out, releaseowner.PromotionTarget{Tenant: other.ID, Member: origin.Member, At: origin.At, Active: active})
-		}
 	}
-	return out
+	return snapshots
+}
+
+func (h *Host) promotionsOf(source, candidate string) []releaseowner.PromotionTarget {
+	return releaseowner.PromotionTargets(source, candidate, h.promotionSnapshots(source))
 }
 
 func (h *Host) withPromotions(source string, page releaseowner.ReleasePage) releaseowner.ReleasePage {
-	for i := range page.Candidates {
-		page.Candidates[i].PromotedTo = h.promotionsOf(source, page.Candidates[i].ID)
-	}
-	return page
+	return releaseowner.WithPromotions(page, source, h.promotionSnapshots(source))
 }
 
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application ...string) (releaseowner.ReleasePage, error) {

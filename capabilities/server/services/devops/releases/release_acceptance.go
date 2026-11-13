@@ -69,14 +69,8 @@ func AcceptedInstallationRelease(saved platform.ReleaseCandidate, assets Accepte
 	return assets.WithBindings(roots, available)
 }
 
-type PendingWork struct {
-	Hosted    func() bool
-	Approvals func() []platform.ApprovalRequest
-	Saved     func(id string) []byte
-}
-
-func PendingWorkFits(candidateID string, raw []byte, work PendingWork) error {
-	if !work.Hosted() {
+func PendingWorkFits(candidateID string, raw []byte, caller *platform.Caller, saved func(string) json.RawMessage) error {
+	if caller == nil {
 		return nil
 	}
 	candidate, err := platform.ReadCandidate(candidateID, raw)
@@ -92,13 +86,15 @@ func PendingWorkFits(candidateID string, raw []byte, work PendingWork) error {
 		}
 		return nil
 	}
-	for _, request := range work.Approvals() {
+	approvals, _, _ := platform.Find[platform.ApprovalRequest](*caller,
+		platform.Query{Domain: json.RawMessage(`[["state","=","pending"]]`), Sort: []string{"id"}})
+	for _, request := range approvals {
 		next := actionIn(candidate, request.Action)
 		if next == nil || request.Release == candidateID {
 			continue
 		}
-		if saved := work.Saved(request.Release); saved != nil {
-			started, err := platform.ReadCandidate(request.Release, saved)
+		if raw := saved(request.Release); raw != nil {
+			started, err := platform.ReadCandidate(request.Release, raw)
 			if err == nil && bytes.Equal(actionIn(started, request.Action), next) {
 				continue
 			}

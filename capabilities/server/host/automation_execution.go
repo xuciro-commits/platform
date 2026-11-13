@@ -168,47 +168,8 @@ func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb
 	return r.stagedDecision.decideAppFrom(c, r.stateApp(app), s, at, r.view, r.release, r.assets)
 }
 
-func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info platform.EntityInfo, value *records.Row) (*records.Row, *kernel.Error) {
-	raw, err := value.Image()
-	if err != nil {
-		return nil, conflictRefusal(err)
-	}
-	fields, err := automation.RetainedFields(current, info, raw, func() (string, json.RawMessage, bool) {
-		source := records.ProjectionFor(value.Projection, r.release)
-		if source == nil {
-			return "", nil, false
-		}
-		return source.Shape, source.Value, true
-	})
-	if err != nil {
-		return nil, conflictRefusal(err)
-	}
-	decoded := reflect.New(info.Go)
-	if err := json.Unmarshal(fields, decoded.Interface()); err != nil {
-		return nil, conflictRefusal(err)
-	}
-	return &records.Row{Value: decoded.Elem(), Format: value.Format, HistoryHead: value.HistoryHead, HistoryParent: value.HistoryParent, History: value.History, LoadHistory: value.LoadHistory, HistoryCount: value.HistoryCount}, nil
-}
-
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
-	store, err := r.reads.Fork(r.Records, func(store *records.Store, original func(string) records.Rows) error {
-		for typ, info := range r.shapes {
-			current := store.Type(typ)
-			if current == nil {
-				return fmt.Errorf("retained object %s has no current storage", typ)
-			}
-			stored, rows := current.Info(), original(typ)
-			store.ReplaceReadType(info, records.SourceRows(automation.RetainedRows[*records.Row]{
-				List:  func(after string, limit int) []string { return rows.IDs(after, limit) },
-				Fetch: func(id string) *records.Row { return rows.Get(id) },
-				Batch: func(ids []string) map[string]*records.Row { return rows.GetBatch(ids) },
-				Convert: func(row *records.Row) (*records.Row, *kernel.Error) {
-					return r.retainedRow(stored, info, row)
-				},
-			}), true)
-		}
-		return nil
-	})
+	store, err := automation.RetainedView(&r.reads, r.Records, r.release, r.shapes)
 	if err != nil {
 		return nil, conflictRefusal(err)
 	}
@@ -216,31 +177,12 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 }
 
 func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id string) (any, bool) {
-	for name, info := range r.shapes {
-		if info.Go != typ || info.App != c.App {
-			continue
-		}
-		var value *records.Row
-		var stored platform.EntityInfo
-		func() {
-			r.Records.Lock()
-			defer r.Records.Unlock()
-			current := r.Records.Type(name)
-			if current != nil {
-				value, stored = current.Rows().Get(id), current.Info()
-			}
-		}()
-		if value == nil {
-			return nil, false
-		}
-		decoded, refusal := r.retainedRow(stored, info, value)
-		if refusal != nil {
-			r.FailDecision(refusal)
-			return nil, false
-		}
-		return decoded.Value.Interface(), true
+	value, ok, err := automation.RetainedGet(r.Records, r.shapes, r.release, c, typ, id)
+	if err != nil {
+		r.FailDecision(conflictRefusal(err))
+		return nil, false
 	}
-	return r.Records.Get(c, typ, id)
+	return value, ok
 }
 func retainedRead[T any](r *flowExecutionRuntime, read func(view *Tenant) (T, *kernel.Error)) (output T, refusal *kernel.Error) {
 	defer automation.RecoverRetained(r.FailDecision, &refusal)

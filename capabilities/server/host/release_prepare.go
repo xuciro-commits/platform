@@ -134,14 +134,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 }
 
 func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
-	if err := build.CheckProposalFunctions(candidate); err != nil {
-		return nil, nil, err
-	}
-	return t.prepareReleaseInstallationLocked(candidate, member, at, upgrade, true)
-}
-
-func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
-	return releaseowner.PrepareInstallation(releaseInstallationRuntime{t}, candidate, member, at, upgrade, activating)
+	return releaseowner.PrepareLifecycle(releaseInstallationRuntime{t}, candidate, member, at, upgrade)
 }
 
 type releaseInstallationRuntime struct{ t *Tenant }

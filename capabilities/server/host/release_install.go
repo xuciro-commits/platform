@@ -20,20 +20,8 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []platform.Release
 		return nil, err
 	}
 	draft.installingSet = true
-	err = releaseowner.StageInstallations(registry, installations, platform.AssetApplyContext{Validate: validate, Upgrade: len(upgrade) > 0 && upgrade[0], Private: true},
-		func(plan platform.AssetInstallation, installation platform.ReleaseInstallation) error {
-			before, err := draft.Projection.RowDigest(plan.Record)
-			if err != nil || before != installation.Before {
-				return fmt.Errorf("release metadata predecessor differs for %s: %v", plan.Record, err)
-			}
-			return nil
-		},
-		func(plan platform.AssetInstallation) error {
-			if err := draft.Projection.InstallImage(plan.Record, plan.Image); err != nil {
-				return err
-			}
-			return draft.registerInstalledAsset(plan)
-		})
+	err = releaseowner.StageReleaseInstallation(registry, installations, draft.Projection,
+		platform.AssetApplyContext{Validate: validate, Upgrade: len(upgrade) > 0 && upgrade[0], Private: true}, draft.registerInstalledAsset)
 	if err != nil {
 		return nil, err
 	}
@@ -82,20 +70,11 @@ func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchive
 }
 
 func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade, allowContraction bool) error {
-	return releaseowner.CheckStorage(t.storedShapes(draft), t.definitions, draft.definitions, upgrade, allowContraction)
-}
-func (t *Tenant) storedShapes(after *Tenant) []releaseowner.StoredShape {
-	shapes := []releaseowner.StoredShape{}
-	for typ, old := range t.Projection.Types() {
-		if next := after.Projection.Type(typ); next != nil {
-			shapes = append(shapes, releaseowner.StoredShape{Before: old.Info(), After: next.Info(), Records: old.Rows().Len()})
-		}
-	}
-	return shapes
+	return releaseowner.CheckStorage(releaseowner.StoredShapes(t.Projection, draft.Projection), t.definitions, draft.definitions, upgrade, allowContraction)
 }
 func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 	return releaseowner.ValidateSet(releaseowner.ValidationContext{
-		Entities: t.releaseStoredShapes(), Definitions: t.definitions, Lookup: t.Entity, Properties: t.checkObjectProperties, RecordSets: t.checkRecordSetDeclarations,
+		Entities: releaseowner.StoredEntities(t.Projection), Definitions: t.definitions, Lookup: t.Entity, Properties: t.checkObjectProperties, RecordSets: t.checkRecordSetDeclarations,
 		Link: func(app string, link platform.LinkType) error {
 			return (hostView{t: t, app: t.App(app)}).ValidateInstallLinkType(link)
 		},
@@ -104,22 +83,15 @@ func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 	}, engines...)
 }
 
-func (t *Tenant) releaseStoredShapes() []platform.EntityInfo {
-	entities := []platform.EntityInfo{}
-	for _, et := range t.Projection.SortedTypes() {
-		entities = append(entities, et.Info())
-	}
-	return entities
-}
 func (t *Tenant) checkExtensionSet() error {
-	return releaseowner.CheckExtensions(t.releaseStoredShapes(), t.Entity)
+	return releaseowner.CheckExtensions(releaseowner.StoredEntities(t.Projection), t.Entity)
 }
 func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]releaseowner.ReleaseExtensionReview, error) {
 	shapes, err := releaseowner.AssetShapes(t.apps, candidate.Assets)
 	if err != nil {
 		return nil, err
 	}
-	return releaseowner.ExtensionReview(candidate, t.releaseStoredShapes(), shapes, t.Entity, (hostView{t: t}).EntitySource)
+	return releaseowner.ExtensionReview(candidate, releaseowner.StoredEntities(t.Projection), shapes, t.Entity, (hostView{t: t}).EntitySource)
 }
 
 func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, member platform.Member) (*releaseowner.ReleaseUpgradePlan, error) {
@@ -143,5 +115,5 @@ func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, m
 	if err != nil {
 		return nil, err
 	}
-	return releaseowner.UpgradePlan(candidate.ID, t.releases.Active(), t.storedShapes(trial))
+	return releaseowner.UpgradePlan(candidate.ID, t.releases.Active(), releaseowner.StoredShapes(t.Projection, trial.Projection))
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 	"slices"
@@ -141,6 +142,24 @@ func SelectOwnerDrafts(drafts []platform.AssetDraft, context platform.AssetRelea
 type StoredShape struct {
 	Before, After platform.EntityInfo
 	Records       int
+}
+
+func StoredShapes(before, after *records.Store) []StoredShape {
+	shapes := []StoredShape{}
+	for typ, old := range before.Types() {
+		if next := after.Type(typ); next != nil {
+			shapes = append(shapes, StoredShape{Before: old.Info(), After: next.Info(), Records: old.Rows().Len()})
+		}
+	}
+	return shapes
+}
+
+func StoredEntities(store *records.Store) []platform.EntityInfo {
+	entities := []platform.EntityInfo{}
+	for _, et := range store.SortedTypes() {
+		entities = append(entities, et.Info())
+	}
+	return entities
 }
 
 func UpgradePlan(candidate, active string, shapes []StoredShape) (*ReleaseUpgradePlan, error) {
@@ -329,6 +348,13 @@ func PrepareInstallation(runtime InstallationRuntime, candidate platform.Release
 	return installations, bootstrap, nil
 }
 
+func PrepareLifecycle(runtime InstallationRuntime, candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
+	if err := build.CheckProposalFunctions(candidate); err != nil {
+		return nil, nil, err
+	}
+	return PrepareInstallation(runtime, candidate, member, at, upgrade, true)
+}
+
 type InstallationRuntime interface {
 	HasAgentRuntime() bool
 	Registry() (*platform.AssetRegistry, error)
@@ -455,6 +481,30 @@ func StageInstallations(registry *platform.AssetRegistry, installations []platfo
 			return err
 		}
 		if err := record(plan); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func StageReleaseInstallation(registry *platform.AssetRegistry, installations []platform.ReleaseInstallation, projection *records.Store,
+	apply platform.AssetApplyContext, register func(platform.AssetInstallation) error) error {
+	for _, installation := range installations {
+		plan, err := InstallationPlan(registry, installation)
+		if err != nil {
+			return err
+		}
+		before, err := projection.RowDigest(plan.Record)
+		if err != nil || before != installation.Before {
+			return fmt.Errorf("release metadata predecessor differs for %s: %v", plan.Record, err)
+		}
+		if err := registry.ApplyInstallation(plan, apply); err != nil {
+			return err
+		}
+		if err := projection.InstallImage(plan.Record, plan.Image); err != nil {
+			return err
+		}
+		if err := register(plan); err != nil {
 			return err
 		}
 	}
