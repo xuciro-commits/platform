@@ -10,7 +10,6 @@ import (
 	"platformserver/services/actions"
 
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
@@ -44,120 +43,29 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 }
 
 func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *kernel.Error) {
-	out := platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}
 	if err := t.Admits(m); err != nil {
-		return out, err
+		return platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}, err
 	}
 	if typ == "" || id == "" {
-		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the original business record")
+		return platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the original business record")
 	}
-	add := func(sub *pb.Submission, e platform.BusinessRefusalEntry) {
-		if sub.GetTarget().GetType() != typ || sub.GetTarget().GetId() != id {
-			return
-		}
-		if len(keys) > 0 && keys[0] != "" && sub.GetIdempotencyKey() != keys[0] {
-			return
-		}
-		own := sub.GetPrincipalId() == m.ID
-		readable := t.readable(m, runtimekernel.Target(sub), at)
-		exists := false
-		func() {
+	key := ""
+	if len(keys) > 0 {
+		key = keys[0]
+	}
+	return t.Committed.BusinessRefusals(runtimekernel.RefusalView{Member: m.ID, Correction: actions.CorrectionOf, Category: actions.RefusalCategory, Changes: actions.ChangedBusinessInputs,
+		Readable: func(ref string) bool { return t.readable(m, ref, at) },
+		Exists: func() bool {
 			t.Projection.Lock()
 			defer t.Projection.Unlock()
-			if et := t.Projection.Type(typ); et != nil {
-				exists = et.Rows().Get(id) != nil
-			}
-		}()
-		if exists && !readable || !exists && !own {
-			return
-		}
-		e.Key, e.App, e.Type, e.ID, e.Action, e.Member = sub.GetIdempotencyKey(), sub.GetAuthority(), typ, id, sub.GetSchema().GetName(), sub.GetPrincipalId()
-		e.CorrectionOf = actions.CorrectionOf(sub)
-		if own && (!exists || readable) {
-			e.Inputs = slices.Clone(sub.GetPayload())
-			if e.CorrectionOf != "" {
-				if prior, ok := t.Committed.Refusal(e.App + "/" + e.CorrectionOf); ok {
-					var old pb.Submission
-					if protojson.Unmarshal(prior.Submission, &old) == nil {
-						e.Changes = actions.ChangedBusinessInputs(old.GetPayload(), sub.GetPayload())
-					}
-				}
-			}
-		}
-		e.Issues = t.readableFieldIssues(m, e.Issues, at)
-		for i, f := range e.Facts {
-			e.Facts[i] = t.readableBusinessFact(m, f, at)
-			if !own {
-				e.Facts[i].Inputs = nil
-			}
-		}
-		out.Records = append(out.Records, e)
-	}
-	for _, r := range t.Committed.AllRefusals() {
-		var sub pb.Submission
-		if protojson.Unmarshal(r.Submission, &sub) != nil {
-			continue
-		}
-		category, code := actions.RefusalCategory(r.Error, r.Business, r.Issues)
-		e := platform.BusinessRefusalEntry{At: r.At, Category: category, Code: code, Message: r.Error.Message, State: "refused", Issues: r.Issues}
-		if r.Business != nil {
-			e.Facts = []platform.BusinessRefusalFact{acceptedformat.CloneBusinessFact(*r.Business)}
-			e.Message = r.Business.Message
-		}
-		add(&sub, e)
-	}
-	for _, raw := range t.Committed.AllAnswers() {
-		var kind struct{ Kind string }
-		if json.Unmarshal(raw, &kind) != nil || kind.Kind != "record-batch" {
-			continue
-		}
-		r, receipt, err := acceptedformat.DecodeBatch(raw)
-		if err != nil {
-			continue
-		}
-		sub, err := acceptedformat.BatchSubmission(r, receipt)
-		if err != nil {
-			continue
-		}
-		if len(r.Business) == 0 && actions.CorrectionOf(sub) == "" {
-			continue
-		}
-		if len(r.Business) == 0 {
-			add(sub, platform.BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business"})
-			continue
-		}
-		for _, decision := range r.Decisions {
-			accepted := new(pb.ChangeRecord)
-			if protojson.Unmarshal(decision.Receipt, accepted) != nil {
-				continue
-			}
-			child := accepted.GetSubmission()
-			facts := []platform.BusinessRefusalFact{}
-			for _, f := range r.Business {
-				if f.Subject == runtimekernel.Target(child) && f.Action == child.GetSchema().GetName() && f.Member == child.GetPrincipalId() {
-					facts = append(facts, f)
-				}
-			}
-			if len(facts) == 0 {
-				continue
-			}
-			e := platform.BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business", Facts: facts, Code: facts[0].Code, Message: facts[0].Message}
-			add(child, e)
-		}
-	}
-	slices.SortFunc(out.Records, func(a, b platform.BusinessRefusalEntry) int {
-		if c := b.At.Compare(a.At); c != 0 {
-			return c
-		}
-		return strings.Compare(a.Key, b.Key)
-	})
-	out.Total = len(out.Records)
-	offset = max(0, min(offset, out.Total))
-	if limit <= 0 || limit > 200 {
-		limit = 200
-	}
-	out.Records = out.Records[offset:min(out.Total, offset+limit)]
-	return out, nil
+			et := t.Projection.Type(typ)
+			return et != nil && et.Rows().Get(id) != nil
+		},
+		Issues: func(issues []platform.FieldIssue) []platform.FieldIssue { return t.readableFieldIssues(m, issues, at) },
+		Fact: func(f platform.BusinessRefusalFact) platform.BusinessRefusalFact {
+			return t.readableBusinessFact(m, f, at)
+		},
+	}, typ, id, key, offset, limit), nil
 }
 
 func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefusalFact, at time.Time) platform.BusinessRefusalFact {
