@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"platformserver/services/ai/gateway"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -41,7 +42,7 @@ func (h *Host) routesAI(rt *routes) {
 			WriteJSON(w, http.StatusOK, status)
 		}
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/ai/model-selection", Summary: "Purpose-compatible models and effective configuration from the original AI and settings owners", Answer: ModelSelection{}, Query: []transport.Param{{Name: "purpose", Description: "generation, agent or embedding"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "GET /v1/ai/model-selection", Summary: "Purpose-compatible models and effective configuration from the original AI and settings owners", Answer: aigateway.ModelSelection{}, Query: []transport.Param{{Name: "purpose", Description: "generation, agent or embedding"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		selection, err := t.ModelSelection(r.Context(), m, r.URL.Query().Get("purpose"))
 		if err != nil {
 			Reply(w, nil, err)

@@ -3,6 +3,7 @@ package host
 import (
 	"maps"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	releaseowner "platformserver/services/devops/releases"
 	"slices"
 	"strings"
 	"time"
@@ -36,7 +37,7 @@ func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Erro
 			continue
 		}
 		running, err := h.t.runningReleaseLocked(closed)
-		if err == nil && sameRetainedCapability(running, closed) {
+		if err == nil && releaseowner.SameRetainedCapability(running, closed) {
 			return release, nil
 		}
 	}
